@@ -1,0 +1,50 @@
+import SwiftUI
+
+struct PrivacyPolicyView: View {
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("隐私政策").font(.title.bold())
+
+                Text("最后更新: \(AppPolicy.privacyPolicyLastUpdated)")
+
+                Text("""
+                \(AppBrand.displayName) 默认不会自动收集、传输、出售或共享你的项目数据、照片、票据、图纸、联系人、随手记或附件文件。
+
+                    数据收集
+                    只有在你主动通过「意见反馈」发送邮件时，反馈内容和你填写的联系邮箱才会离开设备，并发送到 \(AppContact.supportEmail)。对应 App Store 隐私标签，应用可能处理的数据类型为 Email Address 和 Other User Content，且仅用于 App Functionality（用于回复反馈与处理问题），不用于追踪。
+
+                    本地处理
+                    工程项目、施工日志、待办、财务流水、仓库流水和设置默认保存在设备本地。照片、视频、语音、手绘、PDF、CAD、表格、文档等附件默认保存在应用本地沙盒。报价、交付包、备份 ZIP 和数据报告由你手动导出到所选位置。应用不使用第三方分析工具，不使用广告追踪。
+
+                    iCloud 云备份
+                    当你主动使用「立即备份到 iCloud」，或你在应用内开启了「自动备份」且到达设定周期时，应用会将你勾选范围内的备份 ZIP 写入你自己的 iCloud 容器，用于同一 Apple ID 下的设备恢复。云备份不会发送到开发者服务器，开发者无法从应用内读取你的 iCloud 备份内容。你可以在 iCloud 设置或文件管理中管理相关备份。
+
+                    权限使用
+                    - 相机：用于扫描票据、拍摄现场照片、随手记拍照和水印相机
+                    - 相册：用于选择项目照片、票据、资料和随手记素材
+                    - 定位：仅在你主动使用水印相机定位功能时，为水印照片带入拍摄位置
+                    - 麦克风：用于随手记录现场语音
+                    - 文件访问与 iCloud：用于导入、导出或恢复备份 ZIP、图纸、PDF、表格、文档和其他附件
+
+                备份与导出
+                    应用支持手动导出完整 ZIP 备份，备份文件包含数据索引和项目原文件；也支持在 iCloud 备份中按内容范围进行备份与恢复。备份文件会保存到你选择的位置，例如"文件"App、iCloud Drive 或其他本地目录；也可以写入本 App 的 iCloud 云备份目录。是否保留、移动、分享或删除备份文件，由你自行管理。
+
+                数据删除
+                - 你可以在应用内删除项目、日志、票据、附件和其他记录。
+                - 你可以在设置中清空本机全部数据。
+                - 卸载应用会删除应用沙盒内的本地数据；如果未提前导出备份，数据将无法恢复。
+                - 已经导出的备份文件不在应用沙盒内，卸载应用不会自动删除这些外部备份文件。
+
+                联系我们
+                如对隐私政策有任何疑问，请联系：\(AppContact.supportEmail)
+                """)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+            .padding()
+        }
+        .navigationTitle("隐私政策")
+        .navigationBarTitleDisplayMode(.inline)
+    }
+}

@@ -1,0 +1,592 @@
+import SwiftUI
+import PhotosUI
+import UIKit
+import ImageIO
+
+struct SiteTodoView: View {
+    @Environment(DataStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let initialProjectId: UUID?
+    let autoOpenComposer: Bool
+    let focusedTodoId: UUID?
+    let initialBeforePhotoData: Data?
+    let initialAfterPhotoData: Data?
+
+    @State private var searchText = ""
+    @State private var projectFilter: UUID?
+    @State private var statusFilter: TodoFilter = .open
+    @State private var showAdd = false
+    @State private var editingTodo: SiteTodo?
+    @State private var didAutoOpenComposer = false
+    @State private var didOpenFocusedTodo = false
+
+    init(
+        initialProjectId: UUID? = nil,
+        autoOpenComposer: Bool = false,
+        focusedTodoId: UUID? = nil,
+        initialBeforePhotoData: Data? = nil,
+        initialAfterPhotoData: Data? = nil
+    ) {
+        self.initialProjectId = initialProjectId
+        self.autoOpenComposer = autoOpenComposer
+        self.focusedTodoId = focusedTodoId
+        self.initialBeforePhotoData = initialBeforePhotoData
+        self.initialAfterPhotoData = initialAfterPhotoData
+        _projectFilter = State(initialValue: initialProjectId)
+    }
+
+    private var filteredTodos: [SiteTodo] {
+        store.siteTodos
+            .filter(matchesFilters(_:))
+            .sorted { lhs, rhs in
+                if lhs.isDone != rhs.isDone { return !lhs.isDone && rhs.isDone }
+                if lhs.isOverdue != rhs.isOverdue { return lhs.isOverdue && !rhs.isOverdue }
+                return lhs.dueDate < rhs.dueDate
+            }
+    }
+
+    private var usesSidebarLayout: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    var body: some View {
+        Group {
+            if usesSidebarLayout {
+                NavigationSplitView {
+                    filterSidebar
+                } detail: {
+                    todoListContent
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                compactTodoLayout
+            }
+        }
+        .navigationTitle("现场待办")
+        .searchable(text: $searchText, prompt: "搜索事项、负责人、备注")
+        .toolbar {
+            if !usesSidebarLayout {
+                Button { showAdd = true } label: { Image(systemName: "plus") }
+                    .accessibilityLabel("新建待办")
+            }
+        }
+        .sheet(isPresented: $showAdd) {
+            SiteTodoEditSheet(
+                todo: nil,
+                projects: store.projects,
+                initialProjectId: projectFilter ?? initialProjectId,
+                initialBeforePhotoData: initialBeforePhotoData,
+                initialAfterPhotoData: initialAfterPhotoData
+            ) { todo in
+                store.siteTodos.insert(todo, at: 0)
+                store.scheduleSave()
+                showAdd = false
+            }
+        }
+        .sheet(item: $editingTodo) { todo in
+            SiteTodoEditSheet(todo: todo, projects: store.projects, initialProjectId: todo.projectId) { updated in
+                save(updated)
+            } onDelete: { target in
+                deleteTodo(target)
+            }
+        }
+        .onAppear {
+            autoOpenComposerIfNeeded()
+            openFocusedTodoIfNeeded()
+        }
+    }
+
+    private var compactTodoLayout: some View {
+        List {
+            filterSection
+            todoListSection
+        }
+    }
+
+    private var filterSidebar: some View {
+        List {
+            filterSection
+            Section("快捷操作") {
+                Button {
+                    showAdd = true
+                } label: {
+                    Label("新建待办", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+            }
+        }
+        .navigationTitle("筛选")
+    }
+
+    private var todoListContent: some View {
+        List {
+            todoListSection
+        }
+    }
+
+    private var filterSection: some View {
+        Section("筛选") {
+            Picker("项目", selection: $projectFilter) {
+                Text("全部项目").tag(nil as UUID?)
+                ForEach(store.projects) { project in
+                    Text(project.name).tag(project.id as UUID?)
+                }
+            }
+            Picker("状态", selection: $statusFilter) {
+                ForEach(TodoFilter.allCases, id: \.self) { filter in
+                    Text(filter.rawValue).tag(filter)
+                }
+            }
+            .pickerStyle(.segmented)
+        }
+    }
+
+    private var todoListSection: some View {
+        Section("现场待办 (\(filteredTodos.count))") {
+            if filteredTodos.isEmpty {
+                ContentUnavailableView("暂无现场待办", systemImage: "checklist", description: Text("添加事项后可按项目、负责人、优先级和问题类型跟踪。"))
+            } else {
+                ForEach(filteredTodos) { todo in
+                    Button { editingTodo = todo } label: {
+                        SiteTodoRow(todo: todo, projectName: projectName(todo.projectId))
+                    }
+                    .buttonStyle(.plain)
+                    .swipeActions(edge: .leading, allowsFullSwipe: true) {
+                        Button {
+                            toggleDone(todo)
+                        } label: {
+                            Label(todo.isDone ? "重开" : "完成", systemImage: todo.isDone ? "arrow.uturn.backward" : "checkmark.circle.fill")
+                        }
+                        .tint(todo.isDone ? .orange : .green)
+                    }
+                }
+                .onDelete(perform: deleteTodos)
+            }
+        }
+    }
+
+    private func matchesFilters(_ todo: SiteTodo) -> Bool {
+        if let projectFilter, todo.projectId != projectFilter { return false }
+        if !statusFilter.matches(todo) { return false }
+        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !keyword.isEmpty else { return true }
+        return todo.title.localizedStandardContains(keyword)
+            || todo.owner.localizedStandardContains(keyword)
+            || todo.dueDate.localizedStandardContains(keyword)
+            || todo.priority.localizedStandardContains(keyword)
+            || todo.issueType.localizedStandardContains(keyword)
+            || todo.note.localizedStandardContains(keyword)
+            || projectName(todo.projectId).localizedStandardContains(keyword)
+    }
+
+    private func autoOpenComposerIfNeeded() {
+        guard autoOpenComposer, !didAutoOpenComposer else { return }
+        didAutoOpenComposer = true
+        DispatchQueue.main.async { showAdd = true }
+    }
+
+    private func openFocusedTodoIfNeeded() {
+        guard let focusedTodoId, !didOpenFocusedTodo,
+              let todo = store.siteTodos.first(where: { $0.id == focusedTodoId }) else { return }
+        didOpenFocusedTodo = true
+        projectFilter = todo.projectId
+        DispatchQueue.main.async { editingTodo = todo }
+    }
+
+    private func save(_ updated: SiteTodo) {
+        if let index = store.siteTodos.firstIndex(where: { $0.id == updated.id }) {
+            store.siteTodos[index] = updated
+            store.scheduleSave()
+        }
+    }
+
+    private func toggleDone(_ todo: SiteTodo) {
+        var value = todo
+        value.isDone.toggle()
+        value.completedAt = value.isDone ? Formatters.now() : nil
+        save(value)
+    }
+
+    private func deleteTodos(_ offsets: IndexSet) {
+        let ids = offsets.compactMap { filteredTodos.indices.contains($0) ? filteredTodos[$0].id : nil }
+        let targets = store.siteTodos.filter { ids.contains($0.id) }
+        targets.forEach(deleteTodoFiles(_:))
+        store.siteTodos.removeAll { ids.contains($0.id) }
+        store.scheduleSave()
+    }
+
+    private func deleteTodo(_ todo: SiteTodo) {
+        deleteTodoFiles(todo)
+        store.siteTodos.removeAll { $0.id == todo.id }
+        editingTodo = nil
+        store.scheduleSave()
+    }
+
+    private func deleteTodoFiles(_ todo: SiteTodo) {
+        PhotoStorage.delete(fileName: todo.rectificationBeforePhotoFileName)
+        PhotoStorage.delete(fileName: todo.rectificationAfterPhotoFileName)
+    }
+
+    private func projectName(_ id: UUID?) -> String {
+        guard let id else { return "" }
+        return store.projects.first(where: { $0.id == id })?.name ?? ""
+    }
+}
+
+private struct SiteTodoRow: View {
+    let todo: SiteTodo
+    let projectName: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: todo.isDone ? "checkmark.circle.fill" : todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
+                    .foregroundStyle(todo.isDone ? .green : todo.isOverdue ? .red : .orange)
+                Text(todo.title.isEmpty ? "未命名事项" : todo.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(todo.isDone ? .secondary : .primary)
+                Spacer()
+                priorityBadge(todo.priority)
+            }
+            HStack(spacing: 8) {
+                Text(todo.dueDate)
+                Text(todo.issueType)
+                if !todo.owner.isEmpty { Text(todo.owner) }
+                if !projectName.isEmpty { Text(projectName).foregroundStyle(.blue) }
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            if !todo.note.isEmpty {
+                Text(todo.note)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            if todo.rectificationBeforePhotoFileName != nil || todo.rectificationAfterPhotoFileName != nil {
+                HStack(spacing: 8) {
+                    thumbnail(title: "前", fileName: todo.rectificationBeforePhotoFileName)
+                    thumbnail(title: "后", fileName: todo.rectificationAfterPhotoFileName)
+                }
+            }
+            if let completedAt = todo.completedAt, todo.isDone {
+                Text("完成时间: \(completedAt)")
+                    .font(.caption2)
+                    .foregroundStyle(.green)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func priorityBadge(_ priority: String) -> some View {
+        let color: Color = priority == TodoPriority.high.rawValue ? .red : priority == TodoPriority.low.rawValue ? .gray : .orange
+        return Text(priority)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(color)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(color.opacity(0.14)))
+    }
+
+    @ViewBuilder
+    private func thumbnail(title: String, fileName: String?) -> some View {
+        if let image = PhotoStorage.thumbnail(for: fileName) {
+            ZStack(alignment: .topLeading) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 64, height: 48)
+                    .clipped()
+                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                Text(title)
+                    .font(.caption2.weight(.bold))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.55))
+                    .foregroundStyle(.white)
+                    .clipShape(Capsule())
+                    .padding(4)
+            }
+        }
+    }
+}
+
+private struct SiteTodoEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let todo: SiteTodo?
+    let projects: [Project]
+    let initialProjectId: UUID?
+    let initialBeforePhotoData: Data?
+    let initialAfterPhotoData: Data?
+    let onSave: (SiteTodo) -> Void
+    var onDelete: ((SiteTodo) -> Void)? = nil
+
+    @State private var id: UUID
+    @State private var title: String
+    @State private var owner: String
+    @State private var dueDate: Date
+    @State private var priority: TodoPriority
+    @State private var issueType: TodoIssueType
+    @State private var beforePhotoFileName: String?
+    @State private var afterPhotoFileName: String?
+    @State private var isDone: Bool
+    @State private var completedAt: String?
+    @State private var note: String
+    @State private var projectId: UUID?
+    @State private var beforePhotoItem: PhotosPickerItem?
+    @State private var afterPhotoItem: PhotosPickerItem?
+    @State private var showDeleteConfirm = false
+    @State private var didCommit = false
+    @State private var alertMessage = ""
+    @State private var showAlert = false
+    @State private var didImportInitialPhotos = false
+
+    init(
+        todo: SiteTodo?,
+        projects: [Project],
+        initialProjectId: UUID?,
+        initialBeforePhotoData: Data? = nil,
+        initialAfterPhotoData: Data? = nil,
+        onSave: @escaping (SiteTodo) -> Void,
+        onDelete: ((SiteTodo) -> Void)? = nil
+    ) {
+        self.todo = todo
+        self.projects = projects
+        self.initialProjectId = initialProjectId
+        self.initialBeforePhotoData = initialBeforePhotoData
+        self.initialAfterPhotoData = initialAfterPhotoData
+        self.onSave = onSave
+        self.onDelete = onDelete
+        let draftId = todo?.id ?? UUID()
+        _id = State(initialValue: draftId)
+        _title = State(initialValue: todo?.title ?? "")
+        _owner = State(initialValue: todo?.owner ?? "")
+        _dueDate = State(initialValue: todo.flatMap { Formatters.date.date(from: $0.dueDate) } ?? Date())
+        _priority = State(initialValue: TodoPriority(rawValue: todo?.priority ?? "") ?? .medium)
+        _issueType = State(initialValue: TodoIssueType(rawValue: todo?.issueType ?? "") ?? .general)
+        _beforePhotoFileName = State(initialValue: todo?.rectificationBeforePhotoFileName)
+        _afterPhotoFileName = State(initialValue: todo?.rectificationAfterPhotoFileName)
+        _isDone = State(initialValue: todo?.isDone ?? false)
+        _completedAt = State(initialValue: todo?.completedAt)
+        _note = State(initialValue: todo?.note ?? "")
+        _projectId = State(initialValue: todo?.projectId ?? initialProjectId)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("事项") {
+                    TextField("待办事项", text: $title, axis: .vertical)
+                        .lineLimit(2...5)
+                    TextField("负责人", text: $owner)
+                    DatePicker("日期", selection: $dueDate, displayedComponents: .date)
+                    Picker("优先级", selection: $priority) {
+                        ForEach(TodoPriority.allCases, id: \.self) { item in
+                            Text(item.rawValue).tag(item)
+                        }
+                    }
+                    Picker("问题类型", selection: $issueType) {
+                        ForEach(TodoIssueType.allCases, id: \.self) { item in
+                            Text(item.rawValue).tag(item)
+                        }
+                    }
+                    TextField("备注", text: $note, axis: .vertical)
+                        .lineLimit(2...5)
+                }
+                Section("归属项目") {
+                    Picker("项目", selection: $projectId) {
+                        Text("不关联项目").tag(nil as UUID?)
+                        ForEach(projects) { project in
+                            Text(project.name).tag(project.id as UUID?)
+                        }
+                    }
+                }
+                Section("整改照片") {
+                    photoPickerRow(title: "整改前", fileName: beforePhotoFileName, selection: $beforePhotoItem, clear: clearBeforePhoto)
+                    photoPickerRow(title: "整改后", fileName: afterPhotoFileName, selection: $afterPhotoItem, clear: clearAfterPhoto)
+                }
+                Section("状态") {
+                    Toggle("已完成", isOn: $isDone)
+                    if let completedAt, isDone {
+                        LabeledContent("完成时间", value: completedAt)
+                    }
+                }
+                if todo != nil {
+                    Section {
+                        Button("删除待办", role: .destructive) { showDeleteConfirm = true }
+                    }
+                }
+            }
+            .navigationTitle(todo == nil ? "新增待办" : "编辑待办")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        didCommit = true
+                        onSave(updatedTodo)
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .alert("删除这条待办？", isPresented: $showDeleteConfirm) {
+                Button("取消", role: .cancel) {}
+                Button("删除", role: .destructive) {
+                    didCommit = true
+                    if let todo { onDelete?(todo) }
+                    dismiss()
+                }
+            }
+            .alert("现场待办", isPresented: $showAlert) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(alertMessage)
+            }
+            .onChange(of: beforePhotoItem) { _, item in
+                Task { await importTodoPhoto(item, kind: .before) }
+            }
+            .onChange(of: afterPhotoItem) { _, item in
+                Task { await importTodoPhoto(item, kind: .after) }
+            }
+            .onDisappear(perform: cleanupNewDraftFilesIfNeeded)
+            .onAppear(perform: importInitialPhotosIfNeeded)
+        }
+    }
+
+    private func photoPickerRow(title: String, fileName: String?, selection: Binding<PhotosPickerItem?>, clear: @escaping () -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                PhotosPicker(selection: selection, matching: .images) {
+                    Label(fileName == nil ? "添加\(title)照片" : "替换\(title)照片", systemImage: "photo.on.rectangle")
+                }
+                Spacer()
+                if fileName != nil {
+                    Button("移除", role: .destructive, action: clear)
+                        .font(.caption)
+                }
+            }
+            if let image = PhotoStorage.thumbnail(for: fileName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxHeight: 150)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+        }
+    }
+
+    private enum TodoPhotoKind { case before, after }
+
+    private func importTodoPhoto(_ item: PhotosPickerItem?, kind: TodoPhotoKind) async {
+        guard let item,
+              let data = try? await item.loadTransferable(type: Data.self) else { return }
+        let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) ?? data
+        await saveTodoPhotoData(normalizedData, kind: kind)
+    }
+
+    @MainActor
+    private func saveTodoPhotoData(_ data: Data, kind: TodoPhotoKind) async {
+        let suffix = kind == .before ? "before" : "after"
+        let fileName = "todo-\(id.uuidString)-\(suffix).jpg"
+        let saved: String
+        do {
+            saved = try PhotoStorage.saveOrThrow(original: data, fileName: fileName)
+        } catch {
+            alertMessage = "整改照片保存失败：\(error.localizedDescription)"
+            showAlert = true
+            return
+        }
+        switch kind {
+        case .before:
+            if beforePhotoFileName != saved { PhotoStorage.delete(fileName: beforePhotoFileName) }
+            beforePhotoFileName = saved
+            beforePhotoItem = nil
+        case .after:
+            if afterPhotoFileName != saved { PhotoStorage.delete(fileName: afterPhotoFileName) }
+            afterPhotoFileName = saved
+            afterPhotoItem = nil
+        }
+    }
+
+    private func importInitialPhotosIfNeeded() {
+        guard todo == nil, !didImportInitialPhotos else { return }
+        didImportInitialPhotos = true
+        Task {
+            if let initialBeforePhotoData {
+                await saveTodoPhotoData(initialBeforePhotoData, kind: .before)
+            }
+            if let initialAfterPhotoData {
+                await saveTodoPhotoData(initialAfterPhotoData, kind: .after)
+            }
+        }
+    }
+
+    private func clearBeforePhoto() {
+        PhotoStorage.delete(fileName: beforePhotoFileName)
+        beforePhotoFileName = nil
+    }
+
+    private func clearAfterPhoto() {
+        PhotoStorage.delete(fileName: afterPhotoFileName)
+        afterPhotoFileName = nil
+    }
+
+    private func cleanupNewDraftFilesIfNeeded() {
+        guard todo == nil, !didCommit else { return }
+        PhotoStorage.delete(fileName: beforePhotoFileName)
+        PhotoStorage.delete(fileName: afterPhotoFileName)
+    }
+
+    private var updatedTodo: SiteTodo {
+        var value = todo ?? SiteTodo(id: id, title: "")
+        value.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.owner = owner.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.dueDate = Formatters.date.string(from: dueDate)
+        value.priority = priority.rawValue
+        value.issueType = issueType.rawValue
+        value.rectificationBeforePhotoFileName = beforePhotoFileName
+        value.rectificationAfterPhotoFileName = afterPhotoFileName
+        value.isDone = isDone
+        value.completedAt = isDone ? (completedAt ?? Formatters.now()) : nil
+        value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.projectId = projectId
+        return value
+    }
+
+    private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
+        let sourceOptions: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
+            return nil
+        }
+        let downsampleOptions: CFDictionary = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
+            kCGImageSourceShouldCache: false,
+            kCGImageSourceShouldCacheImmediately: false
+        ] as CFDictionary
+        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else {
+            return nil
+        }
+        return UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
+    }
+}
+
+private enum TodoFilter: String, CaseIterable {
+    case open = "未完成"
+    case overdue = "延期"
+    case done = "已完成"
+    case all = "全部"
+
+    func matches(_ todo: SiteTodo) -> Bool {
+        switch self {
+        case .open: return !todo.isDone
+        case .overdue: return todo.isOverdue
+        case .done: return todo.isDone
+        case .all: return true
+        }
+    }
+}

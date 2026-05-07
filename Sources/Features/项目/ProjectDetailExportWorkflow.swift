@@ -1,0 +1,100 @@
+import Foundation
+
+enum ProjectDetailPackageRequestDecision {
+    case proceed
+    case warn(String)
+    case reject(String)
+}
+
+enum ProjectDetailPackageExportTaskResult {
+    case success(ExportPayload)
+    case failure(String)
+}
+
+enum ProjectDetailExportWorkflow {
+    static func packageRequestDecision(
+        documents: [ProjectDocument],
+        drawings: [ProjectDrawing],
+        logs: [DailyLog],
+        quickNotes: [QuickNote]
+    ) -> ProjectDetailPackageRequestDecision {
+        let estimatedBytes = ProjectDetailImportExportActions.estimatedProjectPackageBytes(
+            documents: documents,
+            drawings: drawings,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        switch ProjectDetailImportExportActions.packageSizeDecision(for: estimatedBytes) {
+        case .normal:
+            return .proceed
+        case .warn:
+            return .warn(
+                "预计原始附件约 \(ProjectDetailImportExportActions.formattedBytes(estimatedBytes))。导出不设体积上限，会使用 ZIP64 流式打包；大照片、视频和 CAD 会增加导出时间，并需要设备有足够剩余空间。"
+            )
+        }
+    }
+
+    static func makeProjectPackageExportTask(
+        project: Project,
+        projectId: UUID,
+        materials: [MaterialItem],
+        quotes: [QuoteItem],
+        labor: [LaborRecord],
+        logs: [DailyLog],
+        tasks: [ProgressTask],
+        todos: [SiteTodo],
+        drawings: [ProjectDrawing],
+        contacts: [ProjectContact],
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument],
+        quickNotes: [QuickNote],
+        paidAmountOverride: Double,
+        onProgress: @escaping @MainActor (ProjectPackageExportProgress) -> Void,
+        onCancelled: @escaping @MainActor () -> Void,
+        onCompletion: @escaping @MainActor (ProjectDetailPackageExportTaskResult) -> Void
+    ) -> Task<Void, Never> {
+        let relatedTodos = todos.filter { $0.projectId == projectId }
+
+        return Task {
+            let result = await Task.detached(priority: .userInitiated) {
+                ProjectDetailImportExportActions.makeProjectPackageExport(
+                    project: project,
+                    materials: materials,
+                    quotes: quotes,
+                    labor: labor,
+                    logs: logs,
+                    tasks: tasks,
+                    todos: relatedTodos,
+                    drawings: drawings,
+                    contacts: contacts,
+                    financialRecords: financialRecords,
+                    documents: documents,
+                    quickNotes: quickNotes,
+                    paidAmountOverride: paidAmountOverride,
+                    progress: { progress in
+                        Task { @MainActor in
+                            onProgress(progress)
+                        }
+                    },
+                    shouldCancel: { Task.isCancelled }
+                )
+            }.value
+
+            guard !Task.isCancelled else {
+                await onCancelled()
+                return
+            }
+
+            switch result {
+            case .success(let payload):
+                await onCompletion(.success(payload))
+            case .failure(let message):
+                await onCompletion(.failure(message))
+            }
+        }
+    }
+
+    static func makeDailyReportExport(project: Project, logs: [DailyLog]) -> ExportPayload {
+        ProjectDetailImportExportActions.makeDailyReportExport(project: project, logs: logs)
+    }
+}

@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "工地掌柜";
+"NSCameraUsageDescription" = "用于扫描项目发票、收据、施工资料和随手记拍照。";
+"NSLocationWhenInUseUsageDescription" = "用于在水印照片中带入拍摄位置。";
+"NSMicrophoneUsageDescription" = "用于随手记录现场语音。";
+"NSPhotoLibraryUsageDescription" = "用于从相册选择项目照片、票据、施工资料和随手记素材。";
+"NSPhotoLibraryAddUsageDescription" = "用于将水印现场照片保存到系统相册。";

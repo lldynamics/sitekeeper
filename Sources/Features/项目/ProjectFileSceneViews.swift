@@ -1,0 +1,263 @@
+import SwiftUI
+import QuickLook
+
+struct ProjectFileCategoryView: View {
+    @Environment(DataStore.self) private var store
+    @AppStorage(UserPreferenceKeys.hasSeenProjectFileCategoryGuide) private var hasSeenCategoryGuide = false
+    @State private var searchText = ""
+    @State private var previewURL: URL?
+    @State private var shouldShowCategoryGuide = false
+    @State private var isCategoryGuideExpanded = false
+    let project: Project
+    private let summaryColumns: [GridItem] = [
+        GridItem(.flexible(minimum: 80), spacing: 8, alignment: .leading),
+        GridItem(.flexible(minimum: 80), spacing: 8, alignment: .leading)
+    ]
+
+    private var summary: ProjectFileSummary {
+        ProjectFileSummary(projectId: project.id, store: store)
+    }
+
+    private var recentItems: [ProjectFileItem] {
+        let all = ProjectFileCollector.allRecent(for: project.id, limit: 8, store: store)
+        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return all }
+        return all.filter {
+            $0.title.localizedStandardContains(query) || $0.subtitle.localizedStandardContains(query)
+        }
+    }
+
+    var body: some View {
+        List {
+            Section {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(project.name)
+                                .font(.title3.weight(.semibold))
+                            if !project.location.isEmpty {
+                                Text(project.location)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        Spacer()
+                        Text("\(summary.totalCount)")
+                            .font(.title.weight(.bold))
+                            .foregroundStyle(summary.totalCount > 0 ? .orange : .secondary)
+                        Text("个文件")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    LazyVGrid(columns: summaryColumns, alignment: .leading, spacing: 8) {
+                        ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .blue)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .indigo)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ProjectFileCountChip(title: "票据", value: summary.documentCount, color: .brown)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .orange)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            if shouldShowCategoryGuide {
+                Section {
+                    ProjectFileGuideHintStrip(
+                        title: "分类页操作指引",
+                        subtitle: isCategoryGuideExpanded ? "再次点 ? 收起详细说明" : "点 ? 查看分类页用法",
+                        isExpanded: isCategoryGuideExpanded,
+                        onToggleExpand: {
+                            hasSeenCategoryGuide = true
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isCategoryGuideExpanded.toggle()
+                            }
+                        },
+                        onDismiss: {
+                            hasSeenCategoryGuide = true
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                shouldShowCategoryGuide = false
+                                isCategoryGuideExpanded = false
+                            }
+                        }
+                    )
+
+                    if isCategoryGuideExpanded {
+                        ProjectFileCategoryGuidePanel()
+                            .padding(.top, 2)
+                    }
+                }
+            }
+
+            Section("文件分类") {
+                ForEach(ProjectFileCategory.allCases, id: \.self) { category in
+                    let count = summary.count(for: category)
+                    NavigationLink {
+                        ProjectFileListView(project: project, category: category)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: category.systemImage)
+                                .font(.body.weight(.semibold))
+                                .foregroundStyle(category.tint)
+                                .frame(width: 28)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(category.title)
+                                    .font(.body.weight(.medium))
+                                Text(category.description)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Text("\(count)")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(count > 0 ? category.tint : .secondary)
+                        }
+                    }
+                }
+            }
+
+            if !recentItems.isEmpty {
+                Section("最近文件") {
+                    ForEach(recentItems) { item in
+                        ProjectFileItemRow(item: item) {
+                            previewURL = item.url
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(project.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    hasSeenCategoryGuide = true
+                    shouldShowCategoryGuide = true
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isCategoryGuideExpanded.toggle()
+                    }
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("查看使用提示")
+            }
+        }
+        .searchable(text: $searchText, prompt: "搜索本项目的文件")
+        .quickLookPreview($previewURL)
+        .onAppear {
+            let shouldAutoShowGuide = !hasSeenCategoryGuide
+            shouldShowCategoryGuide = shouldAutoShowGuide
+            isCategoryGuideExpanded = false
+            if shouldAutoShowGuide {
+                hasSeenCategoryGuide = true
+            }
+        }
+    }
+}
+
+struct ProjectFileListView: View {
+    let project: Project
+    let category: ProjectFileCategory
+    @Environment(DataStore.self) private var store
+    @State private var previewURL: URL?
+
+    private var items: [ProjectFileItem] {
+        ProjectFileCollector.items(for: project.id, category: category, store: store)
+    }
+
+    private var missingItemCount: Int {
+        items.reduce(0) { result, item in
+            result + (item.exists ? 0 : 1)
+        }
+    }
+
+    private var emptyDescription: String {
+        switch category {
+        case .images:
+            return "先去施工日志或随手记添加照片，这里会按项目自动汇总。"
+        case .drawings:
+            return "先去项目详情导入 CAD / 图纸文件。"
+        case .documents:
+            return "先去项目详情添加票据或扫描资料。"
+        case .quickNoteAttachments:
+            return "先去随手记添加视频、语音或文档附件。"
+        }
+    }
+
+    private var emptyActionTitle: String {
+        switch category {
+        case .images:
+            return "去写日志并添加照片"
+        case .drawings:
+            return "去项目详情导入图纸"
+        case .documents:
+            return "去项目详情添加资料"
+        case .quickNoteAttachments:
+            return "去随手记添加附件"
+        }
+    }
+
+    private var emptyActionDestination: AnyView {
+        switch category {
+        case .images:
+            return AnyView(DailyLogView(initialProjectId: project.id, autoOpenComposer: true))
+        case .drawings:
+            return AnyView(ProjectDetailView(projectId: project.id, initialMode: .assets))
+        case .documents:
+            return AnyView(ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true))
+        case .quickNoteAttachments:
+            return AnyView(QuickNoteView())
+        }
+    }
+
+    var body: some View {
+        List {
+            if items.isEmpty {
+                Section("建议下一步") {
+                    ContentUnavailableView(
+                        "暂无\(category.title)",
+                        systemImage: category.systemImage,
+                        description: Text(emptyDescription)
+                    )
+                    NavigationLink {
+                        emptyActionDestination
+                    } label: {
+                        Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.orange)
+                }
+            } else {
+                if missingItemCount > 0 {
+                    Section("建议下一步") {
+                        ProjectFileMicroGuideRow(
+                            icon: "exclamationmark.triangle.fill",
+                            color: .red,
+                            title: String(localized: "本分类有 \(missingItemCount) 个文件缺失"),
+                            detail: "建议尽快补齐，避免预览、分享或导出时失败。"
+                        )
+                        NavigationLink {
+                            emptyActionDestination
+                        } label: {
+                            Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
+                        }
+                        .buttonStyle(.bordered)
+                    }
+                }
+
+                Section("\(project.name) · \(category.title)") {
+                    ForEach(items) { item in
+                        ProjectFileItemRow(item: item) {
+                            previewURL = item.url
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(category.title)
+        .navigationBarTitleDisplayMode(.inline)
+        .quickLookPreview($previewURL)
+    }
+}

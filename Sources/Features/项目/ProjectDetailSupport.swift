@@ -1,0 +1,753 @@
+import SwiftUI
+import UIKit
+
+enum ProjectDetailMode: String, CaseIterable {
+    case overview
+    case records
+    case finance
+    case assets
+
+    var displayName: String {
+        switch self {
+        case .overview: "概览"
+        case .records: "记录"
+        case .finance: "财务"
+        case .assets: "资料"
+        }
+    }
+}
+
+enum DrawingListFilter: String, CaseIterable {
+    case all
+    case current
+    case withIssue
+
+    var displayName: String {
+        switch self {
+        case .all: "全部"
+        case .current: "当前版"
+        case .withIssue: "有问题"
+        }
+    }
+}
+
+struct ProjectPhotoItem: Identifiable {
+    var id: UUID { photo.id }
+    let logId: UUID
+    let date: String
+    let photo: LogPhoto
+}
+
+struct ProjectPhotoContext: Identifiable {
+    var id: String { "\(logId.uuidString)-\(photoId.uuidString)" }
+    let logId: UUID
+    let photoId: UUID
+    let legacyFileName: String
+}
+
+struct DrawingTimelineContext: Identifiable {
+    var id: String { name }
+    let name: String
+}
+
+struct ProjectDrawingTimelineSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let drawingName: String
+    let drawings: [ProjectDrawing]
+    let onSetCurrent: (ProjectDrawing) -> Void
+    let onPreview: (ProjectDrawing) -> Void
+    let onEdit: (ProjectDrawing) -> Void
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if drawings.isEmpty {
+                    Text("暂无版本记录").foregroundStyle(.secondary)
+                } else {
+                    ForEach(drawings) { drawing in
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack {
+                                Text(drawing.version).font(.callout.weight(.semibold))
+                                if drawing.isCurrentVersion {
+                                    Text("当前版")
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.green)
+                                }
+                                Spacer()
+                                Text(drawing.importedAt)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if !drawing.relatedLogDate.isEmpty {
+                                Text("关联日志: \(drawing.relatedLogDate)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
+                            if drawing.issueStatus != DrawingIssueStatus.none.rawValue {
+                                Text("状态: \(drawing.issueStatus)")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.orange)
+                            }
+                            if !drawing.issueNote.isEmpty {
+                                Text("问题: \(drawing.issueNote)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.red)
+                            }
+                            HStack(spacing: 16) {
+                                Button("预览") {
+                                    onPreview(drawing)
+                                }
+                                .font(.caption)
+                                Button("编辑") {
+                                    onEdit(drawing)
+                                    dismiss()
+                                }
+                                .font(.caption)
+                                if !drawing.isCurrentVersion {
+                                    Button("设为当前版") {
+                                        onSetCurrent(drawing)
+                                    }
+                                    .font(.caption)
+                                }
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+            }
+            .navigationTitle("\(drawingName) 时间线")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+struct ProjectDrawingEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let drawing: ProjectDrawing
+    let onSave: (ProjectDrawing) -> Void
+    let onDelete: (ProjectDrawing) -> Void
+    let onPreview: (ProjectDrawing) -> Void
+
+    @State private var name: String
+    @State private var version: String
+    @State private var isCurrentVersion: Bool
+    @State private var relatedLogDate: String
+    @State private var issueStatus: DrawingIssueStatus
+    @State private var issueNote: String
+    @State private var note: String
+    @State private var showDeleteConfirm = false
+
+    init(
+        drawing: ProjectDrawing,
+        onSave: @escaping (ProjectDrawing) -> Void,
+        onDelete: @escaping (ProjectDrawing) -> Void,
+        onPreview: @escaping (ProjectDrawing) -> Void
+    ) {
+        self.drawing = drawing
+        self.onSave = onSave
+        self.onDelete = onDelete
+        self.onPreview = onPreview
+        _name = State(initialValue: drawing.name)
+        _version = State(initialValue: drawing.version)
+        _isCurrentVersion = State(initialValue: drawing.isCurrentVersion)
+        _relatedLogDate = State(initialValue: drawing.relatedLogDate)
+        _issueStatus = State(initialValue: DrawingIssueStatus(rawValue: drawing.issueStatus) ?? .none)
+        _issueNote = State(initialValue: drawing.issueNote)
+        _note = State(initialValue: drawing.note)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("图纸信息") {
+                    TextField("图纸名称", text: $name)
+                    TextField("版本号（如 V2）", text: $version)
+                    LabeledContent("格式", value: drawing.fileType.uppercased())
+                    LabeledContent("导入时间", value: drawing.importedAt)
+                    Toggle("设为当前版本", isOn: $isCurrentVersion)
+                    TextField("关联日志日期(yyyy-MM-dd)", text: $relatedLogDate)
+                    Picker("问题状态", selection: $issueStatus) {
+                        ForEach(DrawingIssueStatus.allCases, id: \.self) { status in
+                            Text(status.displayName).tag(status)
+                        }
+                    }
+                    TextField("问题标记", text: $issueNote, axis: .vertical)
+                        .lineLimit(2...5)
+                    TextField("备注", text: $note, axis: .vertical)
+                        .lineLimit(2...5)
+                }
+                Section {
+                    Button {
+                        onPreview(drawing)
+                    } label: {
+                        Label("预览图纸", systemImage: "eye.fill")
+                    }
+                }
+                Section {
+                    Button("删除图纸", role: .destructive) {
+                        showDeleteConfirm = true
+                    }
+                }
+            }
+            .navigationTitle("图纸详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        var updated = drawing
+                        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.name = trimmed.isEmpty ? drawing.name : trimmed
+                        updated.version = version
+                        updated.isCurrentVersion = isCurrentVersion
+                        updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.issueStatus = issueStatus.rawValue
+                        updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.note = note
+                        onSave(updated)
+                        dismiss()
+                    }
+                }
+            }
+            .alert("删除这份图纸？", isPresented: $showDeleteConfirm) {
+                Button("取消", role: .cancel) {}
+                Button("删除", role: .destructive) {
+                    onDelete(drawing)
+                    dismiss()
+                }
+            } message: {
+                Text("删除后将无法在项目中预览该图纸。")
+            }
+        }
+    }
+}
+
+struct MaterialEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: MaterialItem
+    let useMetric: Bool
+    let onSave: (MaterialItem) -> Void
+    let onDelete: (UUID) -> Void
+
+    @State private var name: String
+    @State private var quantity: String
+    @State private var unit: String
+    @State private var unitPrice: String
+    @State private var specification: String
+    @State private var brand: String
+    @State private var supplier: String
+    @State private var purchaseStatus: MaterialPurchaseStatus
+    @State private var arrivalDate: String
+
+    init(item: MaterialItem, useMetric: Bool, onSave: @escaping (MaterialItem) -> Void, onDelete: @escaping (UUID) -> Void) {
+        self.item = item
+        self.useMetric = useMetric
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _name = State(initialValue: item.name)
+        _quantity = State(initialValue: item.quantity)
+        _unit = State(initialValue: item.unit)
+        _unitPrice = State(initialValue: item.unitPrice)
+        _specification = State(initialValue: item.specification)
+        _brand = State(initialValue: item.brand)
+        _supplier = State(initialValue: item.supplier)
+        _purchaseStatus = State(initialValue: MaterialPurchaseStatus(rawValue: item.purchaseStatus) ?? .notPurchased)
+        _arrivalDate = State(initialValue: item.arrivalDate)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("材料名称", text: $name)
+                TextField("数量", text: $quantity).keyboardType(.decimalPad)
+                TextField("单位", text: $unit)
+                TextField("单价", text: $unitPrice).keyboardType(.decimalPad)
+                TextField("规格", text: $specification)
+                TextField("品牌", text: $brand)
+                TextField("供应商", text: $supplier)
+                Picker("采购状态", selection: $purchaseStatus) {
+                    ForEach(MaterialPurchaseStatus.allCases, id: \.self) { item in
+                        Text(item.displayName).tag(item)
+                    }
+                }
+                TextField("进场日期(yyyy-MM-dd)", text: $arrivalDate)
+                LabeledContent("金额") {
+                    Text(ReportBuilder.money(ReportBuilder.number(quantity) * ReportBuilder.number(unitPrice)))
+                }
+                Section {
+                    Button("删除材料", role: .destructive) {
+                        onDelete(item.id)
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("编辑材料")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        var updated = item
+                        updated.name = name
+                        updated.quantity = quantity
+                        updated.unit = unit
+                        updated.unitPrice = unitPrice
+                        updated.specification = specification.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.purchaseStatus = purchaseStatus.rawValue
+                        updated.arrivalDate = arrivalDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        onSave(updated)
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                              !InputValidator.nonNegativeNumber(quantity) ||
+                              !unitPrice.isEmpty && !InputValidator.nonNegativeNumber(unitPrice))
+                }
+            }
+        }
+    }
+}
+
+struct QuoteEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: QuoteItem
+    let onSave: (QuoteItem) -> Void
+    let onDelete: (UUID) -> Void
+
+    @State private var name: String
+    @State private var unitPrice: String
+    @State private var quantity: String
+    @State private var unit: String
+    @State private var taxRate: String
+    @State private var discountRate: String
+    @State private var notes: String
+    @State private var versionName: String
+    @State private var status: QuoteStatus
+    @State private var customerConfirmedDate: String
+    @State private var contractAmount: String
+
+    init(item: QuoteItem, onSave: @escaping (QuoteItem) -> Void, onDelete: @escaping (UUID) -> Void) {
+        self.item = item
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _name = State(initialValue: item.name)
+        _unitPrice = State(initialValue: item.unitPrice)
+        _quantity = State(initialValue: item.quantity)
+        _unit = State(initialValue: item.unit)
+        _taxRate = State(initialValue: item.taxRate)
+        _discountRate = State(initialValue: item.discountRate)
+        _notes = State(initialValue: item.notes)
+        _versionName = State(initialValue: item.versionName)
+        _status = State(initialValue: QuoteStatus(rawValue: item.status) ?? .draft)
+        _customerConfirmedDate = State(initialValue: item.customerConfirmedDate)
+        _contractAmount = State(initialValue: item.contractAmount)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("项目名称", text: $name)
+                TextField("单价", text: $unitPrice).keyboardType(.decimalPad)
+                TextField("数量", text: $quantity).keyboardType(.decimalPad)
+                TextField("单位", text: $unit)
+                TextField("税率", text: $taxRate).keyboardType(.decimalPad)
+                TextField("折扣", text: $discountRate).keyboardType(.decimalPad)
+                TextField("版本", text: $versionName)
+                Picker("状态", selection: $status) {
+                    ForEach(QuoteStatus.allCases, id: \.self) { item in
+                        Text(item.displayName).tag(item)
+                    }
+                }
+                TextField("客户确认日期(yyyy-MM-dd)", text: $customerConfirmedDate)
+                TextField("转合同金额", text: $contractAmount).keyboardType(.decimalPad)
+                TextField("备注", text: $notes)
+                LabeledContent("合计") {
+                    let preview = QuoteItem(
+                        id: item.id,
+                        name: name,
+                        unitPrice: unitPrice,
+                        quantity: quantity,
+                        unit: unit,
+                        notes: notes,
+                        taxRate: taxRate,
+                        discountRate: discountRate,
+                        versionName: versionName,
+                        status: status.rawValue,
+                        customerConfirmedDate: customerConfirmedDate,
+                        contractAmount: contractAmount,
+                        projectId: item.projectId
+                    )
+                    Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(preview)))
+                }
+                Section {
+                    Button("删除报价", role: .destructive) {
+                        onDelete(item.id)
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("编辑报价")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        var updated = item
+                        updated.name = name
+                        updated.unitPrice = unitPrice
+                        updated.quantity = quantity
+                        updated.unit = unit
+                        updated.taxRate = taxRate
+                        updated.discountRate = discountRate
+                        updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.status = status.rawValue
+                        updated.customerConfirmedDate = customerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.contractAmount = contractAmount
+                        updated.notes = notes
+                        onSave(updated)
+                        dismiss()
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                              !InputValidator.nonNegativeNumber(unitPrice) ||
+                              !InputValidator.nonNegativeNumber(quantity) ||
+                              !InputValidator.nonNegativeNumber(taxRate) ||
+                              !InputValidator.nonNegativeNumber(discountRate) ||
+                              (!contractAmount.isEmpty && !InputValidator.nonNegativeNumber(contractAmount)))
+                }
+            }
+        }
+    }
+}
+
+struct ProgressEditSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let item: ProgressTask
+    let onSave: (ProgressTask) -> Void
+    let onDelete: (UUID) -> Void
+
+    @State private var title: String
+    @State private var startDate: String
+    @State private var dueDate: String
+    @State private var completion: Double
+    @State private var note: String
+
+    init(item: ProgressTask, onSave: @escaping (ProgressTask) -> Void, onDelete: @escaping (UUID) -> Void) {
+        self.item = item
+        self.onSave = onSave
+        self.onDelete = onDelete
+        _title = State(initialValue: item.title)
+        _startDate = State(initialValue: item.startDate)
+        _dueDate = State(initialValue: item.dueDate)
+        _completion = State(initialValue: item.clampedCompletion)
+        _note = State(initialValue: item.note)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                TextField("任务", text: $title)
+                TextField("开始日期(yyyy-MM-dd)", text: $startDate)
+                TextField("截止日期(yyyy-MM-dd)", text: $dueDate)
+                Slider(value: $completion, in: 0...1, step: 0.05)
+                LabeledContent("完成率", value: "\(Int(completion * 100))%")
+                TextField("备注", text: $note, axis: .vertical)
+                    .lineLimit(2...4)
+                Section {
+                    Button("删除任务", role: .destructive) {
+                        onDelete(item.id)
+                        dismiss()
+                    }
+                }
+            }
+            .navigationTitle("编辑进度")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        var updated = item
+                        updated.title = title
+                        updated.startDate = startDate
+                        updated.dueDate = dueDate
+                        updated.completion = completion
+                        updated.note = note
+                        onSave(updated)
+                        dismiss()
+                    }
+                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+        }
+    }
+}
+
+struct ProjectPhotoDetailSheet: View {
+    @Environment(\.dismiss) private var dismiss
+
+    let context: ProjectPhotoContext
+    let allLogs: [DailyLog]
+    let onSave: (String, String) -> Void
+    let onDelete: () -> Void
+
+    @State private var note = ""
+    @State private var tag: PhotoTag = .general
+    @State private var showDeleteConfirm = false
+
+    private var selectedPhoto: LogPhoto? {
+        allLogs.first(where: { $0.id == context.logId })?
+            .photoAttachments
+            .first(where: { $0.id == context.photoId || $0.fileName == context.legacyFileName })
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("照片预览") {
+                    if let fileName = selectedPhoto?.fileName,
+                       let data = PhotoStorage.data(for: fileName),
+                       let image = UIImage(data: data) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxHeight: 360)
+                            .frame(maxWidth: .infinity)
+                    } else {
+                        Text("图片已丢失或不可读取")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Section("备注") {
+                    Picker("照片标签", selection: $tag) {
+                        ForEach(PhotoTag.allCases, id: \.self) { item in
+                            Text(item.displayName).tag(item)
+                        }
+                    }
+                    TextField("现场备注", text: $note, axis: .vertical)
+                        .lineLimit(2...5)
+                }
+                Section {
+                    Button("保存") {
+                        onSave(note, tag.rawValue)
+                        dismiss()
+                    }
+                    .frame(maxWidth: .infinity)
+                    Button("删除照片", role: .destructive) {
+                        showDeleteConfirm = true
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .navigationTitle("照片详情")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { dismiss() }
+                }
+            }
+            .onAppear {
+                note = selectedPhoto?.note ?? ""
+                tag = PhotoTag(rawValue: selectedPhoto?.tag ?? "") ?? .general
+            }
+            .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
+                Button("删除", role: .destructive) {
+                    onDelete()
+                    dismiss()
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("该操作仅删除当前照片，不会删除整条日志。")
+            }
+        }
+    }
+}
+
+struct QuickAddSheet: View {
+    @Environment(DataStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    let sheet: DetailSheet
+    let projectId: UUID
+
+    @State private var name = ""; @State private var qty = ""; @State private var unit = ""
+    @State private var unitPrice = ""
+    @State private var materialSpecification = ""
+    @State private var materialBrand = ""
+    @State private var materialSupplier = ""
+    @State private var materialPurchaseStatus: MaterialPurchaseStatus = .notPurchased
+    @State private var materialArrivalDate = ""
+    @State private var price = ""; @State private var notes = ""
+    @State private var quoteVersionName = "V1"
+    @State private var quoteStatus: QuoteStatus = .draft
+    @State private var quoteConfirmedDate = ""
+    @State private var quoteContractAmount = ""
+    @State private var workers = ""; @State private var hours = ""; @State private var unitRate = ""
+    @State private var content = ""; @State private var weather = "晴"
+    @State private var safety = ""; @State private var materials = ""
+    @State private var tomorrowPlan = ""; @State private var qualityIssue = ""
+    @State private var rectification = ""; @State private var confirmer = ""
+    @State private var logDate = Date()
+    @State private var laborDate = Date()
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                switch sheet {
+                case .material:
+                    TextField("材料名称", text: $name)
+                    LabeledContent("数量") {
+                        TextField("0", text: $qty)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("单位") {
+                        TextField("米 / 卷 / 个", text: $unit)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("单价") {
+                        TextField("0", text: $unitPrice)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    TextField("规格型号", text: $materialSpecification)
+                    TextField("品牌", text: $materialBrand)
+                    TextField("供应商", text: $materialSupplier)
+                    Picker("采购状态", selection: $materialPurchaseStatus) {
+                        ForEach(MaterialPurchaseStatus.allCases, id: \.self) { status in
+                            Text(status.displayName).tag(status)
+                        }
+                    }
+                    TextField("进场日期（yyyy-MM-dd）", text: $materialArrivalDate)
+                case .quote:
+                    TextField("项目名称", text: $name)
+                    LabeledContent("单价 ¥") {
+                        TextField("0", text: $price)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("数量") {
+                        TextField("0", text: $qty)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    LabeledContent("单位") {
+                        TextField("项 / 米 / 台", text: $unit)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    TextField("版本", text: $quoteVersionName)
+                    Picker("状态", selection: $quoteStatus) {
+                        ForEach(QuoteStatus.allCases, id: \.self) { status in
+                            Text(status.displayName).tag(status)
+                        }
+                    }
+                    TextField("客户确认日期（yyyy-MM-dd）", text: $quoteConfirmedDate)
+                    TextField("转合同金额", text: $quoteContractAmount)
+                        .keyboardType(.decimalPad)
+                case .log:
+                    DatePicker("日期", selection: $logDate, displayedComponents: .date)
+                    Picker("天气", selection: $weather) {
+                        ForEach(["晴", "多云", "阴", "小雨", "大雨", "雪"], id: \.self) { Text($0).tag($0) }
+                    }
+                    TextField("人数", text: $workers)
+                    TextField("内容", text: $content, axis: .vertical).lineLimit(3...6)
+                    TextField("安全事项", text: $safety, axis: .vertical).lineLimit(2...4)
+                    TextField("材料进场", text: $materials, axis: .vertical).lineLimit(2...4)
+                    TextField("明日计划", text: $tomorrowPlan, axis: .vertical).lineLimit(2...4)
+                    TextField("质量问题", text: $qualityIssue, axis: .vertical).lineLimit(2...4)
+                    TextField("整改记录", text: $rectification, axis: .vertical).lineLimit(2...4)
+                    TextField("现场确认人", text: $confirmer)
+                case .labor:
+                    DatePicker("日期", selection: $laborDate, displayedComponents: .date)
+                    TextField("人数", text: $workers).keyboardType(.numberPad)
+                    TextField("工时 (h)", text: $hours).keyboardType(.numberPad)
+                    TextField("工价（每工时）", text: $unitRate).keyboardType(.decimalPad)
+                    TextField("备注", text: $notes)
+                }
+            }
+            .navigationTitle(sheetTitle).navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button("保存") { save(); dismiss() } }
+            }
+        }
+    }
+
+    private var sheetTitle: String {
+        switch sheet {
+        case .material: return "添加材料"
+        case .quote: return "添加报价"
+        case .log: return "写施工日志"
+        case .labor: return "记人工"
+        }
+    }
+
+    private func save() {
+        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+        switch sheet {
+        case .material:
+            guard !name.isEmpty else { return }
+            store.materialItems.append(
+                MaterialItem(
+                    name: name,
+                    quantity: qty,
+                    unit: unit,
+                    unitPrice: unitPrice,
+                    specification: materialSpecification.trimmingCharacters(in: .whitespacesAndNewlines),
+                    brand: materialBrand.trimmingCharacters(in: .whitespacesAndNewlines),
+                    supplier: materialSupplier.trimmingCharacters(in: .whitespacesAndNewlines),
+                    purchaseStatus: materialPurchaseStatus.rawValue,
+                    arrivalDate: materialArrivalDate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    projectId: projectId
+                )
+            )
+        case .quote:
+            guard !name.isEmpty else { return }
+            store.quoteItems.append(
+                QuoteItem(
+                    name: name,
+                    unitPrice: price,
+                    quantity: qty,
+                    unit: unit,
+                    notes: "",
+                    taxRate: "0",
+                    discountRate: "0",
+                    versionName: quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    status: quoteStatus.rawValue,
+                    customerConfirmedDate: quoteConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    contractAmount: quoteContractAmount,
+                    projectId: projectId
+                )
+            )
+        case .log:
+            store.dailyLogs.insert(DailyLog(
+                date: df.string(from: logDate),
+                weather: weather,
+                content: content,
+                workers: workers,
+                photoFileName: nil,
+                safety: safety,
+                materials: materials,
+                tomorrowPlan: tomorrowPlan,
+                qualityIssue: qualityIssue,
+                rectification: rectification,
+                confirmer: confirmer,
+                projectId: projectId
+            ), at: 0)
+        case .labor:
+            store.laborRecords.append(LaborRecord(date: df.string(from: laborDate), workers: workers, hours: hours, unitRate: unitRate, note: notes, projectId: projectId))
+        }
+        store.scheduleSave()
+    }
+}
