@@ -2,13 +2,6 @@ import Foundation
 import SwiftUI
 
 struct ProjectListView: View {
-    private enum NewProjectNumericField: Hashable {
-        case contractAmount
-        case paidAmount
-        case materialCost
-        case laborCost
-    }
-
     @Environment(DataStore.self) private var store
     @Environment(ProjectStore.self) private var projectStore
     @Environment(FinanceStore.self) private var financeStore
@@ -34,7 +27,7 @@ struct ProjectListView: View {
     @State private var sortOption: ProjectSortOption = .recentUpdate
     @State private var selectedProjectId: UUID?
     @State private var lastHandledAutoOpenComposerToken = 0
-    @FocusState private var newProjectFocusedField: NewProjectNumericField?
+    @FocusState private var newProjectFocusedField: ProjectCreateNumericField?
     private let autoOpenComposerToken: Int
     private let prefersSplitNavigation: Bool?
 
@@ -141,7 +134,30 @@ struct ProjectListView: View {
             }
         }
         .sheet(isPresented: $showAdd) {
-            addProjectForm
+            ProjectCreateSheet(
+                name: $newName,
+                location: $newLocation,
+                customerName: $newCustomerName,
+                customerPhone: $newCustomerPhone,
+                managerName: $newManagerName,
+                startDate: $newStartDate,
+                expectedEndDate: $newExpectedEndDate,
+                contractAmount: $newContractAmount,
+                paidAmount: $newPaidAmount,
+                materialCost: $newMaterialCost,
+                laborCost: $newLaborCost,
+                paymentStatus: $newPaymentStatus,
+                focusedField: $newProjectFocusedField,
+                canCreate: canCreateProject,
+                onCancel: {
+                    clearProject()
+                    showAdd = false
+                },
+                onCreate: {
+                    addProject()
+                    showAdd = false
+                }
+            )
         }
         .confirmationDialog("删除项目", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("归档项目，保留全部数据") { archiveProject() }
@@ -229,113 +245,15 @@ struct ProjectListView: View {
 
     @ViewBuilder
     private func searchFilterSection(isSplitNavigation: Bool) -> some View {
-        Section {
-            // 搜索栏
-            HStack(spacing: AppSpacing.tight) {
-                Image(systemName: "magnifyingglass")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                TextField("搜索项目名称或地点", text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            // 状态筛选 chips + 排序 + 清除
-            if isSplitNavigation {
-                HStack(spacing: AppSpacing.tight) {
-                    Menu {
-                        Button("全部状态") { statusFilter = nil }
-                        ForEach(ProjectStatus.allCases, id: \.rawValue) { status in
-                            Button(status.displayName) {
-                                statusFilter = status
-                            }
-                        }
-                    } label: {
-                        Label(statusFilter?.displayName ?? "全部状态", systemImage: "line.3.horizontal.decrease.circle")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, AppSpacing.normal)
-                            .padding(.vertical, 6)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                    }
-
-                    Menu {
-                        ForEach(ProjectSortOption.allCases, id: \.self) { option in
-                            Button(option.displayName) {
-                                sortOption = option
-                            }
-                        }
-                    } label: {
-                        Label(sortOption.displayName, systemImage: "arrow.up.arrow.down.circle")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, AppSpacing.normal)
-                            .padding(.vertical, 6)
-                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                    }
-
-                    Spacer(minLength: 0)
-
-                    if hasAnyFilterApplied {
-                        Button {
-                            clearAllFilters()
-                        } label: {
-                            Label("清除", systemImage: "xmark.circle")
-                                .font(.caption.weight(.semibold))
-                        }
-                    }
-                }
-            } else {
-                VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: AppSpacing.tight) {
-                            FilterChip(title: "全部", isSelected: statusFilter == nil) { statusFilter = nil }
-                            ForEach(ProjectStatus.allCases, id: \.rawValue) { s in
-                                FilterChip(title: s.rawValue, isSelected: statusFilter == s) { statusFilter = s }
-                            }
-                        }
-                        .padding(.vertical, 4)
-                    }
-
-                    HStack(spacing: AppSpacing.tight) {
-                        Picker("排序", selection: $sortOption) {
-                            ForEach(ProjectSortOption.allCases, id: \.self) { option in
-                                Text(option.rawValue).tag(option)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        Spacer(minLength: 0)
-
-                        if hasAnyFilterApplied {
-                            Button("清除筛选") {
-                                clearAllFilters()
-                            }
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.orange)
-                        }
-                    }
-                }
-            }
-
-            if overviewFilter != nil {
-                Button {
-                    overviewFilter = nil
-                } label: {
-                    Label("清除概况筛选", systemImage: "xmark.circle")
-                        .font(.caption.weight(.semibold))
-                }
-            }
-        } header: {
-            Text("搜索与筛选")
-        }
+        ProjectListFiltersSection(
+            searchText: $searchText,
+            statusFilter: $statusFilter,
+            sortOption: $sortOption,
+            overviewFilter: $overviewFilter,
+            hasAnyFilterApplied: hasAnyFilterApplied,
+            isSplitNavigation: isSplitNavigation,
+            onClearAll: clearAllFilters
+        )
     }
 
     // MARK: - 空状态
@@ -468,86 +386,6 @@ struct ProjectListView: View {
               autoOpenComposerToken != lastHandledAutoOpenComposerToken else { return }
         lastHandledAutoOpenComposerToken = autoOpenComposerToken
         showAdd = true
-    }
-
-    private var addProjectForm: some View {
-        NavigationStack {
-            Form {
-                Section("工程信息") {
-                    TextField("工程名称", text: $newName)
-                    TextField("项目地址", text: $newLocation, axis: .vertical)
-                        .lineLimit(2...4)
-                    TextField("负责人", text: $newManagerName)
-                }
-                Section("客户") {
-                    TextField("客户姓名/单位", text: $newCustomerName)
-                    TextField("客户电话", text: $newCustomerPhone)
-                        .keyboardType(.phonePad)
-                }
-                Section("工期") {
-                    DatePicker("开工日期", selection: $newStartDate, displayedComponents: .date)
-                    DatePicker("预计完工", selection: $newExpectedEndDate, displayedComponents: .date)
-                }
-                Section("合同与收款") {
-                    LabeledContent("合同金额") {
-                        TextField("0", text: $newContractAmount)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($newProjectFocusedField, equals: .contractAmount)
-                    }
-                    LabeledContent("已收款") {
-                        TextField("0", text: $newPaidAmount)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($newProjectFocusedField, equals: .paidAmount)
-                    }
-                    LabeledContent("材料成本") {
-                        TextField("0", text: $newMaterialCost)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($newProjectFocusedField, equals: .materialCost)
-                    }
-                    LabeledContent("人工成本") {
-                        TextField("0", text: $newLaborCost)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($newProjectFocusedField, equals: .laborCost)
-                    }
-                    Picker("收款状态", selection: $newPaymentStatus) {
-                        ForEach(PaymentStatus.allCases, id: \.self) { status in
-                            Text(status.rawValue).tag(status)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("新建工程")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
-                        clearProject()
-                        showAdd = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("创建") {
-                        addProject()
-                        showAdd = false
-                    }
-                    .disabled(!canCreateProject)
-                }
-                KeyboardNavigationToolbar(
-                    focusedField: $newProjectFocusedField,
-                    fields: [.contractAmount, .paidAmount, .materialCost, .laborCost]
-                )
-            }
-        }
-        .presentationDetents([.large])
-    }
-
-    @ViewBuilder
-    private func statusBadge(_ status: ProjectStatus) -> some View {
-        ProjectStatusBadge(status: status)
     }
 
     private func deleteProject(keepData: Bool) {
@@ -702,163 +540,5 @@ struct ProjectListView: View {
             latest = max(latest, latestLabor)
         }
         return latest
-    }
-}
-
-// MARK: - 项目行内容（统一组件）
-
-private struct ProjectRowContent: View {
-    let project: Project
-    let isSelected: Bool
-    let unpaidAmount: Double
-    let badges: [ProjectRiskBadge]
-
-    private var riskColor: Color {
-        if badges.contains(where: { $0.color == .red }) { return .red }
-        if badges.contains(where: { $0.color == .orange }) { return .orange }
-        if badges.contains(where: { $0.color == .pink }) { return .pink }
-        return isSelected ? .orange : .clear
-    }
-
-    var body: some View {
-        HStack(alignment: .top, spacing: AppSpacing.normal) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(riskColor)
-                .frame(width: 4)
-
-            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.625) {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
-                    Text(project.name)
-                        .font(.body.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: AppSpacing.tight)
-                    ProjectStatusBadge(status: project.status)
-                }
-
-                HStack(spacing: AppSpacing.tight) {
-                    if !project.location.isEmpty {
-                        Image(systemName: "mappin").font(.caption2)
-                        Text(project.location)
-                    }
-                    if !project.customerName.isEmpty {
-                        Text("·")
-                        Text(project.customerName)
-                    }
-                    if !project.expectedEndDate.isEmpty {
-                        Text("·")
-                        Text("完工 \(project.expectedEndDate)")
-                    }
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-                HStack(spacing: AppSpacing.tight) {
-                    if !project.contractAmount.isEmpty {
-                        Text("合同 \(ReportBuilder.money(project.contractAmountValue.doubleValue))")
-                            .font(.caption2.weight(.medium))
-                    }
-                    if unpaidAmount > 0 {
-                        Text("未收 \(ReportBuilder.money(unpaidAmount))")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.secondary)
-
-                if !badges.isEmpty {
-                    HStack(spacing: 6) {
-                        ForEach(Array(badges.prefix(3)), id: \.title) { badge in
-                            ProjectRiskBadgeView(badge: badge)
-                        }
-                        if badges.count > 3 {
-                            Text("+\(badges.count - 3)")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 2)
-    }
-}
-
-// MARK: - 项目状态标签
-
-private struct ProjectStatusBadge: View {
-    let status: ProjectStatus
-
-    private var color: Color {
-        switch status {
-        case .active: return .orange
-        case .paused: return .yellow
-        case .completed: return .green
-        case .settled: return .blue
-        case .archived: return .gray
-        }
-    }
-
-    var body: some View {
-        Text(status.displayName)
-            .font(.caption2.weight(.medium))
-            .padding(.horizontal, AppSpacing.tight)
-            .padding(.vertical, 2)
-            .background(color.opacity(0.2))
-            .clipShape(Capsule())
-    }
-}
-
-// MARK: - 风险标签
-
-private struct ProjectRiskBadgeView: View {
-    let badge: ProjectRiskBadge
-
-    var body: some View {
-        Label(badge.title, systemImage: badge.systemImage)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(badge.color)
-            .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 7)
-            .padding(.vertical, 3)
-            .background(badge.color.opacity(0.14), in: Capsule())
-            .lineLimit(1)
-    }
-}
-
-enum ProjectOverviewFilter: String {
-    case active
-    case overdue
-    case todo
-    case missingReceipt
-    case financialDue
-    case missingTodayLog
-}
-
-private enum ProjectSortOption: String, CaseIterable {
-    case recentUpdate = "最近更新"
-    case expectedEnd = "预计完工"
-    case unpaidAmount = "未收款"
-
-    var displayName: String { rawValue }
-}
-
-private struct ProjectRiskBadge {
-    let title: String
-    let systemImage: String
-    let color: Color
-}
-
-private struct FilterChip: View {
-    let title: String; let isSelected: Bool; let action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Text(title).font(.caption.weight(.medium))
-                .padding(.horizontal, AppSpacing.normal).padding(.vertical, 6)
-                .background(isSelected ? Color.orange : Color.gray.opacity(0.15))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
-        }
     }
 }

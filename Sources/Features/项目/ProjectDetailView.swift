@@ -587,7 +587,8 @@ struct ProjectDetailView: View {
     }
 
     private func usesInlineDetailLayout(for availableWidth: CGFloat) -> Bool {
-        usesWideDetailLayout && availableWidth >= 720
+        _ = availableWidth
+        return usesWideDetailLayout
     }
 
     private func paidAmount(_ project: Project, snapshot: ProjectDetailSnapshot) -> Double {

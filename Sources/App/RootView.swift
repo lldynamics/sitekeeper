@@ -171,7 +171,7 @@ struct RootView: View {
             NavigationStack {
                 ProjectListView(
                     autoOpenComposerToken: projectComposerOpenToken,
-                    prefersSplitNavigation: false
+                    prefersSplitNavigation: true
                 )
             }
         case .checklist:
