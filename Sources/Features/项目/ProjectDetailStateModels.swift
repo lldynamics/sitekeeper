@@ -1,16 +1,20 @@
 import Foundation
+import Observation
 import SwiftUI
+import PhotosUI
+import UIKit
 
 @MainActor
-final class ProjectDetailExportStateModel: ObservableObject {
-    @Published var exportPayload: ExportPayload?
-    @Published var showExporter = false
-    @Published var pendingPackageProject: Project?
-    @Published var packageSizeWarningMessage = ""
-    @Published var showPackageSizeWarning = false
-    @Published var projectPackageExportTask: Task<Void, Never>?
-    @Published var isExportingProjectPackage = false
-    @Published var projectPackageExportProgress = ProjectPackageExportProgress(
+@Observable
+final class ProjectDetailExportStateModel {
+    var exportPayload: ExportPayload?
+    var showExporter = false
+    var pendingPackageProject: Project?
+    var packageSizeWarningMessage = ""
+    var showPackageSizeWarning = false
+    var projectPackageExportTask: Task<Void, Never>?
+    var isExportingProjectPackage = false
+    var projectPackageExportProgress = ProjectPackageExportProgress(
         completedSteps: 0,
         totalSteps: 1,
         currentItem: "准备导出"
@@ -21,4 +25,28 @@ final class ProjectDetailExportStateModel: ObservableObject {
         projectPackageExportTask = nil
         isExportingProjectPackage = false
     }
+}
+
+struct ProjectDetailFinanceState {
+    var financialAddSeed: ProjectFinancialRecord?
+    var editingFinancialRecord: ProjectFinancialRecord?
+    var attachmentManagingRecord: ProjectFinancialRecord?
+    var showFinancialDeleteConfirm = false
+    var pendingDeleteFinancialRecordIDs: Set<UUID> = []
+}
+
+struct ProjectDetailAssetState {
+    var showDocumentFileImporter = false
+    var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
+    var selectedPhotoItem: PhotosPickerItem?
+    var editingDrawing: ProjectDrawing?
+    var editingDocument: ProjectDocument?
+    var editingContact: ProjectContact?
+    var timelineContext: DrawingTimelineContext?
+    var selectedPhotoContext: ProjectPhotoContext?
+    var quickLookURL: URL?
+    var showDrawingImporter = false
+    var scanTarget: ProjectScanTarget?
+    var importErrorMessage = ""
+    var showImportError = false
 }

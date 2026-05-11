@@ -3,6 +3,7 @@ import SwiftUI
 @main
 struct SitekeeperApp: App {
     @State private var store: DataStore
+    @State private var scenePhaseTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -17,19 +18,22 @@ struct SitekeeperApp: App {
         WindowGroup {
             RootView()
                 .environment(store)
+                .environment(store.projectStore)
+                .environment(store.financeStore)
+                .environment(store.materialLibraryStore)
+                .environment(store.userPreferenceStore)
         }
         .onChange(of: scenePhase) { _, newPhase in
-            switch newPhase {
-            case .active:
-                Task {
+            scenePhaseTask?.cancel()
+            scenePhaseTask = Task {
+                switch newPhase {
+                case .active:
                     await CloudAutoBackupScheduler.shared.triggerIfNeeded(store: store)
-                }
-            case .background, .inactive:
-                Task {
+                case .background, .inactive:
                     await store.flushSave()
+                default:
+                    break
                 }
-            default:
-                break
             }
         }
     }

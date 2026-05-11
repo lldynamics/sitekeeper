@@ -4,6 +4,18 @@ import UniformTypeIdentifiers
 struct LightingCircuitPlannerView: View {
     @Environment(DataStore.self) private var store
 
+    @AppStorage("calc.lightingPlanner.planName") private var savedPlanName: String = ""
+    @AppStorage("calc.lightingPlanner.supplyType") private var savedSupplyTypeRawValue: String = CircuitSupplyType.singlePhase.rawValue
+    @AppStorage("calc.lightingPlanner.voltage") private var savedVoltage: String = "220"
+    @AppStorage("calc.lightingPlanner.powerFactor") private var savedPowerFactor: String = "0.90"
+    @AppStorage("calc.lightingPlanner.demandFactor") private var savedDemandFactor: String = "0.90"
+    @AppStorage("calc.lightingPlanner.breakerFactor") private var savedBreakerFactor: String = "1.25"
+    @AppStorage("calc.lightingPlanner.wireFactor") private var savedWireFactor: String = "1.15"
+    @AppStorage("calc.lightingPlanner.mainBreakerLimitA") private var savedMainBreakerLimitA: String = "100"
+    @AppStorage("calc.lightingPlanner.imbalanceLimitPercent") private var savedImbalanceLimitPercent: String = "15"
+    @AppStorage("calc.lightingPlanner.isCopper") private var savedIsCopper: Bool = true
+    @AppStorage("calc.lightingPlanner.rows") private var savedRowsJSON: String = ""
+
     @State private var selectedProjectId: UUID?
     @State private var selectedPlanId: UUID?
     @State private var planName: String = ""
@@ -20,9 +32,13 @@ struct LightingCircuitPlannerView: View {
 
     @State private var rows: [LightingCircuitLoad] = [LightingCircuitLoad(name: "照明回路 1", powerKW: "3.0")]
     @State private var resultText = ""
+    @State private var resultModel: CalculationResult?
     @State private var exportFormat: CircuitPlanExportFormat = .pdf
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
+    @State private var didRestorePersistedInputs = false
+    @State private var isRestoringPersistedInputs = false
+    @FocusState private var isInputFocused: Bool
 
     init(initialProjectId: UUID? = nil) {
         _selectedProjectId = State(initialValue: initialProjectId)
@@ -47,6 +63,7 @@ struct LightingCircuitPlannerView: View {
                 LabeledContent("方案名称") {
                     TextField("例如：3层公共照明", text: $planName)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
 
                 Picker("已保存方案", selection: $selectedPlanId) {
@@ -82,32 +99,40 @@ struct LightingCircuitPlannerView: View {
                     }
                 }
                 .onChange(of: supplyType) { _, newType in
-                    voltage = newType.defaultVoltage
+                    if !isRestoringPersistedInputs {
+                        voltage = newType.defaultVoltage
+                    }
+                    persistInputs()
                 }
                 LabeledContent("电压 (V)") {
                     TextField("220 / 380", text: $voltage)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
-                LabeledContent("功率因数") {
+                LabeledContent("功率因数 (0-1)") {
                     TextField("0.90", text: $powerFactor)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
-                LabeledContent("需用系数") {
+                LabeledContent("需用系数 (0-1)") {
                     TextField("0.90", text: $demandFactor)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
-                LabeledContent("断路器裕量") {
+                LabeledContent("断路器裕量 (倍)") {
                     TextField("1.25", text: $breakerFactor)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
-                LabeledContent("线径裕量") {
+                LabeledContent("线径裕量 (倍)") {
                     TextField("1.15", text: $wireFactor)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
                 Toggle("铜导线", isOn: $isCopper)
             }
@@ -117,11 +142,13 @@ struct LightingCircuitPlannerView: View {
                     TextField("100", text: $mainBreakerLimitA)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
                 LabeledContent("三相不平衡阈值 (%)") {
                     TextField("15", text: $imbalanceLimitPercent)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
             }
 
@@ -129,10 +156,12 @@ struct LightingCircuitPlannerView: View {
                 ForEach($rows) { $row in
                     VStack(alignment: .leading, spacing: 8) {
                         TextField("回路名称", text: $row.name)
+                            .focused($isInputFocused)
                         LabeledContent("装机功率 (kW)") {
                             TextField("0", text: $row.powerKW)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
+                                .focused($isInputFocused)
                         }
                         if rows.count > 1 {
                             Button("删除回路", role: .destructive) {
@@ -151,20 +180,42 @@ struct LightingCircuitPlannerView: View {
             }
 
             Section {
-                Button("生成回路表") { evaluate() }
+                Button("生成回路表") {
+                    isInputFocused = false
+                    evaluate()
+                }
                     .frame(maxWidth: .infinity)
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty {
+            if !resultText.isEmpty, let resultModel {
                 Section("计算结果") {
-                    Text(resultText)
-                        .font(.system(.body, design: .monospaced))
+                    CalculatorResultCard(
+                        title: "照明回路评估",
+                        result: resultModel,
+                        copyText: resultText
+                    )
                 }
             }
         }
         .navigationTitle("照明回路表")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            KeyboardDismissToolbar {
+                isInputFocused = false
+            }
+        }
+        .onAppear(perform: restorePersistedInputsIfNeeded)
+        .onChange(of: planName) { _, _ in persistInputs() }
+        .onChange(of: voltage) { _, _ in persistInputs() }
+        .onChange(of: powerFactor) { _, _ in persistInputs() }
+        .onChange(of: demandFactor) { _, _ in persistInputs() }
+        .onChange(of: breakerFactor) { _, _ in persistInputs() }
+        .onChange(of: wireFactor) { _, _ in persistInputs() }
+        .onChange(of: mainBreakerLimitA) { _, _ in persistInputs() }
+        .onChange(of: imbalanceLimitPercent) { _, _ in persistInputs() }
+        .onChange(of: isCopper) { _, _ in persistInputs() }
+        .onChange(of: rowDraftSignature) { _, _ in persistInputs() }
         .fileExporter(
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
@@ -196,27 +247,45 @@ struct LightingCircuitPlannerView: View {
     }
 
     private func evaluate() {
-        guard let v = Double(voltage), v > 0,
-              let pf = Double(powerFactor), pf > 0, pf <= 1,
-              let demand = Double(demandFactor), demand > 0,
-              let bFactor = Double(breakerFactor), bFactor > 0,
-              let wFactor = Double(wireFactor), wFactor > 0,
-              let mainBreakerLimit = Double(mainBreakerLimitA), mainBreakerLimit > 0,
-              let imbalanceLimit = Double(imbalanceLimitPercent), imbalanceLimit > 0 else {
-            resultText = "请输入有效参数"
+        let v = DataValueParser.double(from: voltage)
+        let pf = DataValueParser.double(from: powerFactor)
+        let demand = DataValueParser.double(from: demandFactor)
+        let bFactor = DataValueParser.double(from: breakerFactor)
+        let wFactor = DataValueParser.double(from: wireFactor)
+        let mainBreakerLimit = DataValueParser.double(from: mainBreakerLimitA)
+        let imbalanceLimit = DataValueParser.double(from: imbalanceLimitPercent)
+        guard v > 0,
+              pf > 0, pf <= 1,
+              demand > 0,
+              bFactor > 0,
+              wFactor > 0,
+              mainBreakerLimit > 0,
+              imbalanceLimit > 0 else {
+            presentError("请输入有效参数")
             return
         }
 
+        var rowValidationError: String?
         let validRows = rows.compactMap { row -> CircuitEvalRow? in
-            let power = Double(row.powerKW) ?? 0
+            let power = DataValueParser.double(from: row.powerKW)
             guard power > 0 else { return nil }
             let demandPower = power * demand
-            let current = EngineeringCalculations.circuitCurrent(
+            let current: Double
+            switch EngineeringCalculations.circuitCurrentValidated(
                 powerKW: demandPower,
                 voltage: v,
                 powerFactor: pf,
                 isThreePhase: supplyType == .threePhase
-            )
+            ) {
+            case .success(let value):
+                current = value
+            case .failure(let error):
+                if rowValidationError == nil {
+                    let displayName = row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名回路" : row.name
+                    rowValidationError = "\(displayName)：\(error.userMessage)"
+                }
+                return nil
+            }
             let breaker = EngineeringCalculations.recommendedBreaker(current: current, safetyFactor: bFactor)
             let wire = EngineeringCalculations.recommendedWireSectionByAmpacity(current: current, isCopper: isCopper, safetyFactor: wFactor)
             return CircuitEvalRow(
@@ -229,8 +298,13 @@ struct LightingCircuitPlannerView: View {
             )
         }
 
+        if let rowValidationError {
+            presentError(rowValidationError)
+            return
+        }
+
         guard !validRows.isEmpty else {
-            resultText = "请至少填写一个回路的有效功率"
+            presentError("请至少填写一个回路的有效功率")
             return
         }
 
@@ -270,13 +344,17 @@ struct LightingCircuitPlannerView: View {
 
         var warnings: [String] = []
         var currentForMainBreaker = totalCurrent
+        var phaseSummary: String?
 
         if supplyType == .threePhase {
             let totals = EngineeringCalculations.phaseTotals(currents: validRows.map(\.currentA), assignments: phaseAssignments)
             let imbalance = EngineeringCalculations.threePhaseImbalancePercent(phaseTotals: totals)
             currentForMainBreaker = totals.max() ?? totalCurrent
-            lines.append("- A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A")
+            if totals.count >= 3 { lines.append("- A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A") }
             lines.append("- 三相不平衡: \(fmt(imbalance))%")
+            phaseSummary = totals.count >= 3
+                ? "A/B/C相: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A"
+                : nil
             if imbalance > imbalanceLimit {
                 warnings.append("三相不平衡 \(fmt(imbalance))% 超过阈值 \(fmt(imbalanceLimit))%")
             }
@@ -296,17 +374,47 @@ struct LightingCircuitPlannerView: View {
             lines += warnings.map { "- \($0)" }
         }
 
-        resultText = lines.joined(separator: "\n")
-        store.historyRecords.insert(
-            HistoryRecord(
-                tool: "照明回路表",
-                input: "\(validRows.count)回路, \(Int(v))V",
-                result: "总电流 \(fmt(totalCurrent))A",
-                date: Formatters.now()
-            ),
-            at: 0
+        var summaryItems: [CalculationResult.ResultItem] = [
+            CalculationResult.item("供电", "\(supplyType.displayName) \(Int(v))V"),
+            CalculationResult.item("回路数", "\(validRows.count)"),
+            CalculationResult.item("总装机功率", "\(fmt(totalInstalled)) kW"),
+            CalculationResult.item("总计算功率", "\(fmt(totalDemand)) kW"),
+            CalculationResult.item("电流合计", "\(fmt(totalCurrent)) A"),
+            CalculationResult.item("主开关建议", "\(mainBreakerRecommend)A", status: warnings.isEmpty ? .pass : .warning),
+        ]
+        if let phaseSummary {
+            summaryItems.append(CalculationResult.item("三相分配", phaseSummary))
+        }
+        if warnings.isEmpty {
+            summaryItems.append(CalculationResult.item("预警状态", "未触发超限", status: .pass))
+        } else {
+            for warning in warnings {
+                summaryItems.append(CalculationResult.item("预警", warning, status: .warning))
+            }
+        }
+
+        let rowItems = validRows.map { row -> CalculationResult.ResultItem in
+            let wireText = row.wireSection.map { "\(fmtSection($0))mm²" } ?? "超规格"
+            let status: CalculationResult.ResultStatus = row.wireSection == nil ? .warning : .normal
+            return CalculationResult.item(
+                row.name,
+                "I=\(fmt(row.currentA))A / 空开\(row.breakerA)A / 线径\(wireText)",
+                status: status
+            )
+        }
+        resultModel = CalculationResult(
+            headline: warnings.isEmpty ? "未触发预警" : "\(warnings.count) 项预警",
+            sections: [
+                .init(title: "汇总", items: summaryItems),
+                .init(title: "回路明细", items: rowItems),
+            ]
         )
-        store.scheduleSave()
+        resultText = lines.joined(separator: "\n")
+        store.appendCalculationHistory(
+            tool: "照明回路表",
+            input: "\(validRows.count)回路, \(Int(v))V",
+            result: "总电流 \(fmt(totalCurrent))A"
+        )
     }
 
     private func exportCurrentProjectPlans() {
@@ -343,6 +451,8 @@ struct LightingCircuitPlannerView: View {
         isCopper = plan.isCopper
         rows = plan.loads.isEmpty ? [LightingCircuitLoad(name: "照明回路 1", powerKW: "")] : plan.loads
         resultText = ""
+        resultModel = nil
+        persistInputs()
     }
 
     private func savePlan(overwrite: Bool) {
@@ -391,6 +501,7 @@ struct LightingCircuitPlannerView: View {
         }
         planName = finalName
         store.scheduleSave()
+        persistInputs()
     }
 
     private func deleteSelectedPlan() {
@@ -398,6 +509,7 @@ struct LightingCircuitPlannerView: View {
         store.lightingCircuitPlans.removeAll { $0.id == selected.id }
         selectedPlanId = nil
         store.scheduleSave()
+        persistInputs()
     }
 
     private var defaultPlanName: String {
@@ -423,6 +535,58 @@ struct LightingCircuitPlannerView: View {
         case 2: return "C"
         default: return "-"
         }
+    }
+
+    private func presentError(_ message: String) {
+        resultText = message
+        resultModel = .error(message)
+    }
+
+    private func restorePersistedInputsIfNeeded() {
+        guard !didRestorePersistedInputs else { return }
+        didRestorePersistedInputs = true
+        isRestoringPersistedInputs = true
+
+        planName = savedPlanName
+        supplyType = StringEnumFallback.value(savedSupplyTypeRawValue, default: CircuitSupplyType.singlePhase)
+        voltage = savedVoltage
+        powerFactor = savedPowerFactor
+        demandFactor = savedDemandFactor
+        breakerFactor = savedBreakerFactor
+        wireFactor = savedWireFactor
+        mainBreakerLimitA = savedMainBreakerLimitA
+        imbalanceLimitPercent = savedImbalanceLimitPercent
+        isCopper = savedIsCopper
+        if let data = savedRowsJSON.data(using: .utf8),
+           let decodedRows = try? JSONDecoder().decode([LightingCircuitLoad].self, from: data),
+           !decodedRows.isEmpty {
+            rows = decodedRows
+        }
+
+        isRestoringPersistedInputs = false
+    }
+
+    private func persistInputs() {
+        guard !isRestoringPersistedInputs else { return }
+        savedPlanName = planName
+        savedSupplyTypeRawValue = supplyType.rawValue
+        savedVoltage = voltage
+        savedPowerFactor = powerFactor
+        savedDemandFactor = demandFactor
+        savedBreakerFactor = breakerFactor
+        savedWireFactor = wireFactor
+        savedMainBreakerLimitA = mainBreakerLimitA
+        savedImbalanceLimitPercent = imbalanceLimitPercent
+        savedIsCopper = isCopper
+        if let data = try? JSONEncoder().encode(rows),
+           let encodedRows = String(data: data, encoding: .utf8) {
+            savedRowsJSON = encodedRows
+        }
+    }
+
+    private var rowDraftSignature: String {
+        rows.map { "\($0.id.uuidString)|\($0.name)|\($0.powerKW)" }
+            .joined(separator: "\n")
     }
 }
 

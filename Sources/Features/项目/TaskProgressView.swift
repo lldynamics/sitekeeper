@@ -2,6 +2,7 @@ import SwiftUI
 
 struct TaskProgressView: View {
     @Environment(DataStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let initialProjectId: UUID?
     @State private var showAdd = false
     @State private var newProjectId: UUID?
@@ -13,6 +14,7 @@ struct TaskProgressView: View {
     @State private var mode: ProgressDisplayMode = .timeline
     @State private var projectFilter: UUID?
     @State private var statusFilter: ProgressStatusFilter = .all
+    @State private var operationMessage: String?
 
     init(initialProjectId: UUID? = nil) {
         self.initialProjectId = initialProjectId
@@ -51,9 +53,35 @@ struct TaskProgressView: View {
         }
     }
 
+    private var usesSplitLayout: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
     var body: some View {
+        Group {
+            if usesSplitLayout {
+                splitProgressLayout
+            } else {
+                compactProgressLayout
+            }
+        }
+        .navigationTitle("施工进度")
+        .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: $showAdd) {
+            addTaskForm
+        }
+        .operationToast(message: $operationMessage)
+    }
+
+    private var compactProgressLayout: some View {
         List {
             Section {
+                ProjectContextStrip(
+                    title: "当前工程",
+                    projects: store.projects,
+                    selectedProjectId: $projectFilter,
+                    emptyText: "全部项目"
+                )
                 Picker("视图", selection: $mode) {
                     ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
@@ -67,31 +95,84 @@ struct TaskProgressView: View {
                         Text(project.name).tag(project.id as UUID?)
                     }
                 }
-                Picker("状态", selection: $statusFilter) {
-                    ForEach(ProgressStatusFilter.allCases, id: \.self) { filter in
-                        Text(filter.displayName).tag(filter)
-                    }
-                }
-                .pickerStyle(.segmented)
+                FilterChipBar(
+                    options: ProgressStatusFilter.allCases,
+                    selection: $statusFilter,
+                    title: { $0.displayName }
+                )
             }
 
             if visibleTasks.isEmpty {
                 ContentUnavailableView("暂无进度任务", systemImage: "calendar.badge.plus", description: Text("添加任务后可按项目跟踪节点、完成率和延期情况"))
+                Button {
+                    showAdd = true
+                } label: {
+                    Label("新建进度任务", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(Color.appPrimaryAction)
             } else if mode == .timeline {
                 timelineContent
             } else {
                 listContent
             }
         }
-        .navigationTitle("施工进度")
-        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            Button { showAdd = true } label: { Image(systemName: "plus") }
-            .accessibilityLabel("新建进度任务")
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: {
+                    Image(systemName: "plus")
+                        .visibleIconStyle()
+                }
+                .accessibilityLabel("新建进度任务")
+            }
         }
-        .sheet(isPresented: $showAdd) {
-            addTaskForm
+    }
+
+    private var splitProgressLayout: some View {
+        NavigationSplitView {
+            List {
+                Section("筛选") {
+                    ProjectContextStrip(
+                        title: "当前工程",
+                        projects: store.projects,
+                        selectedProjectId: $projectFilter,
+                        emptyText: "全部项目"
+                    )
+                    Picker("视图", selection: $mode) {
+                        ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                    FilterChipBar(
+                        options: ProgressStatusFilter.allCases,
+                        selection: $statusFilter,
+                        title: { $0.displayName }
+                    )
+                }
+                Section("快捷操作") {
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Label("新建进度任务", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.appPrimaryAction)
+                }
+            }
+            .navigationTitle("进度筛选")
+        } detail: {
+            List {
+                if visibleTasks.isEmpty {
+                    ContentUnavailableView("暂无进度任务", systemImage: "calendar.badge.plus", description: Text("添加任务后可按项目跟踪节点、完成率和延期情况"))
+                } else if mode == .timeline {
+                    timelineContent
+                } else {
+                    listContent
+                }
+            }
         }
+        .navigationSplitViewStyle(.balanced)
     }
 
     private var timelineContent: some View {
@@ -278,6 +359,7 @@ struct TaskProgressView: View {
             note: newNote
         ))
         store.scheduleSave()
+        operationMessage = "已新增进度任务"
         newTitle = ""
         newProjectId = nil
         newCompletion = 0
@@ -290,6 +372,7 @@ struct TaskProgressView: View {
         let ids = offsets.compactMap { tasks.indices.contains($0) ? tasks[$0].id : nil }
         store.progressTasks.removeAll { ids.contains($0.id) }
         store.scheduleSave()
+        operationMessage = "已删除 \(ids.count) 条任务"
     }
 
     private func isOverdue(_ task: ProgressTask) -> Bool {
@@ -378,7 +461,7 @@ private struct TimelineScale: View {
                         path.addLine(to: CGPoint(x: x, y: 12))
                     }
                 }
-                .stroke(Color.gray.opacity(0.35), lineWidth: 1)
+                .stroke(Color.appStrokeNeutral, lineWidth: 1)
             }
             .frame(height: 12)
         }

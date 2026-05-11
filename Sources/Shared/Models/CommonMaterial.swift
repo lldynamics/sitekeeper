@@ -35,7 +35,7 @@ enum MaterialCategory: String, CaseIterable, Identifiable {
 
 /// 预置常用材料库
 enum MaterialLibrary {
-    static let all: [CommonMaterial] = [
+    private static let rawCatalog: [CommonMaterial] = [
         // ==================== 电线 ====================
         CommonMaterial(name: "BV 铜芯线", specification: "1.5mm²", unit: "卷(100m)", category: .wire),
         CommonMaterial(name: "BV 铜芯线", specification: "2.5mm²", unit: "卷(100m)", category: .wire),
@@ -1057,4 +1057,25 @@ enum MaterialLibrary {
         CommonMaterial(name: "放电棒", specification: "10kV 配线", unit: "支", category: .other),
         CommonMaterial(name: "接地线（临时）", specification: "10kV 3×1.5m+10m", unit: "套", category: .other),
     ]
+
+    static var all: [CommonMaterial] { catalogIndex.all }
+
+    static var byCategory: [MaterialCategory: [CommonMaterial]] { catalogIndex.byCategory }
+
+    static func materials(for category: MaterialCategory) -> [CommonMaterial] {
+        catalogIndex.byCategory[category] ?? []
+    }
+
+    private static let catalogIndex: CatalogIndex = {
+        let materials = rawCatalog
+        return CatalogIndex(
+            all: materials,
+            byCategory: Dictionary(grouping: materials, by: \.category)
+        )
+    }()
+
+    private struct CatalogIndex {
+        let all: [CommonMaterial]
+        let byCategory: [MaterialCategory: [CommonMaterial]]
+    }
 }

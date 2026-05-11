@@ -13,7 +13,9 @@ Chinese guide: `README.zh-CN.md`
 - Lists: material list, labor records, quote management, custom material library, and project-linked records.
 - Projects: project list, business dashboard, project detail summary, editable progress tasks, calculation history, and enhanced daily logs.
 - Daily logs: list/calendar views, project/date/search filters, safety and material notes, weather capture, and multiple photo attachments.
-- Export and backup: CSV, PDF, Excel-compatible HTML, quote PDF export, full ZIP backup with original files, import merge/overwrite, and photo backup/restore.
+- Export and backup: CSV, PDF, Excel-compatible HTML, quote PDF export, full ZIP backup with original files, import merge/overwrite, iCloud backup/restore preview, and large-file ZIP64 streaming export.
+- Data health: one-click checks for missing files, orphan project links, and invalid references.
+- Widget: risk-priority project list (overdue/pending first), todo and stock snapshot, and sync timestamp.
 - Release basics: generated app icon, privacy manifest, bundle ID, version/build number, shared test scheme, and unit tests.
 
 ## Quick Start
@@ -68,6 +70,12 @@ UI tests:
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project sitekeeper.xcodeproj -scheme sitekeeper-iOS-UITests -destination 'id=<SIMULATOR_UDID>'
+```
+
+Release preflight:
+
+```sh
+scripts/release/preflight.sh
 ```
 
 ## Project Layout

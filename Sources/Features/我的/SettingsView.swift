@@ -6,15 +6,13 @@ struct SettingsView: View {
     @AppStorage(UserPreferenceKeys.autoSave) private var autoSave = true
     @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
-    @AppStorage(UserPreferenceKeys.companyName) private var companyName = ""
-    @AppStorage(UserPreferenceKeys.companyPhone) private var companyPhone = ""
-    @AppStorage(UserPreferenceKeys.companyAddress) private var companyAddress = ""
-    @AppStorage(UserPreferenceKeys.quoteValidityDays) private var quoteValidityDays = 15
     @AppStorage(UserPreferenceKeys.hasSeenBackupGuide) private var hasSeenBackupGuide = false
     @AppStorage(UserPreferenceKeys.hasSeenProjectFileRootGuide) private var hasSeenProjectFileRootGuide = false
     @AppStorage(UserPreferenceKeys.hasSeenProjectFileCategoryGuide) private var hasSeenProjectFileCategoryGuide = false
     @AppStorage(UserPreferenceKeys.hasCompletedBackupExportTask) private var hasCompletedBackupExportTask = false
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
+    @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
+    @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataConfirm = false
     @State private var showClearLocalDataSheet = false
@@ -46,7 +44,7 @@ struct SettingsView: View {
                 .onChange(of: languageCode) { _, newCode in
                     if let lang = AppLanguage(rawValue: newCode) {
                         AppLanguage.apply(lang)
-                        languageSwitchFeedback = "语言已切换；大部分页面会即时刷新，如仍有个别系统文案未变化，请重启 App。"
+                        languageSwitchFeedback = String(localized: "settings_language_switch_feedback")
                     }
                 }
                 if !languageSwitchFeedback.isEmpty {
@@ -55,27 +53,24 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
                 if !autoSave {
-                    Text("已关闭实时自动保存。为降低意外丢失风险，应用退到后台时仍会自动保存一次。")
+                    Text(String(localized: "settings_auto_save_disabled_hint"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("报价单公司信息") {
-                TextField("公司名称", text: $companyName)
-                TextField("公司电话", text: $companyPhone)
-                    .keyboardType(.phonePad)
-                TextField("公司地址", text: $companyAddress, axis: .vertical)
-                    .lineLimit(2...4)
-                Stepper(value: $quoteValidityDays, in: 1...180) {
-                    Text(String(localized: "报价有效期 \(quoteValidityDays) 天"))
-                }
-                if companyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || companyPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    || companyAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("未填写的字段会在导出报价单前提示补全。")
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                }
+            Section("账号") {
+                TextField("用户名", text: $userName)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .onChange(of: userName) { _, newValue in
+                        let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                        if normalized != newValue {
+                            userName = normalized
+                        }
+                    }
+                Text("用于在“我的”页面显示。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             if allowsSampleDataImport {
                 Section("示例数据") {
@@ -105,6 +100,12 @@ struct SettingsView: View {
                     }
                 }
             }
+            Section("实验功能") {
+                Toggle("显示模板管理入口", isOn: $showTemplates)
+                Text("默认关闭。开启后会在工具箱显示“模板管理”。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
             Section("使用提示") {
                 Button {
                     resetGuideState()
@@ -118,11 +119,6 @@ struct SettingsView: View {
                     Text(guideResetFeedback)
                         .font(.caption)
                         .foregroundStyle(.green)
-                }
-            }
-            Section("计算器") {
-                NavigationLink("管理收藏计算器") {
-                    FavoriteCalcEditor()
                 }
             }
             Section("关于") {
@@ -148,7 +144,7 @@ struct SettingsView: View {
                 showClearLocalDataSheet = true
             }
         } message: {
-            Text("此操作会删除本机全部项目数据与附件文件，且无法恢复。建议先在「数据备份」里导出 ZIP。")
+            Text("此操作会删除本机全部项目数据与附件文件，且无法恢复。建议先在「数据管理」里导出 ZIP。")
         }
         .sheet(isPresented: $showClearLocalDataSheet) {
             ClearLocalDataConfirmationSheet {
@@ -192,7 +188,7 @@ struct SettingsView: View {
 
 private struct FavoriteCalcEditor: View {
     @AppStorage(UserPreferenceKeys.favoriteCalculators) private var data = ""
-    private let all = CalculatorDestination.allCases.filter { $0 != .watermarkCamera }
+    private let all = CalculatorDestination.allCases
 
     private var favSet: Set<String> {
         Set(data.split(separator: ",").map(String.init).filter { !$0.isEmpty })
@@ -244,7 +240,7 @@ private struct ClearLocalDataConfirmationSheet: View {
                 Text("即将清空本机全部数据")
                     .font(.title2.weight(.semibold))
 
-                Text("此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。\n建议先在「数据备份」中导出一份 ZIP。")
+                Text("此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。\n建议先在「数据管理」中导出一份 ZIP。")
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)

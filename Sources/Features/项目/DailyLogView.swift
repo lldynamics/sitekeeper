@@ -90,14 +90,7 @@ struct DailyLogView: View {
         if let filterProjectId {
             result = result.filter { $0.projectId == filterProjectId }
         }
-        if !searchText.isEmpty {
-            result = result.filter {
-                $0.date.localizedStandardContains(searchText) ||
-                $0.content.localizedStandardContains(searchText) ||
-                $0.safety.localizedStandardContains(searchText) ||
-                $0.materials.localizedStandardContains(searchText)
-            }
-        }
+        result = SearchMatcher.filter(result, keyword: searchText)
         if isDateFilterActive {
             let df = Formatters.date
             let start = Calendar.current.startOfDay(for: filterStart)
@@ -328,7 +321,7 @@ struct DailyLogView: View {
     private var calendarContent: some View {
         Group {
             Section {
-                VStack(spacing: 12) {
+                VStack(spacing: AppSpacing.normal) {
                     HStack {
                         Button {
                             moveMonth(-1)
@@ -378,10 +371,11 @@ struct DailyLogView: View {
 
             Section(dayTitle(selectedCalendarDate)) {
                 if selectedDateLogs.isEmpty {
-                    Text("当天暂无日志")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, alignment: .center)
+                    ContentUnavailableView(
+                        "当天暂无日志",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("可切换日期或新增一条施工日志。")
+                    )
                 } else {
                     ForEach(selectedDateLogs) { log in
                         logRow(log)
@@ -402,7 +396,7 @@ struct DailyLogView: View {
     }
 
     private func logRow(_ log: DailyLog) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
             HStack {
                 Text(log.date).font(.body.weight(.medium))
                 Spacer()
@@ -439,7 +433,7 @@ struct DailyLogView: View {
             }
             if !log.photoAttachments.isEmpty {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: AppSpacing.tight) {
                         ForEach(log.photoAttachments) { photo in
                             VStack(alignment: .leading, spacing: 4) {
                                 if let thumbnail = PhotoStorage.thumbnail(for: photo.fileName) {
@@ -453,10 +447,10 @@ struct DailyLogView: View {
                                             .clipShape(RoundedRectangle(cornerRadius: 8))
                                         }
                                     .buttonStyle(.plain)
-                                    .accessibilityLabel("查看日志照片，标签 \(photo.tag)")
+                                    .accessibilityLabel("查看日志照片，标签 \(photo.tag.displayName)")
                                     .accessibilityHint("打开照片详情")
                                 }
-                                Text(photo.tag)
+                                Text(photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(.blue)
                                 if !photo.note.isEmpty {
@@ -523,12 +517,13 @@ struct DailyLogView: View {
             }
             .disabled(items.isEmpty)
             if items.isEmpty {
-                Text("暂无现场照片")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .center)
+                ContentUnavailableView(
+                    "暂无现场照片",
+                    systemImage: "photo.on.rectangle",
+                    description: Text("添加日志照片后可在这里按标签查看。")
+                )
             } else {
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 10) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.tight), count: 3), spacing: AppSpacing.normal) {
                     ForEach(items) { item in
                         Button {
                             if isPhotoSelecting {
@@ -562,12 +557,12 @@ struct DailyLogView: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(1)
-                                Text(item.photo.tag)
+                                Text(item.photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(.blue)
                                     .lineLimit(1)
                                 if hasRectificationPair(logId: item.logId),
-                                   (PhotoTag(rawValue: item.photo.tag) == .rectificationBefore || PhotoTag(rawValue: item.photo.tag) == .rectificationAfter) {
+                                   (item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter) {
                                     Text("已配对")
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(.green)
@@ -588,7 +583,7 @@ struct DailyLogView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityElement(children: .combine)
-                        .accessibilityLabel("\(item.logDate)，\(item.photo.tag)")
+                        .accessibilityLabel("\(item.logDate)，\(item.photo.tag.displayName)")
                         .accessibilityHint(isPhotoSelecting ? "双击切换选择状态" : "双击查看照片详情")
                     }
                 }
@@ -602,7 +597,7 @@ struct DailyLogView: View {
             log.photoAttachments.map { PhotoWallItem(logId: log.id, logDate: log.date, projectId: log.projectId, photo: $0) }
         }
         guard let photoTagFilter else { return allItems }
-        return allItems.filter { $0.photo.tag == photoTagFilter.rawValue }
+        return allItems.filter { $0.photo.tag == photoTagFilter }
     }
 
     private func photoSelectionKey(_ item: PhotoWallItem) -> String {
@@ -625,16 +620,16 @@ struct DailyLogView: View {
                 let photo = store.dailyLogs[logIndex].photos[photoIndex]
                 let key = "\(store.dailyLogs[logIndex].id.uuidString)-\(photo.fileName)"
                 if selectedPhotoKeys.contains(key) {
-                    store.dailyLogs[logIndex].photos[photoIndex].tag = batchPhotoTag.rawValue
+                    store.dailyLogs[logIndex].photos[photoIndex].tag = batchPhotoTag
                 }
             }
             if let legacy = store.dailyLogs[logIndex].photoFileName {
                 let key = "\(store.dailyLogs[logIndex].id.uuidString)-\(legacy)"
                 if selectedPhotoKeys.contains(key) {
                     if let idx = store.dailyLogs[logIndex].photos.firstIndex(where: { $0.fileName == legacy }) {
-                        store.dailyLogs[logIndex].photos[idx].tag = batchPhotoTag.rawValue
+                        store.dailyLogs[logIndex].photos[idx].tag = batchPhotoTag
                     } else {
-                        store.dailyLogs[logIndex].photos.append(LogPhoto(fileName: legacy, tag: batchPhotoTag.rawValue))
+                        store.dailyLogs[logIndex].photos.append(LogPhoto(fileName: legacy, tag: batchPhotoTag))
                     }
                 }
             }
@@ -645,7 +640,7 @@ struct DailyLogView: View {
 
     private func hasRectificationPair(logId: UUID) -> Bool {
         guard let log = store.dailyLogs.first(where: { $0.id == logId }) else { return false }
-        let tags = Set(log.photoAttachments.map { PhotoTag(rawValue: $0.tag) })
+        let tags = Set(log.photoAttachments.map(\.tag))
         return tags.contains(.rectificationBefore) && tags.contains(.rectificationAfter)
     }
 
@@ -660,7 +655,7 @@ struct DailyLogView: View {
             ReportPhotoItem(
                 date: item.logDate,
                 projectName: item.projectId.flatMap { pid in store.projects.first(where: { $0.id == pid })?.name } ?? "未归属",
-                tag: item.photo.tag,
+                tag: item.photo.tag.displayName,
                 note: item.photo.note,
                 fileName: item.photo.fileName
             )
@@ -853,7 +848,7 @@ struct DailyLogView: View {
             return
         }
         let photos = zip(fileNames, photoDrafts).map { fileName, draft in
-            LogPhoto(fileName: fileName, note: draft.note, tag: draft.tag.rawValue)
+            LogPhoto(fileName: fileName, note: draft.note, tag: draft.tag)
         }
         store.dailyLogs.insert(DailyLog(
             id: logId,
@@ -890,7 +885,7 @@ struct DailyLogView: View {
         store.scheduleSave()
     }
 
-    private func updatePhoto(context: SelectedPhotoContext, note: String, tag: String) {
+    private func updatePhoto(context: SelectedPhotoContext, note: String, tag: PhotoTag) {
         guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
         var log = store.dailyLogs[logIndex]
         if let photoIndex = log.photos.firstIndex(where: { $0.id == context.photoId }) {
@@ -931,15 +926,11 @@ struct DailyLogView: View {
     }
 
     private func monthTitle(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年M月"
-        return formatter.string(from: date)
+        DailyLogDateFormatters.monthTitle.string(from: date)
     }
 
     private func dayTitle(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M月d日"
-        return formatter.string(from: date)
+        DailyLogDateFormatters.dayTitle.string(from: date)
     }
 
     private func clearDraft() {
@@ -981,7 +972,7 @@ struct DailyLogView: View {
         viewMode = .list
         filterProjectId = log.projectId
         searchText = ""
-        DispatchQueue.main.async {
+        Task { @MainActor in
             startEdit(log)
         }
     }
@@ -1069,7 +1060,7 @@ struct DailyLogView: View {
         [
             "来源: 拍照",
             "拍摄时间: \(Formatters.dateTime.string(from: capturedAt))",
-            "标签: \(cameraPhotoTag.displayName)"
+            "标签: \(cameraPhotoTag.rawValue)"
         ].compactMap { $0 }.joined(separator: "\n")
     }
 
@@ -1078,4 +1069,22 @@ struct DailyLogView: View {
         let workersReady = newWorkers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || InputValidator.nonNegativeNumber(newWorkers)
         return contentReady && workersReady
     }
+}
+
+private enum DailyLogDateFormatters {
+    static let monthTitle: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.autoupdatingCurrent
+        formatter.timeZone = TimeZone.autoupdatingCurrent
+        formatter.dateFormat = "yyyy年M月"
+        return formatter
+    }()
+
+    static let dayTitle: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale.autoupdatingCurrent
+        formatter.timeZone = TimeZone.autoupdatingCurrent
+        formatter.dateFormat = "M月d日"
+        return formatter
+    }()
 }

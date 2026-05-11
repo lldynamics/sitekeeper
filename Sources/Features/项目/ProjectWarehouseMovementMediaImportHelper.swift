@@ -2,18 +2,21 @@ import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
 import UIKit
+import Observation
 
 @MainActor
-final class ProjectWarehouseMovementMediaImportHelper: ObservableObject {
-    @Published var selectedItems: [PhotosPickerItem] = []
-    @Published var showImagePicker = false
-    @Published var errorMessage = ""
-    @Published var showError = false
-    @Published private(set) var isImporting = false
-    @Published private(set) var completedCount = 0
-    @Published private(set) var totalCount = 0
-    @Published private(set) var status = ""
+@Observable
+final class ProjectWarehouseMovementMediaImportHelper {
+    var selectedItems: [PhotosPickerItem] = []
+    var showImagePicker = false
+    var errorMessage = ""
+    var showError = false
+    private(set) var isImporting = false
+    private(set) var completedCount = 0
+    private(set) var totalCount = 0
+    private(set) var status = ""
 
+    @ObservationIgnored
     private var importTask: Task<Void, Never>?
 
     var progressValue: Double {

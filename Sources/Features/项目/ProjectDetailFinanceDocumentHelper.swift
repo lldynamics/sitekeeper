@@ -31,8 +31,8 @@ enum ProjectDetailFinanceDocumentHelper {
         return max(doc.numberOfPages, 1)
     }
 
-    static func documentCategory(for financialCategory: String) -> ProjectDocumentCategory {
-        switch ProjectFinancialCategory(rawValue: financialCategory) ?? .receipt {
+    static func documentCategory(for financialCategory: ProjectFinancialCategory) -> ProjectDocumentCategory {
+        switch financialCategory {
         case .paymentRequest:
             return .paymentRequest
         case .collection, .invoice:
@@ -44,8 +44,12 @@ enum ProjectDetailFinanceDocumentHelper {
         }
     }
 
-    static func documentIcon(_ category: String) -> String {
-        switch ProjectDocumentCategory(rawValue: category) ?? .other {
+    static func documentCategory(for financialCategory: String) -> ProjectDocumentCategory {
+        documentCategory(for: StringEnumFallback.value(financialCategory, default: ProjectFinancialCategory.receipt))
+    }
+
+    static func documentIcon(_ category: ProjectDocumentCategory) -> String {
+        switch category {
         case .paymentRequest:
             return "doc.text.fill"
         case .construction:
@@ -61,6 +65,10 @@ enum ProjectDetailFinanceDocumentHelper {
         case .other:
             return "folder.fill"
         }
+    }
+
+    static func documentIcon(_ category: String) -> String {
+        documentIcon(StringEnumFallback.value(category, default: ProjectDocumentCategory.other))
     }
 
     private static func resize(_ image: UIImage, longEdge: CGFloat) -> UIImage {

@@ -7,7 +7,6 @@ struct ProjectFileBrowserView: View {
     @AppStorage(UserPreferenceKeys.hasSeenProjectFileRootGuide) private var hasSeenRootGuide = false
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
-    @State private var fileSearchTask: Task<Void, Never>?
     @State private var searchResultIDs: [String] = []
     @State private var searchResultByID: [String: ProjectFileSearchResult] = [:]
     @State private var indexedDataSignature = 0
@@ -29,15 +28,16 @@ struct ProjectFileBrowserView: View {
         debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var fileSearchExecutionKey: FileSearchExecutionKey {
+        FileSearchExecutionKey(keyword: normalizedQuery, signature: fileSearchDataSignature)
+    }
+
     private var filteredProjects: [Project] {
-        let keyword = normalizedQuery
-        return store.projects
-            .filter { project in
-                keyword.isEmpty
-                    || project.name.localizedStandardContains(keyword)
-                    || project.location.localizedStandardContains(keyword)
-            }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        SearchMatcher.filter(
+            store.projects,
+            keyword: normalizedQuery,
+            sort: { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        )
     }
 
     private var fileSearchResults: [ProjectFileSearchResult] {
@@ -174,10 +174,9 @@ struct ProjectFileBrowserView: View {
         }
     }
 
-    private func scheduleFileSearch(for text: String) {
+    @MainActor
+    private func runFileSearchTask(for text: String) async {
         let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        fileSearchTask?.cancel()
-
         guard !keyword.isEmpty else {
             debouncedSearchText = ""
             searchResultIDs = []
@@ -186,18 +185,30 @@ struct ProjectFileBrowserView: View {
         }
 
         isSearchingFiles = true
-        fileSearchTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            let requestedKeyword = keyword
+        guard await DebouncedTask.wait(for: .milliseconds(300)) else { return }
+        let requestedKeyword = keyword
+        await refreshSearchIndexIfNeeded()
+        guard !Task.isCancelled else { return }
+        let ids = await searchIndexedFileIDs(keyword: requestedKeyword)
+        guard !Task.isCancelled else { return }
+        guard requestedKeyword == normalizedQuery else { return }
+        searchResultIDs = ids
+        debouncedSearchText = requestedKeyword
+        isSearchingFiles = false
+    }
 
+    private func refreshSearchIndexIfNeeded() async {
+        await withCheckedContinuation { continuation in
             refreshSearchIndexIfNeeded {
-                fileSearchService.search(keyword: requestedKeyword) { ids in
-                    guard requestedKeyword == normalizedQuery else { return }
-                    searchResultIDs = ids
-                    debouncedSearchText = requestedKeyword
-                    isSearchingFiles = false
-                }
+                continuation.resume()
+            }
+        }
+    }
+
+    private func searchIndexedFileIDs(keyword: String) async -> [String] {
+        await withCheckedContinuation { continuation in
+            fileSearchService.search(keyword: keyword) { ids in
+                continuation.resume(returning: ids)
             }
         }
     }
@@ -260,21 +271,13 @@ struct ProjectFileBrowserView: View {
             if shouldAutoShowGuide {
                 hasSeenRootGuide = true
             }
-            refreshSearchIndexIfNeeded {
-                scheduleFileSearch(for: searchText)
-                syncSplitSelectionIfNeeded()
-            }
+            syncSplitSelectionIfNeeded()
         }
-        .onChange(of: searchText) { _, newValue in
-            scheduleFileSearch(for: newValue)
+        .task(id: fileSearchExecutionKey) {
+            await runFileSearchTask(for: fileSearchExecutionKey.keyword)
         }
         .onChange(of: fileSearchDataSignature) { _, _ in
-            refreshSearchIndexIfNeeded {
-                if !normalizedQuery.isEmpty {
-                    scheduleFileSearch(for: searchText)
-                }
-                syncSplitSelectionIfNeeded()
-            }
+            syncSplitSelectionIfNeeded()
         }
         .onChange(of: filteredProjects.map(\.id)) { _, _ in
             syncSplitSelectionIfNeeded()
@@ -283,8 +286,7 @@ struct ProjectFileBrowserView: View {
             syncSplitSelectionIfNeeded()
         }
         .onDisappear {
-            fileSearchTask?.cancel()
-            fileSearchTask = nil
+            isSearchingFiles = false
         }
     }
 
@@ -418,7 +420,7 @@ struct ProjectFileBrowserView: View {
                         NavigationLink {
                             ProjectFileCategoryView(project: project)
                         } label: {
-                            ProjectFileProjectRow(project: project, summary: summary)
+                            ProjectFileProjectRow(project: project, summary: summary, isSelected: false)
                         }
                     }
                 }
@@ -510,14 +512,15 @@ struct ProjectFileBrowserView: View {
                     } else {
                         ForEach(filteredProjects) { project in
                             let summary = ProjectFileSummary(projectId: project.id, store: store)
+                            let isSelected = selectedProjectId == project.id
                             Button {
                                 selectedProjectId = project.id
                                 syncSplitSelectionIfNeeded()
                             } label: {
-                                ProjectFileProjectRow(project: project, summary: summary)
+                                ProjectFileProjectRow(project: project, summary: summary, isSelected: isSelected)
                             }
                             .buttonStyle(.plain)
-                            .listRowBackground(selectedProjectId == project.id ? Color.orange.opacity(0.12) : Color.clear)
+                            .listRowBackground(Color.clear)
                         }
                     }
                 }
@@ -539,7 +542,7 @@ struct ProjectFileBrowserView: View {
             List {
                 if let selectedProject {
                     Section {
-                        VStack(alignment: .leading, spacing: 8) {
+                        VStack(alignment: .leading, spacing: AppSpacing.tight) {
                             Text(selectedProject.name)
                                 .font(.headline)
                             if !selectedProject.location.isEmpty {
@@ -557,7 +560,7 @@ struct ProjectFileBrowserView: View {
                                 selectedCategory = category
                                 syncSplitSelectionIfNeeded()
                             } label: {
-                                HStack(spacing: 10) {
+                                HStack(spacing: AppSpacing.normal) {
                                     Image(systemName: category.systemImage)
                                         .foregroundStyle(category.tint)
                                         .frame(width: 20)
@@ -609,8 +612,8 @@ struct ProjectFileBrowserView: View {
             Group {
                 if let item = selectedSplitItem {
                     ScrollView {
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                            HStack(spacing: AppSpacing.normal) {
                                 Image(systemName: item.systemImage)
                                     .font(.title2.weight(.semibold))
                                     .foregroundStyle(item.category.tint)
@@ -648,7 +651,7 @@ struct ProjectFileBrowserView: View {
                                     .foregroundStyle(.red)
                             }
                         }
-                        .padding(16)
+                        .padding(AppSpacing.relaxed)
                     }
                 } else {
                     ContentUnavailableView(
@@ -685,35 +688,53 @@ struct ProjectFileBrowserView: View {
     }
 }
 
+private struct FileSearchExecutionKey: Equatable {
+    let keyword: String
+    let signature: Int
+}
+
 private struct ProjectFileProjectRow: View {
     let project: Project
     let summary: ProjectFileSummary
+    let isSelected: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(project.name)
-                    .font(.body.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-                Text("\(summary.totalCount) 个文件")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(summary.totalCount > 0 ? .orange : .secondary)
-            }
-            HStack(spacing: 8) {
-                ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .blue)
-                ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .indigo)
-                ProjectFileCountChip(title: "资料", value: summary.documentCount, color: .brown)
-                ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .orange)
-            }
-            if !project.location.isEmpty {
-                Text(project.location)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+        HStack(spacing: AppSpacing.normal) {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(isSelected ? Color.orange : Color.clear)
+                .frame(width: 3)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Text(project.name)
+                        .font(.body.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer()
+                    Text("\(summary.totalCount) 个文件")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(summary.totalCount > 0 ? .orange : .secondary)
+                }
+                HStack(spacing: AppSpacing.tight) {
+                    ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .blue)
+                    ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .indigo)
+                    ProjectFileCountChip(title: "资料", value: summary.documentCount, color: .brown)
+                    ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .orange)
+                }
+                if !project.location.isEmpty {
+                    Text(project.location)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
             }
         }
-        .padding(.vertical, 3)
+        .padding(.horizontal, AppSpacing.tight)
+        .padding(.vertical, 6)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(isSelected ? Color.appPrimarySurface : Color.clear)
+        )
     }
 }
 
@@ -722,7 +743,7 @@ private struct ProjectFileSplitItemRow: View {
     let isSelected: Bool
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: AppSpacing.normal) {
             Image(systemName: item.systemImage)
                 .foregroundStyle(item.exists ? item.category.tint : .secondary)
                 .frame(width: 18)
@@ -734,7 +755,7 @@ private struct ProjectFileSplitItemRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.tight) {
                     Text(item.fileType.uppercased())
                     Text(item.formattedSize)
                 }
@@ -747,7 +768,7 @@ private struct ProjectFileSplitItemRow: View {
                     .foregroundStyle(.orange)
             }
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, AppSpacing.tight)
         .padding(.vertical, 6)
         .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.orange.opacity(0.12) : Color.clear))
     }

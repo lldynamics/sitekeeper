@@ -1,0 +1,101 @@
+import Foundation
+
+enum ReportBuilderPDFSections {
+    static func appendSections(
+        snapshot: BackupSnapshot,
+        options: ExportContentOptions,
+        lines: inout [String]
+    ) {
+        if options.includeMaterials {
+            lines.append(String(localized: "材料清单"))
+            lines += snapshot.materialItems.map {
+                "- \($0.name)  \($0.quantity) \($0.unit)  单价\(ReportBuilder.money(ReportBuilder.number($0.unitPrice)))  金额\(ReportBuilder.money(ReportBuilder.materialLineTotal($0)))"
+            }
+            lines.append("")
+        }
+        if options.includeQuotes {
+            let total = snapshot.quoteItems.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
+            lines.append("\(String(localized: "报价明细"))  合计 \(ReportBuilder.money(total))")
+            lines += snapshot.quoteItems.map {
+                "- \($0.name)  \($0.quantity)\($0.unit)  \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0)))"
+            }
+            lines.append("")
+        }
+        if options.includeLabor {
+            lines.append(String(localized: "人工记录"))
+            lines += snapshot.laborRecords.map {
+                "- \($0.date)  \($0.workers)人 × \($0.hours)h  单价\(ReportBuilder.money(ReportBuilder.number($0.unitRate)))  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))  \($0.note)"
+            }
+            lines.append("")
+        }
+        if options.includeDailyLogs {
+            lines.append(String(localized: "施工日志"))
+            lines += snapshot.dailyLogs.map { "- \($0.date) \($0.weather) \($0.workers)  \($0.content)" }
+            lines.append("")
+        }
+        if options.includeTodos && !snapshot.siteTodos.isEmpty {
+            lines.append(String(localized: "现场待办"))
+            lines += snapshot.siteTodos.map {
+                "- \($0.dueDate) [\($0.priority.displayName)] [\($0.issueType.displayName)] \($0.isDone ? String(localized: "完成") : $0.isOverdue ? String(localized: "延期") : String(localized: "待办"))  \($0.title) \($0.owner)"
+            }
+            lines.append("")
+        }
+        if options.includeProgress {
+            lines.append(String(localized: "进度任务"))
+            lines += snapshot.progressTasks.map {
+                "- \($0.title)  \(Int($0.clampedCompletion * 100))%  \($0.startDate)-\($0.dueDate)"
+            }
+        }
+        if options.includeProjectFinance {
+            lines.append("")
+            lines.append(String(localized: "项目财务流水"))
+            lines += snapshot.projectFinancialRecords.sorted(by: { $0.date > $1.date }).map {
+                let reminder = $0.hasDueReminder ? "  到期\($0.dueDate) \($0.normalizedReminderStatus.displayName)" : ""
+                return "- \($0.date) [\($0.direction.displayName)] [\($0.category.displayName)] [\($0.normalizedStatus.displayName)]\(reminder) \(ReportBuilder.money(ReportBuilder.number($0.amount)))  \($0.counterparty)  票据\($0.linkedDocumentIds.count)份"
+            }
+        }
+        if options.includeProjectDocuments {
+            lines.append("")
+            lines.append(String(localized: "项目票据与资料"))
+            lines += snapshot.projectDocuments.sorted(by: { $0.createdAt > $1.createdAt }).map {
+                "- \($0.createdAt) [\($0.category.displayName)] \($0.title)  \($0.pageCount)页  \(ReportBuilder.money(ReportBuilder.number($0.amount)))"
+            }
+        }
+        if options.includeProjectContacts && !snapshot.projectContacts.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "项目联系人"))
+            lines += snapshot.projectContacts.map { "- \($0.name) [\($0.roleDisplayName)] \($0.phone) \($0.company)" }
+        }
+        if options.includeProjectDrawings && !snapshot.projectDrawings.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "图纸索引"))
+            lines += snapshot.projectDrawings.map { "- \($0.name) \($0.fileType) v\($0.version) [\($0.issueStatus.displayName)]" }
+        }
+        if options.includeWarehouseMovements && !snapshot.projectWarehouseMovements.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "仓库流水"))
+            lines += snapshot.projectWarehouseMovements.map {
+                "- \($0.date) [\($0.normalizedMovementType.displayName)] \($0.materialName) × \($0.quantity)\($0.unit)  \($0.counterparty)"
+            }
+        }
+        if options.includeQuickNotes && !snapshot.quickNotes.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "随手记"))
+            lines += snapshot.quickNotes.map { "- \($0.title)  \($0.updatedAt)  附件\($0.attachments.count)个" }
+        }
+        if options.includeLightingCircuits && !snapshot.lightingCircuitPlans.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "照明回路"))
+            lines += snapshot.lightingCircuitPlans.map {
+                "- \($0.name) [\($0.supplyType.displayName)] \($0.voltage)V  \($0.loads.count)个负荷"
+            }
+        }
+        if options.includePaymentRecords && !snapshot.paymentRecords.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "付款记录"))
+            lines += snapshot.paymentRecords.map {
+                "- \($0.date) \(ReportBuilder.money(ReportBuilder.number($0.amount))) [\($0.normalizedMethod.displayName)] \($0.note)"
+            }
+        }
+    }
+}

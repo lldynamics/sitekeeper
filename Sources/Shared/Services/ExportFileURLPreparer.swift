@@ -16,9 +16,17 @@ enum ExportFileURLPreparer {
     static func cleanup(fileURL: URL) {
         let parent = fileURL.deletingLastPathComponent()
         if parent.lastPathComponent.hasPrefix(exportDirectoryPrefix) {
-            try? FileManager.default.removeItem(at: parent)
+            do {
+                try FileManager.default.removeItem(at: parent)
+            } catch {
+                StorageIssueLog.record("导出临时目录清理失败：\(parent.lastPathComponent)，\(error.localizedDescription)")
+            }
         } else if FileManager.default.fileExists(atPath: fileURL.path) {
-            try? FileManager.default.removeItem(at: fileURL)
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                StorageIssueLog.record("导出临时文件清理失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
     }
 

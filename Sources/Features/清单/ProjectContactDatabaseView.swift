@@ -17,27 +17,23 @@ struct ProjectContactDatabaseView: View {
     }
 
     private var filteredContacts: [ProjectContact] {
-        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return store.projectContacts
-            .filter { contact in
-                guard let selectedProjectId else { return true }
-                return contact.projectId == selectedProjectId
-            }
-            .filter { contact in
-                guard !keyword.isEmpty else { return true }
-                return contact.name.localizedStandardContains(keyword)
-                    || contact.role.localizedStandardContains(keyword)
-                    || contact.company.localizedStandardContains(keyword)
-                    || contact.phone.localizedStandardContains(keyword)
-                    || contact.note.localizedStandardContains(keyword)
-                    || projectName(contact.projectId).localizedStandardContains(keyword)
-            }
-            .sorted { lhs, rhs in
+        let scopedContacts = store.projectContacts.filter { contact in
+            guard let selectedProjectId else { return true }
+            return contact.projectId == selectedProjectId
+        }
+        return SearchMatcher.filter(
+            scopedContacts,
+            keyword: searchText,
+            sort: { lhs, rhs in
                 let leftProject = projectName(lhs.projectId)
                 let rightProject = projectName(rhs.projectId)
                 if leftProject != rightProject { return leftProject < rightProject }
                 return lhs.name < rhs.name
+            },
+            extraFields: { contact in
+                [projectName(contact.projectId)]
             }
+        )
     }
 
     private var duplicatePhoneGroups: [(phone: String, contacts: [ProjectContact])] {
@@ -49,54 +45,59 @@ struct ProjectContactDatabaseView: View {
     }
 
     var body: some View {
-        List {
-            Section {
-                projectFilterBar
-                    .listRowInsets(EdgeInsets())
-                    .listRowBackground(Color.clear)
-            }
+        SearchableDatabaseView(
+            title: "联系人",
+            searchText: $searchText,
+            searchPrompt: "搜索姓名、电话、公司、项目",
+            items: filteredContacts,
+            emptyTitle: "暂无联系人",
+            emptySystemImage: "person.crop.rectangle.stack",
+            emptyDescription: Text("项目联系人会统一显示在这里，可按项目筛选。"),
+            onSelect: { contact in
+                editingContact = contact
+            },
+            onDelete: deleteContacts,
+            rowContent: { contact in
+                ContactPickerRowView(
+                    contact: contact,
+                    projectName: projectName(contact.projectId),
+                    showsProjectName: true,
+                    showsPhoneActions: false
+                )
+            },
+            headerContent: {
+                Section {
+                    projectFilterBar
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                }
 
-            if selectedProjectId == nil && !duplicatePhoneGroups.isEmpty {
-                Section("疑似重复联系人") {
-                    ForEach(duplicatePhoneGroups, id: \.phone) { group in
-                        DisclosureGroup("\(group.phone) · \(group.contacts.count) 条") {
-                            ForEach(group.contacts) { contact in
-                                Button {
-                                    editingContact = contact
-                                } label: {
-                                    ProjectContactDatabaseRow(contact: contact, projectName: projectName(contact.projectId))
+                if selectedProjectId == nil && !duplicatePhoneGroups.isEmpty {
+                    Section("疑似重复联系人") {
+                        ForEach(duplicatePhoneGroups, id: \.phone) { group in
+                            DisclosureGroup("\(group.phone) · \(group.contacts.count) 条") {
+                                ForEach(group.contacts) { contact in
+                                    Button {
+                                        editingContact = contact
+                                    } label: {
+                                        ContactPickerRowView(
+                                            contact: contact,
+                                            projectName: projectName(contact.projectId),
+                                            showsProjectName: true,
+                                            showsPhoneActions: false
+                                        )
+                                    }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
                         }
                     }
                 }
-            }
-
-            Section(String(localized: "联系人 (\(filteredContacts.count))")) {
-                if filteredContacts.isEmpty {
-                    ContentUnavailableView("暂无联系人", systemImage: "person.crop.rectangle.stack", description: Text("项目联系人会统一显示在这里，可按项目筛选。"))
-                } else {
-                    ForEach(filteredContacts) { contact in
-                        Button { editingContact = contact } label: {
-                            ProjectContactDatabaseRow(contact: contact, projectName: projectName(contact.projectId))
-                        }
-                        .buttonStyle(.plain)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button(role: .destructive) {
-                                deleteContact(contact)
-                            } label: {
-                                Label("删除", systemImage: "trash")
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .navigationTitle("联系人")
-        .searchable(text: $searchText, prompt: "搜索姓名、电话、公司、项目")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            },
+            footerContent: {
+                EmptyView()
+            },
+            toolbarContent: {
                 Menu {
                     Button {
                         exportContactsCSV()
@@ -113,7 +114,7 @@ struct ProjectContactDatabaseView: View {
                 }
                 .accessibilityLabel("更多操作")
             }
-        }
+        )
         .onAppear(perform: openFocusedContactIfNeeded)
         .sheet(isPresented: $showAdd) {
             ProjectContactDatabaseEditSheet(contact: nil, projects: store.projects, initialProjectId: selectedProjectId) { contact in
@@ -178,7 +179,7 @@ struct ProjectContactDatabaseView: View {
         didOpenFocusedContact = true
         searchText = ""
         selectedProjectId = contact.projectId
-        DispatchQueue.main.async {
+        Task { @MainActor in
             editingContact = contact
         }
     }
@@ -188,12 +189,23 @@ struct ProjectContactDatabaseView: View {
         store.scheduleSave()
     }
 
+    private func deleteContacts(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        store.projectContacts.removeAll { ids.contains($0.id) }
+        store.scheduleSave()
+    }
+
+    private func deleteContacts(_ offsets: IndexSet, _ items: [ProjectContact]) {
+        let ids = offsets.compactMap { items.indices.contains($0) ? items[$0].id : nil }
+        deleteContacts(Set(ids))
+    }
+
     private func exportContactsCSV() {
         var rows = ["项目,姓名/单位,角色,公司/班组,电话,备注,重复手机号"]
         rows += filteredContacts.map { contact in
             let phoneKey = normalizedPhone(contact.phone)
             let duplicateMark = duplicatePhoneGroups.contains { $0.phone == phoneKey } ? "是" : ""
-            return csv([projectName(contact.projectId), contact.name, contact.role, contact.company, contact.phone, contact.note, duplicateMark])
+            return csv([projectName(contact.projectId), contact.name, contact.roleDisplayName, contact.company, contact.phone, contact.note, duplicateMark])
         }
         exportPayload = ExportPayload(
             data: rows.joined(separator: "\n").data(using: .utf8) ?? Data(),
@@ -218,43 +230,6 @@ struct ProjectContactDatabaseView: View {
     }
 }
 
-private struct ProjectContactDatabaseRow: View {
-    let contact: ProjectContact
-    let projectName: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(contact.name.isEmpty ? "未命名联系人" : contact.name)
-                    .font(.body.weight(.semibold))
-                Spacer()
-                Text(contact.role)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.blue)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 3)
-                    .background(Color.blue.opacity(0.12))
-                    .clipShape(Capsule())
-            }
-            Text(projectName)
-                .font(.caption)
-                .foregroundStyle(.orange)
-            if !contact.company.isEmpty || !contact.phone.isEmpty {
-                Text([contact.company, contact.phone].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if !contact.note.isEmpty {
-                Text(contact.note)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(.vertical, 3)
-    }
-}
-
 private struct ProjectContactDatabaseEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let contact: ProjectContact?
@@ -265,7 +240,7 @@ private struct ProjectContactDatabaseEditSheet: View {
 
     @State private var projectId: UUID?
     @State private var name: String
-    @State private var role: String
+    @State private var role: ProjectContactRole
     @State private var company: String
     @State private var phone: String
     @State private var note: String
@@ -285,7 +260,7 @@ private struct ProjectContactDatabaseEditSheet: View {
         self.onDelete = onDelete
         _projectId = State(initialValue: contact?.projectId ?? initialProjectId ?? projects.first?.id)
         _name = State(initialValue: contact?.name ?? "")
-        _role = State(initialValue: contact?.role ?? ProjectContactRole.owner.rawValue)
+        _role = State(initialValue: contact?.role ?? .owner)
         _company = State(initialValue: contact?.company ?? "")
         _phone = State(initialValue: contact?.phone ?? "")
         _note = State(initialValue: contact?.note ?? "")
@@ -349,15 +324,10 @@ private struct ProjectContactDatabaseEditSheet: View {
         var value = contact ?? ProjectContact(projectId: targetProjectId, name: "")
         value.projectId = targetProjectId
         value.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        value.role = normalizedRole
+        value.role = role
         value.company = company.trimmingCharacters(in: .whitespacesAndNewlines)
         value.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         return value
-    }
-
-    private var normalizedRole: String {
-        let trimmed = role.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? ProjectContactRole.other.rawValue : trimmed
     }
 }

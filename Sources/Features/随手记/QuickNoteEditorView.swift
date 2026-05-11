@@ -44,7 +44,7 @@ struct QuickNoteEditSheet: View {
                         .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(.separator).opacity(0.35), lineWidth: 0.5)
+                                .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                         )
                 }
                 Section("附件") {
@@ -235,7 +235,7 @@ struct QuickNoteEditSheet: View {
         store.projectDocuments.append(ProjectDocument(
             projectId: projectId,
             title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
-            category: ProjectDocumentCategory.construction.rawValue,
+            category: .construction,
             fileName: fileName,
             fileType: "pdf",
             pageCount: 1,
@@ -374,8 +374,8 @@ private struct QuickNoteFinancialMemoSheet: View {
                         onSave(ProjectFinancialRecord(
                             projectId: projectId,
                             date: Formatters.date.string(from: date),
-                            direction: direction.rawValue,
-                            category: category.rawValue,
+                            direction: direction,
+                            category: category,
                             amount: amount,
                             counterparty: counterparty,
                             invoiceNumber: invoiceNumber,

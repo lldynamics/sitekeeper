@@ -20,11 +20,7 @@ struct ProjectFileCategoryView: View {
 
     private var recentItems: [ProjectFileItem] {
         let all = ProjectFileCollector.allRecent(for: project.id, limit: 8, store: store)
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return all }
-        return all.filter {
-            $0.title.localizedStandardContains(query) || $0.subtitle.localizedStandardContains(query)
-        }
+        return SearchMatcher.filter(all, keyword: searchText)
     }
 
     var body: some View {
@@ -199,16 +195,17 @@ struct ProjectFileListView: View {
         }
     }
 
-    private var emptyActionDestination: AnyView {
+    @ViewBuilder
+    private var emptyActionDestination: some View {
         switch category {
         case .images:
-            return AnyView(DailyLogView(initialProjectId: project.id, autoOpenComposer: true))
+            DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
         case .drawings:
-            return AnyView(ProjectDetailView(projectId: project.id, initialMode: .assets))
+            ProjectDetailView(projectId: project.id, initialMode: .records)
         case .documents:
-            return AnyView(ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true))
+            ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
         case .quickNoteAttachments:
-            return AnyView(QuickNoteView())
+            QuickNoteView()
         }
     }
 

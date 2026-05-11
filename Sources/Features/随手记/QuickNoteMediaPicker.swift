@@ -12,9 +12,12 @@ struct QuickNoteAttachmentPickerBar: View {
     @State private var showFileImporter = false
     @State private var alertMessage = ""
     @State private var showAlert = false
-    @StateObject private var audioRecorder = QuickNoteAudioRecorder()
+    @State private var audioRecorder = QuickNoteAudioRecorder()
     @State private var isImportingMedia = false
     @State private var mediaImportMessage = ""
+    @State private var mediaImportTask: Task<Void, Never>?
+    @State private var fileImportTask: Task<Void, Never>?
+    @State private var recordingTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -24,23 +27,34 @@ struct QuickNoteAttachmentPickerBar: View {
                         toolLabel("媒体", systemImage: "photo.stack")
                     }
                     .disabled(isImportingMedia)
+                    .accessibilityLabel("从相册添加媒体")
+                    .accessibilityHint("选择照片或视频附件")
                     Button { openCamera() } label: {
                         toolLabel("拍照", systemImage: "camera")
                     }
+                    .accessibilityLabel("拍照添加")
+                    .accessibilityHint("打开相机拍照并加入随手记")
                     Button {
-                        Task { await toggleRecording() }
+                        recordingTask?.cancel()
+                        recordingTask = Task { await toggleRecording() }
                     } label: {
                         toolLabel(audioRecorder.isRecording ? "停止" : "语音", systemImage: audioRecorder.isRecording ? "stop.circle.fill" : "mic")
                     }
                     .tint(audioRecorder.isRecording ? .red : .orange)
+                    .accessibilityLabel(audioRecorder.isRecording ? "停止录音" : "开始录音")
+                    .accessibilityHint("录制语音附件")
                     if mode == .full {
                         Button { showDrawing = true } label: {
                             toolLabel("手绘/标注", systemImage: "pencil.and.outline")
                         }
+                        .accessibilityLabel("添加手绘标注")
+                        .accessibilityHint("打开手绘板创建标注附件")
                     }
                     Button { showFileImporter = true } label: {
                         toolLabel("附件", systemImage: "paperclip")
                     }
+                    .accessibilityLabel("导入文件附件")
+                    .accessibilityHint("从文件中选择附件导入")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -56,7 +70,8 @@ struct QuickNoteAttachmentPickerBar: View {
             }
         }
         .onChange(of: selectedMediaItems) { _, newItems in
-            Task { await importMediaItems(newItems) }
+            mediaImportTask?.cancel()
+            mediaImportTask = Task { await importMediaItems(newItems) }
         }
         .sheet(isPresented: $showCamera) {
             ImagePickerView(
@@ -80,6 +95,14 @@ struct QuickNoteAttachmentPickerBar: View {
         } message: {
             Text(alertMessage)
         }
+        .onDisappear {
+            mediaImportTask?.cancel()
+            fileImportTask?.cancel()
+            recordingTask?.cancel()
+            mediaImportTask = nil
+            fileImportTask = nil
+            recordingTask = nil
+        }
     }
 
     private func toolLabel(_ title: String, systemImage: String) -> some View {
@@ -101,24 +124,25 @@ struct QuickNoteAttachmentPickerBar: View {
             isImportingMedia = true
             mediaImportMessage = "正在导入媒体..."
         }
-        defer {
-            Task { @MainActor in
-                isImportingMedia = false
-                mediaImportMessage = ""
-                selectedMediaItems = []
-            }
-        }
         for item in items {
+            guard !Task.isCancelled else { break }
             if isVideoItem(item) {
                 await importVideoItem(item)
                 continue
             }
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
+                guard !Task.isCancelled else { break }
                 await MainActor.run { showError("有一项媒体导入失败。") }
                 continue
             }
+            guard !Task.isCancelled else { break }
             await MainActor.run { appendImage(image, kind: .photo) }
+        }
+        await MainActor.run {
+            isImportingMedia = false
+            mediaImportMessage = ""
+            selectedMediaItems = []
         }
     }
 
@@ -178,14 +202,10 @@ struct QuickNoteAttachmentPickerBar: View {
             guard !urls.isEmpty else { return }
             isImportingMedia = true
             mediaImportMessage = "正在导入附件..."
-            Task {
-                defer {
-                    Task { @MainActor in
-                        isImportingMedia = false
-                        mediaImportMessage = ""
-                    }
-                }
+            fileImportTask?.cancel()
+            fileImportTask = Task {
                 for (index, url) in urls.enumerated() {
+                    guard !Task.isCancelled else { break }
                     await MainActor.run {
                         mediaImportMessage = "正在导入附件 \(index + 1)/\(urls.count)"
                     }
@@ -197,10 +217,17 @@ struct QuickNoteAttachmentPickerBar: View {
                             onAppend(attachment)
                         }
                     } catch let error as QuickNoteFileAttachmentImportError {
+                        guard !Task.isCancelled else { break }
                         await MainActor.run { showError(error.userMessage) }
                     } catch {
+                        guard !Task.isCancelled else { break }
                         await MainActor.run { showError("附件导入失败。") }
                     }
+                }
+                await MainActor.run {
+                    isImportingMedia = false
+                    mediaImportMessage = ""
+                    fileImportTask = nil
                 }
             }
         case .failure:

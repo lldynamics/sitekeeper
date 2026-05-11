@@ -27,6 +27,9 @@ enum UserPreferenceKeys {
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
     static let cloudBackupAutoLastAttemptAt = "cloudBackup.autoLastAttemptAt"
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
+    static let userName = "userName"
+    static let cadPreviewEngine = "cad.preview.engine"
+    static let showTemplates = "feature.showTemplates"
 }
 
 enum AppAppearanceMode: String, CaseIterable {
@@ -63,7 +66,7 @@ enum AppLanguage: String, CaseIterable {
 
     static var current: AppLanguage {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
-        return AppLanguage(rawValue: stored) ?? .chinese
+        return StringEnumFallback.value(stored, default: .chinese)
     }
 
     static func apply(_ language: AppLanguage) {
@@ -73,7 +76,7 @@ enum AppLanguage: String, CaseIterable {
 
     static func restoreFromStorage() {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
-        let lang = AppLanguage(rawValue: stored) ?? .chinese
+        let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
         UserDefaults.standard.set([lang.appleLanguageCode], forKey: "AppleLanguages")
     }
 }
@@ -102,12 +105,16 @@ enum AppBrand {
 }
 
 enum AppPolicy {
-    static let privacyPolicyLastUpdated = "2026年5月6日"
+    static let privacyPolicyLastUpdated = "2026年5月9日"
 }
 
 enum AppFeatureFlags {
     static var allowsSampleDataImport: Bool {
         TransferLimitPolicy.allowsSampleDataImport
+    }
+
+    static var showTemplates: Bool {
+        UserPreferences.bool(UserPreferenceKeys.showTemplates, default: false)
     }
 }
 

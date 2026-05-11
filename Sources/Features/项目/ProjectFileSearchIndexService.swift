@@ -20,9 +20,15 @@ final class ProjectFileSearchIndexService {
     }
 
     func rebuild(signature: Int, rows: [ProjectFileSearchIndexRow], completion: @escaping () -> Void) {
-        queue.async {
+        queue.async { [weak self] in
+            guard let self else {
+                Task { @MainActor in
+                    completion()
+                }
+                return
+            }
             if self.dataSignature == signature {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     completion()
                 }
                 return
@@ -42,7 +48,7 @@ final class ProjectFileSearchIndexService {
                     lhs.sortDate > rhs.sortDate
                 }
 
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completion()
             }
         }
@@ -50,16 +56,22 @@ final class ProjectFileSearchIndexService {
 
     func search(keyword: String, completion: @escaping ([String]) -> Void) {
         let normalized = Self.normalizedKeyword(keyword)
-        queue.async {
+        queue.async { [weak self] in
+            guard let self else {
+                Task { @MainActor in
+                    completion([])
+                }
+                return
+            }
             guard !normalized.isEmpty else {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     completion([])
                 }
                 return
             }
 
             if let cached = self.queryCache[normalized] {
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     completion(cached)
                 }
                 return
@@ -70,7 +82,7 @@ final class ProjectFileSearchIndexService {
                 .map(\.id)
 
             self.queryCache[normalized] = ids
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completion(ids)
             }
         }

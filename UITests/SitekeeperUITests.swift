@@ -53,11 +53,30 @@ final class SitekeeperUITests: XCTestCase {
         return app
     }
 
+    private func tapPrimaryModule(_ app: XCUIApplication, name: String) {
+        let tabButton = app.tabBars.buttons[name]
+        if tabButton.waitForExistence(timeout: 2) {
+            tabButton.tap()
+            return
+        }
+
+        let sidebarButton = app.buttons[name]
+        if sidebarButton.waitForExistence(timeout: 2) {
+            sidebarButton.tap()
+            return
+        }
+
+        let sidebarText = app.staticTexts[name]
+        if sidebarText.waitForExistence(timeout: 2) {
+            sidebarText.tap()
+        }
+    }
+
     func testColdLaunchShowsPrimaryTabs() {
         let app = launchApp()
         XCTAssertTrue(app.tabBars.buttons["工作台"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.tabBars.buttons["项目"].exists)
-        XCTAssertTrue(app.tabBars.buttons["数据库"].exists)
+        XCTAssertTrue(app.tabBars.buttons["工具箱"].exists)
         XCTAssertTrue(app.tabBars.buttons["随手记"].exists)
         XCTAssertTrue(app.tabBars.buttons["我的"].exists)
     }
@@ -163,6 +182,19 @@ final class SitekeeperUITests: XCTestCase {
         overwriteAlert.buttons["取消"].tap()
     }
 
+    func testSwitchingFromSettingsToToolboxRefreshesDetail() {
+        let app = launchApp(resetState: true)
+
+        tapPrimaryModule(app, name: "我的")
+        let settingsEntry = app.cells.containing(.staticText, identifier: "设置").firstMatch
+        XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
+        settingsEntry.tap()
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
+
+        tapPrimaryModule(app, name: "工具箱")
+        XCTAssertTrue(app.navigationBars["工程工具箱"].waitForExistence(timeout: 5))
+    }
+
     func testCaptureFeaturedAppStoreScreenshots() {
         prepareScreenshotDirectory()
 
@@ -192,8 +224,8 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "05-project-files")
         app.navigationBars.buttons.firstMatch.tap()
 
-        app.tabBars.buttons["数据库"].tap()
-        XCTAssertTrue(app.tabBars.buttons["数据库"].isSelected)
+        app.tabBars.buttons["工具箱"].tap()
+        XCTAssertTrue(app.tabBars.buttons["工具箱"].isSelected)
         saveScreenshot(app, named: "06-database")
 
         app.tabBars.buttons["随手记"].tap()
@@ -215,7 +247,7 @@ final class SitekeeperUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 20))
         saveScreenshot(app, named: "screenshot1_dashboard")
 
-        app.buttons["数据库"].tap()
+        app.buttons["工具箱"].tap()
         saveScreenshot(app, named: "screenshot2_database")
 
         app.buttons["随手记"].tap()

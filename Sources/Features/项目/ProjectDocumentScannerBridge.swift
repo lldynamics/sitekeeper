@@ -31,8 +31,10 @@ struct CameraWatermarkContext {
             "工程: \(normalizedProject.isEmpty ? "未指定项目" : normalizedProject)",
             "时间: \(Formatters.dateTime.string(from: capturedAt))"
         ]
-        if !template.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            result.append("模板: \(template)")
+        let normalizedTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !normalizedTemplate.isEmpty {
+            let displayTemplate = CameraWatermarkTemplate(rawValue: normalizedTemplate)?.displayName ?? normalizedTemplate
+            result.append("模板: \(displayTemplate)")
         }
         if !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             result.append("标签: \(tag)")
@@ -202,7 +204,7 @@ struct ImagePickerView: UIViewControllerRepresentable {
     }
 }
 
-private extension UIImage {
+extension UIImage {
     func applyingCameraWatermark(context: CameraWatermarkContext?, capturedAt: Date) -> UIImage {
         let lines = (context ?? CameraWatermarkContext(projectName: nil)).lines(capturedAt: capturedAt)
 

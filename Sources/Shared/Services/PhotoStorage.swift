@@ -49,8 +49,21 @@ enum PhotoStorage {
             try original.write(to: fileURL(for: fileName), options: .atomic)
             try thumbData.write(to: thumbnailFileURL(for: fileName), options: .atomic)
         } catch {
-            try? FileManager.default.removeItem(at: fileURL(for: fileName))
-            try? FileManager.default.removeItem(at: thumbnailFileURL(for: fileName))
+            let fm = FileManager.default
+            if fm.fileExists(atPath: fileURL(for: fileName).path) {
+                do {
+                    try fm.removeItem(at: fileURL(for: fileName))
+                } catch {
+                    StorageIssueLog.record("照片写入回滚失败：\(fileName)，\(error.localizedDescription)")
+                }
+            }
+            if fm.fileExists(atPath: thumbnailFileURL(for: fileName).path) {
+                do {
+                    try fm.removeItem(at: thumbnailFileURL(for: fileName))
+                } catch {
+                    StorageIssueLog.record("照片缩略图写入回滚失败：\(fileName)，\(error.localizedDescription)")
+                }
+            }
             throw FileStorageError.writeFailed(fileName)
         }
 
@@ -138,8 +151,15 @@ enum PhotoStorage {
 
     static func fileSize(for fileName: String) -> Int {
         let url = fileURL(for: fileName)
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-        return values?.fileSize ?? values?.totalFileAllocatedSize ?? 0
+        do {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            return values.fileSize ?? values.totalFileAllocatedSize ?? 0
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return 0
+        } catch {
+            StorageIssueLog.record("照片文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            return 0
+        }
     }
 
     static func restore(_ files: [PhotoBackupFile]) {
@@ -205,13 +225,69 @@ enum PhotoStorage {
     static func allStoredFileNames() -> [String] {
         let manager = FileManager.default
         var names = Set<String>()
-        if let files = try? manager.contentsOfDirectory(at: photoDir, includingPropertiesForKeys: nil) {
+        do {
+            let files = try manager.contentsOfDirectory(at: photoDir, includingPropertiesForKeys: nil)
             names.formUnion(files.map(\.lastPathComponent))
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            // ignore missing directory
+        } catch {
+            StorageIssueLog.record("照片目录读取失败：\(photoDir.lastPathComponent)，\(error.localizedDescription)")
         }
-        if let files = try? manager.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil) {
+        do {
+            let files = try manager.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
             names.formUnion(files.map(\.lastPathComponent))
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            // ignore missing directory
+        } catch {
+            StorageIssueLog.record("照片缩略图目录读取失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
         }
         return names.sorted()
+    }
+
+    static func thumbnailCacheUsageBytes() -> Int {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(
+                at: thumbnailDir,
+                includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey]
+            )
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return 0
+        } catch {
+            StorageIssueLog.record("缩略图缓存体积统计失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
+            return 0
+        }
+        return files.reduce(0) { total, url in
+            do {
+                let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+                return total + (values.fileSize ?? values.totalFileAllocatedSize ?? 0)
+            } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+                return total
+            } catch {
+                StorageIssueLog.record("缩略图文件体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                return total
+            }
+        }
+    }
+
+    static func clearThumbnailCache() {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return
+        } catch {
+            StorageIssueLog.record("缩略图缓存目录读取失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
+            return
+        }
+        for url in files {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                StorageIssueLog.record("缩略图缓存清理失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            }
+        }
+        PhotoCache.shared.clear()
     }
 
     static func referencedFileNames(logs: [DailyLog], todos: [SiteTodo]) -> Set<String> {

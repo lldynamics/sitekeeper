@@ -12,6 +12,9 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+    dependencies:
+      - target: sitekeeperWidgetExtension
+        embed: true
     settings:
       base:
         SWIFT_VERSION: "5.0"
@@ -19,7 +22,7 @@ targets:
         PRODUCT_MODULE_NAME: sitekeeper
         PRODUCT_BUNDLE_IDENTIFIER: com.chengjinfang.sitekeeper
         CODE_SIGN_ENTITLEMENTS: Sources/Resources/sitekeeper.entitlements
-        MARKETING_VERSION: "1.0.1"
+        MARKETING_VERSION: "1.0.2"
         CURRENT_PROJECT_VERSION: "1"
         TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: YES
@@ -41,6 +44,7 @@ targets:
     platform: iOS
     sources:
       - path: Widget
+      - path: Sources/Shared/Services/WidgetSharedModels.swift
     settings:
       base:
         SWIFT_VERSION: "5.0"
@@ -48,14 +52,13 @@ targets:
         PRODUCT_MODULE_NAME: sitekeeperWidget
         PRODUCT_BUNDLE_IDENTIFIER: com.chengjinfang.sitekeeper.widget
         CODE_SIGN_ENTITLEMENTS: Widget/WidgetExtension.entitlements
-        MARKETING_VERSION: "1.0.1"
+        MARKETING_VERSION: "1.0.2"
         CURRENT_PROJECT_VERSION: "1"
-        GENERATE_INFOPLIST_FILE: YES
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: Widget/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜Widget
         ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: widgetBackground
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.chengjinfang.sitekeeper
-        INFOPLIST_KEY_NSExtension:
-          NSExtensionPointIdentifier: com.apple.widgetkit-extension
 
   sitekeeperTests:
     type: bundle.unit-test

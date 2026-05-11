@@ -1,9 +1,18 @@
+import Foundation
 import SwiftUI
 
 struct ProjectListView: View {
+    private enum NewProjectNumericField: Hashable {
+        case contractAmount
+        case paidAmount
+        case materialCost
+        case laborCost
+    }
+
     @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
+    @Environment(FinanceStore.self) private var financeStore
     @Environment(\.openURL) private var openURL
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var searchText = ""
     @State private var showAdd = false
     @State private var newName = ""
@@ -25,6 +34,7 @@ struct ProjectListView: View {
     @State private var sortOption: ProjectSortOption = .recentUpdate
     @State private var selectedProjectId: UUID?
     @State private var lastHandledAutoOpenComposerToken = 0
+    @FocusState private var newProjectFocusedField: NewProjectNumericField?
     private let autoOpenComposerToken: Int
     private let prefersSplitNavigation: Bool?
 
@@ -39,24 +49,26 @@ struct ProjectListView: View {
     }
 
     private var filtered: [Project] {
-        var result = store.projects
-        if !normalizedSearchText.isEmpty {
-            result = result.filter { $0.name.localizedStandardContains(normalizedSearchText) || $0.location.localizedStandardContains(normalizedSearchText) }
-        }
+        var result = projectStore.projects
+        result = SearchMatcher.filter(result, keyword: searchText)
         if let sf = statusFilter {
-            result = result.filter { $0.status == sf.rawValue }
+            result = result.filter { $0.status == sf }
         }
         if let overviewFilter {
             result = result.filter { project in
                 switch overviewFilter {
                 case .active:
-                    return project.status == ProjectStatus.active.rawValue || project.status == ProjectStatus.paused.rawValue
+                    return project.status == .active || project.status == .paused
                 case .overdue:
                     return hasOverdueItem(for: project)
                 case .todo:
                     return openTodoCount(for: project) > 0
                 case .missingReceipt:
                     return unattachedReceiptCount(for: project) > 0
+                case .financialDue:
+                    return hasUnsettledFinancial(for: project)
+                case .missingTodayLog:
+                    return missingTodayLog(for: project)
                 }
             }
         }
@@ -77,30 +89,23 @@ struct ProjectListView: View {
     }
 
     private var activeProjectCount: Int {
-        store.projects.filter { $0.status == ProjectStatus.active.rawValue || $0.status == ProjectStatus.paused.rawValue }.count
+        projectStore.activeOrPausedProjectCount
     }
 
-    private var overdueCount: Int {
-        let today = Calendar.current.startOfDay(for: Date())
-        let progress = store.progressTasks.filter { task in
-            guard task.clampedCompletion < 1,
-                  let due = Formatters.date.date(from: task.dueDate) else { return false }
-            return due < today
-        }.count
-        return progress + store.siteTodos.filter(\.isOverdue).count
-    }
+    private var overdueCount: Int { projectStore.totalOverdueItemCount }
 
-    private var openTodoCount: Int {
-        store.siteTodos.filter { !$0.isDone }.count
-    }
+    private var openTodoCount: Int { projectStore.totalOpenTodoCount }
 
     private var unattachedReceiptCount: Int {
-        store.projectFinancialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
-            let linkedByList = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = store.projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByList || linkedByDocument)
-        }.count
+        projectStore.totalUnattachedReceiptCount
+    }
+
+    private var unsettledFinancialCount: Int {
+        projectStore.totalUnsettledFinancialCount
+    }
+
+    private var missingTodayLogCount: Int {
+        projectStore.missingTodayLogActiveProjectCount
     }
 
     private var normalizedSearchText: String {
@@ -115,7 +120,7 @@ struct ProjectListView: View {
         if let prefersSplitNavigation {
             return prefersSplitNavigation
         }
-        return UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+        return false
     }
 
     private var visibleProjectIDs: [UUID] {
@@ -124,7 +129,7 @@ struct ProjectListView: View {
 
     private var selectedProject: Project? {
         guard let selectedProjectId else { return nil }
-        return store.projects.first { $0.id == selectedProjectId }
+        return projectStore.projects.first { $0.id == selectedProjectId }
     }
 
     var body: some View {
@@ -209,214 +214,192 @@ struct ProjectListView: View {
 
     @ViewBuilder
     private func projectList(isSplitNavigation: Bool) -> some View {
-        if isSplitNavigation {
-            List {
-                projectListSections(isSplitNavigation: true)
+        List {
+            searchFilterSection(isSplitNavigation: isSplitNavigation)
+
+            if sortedProjects.isEmpty {
+                emptyProjectSection
             }
-            .searchable(text: $searchText, prompt: "按名称或地点搜索")
-        } else {
-            List {
-                projectListSections(isSplitNavigation: false)
-            }
-            .searchable(text: $searchText, prompt: "按名称或地点搜索")
+
+            projectRowsSection(isSplitNavigation: isSplitNavigation)
         }
     }
 
+    // MARK: - 内联搜索与筛选
+
     @ViewBuilder
-    private func projectListSections(isSplitNavigation: Bool) -> some View {
-        Section("工程概况") {
-            if isSplitNavigation {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 8)], spacing: 8) {
-                    ProjectCompactMetric(
-                        title: "进行中",
-                        value: "\(activeProjectCount)",
-                        color: .green,
-                        isSelected: overviewFilter == .active,
-                        expandsToFill: true
-                    ) {
-                        toggleOverviewFilter(.active)
-                    }
-                    ProjectCompactMetric(
-                        title: "延期",
-                        value: "\(overdueCount)",
-                        color: overdueCount > 0 ? .red : .green,
-                        isSelected: overviewFilter == .overdue,
-                        expandsToFill: true
-                    ) {
-                        toggleOverviewFilter(.overdue)
-                    }
-                    ProjectCompactMetric(
-                        title: "待办",
-                        value: "\(openTodoCount)",
-                        color: openTodoCount > 0 ? .orange : .green,
-                        isSelected: overviewFilter == .todo,
-                        expandsToFill: true
-                    ) {
-                        toggleOverviewFilter(.todo)
-                    }
-                    ProjectCompactMetric(
-                        title: "缺票",
-                        value: "\(unattachedReceiptCount)",
-                        color: unattachedReceiptCount > 0 ? .pink : .green,
-                        isSelected: overviewFilter == .missingReceipt,
-                        expandsToFill: true
-                    ) {
-                        toggleOverviewFilter(.missingReceipt)
-                    }
-                }
-                .padding(.vertical, 2)
-                .listRowInsets(EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16))
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        ProjectCompactMetric(title: "进行中", value: "\(activeProjectCount)", color: .green, isSelected: overviewFilter == .active) {
-                            toggleOverviewFilter(.active)
-                        }
-                        ProjectCompactMetric(title: "延期", value: "\(overdueCount)", color: overdueCount > 0 ? .red : .green, isSelected: overviewFilter == .overdue) {
-                            toggleOverviewFilter(.overdue)
-                        }
-                        ProjectCompactMetric(title: "待办", value: "\(openTodoCount)", color: openTodoCount > 0 ? .orange : .green, isSelected: overviewFilter == .todo) {
-                            toggleOverviewFilter(.todo)
-                        }
-                        ProjectCompactMetric(title: "缺票", value: "\(unattachedReceiptCount)", color: unattachedReceiptCount > 0 ? .pink : .green, isSelected: overviewFilter == .missingReceipt) {
-                            toggleOverviewFilter(.missingReceipt)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 0))
-            }
-        }
-
+    private func searchFilterSection(isSplitNavigation: Bool) -> some View {
         Section {
-            if isSplitNavigation {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(spacing: 8) {
-                        Menu {
-                            Button("全部状态") { statusFilter = nil }
-                            ForEach(ProjectStatus.allCases, id: \.self) { status in
-                                Button(status.displayName) {
-                                    statusFilter = status
-                                }
-                            }
-                        } label: {
-                            Label(statusFilter?.displayName ?? "全部状态", systemImage: "line.3.horizontal.decrease.circle")
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-                        }
+            // 搜索栏
+            HStack(spacing: AppSpacing.tight) {
+                Image(systemName: "magnifyingglass")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                TextField("搜索项目名称或地点", text: $searchText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                if !searchText.isEmpty {
+                    Button {
+                        searchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
 
-                        Menu {
-                            ForEach(ProjectSortOption.allCases, id: \.self) { option in
-                                Button(option.displayName) {
-                                    sortOption = option
-                                }
+            // 状态筛选 chips + 排序 + 清除
+            if isSplitNavigation {
+                HStack(spacing: AppSpacing.tight) {
+                    Menu {
+                        Button("全部状态") { statusFilter = nil }
+                        ForEach(ProjectStatus.allCases, id: \.rawValue) { status in
+                            Button(status.displayName) {
+                                statusFilter = status
                             }
-                        } label: {
-                            Label(sortOption.displayName, systemImage: "arrow.up.arrow.down.circle")
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 10)
-                                .padding(.vertical, 6)
-                                .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
                         }
+                    } label: {
+                        Label(statusFilter?.displayName ?? "全部状态", systemImage: "line.3.horizontal.decrease.circle")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, AppSpacing.normal)
+                            .padding(.vertical, 6)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                    }
+
+                    Menu {
+                        ForEach(ProjectSortOption.allCases, id: \.self) { option in
+                            Button(option.displayName) {
+                                sortOption = option
+                            }
+                        }
+                    } label: {
+                        Label(sortOption.displayName, systemImage: "arrow.up.arrow.down.circle")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, AppSpacing.normal)
+                            .padding(.vertical, 6)
+                            .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
+                    }
+
+                    Spacer(minLength: 0)
+
+                    if hasAnyFilterApplied {
+                        Button {
+                            clearAllFilters()
+                        } label: {
+                            Label("清除", systemImage: "xmark.circle")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                }
+            } else {
+                VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: AppSpacing.tight) {
+                            FilterChip(title: "全部", isSelected: statusFilter == nil) { statusFilter = nil }
+                            ForEach(ProjectStatus.allCases, id: \.rawValue) { s in
+                                FilterChip(title: s.rawValue, isSelected: statusFilter == s) { statusFilter = s }
+                            }
+                        }
+                        .padding(.vertical, 4)
+                    }
+
+                    HStack(spacing: AppSpacing.tight) {
+                        Picker("排序", selection: $sortOption) {
+                            ForEach(ProjectSortOption.allCases, id: \.self) { option in
+                                Text(option.rawValue).tag(option)
+                            }
+                        }
+                        .pickerStyle(.menu)
 
                         Spacer(minLength: 0)
 
                         if hasAnyFilterApplied {
-                            Button {
+                            Button("清除筛选") {
                                 clearAllFilters()
-                            } label: {
-                                Label("清除", systemImage: "xmark.circle")
-                                    .font(.caption.weight(.semibold))
                             }
-                        }
-                    }
-
-                    if overviewFilter != nil {
-                        Button {
-                            overviewFilter = nil
-                        } label: {
-                            Label("清除工程概况筛选", systemImage: "xmark.circle")
-                                .font(.caption.weight(.semibold))
-                        }
-                    }
-                }
-                .padding(.vertical, 2)
-            } else {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        FilterChip(title: "全部", isSelected: statusFilter == nil) { statusFilter = nil }
-                        ForEach(ProjectStatus.allCases, id: \.self) { s in
-                            FilterChip(title: s.displayName, isSelected: statusFilter == s) { statusFilter = s }
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-
-                Picker("排序", selection: $sortOption) {
-                    ForEach(ProjectSortOption.allCases, id: \.self) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                if overviewFilter != nil {
-                    Button {
-                        overviewFilter = nil
-                    } label: {
-                        Label("清除工程概况筛选", systemImage: "xmark.circle")
                             .font(.caption.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        }
                     }
                 }
             }
-        }
 
-        if sortedProjects.isEmpty {
-            Section("建议下一步") {
-                if hasAnyFilterApplied {
-                    ContentUnavailableView(
-                        "没有匹配项目",
-                        systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text("当前筛选条件下没有匹配项，建议先清除筛选再查看全部工程。")
-                    )
-                    Button {
-                        clearAllFilters()
-                    } label: {
-                        Label("清除筛选条件", systemImage: "arrow.uturn.backward.circle")
-                    }
-                } else {
-                    ContentUnavailableView(
-                        "还没有项目",
-                        systemImage: "building.2",
-                        description: Text("先新建一个工程，再补充日志、资料、报价和回款。")
-                    )
-                    Button {
-                        showAdd = true
-                    } label: {
-                        Label("新建第一个项目", systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+            if overviewFilter != nil {
+                Button {
+                    overviewFilter = nil
+                } label: {
+                    Label("清除概况筛选", systemImage: "xmark.circle")
+                        .font(.caption.weight(.semibold))
                 }
             }
+        } header: {
+            Text("搜索与筛选")
         }
+    }
 
+    // MARK: - 空状态
+
+    @ViewBuilder
+    private var emptyProjectSection: some View {
+        Section("建议下一步") {
+            if hasAnyFilterApplied {
+                ContentUnavailableView(
+                    "没有匹配项目",
+                    systemImage: "line.3.horizontal.decrease.circle",
+                    description: Text("当前筛选条件下没有匹配项，建议先清除筛选再查看全部工程。")
+                )
+                Button {
+                    clearAllFilters()
+                } label: {
+                    Label("清除筛选条件", systemImage: "arrow.uturn.backward.circle")
+                }
+            } else {
+                ContentUnavailableView(
+                    "还没有项目",
+                    systemImage: "building.2",
+                    description: Text("先新建一个工程，再补充日志、资料、报价和回款。")
+                )
+                Button {
+                    showAdd = true
+                } label: {
+                    Label("新建第一个项目", systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.orange)
+            }
+        }
+    }
+
+    // MARK: - 项目列表行
+
+    @ViewBuilder
+    private func projectRowsSection(isSplitNavigation: Bool) -> some View {
         ForEach(sortedProjects) { project in
             Group {
                 if isSplitNavigation {
                     Button {
                         selectedProjectId = project.id
                     } label: {
-                        projectRowContent(project)
+                        ProjectRowContent(
+                            project: project,
+                            isSelected: selectedProjectId == project.id,
+                            unpaidAmount: unpaidAmount(for: project),
+                            badges: projectRiskBadges(for: project)
+                        )
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(selectedProjectId == project.id ? Color.orange.opacity(0.1) : Color.clear)
+                    .listRowBackground(selectedProjectId == project.id ? Color.orange.opacity(0.14) : Color.clear)
                 } else {
                     NavigationLink {
                         ProjectDetailView(projectId: project.id)
                     } label: {
-                        projectRowContent(project)
+                        ProjectRowContent(
+                            project: project,
+                            isSelected: false,
+                            unpaidAmount: unpaidAmount(for: project),
+                            badges: projectRiskBadges(for: project)
+                        )
                     }
                 }
             }
@@ -455,41 +438,10 @@ struct ProjectListView: View {
         }
         .onDelete { indexSet in
             let ids = indexSet.map { sortedProjects[$0].id }
-            if let target = store.projects.first(where: { ids.contains($0.id) }) {
+            if let target = projectStore.projects.first(where: { ids.contains($0.id) }) {
                 projectToDelete = target
                 showDeleteConfirm = true
             }
-        }
-    }
-
-    private func projectRowContent(_ project: Project) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(project.name)
-                .font(.body.weight(.medium))
-            HStack {
-                Text(project.location)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                statusBadge(project.status)
-            }
-            HStack(spacing: 8) {
-                if !project.customerName.isEmpty {
-                    Text(project.customerName)
-                }
-                if !project.expectedEndDate.isEmpty {
-                    Text("完工 \(project.expectedEndDate)")
-                }
-                if !project.contractAmount.isEmpty {
-                    Text("合同 \(ReportBuilder.money(Double(project.contractAmount) ?? 0))")
-                }
-                let unpaid = unpaidAmount(for: project)
-                if unpaid > 0 {
-                    Text("未收 \(ReportBuilder.money(unpaid))")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
         }
     }
 
@@ -541,25 +493,29 @@ struct ProjectListView: View {
                         TextField("0", text: $newContractAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($newProjectFocusedField, equals: .contractAmount)
                     }
                     LabeledContent("已收款") {
                         TextField("0", text: $newPaidAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($newProjectFocusedField, equals: .paidAmount)
                     }
                     LabeledContent("材料成本") {
                         TextField("0", text: $newMaterialCost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($newProjectFocusedField, equals: .materialCost)
                     }
                     LabeledContent("人工成本") {
                         TextField("0", text: $newLaborCost)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($newProjectFocusedField, equals: .laborCost)
                     }
                     Picker("收款状态", selection: $newPaymentStatus) {
                         ForEach(PaymentStatus.allCases, id: \.self) { status in
-                            Text(status.displayName).tag(status)
+                            Text(status.rawValue).tag(status)
                         }
                     }
                 }
@@ -580,32 +536,25 @@ struct ProjectListView: View {
                     }
                     .disabled(!canCreateProject)
                 }
+                KeyboardNavigationToolbar(
+                    focusedField: $newProjectFocusedField,
+                    fields: [.contractAmount, .paidAmount, .materialCost, .laborCost]
+                )
             }
         }
         .presentationDetents([.large])
     }
 
     @ViewBuilder
-    private func statusBadge(_ status: String) -> some View {
-        let color: Color = {
-            switch status {
-            case ProjectStatus.active.rawValue: return .orange
-            case ProjectStatus.paused.rawValue: return .yellow
-            case ProjectStatus.completed.rawValue: return .green
-            case ProjectStatus.settled.rawValue: return .blue
-            case ProjectStatus.archived.rawValue: return .gray
-            default: return .gray
-            }
-        }()
-        Text(status).font(.caption2.weight(.medium))
-            .padding(.horizontal, 8).padding(.vertical, 2)
-            .background(color.opacity(0.2)).clipShape(Capsule())
+    private func statusBadge(_ status: ProjectStatus) -> some View {
+        ProjectStatusBadge(status: status)
     }
 
     private func deleteProject(keepData: Bool) {
         guard let pid = projectToDelete?.id else { return }
         if keepData {
             archiveProject()
+            return
         } else {
             store.deleteProject(pid)
         }
@@ -613,8 +562,8 @@ struct ProjectListView: View {
 
     private func archiveProject() {
         guard let pid = projectToDelete?.id,
-              let index = store.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[index].status = ProjectStatus.archived.rawValue
+              let index = projectStore.projects.firstIndex(where: { $0.id == pid }) else { return }
+        store.projects[index].status = .archived
         projectToDelete = nil
         store.scheduleSave()
     }
@@ -624,7 +573,7 @@ struct ProjectListView: View {
         store.projects.append(Project(
             name: newName.trimmingCharacters(in: .whitespacesAndNewlines),
             location: newLocation,
-            status: ProjectStatus.active.rawValue,
+            status: .active,
             customerName: newCustomerName,
             customerPhone: newCustomerPhone,
             startDate: Formatters.date.string(from: newStartDate),
@@ -632,7 +581,7 @@ struct ProjectListView: View {
             managerName: newManagerName,
             contractAmount: newContractAmount,
             paidAmount: newPaidAmount,
-            paymentStatus: newPaymentStatus.rawValue,
+            paymentStatus: newPaymentStatus,
             materialCost: newMaterialCost,
             laborCost: newLaborCost
         ))
@@ -664,20 +613,7 @@ struct ProjectListView: View {
 
     private var relatedCount: Int {
         guard let pid = projectToDelete?.id else { return 0 }
-        return store.materialItems.filter { $0.projectId == pid }.count
-            + store.quoteItems.filter { $0.projectId == pid }.count
-            + store.laborRecords.filter { $0.projectId == pid }.count
-            + store.dailyLogs.filter { $0.projectId == pid }.count
-            + store.progressTasks.filter { $0.projectId == pid }.count
-            + store.lightingCircuitPlans.filter { $0.projectId == pid }.count
-            + store.siteTodos.filter { $0.projectId == pid }.count
-            + store.paymentRecords.filter { $0.projectId == pid }.count
-            + store.projectDrawings.filter { $0.projectId == pid }.count
-            + store.projectContacts.filter { $0.projectId == pid }.count
-            + store.projectFinancialRecords.filter { $0.projectId == pid }.count
-            + store.projectDocuments.filter { $0.projectId == pid }.count
-            + store.projectWarehouseMovements.filter { $0.projectId == pid }.count
-            + store.quickNotes.filter { $0.projectId == pid }.count
+        return store.relatedDataCount(for: pid)
     }
 
     private func expectedEndDate(for project: Project) -> Date {
@@ -685,22 +621,15 @@ struct ProjectListView: View {
     }
 
     private func paidAmount(for project: Project) -> Double {
-        let records = store.projectFinancialRecords.filter {
-            $0.projectId == project.id && $0.direction == ProjectFinancialDirection.income.rawValue
+        let projectId = project.id
+        let summary = projectStore.projectActivitySummary(for: projectId)
+        if summary.collectedIncomeAmount > 0 {
+            return summary.collectedIncomeAmount
         }
-        let amountFromFinancial = records.reduce(0) { result, item in
-            let category = ProjectFinancialCategory(rawValue: item.category)
-            guard category == .collection || category == .receipt else { return result }
-            return result + ReportBuilder.number(item.amount)
+        if financeStore.hasLegacyPaymentRecord(for: projectId) {
+            return financeStore.legacyPaymentAmount(for: projectId)
         }
-        if amountFromFinancial > 0 {
-            return amountFromFinancial
-        }
-        let legacyPayments = store.paymentRecords.filter { $0.projectId == project.id }
-        if !legacyPayments.isEmpty {
-            return legacyPayments.reduce(0) { $0 + ReportBuilder.number($1.amount) }
-        }
-        return ReportBuilder.number(project.paidAmount)
+        return project.paidAmountValue.doubleValue
     }
 
     private func customerPhoneURL(for project: Project) -> URL? {
@@ -711,7 +640,26 @@ struct ProjectListView: View {
     }
 
     private func unpaidAmount(for project: Project) -> Double {
-        max(ReportBuilder.number(project.contractAmount) - paidAmount(for: project), 0)
+        max(project.contractAmountValue.doubleValue - paidAmount(for: project), 0)
+    }
+
+    private func projectRiskBadges(for project: Project) -> [ProjectRiskBadge] {
+        var badges: [ProjectRiskBadge] = []
+        if hasOverdueItem(for: project) {
+            badges.append(ProjectRiskBadge(title: "延期", systemImage: "exclamationmark.triangle.fill", color: .red))
+        }
+        let todos = openTodoCount(for: project)
+        if todos > 0 {
+            badges.append(ProjectRiskBadge(title: "\(todos)待办", systemImage: "checklist", color: .orange))
+        }
+        let missingReceipts = unattachedReceiptCount(for: project)
+        if missingReceipts > 0 {
+            badges.append(ProjectRiskBadge(title: "\(missingReceipts)缺票", systemImage: "doc.badge.exclamationmark", color: .pink))
+        }
+        if unpaidAmount(for: project) > 0 {
+            badges.append(ProjectRiskBadge(title: "未收", systemImage: "yensign.circle.fill", color: .blue))
+        }
+        return Array(badges.prefix(4))
     }
 
     private func toggleOverviewFilter(_ filter: ProjectOverviewFilter) {
@@ -719,115 +667,163 @@ struct ProjectListView: View {
     }
 
     private func hasOverdueItem(for project: Project) -> Bool {
-        let today = Calendar.current.startOfDay(for: Date())
-        let hasOverdueProgress = store.progressTasks.contains { task in
-            guard task.projectId == project.id,
-                  task.clampedCompletion < 1,
-                  let due = Formatters.date.date(from: task.dueDate) else { return false }
-            return due < today
-        }
-        return hasOverdueProgress || store.siteTodos.contains { $0.projectId == project.id && $0.isOverdue }
+        projectStore.projectActivitySummary(for: project.id).overdueItemCount > 0
     }
 
     private func openTodoCount(for project: Project) -> Int {
-        store.siteTodos.filter { $0.projectId == project.id && !$0.isDone }.count
+        projectStore.projectActivitySummary(for: project.id).openTodoCount
     }
 
     private func unattachedReceiptCount(for project: Project) -> Int {
-        store.projectFinancialRecords.filter { record in
-            guard record.projectId == project.id, record.requiresAttachment else { return false }
-            let linkedByList = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = store.projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByList || linkedByDocument)
-        }.count
+        projectStore.projectActivitySummary(for: project.id).unattachedReceiptCount
+    }
+
+    private func hasUnsettledFinancial(for project: Project) -> Bool {
+        projectStore.projectActivitySummary(for: project.id).hasUnsettledFinancial
+    }
+
+    private func missingTodayLog(for project: Project) -> Bool {
+        guard project.status == .active || project.status == .paused else {
+            return false
+        }
+        return !projectStore.hasTodayLog(for: project.id)
     }
 
     private func recentActivityDate(for project: Project) -> Date {
-        var dates: [Date] = []
         let projectId = project.id
-        if let start = Formatters.date.date(from: project.startDate) {
-            dates.append(start)
+        var latest = projectStore.projectActivitySummary(for: projectId).latestActivityDate ?? .distantPast
+        if let startDate = Formatters.parseDateOrDateTime(project.startDate) {
+            latest = max(latest, startDate)
         }
-        for item in store.dailyLogs where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
+        if let latestPayment = financeStore.latestPaymentDate(for: projectId) {
+            latest = max(latest, latestPayment)
         }
-        for item in store.paymentRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
+        if let latestLabor = financeStore.latestLaborDate(for: projectId) {
+            latest = max(latest, latestLabor)
         }
-        for item in store.projectFinancialRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.laborRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.progressTasks where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.startDate) {
-                dates.append(date)
-            }
-            if let date = Formatters.date.date(from: item.dueDate) {
-                dates.append(date)
-            }
-        }
-        for item in store.siteTodos where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.dueDate) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectDrawings where item.projectId == projectId {
-            if let date = Formatters.dateTime.date(from: item.importedAt) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectDocuments where item.projectId == projectId {
-            if let date = Formatters.dateTime.date(from: item.createdAt) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectWarehouseMovements where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        return dates.max() ?? .distantPast
+        return latest
     }
 }
 
-private struct ProjectCompactMetric: View {
-    let title: String
-    let value: String
-    let color: Color
-    var isSelected = false
-    var expandsToFill = false
-    let action: () -> Void
+// MARK: - 项目行内容（统一组件）
+
+private struct ProjectRowContent: View {
+    let project: Project
+    let isSelected: Bool
+    let unpaidAmount: Double
+    let badges: [ProjectRiskBadge]
+
+    private var riskColor: Color {
+        if badges.contains(where: { $0.color == .red }) { return .red }
+        if badges.contains(where: { $0.color == .orange }) { return .orange }
+        if badges.contains(where: { $0.color == .pink }) { return .pink }
+        return isSelected ? .orange : .clear
+    }
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.caption2)
-                    .foregroundStyle(isSelected ? .white.opacity(0.86) : .secondary)
-                Text(value)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : color)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.58)
+        HStack(alignment: .top, spacing: AppSpacing.normal) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(riskColor)
+                .frame(width: 4)
+
+            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.625) {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
+                    Text(project.name)
+                        .font(.body.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: AppSpacing.tight)
+                    ProjectStatusBadge(status: project.status)
+                }
+
+                HStack(spacing: AppSpacing.tight) {
+                    if !project.location.isEmpty {
+                        Image(systemName: "mappin").font(.caption2)
+                        Text(project.location)
+                    }
+                    if !project.customerName.isEmpty {
+                        Text("·")
+                        Text(project.customerName)
+                    }
+                    if !project.expectedEndDate.isEmpty {
+                        Text("·")
+                        Text("完工 \(project.expectedEndDate)")
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+                HStack(spacing: AppSpacing.tight) {
+                    if !project.contractAmount.isEmpty {
+                        Text("合同 \(ReportBuilder.money(project.contractAmountValue.doubleValue))")
+                            .font(.caption2.weight(.medium))
+                    }
+                    if unpaidAmount > 0 {
+                        Text("未收 \(ReportBuilder.money(unpaidAmount))")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(.orange)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .foregroundStyle(.secondary)
+
+                if !badges.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(Array(badges.prefix(3)), id: \.title) { badge in
+                            ProjectRiskBadgeView(badge: badge)
+                        }
+                        if badges.count > 3 {
+                            Text("+\(badges.count - 3)")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(width: expandsToFill ? nil : 82, alignment: .leading)
-            .frame(minHeight: 38, alignment: .leading)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 6)
-            .background(RoundedRectangle(cornerRadius: 7).fill(isSelected ? color : Color(uiColor: .secondarySystemGroupedBackground)))
         }
-        .buttonStyle(.plain)
+        .padding(.vertical, 2)
+    }
+}
+
+// MARK: - 项目状态标签
+
+private struct ProjectStatusBadge: View {
+    let status: ProjectStatus
+
+    private var color: Color {
+        switch status {
+        case .active: return .orange
+        case .paused: return .yellow
+        case .completed: return .green
+        case .settled: return .blue
+        case .archived: return .gray
+        }
+    }
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2.weight(.medium))
+            .padding(.horizontal, AppSpacing.tight)
+            .padding(.vertical, 2)
+            .background(color.opacity(0.2))
+            .clipShape(Capsule())
+    }
+}
+
+// MARK: - 风险标签
+
+private struct ProjectRiskBadgeView: View {
+    let badge: ProjectRiskBadge
+
+    var body: some View {
+        Label(badge.title, systemImage: badge.systemImage)
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(badge.color)
+            .labelStyle(.titleAndIcon)
+            .padding(.horizontal, 7)
+            .padding(.vertical, 3)
+            .background(badge.color.opacity(0.14), in: Capsule())
+            .lineLimit(1)
     }
 }
 
@@ -836,20 +832,22 @@ enum ProjectOverviewFilter: String {
     case overdue
     case todo
     case missingReceipt
+    case financialDue
+    case missingTodayLog
 }
 
 private enum ProjectSortOption: String, CaseIterable {
-    case recentUpdate
-    case expectedEnd
-    case unpaidAmount
+    case recentUpdate = "最近更新"
+    case expectedEnd = "预计完工"
+    case unpaidAmount = "未收款"
 
-    var displayName: String {
-        switch self {
-        case .recentUpdate: "最近更新"
-        case .expectedEnd: "预计完工"
-        case .unpaidAmount: "未收款"
-        }
-    }
+    var displayName: String { rawValue }
+}
+
+private struct ProjectRiskBadge {
+    let title: String
+    let systemImage: String
+    let color: Color
 }
 
 private struct FilterChip: View {
@@ -857,7 +855,7 @@ private struct FilterChip: View {
     var body: some View {
         Button(action: action) {
             Text(title).font(.caption.weight(.medium))
-                .padding(.horizontal, 12).padding(.vertical, 6)
+                .padding(.horizontal, AppSpacing.normal).padding(.vertical, 6)
                 .background(isSelected ? Color.orange : Color.gray.opacity(0.15))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())

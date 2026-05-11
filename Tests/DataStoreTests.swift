@@ -6,9 +6,15 @@ import Foundation
 struct DataStoreTests {
 
     let testStore: DataStore
+    let storageDirectory: URL
 
     init() {
-        let store = DataStore()
+        TransferLimitPolicy.setRuntimeProfileOverride(.development)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DataStoreTests-\(UUID().uuidString)", isDirectory: true)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        self.storageDirectory = directory
+        let store = DataStore(storageDirectory: directory)
         store.clearAllBusinessData(deleteStoredFiles: false)
         self.testStore = store
     }
@@ -98,9 +104,7 @@ struct DataStoreTests {
 
     @Test func deleteProjectRemovesProjectAndAllRelatedData() async throws {
         testStore.importSampleData(replacingExisting: true)
-        guard let project = testStore.projects.first else {
-            throw TestFailure("No project to delete")
-        }
+        let project = try #require(testStore.projects.first)
         let pid = project.id
 
         testStore.deleteProject(pid)
@@ -124,9 +128,7 @@ struct DataStoreTests {
 
     @Test func deleteProjectDoesNotAffectOtherProjects() async throws {
         testStore.importSampleData(replacingExisting: true)
-        guard testStore.projects.count >= 2 else {
-            throw TestFailure("Need at least 2 projects")
-        }
+        try #require(testStore.projects.count >= 2)
         let firstPid = testStore.projects[0].id
         let secondPid = testStore.projects[1].id
         let otherMaterialCount = testStore.materialItems.filter { $0.projectId == secondPid }.count
@@ -137,28 +139,45 @@ struct DataStoreTests {
         #expect(testStore.materialItems.filter { $0.projectId == secondPid }.count == otherMaterialCount)
     }
 
+    @Test func deleteProjectRemovesOnlyMaterialSheetDraftsUnderProject() async throws {
+        testStore.clearAllBusinessData(deleteStoredFiles: false)
+        let first = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let second = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        testStore.projects = [first, second]
+        testStore.materialSheetDrafts = [
+            MaterialSheetDraft(title: "A 草稿", projectId: first.id),
+            MaterialSheetDraft(title: "B 草稿", projectId: second.id),
+            MaterialSheetDraft(title: "无归属草稿", projectId: nil)
+        ]
+
+        testStore.deleteProject(first.id)
+
+        #expect(!testStore.materialSheetDrafts.contains { $0.projectId == first.id })
+        #expect(testStore.materialSheetDrafts.contains { $0.projectId == second.id })
+        #expect(testStore.materialSheetDrafts.contains { $0.projectId == nil })
+    }
+
     // MARK: - flushSave
 
     @Test func flushSaveWritesToDisk() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
-        // Force a save that we can await
-        let store = DataStore()
-        store.clearAllBusinessData(deleteStoredFiles: true)
-        let project = Project(name: "flush test", location: "", status: ProjectStatus.active.rawValue, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        store.projects.append(project)
-        await store.flushSave()
+        let project = Project(name: "flush test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        testStore.projects.append(project)
+        await testStore.flushSave()
 
-        let restored = DataStore()
+        let restored = DataStore(storageDirectory: storageDirectory)
+        await restored.awaitInitialLoad()
         #expect(restored.projects.contains { $0.name == "flush test" })
     }
 
     @Test func flushSaveReplacesPendingScheduleSave() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
-        testStore.projects.append(Project(name: "flush pending", location: "", status: ProjectStatus.active.rawValue, startDate: "2025-01-01", expectedEndDate: "2025-06-01"))
+        testStore.projects.append(Project(name: "flush pending", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01"))
         testStore.scheduleSave()
         await testStore.flushSave()
 
-        let restored = DataStore()
+        let restored = DataStore(storageDirectory: storageDirectory)
+        await restored.awaitInitialLoad()
         #expect(restored.projects.contains { $0.name == "flush pending" })
     }
 }

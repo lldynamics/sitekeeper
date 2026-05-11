@@ -18,6 +18,20 @@ enum ProjectDetailExportWorkflow {
         logs: [DailyLog],
         quickNotes: [QuickNote]
     ) -> ProjectDetailPackageRequestDecision {
+        // ① 先检查缺失文件（阻断性错误，让用户第一时间看到）
+        let missingFiles = ProjectDetailImportExportActions.missingProjectPackageFiles(
+            documents: documents,
+            drawings: drawings,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        if !missingFiles.isEmpty {
+            let preview = missingFiles.prefix(8).joined(separator: "、")
+            let more = missingFiles.count > 8 ? " 等 \(missingFiles.count) 项" : ""
+            return .reject("交付包存在缺失原件：\(preview)\(more)。请先到数据健康检查处理后再导出。")
+        }
+
+        // ② 再检查体积（警告性，不阻断）
         let estimatedBytes = ProjectDetailImportExportActions.estimatedProjectPackageBytes(
             documents: documents,
             drawings: drawings,
@@ -54,31 +68,36 @@ enum ProjectDetailExportWorkflow {
         onCompletion: @escaping @MainActor (ProjectDetailPackageExportTaskResult) -> Void
     ) -> Task<Void, Never> {
         let relatedTodos = todos.filter { $0.projectId == projectId }
+        let relay = TaskCancellationRelay()
 
         return Task {
-            let result = await Task.detached(priority: .userInitiated) {
-                ProjectDetailImportExportActions.makeProjectPackageExport(
-                    project: project,
-                    materials: materials,
-                    quotes: quotes,
-                    labor: labor,
-                    logs: logs,
-                    tasks: tasks,
-                    todos: relatedTodos,
-                    drawings: drawings,
-                    contacts: contacts,
-                    financialRecords: financialRecords,
-                    documents: documents,
-                    quickNotes: quickNotes,
-                    paidAmountOverride: paidAmountOverride,
-                    progress: { progress in
-                        Task { @MainActor in
-                            onProgress(progress)
-                        }
-                    },
-                    shouldCancel: { Task.isCancelled }
-                )
-            }.value
+            let result = await withTaskCancellationHandler {
+                await Task.detached(priority: .userInitiated) {
+                    ProjectDetailImportExportActions.makeProjectPackageExport(
+                        project: project,
+                        materials: materials,
+                        quotes: quotes,
+                        labor: labor,
+                        logs: logs,
+                        tasks: tasks,
+                        todos: relatedTodos,
+                        drawings: drawings,
+                        contacts: contacts,
+                        financialRecords: financialRecords,
+                        documents: documents,
+                        quickNotes: quickNotes,
+                        paidAmountOverride: paidAmountOverride,
+                        progress: { progress in
+                            Task { @MainActor in
+                                onProgress(progress)
+                            }
+                        },
+                        shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                    )
+                }.value
+            } onCancel: {
+                relay.cancel()
+            }
 
             guard !Task.isCancelled else {
                 await onCancelled()

@@ -3,13 +3,13 @@ import Foundation
 struct MaterialItem: Identifiable, Codable {
     var id = UUID()
     var name: String
-    var quantity: String
+    @NonNegativeNumberText var quantity: String
     var unit: String
-    var unitPrice: String
+    @NonNegativeNumberText var unitPrice: String
     var specification: String
     var brand: String
     var supplier: String
-    var purchaseStatus: String
+    var purchaseStatus: MaterialPurchaseStatus
     var arrivalDate: String
     var projectId: UUID?
 
@@ -22,7 +22,7 @@ struct MaterialItem: Identifiable, Codable {
         specification: String = "",
         brand: String = "",
         supplier: String = "",
-        purchaseStatus: String = MaterialPurchaseStatus.notPurchased.rawValue,
+        purchaseStatus: MaterialPurchaseStatus = .notPurchased,
         arrivalDate: String = "",
         projectId: UUID? = nil
     ) {
@@ -53,25 +53,151 @@ struct MaterialItem: Identifiable, Codable {
         specification = try container.decodeIfPresent(String.self, forKey: .specification) ?? ""
         brand = try container.decodeIfPresent(String.self, forKey: .brand) ?? ""
         supplier = try container.decodeIfPresent(String.self, forKey: .supplier) ?? ""
-        purchaseStatus = try container.decodeIfPresent(String.self, forKey: .purchaseStatus) ?? MaterialPurchaseStatus.notPurchased.rawValue
+        purchaseStatus = try container.decodeStringEnum(
+            MaterialPurchaseStatus.self,
+            forKey: .purchaseStatus,
+            default: .notPurchased
+        )
         arrivalDate = try container.decodeIfPresent(String.self, forKey: .arrivalDate) ?? ""
         projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+    }
+}
+
+struct MaterialSheetDraftItem: Identifiable, Codable {
+    var id: UUID
+    var name: String
+    var specification: String
+    var unit: String
+    @NonNegativeNumberText var quantity: String
+    @NonNegativeNumberText var unitPrice: String
+    @NonNegativeNumberText var laborCost: String
+    var supplier: String
+    var usageLocation: String
+    var note: String
+    var attachmentData: Data?
+    var attachmentFileName: String?
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        specification: String = "",
+        unit: String = "",
+        quantity: String = "",
+        unitPrice: String = "",
+        laborCost: String = "",
+        supplier: String = "",
+        usageLocation: String = "",
+        note: String = "",
+        attachmentData: Data? = nil,
+        attachmentFileName: String? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.specification = specification
+        self.unit = unit
+        self.quantity = quantity
+        self.unitPrice = unitPrice
+        self.laborCost = laborCost
+        self.supplier = supplier
+        self.usageLocation = usageLocation
+        self.note = note
+        self.attachmentData = attachmentData
+        self.attachmentFileName = attachmentFileName
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, specification, unit, quantity, unitPrice
+        case laborCost, supplier, usageLocation, note
+        case attachmentData, attachmentFileName
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        specification = try container.decodeIfPresent(String.self, forKey: .specification) ?? ""
+        unit = try container.decodeIfPresent(String.self, forKey: .unit) ?? ""
+        quantity = try container.decodeIfPresent(String.self, forKey: .quantity) ?? ""
+        unitPrice = try container.decodeIfPresent(String.self, forKey: .unitPrice) ?? ""
+        laborCost = try container.decodeIfPresent(String.self, forKey: .laborCost) ?? ""
+        supplier = try container.decodeIfPresent(String.self, forKey: .supplier) ?? ""
+        usageLocation = try container.decodeIfPresent(String.self, forKey: .usageLocation) ?? ""
+        note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        attachmentData = try container.decodeIfPresent(Data.self, forKey: .attachmentData)
+        attachmentFileName = try container.decodeIfPresent(String.self, forKey: .attachmentFileName)
+    }
+}
+
+struct MaterialSheetDraft: Identifiable, Codable {
+    var id: UUID
+    var title: String
+    var projectId: UUID?
+    var isArchived: Bool
+    var exportProjectName: String
+    var exportPreparer: String
+    var exportDate: String
+    var items: [MaterialSheetDraftItem]
+    var createdAt: String
+    var updatedAt: String
+
+    init(
+        id: UUID = UUID(),
+        title: String = "",
+        projectId: UUID? = nil,
+        isArchived: Bool = false,
+        exportProjectName: String = "",
+        exportPreparer: String = "",
+        exportDate: String = Formatters.date.string(from: Date()),
+        items: [MaterialSheetDraftItem] = [],
+        createdAt: String = Formatters.now(),
+        updatedAt: String = Formatters.now()
+    ) {
+        self.id = id
+        self.title = title
+        self.projectId = projectId
+        self.isArchived = isArchived
+        self.exportProjectName = exportProjectName
+        self.exportPreparer = exportPreparer
+        self.exportDate = exportDate
+        self.items = items
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, projectId, isArchived
+        case exportProjectName, exportPreparer, exportDate, items
+        case createdAt, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+        isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
+        exportProjectName = try container.decodeIfPresent(String.self, forKey: .exportProjectName) ?? ""
+        exportPreparer = try container.decodeIfPresent(String.self, forKey: .exportPreparer) ?? ""
+        exportDate = try container.decodeIfPresent(String.self, forKey: .exportDate) ?? Formatters.date.string(from: Date())
+        items = try container.decodeIfPresent([MaterialSheetDraftItem].self, forKey: .items) ?? []
+        createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? Formatters.now()
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? Formatters.now()
     }
 }
 
 struct QuoteItem: Identifiable, Codable {
     var id = UUID()
     var name: String
-    var unitPrice: String
-    var quantity: String
+    @NonNegativeNumberText var unitPrice: String
+    @NonNegativeNumberText var quantity: String
     var unit: String
     var notes: String
-    var taxRate: String
-    var discountRate: String
+    @NonNegativeNumberText var taxRate: String
+    @NonNegativeNumberText var discountRate: String
     var versionName: String
-    var status: String
+    var status: QuoteStatus
     var customerConfirmedDate: String
-    var contractAmount: String
+    @NonNegativeNumberText var contractAmount: String
     var projectId: UUID?
 
     init(
@@ -84,7 +210,7 @@ struct QuoteItem: Identifiable, Codable {
         taxRate: String,
         discountRate: String,
         versionName: String = "V1",
-        status: String = QuoteStatus.draft.rawValue,
+        status: QuoteStatus = .draft,
         customerConfirmedDate: String = "",
         contractAmount: String = "",
         projectId: UUID? = nil
@@ -120,7 +246,7 @@ struct QuoteItem: Identifiable, Codable {
         taxRate = try container.decodeIfPresent(String.self, forKey: .taxRate) ?? "0"
         discountRate = try container.decodeIfPresent(String.self, forKey: .discountRate) ?? "0"
         versionName = try container.decodeIfPresent(String.self, forKey: .versionName) ?? "V1"
-        status = try container.decodeIfPresent(String.self, forKey: .status) ?? QuoteStatus.draft.rawValue
+        status = try container.decodeStringEnum(QuoteStatus.self, forKey: .status, default: .draft)
         customerConfirmedDate = try container.decodeIfPresent(String.self, forKey: .customerConfirmedDate) ?? ""
         contractAmount = try container.decodeIfPresent(String.self, forKey: .contractAmount) ?? ""
         projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
@@ -130,9 +256,9 @@ struct QuoteItem: Identifiable, Codable {
 struct LaborRecord: Identifiable, Codable {
     var id = UUID()
     var date: String
-    var workers: String
-    var hours: String
-    var unitRate: String
+    @NonNegativeNumberText var workers: String
+    @NonNegativeNumberText var hours: String
+    @NonNegativeNumberText var unitRate: String
     var workType: String
     var teamName: String
     var isSettled: Bool
@@ -186,8 +312,8 @@ struct PaymentRecord: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var date: String
-    var amount: String
-    var method: String
+    @NonNegativeNumberText var amount: String
+    var method: PaymentMethod
     var note: String
     var isInvoiced: Bool
 
@@ -196,7 +322,7 @@ struct PaymentRecord: Identifiable, Codable {
         projectId: UUID,
         date: String,
         amount: String,
-        method: String = PaymentMethod.bankTransfer.rawValue,
+        method: PaymentMethod = .bankTransfer,
         note: String = "",
         isInvoiced: Bool = false
     ) {
@@ -219,9 +345,17 @@ struct PaymentRecord: Identifiable, Codable {
         projectId = try container.decode(UUID.self, forKey: .projectId)
         date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.date.string(from: Date())
         amount = try container.decodeIfPresent(String.self, forKey: .amount) ?? ""
-        method = try container.decodeIfPresent(String.self, forKey: .method) ?? PaymentMethod.bankTransfer.rawValue
+        method = try container.decodeStringEnum(
+            PaymentMethod.self,
+            forKey: .method,
+            default: .bankTransfer
+        )
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         isInvoiced = try container.decodeIfPresent(Bool.self, forKey: .isInvoiced) ?? false
+    }
+
+    var normalizedMethod: PaymentMethod {
+        method
     }
 }
 
@@ -229,51 +363,68 @@ struct ProjectFinancialRecord: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var date: String
-    var direction: String
-    var category: String
-    var amount: String
+    var direction: ProjectFinancialDirection
+    var category: ProjectFinancialCategory
+    @NonNegativeNumberText var amount: String
     var counterparty: String
     var invoiceNumber: String
     var linkedDocumentIds: [UUID]
+    var status: ProjectFinancialStatus
+    var dueDate: String
+    var reminderStatus: ProjectFinancialReminderStatus
     var note: String
 
     init(
         id: UUID = UUID(),
         projectId: UUID,
-        date: String = Formatters.date.string(from: Date()),
-        direction: String = ProjectFinancialDirection.expense.rawValue,
-        category: String = ProjectFinancialDirection.expense.defaultCategory.rawValue,
+        date: String = Formatters.now(),
+        direction: ProjectFinancialDirection = .expense,
+        category: ProjectFinancialCategory = ProjectFinancialDirection.expense.defaultCategory,
         amount: String = "",
         counterparty: String = "",
         invoiceNumber: String = "",
         linkedDocumentIds: [UUID] = [],
+        status: ProjectFinancialStatus = .active,
+        dueDate: String = "",
+        reminderStatus: ProjectFinancialReminderStatus = .none,
         note: String = ""
     ) {
         self.id = id
         self.projectId = projectId
         self.date = date
         self.direction = direction
-        self.category = category
+        self.category = ProjectFinancialCategory.normalized(category, for: direction)
         self.amount = amount
         self.counterparty = counterparty
         self.invoiceNumber = invoiceNumber
         self.linkedDocumentIds = linkedDocumentIds
+        self.status = status
+        self.dueDate = dueDate
+        self.reminderStatus = reminderStatus
         self.note = note
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, date, direction, category, amount, counterparty, invoiceNumber, linkedDocumentIds, linkedDocumentId, note
+        case id, projectId, date, direction, category, amount, counterparty, invoiceNumber, linkedDocumentIds, linkedDocumentId, status, dueDate, reminderStatus, note
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
-        date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.date.string(from: Date())
-        let decodedDirection = ProjectFinancialDirection(rawValue: try container.decodeIfPresent(String.self, forKey: .direction) ?? "") ?? .expense
-        direction = decodedDirection.rawValue
-        let decodedCategory = try container.decodeIfPresent(String.self, forKey: .category) ?? decodedDirection.defaultCategory.rawValue
-        category = ProjectFinancialCategory.normalized(rawValue: decodedCategory, for: decodedDirection).rawValue
+        date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.now()
+        let decodedDirection = try container.decodeStringEnum(
+            ProjectFinancialDirection.self,
+            forKey: .direction,
+            default: .expense
+        )
+        direction = decodedDirection
+        let decodedCategory = try container.decodeStringEnum(
+            ProjectFinancialCategory.self,
+            forKey: .category,
+            default: decodedDirection.defaultCategory
+        )
+        category = ProjectFinancialCategory.normalized(decodedCategory, for: decodedDirection)
         amount = try container.decodeIfPresent(String.self, forKey: .amount) ?? ""
         counterparty = try container.decodeIfPresent(String.self, forKey: .counterparty) ?? ""
         invoiceNumber = try container.decodeIfPresent(String.self, forKey: .invoiceNumber) ?? ""
@@ -284,6 +435,13 @@ struct ProjectFinancialRecord: Identifiable, Codable {
         } else {
             linkedDocumentIds = []
         }
+        status = try container.decodeStringEnum(ProjectFinancialStatus.self, forKey: .status, default: .active)
+        dueDate = try container.decodeIfPresent(String.self, forKey: .dueDate) ?? ""
+        reminderStatus = try container.decodeStringEnum(
+            ProjectFinancialReminderStatus.self,
+            forKey: .reminderStatus,
+            default: .none
+        )
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
 
@@ -298,6 +456,9 @@ struct ProjectFinancialRecord: Identifiable, Codable {
         try container.encode(counterparty, forKey: .counterparty)
         try container.encode(invoiceNumber, forKey: .invoiceNumber)
         try container.encode(linkedDocumentIds, forKey: .linkedDocumentIds)
+        try container.encode(status, forKey: .status)
+        try container.encode(dueDate, forKey: .dueDate)
+        try container.encode(reminderStatus, forKey: .reminderStatus)
         try container.encode(note, forKey: .note)
     }
 }
@@ -383,7 +544,7 @@ enum ProjectFinancialCategory: String, CaseIterable, Codable {
     }
 
     static func normalized(rawValue: String, for direction: ProjectFinancialDirection) -> ProjectFinancialCategory {
-        normalized(ProjectFinancialCategory(rawValue: rawValue) ?? direction.defaultCategory, for: direction)
+        normalized(StringEnumFallback.value(rawValue, default: direction.defaultCategory), for: direction)
     }
 
     var requiresAttachment: Bool {
@@ -396,16 +557,74 @@ enum ProjectFinancialCategory: String, CaseIterable, Codable {
     }
 }
 
+enum ProjectFinancialStatus: String, CaseIterable, Codable {
+    case active = "正式"
+    case draft = "草稿"
+    case archived = "已归档"
+
+    var displayName: String { rawValue }
+}
+
+enum ProjectFinancialReminderStatus: String, CaseIterable, Codable {
+    case none = "不提醒"
+    case pending = "待提醒"
+    case reminded = "已提醒"
+    case done = "已处理"
+
+    var displayName: String { rawValue }
+}
+
 extension ProjectFinancialRecord {
     var normalizedDirection: ProjectFinancialDirection {
-        ProjectFinancialDirection(rawValue: direction) ?? .expense
+        direction
+    }
+
+    var isIncomeDirection: Bool {
+        normalizedDirection == .income
+    }
+
+    var isExpenseDirection: Bool {
+        normalizedDirection == .expense
+    }
+
+    func matchesDirection(_ direction: ProjectFinancialDirection) -> Bool {
+        normalizedDirection == direction
     }
 
     var normalizedCategory: ProjectFinancialCategory {
-        ProjectFinancialCategory.normalized(rawValue: category, for: normalizedDirection)
+        category
     }
 
     var requiresAttachment: Bool {
         normalizedCategory.requiresAttachment
+    }
+
+    var normalizedStatus: ProjectFinancialStatus {
+        status
+    }
+
+    var normalizedReminderStatus: ProjectFinancialReminderStatus {
+        reminderStatus
+    }
+
+    var countsInBusinessMetrics: Bool {
+        normalizedStatus == .active
+    }
+
+    var isCollectionIncome: Bool {
+        normalizedDirection == .income && (normalizedCategory == .collection || normalizedCategory == .receipt)
+    }
+
+    var hasDueReminder: Bool {
+        !dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && normalizedReminderStatus != .none
+    }
+
+    var isDueReminderOpen: Bool {
+        hasDueReminder && normalizedReminderStatus != .done
+    }
+
+    var isDueReminderOverdue: Bool {
+        guard isDueReminderOpen, let due = Formatters.date.date(from: dueDate) else { return false }
+        return due < Calendar.current.startOfDay(for: Date())
     }
 }

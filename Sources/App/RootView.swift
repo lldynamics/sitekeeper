@@ -12,6 +12,9 @@ struct RootView: View {
     @State private var showOnboarding = false
     @State private var showOnboardingBackupImport = false
     @State private var projectComposerOpenToken = 0
+    @State private var padDetailResetToken = 0
+    @State private var padShellResetToken = 0
+    @State private var padColumnVisibility: NavigationSplitViewVisibility = .all
 
     private let currentOnboardingVersion = 1
 
@@ -25,7 +28,7 @@ struct RootView: View {
     }
 
     private var preferredAppearance: ColorScheme? {
-        switch AppAppearanceMode(rawValue: appearanceMode) ?? .system {
+        switch StringEnumFallback.value(appearanceMode, default: AppAppearanceMode.system) {
         case .system:
             return nil
         case .light:
@@ -61,7 +64,7 @@ struct RootView: View {
                     },
                     onImportBackup: {
                         finishOnboarding()
-                        DispatchQueue.main.async {
+                        Task { @MainActor in
                             showOnboardingBackupImport = true
                         }
                     },
@@ -135,11 +138,11 @@ struct RootView: View {
     }
 
     private var padSplitShell: some View {
-        NavigationSplitView {
+        NavigationSplitView(columnVisibility: $padColumnVisibility) {
             List {
                 ForEach(Tab.allCases) { tab in
                     Button {
-                        selectedTab = tab
+                        switchPadModule(to: tab)
                     } label: {
                         Label(tab.title, systemImage: tab.systemImage)
                             .font(.body.weight(selectedTab == tab ? .semibold : .regular))
@@ -153,9 +156,10 @@ struct RootView: View {
             .listStyle(.sidebar)
         } detail: {
             selectedModuleContent
-                .id(selectedTab)
+                .id("pad-detail-\(selectedTab.id)-\(padDetailResetToken)")
         }
         .navigationSplitViewStyle(.balanced)
+        .id("pad-shell-\(padShellResetToken)")
     }
 
     @ViewBuilder
@@ -164,17 +168,33 @@ struct RootView: View {
         case .dashboard:
             DashboardView()
         case .records:
-            ProjectListView(
-                autoOpenComposerToken: projectComposerOpenToken,
-                prefersSplitNavigation: true
-            )
+            NavigationStack {
+                ProjectListView(
+                    autoOpenComposerToken: projectComposerOpenToken,
+                    prefersSplitNavigation: false
+                )
+            }
         case .checklist:
-            ChecklistTabView()
+            NavigationStack {
+                ChecklistTabView(embedsNavigationStack: false)
+            }
         case .quickNote:
-            QuickNoteView()
+            NavigationStack {
+                QuickNoteView(embedsNavigationStack: false)
+            }
         case .profile:
-            ProfileTabView()
+            NavigationStack {
+                ProfileTabView(embedsNavigationStack: false)
+            }
         }
+    }
+
+    private func switchPadModule(to tab: Tab) {
+        guard selectedTab != tab else { return }
+        selectedTab = tab
+        padColumnVisibility = .all
+        padDetailResetToken &+= 1
+        padShellResetToken &+= 1
     }
 
     private var persistenceErrorBinding: Binding<Bool> {
@@ -228,7 +248,7 @@ enum Tab: Hashable, CaseIterable, Identifiable {
         case .records:
             return "项目"
         case .checklist:
-            return "数据库"
+            return "工具箱"
         case .quickNote:
             return "随手记"
         case .profile:

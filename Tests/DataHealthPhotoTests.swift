@@ -11,11 +11,11 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "test project", location: "", status: ProjectStatus.active.rawValue, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "test project", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         store.projects.append(project)
 
         // 创建一个有待办但没有实际照片文件的待办
-        var todo = SiteTodo(title: "整改检查", priority: .high, issueType: .safety, projectId: pid)
+        var todo = SiteTodo(title: "整改检查", priority: TodoPriority.high.rawValue, issueType: TodoIssueType.safety.rawValue, projectId: pid)
         todo.rectificationBeforePhotoFileName = "nonexistent_before.jpg"
         todo.rectificationAfterPhotoFileName = "nonexistent_after.jpg"
         store.siteTodos.append(todo)
@@ -36,10 +36,10 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "repair test", location: "", status: ProjectStatus.active.rawValue, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "repair test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         store.projects.append(project)
 
-        var todo = SiteTodo(title: "安全整改", priority: .high, issueType: .safety, projectId: pid)
+        var todo = SiteTodo(title: "安全整改", priority: TodoPriority.high.rawValue, issueType: TodoIssueType.safety.rawValue, projectId: pid)
         todo.rectificationBeforePhotoFileName = "ghost_photo.jpg"
         store.siteTodos.append(todo)
 
@@ -64,10 +64,10 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "combined test", location: "", status: ProjectStatus.active.rawValue, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "combined test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         store.projects.append(project)
 
-        var todo = SiteTodo(title: "整改项", priority: .medium, issueType: .quality, projectId: pid)
+        var todo = SiteTodo(title: "整改项", priority: TodoPriority.medium.rawValue, issueType: TodoIssueType.quality.rawValue, projectId: pid)
         todo.rectificationBeforePhotoFileName = "rect_before_combined.jpg"
         store.siteTodos.append(todo)
 

@@ -47,9 +47,9 @@ final class AppStoreScreenshotUITests: XCTestCase {
         // 截图1：工作台首页
         saveScreenshot(app, named: "screenshot1_dashboard")
 
-        // 截图2：计算工具页面（数据库 tab）
-        app.tabBars.buttons["数据库"].tap()
-        XCTAssertTrue(app.tabBars.buttons["数据库"].isSelected)
+        // 截图2：计算工具页面（工具箱 tab）
+        app.tabBars.buttons["工具箱"].tap()
+        XCTAssertTrue(app.tabBars.buttons["工具箱"].isSelected)
         // 等待列表加载
         let listExists = app.collectionViews.firstMatch.waitForExistence(timeout: 5)
         XCTAssertTrue(listExists)

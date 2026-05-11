@@ -117,8 +117,13 @@ enum ProjectDocumentStorage {
     }
 
     static func allStoredFileNames() -> [String] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: documentDir, includingPropertiesForKeys: nil) else { return [] }
-        return files.map(\.lastPathComponent).sorted()
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: documentDir, includingPropertiesForKeys: nil)
+            return files.map(\.lastPathComponent).sorted()
+        } catch {
+            StorageIssueLog.record("项目资料目录读取失败：\(error.localizedDescription)")
+            return []
+        }
     }
 
     static func referencedFileNames(for documents: [ProjectDocument]) -> Set<String> {
@@ -277,8 +282,13 @@ enum DrawingStorage {
     }
 
     static func allStoredFileNames() -> [String] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: drawingDir, includingPropertiesForKeys: nil) else { return [] }
-        return files.map(\.lastPathComponent).sorted()
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: drawingDir, includingPropertiesForKeys: nil)
+            return files.map(\.lastPathComponent).sorted()
+        } catch {
+            StorageIssueLog.record("图纸目录读取失败：\(error.localizedDescription)")
+            return []
+        }
     }
 
     static func referencedFileNames(for drawings: [ProjectDrawing]) -> Set<String> {
@@ -483,9 +493,13 @@ enum QuickNoteAttachmentStorage {
         }
     }
 
-    static func backupFiles(for notes: [QuickNote]) -> [QuickNoteAttachmentBackupFile] {
+    static func backupFiles(
+        for notes: [QuickNote],
+        extraAttachments: [QuickNoteAttachment] = []
+    ) -> [QuickNoteAttachmentBackupFile] {
         var seen = Set<String>()
-        return notes.flatMap(\.attachments).compactMap { attachment in
+        let allAttachments = notes.flatMap(\.attachments) + extraAttachments
+        return allAttachments.compactMap { attachment in
             guard !seen.contains(attachment.fileName),
                   let data = data(for: attachment.fileName) else { return nil }
             seen.insert(attachment.fileName)
@@ -494,21 +508,34 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func allStoredFileNames() -> [String] {
-        guard let files = try? FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil) else { return [] }
-        return files.map(\.lastPathComponent).sorted()
+        do {
+            let files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil)
+            return files.map(\.lastPathComponent).sorted()
+        } catch {
+            StorageIssueLog.record("随手记附件目录读取失败：\(error.localizedDescription)")
+            return []
+        }
     }
 
-    static func referencedFileNames(for notes: [QuickNote]) -> Set<String> {
-        var names = Set(notes.flatMap { $0.attachments.map(\.fileName) })
+    static func referencedFileNames(
+        for notes: [QuickNote],
+        extraAttachments: [QuickNoteAttachment] = []
+    ) -> Set<String> {
+        var names = Set((notes.flatMap { $0.attachments.map(\.fileName) }) + extraAttachments.map(\.fileName))
         names.formUnion(draftReferencedFileNames())
-        for attachment in notes.flatMap(\.attachments) where attachment.attachmentKind == .video {
+        let videoAttachments = notes.flatMap(\.attachments).filter { $0.attachmentKind == .video }
+            + extraAttachments.filter { $0.attachmentKind == .video }
+        for attachment in videoAttachments {
             names.insert(videoThumbnailFileName(for: attachment.fileName))
         }
         return names
     }
 
-    static func orphanFileNames(for notes: [QuickNote]) -> [String] {
-        let referenced = referencedFileNames(for: notes)
+    static func orphanFileNames(
+        for notes: [QuickNote],
+        extraAttachments: [QuickNoteAttachment] = []
+    ) -> [String] {
+        let referenced = referencedFileNames(for: notes, extraAttachments: extraAttachments)
         return allStoredFileNames().filter { !referenced.contains($0) }
     }
 
@@ -547,14 +574,52 @@ enum QuickNoteAttachmentStorage {
         return image
     }
 
+    static func thumbnailCacheUsageBytes() -> Int {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+        } catch {
+            StorageIssueLog.record("随手记缩略图目录读取失败：\(error.localizedDescription)")
+            return 0
+        }
+        return files.reduce(0) { total, url in
+            guard url.lastPathComponent.hasPrefix("thumb-") else { return total }
+            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            return total + (values?.fileSize ?? values?.totalFileAllocatedSize ?? 0)
+        }
+    }
+
+    static func clearThumbnailCache() {
+        let files: [URL]
+        do {
+            files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil)
+        } catch {
+            StorageIssueLog.record("随手记缩略图目录读取失败：\(error.localizedDescription)")
+            return
+        }
+        for url in files where url.lastPathComponent.hasPrefix("thumb-") {
+            do {
+                try FileManager.default.removeItem(at: url)
+            } catch {
+                StorageIssueLog.record("随手记缩略图清理失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            }
+        }
+    }
+
     private static func videoThumbnailFileName(for fileName: String) -> String {
         "thumb-\(fileName).jpg"
     }
 
     private static func draftReferencedFileNames() -> Set<String> {
         guard let raw = UserDefaults.standard.string(forKey: "quickNoteDraftAttachments"),
-              let data = raw.data(using: .utf8),
-              let attachments = try? JSONDecoder().decode([QuickNoteAttachment].self, from: data) else {
+              let data = raw.data(using: .utf8) else {
+            return []
+        }
+        let attachments: [QuickNoteAttachment]
+        do {
+            attachments = try JSONDecoder().decode([QuickNoteAttachment].self, from: data)
+        } catch {
+            StorageIssueLog.record("随手记草稿附件解析失败：\(error.localizedDescription)")
             return []
         }
         var names = Set(attachments.map(\.fileName))
@@ -573,7 +638,11 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func clearAttachmentsDirectory() {
-        try? FileManager.default.removeItem(at: attachmentDir)
+        do {
+            try FileManager.default.removeItem(at: attachmentDir)
+        } catch {
+            StorageIssueLog.record("随手记附件目录清理失败：\(attachmentDir.lastPathComponent)，\(error.localizedDescription)")
+        }
     }
 }
 

@@ -4,17 +4,25 @@ import UIKit
 enum ProjectDetailMode: String, CaseIterable {
     case overview
     case records
-    case finance
     case assets
+    case finance
+    case timeline
 
     var displayName: String {
         switch self {
         case .overview: "概览"
-        case .records: "记录"
-        case .finance: "财务"
+        case .records: "现场"
         case .assets: "资料"
+        case .finance: "财务"
+        case .timeline: "时间线"
         }
     }
+}
+
+enum ProjectFinanceJumpFilter: Equatable {
+    case none
+    case unsettled
+    case missingReceipt
 }
 
 enum DrawingListFilter: String, CaseIterable {
@@ -62,7 +70,11 @@ struct ProjectDrawingTimelineSheet: View {
         NavigationStack {
             List {
                 if drawings.isEmpty {
-                    Text("暂无版本记录").foregroundStyle(.secondary)
+                    ContentUnavailableView(
+                        "暂无版本记录",
+                        systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
+                        description: Text("同名图纸导入新版本后，可在这里查看版本时间线。")
+                    )
                 } else {
                     ForEach(drawings) { drawing in
                         VStack(alignment: .leading, spacing: 6) {
@@ -83,8 +95,8 @@ struct ProjectDrawingTimelineSheet: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
-                            if drawing.issueStatus != DrawingIssueStatus.none.rawValue {
-                                Text("状态: \(drawing.issueStatus)")
+                            if drawing.issueStatus != .none {
+                                Text("状态: \(drawing.issueStatus.displayName)")
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(.orange)
                             }
@@ -156,7 +168,7 @@ struct ProjectDrawingEditSheet: View {
         _version = State(initialValue: drawing.version)
         _isCurrentVersion = State(initialValue: drawing.isCurrentVersion)
         _relatedLogDate = State(initialValue: drawing.relatedLogDate)
-        _issueStatus = State(initialValue: DrawingIssueStatus(rawValue: drawing.issueStatus) ?? .none)
+        _issueStatus = State(initialValue: drawing.issueStatus)
         _issueNote = State(initialValue: drawing.issueNote)
         _note = State(initialValue: drawing.note)
     }
@@ -208,7 +220,7 @@ struct ProjectDrawingEditSheet: View {
                         updated.version = version
                         updated.isCurrentVersion = isCurrentVersion
                         updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.issueStatus = issueStatus.rawValue
+                        updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.note = note
                         onSave(updated)
@@ -258,7 +270,7 @@ struct MaterialEditSheet: View {
         _specification = State(initialValue: item.specification)
         _brand = State(initialValue: item.brand)
         _supplier = State(initialValue: item.supplier)
-        _purchaseStatus = State(initialValue: MaterialPurchaseStatus(rawValue: item.purchaseStatus) ?? .notPurchased)
+        _purchaseStatus = State(initialValue: item.purchaseStatus)
         _arrivalDate = State(initialValue: item.arrivalDate)
     }
 
@@ -304,7 +316,7 @@ struct MaterialEditSheet: View {
                         updated.specification = specification.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.purchaseStatus = purchaseStatus.rawValue
+                        updated.purchaseStatus = purchaseStatus
                         updated.arrivalDate = arrivalDate.trimmingCharacters(in: .whitespacesAndNewlines)
                         onSave(updated)
                         dismiss()
@@ -348,7 +360,7 @@ struct QuoteEditSheet: View {
         _discountRate = State(initialValue: item.discountRate)
         _notes = State(initialValue: item.notes)
         _versionName = State(initialValue: item.versionName)
-        _status = State(initialValue: QuoteStatus(rawValue: item.status) ?? .draft)
+        _status = State(initialValue: item.status)
         _customerConfirmedDate = State(initialValue: item.customerConfirmedDate)
         _contractAmount = State(initialValue: item.contractAmount)
     }
@@ -382,7 +394,7 @@ struct QuoteEditSheet: View {
                         taxRate: taxRate,
                         discountRate: discountRate,
                         versionName: versionName,
-                        status: status.rawValue,
+                        status: status,
                         customerConfirmedDate: customerConfirmedDate,
                         contractAmount: contractAmount,
                         projectId: item.projectId
@@ -412,7 +424,7 @@ struct QuoteEditSheet: View {
                         updated.taxRate = taxRate
                         updated.discountRate = discountRate
                         updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.status = status.rawValue
+                        updated.status = status
                         updated.customerConfirmedDate = customerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.contractAmount = contractAmount
                         updated.notes = notes
@@ -500,7 +512,7 @@ struct ProjectPhotoDetailSheet: View {
 
     let context: ProjectPhotoContext
     let allLogs: [DailyLog]
-    let onSave: (String, String) -> Void
+    let onSave: (String, PhotoTag) -> Void
     let onDelete: () -> Void
 
     @State private var note = ""
@@ -541,7 +553,7 @@ struct ProjectPhotoDetailSheet: View {
                 }
                 Section {
                     Button("保存") {
-                        onSave(note, tag.rawValue)
+                        onSave(note, tag)
                         dismiss()
                     }
                     .frame(maxWidth: .infinity)
@@ -560,7 +572,7 @@ struct ProjectPhotoDetailSheet: View {
             }
             .onAppear {
                 note = selectedPhoto?.note ?? ""
-                tag = PhotoTag(rawValue: selectedPhoto?.tag ?? "") ?? .general
+                tag = selectedPhoto?.tag ?? .general
             }
             .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {
@@ -588,12 +600,15 @@ struct QuickAddSheet: View {
     @State private var materialSupplier = ""
     @State private var materialPurchaseStatus: MaterialPurchaseStatus = .notPurchased
     @State private var materialArrivalDate = ""
-    @State private var price = ""; @State private var notes = ""
+    @State private var price = ""
     @State private var quoteVersionName = "V1"
     @State private var quoteStatus: QuoteStatus = .draft
     @State private var quoteConfirmedDate = ""
     @State private var quoteContractAmount = ""
-    @State private var workers = ""; @State private var hours = ""; @State private var unitRate = ""
+    @State private var workers = ""
+    @State private var laborTeamName = ""
+    @State private var laborIsSettled = false
+    @State private var laborLines: [QuickAddLaborLine] = [.init()]
     @State private var content = ""; @State private var weather = "晴"
     @State private var safety = ""; @State private var materials = ""
     @State private var tomorrowPlan = ""; @State private var qualityIssue = ""
@@ -670,16 +685,57 @@ struct QuickAddSheet: View {
                     TextField("现场确认人", text: $confirmer)
                 case .labor:
                     DatePicker("日期", selection: $laborDate, displayedComponents: .date)
-                    TextField("人数", text: $workers).keyboardType(.numberPad)
-                    TextField("工时 (h)", text: $hours).keyboardType(.numberPad)
-                    TextField("工价（每工时）", text: $unitRate).keyboardType(.decimalPad)
-                    TextField("备注", text: $notes)
+                    TextField("班组（可选）", text: $laborTeamName)
+                    Toggle("已结算", isOn: $laborIsSettled)
+                    ForEach($laborLines) { $line in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("工种 \(laborLineTitle(for: line.id))")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                if laborLines.count > 1 {
+                                    Button(role: .destructive) {
+                                        removeLaborLine(id: line.id)
+                                    } label: {
+                                        Image(systemName: "minus.circle.fill")
+                                    }
+                                    .buttonStyle(.plain)
+                                }
+                            }
+                            TextField("工种", text: $line.workType)
+                            HStack(spacing: 10) {
+                                TextField("人数", text: $line.workers)
+                                    .keyboardType(.numberPad)
+                                TextField("工时 (h)", text: $line.hours)
+                                    .keyboardType(.decimalPad)
+                            }
+                            TextField("工价（每工时）", text: $line.unitRate)
+                                .keyboardType(.decimalPad)
+                            TextField("备注", text: $line.note)
+                        }
+                        .padding(.vertical, 2)
+                    }
+                    Button {
+                        laborLines.append(.init())
+                    } label: {
+                        Label("添加工种", systemImage: "plus.circle")
+                    }
                 }
             }
             .navigationTitle(sheetTitle).navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("保存") { save(); dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        if save() {
+                            dismiss()
+                        }
+                    }
+                }
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
             }
         }
     }
@@ -693,11 +749,10 @@ struct QuickAddSheet: View {
         }
     }
 
-    private func save() {
-        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
+    private func save() -> Bool {
         switch sheet {
         case .material:
-            guard !name.isEmpty else { return }
+            guard !name.isEmpty else { return false }
             store.materialItems.append(
                 MaterialItem(
                     name: name,
@@ -707,13 +762,15 @@ struct QuickAddSheet: View {
                     specification: materialSpecification.trimmingCharacters(in: .whitespacesAndNewlines),
                     brand: materialBrand.trimmingCharacters(in: .whitespacesAndNewlines),
                     supplier: materialSupplier.trimmingCharacters(in: .whitespacesAndNewlines),
-                    purchaseStatus: materialPurchaseStatus.rawValue,
+                    purchaseStatus: materialPurchaseStatus,
                     arrivalDate: materialArrivalDate.trimmingCharacters(in: .whitespacesAndNewlines),
                     projectId: projectId
                 )
             )
+            store.scheduleSave()
+            return true
         case .quote:
-            guard !name.isEmpty else { return }
+            guard !name.isEmpty else { return false }
             store.quoteItems.append(
                 QuoteItem(
                     name: name,
@@ -724,15 +781,17 @@ struct QuickAddSheet: View {
                     taxRate: "0",
                     discountRate: "0",
                     versionName: quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
-                    status: quoteStatus.rawValue,
+                    status: quoteStatus,
                     customerConfirmedDate: quoteConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
                     contractAmount: quoteContractAmount,
                     projectId: projectId
                 )
             )
+            store.scheduleSave()
+            return true
         case .log:
             store.dailyLogs.insert(DailyLog(
-                date: df.string(from: logDate),
+                date: Formatters.date.string(from: logDate),
                 weather: weather,
                 content: content,
                 workers: workers,
@@ -745,9 +804,79 @@ struct QuickAddSheet: View {
                 confirmer: confirmer,
                 projectId: projectId
             ), at: 0)
+            store.scheduleSave()
+            return true
         case .labor:
-            store.laborRecords.append(LaborRecord(date: df.string(from: laborDate), workers: workers, hours: hours, unitRate: unitRate, note: notes, projectId: projectId))
+            guard canSaveLaborLines else { return false }
+            let teamName = laborTeamName.trimmingCharacters(in: .whitespacesAndNewlines)
+            let date = Formatters.date.string(from: laborDate)
+            var appendedCount = 0
+            for line in laborLines where line.hasContent {
+                let workers = line.workers.trimmingCharacters(in: .whitespacesAndNewlines)
+                let hours = line.hours.trimmingCharacters(in: .whitespacesAndNewlines)
+                let unitRate = line.unitRate.trimmingCharacters(in: .whitespacesAndNewlines)
+                let workType = line.workType.trimmingCharacters(in: .whitespacesAndNewlines)
+                let note = line.note.trimmingCharacters(in: .whitespacesAndNewlines)
+                store.laborRecords.append(
+                    LaborRecord(
+                        date: date,
+                        workers: workers,
+                        hours: hours,
+                        unitRate: unitRate,
+                        workType: workType,
+                        teamName: teamName,
+                        isSettled: laborIsSettled,
+                        note: note,
+                        projectId: projectId
+                    )
+                )
+                appendedCount += 1
+            }
+            guard appendedCount > 0 else { return false }
+            store.scheduleSave()
+            return true
         }
-        store.scheduleSave()
+    }
+
+    private func laborLineTitle(for id: UUID) -> String {
+        if let index = laborLines.firstIndex(where: { $0.id == id }) {
+            return "#\(index + 1)"
+        }
+        return ""
+    }
+
+    private func removeLaborLine(id: UUID) {
+        guard laborLines.count > 1 else { return }
+        laborLines.removeAll { $0.id == id }
+    }
+
+    private var canSaveLaborLines: Bool {
+        let filledLines = laborLines.filter(\.hasContent)
+        guard !filledLines.isEmpty else { return false }
+        return filledLines.allSatisfy { line in
+            let workers = line.workers.trimmingCharacters(in: .whitespacesAndNewlines)
+            let hours = line.hours.trimmingCharacters(in: .whitespacesAndNewlines)
+            let unitRate = line.unitRate.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard InputValidator.nonNegativeNumber(workers),
+                  InputValidator.nonNegativeNumber(hours) else { return false }
+            return unitRate.isEmpty || InputValidator.nonNegativeNumber(unitRate)
+        }
+    }
+}
+
+private struct QuickAddLaborLine: Identifiable {
+    var id = UUID()
+    var workType = ""
+    var workers = ""
+    var hours = ""
+    var unitRate = ""
+    var note = ""
+
+    var hasContent: Bool {
+        !workType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !workers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !hours.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !unitRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        || !note.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 }

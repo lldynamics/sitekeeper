@@ -8,7 +8,11 @@ struct HistoryView: View {
     var body: some View {
         List {
             if store.historyRecords.isEmpty {
-                Text("暂无历史记录").foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "还没有计算历史",
+                    systemImage: "clock.arrow.circlepath",
+                    description: Text("完成一次计算后，最近结果会显示在这里。")
+                )
             }
             ForEach(store.historyRecords) { r in
                 Button { selectedRecord = r } label: {
@@ -23,9 +27,8 @@ struct HistoryView: View {
                 }
             }
             .onDelete { idx in
-                let ids = idx.map { store.historyRecords[$0].id }
-                store.historyRecords.removeAll { ids.contains($0.id) }
-                store.scheduleSave()
+                let ids = Set(idx.map { store.historyRecords[$0].id })
+                store.removeCalculationHistory(ids: ids)
             }
         }
         .navigationTitle("历史计算")
@@ -35,7 +38,7 @@ struct HistoryView: View {
             }
         }
         .confirmationDialog("清空所有历史？", isPresented: $showClearConfirm) {
-            Button("清空", role: .destructive) { store.historyRecords.removeAll(); store.scheduleSave() }
+            Button("清空", role: .destructive) { store.clearCalculationHistory() }
             Button("取消", role: .cancel) {}
         }
         .sheet(item: $selectedRecord) { record in

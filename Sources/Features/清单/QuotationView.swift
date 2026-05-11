@@ -1,6 +1,22 @@
 import SwiftUI
+import Foundation
 
 struct QuotationView: View {
+    private enum QuoteFormField: Hashable {
+        case price
+        case quantity
+        case contractAmount
+        case taxRate
+        case discountRate
+    }
+
+    private enum GenerateQuoteField: Hashable {
+        case materialPrice
+        case laborRate
+        case taxRate
+        case discountRate
+    }
+
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.companyName) private var companyName = ""
@@ -41,6 +57,9 @@ struct QuotationView: View {
     @State private var quoteCustomerName = ""
     @State private var quoteProjectAddress = ""
     @State private var quoteSignerName = "项目负责人"
+    @State private var operationMessage: String?
+    @FocusState private var quoteFormFocusedField: QuoteFormField?
+    @FocusState private var generateQuoteFocusedField: GenerateQuoteField?
 
     init(focusedQuoteId: UUID? = nil) {
         self.focusedQuoteId = focusedQuoteId
@@ -51,50 +70,58 @@ struct QuotationView: View {
         if let projectFilter {
             result = result.filter { $0.projectId == projectFilter }
         }
-        if !searchText.isEmpty {
-            result = result.filter { $0.name.localizedStandardContains(searchText) }
-        }
+        result = SearchMatcher.filter(result, keyword: searchText)
         if let statusFilter {
-            result = result.filter { $0.status == statusFilter.rawValue }
+            result = result.filter { $0.status == statusFilter }
         }
         return result
     }
 
-    private var subtotalBefore: Double {
-        filtered.reduce(0) { $0 + lineTotal($1) }
-    }
-
-    private var totalTax: Double {
-        filtered.reduce(0) { acc, item in
-            let tax = (Double(item.taxRate) ?? 0) / 100
-            return acc + lineTotal(item) * tax
+    private var subtotalBeforeValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteLineTotalValue(item)
         }
     }
 
-    private var totalDiscount: Double {
-        filtered.reduce(0) { acc, item in
-            let d = (Double(item.discountRate) ?? 0) / 100
-            return acc + lineTotal(item) * d
+    private var totalTaxValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteTaxValue(item)
         }
     }
 
-    var grandTotal: Double { subtotalBefore + totalTax - totalDiscount }
+    private var totalDiscountValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteDiscountValue(item)
+        }
+    }
+
+    private var grandTotalValue: MoneyValue {
+        subtotalBeforeValue + totalTaxValue - totalDiscountValue
+    }
+
+    var grandTotal: Double { grandTotalValue.doubleValue }
+
+    private var statusChipBinding: Binding<QuoteStatusChip> {
+        Binding(
+            get: { QuoteStatusChip(status: statusFilter) },
+            set: { statusFilter = $0.status }
+        )
+    }
 
     var body: some View {
         List {
             Section("范围") {
-                Picker("项目", selection: $projectFilter) {
-                    Text("全部项目").tag(nil as UUID?)
-                    ForEach(store.projects) { project in
-                        Text(project.name).tag(project.id as UUID?)
-                    }
-                }
-                Picker("状态", selection: $statusFilter) {
-                    Text("全部状态").tag(nil as QuoteStatus?)
-                    ForEach(QuoteStatus.allCases, id: \.self) { item in
-                        Text(item.displayName).tag(item as QuoteStatus?)
-                    }
-                }
+                ProjectContextStrip(
+                    title: "当前工程",
+                    projects: store.projects,
+                    selectedProjectId: $projectFilter,
+                    emptyText: "全部项目"
+                )
+                FilterChipBar(
+                    options: QuoteStatusChip.allCases,
+                    selection: statusChipBinding,
+                    title: { $0.title }
+                )
                 if projectFilter == nil {
                     ForEach(projectQuoteSummaries, id: \.name) { summary in
                         LabeledContent(summary.name, value: ReportBuilder.money(summary.total))
@@ -108,81 +135,48 @@ struct QuotationView: View {
             }
 
             ForEach(filtered) { item in
-                let line = lineTotal(item)
                 let total = ReportBuilder.quoteGrandTotal(item)
+                let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
+                let statusText = "\(item.versionName) · \(item.status.displayName)"
+                let amountText = "单价 ¥\(item.unitPrice) × \(item.quantity)\(item.unit)"
+                let extraText = item.customerConfirmedDate.isEmpty ? "" : "确认 \(item.customerConfirmedDate)"
                 Button {
                     openEdit(item)
                 } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(item.name).font(.body.weight(.medium))
-                            Spacer()
-                            Text(ReportBuilder.money(total))
-                                .font(.body.weight(.medium)).foregroundStyle(.orange)
-                        }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("单价 ¥\(item.unitPrice) × \(item.quantity) \(item.unit)")
-                                .font(.caption).foregroundStyle(.secondary)
-                            HStack(spacing: 6) {
-                                Text(item.versionName)
-                                    .foregroundStyle(.secondary)
-                                Text(item.status)
-                                    .foregroundStyle(statusColor(item.status))
-                                if total != line {
-                                    Text("小计 \(ReportBuilder.money(line))")
-                                        .foregroundStyle(.secondary)
-                                }
-                                if let pid = item.projectId, let proj = store.projects.first(where: { $0.id == pid }) {
-                                    Text(proj.name)
-                                        .foregroundStyle(.blue)
-                                }
-                                if !item.notes.isEmpty {
-                                    Text(item.notes)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                            }
-                            .font(.caption2)
-                            if !item.customerConfirmedDate.isEmpty || !item.contractAmount.isEmpty {
-                                Text("确认日期: \(item.customerConfirmedDate.isEmpty ? "-" : item.customerConfirmedDate) · 合同金额: \(item.contractAmount.isEmpty ? "-" : ReportBuilder.money(ReportBuilder.number(item.contractAmount)))")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            Text(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        if (Double(item.taxRate) ?? 0) > 0 || (Double(item.discountRate) ?? 0) > 0 {
-                            HStack(spacing: 8) {
-                                if (Double(item.taxRate) ?? 0) > 0 { Text("税 \(item.taxRate)%").font(.caption2).foregroundStyle(.red) }
-                                if (Double(item.discountRate) ?? 0) > 0 { Text("折 \(item.discountRate)%").font(.caption2).foregroundStyle(.green) }
-                            }
-                        }
-                    }
+                    BusinessRecordRow(
+                        icon: "doc.text.fill",
+                        iconColor: statusColor(item.status),
+                        title: item.name,
+                        meta: [amountText, projectText, statusText].joined(separator: " · "),
+                        note: [extraText, item.notes].filter { !$0.isEmpty }.joined(separator: " · "),
+                        trailing: ReportBuilder.money(total),
+                        trailingColor: Color.appPrimaryAction
+                    )
                 }
             }
             .onDelete { idx in
                 let ids = idx.map { filtered[$0].id }
                 store.quoteItems.removeAll { ids.contains($0.id) }
                 store.scheduleSave()
+                operationMessage = "已删除 \(ids.count) 条报价"
             }
 
             Section {
                 VStack(spacing: 4) {
-                    HStack { Text("小计").foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBefore)) }
-                    if totalTax > 0 { HStack { Text("税额").foregroundStyle(.red); Spacer(); Text(ReportBuilder.money(totalTax)).foregroundStyle(.red) } }
-                    if totalDiscount > 0 { HStack { Text("折扣").foregroundStyle(.green); Spacer(); Text("-\(ReportBuilder.money(totalDiscount))").foregroundStyle(.green) } }
+                    HStack { Text("小计").foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
+                    if totalTaxValue.isPositive { HStack { Text("税额").foregroundStyle(.red); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.red) } }
+                    if totalDiscountValue.isPositive { HStack { Text("折扣").foregroundStyle(.green); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.green) } }
                     Divider()
                     HStack {
                         Text("合计").font(.title3.weight(.bold))
                         Spacer()
-                        Text(ReportBuilder.money(grandTotal)).font(.title3.weight(.bold)).foregroundStyle(.orange)
+                        Text(ReportBuilder.money(grandTotalValue.doubleValue)).font(.title3.weight(.bold)).foregroundStyle(.orange)
                     }
                 }
             }
         }
         .searchable(text: $searchText, prompt: "搜索报价名称")
-        .navigationTitle("报价明细")
+        .navigationTitle("预结算信息")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Menu {
@@ -208,10 +202,12 @@ struct QuotationView: View {
                     }
                     if store.materialItems.isEmpty { Text("材料清单为空").foregroundStyle(.secondary) }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
                 .accessibilityLabel("更多操作")
-                Button { openAdd() } label: { Image(systemName: "plus") }.accessibilityLabel("新建报价")
+                .buttonStyle(.appIcon())
+                Button { openAdd() } label: { Image(systemName: "plus").visibleIconStyle() }
+                    .accessibilityLabel("新建报价")
             }
         }
         .sheet(isPresented: $showForm) {
@@ -228,13 +224,23 @@ struct QuotationView: View {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .pdf,
             defaultFilename: exportPayload?.defaultFilename ?? "报价单.pdf"
-        ) { _ in }
+        ) { result in
+            switch result {
+            case .success:
+                AppHaptics.success()
+            case .failure(let error):
+                if (error as NSError).code != NSUserCancelledError {
+                    AppHaptics.error()
+                }
+            }
+        }
         .alert("先填写公司信息", isPresented: $showCompanyInfoPrompt) {
             Button("知道了", role: .cancel) {}
         } message: {
             Text("请先填写公司名称、电话和地址。导出的报价单会使用这些信息。")
         }
         .onAppear(perform: openFocusedQuoteIfNeeded)
+        .operationToast(message: $operationMessage)
     }
 
     // MARK: - Form
@@ -242,7 +248,7 @@ struct QuotationView: View {
     private var quoteForm: some View {
         NavigationStack {
             Form {
-                Section("基本信息") {
+                Section("必填信息") {
                     if !store.templates.filter({ $0.category == .quotation }).isEmpty {
                         Menu("套用报价模板") {
                             ForEach(store.templates.filter { $0.category == .quotation }) { template in
@@ -255,11 +261,13 @@ struct QuotationView: View {
                         TextField("0", text: $formPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($quoteFormFocusedField, equals: .price)
                     }
                     LabeledContent("数量") {
                         TextField("0", text: $formQty)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($quoteFormFocusedField, equals: .quantity)
                     }
                     LabeledContent("单位") {
                         TextField("项 / 米 / 台", text: $formUnit)
@@ -271,11 +279,14 @@ struct QuotationView: View {
                             Text(item.displayName).tag(item)
                         }
                     }
+                }
+                Section("商务信息") {
                     TextField("客户确认日期（yyyy-MM-dd）", text: $formCustomerConfirmedDate)
                     LabeledContent("合同金额") {
                         TextField("0", text: $formContractAmount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($quoteFormFocusedField, equals: .contractAmount)
                     }
                 }
                 Section("归属项目") {
@@ -290,12 +301,20 @@ struct QuotationView: View {
                     HStack {
                         Text("税率 (%)")
                         Spacer()
-                        TextField("0", text: $formTax).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                        TextField("0", text: $formTax)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                            .focused($quoteFormFocusedField, equals: .taxRate)
                     }
                     HStack {
                         Text("折扣 (%)")
                         Spacer()
-                        TextField("0", text: $formDiscount).keyboardType(.decimalPad).multilineTextAlignment(.trailing).frame(width: 60)
+                        TextField("0", text: $formDiscount)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .frame(width: 60)
+                            .focused($quoteFormFocusedField, equals: .discountRate)
                     }
                 }
                 Section("备注") {
@@ -310,6 +329,10 @@ struct QuotationView: View {
                     Button("保存") { saveItem(); showForm = false }
                         .disabled(!canSaveQuoteForm)
                 }
+                KeyboardNavigationToolbar(
+                    focusedField: $quoteFormFocusedField,
+                    fields: [.price, .quantity, .contractAmount, .taxRate, .discountRate]
+                )
             }
         }
     }
@@ -330,11 +353,13 @@ struct QuotationView: View {
                         TextField("留空表示待补", text: $defaultMaterialPrice)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($generateQuoteFocusedField, equals: .materialPrice)
                     }
                     LabeledContent("人工单价 ¥/工时") {
                         TextField("120", text: $defaultLaborRate)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($generateQuoteFocusedField, equals: .laborRate)
                     }
                 }
                 Section("费率") {
@@ -342,11 +367,13 @@ struct QuotationView: View {
                         TextField("0", text: $generateTax)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($generateQuoteFocusedField, equals: .taxRate)
                     }
                     LabeledContent("折扣 %") {
                         TextField("0", text: $generateDiscount)
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
+                            .focused($generateQuoteFocusedField, equals: .discountRate)
                     }
                 }
                 Section {
@@ -364,6 +391,10 @@ struct QuotationView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("取消") { showGenerateSheet = false }
                 }
+                KeyboardNavigationToolbar(
+                    focusedField: $generateQuoteFocusedField,
+                    fields: [.materialPrice, .laborRate, .taxRate, .discountRate]
+                )
             }
         }
     }
@@ -381,7 +412,7 @@ struct QuotationView: View {
         formName = item.name; formUnit = item.unit; formPrice = item.unitPrice; formQty = item.quantity
         formNotes = item.notes; formTax = item.taxRate; formDiscount = item.discountRate
         formVersionName = item.versionName
-        formStatus = QuoteStatus(rawValue: item.status) ?? .draft
+        formStatus = item.status
         formCustomerConfirmedDate = item.customerConfirmedDate
         formContractAmount = item.contractAmount
         formProjectId = item.projectId
@@ -395,7 +426,7 @@ struct QuotationView: View {
         searchText = ""
         projectFilter = item.projectId
         statusFilter = nil
-        DispatchQueue.main.async {
+        Task { @MainActor in
             openEdit(item)
         }
     }
@@ -407,7 +438,7 @@ struct QuotationView: View {
             name: formName, unitPrice: formPrice, quantity: formQty, unit: formUnit,
             notes: formNotes, taxRate: formTax, discountRate: formDiscount,
             versionName: formVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : formVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
-            status: formStatus.rawValue,
+            status: formStatus,
             customerConfirmedDate: formCustomerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
             contractAmount: formContractAmount,
             projectId: formProjectId
@@ -418,6 +449,7 @@ struct QuotationView: View {
             store.quoteItems.append(newItem)
         }
         store.scheduleSave()
+        operationMessage = editingId == nil ? "已新增报价" : "已更新报价"
     }
 
     private func applyQuotationTemplate(_ template: ProjectTemplate) {
@@ -445,7 +477,7 @@ struct QuotationView: View {
                 taxRate: generateTax,
                 discountRate: generateDiscount,
                 versionName: "V1",
-                status: QuoteStatus.draft.rawValue,
+                status: .draft,
                 projectId: material.projectId
             ))
         }
@@ -463,11 +495,12 @@ struct QuotationView: View {
                 taxRate: generateTax,
                 discountRate: generateDiscount,
                 versionName: "V1",
-                status: QuoteStatus.draft.rawValue,
+                status: .draft,
                 projectId: record.projectId
             ))
         }
         store.scheduleSave()
+        operationMessage = "已从材料/人工生成报价"
     }
 
     private func exportQuotationPDF() {
@@ -488,6 +521,7 @@ struct QuotationView: View {
         )
         let data = ReportBuilder.makeQuotationPDF(title: "报价单", items: filtered, projects: store.projects, meta: meta)
         exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "报价单.pdf")
+        AppHaptics.impact(.light)
         showExporter = true
     }
 
@@ -552,14 +586,8 @@ struct QuotationView: View {
         return store.projects.first(where: { $0.id == id })
     }
 
-    private func lineTotal(_ item: QuoteItem) -> Double {
-        ReportBuilder.quoteLineTotal(item)
-    }
-
     private func firstNumber(in text: String) -> Double {
-        let filtered = text.replacingOccurrences(of: ",", with: ".")
-        let match = filtered.firstMatch(of: /[0-9]+(\.[0-9]+)?/)
-        return match.flatMap { Double(String($0.output.0)) } ?? 0
+        DataValueParser.double(from: text)
     }
 
     private func trim(_ v: Double) -> String {
@@ -592,8 +620,8 @@ struct QuotationView: View {
         (formContractAmount.isEmpty || InputValidator.nonNegativeNumber(formContractAmount))
     }
 
-    private func statusColor(_ raw: String) -> Color {
-        switch QuoteStatus(rawValue: raw) ?? .draft {
+    private func statusColor(_ status: QuoteStatus) -> Color {
+        switch status {
         case .draft: return .secondary
         case .sent: return .orange
         case .confirmed: return .green
@@ -608,7 +636,42 @@ struct QuotationView: View {
 
     private func applyGrandTotalToProjectContract() {
         guard let pid = projectFilter, let projectIndex = store.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[projectIndex].contractAmount = String(format: "%.2f", grandTotal)
+        store.projects[projectIndex].contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
         store.scheduleSave()
+        operationMessage = "已同步到项目合同金额"
+    }
+}
+
+private enum QuoteStatusChip: CaseIterable, Hashable {
+    case all
+    case draft
+    case sent
+    case confirmed
+
+    init(status: QuoteStatus?) {
+        switch status {
+        case .draft: self = .draft
+        case .sent: self = .sent
+        case .confirmed: self = .confirmed
+        case nil: self = .all
+        }
+    }
+
+    var status: QuoteStatus? {
+        switch self {
+        case .all: return nil
+        case .draft: return .draft
+        case .sent: return .sent
+        case .confirmed: return .confirmed
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .all: return "全部"
+        case .draft: return "草稿"
+        case .sent: return "已发送"
+        case .confirmed: return "已确认"
+        }
     }
 }

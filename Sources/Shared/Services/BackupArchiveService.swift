@@ -1,5 +1,9 @@
 import Foundation
 
+private enum BackupArchiveDataCache {
+    static let storage = NSCache<NSString, NSData>()
+}
+
 struct BackupArchive {
     let fileURL: URL
     let includedFileCount: Int
@@ -12,7 +16,35 @@ struct BackupArchive {
     // 兼容旧调用：需要内存数据时按需读取。
     @available(*, deprecated, message: "请优先使用 fileURL 流式读取，避免整包加载到内存。")
     var data: Data {
-        (try? Data(contentsOf: fileURL)) ?? Data()
+        let cacheKey = fileURL.path as NSString
+        if let cached = BackupArchiveDataCache.storage.object(forKey: cacheKey) {
+            return Data(referencing: cached)
+        }
+        do {
+            let loaded = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+            BackupArchiveDataCache.storage.setObject(loaded as NSData, forKey: cacheKey)
+            return loaded
+        } catch {
+            StorageIssueLog.record("备份归档读取失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            return Data()
+        }
+    }
+
+    func loadData() async -> Data {
+        let cacheKey = fileURL.path as NSString
+        if let cached = BackupArchiveDataCache.storage.object(forKey: cacheKey) {
+            return Data(referencing: cached)
+        }
+        return await Task.detached(priority: .utility) {
+            do {
+                let loaded = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+                BackupArchiveDataCache.storage.setObject(loaded as NSData, forKey: cacheKey)
+                return loaded
+            } catch {
+                StorageIssueLog.record("备份归档异步读取失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                return Data()
+            }
+        }.value
     }
 }
 
@@ -114,8 +146,16 @@ enum BackupArchiveService {
         var writerFinished = false
         defer {
             if !writerFinished {
-                try? zip.close()
-                try? FileManager.default.removeItem(at: archiveURL)
+                do {
+                    try zip.close()
+                } catch {
+                    StorageIssueLog.record("备份归档关闭失败：\(archiveURL.lastPathComponent)，\(error.localizedDescription)")
+                }
+                do {
+                    try FileManager.default.removeItem(at: archiveURL)
+                } catch {
+                    StorageIssueLog.record("备份归档临时文件清理失败：\(archiveURL.lastPathComponent)，\(error.localizedDescription)")
+                }
             }
         }
         var includedFileCount = 0
@@ -176,9 +216,9 @@ enum BackupArchiveService {
             onStep: reportProgress
         )
         try addFiles(
-            paths: snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) },
+            paths: quickNoteAttachmentNames(from: snapshot),
             prefix: quickNotePrefix,
-            displayName: "随手记附件",
+            displayName: "随手记/工艺附件",
             fileURLProvider: QuickNoteAttachmentStorage.fileURL(for:),
             sizeProvider: QuickNoteAttachmentStorage.fileSize(for:),
             zip: &zip,
@@ -206,13 +246,19 @@ enum BackupArchiveService {
     }
 
     static func estimateArchive(from snapshot: BackupSnapshot) -> BackupArchiveEstimate {
-        let metadataBytes = (try? encodeMetadata(snapshot.withoutEmbeddedFiles()).count) ?? 0
+        let metadataBytes: Int
+        do {
+            metadataBytes = try encodeMetadata(snapshot.withoutEmbeddedFiles()).count
+        } catch {
+            StorageIssueLog.record("备份体积估算失败：索引编码失败，\(error.localizedDescription)")
+            metadataBytes = 0
+        }
         var missingFiles: [String] = []
         var rawFilesBytes = 0
         collectFileSizes(paths: photoFileNames(from: snapshot), displayName: "照片", exists: PhotoStorage.exists(fileName:), size: PhotoStorage.fileSize(for:), missingFiles: &missingFiles, rawFilesBytes: &rawFilesBytes)
         collectFileSizes(paths: snapshot.projectDrawings.map(\.fileName), displayName: "图纸", exists: DrawingStorage.exists(fileName:), size: DrawingStorage.fileSize(for:), missingFiles: &missingFiles, rawFilesBytes: &rawFilesBytes)
         collectFileSizes(paths: snapshot.projectDocuments.map(\.fileName), displayName: "项目资料", exists: ProjectDocumentStorage.exists(fileName:), size: ProjectDocumentStorage.fileSize(for:), missingFiles: &missingFiles, rawFilesBytes: &rawFilesBytes)
-        collectFileSizes(paths: snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) }, displayName: "随手记附件", exists: QuickNoteAttachmentStorage.exists(fileName:), size: QuickNoteAttachmentStorage.fileSize(for:), missingFiles: &missingFiles, rawFilesBytes: &rawFilesBytes)
+        collectFileSizes(paths: quickNoteAttachmentNames(from: snapshot), displayName: "随手记/工艺附件", exists: QuickNoteAttachmentStorage.exists(fileName:), size: QuickNoteAttachmentStorage.fileSize(for:), missingFiles: &missingFiles, rawFilesBytes: &rawFilesBytes)
         return BackupArchiveEstimate(metadataBytes: metadataBytes, rawFilesBytes: rawFilesBytes, missingFiles: missingFiles)
     }
 
@@ -442,7 +488,11 @@ enum BackupArchiveService {
         }
 
         defer {
-            try? FileManager.default.removeItem(at: stageRoot)
+            do {
+                try FileManager.default.removeItem(at: stageRoot)
+            } catch {
+                StorageIssueLog.record("备份导入暂存目录清理失败：\(stageRoot.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
 
         if ext == "json" {
@@ -467,7 +517,7 @@ enum BackupArchiveService {
             }
             for file in snapshot.quickNoteAttachmentFiles {
                 try failIfCancelled()
-                try stageData(file.data, fileName: file.fileName, to: quickNoteStage, failureMessage: "暂存随手记附件失败")
+                try stageData(file.data, fileName: file.fileName, to: quickNoteStage, failureMessage: "暂存随手记/工艺附件失败")
                 counts.quickNoteAttachmentFileCount += 1
             }
         } else {
@@ -496,7 +546,7 @@ enum BackupArchiveService {
                             return
                         }
                         if let fileName = leafFileName(for: entry.path, prefix: quickNotePrefix) {
-                            try stageEntry(writeEntryToFile, fileName: fileName, to: quickNoteStage, failureMessage: "暂存随手记附件失败")
+                            try stageEntry(writeEntryToFile, fileName: fileName, to: quickNoteStage, failureMessage: "暂存随手记/工艺附件失败")
                             counts.quickNoteAttachmentFileCount += 1
                         }
                     }
@@ -519,8 +569,11 @@ enum BackupArchiveService {
 
     @available(*, deprecated, message: "请优先使用 decodeBackup(from: fileURL) 流式解包，避免整包内存读取。")
     static func decodeBackup(from data: Data) throws -> BackupSnapshot {
-        if let jsonSnapshot = try? decodeJSONSnapshot(from: data) {
+        do {
+            let jsonSnapshot = try decodeJSONSnapshot(from: data)
             return jsonSnapshot
+        } catch {
+            StorageIssueLog.record("旧版备份 JSON 解析失败，尝试按 ZIP 解析：\(error.localizedDescription)")
         }
         let entries = try SimpleZipArchiveReader.read(data)
         guard let metadata = entries.first(where: { $0.path == metadataPath })?.data else {
@@ -609,7 +662,13 @@ enum BackupArchiveService {
     @discardableResult
     private static func commitStagedFiles(from stageDirectory: URL, destinationURL: (String) -> URL) throws -> [String] {
         let manager = FileManager.default
-        let files = (try? manager.contentsOfDirectory(at: stageDirectory, includingPropertiesForKeys: nil)) ?? []
+        let files: [URL]
+        do {
+            files = try manager.contentsOfDirectory(at: stageDirectory, includingPropertiesForKeys: nil)
+        } catch {
+            StorageIssueLog.record("读取备份暂存目录失败：\(stageDirectory.lastPathComponent)，\(error.localizedDescription)")
+            throw BackupArchiveError.restoreFailed("读取备份暂存目录失败：\(stageDirectory.lastPathComponent)")
+        }
         var committedFileNames: [String] = []
         for sourceURL in files where !sourceURL.hasDirectoryPath {
             let fileName = sourceURL.lastPathComponent
@@ -643,12 +702,18 @@ enum BackupArchiveService {
         total += uniqueFileCount(photoFileNames(from: snapshot))
         total += uniqueFileCount(snapshot.projectDrawings.map(\.fileName))
         total += uniqueFileCount(snapshot.projectDocuments.map(\.fileName))
-        total += uniqueFileCount(snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) })
+        total += uniqueFileCount(quickNoteAttachmentNames(from: snapshot))
         return max(total, 1)
     }
 
     private static func uniqueFileCount(_ paths: [String]) -> Int {
         Set(paths.filter { !$0.isEmpty }).count
+    }
+
+    private static func quickNoteAttachmentNames(from snapshot: BackupSnapshot) -> [String] {
+        snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) }
+            + snapshot.constructionMethods.flatMap(\.attachments).map(\.fileName)
+            + snapshot.constructionMethods.flatMap(\.tutorialAttachments).map(\.fileName)
     }
 
     private static func makeReadme(includedFileCount: Int, missingFiles: [String], metadataBytes: Int, rawFilesBytes: Int) -> String {
@@ -665,7 +730,7 @@ enum BackupArchiveService {
             "\(photoPrefix) 现场照片和整改照片",
             "\(drawingPrefix) CAD/PDF 图纸",
             "\(documentPrefix) 票据和项目资料",
-            "\(quickNotePrefix) 随手记媒体与附件",
+            "\(quickNotePrefix) 随手记媒体与工艺教程附件",
             "",
             missingFiles.isEmpty ? "未发现缺失原文件。" : "缺失原文件:\n" + missingFiles.joined(separator: "\n")
         ].joined(separator: "\n")

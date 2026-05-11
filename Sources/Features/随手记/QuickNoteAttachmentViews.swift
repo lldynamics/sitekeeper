@@ -19,6 +19,9 @@ struct QuickNoteAttachmentStrip: View {
                             attachmentCard(attachment)
                         }
                         .buttonStyle(.plain)
+                        .accessibilityLabel("预览附件")
+                        .accessibilityValue("\(attachment.attachmentKind.title) \(label(for: attachment))")
+                        .accessibilityHint("双击打开附件预览")
 
                         if showsRemoveButton {
                             Button { onRemove(attachment) } label: {
@@ -28,6 +31,9 @@ struct QuickNoteAttachmentStrip: View {
                                     .foregroundStyle(.white, .black.opacity(0.55))
                             }
                             .offset(x: 5, y: -5)
+                            .accessibilityLabel("删除附件")
+                            .accessibilityValue("\(attachment.attachmentKind.title) \(label(for: attachment))")
+                            .accessibilityHint("双击移除该附件")
                         }
                     }
                 }

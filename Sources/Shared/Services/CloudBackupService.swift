@@ -126,7 +126,11 @@ enum CloudBackupService {
         guard retainedCount > 0 else { return }
         let backups = try listBackups()
         for file in backups.dropFirst(retainedCount) {
-            try? FileManager.default.removeItem(at: file.fileURL)
+            do {
+                try FileManager.default.removeItem(at: file.fileURL)
+            } catch {
+                StorageIssueLog.record("云备份历史清理失败：\(file.fileURL.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
     }
 

@@ -8,7 +8,6 @@ struct ProjectBusinessView: View {
             Section("总览") {
                 metricGrid(summary: overallSummary)
                 businessInsightGrid(summary: overallSummary)
-                LabeledContent("照明回路方案", value: "\(overallSummary.circuitPlanCount) 条")
             }
 
             ForEach(store.projects) { project in
@@ -16,7 +15,6 @@ struct ProjectBusinessView: View {
                 Section(project.name) {
                     metricGrid(summary: summary)
                     businessInsightGrid(summary: summary)
-                    LabeledContent("照明回路方案", value: "\(summary.circuitPlanCount) 条")
                     if summary.unpricedQuoteCount > 0 || summary.pendingMaterialCount > 0 {
                         HStack {
                             Label("待补价格/数量", systemImage: "exclamationmark.triangle.fill")
@@ -40,10 +38,10 @@ struct ProjectBusinessView: View {
         let paidByRecords = store.projects.reduce(0) { $0 + collectedAmount(for: $1.id) }
         let materialAutoCost = store.materialItems.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
         let laborAutoCost = store.laborRecords.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
-        let contractAmount = store.projects.reduce(0) { $0 + (Double($1.contractAmount) ?? 0) }
-        let paidAmount = paidByRecords > 0 ? paidByRecords : store.projects.reduce(0) { $0 + (Double($1.paidAmount) ?? 0) }
-        let materialCost = materialAutoCost > 0 ? materialAutoCost : store.projects.reduce(0) { $0 + (Double($1.materialCost) ?? 0) }
-        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : store.projects.reduce(0) { $0 + (Double($1.laborCost) ?? 0) }
+        let contractAmount = store.projects.reduce(0) { $0 + $1.contractAmountValue.doubleValue }
+        let paidAmount = paidByRecords > 0 ? paidByRecords : store.projects.reduce(0) { $0 + $1.paidAmountValue.doubleValue }
+        let materialCost = materialAutoCost > 0 ? materialAutoCost : store.projects.reduce(0) { $0 + $1.materialCostValue.doubleValue }
+        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : store.projects.reduce(0) { $0 + $1.laborCostValue.doubleValue }
         let receivableAmount = max(contractAmount - paidAmount, 0)
         return BusinessSummary(
             quoteTotal: store.quoteItems.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) },
@@ -59,8 +57,8 @@ struct ProjectBusinessView: View {
             logDays: Set(store.dailyLogs.map(\.date)).count,
             progress: averageProgress(store.progressTasks),
             circuitPlanCount: store.lightingCircuitPlans.count,
-            pendingMaterialCount: store.materialItems.filter { (Double($0.quantity) ?? 0) == 0 }.count,
-            unpricedQuoteCount: store.quoteItems.filter { (Double($0.unitPrice) ?? 0) == 0 }.count
+            pendingMaterialCount: store.materialItems.filter { $0.quantityValue.doubleValue == 0 }.count,
+            unpricedQuoteCount: store.quoteItems.filter { $0.unitPriceValue.doubleValue == 0 }.count
         )
     }
 
@@ -74,10 +72,10 @@ struct ProjectBusinessView: View {
         let paidByRecords = collectedAmount(for: projectId)
         let materialAutoCost = materials.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
         let laborAutoCost = labor.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
-        let contractAmount = Double(project?.contractAmount ?? "") ?? 0
-        let paidAmount = paidByRecords > 0 ? paidByRecords : (Double(project?.paidAmount ?? "") ?? 0)
-        let materialCost = materialAutoCost > 0 ? materialAutoCost : (Double(project?.materialCost ?? "") ?? 0)
-        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : (Double(project?.laborCost ?? "") ?? 0)
+        let contractAmount = project?.contractAmountValue.doubleValue ?? 0
+        let paidAmount = paidByRecords > 0 ? paidByRecords : (project?.paidAmountValue.doubleValue ?? 0)
+        let materialCost = materialAutoCost > 0 ? materialAutoCost : (project?.materialCostValue.doubleValue ?? 0)
+        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : (project?.laborCostValue.doubleValue ?? 0)
         let receivableAmount = max(contractAmount - paidAmount, 0)
         return BusinessSummary(
             quoteTotal: quotes.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) },
@@ -93,32 +91,26 @@ struct ProjectBusinessView: View {
             logDays: Set(logs.map(\.date)).count,
             progress: averageProgress(tasks),
             circuitPlanCount: store.lightingCircuitPlans.filter { $0.projectId == projectId }.count,
-            pendingMaterialCount: materials.filter { (Double($0.quantity) ?? 0) == 0 }.count,
-            unpricedQuoteCount: quotes.filter { (Double($0.unitPrice) ?? 0) == 0 }.count
+            pendingMaterialCount: materials.filter { $0.quantityValue.doubleValue == 0 }.count,
+            unpricedQuoteCount: quotes.filter { $0.unitPriceValue.doubleValue == 0 }.count
         )
     }
 
     private func collectedAmount(for projectId: UUID) -> Double {
-        let financial = store.projectFinancialRecords.filter {
-            $0.projectId == projectId && $0.direction == ProjectFinancialDirection.income.rawValue
-        }
-        let amountFromFinancial = financial.reduce(0) { result, item in
-            let category = ProjectFinancialCategory(rawValue: item.category)
-            guard category == .collection || category == .receipt else { return result }
-            return result + ReportBuilder.number(item.amount)
-        }
+        let financial = store.projectFinancialRecords.filter { $0.projectId == projectId }
+        let amountFromFinancial = ProjectFinancialMetrics.collectionAmount(financial)
         if amountFromFinancial > 0 {
             return amountFromFinancial
         }
         let payments = store.paymentRecords.filter { $0.projectId == projectId }
-        return payments.reduce(0) { $0 + ReportBuilder.number($1.amount) }
+        return payments.reduce(0) { $0 + $1.amountValue.doubleValue }
     }
 
     private func oldestReceivableAgeDays() -> Int? {
         let values = store.projects.compactMap { project -> Int? in
             let paid = collectedAmount(for: project.id)
-            let paidAmount = paid > 0 ? paid : ReportBuilder.number(project.paidAmount)
-            let receivable = max(ReportBuilder.number(project.contractAmount) - paidAmount, 0)
+            let paidAmount = paid > 0 ? paid : project.paidAmountValue.doubleValue
+            let receivable = max(project.contractAmountValue.doubleValue - paidAmount, 0)
             return receivableAgeDays(for: project, receivableAmount: receivable)
         }
         return values.max()
@@ -135,25 +127,16 @@ struct ProjectBusinessView: View {
 
     private func latestCollection(projectId: UUID?) -> CollectionSnapshot? {
         var snapshots: [CollectionSnapshot] = []
-        for record in store.projectFinancialRecords {
-            guard projectId == nil || record.projectId == projectId else { continue }
-            let direction = ProjectFinancialDirection(rawValue: record.direction) ?? .expense
-            let category = ProjectFinancialCategory(rawValue: record.category) ?? direction.defaultCategory
-            guard direction == .income, category == .collection || category == .receipt else { continue }
-            snapshots.append(
-                CollectionSnapshot(
-                    date: record.date,
-                    amount: ReportBuilder.number(record.amount),
-                    projectName: projectName(record.projectId)
-                )
-            )
+        let records = store.projectFinancialRecords.filter { projectId == nil || $0.projectId == projectId }
+        if let latest = ProjectFinancialMetrics.latestCollection(records: records, projectName: projectName(_:)) {
+            snapshots.append(latest)
         }
         for payment in store.paymentRecords {
             guard projectId == nil || payment.projectId == projectId else { continue }
             snapshots.append(
                 CollectionSnapshot(
                     date: payment.date,
-                    amount: ReportBuilder.number(payment.amount),
+                    amount: payment.amountValue.doubleValue,
                     projectName: projectName(payment.projectId)
                 )
             )
@@ -167,7 +150,7 @@ struct ProjectBusinessView: View {
     }
 
     private func sortDate(_ text: String) -> Date {
-        Formatters.date.date(from: text) ?? .distantPast
+        Formatters.parseDateOrDateTime(text) ?? .distantPast
     }
 
     private func metricGrid(summary: BusinessSummary) -> some View {
@@ -337,10 +320,4 @@ private struct BusinessSummary {
     var circuitPlanCount: Int
     var pendingMaterialCount: Int
     var unpricedQuoteCount: Int
-}
-
-private struct CollectionSnapshot {
-    let date: String
-    let amount: Double
-    let projectName: String?
 }

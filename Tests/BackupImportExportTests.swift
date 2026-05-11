@@ -68,7 +68,7 @@ struct BackupImportExportTests {
             materialItems: [MaterialItem(name: "线管", quantity: "1", unit: "根", projectId: nil)],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "测试项目", location: "A区", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "测试项目", location: "A区", status: .active)],
             dailyLogs: [
                 DailyLog(
                     date: "2026-05-01",
@@ -151,7 +151,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "备份项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "备份项目", location: "现场", status: .active)],
             dailyLogs: [DailyLog(date: "2026-05-03", weather: "晴", content: "完成", workers: "2", photos: [LogPhoto(fileName: photoFile)], projectId: projectId)],
             historyRecords: [],
             projectDrawings: [drawing],
@@ -174,6 +174,48 @@ struct BackupImportExportTests {
         #expect(restored.quickNoteAttachmentFiles.map(\.fileName).contains(quickNoteFile))
     }
 
+    @Test func backupArchiveIncludesConstructionMethodAttachments() throws {
+        let projectId = UUID()
+        let methodAttachment = try QuickNoteAttachmentStorage.saveDataOrThrow(
+            Data([0x11, 0x12]),
+            fileName: "method-attachment-\(UUID().uuidString).bin"
+        )
+        let tutorialAttachment = try QuickNoteAttachmentStorage.saveDataOrThrow(
+            Data([0x13, 0x14]),
+            fileName: "tutorial-attachment-\(UUID().uuidString).bin"
+        )
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: methodAttachment)
+            QuickNoteAttachmentStorage.delete(fileName: tutorialAttachment)
+        }
+
+        let method = ConstructionMethod(
+            title: "砌墙",
+            trade: "泥工",
+            tutorialAttachments: [QuickNoteAttachment(kind: .file, fileName: tutorialAttachment)],
+            attachments: [QuickNoteAttachment(kind: .file, fileName: methodAttachment)]
+        )
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "工艺项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: [],
+            constructionMethods: [method]
+        )
+
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+
+        #expect(archive.includedFileCount == 2)
+        let restored = try BackupArchiveService.decodeBackup(from: archive.fileURL)
+        let attachmentNames = Set(restored.quickNoteAttachmentFiles.map { $0.fileName })
+        #expect(attachmentNames.contains(methodAttachment))
+        #expect(attachmentNames.contains(tutorialAttachment))
+    }
+
     @Test func backupPreviewFromFileURLLoadsMetadataOnly() throws {
         let projectId = UUID()
         let quickNoteFile = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x0A, 0x0B]), fileName: "backup-preview-\(UUID().uuidString).bin")
@@ -183,7 +225,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "预览项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "预览项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
@@ -208,7 +250,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "解包项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "解包项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
@@ -231,7 +273,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "流式恢复项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "流式恢复项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
@@ -265,7 +307,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "大附件流式恢复", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "大附件流式恢复", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
@@ -295,7 +337,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "取消恢复项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "取消恢复项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
@@ -335,7 +377,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "JSON恢复项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "JSON恢复项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             templates: [],
@@ -363,7 +405,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(name: "旧备份", location: "", status: ProjectStatus.active.rawValue)],
+            projects: [Project(name: "旧备份", location: "", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             templates: []
@@ -387,7 +429,7 @@ struct BackupImportExportTests {
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(id: projectId, name: "大包项目", location: "现场", status: ProjectStatus.active.rawValue)],
+            projects: [Project(id: projectId, name: "大包项目", location: "现场", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: fileName)])],

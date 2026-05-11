@@ -24,22 +24,26 @@ struct ProjectDetailRiskStripView: View {
                 Spacer()
             }
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.tight) {
                     ProjectDetailRiskChipView(
                         text: "延期 \(overdueCount)",
-                        color: overdueCount > 0 ? .red : .green
+                        color: overdueCount > 0 ? .red : .green,
+                        hasRisk: overdueCount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: "未收 \(ReportBuilder.money(unpaidAmount))",
-                        color: unpaidAmount > 0 ? .orange : .green
+                        color: unpaidAmount > 0 ? .orange : .green,
+                        hasRisk: unpaidAmount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: "待补报价 \(unpricedQuoteCount)",
-                        color: unpricedQuoteCount > 0 ? .orange : .green
+                        color: unpricedQuoteCount > 0 ? .orange : .green,
+                        hasRisk: unpricedQuoteCount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: hasTodayLog ? "今日日志已写" : "今日日志未写",
-                        color: hasTodayLog ? .green : .red
+                        color: hasTodayLog ? .green : .red,
+                        hasRisk: !hasTodayLog
                     )
                 }
                 .padding(.vertical, 2)
@@ -53,14 +57,24 @@ struct ProjectDetailRiskStripView: View {
 private struct ProjectDetailRiskChipView: View {
     let text: String
     let color: Color
+    let hasRisk: Bool
 
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(color)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(Capsule().fill(color.opacity(0.14)))
+            .foregroundStyle(hasRisk ? .white : color)
+            .padding(.horizontal, AppSpacing.tight)
+            .padding(.vertical, 5)
+            .background(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .fill(hasRisk ? color : color.opacity(0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 7, style: .continuous)
+                    .stroke(hasRisk ? color : color.opacity(0.35), lineWidth: 0.5)
+            )
+            .accessibilityLabel(text)
+            .accessibilityValue(hasRisk ? "需要关注" : "正常")
     }
 }
 

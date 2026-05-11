@@ -19,6 +19,7 @@ struct BackupSnapshot: Codable {
     var projectWarehouseMovements: [ProjectWarehouseMovement] = []
     var templates: [ProjectTemplate]
     var materialPriceEntries: [MaterialPriceEntry] = []
+    var materialSheetDrafts: [MaterialSheetDraft] = []
     var supplierProfiles: [SupplierProfile] = []
     var constructionMethods: [ConstructionMethod] = []
     var favoriteMaterialKeys: [String] = []
@@ -50,6 +51,7 @@ struct BackupSnapshot: Codable {
         projectWarehouseMovements: [ProjectWarehouseMovement] = [],
         templates: [ProjectTemplate],
         materialPriceEntries: [MaterialPriceEntry] = [],
+        materialSheetDrafts: [MaterialSheetDraft] = [],
         supplierProfiles: [SupplierProfile] = [],
         constructionMethods: [ConstructionMethod] = [],
         favoriteMaterialKeys: [String] = [],
@@ -80,6 +82,7 @@ struct BackupSnapshot: Codable {
         self.projectWarehouseMovements = projectWarehouseMovements
         self.templates = templates
         self.materialPriceEntries = materialPriceEntries
+        self.materialSheetDrafts = materialSheetDrafts
         self.supplierProfiles = supplierProfiles
         self.constructionMethods = constructionMethods
         self.favoriteMaterialKeys = favoriteMaterialKeys
@@ -97,7 +100,7 @@ struct BackupSnapshot: Codable {
         case materialItems, quoteItems, laborRecords, projects, dailyLogs, historyRecords
         case progressTasks, lightingCircuitPlans, siteTodos, paymentRecords, projectDrawings
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
-        case templates, materialPriceEntries, supplierProfiles, constructionMethods
+        case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
         case quickNoteAttachmentFiles
     }
@@ -122,6 +125,7 @@ struct BackupSnapshot: Codable {
         projectWarehouseMovements = try container.decodeIfPresent([ProjectWarehouseMovement].self, forKey: .projectWarehouseMovements) ?? []
         templates = try container.decodeIfPresent([ProjectTemplate].self, forKey: .templates) ?? []
         materialPriceEntries = try container.decodeIfPresent([MaterialPriceEntry].self, forKey: .materialPriceEntries) ?? []
+        materialSheetDrafts = try container.decodeIfPresent([MaterialSheetDraft].self, forKey: .materialSheetDrafts) ?? []
         supplierProfiles = try container.decodeIfPresent([SupplierProfile].self, forKey: .supplierProfiles) ?? []
         constructionMethods = try container.decodeIfPresent([ConstructionMethod].self, forKey: .constructionMethods) ?? []
         favoriteMaterialKeys = try container.decodeIfPresent([String].self, forKey: .favoriteMaterialKeys) ?? []

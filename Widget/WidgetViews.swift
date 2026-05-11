@@ -1,5 +1,6 @@
 import SwiftUI
 import WidgetKit
+import Foundation
 
 struct SmallWidgetView: View {
     var entry: SitekeeperProvider.Entry
@@ -16,14 +17,14 @@ struct SmallWidgetView: View {
                 Image(systemName: "checklist")
                     .font(.caption2)
                     .foregroundStyle(.orange)
-                Text("待办")
+                Text(String(localized: "widget_label_todo"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
             Text("\(data.pendingTodos)")
                 .font(.system(size: 32, weight: .bold, design: .rounded))
                 .foregroundStyle(.primary)
-            Text("项待处理")
+            Text(String(localized: "widget_pending_items_text"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -32,7 +33,7 @@ struct SmallWidgetView: View {
             HStack(spacing: 4) {
                 Image(systemName: "shippingbox")
                     .font(.caption2)
-                Text("\(data.materialStockCount) 种材料")
+                Text(widgetLocalizedCount("widget_material_stock_count_format", data.materialStockCount))
                     .font(.caption2)
             }
             .foregroundStyle(.secondary)
@@ -41,11 +42,15 @@ struct SmallWidgetView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .font(.caption2)
-                    Text("\(data.lowStockCount) 种不足")
+                    Text(widgetLocalizedCount("widget_low_stock_count_format", data.lowStockCount))
                         .font(.caption2)
                 }
                 .foregroundStyle(.orange)
             }
+
+            Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -67,14 +72,14 @@ struct MediumWidgetView: View {
                 HStack {
                     Image(systemName: "checklist")
                         .foregroundStyle(.orange)
-                    Text("今日待办")
+                    Text(String(localized: "widget_label_today_todos"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 Text("\(data.pendingTodos)")
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundStyle(.primary)
-                Text("项待处理")
+                Text(String(localized: "widget_pending_items_text"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -83,17 +88,18 @@ struct MediumWidgetView: View {
 
             // 右侧：项目进度列表
             VStack(alignment: .leading, spacing: 8) {
-                Text("项目进度")
+                Text(String(localized: "widget_label_project_progress"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
                 if data.projects.isEmpty {
-                    Text("暂无进行中的项目")
+                    Text(String(localized: "widget_no_active_projects"))
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
                         .padding(.top, 4)
                 } else {
                     ForEach(data.projects.prefix(3), id: \.id) { project in
+                        let status = WidgetProjectStatus.parse(project.status)
                         VStack(alignment: .leading, spacing: 2) {
                             HStack {
                                 Text(project.name)
@@ -105,11 +111,14 @@ struct MediumWidgetView: View {
                                     .foregroundStyle(.secondary)
                             }
                             ProgressView(value: project.progress)
-                                .tint(project.status == "已完成" ? .green : .orange)
+                                .tint(status.isCompleted ? .green : .orange)
                         }
                     }
                 }
                 Spacer()
+                Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -132,20 +141,20 @@ struct LargeWidgetView: View {
                 SummaryBlock(
                     icon: "checklist",
                     value: "\(data.pendingTodos)",
-                    label: "待办",
+                    label: String(localized: "widget_label_todo"),
                     color: .orange
                 )
                 SummaryBlock(
                     icon: "shippingbox",
                     value: "\(data.materialStockCount)",
-                    label: "材料种类",
+                    label: String(localized: "widget_label_material_types"),
                     color: .blue
                 )
                 if data.lowStockCount > 0 {
                     SummaryBlock(
                         icon: "exclamationmark.triangle.fill",
                         value: "\(data.lowStockCount)",
-                        label: "库存不足",
+                        label: String(localized: "widget_label_low_stock"),
                         color: .red
                     )
                 }
@@ -159,13 +168,15 @@ struct LargeWidgetView: View {
                     Image(systemName: "hammer")
                         .font(.title)
                         .foregroundStyle(.tertiary)
-                    Text("暂无进行中的项目")
+                    Text(String(localized: "widget_no_active_projects"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ForEach(data.projects, id: \.id) { project in
+                    let status = WidgetProjectStatus.parse(project.status)
+                    let isCompleted = status.isCompleted
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(project.name)
@@ -173,20 +184,20 @@ struct LargeWidgetView: View {
                                 .fontWeight(.medium)
                                 .lineLimit(1)
                             Spacer()
-                            Text(project.status)
+                            Text(status.displayName)
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background(
                                     Capsule()
-                                        .fill(project.status == "已完成" ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                                        .fill(isCompleted ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
                                 )
-                                .foregroundStyle(project.status == "已完成" ? .green : .orange)
+                                .foregroundStyle(isCompleted ? .green : .orange)
                         }
 
                         HStack(spacing: 12) {
                             ProgressView(value: project.progress)
-                                .tint(project.status == "已完成" ? .green : .orange)
+                                .tint(isCompleted ? .green : .orange)
                             Text("\(Int(project.progress * 100))%")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -194,15 +205,49 @@ struct LargeWidgetView: View {
                         }
 
                         if project.todoCount > 0 {
-                            Text("\(project.todoCount) 项待办")
+                            Text(widgetLocalizedCount("widget_project_todo_count_format", project.todoCount))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
+                Text(widgetLocalizedUpdate("widget_updated_datetime_format", WidgetDateFormatters.dateTime.string(from: entry.date)))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
             }
         }
     }
+}
+
+private enum WidgetDateFormatters {
+    private static let displayLocale = Locale.autoupdatingCurrent
+    private static let displayTimeZone = TimeZone.autoupdatingCurrent
+
+    static let timeOnly: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = displayLocale
+        formatter.timeZone = displayTimeZone
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    static let dateTime: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = displayLocale
+        formatter.timeZone = displayTimeZone
+        formatter.dateFormat = "MM-dd HH:mm"
+        return formatter
+    }()
+}
+
+private func widgetLocalizedCount(_ key: String, _ count: Int) -> String {
+    let format = NSLocalizedString(key, comment: "")
+    return String.localizedStringWithFormat(format, count)
+}
+
+private func widgetLocalizedUpdate(_ key: String, _ value: String) -> String {
+    let format = NSLocalizedString(key, comment: "")
+    return String.localizedStringWithFormat(format, value)
 }
 
 private struct SummaryBlock: View {

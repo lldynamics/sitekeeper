@@ -3,17 +3,25 @@ import UniformTypeIdentifiers
 import UIKit
 import CoreLocation
 import Photos
+import AVFoundation
 
 struct WatermarkCameraToolView: View {
     @Environment(DataStore.self) private var store
     let initialProjectId: UUID?
     let autoOpenCameraOnAppear: Bool
     @State private var selectedProjectId: UUID?
-    @State private var projectName = ""
-    @State private var photographer = ""
-    @State private var locationText = ""
-    @State private var template: CameraWatermarkTemplate = .constructionLog
-    @State private var tag = "现场记录"
+    @AppStorage("watermarkCameraSelectedProjectId") private var selectedProjectIdRaw = ""
+    @AppStorage("watermarkCameraProjectName") private var projectName = ""
+    @AppStorage("watermarkCameraPhotographer") private var photographer = ""
+    @AppStorage("watermarkCameraLocationText") private var locationText = ""
+    @AppStorage("watermarkCameraTemplateRaw") private var templateRaw = CameraWatermarkTemplate.constructionLog.rawValue
+    @AppStorage("watermarkCameraTag") private var tag = "现场记录"
+    @AppStorage("watermarkCameraAutoSaveToAlbum") private var autoSaveToAlbum = false
+    @AppStorage("watermarkCameraAutoOpenLogDraft") private var autoOpenLogDraft = false
+    @AppStorage("watermarkCameraExportQualityRaw") private var exportQualityRaw = WatermarkExportQuality.standard.rawValue
+    @AppStorage("watermarkCameraShowGrid") private var showGrid = true
+    @AppStorage("watermarkCameraFlashEnabled") private var flashEnabled = false
+    @AppStorage("watermarkCameraBurstCount") private var burstCount = 1
     @State private var showCamera = false
     @State private var capturedPhoto: WatermarkCapturedPhoto?
     @State private var exportData = Data()
@@ -24,6 +32,8 @@ struct WatermarkCameraToolView: View {
     @State private var savingToAlbum = false
     @State private var showWatermarkSettings = false
     @State private var didAutoOpenCamera = false
+    @State private var showLogDraft = false
+    @State private var toast: WatermarkToast?
     @StateObject private var locationManager = WatermarkCameraLocationManager()
 
     init(initialProjectId: UUID? = nil, autoOpenCameraOnAppear: Bool = false) {
@@ -32,8 +42,45 @@ struct WatermarkCameraToolView: View {
         _selectedProjectId = State(initialValue: initialProjectId)
     }
 
+    private var template: CameraWatermarkTemplate {
+        get { StringEnumFallback.value(templateRaw, default: CameraWatermarkTemplate.constructionLog) }
+        set { templateRaw = newValue.rawValue }
+    }
+
+    private var templateBinding: Binding<CameraWatermarkTemplate> {
+        Binding(
+            get: { template },
+            set: { templateRaw = $0.rawValue }
+        )
+    }
+
+    private var exportQuality: WatermarkExportQuality {
+        get { StringEnumFallback.value(exportQualityRaw, default: WatermarkExportQuality.standard) }
+        set { exportQualityRaw = newValue.rawValue }
+    }
+
+    private var exportQualityBinding: Binding<WatermarkExportQuality> {
+        Binding(
+            get: { exportQuality },
+            set: { exportQualityRaw = $0.rawValue }
+        )
+    }
+
+    private var boundedBurstCount: Int {
+        min(5, max(1, burstCount))
+    }
+
     var body: some View {
         Form {
+            Section {
+                ProjectContextStrip(
+                    title: "当前工程",
+                    projects: store.projects,
+                    selectedProjectId: $selectedProjectId,
+                    emptyText: "不关联项目"
+                )
+            }
+
             Section("拍摄") {
                 Button {
                     openCamera()
@@ -41,8 +88,8 @@ struct WatermarkCameraToolView: View {
                     Label("拍摄水印照片", systemImage: "camera.fill")
                         .font(.headline)
                         .frame(maxWidth: .infinity, alignment: .center)
-                }
-                .buttonStyle(.borderedProminent)
+                    }
+                    .buttonStyle(.borderedProminent)
 
                 Text(effectiveProjectName.map { "当前水印工程：\($0)" } ?? "当前未指定工程，可在水印设置中选择或手填。")
                     .font(.caption)
@@ -58,7 +105,7 @@ struct WatermarkCameraToolView: View {
                         }
                     }
                     TextField("工程名称（未选项目时填写）", text: $projectName)
-                    Picker("水印模板", selection: $template) {
+                    Picker("水印模板", selection: templateBinding) {
                         ForEach(CameraWatermarkTemplate.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
@@ -70,10 +117,20 @@ struct WatermarkCameraToolView: View {
                         Button {
                             locationManager.requestLocation()
                         } label: {
-                            Image(systemName: "location.fill")
+                            Image(systemName: "location.fill").visibleIconStyle()
                         }
-                        .buttonStyle(.borderless)
+                        .buttonStyle(.appIcon())
                     }
+                    Picker("导出画质", selection: exportQualityBinding) {
+                        ForEach(WatermarkExportQuality.allCases, id: \.self) { quality in
+                            Text(quality.displayName).tag(quality)
+                        }
+                    }
+                    Toggle("拍完自动保存到相册", isOn: $autoSaveToAlbum)
+                    Toggle("拍完自动进入施工日志草稿", isOn: $autoOpenLogDraft)
+                    Toggle("相机显示网格线", isOn: $showGrid)
+                    Toggle("默认开启闪光灯", isOn: $flashEnabled)
+                    Stepper("连拍张数：\(boundedBurstCount)", value: $burstCount, in: 1...5)
                     if !locationManager.statusText.isEmpty {
                         Text(locationManager.statusText)
                             .font(.caption2)
@@ -140,7 +197,7 @@ struct WatermarkCameraToolView: View {
                     Button {
                         exportCurrentImage()
                     } label: {
-                        Label("导出 JPEG", systemImage: "square.and.arrow.up")
+                        Label("导出 JPEG（\(exportQuality.displayName)）", systemImage: "square.and.arrow.up")
                     }
 
                     Button("清空当前照片", role: .destructive) {
@@ -174,16 +231,14 @@ struct WatermarkCameraToolView: View {
         .navigationTitle("水印相机")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showCamera) {
-            ImagePickerView(
-                sourceType: .camera,
+            WatermarkCameraCaptureView(
                 watermarkContext: currentContext,
-                onPickedWithTimestamp: { image, capturedAt in
-                    capturedPhoto = WatermarkCapturedPhoto(image: image, capturedAt: capturedAt)
-                },
-                onPicked: { image in
-                    capturedPhoto = WatermarkCapturedPhoto(image: image, capturedAt: Date())
-                }
-            )
+                showGrid: showGrid,
+                flashEnabled: flashEnabled,
+                burstCount: boundedBurstCount
+            ) { image, capturedAt in
+                handleCapturedImage(image, capturedAt: capturedAt)
+            }
         }
         .fileExporter(
             isPresented: $showExporter,
@@ -196,19 +251,62 @@ struct WatermarkCameraToolView: View {
         } message: {
             Text(alertMessage)
         }
+        .navigationDestination(isPresented: $showLogDraft) {
+            if let logSeedPhoto {
+                DailyLogView(
+                    initialProjectId: selectedProjectId,
+                    autoOpenComposer: true,
+                    initialPhotoDrafts: [logSeedPhoto],
+                    initialContent: logDraftContent
+                )
+            } else {
+                ContentUnavailableView("暂无日志草稿", systemImage: "book.pages", description: Text("请先拍摄一张水印照片。"))
+            }
+        }
+        .safeAreaInset(edge: .bottom) {
+            if capturedPhoto != nil {
+                WatermarkQuickActionsBar(
+                    canAttachToProject: selectedProjectId != nil,
+                    onRetake: openCamera,
+                    onSaveAlbum: saveCurrentImageToAlbum,
+                    onAttachProject: saveCurrentImageAsProjectDocument,
+                    onOpenLogDraft: {
+                        if logSeedPhoto != nil {
+                            showLogDraft = true
+                        }
+                    },
+                    onExport: exportCurrentImage
+                )
+            }
+        }
+        .overlay(alignment: .top) {
+            if let toast {
+                WatermarkToastView(toast: toast)
+                    .padding(.top, 10)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
         .onChange(of: locationManager.locationText) { _, newValue in
             if !newValue.isEmpty {
                 locationText = newValue
             }
         }
         .onChange(of: selectedProjectId) { _, newValue in
+            selectedProjectIdRaw = newValue?.uuidString ?? ""
             guard let project = newValue.flatMap({ id in store.projects.first { $0.id == id } }) else { return }
             projectName = project.name
         }
+        .onChange(of: burstCount) { _, newValue in
+            burstCount = min(5, max(1, newValue))
+        }
+        .animation(.easeInOut(duration: 0.2), value: toast?.id)
         .onAppear {
-            if selectedProjectId == nil {
+            if let initialProjectId {
                 selectedProjectId = initialProjectId
+            } else if selectedProjectId == nil, let restored = UUID(uuidString: selectedProjectIdRaw) {
+                selectedProjectId = restored
             }
+            burstCount = min(5, max(1, burstCount))
             guard autoOpenCameraOnAppear, !didAutoOpenCamera else { return }
             didAutoOpenCamera = true
             openCamera()
@@ -252,7 +350,7 @@ struct WatermarkCameraToolView: View {
     }
 
     private var todoSeedData: Data? {
-        capturedPhoto?.image.jpegData(compressionQuality: 0.82)
+        capturedPhoto?.image.jpegData(compressionQuality: max(0.82, exportQuality.compression - 0.06))
     }
 
     private var logDraftContent: String {
@@ -263,17 +361,54 @@ struct WatermarkCameraToolView: View {
         return "水印照片记录：\(trimmedTag)"
     }
 
+    private func handleCapturedImage(_ image: UIImage, capturedAt: Date) {
+        let output = image.applyingCameraWatermark(context: currentContext, capturedAt: capturedAt)
+        capturedPhoto = WatermarkCapturedPhoto(image: output, capturedAt: capturedAt)
+        presentToast("已拍摄 \(boundedBurstCount > 1 ? "连拍" : "照片")，可继续处理。", style: .success)
+        if autoSaveToAlbum {
+            saveCurrentImageToAlbum()
+        }
+        if autoOpenLogDraft, selectedProjectId != nil, logSeedPhoto != nil {
+            showLogDraft = true
+        }
+    }
+
     private func openCamera() {
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            presentError("当前设备不可用相机。")
+        guard AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil else {
+            presentBlockingError("当前设备不可用相机。")
             return
         }
-        showCamera = true
+        Task { @MainActor in
+            let isGranted = await requestCameraAccessIfNeeded()
+            guard isGranted else {
+                presentBlockingError("未获得相机权限，无法拍摄。")
+                return
+            }
+            showCamera = true
+        }
+    }
+
+    private func requestCameraAccessIfNeeded() async -> Bool {
+        let status = AVCaptureDevice.authorizationStatus(for: .video)
+        switch status {
+        case .authorized:
+            return true
+        case .notDetermined:
+            return await withCheckedContinuation { continuation in
+                AVCaptureDevice.requestAccess(for: .video) { granted in
+                    continuation.resume(returning: granted)
+                }
+            }
+        case .denied, .restricted:
+            return false
+        @unknown default:
+            return false
+        }
     }
 
     private func exportCurrentImage() {
         guard let image = capturedPhoto?.image,
-              let data = image.jpegData(compressionQuality: 0.9) else {
+              let data = image.jpegData(compressionQuality: exportQuality.compression) else {
             presentError("照片导出失败。")
             return
         }
@@ -293,7 +428,7 @@ struct WatermarkCameraToolView: View {
             writeImageToAlbum(image)
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                DispatchQueue.main.async {
+                Task { @MainActor in
                     if newStatus == .authorized || newStatus == .limited {
                         writeImageToAlbum(image)
                     } else {
@@ -313,7 +448,7 @@ struct WatermarkCameraToolView: View {
         PHPhotoLibrary.shared().performChanges {
             PHAssetChangeRequest.creationRequestForAsset(from: image)
         } completionHandler: { success, error in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 savingToAlbum = false
                 if success {
                     presentInfo("已保存到相册。")
@@ -361,15 +496,31 @@ struct WatermarkCameraToolView: View {
     }
 
     private func presentInfo(_ message: String) {
-        alertTitle = "已完成"
+        presentToast(message, style: .success)
+    }
+
+    private func presentError(_ message: String) {
+        presentToast(message, style: .error)
+    }
+
+    private func presentBlockingError(_ message: String) {
+        alertTitle = "无法继续"
         alertMessage = message
         showAlert = true
     }
 
-    private func presentError(_ message: String) {
-        alertTitle = "无法继续"
-        alertMessage = message
-        showAlert = true
+    private func presentToast(_ message: String, style: WatermarkToastStyle) {
+        let toast = WatermarkToast(message: message, style: style)
+        withAnimation {
+            self.toast = toast
+        }
+        Task { @MainActor in
+            guard await DebouncedTask.wait(for: .seconds(2)) else { return }
+            guard self.toast?.id == toast.id else { return }
+            withAnimation {
+                self.toast = nil
+            }
+        }
     }
 }
 
@@ -378,11 +529,451 @@ private struct WatermarkCapturedPhoto {
     let capturedAt: Date
 }
 
+private enum WatermarkExportQuality: String, CaseIterable {
+    case standard
+    case high
+
+    var displayName: String {
+        switch self {
+        case .standard:
+            return "标准"
+        case .high:
+            return "高清"
+        }
+    }
+
+    var compression: CGFloat {
+        switch self {
+        case .standard:
+            return 0.88
+        case .high:
+            return 0.96
+        }
+    }
+}
+
+private enum WatermarkToastStyle {
+    case success
+    case error
+
+    var tint: Color {
+        switch self {
+        case .success:
+            return .green
+        case .error:
+            return .red
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .success:
+            return "checkmark.circle.fill"
+        case .error:
+            return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
+private struct WatermarkToast: Identifiable {
+    let id = UUID()
+    let message: String
+    let style: WatermarkToastStyle
+}
+
+private struct WatermarkToastView: View {
+    let toast: WatermarkToast
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: toast.style.icon)
+                .font(.callout.weight(.semibold))
+            Text(toast.message)
+                .font(.callout)
+                .lineLimit(2)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .background(
+            Capsule()
+                .fill(toast.style.tint.opacity(0.92))
+        )
+    }
+}
+
+private struct WatermarkQuickActionsBar: View {
+    let canAttachToProject: Bool
+    let onRetake: () -> Void
+    let onSaveAlbum: () -> Void
+    let onAttachProject: () -> Void
+    let onOpenLogDraft: () -> Void
+    let onExport: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                quickButton("再拍一张", icon: "camera.fill", action: onRetake)
+                quickButton("保存相册", icon: "photo.on.rectangle.angled", action: onSaveAlbum)
+                quickButton("附到项目", icon: "folder.badge.plus", disabled: !canAttachToProject, action: onAttachProject)
+                quickButton("写日志", icon: "book.pages.fill", action: onOpenLogDraft)
+                quickButton("导出", icon: "square.and.arrow.up", action: onExport)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+        }
+        .background(.ultraThinMaterial)
+    }
+
+    private func quickButton(
+        _ title: String,
+        icon: String,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Label(title, systemImage: icon)
+                .font(.subheadline.weight(.medium))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+        }
+        .buttonStyle(.borderedProminent)
+        .tint(.orange)
+        .disabled(disabled)
+    }
+}
+
+private struct WatermarkCameraCaptureView: View {
+    let watermarkContext: CameraWatermarkContext
+    let showGrid: Bool
+    let flashEnabled: Bool
+    let burstCount: Int
+    let onCapture: (UIImage, Date) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var camera = WatermarkCameraSession()
+    @State private var isCapturing = false
+    @State private var captureError = ""
+    @State private var showError = false
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+            WatermarkCameraPreview(session: camera.session)
+                .ignoresSafeArea()
+
+            if showGrid {
+                CameraGridOverlay()
+                    .ignoresSafeArea()
+            }
+
+            VStack(spacing: 0) {
+                HStack {
+                    Button("关闭") { dismiss() }
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(.black.opacity(0.35), in: Capsule())
+                    Spacer()
+                }
+                .padding(.top, 18)
+                .padding(.horizontal, 14)
+
+                Spacer()
+
+                TimelineView(.periodic(from: .now, by: 1)) { context in
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(watermarkContext.lines(capturedAt: context.date), id: \.self) { line in
+                            Text(line)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                .padding(10)
+                .background(.black.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 14)
+                .padding(.bottom, 10)
+
+                HStack(spacing: 16) {
+                    Text("连拍 x\(burstCount)")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.35), in: Capsule())
+
+                    Button {
+                        capture()
+                    } label: {
+                        ZStack {
+                            Circle().fill(.white).frame(width: 74, height: 74)
+                            Circle().stroke(.orange, lineWidth: 4).frame(width: 62, height: 62)
+                        }
+                    }
+                    .disabled(isCapturing)
+
+                    Text(flashEnabled ? "闪光: 开" : "闪光: 关")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(.black.opacity(0.35), in: Capsule())
+                }
+                .padding(.bottom, 28)
+            }
+        }
+        .alert("相机不可用", isPresented: $showError) {
+            Button("知道了") { dismiss() }
+        } message: {
+            Text(captureError)
+        }
+        .onAppear {
+            camera.start()
+            if let message = camera.lastErrorMessage {
+                captureError = message
+                showError = true
+            }
+        }
+        .onDisappear {
+            camera.stop()
+        }
+    }
+
+    private func capture() {
+        guard !isCapturing else { return }
+        isCapturing = true
+        camera.capture(
+            count: burstCount,
+            flashMode: flashEnabled ? .on : .off
+        ) { images, capturedAt, errorMessage in
+            Task { @MainActor in
+                isCapturing = false
+                if let errorMessage {
+                    captureError = errorMessage
+                    showError = true
+                    return
+                }
+                if let image = images.last {
+                    onCapture(image, capturedAt)
+                    dismiss()
+                } else {
+                    captureError = "未获取到照片，请重试。"
+                    showError = true
+                }
+            }
+        }
+    }
+}
+
+private struct WatermarkCameraPreview: UIViewRepresentable {
+    let session: AVCaptureSession
+
+    func makeUIView(context: Context) -> PreviewContainerView {
+        let view = PreviewContainerView()
+        view.previewLayer.session = session
+        view.previewLayer.videoGravity = .resizeAspectFill
+        return view
+    }
+
+    func updateUIView(_ uiView: PreviewContainerView, context: Context) {
+        uiView.previewLayer.session = session
+    }
+}
+
+private final class PreviewContainerView: UIView {
+    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    var previewLayer: AVCaptureVideoPreviewLayer {
+        guard let previewLayer = layer as? AVCaptureVideoPreviewLayer else {
+            assertionFailure("PreviewContainerView layer is not AVCaptureVideoPreviewLayer")
+            return AVCaptureVideoPreviewLayer()
+        }
+        return previewLayer
+    }
+}
+
+private final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
+    let session = AVCaptureSession()
+    private let photoOutput = AVCapturePhotoOutput()
+    private let sessionQueue = DispatchQueue(label: "watermark.camera.session")
+    private var completion: (([UIImage], Date, String?) -> Void)?
+    private var targetCount = 1
+    private var capturedImages: [UIImage] = []
+    private var capturedAt = Date()
+    private var currentFlashMode: AVCaptureDevice.FlashMode = .off
+    private(set) var lastErrorMessage: String?
+    private var isConfigured = false
+
+    func start() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.configureIfNeeded()
+            guard self.isConfigured else { return }
+            if !self.session.isRunning {
+                self.session.startRunning()
+            }
+        }
+    }
+
+    func stop() {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            if self.session.isRunning {
+                self.session.stopRunning()
+            }
+        }
+    }
+
+    func capture(
+        count: Int,
+        flashMode: AVCaptureDevice.FlashMode,
+        completion: @escaping ([UIImage], Date, String?) -> Void
+    ) {
+        sessionQueue.async { [weak self] in
+            guard let self else { return }
+            self.configureIfNeeded()
+            guard self.isConfigured else {
+                completion([], Date(), self.lastErrorMessage ?? "相机初始化失败。")
+                return
+            }
+            self.completion = completion
+            self.targetCount = max(1, count)
+            self.capturedImages = []
+            self.capturedAt = Date()
+            self.currentFlashMode = flashMode
+            self.captureOne()
+        }
+    }
+
+    private func configureIfNeeded() {
+        guard !isConfigured else { return }
+        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
+        if authStatus == .denied || authStatus == .restricted {
+            lastErrorMessage = "相机权限未开启，请到系统设置中允许访问相机。"
+            return
+        }
+        if authStatus == .notDetermined {
+            lastErrorMessage = "请先授权相机权限，再重新打开相机。"
+            return
+        }
+
+        session.beginConfiguration()
+        session.sessionPreset = .photo
+
+        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            lastErrorMessage = "当前设备不可用相机。"
+            session.commitConfiguration()
+            return
+        }
+        do {
+            let input = try AVCaptureDeviceInput(device: camera)
+            if session.canAddInput(input) {
+                session.addInput(input)
+            } else {
+                lastErrorMessage = "无法添加相机输入。"
+                session.commitConfiguration()
+                return
+            }
+        } catch {
+            lastErrorMessage = "相机输入失败：\(error.localizedDescription)"
+            session.commitConfiguration()
+            return
+        }
+
+        if session.canAddOutput(photoOutput) {
+            session.addOutput(photoOutput)
+        } else {
+            lastErrorMessage = "无法添加相机输出。"
+            session.commitConfiguration()
+            return
+        }
+        if let bestDimensions = bestSupportedPhotoDimensions(from: camera.activeFormat) {
+            photoOutput.maxPhotoDimensions = bestDimensions
+        }
+        session.commitConfiguration()
+        isConfigured = true
+    }
+
+    private func captureOne() {
+        let settings = AVCapturePhotoSettings()
+        if photoOutput.supportedFlashModes.contains(currentFlashMode) {
+            settings.flashMode = currentFlashMode
+        }
+        settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
+        photoOutput.capturePhoto(with: settings, delegate: self)
+    }
+
+    private func bestSupportedPhotoDimensions(from format: AVCaptureDevice.Format) -> CMVideoDimensions? {
+        var result: CMVideoDimensions?
+        var maxPixelCount = 0
+        for dimensions in format.supportedMaxPhotoDimensions {
+            let pixelCount = Int(dimensions.width) * Int(dimensions.height)
+            if pixelCount > maxPixelCount {
+                maxPixelCount = pixelCount
+                result = dimensions
+            }
+        }
+        return result
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
+        if let error {
+            finish(error: "拍摄失败：\(error.localizedDescription)")
+            return
+        }
+        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
+            finish(error: "照片数据损坏，请重试。")
+            return
+        }
+        capturedImages.append(image)
+        if capturedImages.count < targetCount {
+            sessionQueue.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+                self?.captureOne()
+            }
+        } else {
+            finish(error: nil)
+        }
+    }
+
+    private func finish(error: String?) {
+        let completion = self.completion
+        self.completion = nil
+        completion?(capturedImages, capturedAt, error)
+    }
+}
+
+private struct CameraGridOverlay: View {
+    var body: some View {
+        GeometryReader { geo in
+            let w = geo.size.width
+            let h = geo.size.height
+            Path { path in
+                let x1 = w / 3
+                let x2 = w * 2 / 3
+                let y1 = h / 3
+                let y2 = h * 2 / 3
+                path.move(to: CGPoint(x: x1, y: 0))
+                path.addLine(to: CGPoint(x: x1, y: h))
+                path.move(to: CGPoint(x: x2, y: 0))
+                path.addLine(to: CGPoint(x: x2, y: h))
+                path.move(to: CGPoint(x: 0, y: y1))
+                path.addLine(to: CGPoint(x: w, y: y1))
+                path.move(to: CGPoint(x: 0, y: y2))
+                path.addLine(to: CGPoint(x: w, y: y2))
+            }
+            .stroke(Color.appStrokeLightOverlay, lineWidth: 1)
+        }
+        .allowsHitTesting(false)
+    }
+}
+
 private final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var locationText = ""
     @Published var statusText = ""
 
     private let manager = CLLocationManager()
+    private let geocoder = CLGeocoder()
 
     override init() {
         super.init()
@@ -416,9 +1007,35 @@ private final class WatermarkCameraLocationManager: NSObject, ObservableObject, 
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
-        guard let coordinate = locations.last?.coordinate else { return }
-        locationText = String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude)
-        statusText = "已填入当前位置"
+        guard let latestLocation = locations.last else { return }
+        let coordinate = latestLocation.coordinate
+        let fallback = String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude)
+        geocoder.reverseGeocodeLocation(latestLocation) { [weak self] placemarks, _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if let placemark = placemarks?.first {
+                    let readable = [
+                        placemark.administrativeArea,
+                        placemark.locality,
+                        placemark.subLocality,
+                        placemark.thoroughfare,
+                        placemark.name
+                    ]
+                    .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " ")
+                    if readable.isEmpty {
+                        self.locationText = fallback
+                    } else {
+                        self.locationText = readable
+                    }
+                    self.statusText = "已填入当前位置"
+                } else {
+                    self.locationText = fallback
+                    self.statusText = "已填入经纬度位置"
+                }
+            }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {

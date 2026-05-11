@@ -1,6 +1,14 @@
 import WidgetKit
 import SwiftUI
 
+@main
+struct SitekeeperWidgetBundle: WidgetBundle {
+    @WidgetBundleBuilder
+    var body: some Widget {
+        SitekeeperWidget()
+    }
+}
+
 struct SitekeeperProvider: TimelineProvider {
     func placeholder(in context: Context) -> WidgetEntry {
         WidgetEntry(
@@ -12,18 +20,21 @@ struct SitekeeperProvider: TimelineProvider {
                 ],
                 pendingTodos: 8,
                 materialStockCount: 42,
-                lowStockCount: 3
+                lowStockCount: 3,
+                lastUpdatedAt: Date().timeIntervalSince1970
             )
         )
     }
 
     func getSnapshot(in context: Context, completion: @escaping (WidgetEntry) -> Void) {
-        let entry = WidgetEntry(date: Date(), data: WidgetDataStore.shared)
+        let data = WidgetDataStore.shared
+        let entry = WidgetEntry(date: data.lastUpdatedDate ?? Date(), data: data)
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WidgetEntry>) -> Void) {
-        let entry = WidgetEntry(date: Date(), data: WidgetDataStore.shared)
+        let data = WidgetDataStore.shared
+        let entry = WidgetEntry(date: data.lastUpdatedDate ?? Date(), data: data)
         let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)

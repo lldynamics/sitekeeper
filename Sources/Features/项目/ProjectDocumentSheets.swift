@@ -9,6 +9,7 @@ struct ProjectDocumentScanSetupSheet: View {
     @State private var category: ProjectDocumentCategory = .construction
     @State private var amount = ""
     @State private var note = ""
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         NavigationStack {
@@ -18,15 +19,18 @@ struct ProjectDocumentScanSetupSheet: View {
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     TextField("资料名称", text: $title)
+                        .focused($isInputFocused)
                     Picker("资料类型", selection: $category) {
                         ForEach(ProjectDocumentCategory.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("关联金额（可选）", text: $amount)
+                    TextField("关联金额（元，可选）", text: $amount)
                         .keyboardType(.decimalPad)
+                        .focused($isInputFocused)
                     TextField("备注", text: $note, axis: .vertical)
                         .lineLimit(2...4)
+                        .focused($isInputFocused)
                 }
             }
             .navigationTitle("扫描项目资料")
@@ -37,6 +41,7 @@ struct ProjectDocumentScanSetupSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("开始扫描") {
+                        isInputFocused = false
                         onScan(ProjectScanTarget(
                             title: title,
                             category: category,
@@ -47,6 +52,9 @@ struct ProjectDocumentScanSetupSheet: View {
                         dismiss()
                     }
                     .disabled(!amount.isEmpty && !InputValidator.nonNegativeNumber(amount))
+                }
+                KeyboardDismissToolbar {
+                    isInputFocused = false
                 }
             }
         }
@@ -69,10 +77,10 @@ struct ProjectDocumentDetailSheet: View {
             Form {
                 Section("资料") {
                     LabeledContent("名称", value: document.title)
-                    LabeledContent("类型", value: document.category)
+                    LabeledContent("类型", value: document.category.displayName)
                     LabeledContent("页数", value: "\(document.pageCount)")
-                    if ReportBuilder.number(document.amount) > 0 {
-                        LabeledContent("金额", value: ReportBuilder.money(ReportBuilder.number(document.amount)))
+                    if document.amountValue.isPositive {
+                        LabeledContent("金额", value: ReportBuilder.money(document.amountValue.doubleValue))
                     }
                     LabeledContent("创建时间", value: document.createdAt)
                     if !document.note.isEmpty {
@@ -131,6 +139,7 @@ struct ProjectDocumentEditSheet: View {
     @State private var amount: String
     @State private var note: String
     @State private var linkedFinancialRecordId: UUID?
+    @FocusState private var isInputFocused: Bool
 
     init(
         document: ProjectDocument,
@@ -141,7 +150,7 @@ struct ProjectDocumentEditSheet: View {
         self.financialRecords = financialRecords
         self.onSave = onSave
         _title = State(initialValue: document.title)
-        _category = State(initialValue: ProjectDocumentCategory(rawValue: document.category) ?? .other)
+        _category = State(initialValue: document.category)
         _amount = State(initialValue: document.amount)
         _note = State(initialValue: document.note)
         _linkedFinancialRecordId = State(initialValue: document.linkedFinancialRecordId)
@@ -152,15 +161,18 @@ struct ProjectDocumentEditSheet: View {
             Form {
                 Section("资料信息") {
                     TextField("资料名称", text: $title)
+                        .focused($isInputFocused)
                     Picker("资料类型", selection: $category) {
                         ForEach(ProjectDocumentCategory.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("关联金额（可选）", text: $amount)
+                    TextField("关联金额（元，可选）", text: $amount)
                         .keyboardType(.decimalPad)
+                        .focused($isInputFocused)
                     TextField("备注", text: $note, axis: .vertical)
                         .lineLimit(2...4)
+                        .focused($isInputFocused)
                 }
 
                 Section("关联账目") {
@@ -180,25 +192,29 @@ struct ProjectDocumentEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
+                        isInputFocused = false
                         onSave(updatedDocument)
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                               (!amount.isEmpty && !InputValidator.nonNegativeNumber(amount)))
                 }
+                KeyboardDismissToolbar {
+                    isInputFocused = false
+                }
             }
         }
     }
 
     private func recordLabel(_ record: ProjectFinancialRecord) -> String {
-        let money = ReportBuilder.money(ReportBuilder.number(record.amount))
-        return "\(record.date) · \(record.direction) \(money)"
+        let money = ReportBuilder.money(record.amountValue.doubleValue)
+        return "\(record.date) · \(record.direction.displayName) \(money)"
     }
 
     private var updatedDocument: ProjectDocument {
         var value = document
         value.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        value.category = category.rawValue
+        value.category = category
         value.amount = amount
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         value.linkedFinancialRecordId = linkedFinancialRecordId

@@ -20,5 +20,9 @@ struct ToolRow: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(title)
+        .accessibilityValue(desc)
+        .accessibilityHint("双击打开")
     }
 }

@@ -1,6 +1,11 @@
 import SwiftUI
 
 struct MaterialListView: View {
+    private enum AddMaterialField: Hashable {
+        case quantity
+        case unitPrice
+    }
+
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     let focusedMaterialId: UUID?
@@ -18,23 +23,37 @@ struct MaterialListView: View {
     @State private var newPurchaseStatus: MaterialPurchaseStatus = .notPurchased
     @State private var newArrivalDate = ""
     @State private var newProjectId: UUID?
+    @State private var projectFilter: UUID?
     @State private var selection = Set<UUID>()
     @State private var showClearAll = false
     @State private var showBulkProjectSheet = false
     @State private var isSelecting = false
     @State private var bulkProjectId: UUID?
+    @State private var operationMessage: String?
+    @FocusState private var addMaterialFocusedField: AddMaterialField?
 
     init(focusedMaterialId: UUID? = nil) {
         self.focusedMaterialId = focusedMaterialId
     }
 
     private var filtered: [MaterialItem] {
-        if searchText.isEmpty { return store.materialItems }
-        return store.materialItems.filter { $0.name.localizedStandardContains(searchText) }
+        let scopedItems = store.materialItems.filter { item in
+            projectFilter == nil || item.projectId == projectFilter
+        }
+        return SearchMatcher.filter(scopedItems, keyword: searchText)
     }
 
     var body: some View {
         List {
+            Section {
+                ProjectContextStrip(
+                    title: "当前工程",
+                    projects: store.projects,
+                    selectedProjectId: $projectFilter,
+                    emptyText: "全部项目"
+                )
+            }
+
             if isSelecting {
                 Section {
                     HStack {
@@ -51,14 +70,28 @@ struct MaterialListView: View {
                 }
             }
 
-            ForEach(filtered) { item in
-                materialRow(item)
-            }
-            .onDelete { offsets in
-                let ids = offsets.compactMap { filtered.indices.contains($0) ? filtered[$0].id : nil }
-                store.materialItems.removeAll { ids.contains($0.id) }
-                selection.subtract(ids)
-                store.scheduleSave()
+            if filtered.isEmpty {
+                Section {
+                    ContentUnavailableView("暂无材料记录", systemImage: "shippingbox", description: Text("添加材料后可按工程筛选和汇总成本。"))
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Label("添加材料", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.appPrimaryAction)
+                }
+            } else {
+                ForEach(filtered) { item in
+                    materialRow(item)
+                }
+                .onDelete { offsets in
+                    let ids = offsets.compactMap { filtered.indices.contains($0) ? filtered[$0].id : nil }
+                    store.materialItems.removeAll { ids.contains($0.id) }
+                    selection.subtract(ids)
+                    store.scheduleSave()
+                    operationMessage = "已删除 \(ids.count) 条材料"
+                }
             }
         }
         .searchable(text: $searchText, prompt: "搜索材料名称")
@@ -66,8 +99,10 @@ struct MaterialListView: View {
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink { MaterialLibraryView() } label: {
-                    Image(systemName: "books.vertical.fill")
+                    Image(systemName: "books.vertical.fill").visibleIconStyle()
                 }
+                .buttonStyle(.appIcon())
+                .accessibilityLabel("打开材料库")
             }
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
@@ -92,10 +127,12 @@ struct MaterialListView: View {
                         }
                         .disabled(store.materialItems.isEmpty)
                     } label: {
-                        Image(systemName: "ellipsis.circle")
+                        Image(systemName: "ellipsis.circle").visibleIconStyle()
                     }
+                    .buttonStyle(.appIcon())
                     .accessibilityLabel("更多操作")
-                    Button { showAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("添加材料")
+                    Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
+                        .accessibilityLabel("添加材料")
                 }
             }
         }
@@ -105,6 +142,7 @@ struct MaterialListView: View {
                 selection.removeAll()
                 isSelecting = false
                 store.scheduleSave()
+                operationMessage = "已清空全部材料"
             }
             Button("取消", role: .cancel) {}
         }
@@ -124,6 +162,7 @@ struct MaterialListView: View {
                             TextField("0", text: $newQty)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
+                                .focused($addMaterialFocusedField, equals: .quantity)
                         }
                         LabeledContent("单位") {
                             TextField("米 / 卷 / 个", text: $newUnit)
@@ -133,6 +172,7 @@ struct MaterialListView: View {
                             TextField("0", text: $newUnitPrice)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
+                                .focused($addMaterialFocusedField, equals: .unitPrice)
                         }
                         TextField("规格型号", text: $newSpecification)
                         TextField("品牌", text: $newBrand)
@@ -155,6 +195,10 @@ struct MaterialListView: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { showAdd = false } }
                     ToolbarItem(placement: .confirmationAction) { Button("添加") { addItem(); showAdd = false }.disabled(!canAddMaterial) }
+                    KeyboardNavigationToolbar(
+                        focusedField: $addMaterialFocusedField,
+                        fields: [.quantity, .unitPrice]
+                    )
                 }
             }
         }
@@ -174,6 +218,7 @@ struct MaterialListView: View {
             }
         }
         .onAppear(perform: openFocusedMaterialIfNeeded)
+        .operationToast(message: $operationMessage)
     }
 
     private func materialRow(_ item: MaterialItem) -> some View {
@@ -186,65 +231,45 @@ struct MaterialListView: View {
                         .foregroundStyle(selection.contains(item.id) ? .orange : .secondary)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("选择材料")
+                .accessibilityValue(selection.contains(item.id) ? "已选中" : "未选中")
+                .accessibilityHint("双击切换选中状态")
             }
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(item.name).font(.body.weight(.medium))
-                HStack {
-                    Text(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric))
-                        .font(.caption).foregroundStyle(.secondary)
-                    if !item.specification.isEmpty {
-                        Text("· \(item.specification)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !item.brand.isEmpty {
-                        Text("· \(item.brand)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !item.supplier.isEmpty {
-                        Text("· \(item.supplier)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if ReportBuilder.number(item.unitPrice) > 0 {
-                        Text("· \(ReportBuilder.money(ReportBuilder.number(item.unitPrice)))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text("= \(ReportBuilder.money(ReportBuilder.materialLineTotal(item)))")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
-                    }
-                    if let pid = item.projectId, let proj = store.projects.first(where: { $0.id == pid }) {
-                        Text("· \(proj.name)").font(.caption2).foregroundStyle(.blue)
-                    } else {
-                        Text("· 未归属").font(.caption2).foregroundStyle(.secondary)
-                    }
-                }
-                HStack(spacing: 8) {
-                    Text(item.purchaseStatus)
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(purchaseStatusColor(item.purchaseStatus))
-                    if !item.arrivalDate.isEmpty {
-                        Text("进场 \(item.arrivalDate)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-            }
+            let quantityText = UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)
+            let specText = [item.specification, item.brand, item.supplier].filter { !$0.isEmpty }.joined(separator: " · ")
+            let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
+            let meta = [quantityText, specText, projectText].filter { !$0.isEmpty }.joined(separator: " · ")
+            let totalText = item.unitPriceValue.isPositive ? ReportBuilder.money(ReportBuilder.materialLineTotal(item)) : ""
+            let noteText = item.arrivalDate.isEmpty ? item.purchaseStatus.displayName : "\(item.purchaseStatus.displayName) · 进场 \(item.arrivalDate)"
+            BusinessRecordRow(
+                icon: "shippingbox.fill",
+                iconColor: purchaseStatusColor(item.purchaseStatus),
+                title: item.name,
+                meta: meta,
+                note: noteText,
+                trailing: totalText,
+                trailingColor: Color.appPrimaryAction
+            )
             Spacer()
             if !isSelecting {
                 Button {
                     store.materialItems.removeAll { $0.id == item.id }
                     store.scheduleSave()
+                    operationMessage = "已删除材料"
                 } label: {
                     Image(systemName: "trash").foregroundStyle(.red)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("删除材料")
+                .accessibilityValue(item.name)
+                .accessibilityHint("双击删除当前材料")
             }
         }
         .contentShape(Rectangle())
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(.isButton)
+        .accessibilityHint(isSelecting ? "双击选择或取消选择该材料" : "双击编辑材料")
         .onTapGesture {
             if isSelecting {
                 toggleSelection(item.id)
@@ -309,6 +334,7 @@ struct MaterialListView: View {
         isSelecting = false
         bulkProjectId = nil
         store.scheduleSave()
+        operationMessage = "已批量更新归属项目"
     }
 
     private func openFocusedMaterialIfNeeded() {
@@ -316,7 +342,8 @@ struct MaterialListView: View {
               let item = store.materialItems.first(where: { $0.id == focusedMaterialId }) else { return }
         didOpenFocusedMaterial = true
         searchText = ""
-        DispatchQueue.main.async {
+        projectFilter = item.projectId
+        Task { @MainActor in
             editingItem = item
         }
     }
@@ -332,12 +359,13 @@ struct MaterialListView: View {
                 specification: newSpecification,
                 brand: newBrand,
                 supplier: newSupplier,
-                purchaseStatus: newPurchaseStatus.rawValue,
+                purchaseStatus: newPurchaseStatus,
                 arrivalDate: newArrivalDate,
                 projectId: newProjectId
             )
         )
         store.scheduleSave()
+        operationMessage = "已添加材料"
         newName = ""; newQty = ""; newUnit = ""; newUnitPrice = ""; newProjectId = nil
         newSpecification = ""; newBrand = ""; newSupplier = ""
         newPurchaseStatus = .notPurchased
@@ -360,10 +388,11 @@ struct MaterialListView: View {
         newUnit = qtyPart.filter { !"0123456789.".contains($0) && $0 != " " }
         if newQty.isEmpty { newQty = "1" }
         if newUnit.isEmpty { newUnit = "个" }
+        operationMessage = "已套用材料模板"
     }
 
-    private func purchaseStatusColor(_ raw: String) -> Color {
-        switch MaterialPurchaseStatus(rawValue: raw) ?? .notPurchased {
+    private func purchaseStatusColor(_ status: MaterialPurchaseStatus) -> Color {
+        switch status {
         case .notPurchased: return .secondary
         case .purchased: return .orange
         case .arrived: return .blue

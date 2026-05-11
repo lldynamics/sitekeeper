@@ -49,7 +49,10 @@ struct FeedbackView: View {
             Button("复制反馈内容") {
                 ClipboardService.copy(feedbackContent)
                 copiedToast = true
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) { copiedToast = false }
+                Task { @MainActor in
+                    guard await DebouncedTask.wait(for: .seconds(2)) else { return }
+                    copiedToast = false
+                }
             }
             Button("取消", role: .cancel) {}
         } message: {
