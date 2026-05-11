@@ -17,6 +17,8 @@
 		08429971AF139DF8B47B0C48 /* ConstructionMethodDetailEditorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65AB6F66D1E31FA519F824C /* ConstructionMethodDetailEditorViews.swift */; };
 		08B4D49A71F436C66AA21B65 /* ProjectDetailRiskAndLogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256D1629C5EC1A3DAB1C1869 /* ProjectDetailRiskAndLogViews.swift */; };
 		093ADE46720C027F1BC08B50 /* QuickNoteAudioRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA8BDB246DECF08FCAB3D062 /* QuickNoteAudioRecorder.swift */; };
+		0B9F188F5968AF2FA1CBD0B5 /* ProjectListSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */; };
+		0D3080D8AB5557432133EE9F /* ProjectListFiltersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */; };
 		0E62B274696A6A0FB200BBA8 /* DashboardSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD27E55A07E5EFA317299CC5 /* DashboardSupportViews.swift */; };
 		119505A31989DCA9F29723B4 /* CircuitPlanExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB0D2ED4E970D9D0BE22EB7 /* CircuitPlanExportTests.swift */; };
 		11B20D7DE317E8234CCDEF42 /* DataHealthPhotoTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E167248278B9A5A0A0C86CAF /* DataHealthPhotoTests.swift */; };
@@ -36,6 +38,7 @@
 		2012DA2D96934F839DF1334D /* ProjectWarehouseStorageSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7166F125C49CD341AAFD4FB /* ProjectWarehouseStorageSupport.swift */; };
 		20A3F401C69BAA396445A93D /* ContactPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D328E2BFB846539A1D5581BC /* ContactPickerView.swift */; };
 		23BCE63E650C7632B0CACD1E /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE19B8944E85B1B13D1C659 /* HistoryView.swift */; };
+		2508EBE8B577B0F156442962 /* ProjectCreateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */; };
 		27BDA9B6E4F452B43A0178B0 /* ProjectListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164BEF177F56E909B506F569 /* ProjectListView.swift */; };
 		28F709ED086E4B01DD9B332C /* ProjectDetailDocumentActionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9702B3F32D0B603EF21D14A2 /* ProjectDetailDocumentActionSection.swift */; };
 		2C651D44A8BF14307D480771 /* CodableEnumFallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F53771B64BBF6CB0F00F648 /* CodableEnumFallbacks.swift */; };
@@ -318,6 +321,7 @@
 		411BA3A20FB966EF6233DF40 /* SitekeeperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperApp.swift; sourceTree = "<group>"; };
 		4352DA57CB946000FEB04D19 /* LaborRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaborRecordView.swift; sourceTree = "<group>"; };
 		43FF2251ACC9E67949773AA2 /* AppStoreScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotUITests.swift; sourceTree = "<group>"; };
+		4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreateSheet.swift; sourceTree = "<group>"; };
 		47F4074A64739725AEB722A5 /* sitekeeper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = sitekeeper.entitlements; sourceTree = "<group>"; };
 		4829BA0F85A62731DF2B3FD6 /* ProjectDetailSheetCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSheetCoordinator.swift; sourceTree = "<group>"; };
 		4921B6049660BCF7C260E4B8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -364,6 +368,7 @@
 		763C2CC88837FE14E03DA564 /* BackupViewState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupViewState.swift; sourceTree = "<group>"; };
 		77624CB4E9255FB225813DFF /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		7934768262AC52DE1B6FAE8F /* ProjectDetailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSupport.swift; sourceTree = "<group>"; };
+		79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListSupportViews.swift; sourceTree = "<group>"; };
 		7E1A9D549C76B24D3FD23512 /* QuickNoteMediaPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteMediaPicker.swift; sourceTree = "<group>"; };
 		7EC4AE541B26144C015CEF3C /* NonNegativeNumberText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NonNegativeNumberText.swift; sourceTree = "<group>"; };
 		7F291723D1A680B9EC07AAD3 /* QuickNoteVideoImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteVideoImport.swift; sourceTree = "<group>"; };
@@ -440,6 +445,7 @@
 		D9C014D4D4B4A893B9BFD661 /* ChecklistToolboxComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistToolboxComponents.swift; sourceTree = "<group>"; };
 		DA75CA804E78E5F141EE268A /* PhotoCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCache.swift; sourceTree = "<group>"; };
 		DB26E09C695868B0D9F5D4F0 /* TrayFillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrayFillView.swift; sourceTree = "<group>"; };
+		DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListFiltersSection.swift; sourceTree = "<group>"; };
 		DDCBC035A5596CCFF407549F /* MaterialListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialListView.swift; sourceTree = "<group>"; };
 		DDEBAA98C89A19F5CD5E5CC1 /* ProjectDetailExportWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailExportWorkflow.swift; sourceTree = "<group>"; };
 		DE593EED44A3F05EB71A463B /* DataHealthView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHealthView.swift; sourceTree = "<group>"; };
@@ -750,6 +756,7 @@
 				75210DDC0F82C2D36FB0FA19 /* ProjectCADPreviewView.swift */,
 				6EAF2C96189183408C88276F /* ProjectContactRoleField.swift */,
 				CAE16E0EDD8084F2E129AE92 /* ProjectContactSheets.swift */,
+				4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */,
 				68A81978908795373DF1E25F /* ProjectDetailAssetActions.swift */,
 				84032917C65A208CE3CCFAEC /* ProjectDetailBookkeepingSection.swift */,
 				C9C1FF2E6371B840A26AD992 /* ProjectDetailContactsSection.swift */,
@@ -791,6 +798,8 @@
 				F64E6BE994B57F732D933EB2 /* ProjectFileSceneViews.swift */,
 				C46D8C098152E54F70DDA00E /* ProjectFileSearchIndexService.swift */,
 				87352DF4A2BF1CDF99D4F38E /* ProjectFinancialRecordSheets.swift */,
+				DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */,
+				79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */,
 				164BEF177F56E909B506F569 /* ProjectListView.swift */,
 				6D1F74A5A0DBB074250CB098 /* ProjectTimelineView.swift */,
 				4ECD45A2F897D83219089B55 /* ProjectWarehouseMovementMediaImportHelper.swift */,
@@ -1081,6 +1090,7 @@
 				943C3EE41C35683D4012EC73 /* ProjectContactDatabaseView.swift in Sources */,
 				3281E5853BD5FEA1134AE0F0 /* ProjectContactRoleField.swift in Sources */,
 				E4BFD220D1934581CA0EEF5E /* ProjectContactSheets.swift in Sources */,
+				2508EBE8B577B0F156442962 /* ProjectCreateSheet.swift in Sources */,
 				BFBF224D0982A3367D32EE88 /* ProjectDetailAssetActions.swift in Sources */,
 				2FE2E2DB6DF0CDD1BC126F52 /* ProjectDetailBookkeepingSection.swift in Sources */,
 				166B2EE5D4DE8832DB643039 /* ProjectDetailContactsSection.swift in Sources */,
@@ -1123,6 +1133,8 @@
 				987E5D38BEA2DD5AA1E9BE2A /* ProjectFileSearchIndexService.swift in Sources */,
 				56E4200D10D21F0BE9A17FF5 /* ProjectFinancialMetrics.swift in Sources */,
 				6FAB709B582FE7533F855432 /* ProjectFinancialRecordSheets.swift in Sources */,
+				0D3080D8AB5557432133EE9F /* ProjectListFiltersSection.swift in Sources */,
+				0B9F188F5968AF2FA1CBD0B5 /* ProjectListSupportViews.swift in Sources */,
 				27BDA9B6E4F452B43A0178B0 /* ProjectListView.swift in Sources */,
 				3CB4B4874CC86799907FB439 /* ProjectModels.swift in Sources */,
 				CE29216E5463E2341720A4F8 /* ProjectTimelineView.swift in Sources */,
