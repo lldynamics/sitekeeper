@@ -14,13 +14,28 @@ struct TemplateView: View {
                 Section(cat.displayName) {
                     let items = store.templates.filter { $0.category == cat }
                     if items.isEmpty {
-                        Text("暂无模板").foregroundStyle(.secondary)
+                        ContentUnavailableView(
+                            "还没有\(cat.displayName)",
+                            systemImage: cat.emptyStateIcon,
+                            description: Text("点击右上角 + 创建第一个模板")
+                        )
                     }
                     ForEach(items) { tpl in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(tpl.name).font(.body.weight(.medium))
-                            Text(tpl.content).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                        HStack(spacing: 12) {
+                            RoundedRectangle(cornerRadius: 4)
+                                .fill(cat.tintColor)
+                                .frame(width: 4, height: 40)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(tpl.name)
+                                    .font(.body.weight(.medium))
+                                Text(tpl.content)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+                            Spacer(minLength: 0)
                         }
+                        .padding(.vertical, 2)
                         .swipeActions(edge: .leading) {
                             Button { applyTarget = tpl } label: { Label("应用", systemImage: "arrow.turn.down.right") }
                                 .tint(.blue)
@@ -30,12 +45,18 @@ struct TemplateView: View {
                         let ids = idx.compactMap { i in items.indices.contains(i) ? items[i].id : nil }
                         store.templates.removeAll { ids.contains($0.id) }
                         store.scheduleSave()
+                        AppHaptics.success()
                     }
                 }
             }
         }
         .navigationTitle("模板管理")
-        .toolbar { Button { showAdd = true } label: { Image(systemName: "plus") }.accessibilityLabel("新建模板") }
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
+                    .accessibilityLabel("新建模板")
+            }
+        }
         .sheet(item: $applyTarget) { tpl in
             ApplyTemplateSheet(template: tpl)
         }
@@ -56,11 +77,36 @@ struct TemplateView: View {
                             guard !newName.isEmpty else { return }
                             store.templates.append(ProjectTemplate(name: newName, category: newCategory, content: newContent))
                             store.scheduleSave()
+                            AppHaptics.success()
                             newName = ""; newContent = ""; showAdd = false
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+private extension TemplateCategory {
+    var tintColor: Color {
+        switch self {
+        case .quotation:
+            return Color.appFinance
+        case .dailyLog:
+            return Color.appDoc
+        case .material:
+            return Color.appInventory
+        }
+    }
+
+    var emptyStateIcon: String {
+        switch self {
+        case .quotation:
+            return "doc.text.fill"
+        case .dailyLog:
+            return "book.pages.fill"
+        case .material:
+            return "shippingbox.fill"
         }
     }
 }
@@ -236,10 +282,10 @@ struct ApplyTemplateSheet: View {
                 )
             }
         case .dailyLog:
-            let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
-            store.dailyLogs.insert(DailyLog(date: df.string(from: Date()), weather: "晴", content: template.content, workers: "", photoFileName: nil, projectId: selectedProjectId), at: 0)
+            store.dailyLogs.insert(DailyLog(date: Formatters.date.string(from: Date()), weather: "晴", content: template.content, workers: "", photoFileName: nil, projectId: selectedProjectId), at: 0)
         }
         store.scheduleSave()
+        AppHaptics.success()
         dismiss()
     }
 

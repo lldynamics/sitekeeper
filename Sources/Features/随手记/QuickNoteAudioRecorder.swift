@@ -1,11 +1,14 @@
 import AVFoundation
-import Combine
 import Foundation
+import Observation
 
 @MainActor
-final class QuickNoteAudioRecorder: ObservableObject {
-    @Published private(set) var isRecording = false
+@Observable
+final class QuickNoteAudioRecorder {
+    private(set) var isRecording = false
+    @ObservationIgnored
     private var recorder: AVAudioRecorder?
+    @ObservationIgnored
     private var recordingFileName: String?
 
     func toggleRecording() async throws -> QuickNoteAttachment? {

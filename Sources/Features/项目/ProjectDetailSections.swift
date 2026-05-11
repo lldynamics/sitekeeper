@@ -16,32 +16,74 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     let financialCount: Int
     let documentCount: Int
     let recentLogs: [DailyLog]
+    let progressTasks: [ProgressTask]
     let todos: [SiteTodo]
+    let recentItems: [ProjectTimelineItem]
+    let overdueCount: Int
+    let missingReceiptCount: Int
+    let hasTodayLog: Bool
+    let onOpenFinance: () -> Void
+    let onOpenRecords: () -> Void
+    let onOpenAssets: () -> Void
+    let onAddLog: () -> Void
+    let onEditProgress: (ProgressTask) -> Void
     let logRow: (DailyLog) -> LogRowContent
 
     var body: some View {
         Group {
             Section("经营概览") {
-                LabeledContent("合同金额", value: ReportBuilder.money(ReportBuilder.number(project.contractAmount)))
-                LabeledContent("已收款", value: ReportBuilder.money(paidAmount))
-                LabeledContent("未收款", value: ReportBuilder.money(unpaidAmount))
-                LabeledContent("收款状态", value: paymentStatus.displayName)
-                LabeledContent("材料成本", value: ReportBuilder.money(materialCost))
-                LabeledContent("人工成本", value: ReportBuilder.money(laborCost))
-                LabeledContent("毛利估算", value: ReportBuilder.money(estimatedProfit))
-                LabeledContent("人工工时", value: laborHours)
-                LabeledContent("零星收入", value: ReportBuilder.money(projectBookIncome))
-                LabeledContent("零星支出", value: ReportBuilder.money(projectBookExpense))
-                LabeledContent("日志天数", value: "\(logDayCount)")
-                LabeledContent("材料项", value: "\(materialCount)")
-                LabeledContent("联系人", value: "\(contactCount)")
-                LabeledContent("记账笔数", value: "\(financialCount)")
-                LabeledContent("票据/资料", value: "\(documentCount)")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: AppSpacing.tight)], spacing: AppSpacing.tight) {
+                    ProjectOverviewSummaryCard(
+                        title: "合同 / 收款",
+                        systemImage: "yensign.circle.fill",
+                        tint: .pink,
+                        metrics: [
+                            .init(title: "合同", value: ReportBuilder.money(project.contractAmountValue.doubleValue)),
+                            .init(title: "已收", value: ReportBuilder.money(paidAmount), color: .green),
+                            .init(title: "未收", value: ReportBuilder.money(unpaidAmount), color: unpaidAmount > 0 ? .orange : .secondary),
+                            .init(title: "状态", value: paymentStatus.displayName)
+                        ],
+                        action: onOpenFinance
+                    )
+                    ProjectOverviewSummaryCard(
+                        title: "成本 / 利润",
+                        systemImage: "chart.pie.fill",
+                        tint: .orange,
+                        metrics: [
+                            .init(title: "材料", value: ReportBuilder.money(materialCost)),
+                            .init(title: "人工", value: ReportBuilder.money(laborCost)),
+                            .init(title: "工时", value: laborHours),
+                            .init(title: "毛利", value: ReportBuilder.money(estimatedProfit), color: estimatedProfit >= 0 ? .green : .red)
+                        ],
+                        action: onOpenFinance
+                    )
+                    ProjectOverviewSummaryCard(
+                        title: "记录 / 资料",
+                        systemImage: "folder.badge.gearshape",
+                        tint: .blue,
+                        metrics: [
+                            .init(title: "日志", value: "\(logDayCount) 天"),
+                            .init(title: "记账", value: "\(financialCount) 笔"),
+                            .init(title: "材料", value: "\(materialCount) 项"),
+                            .init(title: "资料", value: "\(documentCount) 份")
+                        ],
+                        action: onOpenAssets
+                    )
+                }
+                Button {
+                    onOpenRecords()
+                } label: {
+                    Label("查看现场记录和进度", systemImage: "checklist.checked")
+                }
             }
 
             Section("最近日志") {
                 if recentLogs.isEmpty {
-                    Text("暂无施工日志").foregroundStyle(.secondary)
+                    ContentUnavailableView(
+                        "还没有施工日志",
+                        systemImage: "book.pages",
+                        description: Text("点击顶部“日志”记录今天的现场情况。")
+                    )
                 } else {
                     ForEach(recentLogs.sorted { $0.date > $1.date }.prefix(3)) { log in
                         logRow(log)
@@ -49,9 +91,39 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                 }
             }
 
+            Section("项目看板（±30 天）") {
+                ProjectProgressGanttView(tasks: progressTasks, onEditTask: onEditProgress)
+            }
+
+            Section("下一步建议") {
+                ProjectNextStepSuggestionsView(
+                    suggestions: nextStepSuggestions,
+                    onAddLog: onAddLog,
+                    onOpenRecords: onOpenRecords,
+                    onOpenFinance: onOpenFinance,
+                    onOpenAssets: onOpenAssets
+                )
+            }
+
+            Section("最近操作") {
+                if recentItems.isEmpty {
+                    ContentUnavailableView(
+                        "暂无最近操作",
+                        systemImage: "clock.badge.questionmark",
+                        description: Text("写日志、导入资料、记账或更新进度后会显示在这里。")
+                    )
+                } else {
+                    ProjectTimelineView(items: recentItems)
+                }
+            }
+
             Section("现场待办") {
                 if todos.isEmpty {
-                    Text("暂无未完成待办").foregroundStyle(.secondary)
+                    ContentUnavailableView(
+                        "没有未完成待办",
+                        systemImage: "checklist.checked",
+                        description: Text("新增现场待办后，会在这里显示最近需要处理的事项。")
+                    )
                 } else {
                     ForEach(todos.prefix(4)) { todo in
                         HStack {
@@ -67,8 +139,28 @@ struct ProjectOverviewView<LogRowContent: View>: View {
         }
     }
 
+    private var nextStepSuggestions: [ProjectNextStepSuggestion] {
+        var suggestions: [ProjectNextStepSuggestion] = []
+        if !hasTodayLog {
+            suggestions.append(.init(title: "补写今日日志", subtitle: "今天还没有施工日志", systemImage: "book.pages.fill", tint: .green, action: .addLog))
+        }
+        if overdueCount > 0 {
+            suggestions.append(.init(title: "处理延期事项", subtitle: "\(overdueCount) 项需要跟进", systemImage: "calendar.badge.exclamationmark", tint: .red, action: .records))
+        }
+        if unpaidAmount > 0 {
+            suggestions.append(.init(title: "跟进未收款", subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .orange, action: .finance))
+        }
+        if missingReceiptCount > 0 {
+            suggestions.append(.init(title: "补齐票据资料", subtitle: "\(missingReceiptCount) 笔账目缺票", systemImage: "doc.badge.plus", tint: .brown, action: .assets))
+        }
+        if progressTasks.isEmpty {
+            suggestions.append(.init(title: "添加进度任务", subtitle: "用项目看板跟踪节点", systemImage: "checklist.checked", tint: .blue, action: .records))
+        }
+        return Array(suggestions.prefix(4))
+    }
+
     private var paymentStatus: PaymentStatus {
-        let contract = ReportBuilder.number(project.contractAmount)
+        let contract = project.contractAmountValue.doubleValue
         if paidAmount <= 0 { return .unpaid }
         if contract > 0, paidAmount >= contract { return .paid }
         if contract <= 0 { return .partial }
@@ -76,563 +168,280 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     }
 }
 
-struct ProjectBookkeepingView: View {
-    let records: [ProjectFinancialRecord]
-    let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
-    let onEdit: (ProjectFinancialRecord) -> Void
-    let onDelete: (Set<UUID>) -> Void
-    let onAddRecord: () -> Void
+private struct ProjectOverviewSummaryMetric: Identifiable {
+    let id = UUID()
+    let title: String
+    let value: String
+    var color: Color = .primary
+}
 
-    @State private var directionFilter: BookDirectionFilter = .all
-    @State private var categoryFilter: BookCategoryFilter = .all
-    @State private var attachmentFilter: BookAttachmentFilter = .all
-    @State private var useDateRange = false
-    @State private var startDate = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
-    @State private var endDate = Date()
+private struct ProjectOverviewSummaryCard: View {
+    let title: String
+    let systemImage: String
+    let tint: Color
+    let metrics: [ProjectOverviewSummaryMetric]
+    let action: () -> Void
 
     var body: some View {
-        Group {
-            Section("账目操作") {
-                Button {
-                    onAddRecord()
-                } label: {
-                    Label("新增账目", systemImage: "plus.circle.fill")
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                HStack(spacing: AppSpacing.tight * 0.75) {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(tint)
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                    Spacer(minLength: 0)
+                    Image(systemName: "chevron.right")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
                 }
-            }
 
-            Section("项目财务汇总") {
-                LabeledContent("收入", value: ReportBuilder.money(totalIncome))
-                LabeledContent("支出", value: ReportBuilder.money(totalExpense))
-                LabeledContent("净额", value: ReportBuilder.money(totalIncome - totalExpense))
-                LabeledContent("未附票据", value: "\(unattachedCount) 笔")
-            }
-
-            Section("筛选") {
-                Picker("收支", selection: $directionFilter) {
-                    ForEach(BookDirectionFilter.allCases, id: \.self) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                .pickerStyle(.segmented)
-                Picker("票据类型", selection: $categoryFilter) {
-                    ForEach(BookCategoryFilter.allCases, id: \.self) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                Picker("票据附件", selection: $attachmentFilter) {
-                    ForEach(BookAttachmentFilter.allCases, id: \.self) { option in
-                        Text(option.displayName).tag(option)
-                    }
-                }
-                Toggle("限定日期范围", isOn: $useDateRange)
-                if useDateRange {
-                    DatePicker("开始", selection: $startDate, displayedComponents: .date)
-                    DatePicker("结束", selection: $endDate, displayedComponents: .date)
-                }
-            }
-
-            Section("项目财务流水 (\(filteredRecords.count))") {
-                if filteredRecords.isEmpty {
-                    Text("当前筛选下暂无记录").foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredRecords) { record in
-                        Button {
-                            onEdit(record)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(record.date).font(.callout.weight(.medium))
-                                    Text(record.category)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.secondary)
-                                    Spacer()
-                                    Text("\(record.direction) \(ReportBuilder.money(ReportBuilder.number(record.amount)))")
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(record.direction == ProjectFinancialDirection.income.rawValue ? .green : .red)
-                                }
-                                HStack(spacing: 8) {
-                                    if !record.counterparty.isEmpty { Text(record.counterparty) }
-                                    if !record.invoiceNumber.isEmpty { Text("票号 \(record.invoiceNumber)") }
-                                    if !linkedDocuments(record).isEmpty { Text("已附票据\(linkedDocuments(record).count)") }
-                                }
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                if !record.note.isEmpty {
-                                    Text(record.note).font(.caption2).foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete { offsets in
-                        let ids = offsets.compactMap { filteredRecords.indices.contains($0) ? filteredRecords[$0].id : nil }
-                        onDelete(Set(ids))
-                    }
-                }
-            }
-        }
-    }
-
-    private var filteredRecords: [ProjectFinancialRecord] {
-        records.filter { record in
-            if !directionFilter.matches(record) { return false }
-            if !categoryFilter.matches(record) { return false }
-            if !attachmentFilter.matches(record, linkedDocuments: linkedDocuments) { return false }
-            if useDateRange {
-                guard let date = Formatters.date.date(from: record.date) else { return false }
-                let endOfDay = Calendar.current.date(bySettingHour: 23, minute: 59, second: 59, of: endDate) ?? endDate
-                if date < startDate || date > endOfDay { return false }
-            }
-            return true
-        }
-    }
-
-    private var totalIncome: Double {
-        records
-            .filter { $0.direction == ProjectFinancialDirection.income.rawValue }
-            .reduce(0) { $0 + ReportBuilder.number($1.amount) }
-    }
-
-    private var totalExpense: Double {
-        records
-            .filter { $0.direction == ProjectFinancialDirection.expense.rawValue }
-            .reduce(0) { $0 + ReportBuilder.number($1.amount) }
-    }
-
-    private var unattachedCount: Int {
-        records.filter { $0.requiresAttachment && linkedDocuments($0).isEmpty }.count
-    }
-}
-
-private enum BookDirectionFilter: String, CaseIterable {
-    case all
-    case income
-    case expense
-
-    var displayName: String {
-        switch self {
-        case .all: "全部"
-        case .income: "收入"
-        case .expense: "支出"
-        }
-    }
-
-    func matches(_ record: ProjectFinancialRecord) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .income:
-            return record.direction == ProjectFinancialDirection.income.rawValue
-        case .expense:
-            return record.direction == ProjectFinancialDirection.expense.rawValue
-        }
-    }
-}
-
-private enum BookCategoryFilter: String, CaseIterable {
-    case all
-    case invoice
-    case receipt
-
-    var displayName: String {
-        switch self {
-        case .all: "全部"
-        case .invoice: "发票"
-        case .receipt: "收据"
-        }
-    }
-
-    func matches(_ record: ProjectFinancialRecord) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .invoice:
-            return record.category == ProjectFinancialCategory.invoice.rawValue
-        case .receipt:
-            return record.category == ProjectFinancialCategory.receipt.rawValue
-        }
-    }
-}
-
-private enum BookAttachmentFilter: String, CaseIterable {
-    case all
-    case attached
-    case unattached
-
-    var displayName: String {
-        switch self {
-        case .all: "全部"
-        case .attached: "已附票据"
-        case .unattached: "未附票据"
-        }
-    }
-
-    func matches(
-        _ record: ProjectFinancialRecord,
-        linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
-    ) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .attached:
-            return !linkedDocuments(record).isEmpty
-        case .unattached:
-            return record.requiresAttachment && linkedDocuments(record).isEmpty
-        }
-    }
-}
-
-struct ProjectDocumentsView: View {
-    let documents: [ProjectDocument]
-    let icon: (String) -> String
-    let onOpen: (ProjectDocument) -> Void
-    @State private var categoryFilter: DocumentCategoryFilter = .all
-    @State private var relationFilter: DocumentRelationFilter = .all
-    @State private var useDateRange = false
-    @State private var startDate = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
-    @State private var endDate = Date()
-    @State private var minAmount = ""
-    @State private var maxAmount = ""
-
-    private var filteredDocuments: [ProjectDocument] {
-        documents.filter { document in
-            if !categoryFilter.matches(document) { return false }
-            if !relationFilter.matches(document) { return false }
-            if useDateRange {
-                guard let date = parseDate(document.createdAt) else { return false }
-                let start = Calendar.current.startOfDay(for: min(startDate, endDate))
-                let endStart = Calendar.current.startOfDay(for: max(startDate, endDate))
-                let end = Calendar.current.date(byAdding: .day, value: 1, to: endStart) ?? endStart
-                if date < start || date >= end { return false }
-            }
-            let amount = ReportBuilder.number(document.amount)
-            if !minAmount.isEmpty && amount < ReportBuilder.number(minAmount) { return false }
-            if !maxAmount.isEmpty && amount > ReportBuilder.number(maxAmount) { return false }
-            return true
-        }
-    }
-
-    var body: some View {
-        Group {
-            Section("资料筛选") {
-                Button {
-                    showFilterSheet = true
-                } label: {
-                    HStack {
-                        Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
-                        Spacer()
-                        Text(filterSummary)
-                            .font(.caption)
+                ForEach(metrics) { metric in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(metric.title)
+                            .font(.caption2)
                             .foregroundStyle(.secondary)
+                        Spacer(minLength: AppSpacing.tight)
+                        Text(metric.value)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(metric.color)
                             .lineLimit(1)
-                    }
-                }
-                if hasActiveFilters {
-                    Button("清除筛选") {
-                        resetFilters()
-                    }
-                    .font(.caption.weight(.semibold))
-                }
-            }
-
-            Section("票据与项目资料 (\(filteredDocuments.count))") {
-                if filteredDocuments.isEmpty {
-                    Text("暂无扫描件").foregroundStyle(.secondary)
-                } else {
-                    ForEach(filteredDocuments) { document in
-                        Button {
-                            onOpen(document)
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: icon(document.category))
-                                    .foregroundStyle(.indigo)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(document.title).font(.callout.weight(.medium)).foregroundStyle(.primary)
-                                    HStack(spacing: 8) {
-                                        Text(document.category)
-                                        Text("\(document.pageCount) 页")
-                                        if ReportBuilder.number(document.amount) > 0 {
-                                            Text(ReportBuilder.money(ReportBuilder.number(document.amount)))
-                                        }
-                                    }
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                    Text(document.createdAt)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                            }
-                        }
-                        .buttonStyle(.plain)
+                            .minimumScaleFactor(0.75)
                     }
                 }
             }
+            .frame(maxWidth: .infinity, minHeight: 136, alignment: .topLeading)
+            .padding(AppSpacing.normal)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
         }
-        .sheet(isPresented: $showFilterSheet) {
-            NavigationStack {
-                Form {
-                    filterForm
-                }
-                .navigationTitle("资料筛选")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("重置") {
-                            resetFilters()
-                        }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("完成") {
-                            showFilterSheet = false
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    @State private var showFilterSheet = false
-
-    @ViewBuilder
-    private var filterForm: some View {
-        Section("类型") {
-            Picker("资料类型", selection: $categoryFilter) {
-                ForEach(DocumentCategoryFilter.allCases, id: \.self) { item in
-                    Text(item.displayName).tag(item)
-                }
-            }
-            Picker("关联状态", selection: $relationFilter) {
-                ForEach(DocumentRelationFilter.allCases, id: \.self) { item in
-                    Text(item.displayName).tag(item)
-                }
-            }
-        }
-        Section("日期") {
-            Toggle("限定日期范围", isOn: $useDateRange)
-            if useDateRange {
-                DatePicker("开始", selection: $startDate, displayedComponents: .date)
-                DatePicker("结束", selection: $endDate, displayedComponents: .date)
-            }
-        }
-        Section("金额") {
-            LabeledContent("最小金额") {
-                TextField("0", text: $minAmount)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-            }
-            LabeledContent("最大金额") {
-                TextField("不限", text: $maxAmount)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-            }
-        }
-    }
-
-    private var hasActiveFilters: Bool {
-        categoryFilter != .all || relationFilter != .all || useDateRange || !minAmount.isEmpty || !maxAmount.isEmpty
-    }
-
-    private var filterSummary: String {
-        guard hasActiveFilters else { return "全部资料" }
-        var parts: [String] = []
-        if categoryFilter != .all { parts.append(categoryFilter.displayName) }
-        if relationFilter != .all { parts.append(relationFilter.displayName) }
-        if useDateRange { parts.append("日期") }
-        if !minAmount.isEmpty || !maxAmount.isEmpty { parts.append("金额") }
-        return parts.joined(separator: " · ")
-    }
-
-    private func resetFilters() {
-        categoryFilter = .all
-        relationFilter = .all
-        useDateRange = false
-        minAmount = ""
-        maxAmount = ""
-    }
-
-    private func parseDate(_ text: String) -> Date? {
-        if let dt = Formatters.dateTime.date(from: text) {
-            return dt
-        }
-        return Formatters.date.date(from: text)
+        .buttonStyle(.plain)
+        .accessibilityElement(children: .combine)
     }
 }
 
-private enum DocumentCategoryFilter: String, CaseIterable {
-    case all
-    case invoice
-    case receipt
-    case construction
+private struct ProjectNextStepSuggestion: Identifiable {
+    enum Action {
+        case addLog
+        case records
+        case finance
+        case assets
+    }
 
-    var displayName: String {
-        switch self {
-        case .all: "全部"
-        case .invoice: "发票"
-        case .receipt: "收据"
-        case .construction: "施工资料"
+    let id = UUID()
+    let title: String
+    let subtitle: String
+    let systemImage: String
+    let tint: Color
+    let action: Action
+}
+
+private struct ProjectNextStepSuggestionsView: View {
+    let suggestions: [ProjectNextStepSuggestion]
+    let onAddLog: () -> Void
+    let onOpenRecords: () -> Void
+    let onOpenFinance: () -> Void
+    let onOpenAssets: () -> Void
+
+    var body: some View {
+        if suggestions.isEmpty {
+            VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                Label("当前项目状态良好", systemImage: "checkmark.seal.fill")
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.green)
+                Text("暂无需要优先处理的日志、延期、回款或票据问题。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, 2)
+        } else {
+            ForEach(suggestions) { suggestion in
+                Button {
+                    perform(suggestion.action)
+                } label: {
+                    HStack(spacing: AppSpacing.normal) {
+                        Image(systemName: suggestion.systemImage)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(suggestion.tint)
+                            .frame(width: 24)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(suggestion.title)
+                                .font(.callout.weight(.semibold))
+                                .foregroundStyle(.primary)
+                            Text(suggestion.subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
         }
     }
 
-    func matches(_ document: ProjectDocument) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .invoice:
-            return document.category == ProjectDocumentCategory.invoice.rawValue
-        case .receipt:
-            return document.category == ProjectDocumentCategory.receipt.rawValue
-        case .construction:
-            return document.category == ProjectDocumentCategory.construction.rawValue
+    private func perform(_ action: ProjectNextStepSuggestion.Action) {
+        switch action {
+        case .addLog:
+            onAddLog()
+        case .records:
+            onOpenRecords()
+        case .finance:
+            onOpenFinance()
+        case .assets:
+            onOpenAssets()
         }
     }
 }
 
-private enum DocumentRelationFilter: String, CaseIterable {
-    case all
-    case linked
-    case unlinked
+private struct ProjectProgressGanttView: View {
+    let tasks: [ProgressTask]
+    let onEditTask: (ProgressTask) -> Void
 
-    var displayName: String {
-        switch self {
-        case .all: "全部"
-        case .linked: "已关联账目"
-        case .unlinked: "未关联账目"
-        }
+    private var rangeStart: Date {
+        Calendar.current.date(byAdding: .day, value: -30, to: today) ?? today
     }
-
-    func matches(_ document: ProjectDocument) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .linked:
-            return document.linkedFinancialRecordId != nil
-        case .unlinked:
-            return document.linkedFinancialRecordId == nil
-        }
+    private var rangeEnd: Date {
+        Calendar.current.date(byAdding: .day, value: 30, to: today) ?? today
     }
-}
+    private var totalDays: Int { 61 }
+    private var today: Date { Calendar.current.startOfDay(for: Date()) }
+    private var weekOffsets: [Int] { Array(stride(from: 0, through: totalDays - 1, by: 7)) }
 
-struct ProjectContactsView: View {
-    let contacts: [ProjectContact]
-    let onAdd: () -> Void
-    let onEdit: (ProjectContact) -> Void
-    let onDelete: (Set<UUID>) -> Void
-    @State private var roleFilter = "全部"
-
-    private var roleOptions: [String] {
-        ["全部"] + Set(contacts.map(\.role).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }).sorted()
+    private var bars: [GanttBar] {
+        tasks.compactMap { task in
+            guard let start = Formatters.date.date(from: task.startDate),
+                  let due = Formatters.date.date(from: task.dueDate) else { return nil }
+            let realStart = min(start, due)
+            let realEnd = max(start, due)
+            guard realEnd >= rangeStart, realStart <= rangeEnd else { return nil }
+            let clampedStart = max(realStart, rangeStart)
+            let clampedEnd = min(realEnd, rangeEnd)
+            let offset = Calendar.current.dateComponents([.day], from: rangeStart, to: clampedStart).day ?? 0
+            let span = max((Calendar.current.dateComponents([.day], from: clampedStart, to: clampedEnd).day ?? 0) + 1, 1)
+            return GanttBar(task: task, offsetDays: offset, durationDays: span)
+        }
+        .sorted { lhs, rhs in
+            let lhsDate = Formatters.date.date(from: lhs.task.startDate) ?? .distantPast
+            let rhsDate = Formatters.date.date(from: rhs.task.startDate) ?? .distantPast
+            return lhsDate < rhsDate
+        }
     }
 
     var body: some View {
-        Group {
-            Section("联系人操作") {
-                Button(action: onAdd) {
-                    Label("添加联系人", systemImage: "person.crop.circle.badge.plus")
-                }
-            }
+        if bars.isEmpty {
+            ContentUnavailableView(
+                "暂无可展示的进度任务",
+                systemImage: "chart.bar.xaxis",
+                description: Text("请先补充任务开始和截止日期。")
+            )
+        } else {
+            GeometryReader { proxy in
+                let labelWidth = min(max(proxy.size.width * 0.32, 120), 178)
+                let chartWidth = max(proxy.size.width - labelWidth - AppSpacing.normal, 220)
+                let dayWidth = chartWidth / CGFloat(totalDays)
 
-            Section(String(localized: "联系人 (\(filteredContacts.count))")) {
-                Picker("角色筛选", selection: $roleFilter) {
-                    ForEach(roleOptions, id: \.self) { item in
-                        Text(item).tag(item)
+                VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                    HStack {
+                        Text("\(Formatters.date.string(from: rangeStart)) 至 \(Formatters.date.string(from: rangeEnd))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text("今天")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                        Text("共 \(bars.count) 项")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                     }
-                }
-                if filteredContacts.isEmpty {
-                    ContentUnavailableView(
-                        "暂无联系人",
-                        systemImage: "person.crop.circle",
-                        description: Text("记录客户、监理、供应商和施工班组等联系人。")
-                    )
-                    Button(action: onAdd) {
-                        Label("添加联系人", systemImage: "person.crop.circle.badge.plus")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.orange)
-                } else {
-                    ForEach(filteredContacts) { contact in
-                        Button {
-                            onEdit(contact)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack {
-                                    Text(contact.name).font(.callout.weight(.medium))
-                                    Text(contact.role)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.blue)
-                                    Spacer()
-                                    contactActionLinks(phone: contact.phone)
-                                }
-                                if !contact.company.isEmpty || !contact.note.isEmpty {
-                                    Text([contact.company, contact.note].filter { !$0.isEmpty }.joined(separator: " · "))
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                }
+
+                    ZStack(alignment: .topLeading) {
+                        timelineGrid(chartWidth: chartWidth, dayWidth: dayWidth, labelWidth: labelWidth)
+                        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                            ForEach(bars) { bar in
+                                ganttRow(bar, labelWidth: labelWidth, chartWidth: chartWidth, dayWidth: dayWidth)
                             }
                         }
-                        .buttonStyle(.plain)
-                    }
-                    .onDelete { offsets in
-                        let ids = offsets.compactMap { filteredContacts.indices.contains($0) ? filteredContacts[$0].id : nil }
-                        onDelete(Set(ids))
                     }
                 }
             }
+            .frame(minHeight: CGFloat(bars.count) * 44 + 34)
         }
     }
 
-    private var filteredContacts: [ProjectContact] {
-        guard roleFilter != "全部" else { return contacts }
-        return contacts.filter { $0.role == roleFilter }
+    private func timelineGrid(chartWidth: CGFloat, dayWidth: CGFloat, labelWidth: CGFloat) -> some View {
+        HStack(spacing: AppSpacing.normal) {
+            Color.clear
+                .frame(width: labelWidth)
+            ZStack(alignment: .leading) {
+                ForEach(weekOffsets, id: \.self) { offset in
+                    Rectangle()
+                        .fill(Color.primary.opacity(0.07))
+                        .frame(width: 1)
+                        .offset(x: CGFloat(offset) * dayWidth)
+                }
+                Rectangle()
+                    .fill(Color.orange.opacity(0.65))
+                    .frame(width: 2)
+                    .offset(x: CGFloat(30) * dayWidth)
+            }
+            .frame(width: chartWidth, alignment: .leading)
+            .frame(maxHeight: .infinity)
+        }
+        .allowsHitTesting(false)
     }
 
-    @ViewBuilder
-    private func contactActionLinks(phone: String) -> some View {
-        let tel = telURL(for: phone)
-        let sms = smsURL(for: phone)
-        if tel != nil || sms != nil {
-            HStack(spacing: 10) {
-                if let tel {
-                    Link(destination: tel) {
-                        Image(systemName: "phone.fill")
-                    }
+    private func ganttRow(_ bar: GanttBar, labelWidth: CGFloat, chartWidth: CGFloat, dayWidth: CGFloat) -> some View {
+        Button {
+            onEditTask(bar.task)
+        } label: {
+            HStack(alignment: .center, spacing: AppSpacing.normal) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(bar.task.title)
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                    Text("\(bar.task.startDate) → \(bar.task.dueDate)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
                 }
-                if let sms {
-                    Link(destination: sms) {
-                        Image(systemName: "message.fill")
-                    }
+                .frame(width: labelWidth, alignment: .leading)
+
+                ZStack(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                        .frame(width: chartWidth, height: 18)
+
+                    RoundedRectangle(cornerRadius: 6, style: .continuous)
+                        .fill(bar.color)
+                        .frame(width: max(CGFloat(bar.durationDays) * dayWidth, 5), height: 18)
+                        .offset(x: CGFloat(bar.offsetDays) * dayWidth)
                 }
             }
+            .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
     }
 
-    private func telURL(for phone: String) -> URL? {
-        let cleaned = normalizedPhone(phone)
-        guard !cleaned.isEmpty else { return nil }
-        return URL(string: "tel:\(cleaned)")
-    }
+    private struct GanttBar: Identifiable {
+        let task: ProgressTask
+        let offsetDays: Int
+        let durationDays: Int
+        var id: UUID { task.id }
 
-    private func smsURL(for phone: String) -> URL? {
-        let cleaned = normalizedPhone(phone)
-        guard !cleaned.isEmpty else { return nil }
-        return URL(string: "sms:\(cleaned)")
-    }
-
-    private func normalizedPhone(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-
-        let allowed = Set("+0123456789")
-        var filtered = String(trimmed.filter { allowed.contains($0) })
-        guard !filtered.isEmpty else { return "" }
-
-        let hasLeadingPlus = filtered.first == "+"
-        filtered.removeAll { $0 == "+" }
-        guard !filtered.isEmpty else { return "" }
-
-        return hasLeadingPlus ? "+\(filtered)" : filtered
+        var color: Color {
+            if task.clampedCompletion >= 1 { return .green }
+            if let due = Formatters.date.date(from: task.dueDate),
+               due < Calendar.current.startOfDay(for: Date()) {
+                return .red
+            }
+            return .orange
+        }
     }
 }

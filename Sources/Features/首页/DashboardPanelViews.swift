@@ -4,29 +4,36 @@ struct DashboardRiskPill: View {
     let title: String
     let value: String
     let color: Color
-    let destination: AnyView
+    let hasRisk: Bool
+    let destination: DashboardDestination
 
     var body: some View {
-        NavigationLink { destination } label: {
-            HStack(spacing: 6) {
+        NavigationLink {
+            dashboardDestinationView(destination)
+        } label: {
+            HStack(spacing: AppSpacing.tight * 0.75) {
                 Text(title)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(hasRisk ? Color.white : color)
                 Text(value)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(color)
+                    .foregroundStyle(hasRisk ? Color.white : color)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, AppSpacing.normal - 2)
+            .padding(.vertical, AppSpacing.tight - 1)
             .background(
-                Capsule()
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                    .fill(hasRisk ? color : color.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                    .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
             )
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title)：\(value)")
-        .accessibilityHint("打开\(title)详情")
+        .accessibilityHint(String(localized: "打开\(title)详情"))
     }
 }
 
@@ -34,10 +41,10 @@ struct DashboardInventoryPill: View {
     let title: String
     let value: String
     let color: Color
-    var destination: AnyView? = nil
+    var destination: DashboardDestination? = nil
 
     var body: some View {
-        let content = VStack(alignment: .leading, spacing: 3) {
+        let content = VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
             Text(title)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
@@ -46,18 +53,18 @@ struct DashboardInventoryPill: View {
                 .foregroundStyle(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(9)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .padding(AppSpacing.tight + 1)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.tight).fill(Color(uiColor: .secondarySystemGroupedBackground)))
 
         if let destination {
             NavigationLink {
-                destination
+                dashboardDestinationView(destination)
             } label: {
                 content
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityHint("打开\(title)详情")
+            .accessibilityHint(String(localized: "打开\(title)详情"))
         } else {
             content
                 .accessibilityElement(children: .combine)
@@ -68,14 +75,16 @@ struct DashboardInventoryPill: View {
 struct DashboardPanel<Content: View>: View {
     let title: String
     let systemImage: String
-    var destination: AnyView? = nil
+    var destination: DashboardDestination? = nil
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: AppSpacing.tight + 2) {
             if let destination {
-                NavigationLink { destination } label: {
-                    HStack(spacing: 6) {
+                NavigationLink {
+                    dashboardDestinationView(destination)
+                } label: {
+                    HStack(spacing: AppSpacing.tight * 0.75) {
                         Label(title, systemImage: systemImage)
                             .font(.headline)
                         Image(systemName: "chevron.right")
@@ -84,7 +93,7 @@ struct DashboardPanel<Content: View>: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint("打开\(title)")
+                .accessibilityHint(String(localized: "打开\(title)"))
             } else {
                 Label(title, systemImage: systemImage)
                     .font(.headline)
@@ -92,8 +101,51 @@ struct DashboardPanel<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(14)
-        .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
+        .padding(AppSpacing.normal + 2)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.tight).fill(.ultraThinMaterial))
+    }
+}
+
+struct DashboardMustDoItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let detail: String
+    let systemImage: String
+    let color: Color
+    let destination: DashboardDestination
+}
+
+struct DashboardMustDoRow: View {
+    let item: DashboardMustDoItem
+
+    var body: some View {
+        HStack(spacing: AppSpacing.tight + 2) {
+            Image(systemName: item.systemImage)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(item.color)
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
+                Text(item.title)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                Text(item.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, AppSpacing.normal - 2)
+        .padding(.vertical, AppSpacing.tight + 1)
+        .background(
+            RoundedRectangle(cornerRadius: AppSpacing.tight)
+                .fill(item.color.opacity(0.10))
+        )
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -102,7 +154,7 @@ struct LogPreviewRow: View {
     let projectName: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        VStack(alignment: .leading, spacing: AppSpacing.tight * 0.5) {
             HStack {
                 Text(log.weather)
                     .font(.caption.weight(.medium))
@@ -134,24 +186,24 @@ struct TodoPreviewRow: View {
     let projectName: String?
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: AppSpacing.tight + 2) {
             Image(systemName: todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
                 .foregroundStyle(todo.isOverdue ? .red : .orange)
-            VStack(alignment: .leading, spacing: 3) {
+            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
                 Text(todo.title)
                     .font(.callout.weight(.medium))
                     .lineLimit(1)
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.tight) {
                     Text(todo.dueDate)
-                    Text(todo.priority)
-                    Text(todo.issueType)
+                    Text(todo.priority.displayName)
+                    Text(todo.issueType.displayName)
                     if !todo.owner.isEmpty { Text(todo.owner) }
                     if let projectName { Text(projectName).foregroundStyle(.blue) }
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 if let completedAt = todo.completedAt, todo.isDone {
-                    Text("完成 \(completedAt)")
+                    Text(String(localized: "完成 \(completedAt)"))
                         .font(.caption2)
                         .foregroundStyle(.green)
                 }

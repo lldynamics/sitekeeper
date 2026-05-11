@@ -73,7 +73,7 @@ enum CloudBackupSettingsStore {
 
     static func loadAutoInterval() -> CloudBackupAutoInterval {
         let rawValue = UserPreferences.string(UserPreferenceKeys.cloudBackupAutoInterval, default: CloudBackupAutoInterval.disabled.rawValue)
-        return CloudBackupAutoInterval(rawValue: rawValue) ?? .disabled
+        return StringEnumFallback.value(rawValue, default: .disabled)
     }
 
     static func loadAutoBackupRequiresWiFi() -> Bool {
@@ -217,6 +217,12 @@ extension BackupSnapshot {
                 value.attachments = []
                 return value
             }
+            snapshot.constructionMethods = snapshot.constructionMethods.map { method in
+                var value = method
+                value.attachments = []
+                value.tutorialAttachments = []
+                return value
+            }
             snapshot.photoFiles = []
             snapshot.drawingFiles = []
             snapshot.documentFiles = []
@@ -231,7 +237,10 @@ extension BackupSnapshot {
         )
         let drawingNames = Set(snapshot.projectDrawings.map(\.fileName).filter { !$0.isEmpty })
         let documentNames = Set(snapshot.projectDocuments.map(\.fileName).filter { !$0.isEmpty })
-        let attachmentNames = Set(snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) }.filter { !$0.isEmpty })
+        let quickNoteAttachmentNames = snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) }.filter { !$0.isEmpty }
+        let constructionAttachmentNames = snapshot.constructionMethods.flatMap { $0.attachments.map(\.fileName) }.filter { !$0.isEmpty }
+        let tutorialAttachmentNames = snapshot.constructionMethods.flatMap { $0.tutorialAttachments.map(\.fileName) }.filter { !$0.isEmpty }
+        let attachmentNames = Set(quickNoteAttachmentNames + constructionAttachmentNames + tutorialAttachmentNames)
 
         snapshot.photoFiles = snapshot.photoFiles.filter { photoNames.contains($0.fileName) }
         snapshot.drawingFiles = snapshot.drawingFiles.filter { drawingNames.contains($0.fileName) }
@@ -249,14 +258,19 @@ actor CloudBackupCoordinator {
         progress: ((BackupArchiveProgress) -> Void)? = nil
     ) async throws -> CloudBackupExecutionResult {
         var archiveFileURL: URL?
+        let relay = TaskCancellationRelay()
         do {
-            let archive = try await Task.detached(priority: .userInitiated) {
-                try BackupArchiveService.makeArchive(
-                    from: snapshot,
-                    progress: progress,
-                    shouldCancel: { Task.isCancelled }
-                )
-            }.value
+            let archive = try await withTaskCancellationHandler {
+                try await Task.detached(priority: .userInitiated) {
+                    try BackupArchiveService.makeArchive(
+                        from: snapshot,
+                        progress: progress,
+                        shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                    )
+                }.value
+            } onCancel: {
+                relay.cancel()
+            }
             archiveFileURL = archive.fileURL
 
             let savedFile = try await Task.detached(priority: .utility) {
@@ -265,12 +279,20 @@ actor CloudBackupCoordinator {
             let files = try await Task.detached(priority: .utility) {
                 try CloudBackupService.listBackups()
             }.value
-            try? FileManager.default.removeItem(at: archive.fileURL)
+            do {
+                try FileManager.default.removeItem(at: archive.fileURL)
+            } catch {
+                StorageIssueLog.record("云备份上传后清理临时包失败：\(archive.fileURL.lastPathComponent)，\(error.localizedDescription)")
+            }
             archiveFileURL = nil
             return CloudBackupExecutionResult(savedFile: savedFile, allBackups: files)
         } catch {
             if let archiveFileURL {
-                try? FileManager.default.removeItem(at: archiveFileURL)
+                do {
+                    try FileManager.default.removeItem(at: archiveFileURL)
+                } catch {
+                    StorageIssueLog.record("云备份异常清理临时包失败：\(archiveFileURL.lastPathComponent)，\(error.localizedDescription)")
+                }
             }
             throw error
         }

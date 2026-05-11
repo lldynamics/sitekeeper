@@ -69,7 +69,7 @@ struct ProjectMaterialSectionView: View {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(item.name).font(.callout.weight(.medium))
-                                    Text("\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(ReportBuilder.number(item.unitPrice)))")
+                                    Text("\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(item.unitPriceValue.doubleValue))")
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                     FlowTagLine(tags: materialTags(for: item))
@@ -79,7 +79,7 @@ struct ProjectMaterialSectionView: View {
                                     Text(ReportBuilder.money(ReportBuilder.materialLineTotal(item)))
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(.orange)
-                                    Text(item.purchaseStatus)
+                                    Text(item.purchaseStatus.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(materialStatusColor(item.purchaseStatus))
                                         .padding(.horizontal, 7)
@@ -100,13 +100,12 @@ struct ProjectMaterialSectionView: View {
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    private func materialStatusColor(_ status: String) -> Color {
-        switch MaterialPurchaseStatus(rawValue: status) {
+    private func materialStatusColor(_ status: MaterialPurchaseStatus) -> Color {
+        switch status {
         case .notPurchased: return .gray
         case .purchased: return .blue
         case .arrived: return .green
         case .used: return .orange
-        case nil: return .secondary
         }
     }
 }
@@ -154,7 +153,7 @@ struct ProjectQuoteSectionView: View {
                                     Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(item)))
                                         .font(.caption.weight(.medium))
                                         .foregroundStyle(.orange)
-                                    Text(item.status)
+                                    Text(item.status.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(quoteStatusColor(item.status))
                                         .padding(.horizontal, 7)
@@ -171,16 +170,15 @@ struct ProjectQuoteSectionView: View {
     }
 
     private func quoteTags(for item: QuoteItem) -> [String] {
-        [item.versionName, item.customerConfirmedDate.isEmpty ? "" : "确认 \(item.customerConfirmedDate)", item.contractAmount.isEmpty ? "" : "转合同 \(ReportBuilder.money(ReportBuilder.number(item.contractAmount)))"]
+        [item.versionName, item.customerConfirmedDate.isEmpty ? "" : "确认 \(item.customerConfirmedDate)", item.contractAmount.isEmpty ? "" : "转合同 \(ReportBuilder.money(item.contractAmountValue.doubleValue))"]
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
-    private func quoteStatusColor(_ status: String) -> Color {
-        switch QuoteStatus(rawValue: status) {
+    private func quoteStatusColor(_ status: QuoteStatus) -> Color {
+        switch status {
         case .draft: return .gray
         case .sent: return .blue
         case .confirmed: return .green
-        case nil: return .secondary
         }
     }
 }
@@ -281,8 +279,8 @@ struct ProjectLaborSectionView: View {
         var tags = [String]()
         if !item.workType.isEmpty { tags.append(item.workType) }
         if !item.teamName.isEmpty { tags.append(item.teamName) }
-        if ReportBuilder.number(item.unitRate) > 0 {
-            tags.append("单价 \(ReportBuilder.money(ReportBuilder.number(item.unitRate)))")
+        if item.unitRateValue.isPositive {
+            tags.append("单价 \(ReportBuilder.money(item.unitRateValue.doubleValue))")
             tags.append("金额 \(ReportBuilder.money(ReportBuilder.laborLineTotal(item)))")
         }
         tags.append(item.isSettled ? "已结算" : "未结算")
@@ -297,7 +295,11 @@ struct ProjectProgressSectionView: View {
     var body: some View {
         Section("进度任务 (\(tasks.count))") {
             if tasks.isEmpty {
-                Text("暂无进度任务").foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "暂无进度任务",
+                    systemImage: "calendar.badge.plus",
+                    description: Text("添加任务后可按节点跟踪完成率和延期风险。")
+                )
             } else {
                 ForEach(tasks) { task in
                     Button {
@@ -333,9 +335,13 @@ struct ProjectPhotoSectionView: View {
                 log.photoAttachments.map { ProjectPhotoItem(logId: log.id, date: log.date, photo: $0) }
             }
             if photoItems.isEmpty {
-                Text("暂无照片").foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "暂无现场照片",
+                    systemImage: "photo.on.rectangle.angled",
+                    description: Text("日志或待办上传照片后，会自动汇总在这里。")
+                )
             } else {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 160), spacing: 8)], spacing: 10) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 160), spacing: AppSpacing.tight)], spacing: AppSpacing.normal) {
                     ForEach(photoItems) { item in
                         Button {
                             onOpen(ProjectPhotoContext(logId: item.logId, photoId: item.photo.id, legacyFileName: item.photo.fileName))
@@ -350,7 +356,7 @@ struct ProjectPhotoSectionView: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .clipped()
                                 }
-                                Text(item.photo.tag)
+                                Text(item.photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(.blue)
                                 Text(item.date)
@@ -418,6 +424,15 @@ struct ProjectDrawingSectionView: View {
     let onTimeline: (ProjectDrawing) -> Void
     let onPreview: (ProjectDrawing) -> Void
     let onDelete: (ProjectDrawing) -> Void
+    @State private var showHistoricalDrawings = false
+
+    private var currentVersionDrawings: [ProjectDrawing] {
+        filteredDrawings.filter(\.isCurrentVersion)
+    }
+
+    private var historicalDrawings: [ProjectDrawing] {
+        filteredDrawings.filter { !$0.isCurrentVersion }
+    }
 
     var body: some View {
         Section("图纸操作") {
@@ -448,92 +463,129 @@ struct ProjectDrawingSectionView: View {
                 Text("当前筛选下暂无图纸。")
                     .foregroundStyle(.secondary)
             } else {
-                ForEach(filteredDrawings) { drawing in
-                    Button {
-                        onEdit(drawing)
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: icon(drawing.fileType))
-                                .foregroundStyle(.blue)
-                            VStack(alignment: .leading, spacing: 3) {
-                                HStack(spacing: 6) {
-                                    Text(drawing.name)
-                                        .font(.callout.weight(.medium))
-                                        .foregroundStyle(.primary)
-                                    Text(drawing.version)
-                                        .font(.caption2.weight(.semibold))
-                                        .padding(.horizontal, 6)
-                                        .padding(.vertical, 2)
-                                        .background(.thinMaterial, in: Capsule())
-                                    if drawing.isCurrentVersion {
-                                        Text("当前版")
-                                            .font(.caption2.weight(.semibold))
-                                            .foregroundStyle(.green)
-                                    }
-                                }
-                                Text("\(drawing.fileType.uppercased()) · \(drawing.importedAt)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                                if !drawing.relatedLogDate.isEmpty {
-                                    Text("关联日志: \(drawing.relatedLogDate)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
-                                if drawing.issueStatus != DrawingIssueStatus.none.rawValue {
-                                    Text("状态: \(drawing.issueStatus)")
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.orange)
-                                }
-                                if !drawing.issueNote.isEmpty {
-                                    Text("问题: \(drawing.issueNote)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.red)
-                                        .lineLimit(1)
-                                }
-                                if !drawing.note.isEmpty {
-                                    Text(drawing.note)
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                        .lineLimit(1)
-                                }
+                if drawingFilter == .all {
+                    if !currentVersionDrawings.isEmpty {
+                        ForEach(currentVersionDrawings) { drawing in
+                            drawingRow(drawing)
+                        }
+                    }
+                    if !historicalDrawings.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHistoricalDrawings.toggle()
                             }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
+                        } label: {
+                            HStack {
+                                Label("历史版本 (\(historicalDrawings.count))", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                Spacer()
+                                Image(systemName: showHistoricalDrawings ? "chevron.up" : "chevron.down")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if showHistoricalDrawings {
+                            ForEach(historicalDrawings) { drawing in
+                                drawingRow(drawing)
+                            }
                         }
                     }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button {
-                            onTimeline(drawing)
-                        } label: {
-                            Label("查看版本时间线", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
-                        }
-                        Button {
-                            onPreview(drawing)
-                        } label: {
-                            Label("预览图纸", systemImage: "eye")
-                        }
-                    }
-                    .swipeActions(edge: .trailing) {
-                        Button(role: .destructive) {
-                            onDelete(drawing)
-                        } label: {
-                            Label("删除", systemImage: "trash")
-                        }
-                    }
-                    .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button {
-                            onPreview(drawing)
-                        } label: {
-                            Label("预览", systemImage: "eye")
-                        }
-                        .tint(.blue)
+                } else {
+                    ForEach(filteredDrawings) { drawing in
+                        drawingRow(drawing)
                     }
                 }
             }
+        }
+    }
+
+    private func drawingRow(_ drawing: ProjectDrawing) -> some View {
+        Button {
+            onEdit(drawing)
+        } label: {
+            HStack(spacing: AppSpacing.normal) {
+                Image(systemName: icon(drawing.fileType))
+                    .foregroundStyle(.blue)
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text(drawing.name)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(.primary)
+                        Text(drawing.version)
+                            .font(.caption2.weight(.semibold))
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(.thinMaterial, in: Capsule())
+                        if drawing.isCurrentVersion {
+                            Text("当前版")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.green)
+                        } else {
+                            Text("历史版")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Text("\(drawing.fileType.uppercased()) · \(drawing.importedAt)")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if !drawing.relatedLogDate.isEmpty {
+                        Text("关联日志: \(drawing.relatedLogDate)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                    if drawing.issueStatus != .none {
+                        Text("状态: \(drawing.issueStatus.displayName)")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.orange)
+                    }
+                    if !drawing.issueNote.isEmpty {
+                        Text("问题: \(drawing.issueNote)")
+                            .font(.caption2)
+                            .foregroundStyle(.red)
+                            .lineLimit(1)
+                    }
+                    if !drawing.note.isEmpty {
+                        Text(drawing.note)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button {
+                onTimeline(drawing)
+            } label: {
+                Label("查看版本时间线", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+            }
+            Button {
+                onPreview(drawing)
+            } label: {
+                Label("预览图纸", systemImage: "eye")
+            }
+        }
+        .swipeActions(edge: .trailing) {
+            Button(role: .destructive) {
+                onDelete(drawing)
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+        }
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                onPreview(drawing)
+            } label: {
+                Label("预览", systemImage: "eye")
+            }
+            .tint(.blue)
         }
     }
 }

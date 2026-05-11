@@ -4,21 +4,20 @@ import UIKit
 
 struct ProjectDetailDocumentActionSection: View {
     @Binding var selectedPhotoItem: PhotosPickerItem?
-    @Binding var imagePickerSource: UIImagePickerController.SourceType
-    @Binding var showImagePicker: Bool
-    @Binding var showDocumentScanSetup: Bool
-    @Binding var showDocumentFileImporter: Bool
+    let onScanDocument: () -> Void
+    let onImportFiles: () -> Void
+    let onCapturePhoto: () -> Void
 
     var body: some View {
         Section("资料操作") {
             Menu {
                 Button {
-                    showDocumentScanSetup = true
+                    onScanDocument()
                 } label: {
                     Label("扫描项目资料", systemImage: "viewfinder")
                 }
                 Button {
-                    showDocumentFileImporter = true
+                    onImportFiles()
                 } label: {
                     Label("从文件导入 PDF/图片", systemImage: "doc.badge.plus")
                 }
@@ -27,8 +26,7 @@ struct ProjectDetailDocumentActionSection: View {
                 }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button {
-                        imagePickerSource = .camera
-                        showImagePicker = true
+                        onCapturePhoto()
                     } label: {
                         Label("拍照保存", systemImage: "camera")
                     }

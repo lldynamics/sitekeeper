@@ -11,6 +11,7 @@ struct QuickNoteComposerView: View {
     var onAttachmentAdded: (QuickNoteAttachment) -> Void = { _ in }
     var onAttachmentRemoved: (QuickNoteAttachment) -> Void = { _ in }
     var onDraftCleared: ([QuickNoteAttachment]) -> Void = { _ in }
+    var onDiscardDraftRequest: () -> Void = {}
     @FocusState private var isContentFocused: Bool
 
     private var trimmedContent: String {
@@ -49,7 +50,7 @@ struct QuickNoteComposerView: View {
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color(.separator).opacity(0.35), lineWidth: 0.5)
+                            .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                     )
 
                 if !attachments.isEmpty {
@@ -78,18 +79,26 @@ struct QuickNoteComposerView: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if canPublish {
-                        Button("清空") { clearDraft(deleteFiles: true) }
-                            .buttonStyle(.bordered)
-                            .controlSize(mode == .compact ? .small : .regular)
-                    }
+                    if mode == .compact {
+                        if canPublish {
+                            Button("清空") { clearDraft(deleteFiles: true) }
+                                .buttonStyle(.bordered)
+                                .controlSize(.small)
+                        }
 
-                    Button(mode.publishTitle) {
-                        onPublish()
+                        Button(mode.publishTitle) {
+                            onPublish()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .disabled(!canPublish)
+                    } else if canPublish {
+                        Button("放弃草稿", role: .destructive) {
+                            onDiscardDraftRequest()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(mode == .compact ? .small : .regular)
-                    .disabled(!canPublish)
                 }
             }
             .padding(.vertical, mode == .compact ? 2 : 4)

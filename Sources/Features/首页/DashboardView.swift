@@ -1,250 +1,37 @@
 import SwiftUI
 
 struct DashboardView: View {
-    @Environment(DataStore.self) private var store
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @State private var dashboardSearchText = ""
-    @State private var showGlobalSearch = false
-    @State private var showDashboardProjectPicker = false
-    @AppStorage("dashboardCurrentProjectId") private var selectedProjectIdRaw = ""
-    private let dashboardProjectDisplayLimit = 5
-
-    private var todayStr: String { Formatters.date.string(from: Date()) }
-    private var todayLogs: [DailyLog] { store.dailyLogs.filter { $0.date == todayStr } }
-    private var activeProjects: [Project] {
-        store.projects.filter { $0.status == ProjectStatus.active.rawValue || $0.status == ProjectStatus.paused.rawValue }
-    }
-    private var currentProject: Project? {
-        if let selectedProjectId = UUID(uuidString: selectedProjectIdRaw),
-           let selected = activeProjects.first(where: { $0.id == selectedProjectId }) {
-            return selected
-        }
-        return activeProjects.count == 1 ? activeProjects.first : nil
-    }
-    private var rankedDashboardProjectRows: [DashboardProjectRow] {
-        activeProjects
-            .map(dashboardProjectRow(for:))
-            .sorted { lhs, rhs in
-                if lhs.score != rhs.score { return lhs.score > rhs.score }
-                if lhs.activityDate != rhs.activityDate { return lhs.activityDate > rhs.activityDate }
-                return lhs.project.name.localizedStandardCompare(rhs.project.name) == .orderedAscending
-            }
-    }
-    private var dashboardVisibleProjectRows: [DashboardProjectRow] {
-        let ranked = rankedDashboardProjectRows
-        var visible = Array(ranked.prefix(dashboardProjectDisplayLimit))
-        if let currentProject,
-           !visible.contains(where: { $0.project.id == currentProject.id }),
-           let currentRow = ranked.first(where: { $0.project.id == currentProject.id }) {
-            visible = [currentRow] + Array(ranked.filter { $0.project.id != currentProject.id }.prefix(max(dashboardProjectDisplayLimit - 1, 0)))
-        }
-        return visible
-    }
-    private var hiddenDashboardProjectCount: Int {
-        max(activeProjects.count - dashboardVisibleProjectRows.count, 0)
-    }
-    private var logEntryDestination: AnyView {
-        AnyView(DailyLogView(initialProjectId: currentProject?.id, autoOpenComposer: true))
-    }
-    private var todoEntryDestination: AnyView {
-        AnyView(SiteTodoView(initialProjectId: currentProject?.id, autoOpenComposer: true))
-    }
-    private var photoEntryDestination: AnyView {
-        AnyView(WatermarkCameraToolView(initialProjectId: currentProject?.id, autoOpenCameraOnAppear: true))
-    }
-    private var bookkeepingEntryDestination: AnyView {
-        if let project = currentProject {
-            return AnyView(ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true))
-        }
-        if activeProjects.count > 1 {
-            return AnyView(BookkeepingProjectPickerView(projects: activeProjects))
-        }
-        return AnyView(ProjectListView())
-    }
-    private var warehouseOverviewDestination: AnyView {
-        AnyView(ProjectWarehouseOverviewView())
-    }
-    private var warehouseMovementDestination: AnyView {
-        if let project = currentProject {
-            return AnyView(ProjectWarehouseView(project: project))
-        }
-        return AnyView(ProjectWarehouseOverviewView())
-    }
-    private var openTodos: [SiteTodo] {
-        store.siteTodos.filter { !$0.isDone }
-    }
-    private var todayTodos: [SiteTodo] {
-        openTodos.filter { $0.dueDate == todayStr }
-    }
-    private var overdueTasks: [ProgressTask] {
-        store.progressTasks.filter { task in
-            guard task.clampedCompletion < 1, let due = Formatters.date.date(from: task.dueDate) else { return false }
-            return due < Calendar.current.startOfDay(for: Date())
-        }
-    }
-    private var overdueTodos: [SiteTodo] {
-        store.siteTodos.filter(\.isOverdue)
-    }
-    private var overdueCount: Int {
-        overdueTasks.count + overdueTodos.count
-    }
-    private var projectsWithoutTodayLogCount: Int {
-        activeProjects.filter { project in
-            !store.dailyLogs.contains { $0.projectId == project.id && $0.date == todayStr }
-        }.count
-    }
-    private var unattachedReceiptCount: Int {
-        store.projectFinancialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
-            let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = store.projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByRecord || linkedByDocument)
-        }.count
-    }
-    private var dashboardRiskTotal: Int {
-        overdueCount + todayTodos.count + projectsWithoutTodayLogCount + unattachedReceiptCount
-    }
-    private var hasDashboardRisk: Bool {
-        dashboardRiskTotal > 0
-    }
-
-    @State private var threeColumnAvailable = false
-
-    private var usesWideDashboardLayout: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
-    private var logQuickActions: [TodayPrimaryQuickAction] {
-        var actions: [TodayPrimaryQuickAction] = []
-        if let project = currentProject {
-            actions.append(
-                TodayPrimaryQuickAction(
-                    title: "当前项目新建日志（\(project.name)）",
-                    systemImage: "building.2.fill",
-                    destination: AnyView(DailyLogView(initialProjectId: project.id, autoOpenComposer: true))
-                )
-            )
-        }
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "直接新建日志",
-                systemImage: "square.and.pencil",
-                destination: AnyView(DailyLogView(autoOpenComposer: true))
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "打开日志列表",
-                systemImage: "list.bullet",
-                destination: AnyView(DailyLogView())
-            )
-        )
-        return actions
-    }
-    private var todoQuickActions: [TodayPrimaryQuickAction] {
-        var actions: [TodayPrimaryQuickAction] = []
-        if let project = currentProject {
-            actions.append(
-                TodayPrimaryQuickAction(
-                    title: "当前项目新建待办（\(project.name)）",
-                    systemImage: "building.2.fill",
-                    destination: AnyView(SiteTodoView(initialProjectId: project.id, autoOpenComposer: true))
-                )
-            )
-        }
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "直接新建待办",
-                systemImage: "plus.circle",
-                destination: AnyView(SiteTodoView(autoOpenComposer: true))
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "打开待办列表",
-                systemImage: "list.bullet",
-                destination: AnyView(SiteTodoView())
-            )
-        )
-        return actions
-    }
-    private var photoQuickActions: [TodayPrimaryQuickAction] {
-        var actions: [TodayPrimaryQuickAction] = []
-        if let project = currentProject {
-            actions.append(
-                TodayPrimaryQuickAction(
-                    title: "当前项目拍摄水印照片（\(project.name)）",
-                    systemImage: "camera.fill",
-                    destination: AnyView(WatermarkCameraToolView(initialProjectId: project.id, autoOpenCameraOnAppear: true))
-                )
-            )
-        }
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "打开水印相机",
-                systemImage: "camera.badge.ellipsis",
-                destination: AnyView(WatermarkCameraToolView(initialProjectId: currentProject?.id))
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "打开施工日志",
-                systemImage: "book.pages.fill",
-                destination: AnyView(DailyLogView())
-            )
-        )
-        return actions
-    }
-    private var bookkeepingQuickActions: [TodayPrimaryQuickAction] {
-        var actions: [TodayPrimaryQuickAction] = []
-        if activeProjects.count == 1, let project = activeProjects.first {
-            actions.append(
-                TodayPrimaryQuickAction(
-                    title: "当前项目记账（\(project.name)）",
-                    systemImage: "receipt.fill",
-                    destination: AnyView(ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true))
-                )
-            )
-        } else if activeProjects.count > 1 {
-            actions.append(
-                TodayPrimaryQuickAction(
-                    title: "先选择项目再记账",
-                    systemImage: "list.bullet",
-                    destination: AnyView(BookkeepingProjectPickerView(projects: activeProjects))
-                )
-            )
-        }
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "选择工程记账",
-                systemImage: "building.2.fill",
-                destination: AnyView(ProjectListView())
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: "打开项目列表",
-                systemImage: "list.bullet",
-                destination: AnyView(ProjectListView())
-            )
-        )
-        return actions
-    }
+    @Environment(DataStore.self) var store
+    @Environment(ProjectStore.self) var projectStore
+    @Environment(FinanceStore.self) var financeStore
+    @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @State var dashboardSearchText = ""
+    @State var showDashboardProjectPicker = false
+    @State var quickActionToastMessage: String?
+    @AppStorage("dashboardCurrentProjectId") var selectedProjectIdRaw = ""
+    let dashboardProjectDisplayLimit = 5
 
     var body: some View {
-        GeometryReader { geo in
-            NavigationStack {
-            ScrollView {
-                if usesWideDashboardLayout {
-                    wideDashboardContent
-                } else {
-                    compactDashboardContent
+        NavigationStack {
+            GeometryReader { proxy in
+                ScrollView {
+                    if usesWideDashboardLayout {
+                        wideDashboardContent(containerWidth: proxy.size.width)
+                    } else {
+                        compactDashboardContent
+                    }
+                }
+                .overlay(alignment: .top) {
+                    if let quickActionToastMessage {
+                        DashboardToastView(message: quickActionToastMessage)
+                            .padding(.top, AppSpacing.normal)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                    }
                 }
             }
-            .navigationTitle("今日工作台")
+            .animation(.snappy(duration: 0.22), value: quickActionToastMessage)
+            .navigationTitle(String(localized: "今日工作台"))
             .navigationBarTitleDisplayMode(.large)
-            .navigationDestination(isPresented: $showGlobalSearch) {
-                GlobalSearchView(initialKeyword: dashboardSearchText)
-            }
             .sheet(isPresented: $showDashboardProjectPicker) {
                 DashboardProjectPickerSheet(
                     rows: rankedDashboardProjectRows,
@@ -255,92 +42,113 @@ struct DashboardView: View {
                     }
                 )
             }
-            .onAppear {
-                threeColumnAvailable = geo.size.width >= 1180
-                cleanupSelectedProject()
+            .onAppear(perform: cleanupSelectedProject)
+            .task(id: quickActionToastMessage) {
+                await dismissQuickActionToastAfterDelay()
             }
-            .onChange(of: geo.size.width) { _, width in
-                threeColumnAvailable = width >= 1180
-            }
-        }
         }
     }
 
+    @State private var showMoreOverview = false
+    private var hasCompactOverviewSignal: Bool {
+        hasDashboardRisk
+            || !warehouseStockLines.isEmpty
+            || overdueCount > 0
+            || !todayTodos.isEmpty
+            || !todayLogs.isEmpty
+    }
+
     private var compactDashboardContent: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: AppSpacing.normal) {
             globalSearchInput
             currentProjectSelector
+            if hasDashboardRisk { dashboardRiskStrip }
             todayQuickActions
-            dashboardRiskStrip
-            warehousePanel
-            overduePanel
-            todayTodoPanel
-            todayLogPanel
+            if hasCompactOverviewSignal {
+                DisclosureGroup(isExpanded: $showMoreOverview) {
+                    VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                        warehousePanel
+                        overduePanel
+                        todayTodoPanel
+                        todayLogPanel
+                    }
+                    .padding(.top, AppSpacing.tight)
+                } label: {
+                    HStack(spacing: AppSpacing.tight) {
+                        Image(systemName: "rectangle.grid.2x2")
+                        Text(String(localized: "更多概况"))
+                            .font(.subheadline.weight(.semibold))
+                        if !showMoreOverview {
+                            Spacer()
+                            PanelSummaryLabel(
+                                warehouse: warehouseStockLines.count,
+                                overdue: overdueCount,
+                                todos: todayTodos.count,
+                                logs: todayLogs.count
+                            )
+                        }
+                    }
+                }
+            } else {
+                VStack(spacing: AppSpacing.normal) {
+                    Image(systemName: "checkmark.seal.fill")
+                        .font(.system(size: 40, weight: .semibold))
+                        .foregroundStyle(.green)
+                    Text(String(localized: "全部良好"))
+                        .font(.title3.weight(.semibold))
+                    Text(String(localized: "暂无新增提醒，继续保持"))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 20)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.normal, style: .continuous)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                )
+            }
+            projectTimelinePanel
         }
         .padding()
     }
 
-    private var wideDashboardContent: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func wideDashboardContent(containerWidth: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.relaxed - 2) {
             globalSearchInput
             currentProjectSelector
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .top, spacing: AppSpacing.normal) {
                 wideDashboardSidebar
                     .frame(minWidth: 286, maxWidth: 340)
 
-                wideDashboardMainPanels
+                wideDashboardMainPanels(containerWidth: containerWidth)
             }
+            projectTimelinePanel
         }
         .padding()
     }
 
     private var wideDashboardSidebar: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            DashboardPanel(title: "今日快捷动作", systemImage: "bolt.fill") {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                    TodayMiniAction(
-                        title: "写日志",
-                        systemImage: "book.pages.fill",
-                        color: .green,
-                        destination: logEntryDestination,
-                        quickActions: logQuickActions
-                    )
-                    TodayMiniAction(
-                        title: "加待办",
-                        systemImage: "checklist",
-                        color: .orange,
-                        destination: todoEntryDestination,
-                        quickActions: todoQuickActions
-                    )
-                    TodayMiniAction(
-                        title: "拍照片",
-                        systemImage: "camera.fill",
-                        color: .blue,
-                        destination: photoEntryDestination,
-                        quickActions: photoQuickActions
-                    )
-                    TodayMiniAction(
-                        title: "记账",
-                        systemImage: "receipt.fill",
-                        color: .pink,
-                        destination: bookkeepingEntryDestination,
-                        quickActions: bookkeepingQuickActions
-                    )
+        VStack(alignment: .leading, spacing: AppSpacing.normal) {
+            DashboardPanel(title: String(localized: "今日快捷动作"), systemImage: "bolt.fill") {
+                VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                    TodayMiniAction(title: String(localized: "写日志"), systemImage: "book.pages.fill", color: .green, destination: logEntryDestination, quickActions: logQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "写日志")) })
+                    TodayMiniAction(title: String(localized: "加待办"), systemImage: "checklist", color: .orange, destination: todoEntryDestination, quickActions: todoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "加待办")) })
+                    TodayMiniAction(title: String(localized: "拍照片"), systemImage: "camera.fill", color: .blue, destination: photoEntryDestination, quickActions: photoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "拍照片")) })
+                    TodayMiniAction(title: String(localized: "记账"), systemImage: "receipt.fill", color: .pink, destination: bookkeepingEntryDestination, quickActions: bookkeepingQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) })
                 }
             }
 
-            DashboardPanel(title: "风险条", systemImage: "exclamationmark.triangle.fill", destination: AnyView(SiteTodoView())) {
-                dashboardRiskStrip
-            }
+            if hasDashboardRisk { dashboardRiskStrip }
         }
     }
 
-    private var wideDashboardMainPanels: some View {
-        let columns = threeColumnAvailable
-            ? [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
-            : [GridItem(.flexible(), spacing: 12)]
+    private func wideDashboardMainPanels(containerWidth: CGFloat) -> some View {
+        let canUseTwoColumns = containerWidth >= 1180
+        let columns = canUseTwoColumns
+            ? [GridItem(.flexible(), spacing: AppSpacing.normal), GridItem(.flexible(), spacing: AppSpacing.normal)]
+            : [GridItem(.flexible(), spacing: AppSpacing.normal)]
 
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: AppSpacing.normal) {
             warehousePanel
             overduePanel
             todayTodoPanel
@@ -352,25 +160,56 @@ struct DashboardView: View {
     private var globalSearchInput: some View {
         let hasSearchKeyword = !dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
 
-        return HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .foregroundStyle(.secondary)
-            TextField("搜索项目、联系人、票号、日志、资料", text: $dashboardSearchText)
-                .textInputAutocapitalization(.never)
-                .submitLabel(.search)
-                .onSubmit { openDashboardSearch() }
-            if hasSearchKeyword {
-                Button(action: openDashboardSearch) {
-                    Image(systemName: "magnifyingglass.circle.fill")
-                        .font(.title3)
-                        .foregroundStyle(.orange)
+        return VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: AppSpacing.tight + 2) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField(String(localized: "搜索项目、联系人"), text: $dashboardSearchText)
+                    .textInputAutocapitalization(.never)
+                    .submitLabel(.done)
+                if hasSearchKeyword {
+                    Button {
+                        dashboardSearchText = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(String(localized: "清空搜索"))
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("搜索")
+            }
+            .padding(AppSpacing.normal)
+
+            if hasSearchKeyword {
+                Divider()
+                    .padding(.horizontal, AppSpacing.normal)
+                if dashboardSearchSuggestions.isEmpty {
+                    Text(String(localized: "未找到匹配项目或联系人"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, AppSpacing.normal)
+                        .padding(.vertical, AppSpacing.tight + 1)
+                } else {
+                    VStack(spacing: 0) {
+                        ForEach(Array(dashboardSearchSuggestions.enumerated()), id: \.element.id) { index, suggestion in
+                            NavigationLink {
+                                dashboardDestinationView(suggestion.destination)
+                            } label: {
+                                DashboardSearchSuggestionRow(suggestion: suggestion)
+                            }
+                            .buttonStyle(.plain)
+
+                            if index < dashboardSearchSuggestions.count - 1 {
+                                Divider()
+                                    .padding(.leading, AppSpacing.normal + 20 + AppSpacing.tight)
+                            }
+                        }
+                    }
+                }
             }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(.thinMaterial))
+        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(.thinMaterial))
     }
 
     @ViewBuilder
@@ -384,45 +223,45 @@ struct DashboardView: View {
 
     private var emptyCurrentProjectSelector: some View {
         NavigationLink { ProjectListView() } label: {
-            HStack(spacing: 8) {
-                Label("暂无进行中工程", systemImage: "building.2")
+            HStack(spacing: AppSpacing.tight) {
+                Label(String(localized: "暂无进行中工程"), systemImage: "building.2")
                 Spacer()
-                Text("去添加")
+                Text(String(localized: "去添加"))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.orange)
             }
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .padding(.horizontal, AppSpacing.normal)
+        .padding(.vertical, AppSpacing.tight + 1)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
     }
 
     private var focusedProjectSelector: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
             focusedProjectHeader
             focusedCurrentProjectPrimaryRow
             if activeProjects.count > 1 {
                 focusedProjectScroller
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 9)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .padding(.horizontal, AppSpacing.normal)
+        .padding(.vertical, AppSpacing.tight + 1)
+        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
     }
 
     private var focusedProjectHeader: some View {
-        HStack(spacing: 8) {
-            Label("今日关注工程", systemImage: "scope")
+        HStack(spacing: AppSpacing.tight) {
+            Label(String(localized: "今日关注工程"), systemImage: "scope")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
             Spacer()
             if activeProjects.count > dashboardProjectDisplayLimit {
-                Text("关注 \(dashboardVisibleProjectRows.count)/\(activeProjects.count)")
+                Text(String(localized: "关注 \(dashboardVisibleProjectRows.count)/\(activeProjects.count)"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else if activeProjects.count > 1, currentProject == nil {
-                Text("请选择工程")
+                Text(String(localized: "请选择工程"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -435,12 +274,12 @@ struct DashboardView: View {
             NavigationLink {
                 ProjectDetailView(projectId: currentProject.id)
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: AppSpacing.tight + 2) {
                     Image(systemName: "pin.fill")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("当前工程")
+                    VStack(alignment: .leading, spacing: AppSpacing.tight * 0.25) {
+                        Text(String(localized: "当前工程"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Text(currentProject.name)
@@ -456,40 +295,45 @@ struct DashboardView: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
+                .padding(.horizontal, AppSpacing.normal - 2)
+                .padding(.vertical, AppSpacing.tight + 1)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.orange.opacity(0.12))
+                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
+                        .fill(Color.appPrimarySurfaceSubtle)
                 )
+                .overlay(alignment: .leading) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(Color.orange)
+                        .frame(width: 3)
+                }
             }
             .buttonStyle(.plain)
         } else {
             Button {
                 showDashboardProjectPicker = true
             } label: {
-                HStack(spacing: 10) {
+                HStack(spacing: AppSpacing.tight + 2) {
                     Image(systemName: "hand.tap")
                         .font(.callout.weight(.semibold))
                         .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("当前工程")
+                    VStack(alignment: .leading, spacing: AppSpacing.tight * 0.25) {
+                        Text(String(localized: "当前工程"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                        Text("请选择工程")
+                        Text(String(localized: "请选择工程"))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.primary)
                             .lineLimit(1)
                     }
                     Spacer()
-                    Label("选择", systemImage: "chevron.right")
+                    Label(String(localized: "选择"), systemImage: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.orange)
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 9)
+                .padding(.horizontal, AppSpacing.normal - 2)
+                .padding(.vertical, AppSpacing.tight + 1)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
                         .fill(Color(uiColor: .tertiarySystemGroupedBackground))
                 )
             }
@@ -499,7 +343,7 @@ struct DashboardView: View {
 
     private var focusedProjectScroller: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.tight) {
                 ForEach(dashboardVisibleProjectRows) { row in
                     dashboardProjectButton(row)
                 }
@@ -509,8 +353,8 @@ struct DashboardView: View {
                         showDashboardProjectPicker = true
                     } label: {
                         DashboardProjectChip(
-                            title: "更多 \(hiddenDashboardProjectCount)",
-                            subtitle: "查看全部",
+                            title: String(localized: "更多 \(hiddenDashboardProjectCount)"),
+                            subtitle: String(localized: "查看全部"),
                             isSelected: false,
                             color: .blue
                         )
@@ -540,69 +384,73 @@ struct DashboardView: View {
             Button {
                 selectedProjectIdRaw = project.id.uuidString
             } label: {
-                Label("设为当前工程", systemImage: "pin.fill")
+                Label(String(localized: "设为当前工程"), systemImage: "pin.fill")
             }
             NavigationLink {
                 DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
             } label: {
-                Label("写日志", systemImage: "book.pages.fill")
+                Label(String(localized: "写日志"), systemImage: "book.pages.fill")
             }
             NavigationLink {
                 SiteTodoView(initialProjectId: project.id, autoOpenComposer: true)
             } label: {
-                Label("加待办", systemImage: "checklist")
+                Label(String(localized: "加待办"), systemImage: "checklist")
             }
             NavigationLink {
                 ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
             } label: {
-                Label("记账", systemImage: "receipt.fill")
+                Label(String(localized: "记账"), systemImage: "receipt.fill")
             }
             NavigationLink {
                 ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
             } label: {
-                Label("加资料", systemImage: "doc.badge.plus")
+                Label(String(localized: "加资料"), systemImage: "doc.badge.plus")
             }
             NavigationLink {
                 ProjectDetailView(projectId: project.id, initialMode: .assets)
             } label: {
-                Label("联系人/资料", systemImage: "person.crop.rectangle.stack")
+                Label(String(localized: "联系人/资料"), systemImage: "person.crop.rectangle.stack")
             }
         }
     }
 
     private var todayQuickActions: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
+            HStack(spacing: AppSpacing.tight) {
                 TodayMiniAction(
-                    title: "写日志",
+                    title: String(localized: "写日志"),
                     systemImage: "book.pages.fill",
                     color: .green,
                     destination: logEntryDestination,
-                    quickActions: logQuickActions
+                    quickActions: logQuickActions,
+                    onTrigger: { showQuickActionFeedback(title: String(localized: "写日志")) }
                 )
                 TodayMiniAction(
-                    title: "加待办",
+                    title: String(localized: "加待办"),
                     systemImage: "checklist",
                     color: .orange,
                     destination: todoEntryDestination,
-                    quickActions: todoQuickActions
+                    quickActions: todoQuickActions,
+                    onTrigger: { showQuickActionFeedback(title: String(localized: "加待办")) }
                 )
                 TodayMiniAction(
-                    title: "拍照片",
+                    title: String(localized: "拍照片"),
                     systemImage: "camera.fill",
                     color: .blue,
                     destination: photoEntryDestination,
-                    quickActions: photoQuickActions
+                    quickActions: photoQuickActions,
+                    onTrigger: { showQuickActionFeedback(title: String(localized: "拍照片")) }
                 )
                 TodayMiniAction(
-                    title: "记账",
+                    title: String(localized: "记账"),
                     systemImage: "receipt.fill",
                     color: .pink,
                     destination: bookkeepingEntryDestination,
-                    quickActions: bookkeepingQuickActions
+                    quickActions: bookkeepingQuickActions,
+                    onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) }
                 )
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, AppSpacing.tight * 0.25)
         }
     }
 
@@ -610,31 +458,32 @@ struct DashboardView: View {
         Group {
             if hasDashboardRisk {
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 8) {
-                        DashboardRiskPill(title: "延期", value: "\(overdueCount)", color: overdueCount > 0 ? .red : .green, destination: AnyView(SiteTodoView()))
-                        DashboardRiskPill(title: "今日待办", value: "\(todayTodos.count)", color: todayTodos.isEmpty ? .green : .orange, destination: AnyView(SiteTodoView()))
-                        DashboardRiskPill(title: "未写日志", value: "\(projectsWithoutTodayLogCount)", color: projectsWithoutTodayLogCount > 0 ? .blue : .green, destination: AnyView(DailyLogView()))
-                        DashboardRiskPill(title: "缺票", value: "\(unattachedReceiptCount)", color: unattachedReceiptCount > 0 ? .pink : .green, destination: AnyView(ProjectListView(initialOverviewFilter: .missingReceipt)))
+                    HStack(spacing: AppSpacing.tight) {
+                        DashboardRiskPill(title: String(localized: "延期"), value: "\(overdueCount)", color: overdueCount > 0 ? .red : .green, hasRisk: overdueCount > 0, destination: .projectList(initialOverviewFilter: .overdue))
+                        DashboardRiskPill(title: String(localized: "今日待办"), value: "\(todayTodos.count)", color: !todayTodos.isEmpty ? .orange : .green, hasRisk: !todayTodos.isEmpty, destination: .projectList(initialOverviewFilter: .todo))
+                        DashboardRiskPill(title: String(localized: "应收付"), value: "\(unsettledFinancialCount)", color: unsettledFinancialCount > 0 ? .yellow : .green, hasRisk: unsettledFinancialCount > 0, destination: .projectList(initialOverviewFilter: .financialDue))
+                        DashboardRiskPill(title: String(localized: "未写日志"), value: "\(projectsWithoutTodayLogCount)", color: projectsWithoutTodayLogCount > 0 ? .blue : .green, hasRisk: projectsWithoutTodayLogCount > 0, destination: .projectList(initialOverviewFilter: .missingTodayLog))
+                        DashboardRiskPill(title: String(localized: "缺票"), value: "\(unattachedReceiptCount)", color: unattachedReceiptCount > 0 ? .pink : .green, hasRisk: unattachedReceiptCount > 0, destination: .projectList(initialOverviewFilter: .missingReceipt))
                     }
-                    .padding(.vertical, 2)
+                    .padding(.vertical, AppSpacing.tight * 0.25)
                 }
             } else {
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.tight) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
-                    Text("今日无风险")
+                    Text(String(localized: "今日无风险"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.green)
                     Spacer()
-                    Text("继续保持")
+                    Text(String(localized: "继续保持"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
+                .padding(.horizontal, AppSpacing.normal)
+                .padding(.vertical, AppSpacing.tight + 1)
                 .background(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
                         .fill(Color.green.opacity(0.12))
                 )
             }
@@ -642,15 +491,15 @@ struct DashboardView: View {
     }
 
     private var todayTodoPanel: some View {
-        DashboardPanel(title: "今日待办", systemImage: "checklist", destination: AnyView(SiteTodoView())) {
+        DashboardPanel(title: String(localized: "今日待办"), systemImage: "checklist", destination: .siteTodo()) {
             let items = todayTodos.isEmpty ? Array(openTodos.prefix(3)) : Array(todayTodos.prefix(4))
             if items.isEmpty {
                 NavigationLink { SiteTodoView() } label: {
-                    EmptyDashboardRow(text: "暂无现场待办")
+                    EmptyDashboardRow(text: String(localized: "暂无现场待办"))
                 }
                 .buttonStyle(.plain)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.tight) {
                     ForEach(items) { todo in
                         NavigationLink {
                             SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
@@ -665,14 +514,14 @@ struct DashboardView: View {
     }
 
     private var todayLogPanel: some View {
-        DashboardPanel(title: "今日现场", systemImage: "book.pages.fill", destination: AnyView(DailyLogView())) {
+        DashboardPanel(title: String(localized: "今日现场"), systemImage: "book.pages.fill", destination: .dailyLog()) {
             if todayLogs.isEmpty {
                 NavigationLink { DailyLogView() } label: {
-                    EmptyDashboardRow(text: "今天还没有施工日志")
+                    EmptyDashboardRow(text: String(localized: "今天还没有施工日志"))
                 }
                 .buttonStyle(.plain)
             } else {
-                VStack(spacing: 8) {
+                VStack(spacing: AppSpacing.tight) {
                     ForEach(todayLogs.prefix(3)) { log in
                         NavigationLink {
                             DailyLogView(initialProjectId: log.projectId, focusedLogId: log.id)
@@ -686,12 +535,54 @@ struct DashboardView: View {
         }
     }
 
-    private var overduePanel: some View {
-        DashboardPanel(title: "延期提醒", systemImage: "calendar.badge.exclamationmark", destination: AnyView(SiteTodoView())) {
-            if overdueTasks.isEmpty && overdueTodos.isEmpty {
-                EmptyDashboardRow(text: "暂无延期事项")
+    // MARK: 总项目时间轴
+
+    private var projectTimelinePanel: some View {
+        let activities = collectRecentActivities(limit: 20)
+        return DashboardPanel(title: String(localized: "总项目时间轴"), systemImage: "calendar.badge.clock") {
+            if activities.isEmpty {
+                HStack {
+                    Image(systemName: "tray")
+                        .foregroundStyle(.secondary)
+                    Text(String(localized: "暂无项目活动，完成一次操作后会显示在这里"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, AppSpacing.tight)
             } else {
-                VStack(spacing: 8) {
+                if usesWideDashboardLayout {
+                    LazyVGrid(
+                        columns: [GridItem(.flexible(), spacing: AppSpacing.tight), GridItem(.flexible(), spacing: AppSpacing.tight)],
+                        alignment: .leading,
+                        spacing: AppSpacing.tight * 0.75
+                    ) {
+                        ForEach(activities, id: \.id) { activity in
+                            TimelineActivityRow(
+                                activity: activity,
+                                projectName: projectName(activity.projectId)
+                            )
+                        }
+                    }
+                } else {
+                    VStack(spacing: AppSpacing.tight * 0.75) {
+                        ForEach(activities, id: \.id) { activity in
+                            TimelineActivityRow(
+                                activity: activity,
+                                projectName: projectName(activity.projectId)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var overduePanel: some View {
+        DashboardPanel(title: String(localized: "延期提醒"), systemImage: "calendar.badge.exclamationmark", destination: .projectList(initialOverviewFilter: .overdue)) {
+            if overdueTasks.isEmpty && overdueTodos.isEmpty {
+                EmptyDashboardRow(text: String(localized: "暂无延期事项"))
+            } else {
+                VStack(spacing: AppSpacing.tight) {
                     ForEach(overdueTodos.prefix(3)) { todo in
                         NavigationLink {
                             SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
@@ -714,23 +605,18 @@ struct DashboardView: View {
     }
 
     private var warehousePanel: some View {
-        DashboardPanel(title: "库存情况", systemImage: "shippingbox.fill", destination: warehouseOverviewDestination) {
-            let lines = activeProjects.flatMap { project in
-                WarehouseStockCalculator.stockLines(for: project.id, movements: store.projectWarehouseMovements)
+        DashboardPanel(title: String(localized: "库存情况"), systemImage: "shippingbox.fill", destination: warehouseOverviewDestination) {
+            let lines = warehouseStockLines
+            HStack(spacing: AppSpacing.tight) {
+                DashboardInventoryPill(title: String(localized: "材料种类"), value: "\(lines.count)", color: .orange, destination: warehouseOverviewDestination)
+                DashboardInventoryPill(title: String(localized: "今日出入库"), value: "\(warehouseTodayMovementCount)", color: warehouseTodayMovementCount > 0 ? .blue : Color.secondary, destination: warehouseMovementDestination)
+                DashboardInventoryPill(title: String(localized: "负库存"), value: "\(warehouseNegativeCount)", color: warehouseNegativeCount > 0 ? .red : .green, destination: warehouseOverviewDestination)
             }
-            let todayMovementCount = store.projectWarehouseMovements.filter { $0.date == todayStr }.count
-            let negativeCount = lines.filter { $0.quantity < 0 }.count
-            HStack(spacing: 8) {
-                DashboardInventoryPill(title: "材料种类", value: "\(lines.count)", color: .orange, destination: warehouseOverviewDestination)
-                DashboardInventoryPill(title: "今日出入库", value: "\(todayMovementCount)", color: todayMovementCount > 0 ? .blue : Color.secondary, destination: warehouseMovementDestination)
-                DashboardInventoryPill(title: "负库存", value: "\(negativeCount)", color: negativeCount > 0 ? .red : .green, destination: warehouseOverviewDestination)
-            }
-            let recent = store.projectWarehouseMovements.sorted { $0.createdAt > $1.createdAt }.prefix(3)
-            if recent.isEmpty {
-                EmptyDashboardRow(text: "暂无仓库出入库记录")
+            if recentWarehouseMovements.isEmpty {
+                EmptyDashboardRow(text: String(localized: "暂无仓库出入库记录"))
             } else {
-                VStack(spacing: 8) {
-                    ForEach(Array(recent)) { movement in
+                VStack(spacing: AppSpacing.tight) {
+                    ForEach(recentWarehouseMovements) { movement in
                         NavigationLink {
                             ProjectWarehouseMovementDetailView(
                                 movement: movement,
@@ -746,312 +632,4 @@ struct DashboardView: View {
         }
     }
 
-    private func projectName(_ id: UUID?) -> String? {
-        guard let id else { return nil }
-        return store.projects.first(where: { $0.id == id })?.name
-    }
-
-    private func warehouseLinkedDocuments(for movement: ProjectWarehouseMovement) -> [ProjectDocument] {
-        let documentIds = Set(movement.linkedDocumentIds)
-        guard !documentIds.isEmpty else { return [] }
-        return store.projectDocuments.filter { documentIds.contains($0.id) }
-    }
-
-    private func openDashboardSearch() {
-        guard !dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-        showGlobalSearch = true
-    }
-
-    private func cleanupSelectedProject() {
-        guard !selectedProjectIdRaw.isEmpty else { return }
-        if !activeProjects.contains(where: { $0.id.uuidString == selectedProjectIdRaw }) {
-            selectedProjectIdRaw = ""
-        }
-    }
-
-    private func dashboardProjectRow(for project: Project) -> DashboardProjectRow {
-        let signal = dashboardProjectSignal(for: project)
-        return DashboardProjectRow(
-            project: project,
-            subtitle: signal.subtitle,
-            color: signal.color,
-            score: signal.score,
-            activityDate: recentActivityDate(for: project)
-        )
-    }
-
-    private func dashboardProjectSignal(for project: Project) -> DashboardProjectSignal {
-        let overdue = overdueCount(for: project)
-        let todayTodo = todayTodoCount(for: project)
-        let missingReceipt = unattachedReceiptCount(for: project)
-        let missingLog = !hasTodayLog(for: project)
-        let openTodos = openTodoCount(for: project)
-        let score = overdue * 1000
-            + todayTodo * 420
-            + missingReceipt * 240
-            + (missingLog ? 120 : 0)
-            + openTodos * 20
-
-        if overdue > 0 {
-            return DashboardProjectSignal(subtitle: "延期 \(overdue)", color: .red, score: score)
-        }
-        if todayTodo > 0 {
-            return DashboardProjectSignal(subtitle: "今日 \(todayTodo)", color: .orange, score: score)
-        }
-        if missingReceipt > 0 {
-            return DashboardProjectSignal(subtitle: "缺票 \(missingReceipt)", color: .pink, score: score)
-        }
-        if missingLog {
-            return DashboardProjectSignal(subtitle: "未写日志", color: .blue, score: score)
-        }
-        if openTodos > 0 {
-            return DashboardProjectSignal(subtitle: "待办 \(openTodos)", color: .orange, score: score)
-        }
-        return DashboardProjectSignal(subtitle: "最近使用", color: .green, score: score)
-    }
-
-    private func overdueCount(for project: Project) -> Int {
-        let today = Calendar.current.startOfDay(for: Date())
-        let overdueProgress = store.progressTasks.filter { task in
-            guard task.projectId == project.id,
-                  task.clampedCompletion < 1,
-                  let due = Formatters.date.date(from: task.dueDate) else { return false }
-            return due < today
-        }.count
-        let overdueTodos = store.siteTodos.filter { $0.projectId == project.id && $0.isOverdue }.count
-        return overdueProgress + overdueTodos
-    }
-
-    private func todayTodoCount(for project: Project) -> Int {
-        store.siteTodos.filter {
-            $0.projectId == project.id && !$0.isDone && $0.dueDate == todayStr
-        }.count
-    }
-
-    private func openTodoCount(for project: Project) -> Int {
-        store.siteTodos.filter { $0.projectId == project.id && !$0.isDone }.count
-    }
-
-    private func unattachedReceiptCount(for project: Project) -> Int {
-        store.projectFinancialRecords.filter { record in
-            guard record.projectId == project.id, record.requiresAttachment else { return false }
-            let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = store.projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByRecord || linkedByDocument)
-        }.count
-    }
-
-    private func hasTodayLog(for project: Project) -> Bool {
-        store.dailyLogs.contains { $0.projectId == project.id && $0.date == todayStr }
-    }
-
-    private func recentActivityDate(for project: Project) -> Date {
-        var dates: [Date] = []
-        let projectId = project.id
-        if let start = Formatters.date.date(from: project.startDate) {
-            dates.append(start)
-        }
-        for item in store.dailyLogs where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.paymentRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectFinancialRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.laborRecords where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.date) {
-                dates.append(date)
-            }
-        }
-        for item in store.progressTasks where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.startDate) {
-                dates.append(date)
-            }
-            if let date = Formatters.date.date(from: item.dueDate) {
-                dates.append(date)
-            }
-        }
-        for item in store.siteTodos where item.projectId == projectId {
-            if let date = Formatters.date.date(from: item.dueDate) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectDrawings where item.projectId == projectId {
-            if let date = Formatters.dateTime.date(from: item.importedAt) {
-                dates.append(date)
-            }
-        }
-        for item in store.projectDocuments where item.projectId == projectId {
-            if let date = Formatters.dateTime.date(from: item.createdAt) {
-                dates.append(date)
-            }
-        }
-        return dates.max() ?? .distantPast
-    }
 }
-
-private struct ProjectContextRow: View {
-    let project: Project
-    let note: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(project.name)
-                    .font(.callout.weight(.semibold))
-                    .lineLimit(1)
-                Spacer()
-                Text(project.status)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
-            }
-            HStack(spacing: 8) {
-                if !project.location.isEmpty {
-                    Label(project.location, systemImage: "mappin.and.ellipse")
-                }
-                if !project.managerName.isEmpty {
-                    Label(project.managerName, systemImage: "person.fill")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            Text(note)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
-private struct DashboardProjectRow: Identifiable {
-    var id: UUID { project.id }
-    let project: Project
-    let subtitle: String
-    let color: Color
-    let score: Int
-    let activityDate: Date
-}
-
-private struct DashboardProjectSignal {
-    let subtitle: String
-    let color: Color
-    let score: Int
-}
-
-private struct DashboardProjectPickerSheet: View {
-    @Environment(\.dismiss) private var dismiss
-    let rows: [DashboardProjectRow]
-    let selectedProjectId: UUID?
-    let onSelect: (UUID?) -> Void
-    @State private var searchText = ""
-
-    private var filteredRows: [DashboardProjectRow] {
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return rows }
-        return rows.filter {
-            $0.project.name.localizedStandardContains(query)
-            || $0.project.location.localizedStandardContains(query)
-            || $0.subtitle.localizedStandardContains(query)
-        }
-    }
-
-    var body: some View {
-        NavigationStack {
-            List {
-                Section("今日关注工程") {
-                    ForEach(filteredRows) { row in
-                        Button {
-                            onSelect(row.project.id)
-                        } label: {
-                            HStack(spacing: 10) {
-                                Image(systemName: selectedProjectId == row.project.id ? "checkmark.circle.fill" : "building.2")
-                                    .foregroundStyle(selectedProjectId == row.project.id ? row.color : .secondary)
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(row.project.name)
-                                        .font(.body.weight(.medium))
-                                        .foregroundStyle(.primary)
-                                    HStack(spacing: 8) {
-                                        Text(row.subtitle)
-                                            .foregroundStyle(row.color)
-                                        if !row.project.location.isEmpty {
-                                            Text(row.project.location)
-                                        }
-                                    }
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                }
-                                Spacer()
-                            }
-                        }
-                    }
-                }
-            }
-            .searchable(text: $searchText, prompt: "搜索工程")
-            .navigationTitle("选择当前工程")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
-                }
-            }
-        }
-        .presentationDetents([.medium, .large])
-    }
-}
-
-private struct DashboardProjectChip: View {
-    let title: String
-    let subtitle: String
-    let isSelected: Bool
-    let color: Color
-
-    private var minChipWidth: CGFloat {
-        isSelected ? 124 : 104
-    }
-
-    private var maxChipWidth: CGFloat {
-        isSelected ? 240 : 152
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 5) {
-                Circle()
-                    .fill(isSelected ? .white : color)
-                    .frame(width: 6, height: 6)
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(isSelected ? .white : .primary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-            Text(subtitle)
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(isSelected ? .white.opacity(0.88) : color)
-                .lineLimit(1)
-        }
-        .frame(minWidth: minChipWidth, maxWidth: maxChipWidth, alignment: .leading)
-        .frame(minHeight: 52, alignment: .topLeading)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 9)
-                .fill(isSelected ? color : color.opacity(0.12))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .stroke(isSelected ? color : color.opacity(0.28), lineWidth: 1)
-        )
-    }
-}
-

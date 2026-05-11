@@ -84,7 +84,7 @@ struct ProjectWarehouseAttachmentDocumentRow: View {
 
     private var metaText: String {
         let fileType = document.fileType.isEmpty ? "附件" : document.fileType.uppercased()
-        return "\(document.category) · \(fileType) · \(document.createdAt)"
+        return "\(document.category.displayName) · \(fileType) · \(document.createdAt)"
     }
 
     private var icon: String {
@@ -111,7 +111,7 @@ struct WarehouseMovementRow: View {
     let movement: ProjectWarehouseMovement
 
     private var movementType: WarehouseMovementType {
-        WarehouseMovementType(rawValue: movement.movementType) ?? .inbound
+        movement.normalizedMovementType
     }
 
     var body: some View {

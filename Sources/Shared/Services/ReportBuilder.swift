@@ -1,355 +1,31 @@
 import Foundation
 import UIKit
-import UniformTypeIdentifiers
-
-struct ExportContentOptions {
-    var includeMaterials = true
-    var includeQuotes = true
-    var includeLabor = true
-    var includeDailyLogs = true
-    var includeProgress = true
-    var includeTodos = true
-    var includeProjectFinance = true
-    var includeProjectDocuments = true
-    var includeProjectContacts = true
-    var includeProjectDrawings = true
-    var includeWarehouseMovements = true
-    var includeQuickNotes = true
-    var includeLightingCircuits = true
-    var includePaymentRecords = true
-}
-
-struct ExportPayload {
-    var data: Data
-    var sourceFileURL: URL?
-    var contentType: UTType
-    var defaultFilename: String
-
-    init(data: Data, contentType: UTType, defaultFilename: String) {
-        self.data = data
-        self.sourceFileURL = nil
-        self.contentType = contentType
-        self.defaultFilename = defaultFilename
-    }
-
-    init(fileURL: URL, contentType: UTType, defaultFilename: String) {
-        self.data = Data()
-        self.sourceFileURL = fileURL
-        self.contentType = contentType
-        self.defaultFilename = defaultFilename
-    }
-}
-
-extension UTType {
-    static var excelHTML: UTType {
-        UTType(filenameExtension: "xls", conformingTo: .data) ?? .data
-    }
-
-    static var zipArchive: UTType {
-        UTType.zip
-    }
-}
-
-struct QuotationDocumentMeta {
-    var companyName: String
-    var companyPhone: String
-    var companyAddress: String
-    var customerName: String
-    var projectAddress: String
-    var validUntil: String
-    var signerName: String
-}
-
-struct ReportPhotoItem {
-    var date: String
-    var projectName: String
-    var tag: String
-    var note: String
-    var fileName: String
-}
-
-enum ProjectPackageArchiveError: LocalizedError {
-    case cancelled
-
-    var errorDescription: String? {
-        switch self {
-        case .cancelled:
-            return "已取消交付包导出。"
-        }
-    }
-}
-
-struct ProjectPackageExportProgress {
-    let completedSteps: Int
-    let totalSteps: Int
-    let currentItem: String
-
-    var fractionCompleted: Double {
-        guard totalSteps > 0 else { return 0 }
-        return min(max(Double(completedSteps) / Double(totalSteps), 0), 1)
-    }
-}
 
 enum ReportBuilder {
-    static func makeCSV(snapshot: BackupSnapshot, options: ExportContentOptions) -> Data {
-        var rows: [String] = []
-        if options.includeMaterials {
-            rows.append("[材料清单]")
-            rows.append(csv(["名称", "数量", "单位", "单价", "规格", "品牌", "供应商", "采购状态", "进场日期", "金额", "项目ID"]))
-            rows += snapshot.materialItems.map { csv([$0.name, $0.quantity, $0.unit, $0.unitPrice, $0.specification, $0.brand, $0.supplier, $0.purchaseStatus, $0.arrivalDate, money(materialLineTotal($0)), $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeQuotes {
-            rows.append("[报价明细]")
-            rows.append(csv(["名称", "单价", "数量", "单位", "税率", "折扣", "版本", "状态", "客户确认日期", "合同金额", "备注", "项目ID"]))
-            rows += snapshot.quoteItems.map { csv([$0.name, $0.unitPrice, $0.quantity, $0.unit, $0.taxRate, $0.discountRate, $0.versionName, $0.status, $0.customerConfirmedDate, $0.contractAmount, $0.notes, $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeLabor {
-            rows.append("[人工记录]")
-            rows.append(csv(["日期", "人数", "工时", "单价", "工种", "班组", "是否结算", "金额", "备注", "项目ID"]))
-            rows += snapshot.laborRecords.map { csv([$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? "是" : "否", money(laborLineTotal($0)), $0.note, $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeDailyLogs {
-            rows.append("[施工日志]")
-            rows.append(csv(["日期", "天气", "人数", "内容", "安全事项", "材料进场", "明日计划", "质量问题", "整改记录", "确认人", "照片数", "项目ID"]))
-            rows += snapshot.dailyLogs.map { csv([$0.date, $0.weather, $0.workers, $0.content, $0.safety, $0.materials, $0.tomorrowPlan, $0.qualityIssue, $0.rectification, $0.confirmer, "\($0.photoAttachments.count)", $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeProgress {
-            rows.append("[进度任务]")
-            rows.append(csv(["任务", "开始", "截止", "完成率", "备注", "项目ID"]))
-            rows += snapshot.progressTasks.map { csv([$0.title, $0.startDate, $0.dueDate, "\(Int($0.clampedCompletion * 100))%", $0.note, $0.projectId.uuidString]) }
-            rows.append("")
-        }
-        if options.includeTodos {
-            rows.append("[现场待办]")
-            rows.append(csv(["事项", "负责人", "日期", "优先级", "问题类型", "状态", "完成时间", "整改前照片", "整改后照片", "备注", "项目ID"]))
-            rows += snapshot.siteTodos.map { csv([$0.title, $0.owner, $0.dueDate, $0.priority, $0.issueType, $0.isDone ? "完成" : $0.isOverdue ? "延期" : "待办", $0.completedAt ?? "", $0.rectificationBeforePhotoFileName ?? "", $0.rectificationAfterPhotoFileName ?? "", $0.note, $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeProjectFinance {
-            rows.append("[项目财务流水]")
-            rows.append(csv(["日期", "收支", "分类", "金额", "对方单位", "票号", "关联票据数量", "备注", "项目ID"]))
-            rows += snapshot.projectFinancialRecords.map {
-                csv([$0.date, $0.direction, $0.category, $0.amount, $0.counterparty, $0.invoiceNumber, "\($0.linkedDocumentIds.count)", $0.note, $0.projectId.uuidString])
-            }
-            rows.append("")
-        }
-        if options.includeProjectDocuments {
-            rows.append("[项目票据与资料]")
-            rows.append(csv(["名称", "类型", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"]))
-            rows += snapshot.projectDocuments.map {
-                csv([$0.title, $0.category, "\($0.pageCount)", $0.amount, $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString])
-            }
-            rows.append("")
-        }
-        if options.includeProjectContacts {
-            rows.append("[项目联系人]")
-            rows.append(csv(["姓名", "角色", "电话", "公司", "备注", "项目ID"]))
-            rows += snapshot.projectContacts.map { csv([$0.name, $0.role, $0.phone, $0.company, $0.note, $0.projectId.uuidString]) }
-            rows.append("")
-        }
-        if options.includeProjectDrawings {
-            rows.append("[图纸索引]")
-            rows.append(csv(["名称", "类型", "版本", "文件名", "问题状态", "问题备注", "导入时间", "关联日志日期", "备注", "项目ID"]))
-            rows += snapshot.projectDrawings.map { csv([$0.name, $0.fileType, $0.version, $0.fileName, $0.issueStatus, $0.issueNote, $0.importedAt, $0.relatedLogDate, $0.note, $0.projectId.uuidString]) }
-            rows.append("")
-        }
-        if options.includeWarehouseMovements {
-            rows.append("[仓库流水]")
-            rows.append(csv(["日期", "类型", "材料名称", "规格", "单位", "数量", "对方单位", "操作人", "备注", "关联单据数", "项目ID"]))
-            rows += snapshot.projectWarehouseMovements.map { csv([$0.date, $0.movementType, $0.materialName, $0.specification, $0.unit, $0.quantity, $0.counterparty, $0.handler, $0.note, "\($0.linkedDocumentIds.count)", $0.projectId.uuidString]) }
-            rows.append("")
-        }
-        if options.includeQuickNotes {
-            rows.append("[随手记]")
-            rows.append(csv(["标题", "内容", "创建时间", "更新时间", "附件数", "项目ID"]))
-            rows += snapshot.quickNotes.map { csv([$0.title, $0.content, $0.createdAt, $0.updatedAt, "\($0.attachments.count)", $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includeLightingCircuits {
-            rows.append("[照明回路]")
-            rows.append(csv(["方案名称", "供电类型", "电压", "功率因数", "需用系数", "断路器裕量", "线径裕量", "铜导线", "负荷数", "更新时间", "项目ID"]))
-            rows += snapshot.lightingCircuitPlans.map { csv([$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? "是" : "否", "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]) }
-            rows.append("")
-        }
-        if options.includePaymentRecords {
-            rows.append("[付款记录]")
-            rows.append(csv(["日期", "金额", "方式", "备注", "是否开票", "项目ID"]))
-            rows += snapshot.paymentRecords.map { csv([$0.date, $0.amount, $0.method, $0.note, $0.isInvoiced ? "是" : "否", $0.projectId.uuidString]) }
-        }
-        return Data(rows.joined(separator: "\n").utf8)
+
+    // MARK: - 本地化助手
+
+    /// 本地化 CSV/PDF/HTML 输出字符串，跟随 App 内语言设置
+    static func loc(_ key: String) -> String {
+        String(localized: String.LocalizationValue(stringLiteral: key))
     }
 
-    static func makeExcelHTML(snapshot: BackupSnapshot, options: ExportContentOptions) -> Data {
-        var body = "<html><head><meta charset=\"utf-8\"></head><body>"
-        func table(_ title: String, headers: [String], rows: [[String]]) {
-            body += "<h2>\(escapeHTML(title))</h2><table border=\"1\" cellspacing=\"0\" cellpadding=\"4\"><tr>"
-            body += headers.map { "<th>\(escapeHTML($0))</th>" }.joined()
-            body += "</tr>"
-            for row in rows {
-                body += "<tr>" + row.map { "<td>\(escapeHTML($0))</td>" }.joined() + "</tr>"
-            }
-            body += "</table>"
-        }
-        if options.includeMaterials {
-            table("材料清单", headers: ["名称", "数量", "单位", "单价", "规格", "品牌", "供应商", "采购状态", "进场日期", "金额"], rows: snapshot.materialItems.map {
-                [$0.name, $0.quantity, $0.unit, $0.unitPrice, $0.specification, $0.brand, $0.supplier, $0.purchaseStatus, $0.arrivalDate, money(materialLineTotal($0))]
-            })
-        }
-        if options.includeQuotes {
-            table("报价明细", headers: ["名称", "单价", "数量", "单位", "版本", "状态", "确认日期", "合同金额", "金额", "备注"], rows: snapshot.quoteItems.map {
-                [$0.name, $0.unitPrice, $0.quantity, $0.unit, $0.versionName, $0.status, $0.customerConfirmedDate, $0.contractAmount, money(quoteLineTotal($0)), $0.notes]
-            })
-        }
-        if options.includeLabor {
-            table("人工记录", headers: ["日期", "人数", "工时", "单价", "工种", "班组", "结算", "金额", "备注"], rows: snapshot.laborRecords.map {
-                [$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? "是" : "否", money(laborLineTotal($0)), $0.note]
-            })
-        }
-        if options.includeDailyLogs {
-            table("施工日志", headers: ["日期", "天气", "人数", "内容", "安全事项", "材料进场", "明日计划", "质量问题", "整改记录", "确认人", "照片数"], rows: snapshot.dailyLogs.map {
-                [$0.date, $0.weather, $0.workers, $0.content, $0.safety, $0.materials, $0.tomorrowPlan, $0.qualityIssue, $0.rectification, $0.confirmer, "\($0.photoAttachments.count)"]
-            })
-        }
-        if options.includeProgress {
-            table("进度任务", headers: ["任务", "开始", "截止", "完成率", "备注"], rows: snapshot.progressTasks.map {
-                [$0.title, $0.startDate, $0.dueDate, "\(Int($0.clampedCompletion * 100))%", $0.note]
-            })
-        }
-        if options.includeTodos {
-            table("现场待办", headers: ["事项", "负责人", "日期", "优先级", "问题类型", "状态", "完成时间", "备注"], rows: snapshot.siteTodos.map {
-                [$0.title, $0.owner, $0.dueDate, $0.priority, $0.issueType, $0.isDone ? "完成" : $0.isOverdue ? "延期" : "待办", $0.completedAt ?? "", $0.note]
-            })
-        }
-        if options.includeProjectFinance {
-            table("项目财务流水", headers: ["日期", "收支", "分类", "金额", "对方单位", "票号", "关联票据数", "备注", "项目ID"], rows: snapshot.projectFinancialRecords.map {
-                [$0.date, $0.direction, $0.category, $0.amount, $0.counterparty, $0.invoiceNumber, "\($0.linkedDocumentIds.count)", $0.note, $0.projectId.uuidString]
-            })
-        }
-        if options.includeProjectDocuments {
-            table("项目票据与资料", headers: ["名称", "类型", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"], rows: snapshot.projectDocuments.map {
-                [$0.title, $0.category, "\($0.pageCount)", $0.amount, $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString]
-            })
-        }
-        if options.includeProjectContacts {
-            table("项目联系人", headers: ["姓名", "角色", "电话", "公司", "备注", "项目ID"], rows: snapshot.projectContacts.map {
-                [$0.name, $0.role, $0.phone, $0.company, $0.note, $0.projectId.uuidString]
-            })
-        }
-        if options.includeProjectDrawings {
-            table("图纸索引", headers: ["名称", "类型", "版本", "文件名", "问题状态", "问题备注", "导入时间", "关联日志日期", "备注", "项目ID"], rows: snapshot.projectDrawings.map {
-                [$0.name, $0.fileType, $0.version, $0.fileName, $0.issueStatus, $0.issueNote, $0.importedAt, $0.relatedLogDate, $0.note, $0.projectId.uuidString]
-            })
-        }
-        if options.includeWarehouseMovements {
-            table("仓库流水", headers: ["日期", "类型", "材料名称", "规格", "单位", "数量", "对方单位", "操作人", "备注", "关联单据数", "项目ID"], rows: snapshot.projectWarehouseMovements.map {
-                [$0.date, $0.movementType, $0.materialName, $0.specification, $0.unit, $0.quantity, $0.counterparty, $0.handler, $0.note, "\($0.linkedDocumentIds.count)", $0.projectId.uuidString]
-            })
-        }
-        if options.includeQuickNotes {
-            table("随手记", headers: ["标题", "内容", "创建时间", "更新时间", "附件数", "项目ID"], rows: snapshot.quickNotes.map {
-                [$0.title, $0.content, $0.createdAt, $0.updatedAt, "\($0.attachments.count)", $0.projectId?.uuidString ?? ""]
-            })
-        }
-        if options.includeLightingCircuits {
-            table("照明回路", headers: ["方案名称", "供电类型", "电压", "功率因数", "需用系数", "断路器裕量", "线径裕量", "铜导线", "负荷数", "更新时间", "项目ID"], rows: snapshot.lightingCircuitPlans.map {
-                [$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? "是" : "否", "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]
-            })
-        }
-        if options.includePaymentRecords {
-            table("付款记录", headers: ["日期", "金额", "方式", "备注", "是否开票", "项目ID"], rows: snapshot.paymentRecords.map {
-                [$0.date, $0.amount, $0.method, $0.note, $0.isInvoiced ? "是" : "否", $0.projectId.uuidString]
-            })
-        }
-        body += "</body></html>"
-        return Data(body.utf8)
+    /// 本地化字符串数组
+    static func loc(_ keys: [String]) -> [String] {
+        keys.map { loc($0) }
     }
 
-    static func makePDF(snapshot: BackupSnapshot, options: ExportContentOptions, title: String = "\(AppBrand.displayName) 数据导出") -> Data {
-        var lines: [String] = [title, "生成时间: \(Formatters.now())", ""]
-        if options.includeMaterials {
-            lines.append("材料清单")
-            lines += snapshot.materialItems.map {
-                "- \($0.name)  \($0.quantity) \($0.unit)  单价\(money(number($0.unitPrice)))  金额\(money(materialLineTotal($0)))"
-            }
-            lines.append("")
-        }
-        if options.includeQuotes {
-            let total = snapshot.quoteItems.reduce(0) { $0 + quoteGrandTotal($1) }
-            lines.append("报价明细  合计 \(money(total))")
-            lines += snapshot.quoteItems.map { "- \($0.name)  \($0.quantity)\($0.unit)  \(money(quoteGrandTotal($0)))" }
-            lines.append("")
-        }
-        if options.includeLabor {
-            lines.append("人工记录")
-            lines += snapshot.laborRecords.map {
-                "- \($0.date)  \($0.workers)人 × \($0.hours)h  单价\(money(number($0.unitRate)))  金额\(money(laborLineTotal($0)))  \($0.note)"
-            }
-            lines.append("")
-        }
-        if options.includeDailyLogs {
-            lines.append("施工日志")
-            lines += snapshot.dailyLogs.map { "- \($0.date) \($0.weather) \($0.workers)  \($0.content)" }
-            lines.append("")
-        }
-        if options.includeTodos && !snapshot.siteTodos.isEmpty {
-            lines.append("现场待办")
-            lines += snapshot.siteTodos.map { "- \($0.dueDate) [\($0.priority)] [\($0.issueType)] \($0.isDone ? "完成" : $0.isOverdue ? "延期" : "待办")  \($0.title) \($0.owner)" }
-            lines.append("")
-        }
-        if options.includeProgress {
-            lines.append("进度任务")
-            lines += snapshot.progressTasks.map { "- \($0.title)  \(Int($0.clampedCompletion * 100))%  \($0.startDate)-\($0.dueDate)" }
-        }
-        if options.includeProjectFinance {
-            lines.append("")
-            lines.append("项目财务流水")
-            lines += snapshot.projectFinancialRecords.sorted(by: { $0.date > $1.date }).map {
-                "- \($0.date) [\($0.direction)] [\($0.category)] \(money(number($0.amount)))  \($0.counterparty)  票据\($0.linkedDocumentIds.count)份"
-            }
-        }
-        if options.includeProjectDocuments {
-            lines.append("")
-            lines.append("项目票据与资料")
-            lines += snapshot.projectDocuments.sorted(by: { $0.createdAt > $1.createdAt }).map {
-                "- \($0.createdAt) [\($0.category)] \($0.title)  \($0.pageCount)页  \(money(number($0.amount)))"
-            }
-        }
-        if options.includeProjectContacts && !snapshot.projectContacts.isEmpty {
-            lines.append("")
-            lines.append("项目联系人")
-            lines += snapshot.projectContacts.map { "- \($0.name) [\($0.role)] \($0.phone) \($0.company)" }
-        }
-        if options.includeProjectDrawings && !snapshot.projectDrawings.isEmpty {
-            lines.append("")
-            lines.append("图纸索引")
-            lines += snapshot.projectDrawings.map { "- \($0.name) \($0.fileType) v\($0.version) [\($0.issueStatus)]" }
-        }
-        if options.includeWarehouseMovements && !snapshot.projectWarehouseMovements.isEmpty {
-            lines.append("")
-            lines.append("仓库流水")
-            lines += snapshot.projectWarehouseMovements.map { "- \($0.date) [\($0.movementType)] \($0.materialName) × \($0.quantity)\($0.unit)  \($0.counterparty)" }
-        }
-        if options.includeQuickNotes && !snapshot.quickNotes.isEmpty {
-            lines.append("")
-            lines.append("随手记")
-            lines += snapshot.quickNotes.map { "- \($0.title)  \($0.updatedAt)  附件\($0.attachments.count)个" }
-        }
-        if options.includeLightingCircuits && !snapshot.lightingCircuitPlans.isEmpty {
-            lines.append("")
-            lines.append("照明回路")
-            lines += snapshot.lightingCircuitPlans.map { (plan: LightingCircuitPlan) in return "- \(plan.name) [\(plan.supplyType.displayName)] \(plan.voltage)V  \(plan.loads.count)个负荷" }
-        }
-        if options.includePaymentRecords && !snapshot.paymentRecords.isEmpty {
-            lines.append("")
-            lines.append("付款记录")
-            lines += snapshot.paymentRecords.map { "- \($0.date) \(money(number($0.amount))) [\($0.method)] \($0.note)" }
-        }
-        return pdfData(lines: lines)
+    /// CSV 段标题
+    static func csvSection(_ key: String) -> String {
+        "[\(loc(key))]"
     }
+
+    /// 常用状态值
+    static var locYes: String { loc("是") }
+    static var locNo: String { loc("否") }
+    static var locDone: String { loc("完成") }
+    static var locOverdue: String { loc("延期") }
+    static var locPending: String { loc("待办") }
 
     static func makeLightingCircuitPlansPDF(projectName: String, plans: [LightingCircuitPlan]) -> Data {
         var lines: [String] = ["\(projectName)-照明回路方案", "生成时间: \(Formatters.now())", ""]
@@ -380,7 +56,7 @@ enum ReportBuilder {
             }
 
             lines.append("汇总: 回路数 \(evaluation.rows.count), 总装机 \(fmt(evaluation.totalInstalledPowerKW))kW, 总计算 \(fmt(evaluation.totalDemandPowerKW))kW, 电流合计 \(fmt(evaluation.totalCurrentA))A")
-            if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent {
+            if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent, totals.count >= 3 {
                 lines.append("A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A")
                 lines.append("三相不平衡: \(fmt(imbalance))%")
             }
@@ -423,7 +99,7 @@ enum ReportBuilder {
             }
             body += "</table>"
             body += "<p>汇总: 回路数 \(evaluation.rows.count), 总装机 \(fmt(evaluation.totalInstalledPowerKW))kW, 总计算 \(fmt(evaluation.totalDemandPowerKW))kW, 电流合计 \(fmt(evaluation.totalCurrentA))A</p>"
-            if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent {
+            if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent, totals.count >= 3 {
                 body += "<p>A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A, 三相不平衡: \(fmt(imbalance))%</p>"
             }
         }
@@ -467,9 +143,9 @@ enum ReportBuilder {
         let margin: CGFloat = 36
         let maxWidth = page.width - margin * 2
 
-        let subtotal = items.reduce(0) { $0 + quoteLineTotal($1) }
-        let tax = items.reduce(0) { $0 + quoteLineTotal($1) * ((Double($1.taxRate) ?? 0) / 100) }
-        let discount = items.reduce(0) { $0 + quoteLineTotal($1) * ((Double($1.discountRate) ?? 0) / 100) }
+        let subtotal = items.reduce(MoneyValue.zero) { $0 + quoteLineTotalValue($1) }
+        let tax = items.reduce(MoneyValue.zero) { $0 + quoteTaxValue($1) }
+        let discount = items.reduce(MoneyValue.zero) { $0 + quoteDiscountValue($1) }
         let total = subtotal + tax - discount
         let projectName = resolvedProjectName(items: items, projects: projects)
 
@@ -479,28 +155,28 @@ enum ReportBuilder {
 
             y = drawPDFText(title, at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 20), alignment: .center) + 4
             y = drawPDFText(meta.companyName, at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11), alignment: .center)
-            y = drawPDFText("电话: \(meta.companyPhone)    地址: \(meta.companyAddress)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 10), alignment: .center) + 12
+            y = drawPDFText(String(format: loc("电话: %@    地址: %@"), meta.companyPhone, meta.companyAddress), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 10), alignment: .center) + 12
 
-            y = drawPDFText("客户名称: \(meta.customerName)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
-            y = drawPDFText("项目名称: \(projectName)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
-            y = drawPDFText("项目地址: \(meta.projectAddress)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
-            y = drawPDFText("报价日期: \(Formatters.date.string(from: Date()))    有效期至: \(meta.validUntil)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11)) + 10
+            y = drawPDFText(String(format: loc("客户名称: %@"), meta.customerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            y = drawPDFText(String(format: loc("项目名称: %@"), projectName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            y = drawPDFText(String(format: loc("项目地址: %@"), meta.projectAddress), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            y = drawPDFText(String(format: loc("报价日期: %@    有效期至: %@"), Formatters.date.string(from: Date()), meta.validUntil), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11)) + 10
 
             let columns: [(title: String, width: CGFloat)] = [
-                ("项目", 124), ("单位", 38), ("数量", 44), ("单价", 62),
-                ("税率", 42), ("折扣", 42), ("金额", 76), ("备注", 95)
+                (loc("项目"), 124), (loc("单位"), 38), (loc("数量"), 44), (loc("单价"), 62),
+                (loc("税率"), 42), (loc("折扣"), 42), (loc("金额"), 76), (loc("备注"), 95)
             ]
             let rowHeight: CGFloat = 24
             y = drawPDFTableHeader(columns: columns, startX: margin, y: y, height: rowHeight)
 
             let rows = items.isEmpty ? [[
-                "暂无明细", "-", "-", "-", "-", "-", "-", "-"
+                loc("暂无明细"), "-", "-", "-", "-", "-", "-", "-"
             ]] : items.map { item in
                 [
                     item.name,
                     item.unit,
                     item.quantity,
-                    money(Double(item.unitPrice) ?? 0),
+                    money(item.unitPriceValue.doubleValue),
                     "\(item.taxRate)%",
                     "\(item.discountRate)%",
                     money(quoteGrandTotal(item)),
@@ -518,9 +194,9 @@ enum ReportBuilder {
             }
 
             y += 12
-            y = drawPDFText("小计: \(money(subtotal))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText("税额: \(money(tax))    折扣: -\(money(discount))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText("合计: \(money(total))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
+            y = drawPDFText("小计: \(money(subtotal.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText("税额: \(money(tax.doubleValue))    折扣: -\(money(discount.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText("合计: \(money(total.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
 
             _ = drawPDFText("签字确认: \(meta.signerName)____________________", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
         }
@@ -565,6 +241,93 @@ enum ReportBuilder {
         }
     }
 
+    static func makeProjectArchiveReportPDF(
+        project: Project,
+        materials: [MaterialItem],
+        quotes: [QuoteItem],
+        labor: [LaborRecord],
+        logs: [DailyLog],
+        tasks: [ProgressTask],
+        todos: [SiteTodo],
+        drawings: [ProjectDrawing] = [],
+        contacts: [ProjectContact] = [],
+        financialRecords: [ProjectFinancialRecord] = [],
+        documents: [ProjectDocument] = [],
+        warehouseMovements: [ProjectWarehouseMovement] = [],
+        quickNotes: [QuickNote] = [],
+        paidAmountOverride: Double? = nil
+    ) -> Data {
+        let contract = number(project.contractAmount)
+        let quoteTotal = quotes.reduce(0) { $0 + quoteGrandTotal($1) }
+        let materialCost = materials.reduce(0) { $0 + materialLineTotal($1) }
+        let laborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
+        let income = ProjectFinancialMetrics.income(financialRecords)
+        let expense = ProjectFinancialMetrics.expense(financialRecords)
+        let paid = paidAmountOverride ?? ProjectFinancialMetrics.collectionAmount(financialRecords)
+        let openTodos = todos.filter { !$0.isDone }
+        let overdueTodos = todos.filter(\.isOverdue)
+        let overdueTasks = tasks.filter { task in
+            guard task.clampedCompletion < 1,
+                  let due = Formatters.date.date(from: task.dueDate) else { return false }
+            return due < Calendar.current.startOfDay(for: Date())
+        }
+        let dueReminders = financialRecords.filter(\.isDueReminderOpen)
+        let missingReceipts = financialRecords.filter { record in
+            guard record.countsInBusinessMetrics, record.requiresAttachment else { return false }
+            let linkedByRecord = !record.linkedDocumentIds.isEmpty
+            let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
+            return !(linkedByRecord || linkedByDocument)
+        }
+        let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
+        let photosCount = logs.reduce(0) { $0 + $1.photoAttachments.count }
+
+        var lines: [String] = []
+        lines.append("\(project.name) 项目归档报告")
+        lines.append("生成时间: \(Formatters.now())")
+        lines.append("")
+        lines.append("一、项目概况")
+        lines.append("地址: \(project.location.isEmpty ? "未填写" : project.location)")
+        lines.append("客户: \(project.customerName.isEmpty ? "未填写" : project.customerName)  电话: \(project.customerPhone.isEmpty ? "-" : project.customerPhone)")
+        lines.append("负责人: \(project.managerName.isEmpty ? "未填写" : project.managerName)")
+        lines.append("状态: \(project.status.displayName)  工期: \(project.startDate.isEmpty ? "-" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "-" : project.expectedEndDate)")
+        lines.append("")
+        lines.append("二、经营汇总")
+        lines.append("合同金额: \(money(contract))  已收: \(money(paid))  未收: \(money(max(contract - paid, 0)))")
+        lines.append("报价合计: \(money(quoteTotal))  材料成本: \(money(materialCost))  人工成本: \(money(laborCost))")
+        lines.append("记账收入: \(money(income))  记账支出: \(money(expense))  账面结余: \(money(income - expense))")
+        lines.append("毛利估算: \(money(contract - materialCost - laborCost))")
+        lines.append("")
+        lines.append("三、资料完整度")
+        lines.append("施工日志: \(logs.count) 条  现场照片: \(photosCount) 张  进度平均: \(Int(progress * 100))%")
+        lines.append("材料: \(materials.count) 条  预结算: \(quotes.count) 条  人工: \(labor.count) 条  仓库流水: \(warehouseMovements.count) 条")
+        lines.append("票据/资料: \(documents.count) 份  图纸: \(drawings.count) 份  联系人: \(contacts.count) 位  随手记: \(quickNotes.count) 条")
+        lines.append("")
+        lines.append("四、归档前待处理")
+        if openTodos.isEmpty && overdueTasks.isEmpty && dueReminders.isEmpty && missingReceipts.isEmpty {
+            lines.append("无未完成待办、逾期进度、到期提醒或缺票账目。")
+        } else {
+            lines.append("未完成待办: \(openTodos.count) 项，其中逾期 \(overdueTodos.count) 项")
+            lines.append("逾期进度: \(overdueTasks.count) 项")
+            lines.append("应收/应付提醒: \(dueReminders.count) 笔")
+            lines.append("缺票账目: \(missingReceipts.count) 笔")
+        }
+        if !dueReminders.isEmpty {
+            lines.append("")
+            lines.append("五、应收/应付提醒")
+            lines += dueReminders.sorted(by: { $0.dueDate < $1.dueDate }).prefix(12).map {
+                "- \($0.dueDate)  \($0.normalizedDirection.displayName) \(money(number($0.amount)))  \($0.counterparty)  \($0.normalizedReminderStatus.displayName)"
+            }
+        }
+        if !openTodos.isEmpty {
+            lines.append("")
+            lines.append("六、未完成待办")
+            lines += openTodos.sorted(by: { $0.dueDate < $1.dueDate }).prefix(12).map {
+                "- \($0.dueDate)  \($0.title)  \($0.owner)"
+            }
+        }
+        return pdfData(lines: lines)
+    }
+
     static func makeProjectPackagePDF(
         project: Project,
         materials: [MaterialItem],
@@ -581,8 +344,8 @@ enum ReportBuilder {
         paidAmountOverride: Double? = nil
     ) -> Data {
         let quoteTotal = quotes.reduce(0) { $0 + quoteGrandTotal($1) }
-        let contract = Double(project.contractAmount) ?? 0
-        let paid = paidAmountOverride ?? Double(project.paidAmount) ?? 0
+        let contract = project.contractAmountValue.doubleValue
+        let paid = paidAmountOverride ?? project.paidAmountValue.doubleValue
         let materialCost = materials.reduce(0) { $0 + materialLineTotal($1) }
         let laborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
         let totalLaborHours = labor.reduce(0) { $0 + laborHours($1) }
@@ -599,7 +362,7 @@ enum ReportBuilder {
                 ReportPhotoItem(
                     date: log.date,
                     projectName: projectName,
-                    tag: photo.tag,
+                    tag: photo.tag.displayName,
                     note: photo.note,
                     fileName: photo.fileName
                 )
@@ -649,7 +412,7 @@ enum ReportBuilder {
                 [
                     item.name,
                     item.versionName,
-                    item.status,
+                    item.status.displayName,
                     "\(item.quantity)\(item.unit)",
                     money(number(item.unitPrice)),
                     money(quoteGrandTotal(item)),
@@ -708,13 +471,14 @@ enum ReportBuilder {
 
             // 5. 项目财务流水
             let financeColumns: [(title: String, width: CGFloat)] = [
-                ("日期", 76), ("收支", 44), ("分类", 60), ("金额", 70), ("对方", 110), ("票号", 90), ("票据", 48), ("备注", 97)
+                ("日期", 76), ("收支", 40), ("分类", 52), ("状态", 48), ("金额", 68), ("对方", 96), ("票号", 82), ("票据", 40), ("备注", 83)
             ]
             var financeRows = financialRecords.sorted(by: { $0.date > $1.date }).map { row in
                 [
                     row.date,
-                    row.direction,
-                    row.category,
+                    row.direction.displayName,
+                    row.category.displayName,
+                    row.normalizedStatus.displayName,
                     money(number(row.amount)),
                     row.counterparty,
                     row.invoiceNumber,
@@ -723,7 +487,7 @@ enum ReportBuilder {
                 ]
             }
             if financeRows.isEmpty {
-                financeRows = [["暂无财务记录", "-", "-", "-", "-", "-", "-", "-"]]
+                financeRows = [["暂无财务记录", "-", "-", "-", "-", "-", "-", "-", "-"]]
             }
             var financeIndex = 0
             while financeIndex < financeRows.count {
@@ -745,7 +509,7 @@ enum ReportBuilder {
             var docRows = documents.sorted(by: { $0.createdAt > $1.createdAt }).map { doc in
                 [
                     doc.title,
-                    doc.category,
+                    doc.category.displayName,
                     "\(doc.pageCount)",
                     money(number(doc.amount)),
                     doc.createdAt,
@@ -783,7 +547,7 @@ enum ReportBuilder {
                 contactY = drawPDFText("暂无联系人", at: CGPoint(x: margin, y: contactY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
             } else {
                 for contact in contacts.prefix(18) {
-                    let line = "\(contact.name)  \(contact.role)  \(contact.company)  \(contact.phone)"
+                    let line = "\(contact.name)  \(contact.roleDisplayName)  \(contact.company)  \(contact.phone)"
                     contactY = drawPDFText(line, at: CGPoint(x: margin, y: contactY + 6), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
                 }
             }
@@ -882,8 +646,18 @@ enum ReportBuilder {
         var writerFinished = false
         defer {
             if !writerFinished {
-                try? zip.close()
-                try? FileManager.default.removeItem(at: packageURL)
+                do {
+                    try zip.close()
+                } catch {
+                    StorageIssueLog.record("项目交付包 ZIP 关闭失败：\(packageURL.lastPathComponent)，\(error.localizedDescription)")
+                }
+                do {
+                    try FileManager.default.removeItem(at: packageURL)
+                } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
+                    // ignore missing temporary file
+                } catch {
+                    StorageIssueLog.record("项目交付包临时文件清理失败：\(packageURL.lastPathComponent)，\(error.localizedDescription)")
+                }
             }
         }
 
@@ -965,10 +739,10 @@ enum ReportBuilder {
                 let fileBytes = PhotoStorage.fileSize(for: photo.fileName)
                 let sourceURL = PhotoStorage.fileURL(for: photo.fileName)
                 guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                    reportProgress("检查照片 \(log.date) \(photo.tag)")
+                    reportProgress("检查照片 \(log.date) \(photo.tag.displayName)")
                     continue
                 }
-                let tag = safeZipName(photo.tag)
+                let tag = safeZipName(photo.tag.displayName)
                 try addStoredFileToProjectPackageZip(
                     zip: &zip,
                     sourceFileURL: sourceURL,
@@ -976,7 +750,7 @@ enum ReportBuilder {
                     path: "\(folder)/03-现场照片原件/\(log.date)-\(tag)-\(photo.fileName)",
                     stagedRawBytes: &stagedRawBytes
                 )
-                reportProgress("打包照片 \(log.date) \(photo.tag)")
+                reportProgress("打包照片 \(log.date) \(photo.tag.displayName)")
             }
         }
 
@@ -1020,7 +794,7 @@ enum ReportBuilder {
         if !contacts.isEmpty {
             let header = "姓名\t角色\t公司/班组\t电话\t备注"
             let rows = contacts.sorted { $0.name < $1.name }.map {
-                "\($0.name)\t\($0.role)\t\($0.company)\t\($0.phone)\t\($0.note)"
+                "\($0.name)\t\($0.roleDisplayName)\t\($0.company)\t\($0.phone)\t\($0.note)"
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
@@ -1058,35 +832,58 @@ enum ReportBuilder {
         stagedRawBytes += resolvedFileBytes
     }
 
+    static func quoteLineTotalValue(_ item: QuoteItem) -> MoneyValue {
+        let quantity = item.quantityValue
+        let unitPrice = item.unitPriceValue
+        return quantity * unitPrice
+    }
+
+    static func quoteTaxValue(_ item: QuoteItem) -> MoneyValue {
+        let line = quoteLineTotalValue(item)
+        let taxRate = item.taxRateValue.ratioFromPercent
+        return line * taxRate
+    }
+
+    static func quoteDiscountValue(_ item: QuoteItem) -> MoneyValue {
+        let line = quoteLineTotalValue(item)
+        let discountRate = item.discountRateValue.ratioFromPercent
+        return line * discountRate
+    }
+
     static func quoteLineTotal(_ item: QuoteItem) -> Double {
-        (Double(item.unitPrice) ?? 0) * (Double(item.quantity) ?? 0)
+        quoteLineTotalValue(item).doubleValue
     }
 
     static func materialLineTotal(_ item: MaterialItem) -> Double {
-        number(item.quantity) * number(item.unitPrice)
+        let quantity = item.quantityValue
+        let unitPrice = item.unitPriceValue
+        return (quantity * unitPrice).doubleValue
     }
 
     static func laborHours(_ record: LaborRecord) -> Double {
-        let workers = number(record.workers)
-        let hours = number(record.hours)
-        return workers > 0 ? workers * hours : hours
+        let workers = record.workersValue
+        let hours = record.hoursValue
+        if workers.decimal > 0 {
+            return (workers * hours).doubleValue
+        }
+        return hours.doubleValue
     }
 
     static func laborLineTotal(_ record: LaborRecord) -> Double {
-        laborHours(record) * number(record.unitRate)
+        let hoursValue = MoneyValue(NSDecimalNumber(value: laborHours(record)).decimalValue)
+        let rate = record.unitRateValue.decimal
+        return (hoursValue * rate).doubleValue
     }
 
     static func number(_ text: String) -> Double {
-        let normalized = text.replacingOccurrences(of: ",", with: ".")
-        guard let range = normalized.range(of: #"[0-9]+(\.[0-9]+)?"#, options: .regularExpression) else { return 0 }
-        return Double(normalized[range]) ?? 0
+        DataValueParser.double(from: text)
     }
 
     static func quoteGrandTotal(_ item: QuoteItem) -> Double {
-        let line = quoteLineTotal(item)
-        let tax = line * ((Double(item.taxRate) ?? 0) / 100)
-        let discount = line * ((Double(item.discountRate) ?? 0) / 100)
-        return line + tax - discount
+        let line = quoteLineTotalValue(item)
+        let tax = quoteTaxValue(item)
+        let discount = quoteDiscountValue(item)
+        return (line + tax - discount).doubleValue
     }
 
     static func money(_ value: Double) -> String {
@@ -1185,7 +982,7 @@ enum ReportBuilder {
         }.joined(separator: ",")
     }
 
-    private static func escapeHTML(_ text: String) -> String {
+    static func escapeHTML(_ text: String) -> String {
         text
             .replacingOccurrences(of: "&", with: "&amp;")
             .replacingOccurrences(of: "<", with: "&lt;")
@@ -1288,24 +1085,35 @@ enum ReportBuilder {
     }
 
     private static func evaluateLightingPlan(_ plan: LightingCircuitPlan) -> LightingPlanEvaluation? {
-        guard let voltage = Double(plan.voltage), voltage > 0,
-              let powerFactor = Double(plan.powerFactor), powerFactor > 0, powerFactor <= 1,
-              let demandFactor = Double(plan.demandFactor), demandFactor > 0,
-              let breakerFactor = Double(plan.breakerFactor), breakerFactor > 0,
-              let wireFactor = Double(plan.wireFactor), wireFactor > 0 else {
+        let voltage = DataValueParser.double(from: plan.voltage)
+        let powerFactor = DataValueParser.double(from: plan.powerFactor)
+        let demandFactor = DataValueParser.double(from: plan.demandFactor)
+        let breakerFactor = DataValueParser.double(from: plan.breakerFactor)
+        let wireFactor = DataValueParser.double(from: plan.wireFactor)
+        guard voltage > 0,
+              powerFactor > 0, powerFactor <= 1,
+              demandFactor > 0,
+              breakerFactor > 0,
+              wireFactor > 0 else {
             return nil
         }
 
         let rows = plan.loads.compactMap { load -> LightingPlanRow? in
-            let installedPower = Double(load.powerKW) ?? 0
+            let installedPower = DataValueParser.double(from: load.powerKW)
             guard installedPower > 0 else { return nil }
             let demandPower = installedPower * demandFactor
-            let current = EngineeringCalculations.circuitCurrent(
+            let current: Double
+            switch EngineeringCalculations.circuitCurrentValidated(
                 powerKW: demandPower,
                 voltage: voltage,
                 powerFactor: powerFactor,
                 isThreePhase: plan.supplyType == .threePhase
-            )
+            ) {
+            case .success(let value):
+                current = value
+            case .failure:
+                return nil
+            }
             let breaker = EngineeringCalculations.recommendedBreaker(current: current, safetyFactor: breakerFactor)
             let section = EngineeringCalculations.recommendedWireSectionByAmpacity(current: current, isCopper: plan.isCopper, safetyFactor: wireFactor)
             return LightingPlanRow(
@@ -1346,7 +1154,7 @@ enum ReportBuilder {
         )
     }
 
-    private static func pdfData(lines: [String]) -> Data {
+    static func pdfData(lines: [String]) -> Data {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842)
         let renderer = UIGraphicsPDFRenderer(bounds: page)
         return renderer.pdfData { context in

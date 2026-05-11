@@ -124,7 +124,7 @@ struct ProjectWarehouseMovementDetailView: View {
     @State private var previewURL: URL?
 
     private var movementType: WarehouseMovementType {
-        WarehouseMovementType(rawValue: movement.movementType) ?? .inbound
+        movement.normalizedMovementType
     }
 
     var body: some View {
@@ -310,10 +310,10 @@ enum ProjectWarehouseAttachmentImporter {
         pageCount: Int,
         note: String
     ) -> ProjectDocument {
-        let movementTitle = [movement.movementType, movement.materialName].filter { !$0.isEmpty }.joined(separator: "-")
+        let movementTitle = [movement.normalizedMovementType.displayName, movement.materialName].filter { !$0.isEmpty }.joined(separator: "-")
         let documentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(movementTitle)-附件" : title
         let detailNote = [
-            "仓库\(movement.movementType)",
+            "仓库\(movement.normalizedMovementType.displayName)",
             movement.date,
             movement.materialName,
             movement.specification,
@@ -324,7 +324,7 @@ enum ProjectWarehouseAttachmentImporter {
         return ProjectDocument(
             projectId: movement.projectId,
             title: documentTitle,
-            category: ProjectDocumentCategory.other.rawValue,
+            category: .other,
             fileName: fileName,
             fileType: fileType,
             pageCount: pageCount,
@@ -360,7 +360,7 @@ enum WarehouseStockCalculator {
             let spec = movement.specification.trimmingCharacters(in: .whitespacesAndNewlines)
             let unit = movement.unit.trimmingCharacters(in: .whitespacesAndNewlines)
             let key = [name.lowercased(), spec.lowercased(), unit.lowercased()].joined(separator: "|")
-            let type = WarehouseMovementType(rawValue: movement.movementType) ?? .inbound
+            let type = movement.normalizedMovementType
             var current = groups[key] ?? (name, spec, unit, 0)
             current.quantity += ReportBuilder.number(movement.quantity) * type.sign
             groups[key] = current

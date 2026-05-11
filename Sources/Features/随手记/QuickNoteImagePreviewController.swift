@@ -26,7 +26,7 @@ final class QuickNoteImageZoomViewController: UIViewController, UIScrollViewDele
 
     @available(*, unavailable)
     required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+        nil
     }
 
     override func viewDidLoad() {
@@ -112,4 +112,3 @@ final class QuickNoteImageZoomViewController: UIViewController, UIScrollViewDele
         scrollView.zoom(to: rect, animated: true)
     }
 }
-

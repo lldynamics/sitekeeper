@@ -1,19 +1,20 @@
 import SwiftUI
 
-struct ProjectDetailHeaderSection: View {
+struct ProjectDetailHeaderSection<RiskStrip: View>: View {
     let project: Project
-    @Binding var status: String
+    @Binding var status: ProjectStatus
     let progressValue: String
     let quoteValue: String
     let todoValue: String
-    let riskStrip: AnyView
+    let riskStrip: RiskStrip
     let customerLine: String?
     let periodLine: String?
+    let showsStatus: Bool
     let onEditProject: () -> Void
 
     var body: some View {
         Section {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: AppSpacing.normal) {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(project.name).font(.title3.weight(.bold))
@@ -22,12 +23,14 @@ struct ProjectDetailHeaderSection: View {
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
-                    Picker("状态", selection: $status) {
-                        ForEach(ProjectStatus.allCases, id: \.rawValue) { item in
-                            Text(item.displayName).tag(item.rawValue)
+                    if showsStatus {
+                        Picker("状态", selection: $status) {
+                            ForEach(ProjectStatus.allCases, id: \.self) { item in
+                                Text(item.displayName).tag(item)
+                            }
                         }
+                        .pickerStyle(.menu)
                     }
-                    .pickerStyle(.menu)
                 }
                 HStack {
                     metric("进度", progressValue, .orange)
@@ -79,30 +82,18 @@ struct ProjectDetailQuickActionSection: View {
     let onAddMaterial: () -> Void
     let onAddQuote: () -> Void
     let onAddLabor: () -> Void
-    let lightingDestination: AnyView
 
     var body: some View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
+                HStack(spacing: AppSpacing.tight) {
                     actionChip("日志", systemImage: "book.pages.fill", color: .green, action: onAddLog)
                     actionChip("记账", systemImage: "receipt.fill", color: .pink, action: onAddFinance)
                     actionChip("联系人", systemImage: "person.crop.circle.badge.plus", color: .blue, action: onAddContact)
                     actionChip("图纸", systemImage: "doc.viewfinder.fill", color: .indigo, action: onImportDrawing)
-                    Menu {
-                        Button(action: onAddMaterial) { Label("添加材料", systemImage: "shippingbox.fill") }
-                        Button(action: onAddQuote) { Label("添加报价", systemImage: "doc.text.fill") }
-                        Button(action: onAddLabor) { Label("记人工", systemImage: "person.2.fill") }
-                        NavigationLink { lightingDestination } label: {
-                            Label("照明回路方案", systemImage: "tablecells.fill")
-                        }
-                    } label: {
-                        Label("更多", systemImage: "ellipsis.circle")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 7)
-                            .background(Color(.secondarySystemGroupedBackground), in: Capsule())
-                    }
+                    actionChip("材料", systemImage: "shippingbox.fill", color: .orange, action: onAddMaterial)
+                    actionChip("报价", systemImage: "doc.text.fill", color: .brown, action: onAddQuote)
+                    actionChip("人工", systemImage: "person.2.fill", color: .purple, action: onAddLabor)
                 }
                 .padding(.vertical, 2)
             }
@@ -115,7 +106,7 @@ struct ProjectDetailQuickActionSection: View {
             Label(title, systemImage: systemImage)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(color)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, AppSpacing.normal)
                 .padding(.vertical, 7)
                 .background(color.opacity(0.12), in: Capsule())
         }

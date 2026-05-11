@@ -15,7 +15,13 @@ struct QuickNoteTimelineView: View {
                 VStack(spacing: 10) {
                     ContentUnavailableView("暂无记录", systemImage: "square.and.pencil", description: Text("写一句、拍一张、录一段，都可以先放这里，之后可转为日志、待办或项目资料。"))
                     Button(action: onCreate) {
-                        Label("立即发布一条", systemImage: "square.and.pencil")
+                        HStack(spacing: 6) {
+                            Image(systemName: "square.and.pencil")
+                                .symbolRenderingMode(.monochrome)
+                            Text("立即发布一条")
+                        }
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(.white)
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(.orange)
@@ -81,10 +87,25 @@ private struct QuickNoteTimelineRow: View {
                 .font(.caption2.weight(.semibold))
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
+                .accessibilityLabel("转换记录")
+                .accessibilityHint("双击转换为日志、待办或项目资料")
             }
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 4)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabelText)
+        .accessibilityHint("双击编辑这条随手记")
+    }
+
+    private var accessibilityLabelText: String {
+        var parts: [String] = [QuickNoteText.displayContent(for: note)]
+        if !projectName.isEmpty { parts.append("工程 \(projectName)") }
+        parts.append("时间 \(note.createdAt)")
+        if !note.attachments.isEmpty {
+            parts.append(QuickNoteText.attachmentSummary(note.attachments))
+        }
+        return parts.joined(separator: "，")
     }
 }

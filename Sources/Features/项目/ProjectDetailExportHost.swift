@@ -26,12 +26,28 @@ struct ProjectDetailExportHost: ViewModifier {
                 document: ExportDocument(data: exportPayload?.data ?? Data()),
                 contentType: exportPayload?.contentType ?? .pdf,
                 defaultFilename: exportPayload?.defaultFilename ?? "项目资料包.pdf"
-            ) { _ in
+            ) { result in
+                switch result {
+                case .success:
+                    AppHaptics.success()
+                case .failure(let error):
+                    if (error as NSError).code != NSUserCancelledError {
+                        AppHaptics.error()
+                    }
+                }
                 exportPayload = nil
             }
             .sheet(isPresented: showFileURLExporter) {
                 if let sourceFileURL = exportPayload?.sourceFileURL {
-                    FileURLDocumentExporter(fileURL: sourceFileURL) { _ in
+                    FileURLDocumentExporter(fileURL: sourceFileURL) { result in
+                        switch result {
+                        case .success:
+                            AppHaptics.success()
+                        case .failure(let error):
+                            if (error as NSError).code != NSUserCancelledError {
+                                AppHaptics.error()
+                            }
+                        }
                         showExporter = false
                         ExportFileURLPreparer.cleanup(fileURL: sourceFileURL)
                         exportPayload = nil
@@ -41,11 +57,17 @@ struct ProjectDetailExportHost: ViewModifier {
                         .padding()
                 }
             }
+            .onChange(of: showExporter) { _, isShowing in
+                if isShowing {
+                    AppHaptics.impact(.light)
+                }
+            }
             .alert("交付包较大", isPresented: $showPackageSizeWarning) {
                 Button("取消", role: .cancel) {
                     pendingPackageProject = nil
                 }
                 Button("继续导出") {
+                    AppHaptics.warning()
                     if let project = pendingPackageProject {
                         onContinuePackageExport(project)
                     }

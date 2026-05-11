@@ -6,7 +6,6 @@ struct GlobalSearchView: View {
     @State private var results = GlobalSearchResults()
     @State private var selectedScope: GlobalSearchScope = .all
     @State private var indexCache: GlobalSearchIndexCache?
-    @State private var searchTask: Task<Void, Never>?
     @State private var isSearching = false
     @AppStorage("recentGlobalSearchKeywords") private var recentKeywordsRaw = ""
 
@@ -27,6 +26,10 @@ struct GlobalSearchView: View {
 
     private var scopedResults: GlobalSearchResults {
         results.filtered(by: selectedScope).limited(to: 20)
+    }
+
+    private var searchExecutionKey: SearchExecutionKey {
+        SearchExecutionKey(keyword: trimmedKeyword, searchIndexVersion: store.searchIndexVersion)
     }
 
     var body: some View {
@@ -54,26 +57,17 @@ struct GlobalSearchView: View {
         .searchable(text: $keyword, prompt: "例如：示例客户 / 发票号 / 布线")
         .onSubmit(of: .search) {
             rememberSearch()
-            refreshSearchIndex()
-            scheduleSearch(immediate: true)
-        }
-        .onChange(of: keyword) { _, _ in
-            scheduleSearch()
         }
         .onChange(of: store.searchIndexVersion) { _, _ in
             guard indexCache != nil else { return }
             indexCache = GlobalSearchIndexCache(store: store)
-            if !trimmedKeyword.isEmpty {
-                scheduleSearch(immediate: true)
-            }
+        }
+        .task(id: searchExecutionKey) {
+            await runSearchTask()
         }
         .onAppear {
             refreshSearchIndex()
-            scheduleSearch(immediate: true)
             rememberSearch()
-        }
-        .onDisappear {
-            searchTask?.cancel()
         }
     }
 
@@ -82,7 +76,7 @@ struct GlobalSearchView: View {
         ContentUnavailableView(
             "输入关键词开始搜索",
             systemImage: "magnifyingglass",
-            description: Text("支持项目、联系人、票号、日志、资料、待办、随手记和工程数据库")
+            description: Text("支持项目、联系人、票号、日志、资料、待办、随手记和工程工具箱")
         )
         if !recentKeywords.isEmpty {
             Section("最近搜索") {
@@ -147,7 +141,7 @@ struct GlobalSearchView: View {
                     } label: {
                         searchRow(
                             title: match.contact.name,
-                            subtitle: [match.contact.role, match.contact.phone, match.project?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                            subtitle: [match.contact.roleDisplayName, match.contact.phone, match.project?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
                         )
                     }
                 }
@@ -162,7 +156,7 @@ struct GlobalSearchView: View {
                             ProjectDetailView(projectId: project.id, initialMode: .finance, focus: .financialRecord(match.record.id))
                         } label: {
                             searchRow(
-                                title: "\(match.record.date) · \(match.record.direction) \(ReportBuilder.money(ReportBuilder.number(match.record.amount)))",
+                                title: "\(match.record.date) · \(match.record.direction.displayName) \(ReportBuilder.money(match.record.amountValue.doubleValue))",
                                 subtitle: [match.record.counterparty, match.record.invoiceNumber, project.name].filter { !$0.isEmpty }.joined(separator: " · ")
                             )
                         }
@@ -196,14 +190,14 @@ struct GlobalSearchView: View {
                 ForEach(results.documents) { match in
                     NavigationLink {
                         if let project = match.project {
-                            ProjectDetailView(projectId: project.id, initialMode: .assets, focus: .document(match.document.id))
+                            ProjectDetailView(projectId: project.id, initialMode: .records, focus: .document(match.document.id))
                         } else {
                             ProjectListView()
                         }
                     } label: {
                         searchRow(
                             title: match.document.title,
-                            subtitle: [match.document.category, match.project?.name ?? "未归属项目"].joined(separator: " · ")
+                            subtitle: [match.document.category.displayName, match.project?.name ?? "未归属项目"].joined(separator: " · ")
                         )
                     }
                 }
@@ -248,7 +242,7 @@ struct GlobalSearchView: View {
                     } label: {
                         searchRow(
                             title: match.item.name,
-                            subtitle: [match.item.versionName, match.item.status, match.project?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                            subtitle: [match.item.versionName, match.item.status.displayName, match.project?.name ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
                         )
                     }
                 }
@@ -324,7 +318,9 @@ struct GlobalSearchView: View {
                     } label: {
                         searchRow(
                             title: item.title.isEmpty ? "未命名工艺" : item.title,
-                            subtitle: [item.trade, item.qualityStandard].filter { !$0.isEmpty }.joined(separator: " · "),
+                            subtitle: [item.trade, item.qualityChecklist.first ?? item.qualityStandard, item.tutorialBody.components(separatedBy: .newlines).first ?? ""]
+                                .filter { !$0.isEmpty }
+                                .joined(separator: " · "),
                             subtitleLineLimit: 2
                         )
                     }
@@ -366,9 +362,9 @@ struct GlobalSearchView: View {
         indexCache = GlobalSearchIndexCache(store: store)
     }
 
-    private func scheduleSearch(immediate: Bool = false) {
+    @MainActor
+    private func runSearchTask() async {
         let term = trimmedKeyword
-        searchTask?.cancel()
         guard !term.isEmpty else {
             results = GlobalSearchResults()
             isSearching = false
@@ -379,21 +375,21 @@ struct GlobalSearchView: View {
         }
         let cache = indexCache
         isSearching = true
-        searchTask = Task { @MainActor in
-            if !immediate {
-                try? await Task.sleep(for: .milliseconds(180))
-            }
-            guard !Task.isCancelled else { return }
-            let found = await Task.detached(priority: .userInitiated) {
-                cache?.search(keyword: term) ?? GlobalSearchResults()
-            }.value
-            guard !Task.isCancelled else { return }
-            // 如果用户已继续输入新关键词，丢弃旧结果，避免结果闪回。
-            guard term == trimmedKeyword else { return }
-            results = found
-            isSearching = false
-        }
+        guard await DebouncedTask.wait(for: .milliseconds(180)) else { return }
+        let found = await Task.detached(priority: .userInitiated) {
+            cache?.search(keyword: term) ?? GlobalSearchResults()
+        }.value
+        guard !Task.isCancelled else { return }
+        // 如果用户已继续输入新关键词，丢弃旧结果，避免结果闪回。
+        guard term == trimmedKeyword else { return }
+        results = found
+        isSearching = false
     }
+}
+
+private struct SearchExecutionKey: Equatable {
+    let keyword: String
+    let searchIndexVersion: Int
 }
 
 private struct GlobalSearchResults {
@@ -520,7 +516,7 @@ private enum GlobalSearchScope: String, CaseIterable {
         case .todos: return "待办"
         case .records: return "清单"
         case .quickNotes: return "随手记"
-        case .database: return "数据库"
+        case .database: return "工具箱"
         }
     }
 
@@ -601,17 +597,27 @@ private struct GlobalSearchIndexCache {
 
         return GlobalSearchResults(
             projects: sorted(projects.filter { project in
-                matches([project.name, project.location, project.customerName, project.customerPhone, project.managerName, project.status, project.startDate, project.expectedEndDate], keyword: keyword)
+                matches([
+                    project.name,
+                    project.location,
+                    project.customerName,
+                    project.customerPhone,
+                    project.managerName,
+                    project.status.displayName,
+                    project.status.rawValue,
+                    project.startDate,
+                    project.expectedEndDate
+                ], keyword: keyword)
             }, keyword: keyword) { [$0.name, $0.location, $0.customerName, $0.customerPhone] },
             contacts: sorted(contacts.compactMap { contact in
                 let project = keywordProjectMap[contact.projectId]
-                let fields = [contact.name, contact.role, contact.phone, contact.company, contact.note, project?.name ?? ""]
+                let fields = [contact.name, contact.roleDisplayName, contact.phone, contact.company, contact.note, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return ContactMatch(contact: contact, project: project)
             }, keyword: keyword) { [$0.contact.name, $0.contact.phone, $0.contact.company, $0.project?.name ?? ""] },
             financialRecords: sorted(financialRecords.compactMap { record in
                 let project = keywordProjectMap[record.projectId]
-                let fields = [record.invoiceNumber, record.counterparty, record.note, record.category, record.direction, record.date, record.amount, project?.name ?? ""]
+                let fields = [record.invoiceNumber, record.counterparty, record.note, record.category.displayName, record.direction.displayName, record.date, record.amount, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return FinancialMatch(record: record, project: project)
             }, keyword: keyword, tieBreak: { lhs, rhs in
@@ -627,15 +633,15 @@ private struct GlobalSearchIndexCache {
             }) { [$0.log.content, $0.log.date, $0.project?.name ?? ""] },
             documents: sorted(documents.compactMap { document in
                 let project = keywordProjectMap[document.projectId]
-                let fields = [document.title, document.category, document.amount, document.createdAt, document.note, project?.name ?? ""]
+                let fields = [document.title, document.category.displayName, document.amount, document.createdAt, document.note, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return DocumentMatch(document: document, project: project)
             }, keyword: keyword, tieBreak: { lhs, rhs in
                 lhs.document.createdAt > rhs.document.createdAt
-            }) { [$0.document.title, $0.document.category, $0.project?.name ?? ""] },
+            }) { [$0.document.title, $0.document.category.displayName, $0.project?.name ?? ""] },
             todos: sorted(todos.compactMap { todo in
                 let project = todo.projectId.flatMap { keywordProjectMap[$0] }
-                let fields = [todo.title, todo.owner, todo.dueDate, todo.completedAt ?? "", todo.priority, todo.issueType, todo.note, project?.name ?? ""]
+                let fields = [todo.title, todo.owner, todo.dueDate, todo.completedAt ?? "", todo.priority.displayName, todo.issueType.displayName, todo.note, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return TodoMatch(todo: todo, project: project)
             }, keyword: keyword, tieBreak: { lhs, rhs in
@@ -643,16 +649,16 @@ private struct GlobalSearchIndexCache {
             }) { [$0.todo.title, $0.todo.owner, $0.project?.name ?? ""] },
             materials: sorted(materials.compactMap { item in
                 let project = item.projectId.flatMap { keywordProjectMap[$0] }
-                let fields = [item.name, item.quantity, item.unit, item.unitPrice, item.specification, item.brand, item.supplier, item.purchaseStatus, item.arrivalDate, project?.name ?? ""]
+                let fields = [item.name, item.quantity, item.unit, item.unitPrice, item.specification, item.brand, item.supplier, item.purchaseStatus.displayName, item.arrivalDate, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return MaterialMatch(item: item, project: project)
             }, keyword: keyword) { [$0.item.name, $0.item.specification, $0.item.brand, $0.item.supplier, $0.project?.name ?? ""] },
             quotes: sorted(quotes.compactMap { item in
                 let project = item.projectId.flatMap { keywordProjectMap[$0] }
-                let fields = [item.name, item.quantity, item.unit, item.unitPrice, item.notes, item.versionName, item.status, item.customerConfirmedDate, item.contractAmount, project?.name ?? ""]
+                let fields = [item.name, item.quantity, item.unit, item.unitPrice, item.notes, item.versionName, item.status.displayName, item.customerConfirmedDate, item.contractAmount, project?.name ?? ""]
                 guard matches(fields, keyword: keyword) else { return nil }
                 return QuoteMatch(item: item, project: project)
-            }, keyword: keyword) { [$0.item.name, $0.item.versionName, $0.item.status, $0.project?.name ?? ""] },
+            }, keyword: keyword) { [$0.item.name, $0.item.versionName, $0.item.status.displayName, $0.project?.name ?? ""] },
             laborRecords: sorted(laborRecords.compactMap { item in
                 let project = item.projectId.flatMap { keywordProjectMap[$0] }
                 let fields = [item.date, item.workers, item.hours, item.unitRate, item.workType, item.teamName, item.note, project?.name ?? ""]
@@ -678,7 +684,7 @@ private struct GlobalSearchIndexCache {
                 lhs.updatedAt > rhs.updatedAt
             }) { [$0.name, $0.contact, $0.phone, $0.category] },
             constructionMethods: sorted(constructionMethods.filter { item in
-                matches([item.title, item.trade, item.steps, item.qualityStandard, item.safetyNotes], keyword: keyword)
+                matches([item.title, item.trade, item.tutorialBody, item.steps, item.qualityStandard, item.safetyNotes], keyword: keyword)
             }, keyword: keyword, tieBreak: { lhs, rhs in
                 lhs.updatedAt > rhs.updatedAt
             }) { [$0.title, $0.trade, $0.qualityStandard] },

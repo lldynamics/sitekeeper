@@ -4,23 +4,23 @@ struct Project: Identifiable, Codable {
     var id = UUID()
     var name: String
     var location: String
-    var status: String
+    var status: ProjectStatus
     var customerName: String
     var customerPhone: String
     var startDate: String
     var expectedEndDate: String
     var managerName: String
-    var contractAmount: String
-    var paidAmount: String
-    var paymentStatus: String
-    var materialCost: String
-    var laborCost: String
+    @NonNegativeNumberText var contractAmount: String
+    @NonNegativeNumberText var paidAmount: String
+    var paymentStatus: PaymentStatus
+    @NonNegativeNumberText var materialCost: String
+    @NonNegativeNumberText var laborCost: String
 
     init(
         id: UUID = UUID(),
         name: String,
         location: String,
-        status: String,
+        status: ProjectStatus = .active,
         customerName: String = "",
         customerPhone: String = "",
         startDate: String = "",
@@ -28,7 +28,7 @@ struct Project: Identifiable, Codable {
         managerName: String = "",
         contractAmount: String = "",
         paidAmount: String = "",
-        paymentStatus: String = PaymentStatus.unpaid.rawValue,
+        paymentStatus: PaymentStatus = .unpaid,
         materialCost: String = "",
         laborCost: String = ""
     ) {
@@ -58,7 +58,7 @@ struct Project: Identifiable, Codable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         name = try container.decode(String.self, forKey: .name)
         location = try container.decodeIfPresent(String.self, forKey: .location) ?? ""
-        status = try container.decodeIfPresent(String.self, forKey: .status) ?? ProjectStatus.active.rawValue
+        status = try container.decodeStringEnum(ProjectStatus.self, forKey: .status, default: .active)
         customerName = try container.decodeIfPresent(String.self, forKey: .customerName) ?? ""
         customerPhone = try container.decodeIfPresent(String.self, forKey: .customerPhone) ?? ""
         startDate = try container.decodeIfPresent(String.self, forKey: .startDate) ?? ""
@@ -66,9 +66,27 @@ struct Project: Identifiable, Codable {
         managerName = try container.decodeIfPresent(String.self, forKey: .managerName) ?? ""
         contractAmount = try container.decodeIfPresent(String.self, forKey: .contractAmount) ?? ""
         paidAmount = try container.decodeIfPresent(String.self, forKey: .paidAmount) ?? ""
-        paymentStatus = try container.decodeIfPresent(String.self, forKey: .paymentStatus) ?? PaymentStatus.unpaid.rawValue
+        paymentStatus = try container.decodeStringEnum(PaymentStatus.self, forKey: .paymentStatus, default: .unpaid)
         materialCost = try container.decodeIfPresent(String.self, forKey: .materialCost) ?? ""
         laborCost = try container.decodeIfPresent(String.self, forKey: .laborCost) ?? ""
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(location, forKey: .location)
+        try container.encode(status.rawValue, forKey: .status)
+        try container.encode(customerName, forKey: .customerName)
+        try container.encode(customerPhone, forKey: .customerPhone)
+        try container.encode(startDate, forKey: .startDate)
+        try container.encode(expectedEndDate, forKey: .expectedEndDate)
+        try container.encode(managerName, forKey: .managerName)
+        try container.encode(contractAmount, forKey: .contractAmount)
+        try container.encode(paidAmount, forKey: .paidAmount)
+        try container.encode(paymentStatus.rawValue, forKey: .paymentStatus)
+        try container.encode(materialCost, forKey: .materialCost)
+        try container.encode(laborCost, forKey: .laborCost)
     }
 }
 
@@ -79,7 +97,20 @@ enum ProjectStatus: String, CaseIterable, Codable {
     case settled = "已结算"
     case archived = "已归档"
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .active:
+            return String(localized: "project_status_active")
+        case .paused:
+            return String(localized: "project_status_paused")
+        case .completed:
+            return String(localized: "project_status_completed")
+        case .settled:
+            return String(localized: "project_status_settled")
+        case .archived:
+            return String(localized: "project_status_archived")
+        }
+    }
 }
 
 struct DailyLog: Identifiable, Codable {
@@ -87,7 +118,7 @@ struct DailyLog: Identifiable, Codable {
     var date: String
     var weather: String
     var content: String
-    var workers: String
+    @NonNegativeNumberText var workers: String
     var photoFileName: String?
     var photos: [LogPhoto]
     var safety: String
@@ -158,9 +189,9 @@ struct LogPhoto: Identifiable, Codable {
     var id = UUID()
     var fileName: String
     var note: String
-    var tag: String
+    var tag: PhotoTag
 
-    init(id: UUID = UUID(), fileName: String, note: String = "", tag: String = PhotoTag.general.rawValue) {
+    init(id: UUID = UUID(), fileName: String, note: String = "", tag: PhotoTag = .general) {
         self.id = id
         self.fileName = fileName
         self.note = note
@@ -176,7 +207,11 @@ struct LogPhoto: Identifiable, Codable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         fileName = try container.decode(String.self, forKey: .fileName)
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
-        tag = try container.decodeIfPresent(String.self, forKey: .tag) ?? PhotoTag.general.rawValue
+        tag = try container.decodeStringEnum(
+            PhotoTag.self,
+            forKey: .tag,
+            default: .general
+        )
     }
 }
 
@@ -185,8 +220,8 @@ struct SiteTodo: Identifiable, Codable {
     var title: String
     var owner: String
     var dueDate: String
-    var priority: String
-    var issueType: String
+    var priority: TodoPriority
+    var issueType: TodoIssueType
     var rectificationBeforePhotoFileName: String?
     var rectificationAfterPhotoFileName: String?
     var isDone: Bool
@@ -199,8 +234,8 @@ struct SiteTodo: Identifiable, Codable {
         title: String,
         owner: String = "",
         dueDate: String = Formatters.date.string(from: Date()),
-        priority: String = TodoPriority.medium.rawValue,
-        issueType: String = TodoIssueType.general.rawValue,
+        priority: TodoPriority = .medium,
+        issueType: TodoIssueType = .general,
         rectificationBeforePhotoFileName: String? = nil,
         rectificationAfterPhotoFileName: String? = nil,
         isDone: Bool = false,
@@ -234,8 +269,16 @@ struct SiteTodo: Identifiable, Codable {
         title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
         owner = try container.decodeIfPresent(String.self, forKey: .owner) ?? ""
         dueDate = try container.decodeIfPresent(String.self, forKey: .dueDate) ?? Formatters.date.string(from: Date())
-        priority = try container.decodeIfPresent(String.self, forKey: .priority) ?? TodoPriority.medium.rawValue
-        issueType = try container.decodeIfPresent(String.self, forKey: .issueType) ?? TodoIssueType.general.rawValue
+        priority = try container.decodeStringEnum(
+            TodoPriority.self,
+            forKey: .priority,
+            default: .medium
+        )
+        issueType = try container.decodeStringEnum(
+            TodoIssueType.self,
+            forKey: .issueType,
+            default: .general
+        )
         rectificationBeforePhotoFileName = try container.decodeIfPresent(String.self, forKey: .rectificationBeforePhotoFileName)
         rectificationAfterPhotoFileName = try container.decodeIfPresent(String.self, forKey: .rectificationAfterPhotoFileName)
         isDone = try container.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
@@ -267,11 +310,11 @@ enum QuickNoteAttachmentKind: String, CaseIterable, Codable {
 
     var title: String {
         switch self {
-        case .photo: return "照片"
-        case .video: return "视频"
-        case .audio: return "语音"
-        case .drawing: return "手绘"
-        case .file: return "附件"
+        case .photo: return String(localized: "quick_note_attachment_kind_photo")
+        case .video: return String(localized: "quick_note_attachment_kind_video")
+        case .audio: return String(localized: "quick_note_attachment_kind_audio")
+        case .drawing: return String(localized: "quick_note_attachment_kind_drawing")
+        case .file: return String(localized: "quick_note_attachment_kind_file")
         }
     }
 
@@ -311,7 +354,7 @@ struct QuickNoteAttachment: Identifiable, Codable {
     }
 
     var attachmentKind: QuickNoteAttachmentKind {
-        QuickNoteAttachmentKind(rawValue: kind) ?? .photo
+        StringEnumFallback.value(kind, default: .photo)
     }
 
     var displayName: String {
@@ -453,30 +496,172 @@ struct SupplierProfile: Identifiable, Codable {
 }
 
 struct ConstructionMethod: Identifiable, Codable {
+    enum PublishStatus: String, CaseIterable, Codable {
+        case draft = "草稿"
+        case published = "已发布"
+        case deprecated = "已废止"
+
+        var displayName: String {
+            switch self {
+            case .draft:
+                return String(localized: "construction_method_publish_status_draft")
+            case .published:
+                return String(localized: "construction_method_publish_status_published")
+            case .deprecated:
+                return String(localized: "construction_method_publish_status_deprecated")
+            }
+        }
+    }
+
+    enum TutorialTextSize: String, CaseIterable, Codable {
+        case small
+        case normal
+        case large
+        case extraLarge
+
+        var displayName: String {
+            switch self {
+            case .small: return String(localized: "construction_method_tutorial_text_size_small")
+            case .normal: return String(localized: "construction_method_tutorial_text_size_normal")
+            case .large: return String(localized: "construction_method_tutorial_text_size_large")
+            case .extraLarge: return String(localized: "construction_method_tutorial_text_size_extra_large")
+            }
+        }
+
+        var scale: CGFloat {
+            switch self {
+            case .small: return 0.92
+            case .normal: return 1.0
+            case .large: return 1.12
+            case .extraLarge: return 1.24
+            }
+        }
+    }
+
     var id = UUID()
     var title: String
     var trade: String
-    var steps: String
-    var qualityStandard: String
-    var safetyNotes: String
+    var versionName: String
+    var publishStatus: PublishStatus
+    var tutorialBody: String
+    // Legacy compatibility only: editor no longer applies per-tutorial global text scaling.
+    var tutorialTextSize: TutorialTextSize
+    var tutorialAttachments: [QuickNoteAttachment]
+    var procedureSteps: [String]
+    var qualityChecklist: [String]
+    var safetyChecklist: [String]
+    var attachments: [QuickNoteAttachment]
     var updatedAt: String
 
     init(
         id: UUID = UUID(),
         title: String = "",
         trade: String = "",
+        versionName: String = "V1",
+        publishStatus: PublishStatus = .draft,
+        tutorialBody: String = "",
+        tutorialTextSize: TutorialTextSize = .normal,
+        tutorialAttachments: [QuickNoteAttachment] = [],
         steps: String = "",
         qualityStandard: String = "",
         safetyNotes: String = "",
+        procedureSteps: [String] = [],
+        qualityChecklist: [String] = [],
+        safetyChecklist: [String] = [],
+        attachments: [QuickNoteAttachment] = [],
         updatedAt: String = Formatters.now()
     ) {
         self.id = id
         self.title = title
         self.trade = trade
-        self.steps = steps
-        self.qualityStandard = qualityStandard
-        self.safetyNotes = safetyNotes
+        self.versionName = versionName
+        self.publishStatus = publishStatus
+        self.tutorialBody = tutorialBody
+        self.tutorialTextSize = tutorialTextSize
+        self.tutorialAttachments = tutorialAttachments
+        self.procedureSteps = procedureSteps.isEmpty ? Self.parseLines(steps) : Self.normalizeList(procedureSteps)
+        self.qualityChecklist = qualityChecklist.isEmpty ? Self.parseLines(qualityStandard) : Self.normalizeList(qualityChecklist)
+        self.safetyChecklist = safetyChecklist.isEmpty ? Self.parseLines(safetyNotes) : Self.normalizeList(safetyChecklist)
+        self.attachments = attachments
         self.updatedAt = updatedAt
+    }
+
+    var steps: String {
+        get { procedureSteps.joined(separator: "\n") }
+        set { procedureSteps = Self.parseLines(newValue) }
+    }
+
+    var qualityStandard: String {
+        get { qualityChecklist.joined(separator: "\n") }
+        set { qualityChecklist = Self.parseLines(newValue) }
+    }
+
+    var safetyNotes: String {
+        get { safetyChecklist.joined(separator: "\n") }
+        set { safetyChecklist = Self.parseLines(newValue) }
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, title, trade, versionName, publishStatus, tutorialBody, tutorialTextSize, tutorialAttachments
+        case steps, qualityStandard, safetyNotes
+        case procedureSteps, qualityChecklist, safetyChecklist
+        case attachments, updatedAt
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        trade = try container.decodeIfPresent(String.self, forKey: .trade) ?? ""
+        versionName = try container.decodeIfPresent(String.self, forKey: .versionName) ?? "V1"
+        publishStatus = try container.decodeIfPresent(PublishStatus.self, forKey: .publishStatus) ?? .draft
+        tutorialBody = try container.decodeIfPresent(String.self, forKey: .tutorialBody) ?? ""
+        tutorialTextSize = try container.decodeIfPresent(TutorialTextSize.self, forKey: .tutorialTextSize) ?? .normal
+        tutorialAttachments = try container.decodeIfPresent([QuickNoteAttachment].self, forKey: .tutorialAttachments) ?? []
+        let legacySteps = try container.decodeIfPresent(String.self, forKey: .steps) ?? ""
+        let legacyQuality = try container.decodeIfPresent(String.self, forKey: .qualityStandard) ?? ""
+        let legacySafety = try container.decodeIfPresent(String.self, forKey: .safetyNotes) ?? ""
+        procedureSteps = Self.normalizeList(try container.decodeIfPresent([String].self, forKey: .procedureSteps) ?? Self.parseLines(legacySteps))
+        qualityChecklist = Self.normalizeList(try container.decodeIfPresent([String].self, forKey: .qualityChecklist) ?? Self.parseLines(legacyQuality))
+        safetyChecklist = Self.normalizeList(try container.decodeIfPresent([String].self, forKey: .safetyChecklist) ?? Self.parseLines(legacySafety))
+        attachments = try container.decodeIfPresent([QuickNoteAttachment].self, forKey: .attachments) ?? []
+        updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? Formatters.now()
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(title, forKey: .title)
+        try container.encode(trade, forKey: .trade)
+        try container.encode(versionName, forKey: .versionName)
+        try container.encode(publishStatus, forKey: .publishStatus)
+        try container.encode(tutorialBody, forKey: .tutorialBody)
+        // Keep decoding legacy field, but stop writing it for new data.
+        try container.encode(tutorialAttachments, forKey: .tutorialAttachments)
+        try container.encode(steps, forKey: .steps)
+        try container.encode(qualityStandard, forKey: .qualityStandard)
+        try container.encode(safetyNotes, forKey: .safetyNotes)
+        try container.encode(procedureSteps, forKey: .procedureSteps)
+        try container.encode(qualityChecklist, forKey: .qualityChecklist)
+        try container.encode(safetyChecklist, forKey: .safetyChecklist)
+        try container.encode(attachments, forKey: .attachments)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
+
+    private static func parseLines(_ raw: String) -> [String] {
+        raw
+            .split(whereSeparator: \.isNewline)
+            .map { item in
+                item.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(of: #"^\d+[\.\、\)]\s*"#, with: "", options: .regularExpression)
+            }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func normalizeList(_ list: [String]) -> [String] {
+        list
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
     }
 }
 
@@ -496,10 +681,11 @@ struct ProjectDrawing: Identifiable, Codable {
     var version: String
     var isCurrentVersion: Bool
     var relatedLogDate: String
-    var issueStatus: String
+    var issueStatus: DrawingIssueStatus
     var issueNote: String
     var importedAt: String
     var note: String
+    var cadOverlaySnapshotData: String
 
     init(
         id: UUID = UUID(),
@@ -510,10 +696,11 @@ struct ProjectDrawing: Identifiable, Codable {
         version: String = "V1",
         isCurrentVersion: Bool = true,
         relatedLogDate: String = "",
-        issueStatus: String = DrawingIssueStatus.none.rawValue,
+        issueStatus: DrawingIssueStatus = .none,
         issueNote: String = "",
         importedAt: String = Formatters.now(),
-        note: String = ""
+        note: String = "",
+        cadOverlaySnapshotData: String = ""
     ) {
         self.id = id
         self.projectId = projectId
@@ -527,26 +714,32 @@ struct ProjectDrawing: Identifiable, Codable {
         self.issueNote = issueNote
         self.importedAt = importedAt
         self.note = note
+        self.cadOverlaySnapshotData = cadOverlaySnapshotData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, fileName, fileType, version, isCurrentVersion, relatedLogDate, issueStatus, issueNote, importedAt, note
+        case id, projectId, name, fileName, fileType, version, isCurrentVersion, relatedLogDate, issueStatus, issueNote, importedAt, note, cadOverlaySnapshotData
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
-        name = try container.decodeIfPresent(String.self, forKey: .name) ?? "图纸"
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         fileName = try container.decodeIfPresent(String.self, forKey: .fileName) ?? ""
         fileType = try container.decodeIfPresent(String.self, forKey: .fileType) ?? ""
         version = try container.decodeIfPresent(String.self, forKey: .version) ?? "V1"
         isCurrentVersion = try container.decodeIfPresent(Bool.self, forKey: .isCurrentVersion) ?? true
         relatedLogDate = try container.decodeIfPresent(String.self, forKey: .relatedLogDate) ?? ""
-        issueStatus = try container.decodeIfPresent(String.self, forKey: .issueStatus) ?? DrawingIssueStatus.none.rawValue
+        issueStatus = try container.decodeStringEnum(
+            DrawingIssueStatus.self,
+            forKey: .issueStatus,
+            default: .none
+        )
         issueNote = try container.decodeIfPresent(String.self, forKey: .issueNote) ?? ""
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        cadOverlaySnapshotData = try container.decodeIfPresent(String.self, forKey: .cadOverlaySnapshotData) ?? ""
     }
 
     static let allowedFileExtensions: Set<String> = ["pdf", "dwg", "dxf"]
@@ -556,7 +749,7 @@ struct ProjectContact: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var name: String
-    var role: String
+    var role: ProjectContactRole
     var company: String
     var phone: String
     var note: String
@@ -565,7 +758,7 @@ struct ProjectContact: Identifiable, Codable {
         id: UUID = UUID(),
         projectId: UUID,
         name: String,
-        role: String = ProjectContactRole.owner.rawValue,
+        role: ProjectContactRole = .owner,
         company: String = "",
         phone: String = "",
         note: String = ""
@@ -588,10 +781,22 @@ struct ProjectContact: Identifiable, Codable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
-        role = try container.decodeIfPresent(String.self, forKey: .role) ?? ProjectContactRole.owner.rawValue
+        role = try container.decodeStringEnum(
+            ProjectContactRole.self,
+            forKey: .role,
+            default: .owner
+        )
         company = try container.decodeIfPresent(String.self, forKey: .company) ?? ""
         phone = try container.decodeIfPresent(String.self, forKey: .phone) ?? ""
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
+
+    var normalizedRole: ProjectContactRole {
+        role
+    }
+
+    var roleDisplayName: String {
+        normalizedRole.displayName
     }
 }
 
@@ -599,11 +804,11 @@ struct ProjectDocument: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var title: String
-    var category: String
+    var category: ProjectDocumentCategory
     var fileName: String
     var fileType: String
     var pageCount: Int
-    var amount: String
+    @NonNegativeNumberText var amount: String
     var linkedFinancialRecordId: UUID?
     var createdAt: String
     var note: String
@@ -612,7 +817,7 @@ struct ProjectDocument: Identifiable, Codable {
         id: UUID = UUID(),
         projectId: UUID,
         title: String,
-        category: String = ProjectDocumentCategory.construction.rawValue,
+        category: ProjectDocumentCategory = .construction,
         fileName: String,
         fileType: String = "pdf",
         pageCount: Int = 1,
@@ -642,8 +847,12 @@ struct ProjectDocument: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
-        title = try container.decodeIfPresent(String.self, forKey: .title) ?? "项目资料"
-        category = try container.decodeIfPresent(String.self, forKey: .category) ?? ProjectDocumentCategory.construction.rawValue
+        title = try container.decodeIfPresent(String.self, forKey: .title) ?? ""
+        category = try container.decodeStringEnum(
+            ProjectDocumentCategory.self,
+            forKey: .category,
+            default: .construction
+        )
         fileName = try container.decodeIfPresent(String.self, forKey: .fileName) ?? ""
         fileType = try container.decodeIfPresent(String.self, forKey: .fileType) ?? "pdf"
         pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount) ?? 1
@@ -658,7 +867,14 @@ enum WarehouseMovementType: String, CaseIterable, Codable {
     case inbound = "入库"
     case outbound = "出库"
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .inbound:
+            return String(localized: "warehouse_movement_type_inbound")
+        case .outbound:
+            return String(localized: "warehouse_movement_type_outbound")
+        }
+    }
 
     var sign: Double {
         switch self {
@@ -679,11 +895,11 @@ struct ProjectWarehouseMovement: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var date: String
-    var movementType: String
+    var movementType: WarehouseMovementType
     var materialName: String
     var specification: String
     var unit: String
-    var quantity: String
+    @NonNegativeNumberText var quantity: String
     var counterparty: String
     var handler: String
     var note: String
@@ -694,7 +910,7 @@ struct ProjectWarehouseMovement: Identifiable, Codable {
         id: UUID = UUID(),
         projectId: UUID,
         date: String = Formatters.date.string(from: Date()),
-        movementType: String = WarehouseMovementType.inbound.rawValue,
+        movementType: WarehouseMovementType = .inbound,
         materialName: String = "",
         specification: String = "",
         unit: String = "",
@@ -729,7 +945,11 @@ struct ProjectWarehouseMovement: Identifiable, Codable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
         date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.date.string(from: Date())
-        movementType = try container.decodeIfPresent(String.self, forKey: .movementType) ?? WarehouseMovementType.inbound.rawValue
+        movementType = try container.decodeStringEnum(
+            WarehouseMovementType.self,
+            forKey: .movementType,
+            default: .inbound
+        )
         materialName = try container.decodeIfPresent(String.self, forKey: .materialName) ?? ""
         specification = try container.decodeIfPresent(String.self, forKey: .specification) ?? ""
         unit = try container.decodeIfPresent(String.self, forKey: .unit) ?? ""
@@ -739,6 +959,10 @@ struct ProjectWarehouseMovement: Identifiable, Codable {
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         linkedDocumentIds = try container.decodeIfPresent([UUID].self, forKey: .linkedDocumentIds) ?? []
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? Formatters.now()
+    }
+
+    var normalizedMovementType: WarehouseMovementType {
+        movementType
     }
 }
 

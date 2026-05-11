@@ -1,38 +1,39 @@
 import SwiftUI
 
-struct ProjectModeHubEntry: Identifiable {
-    let id = UUID()
+struct ProjectModeHubSection<Content: View>: View {
+    let title: String
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        Section(title) {
+            content()
+        }
+    }
+}
+
+struct ProjectModeHubRow<Destination: View>: View {
     let title: String
     let subtitle: String
     let systemImage: String
     let tint: Color
-    let destination: AnyView
-}
-
-struct ProjectModeHubSection: View {
-    let title: String
-    let entries: [ProjectModeHubEntry]
+    @ViewBuilder let destination: () -> Destination
 
     var body: some View {
-        Section(title) {
-            ForEach(entries) { entry in
-                NavigationLink {
-                    entry.destination
-                        .navigationTitle(entry.title)
-                        .navigationBarTitleDisplayMode(.inline)
-                } label: {
-                    HStack(spacing: 10) {
-                        Image(systemName: entry.systemImage)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(entry.tint)
-                            .frame(width: 24)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(entry.title)
-                            Text(entry.subtitle)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+        NavigationLink {
+            destination()
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+        } label: {
+            HStack(spacing: AppSpacing.normal) {
+                Image(systemName: systemImage)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(tint)
+                    .frame(width: 24)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title)
+                    Text(subtitle)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

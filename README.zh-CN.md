@@ -11,7 +11,9 @@
 - 清单：材料清单、人工记录、报价单、自定义材料库，并支持关联项目。
 - 项目：工程列表、经营看板、项目详情概览、施工进度任务、历史计算、增强施工日志。
 - 施工日志：列表/日历视图、项目/日期/搜索筛选、安全记录、材料记录、天气记录、多张照片和照片备注。
-- 导出/备份：CSV、PDF、Excel 兼容 HTML、报价单 PDF、完整 ZIP 原文件备份（含数据索引 + 照片/图纸/资料/随手记附件）、合并/覆盖导入、照片备份和恢复。
+- 导出/备份：CSV、PDF、Excel 兼容 HTML、报价单 PDF、完整 ZIP 原文件备份（含数据索引 + 照片/图纸/资料/随手记与工艺附件）、合并/覆盖导入、iCloud 备份与恢复预览、ZIP64 大包流式导出。
+- 数据健康：支持一键检查缺失原件、孤立项目关联和异常引用，并提供修复入口。
+- 小组件：按风险优先展示项目（逾期/待办优先）、待办与库存摘要，并显示最近同步时间。
 - 发布基础：应用图标、隐私清单、正式 Bundle ID、版本号/构建号、共享测试 scheme、单元测试。
 
 ## 快速启动
@@ -68,6 +70,12 @@ UI 测试：
 
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project sitekeeper.xcodeproj -scheme sitekeeper-iOS-UITests -destination 'id=<SIMULATOR_UDID>'
+```
+
+发布预检：
+
+```sh
+scripts/release/preflight.sh
 ```
 
 ## 目录结构

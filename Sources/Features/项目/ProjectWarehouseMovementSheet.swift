@@ -4,6 +4,10 @@ import UniformTypeIdentifiers
 import UIKit
 
 struct ProjectWarehouseMovementSheet: View {
+    private enum MovementField: Hashable {
+        case quantity
+    }
+
     @Environment(DataStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let projects: [Project]
@@ -24,7 +28,8 @@ struct ProjectWarehouseMovementSheet: View {
     @State private var showFileImporter = false
     @State private var fileImportWarningMessage = ""
     @State private var showFileImportWarning = false
-    @StateObject private var mediaImport = ProjectWarehouseMovementMediaImportHelper()
+    @State private var mediaImport = ProjectWarehouseMovementMediaImportHelper()
+    @FocusState private var movementFocusedField: MovementField?
 
     init(
         projects: [Project],
@@ -76,6 +81,7 @@ struct ProjectWarehouseMovementSheet: View {
                     TextField("单位", text: $unit)
                     TextField("数量", text: $quantity)
                         .keyboardType(.decimalPad)
+                        .focused($movementFocusedField, equals: .quantity)
                 }
 
                 Section("备注") {
@@ -148,7 +154,7 @@ struct ProjectWarehouseMovementSheet: View {
                         onSave(ProjectWarehouseMovement(
                             projectId: projectId,
                             date: Formatters.date.string(from: date),
-                            movementType: movementType.rawValue,
+                            movementType: movementType,
                             materialName: materialName.trimmingCharacters(in: .whitespacesAndNewlines),
                             specification: specification.trimmingCharacters(in: .whitespacesAndNewlines),
                             unit: unit.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -161,6 +167,10 @@ struct ProjectWarehouseMovementSheet: View {
                     }
                     .disabled(!canSave)
                 }
+                KeyboardNavigationToolbar(
+                    focusedField: $movementFocusedField,
+                    fields: [.quantity]
+                )
             }
         }
         .fileImporter(
@@ -202,7 +212,7 @@ struct ProjectWarehouseMovementSheet: View {
         projectId != nil
             && !materialName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && InputValidator.nonNegativeNumber(quantity)
-            && ReportBuilder.number(quantity) > 0
+            && QuantityValue(text: quantity).isPositive
     }
 
     private var materialSuggestionTitle: String {

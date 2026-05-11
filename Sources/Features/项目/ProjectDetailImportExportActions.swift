@@ -25,17 +25,12 @@ enum ProjectDetailImportExportActions {
         progress: ((ProjectPackageExportProgress) -> Void)? = nil,
         shouldCancel: (() -> Bool)? = nil
     ) -> ProjectDetailActionResult<ExportPayload> {
-        let missingFiles = missingProjectPackageFiles(
-            documents: documents,
-            drawings: drawings,
-            logs: logs,
-            quickNotes: quickNotes
+        // 缺失文件已由 ProjectDetailExportWorkflow.packageRequestDecision 前置检查；
+        // 此处保留断言以防直接调用此方法时跳过预检。
+        assert(
+            missingProjectPackageFiles(documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes).isEmpty,
+            "缺失文件应在调用 makeProjectPackageExport 前通过 packageRequestDecision 检查"
         )
-        guard missingFiles.isEmpty else {
-            let preview = missingFiles.prefix(8).joined(separator: "、")
-            let more = missingFiles.count > 8 ? " 等 \(missingFiles.count) 项" : ""
-            return .failure("交付包存在缺失原件：\(preview)\(more)。请先到数据健康检查处理后再导出。")
-        }
 
         do {
             let zipURL = try ReportBuilder.makeProjectPackageZIP(
@@ -118,7 +113,7 @@ enum ProjectDetailImportExportActions {
         }
         for log in logs {
             for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
-                issues.append("照片 \(log.date) \(photo.tag)")
+                issues.append("照片 \(log.date) \(photo.tag.displayName)")
             }
         }
         for note in quickNotes {

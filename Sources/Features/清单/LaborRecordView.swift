@@ -1,6 +1,12 @@
 import SwiftUI
 
 struct LaborRecordView: View {
+    private enum LaborFormField: Hashable {
+        case workers
+        case hours
+        case unitRate
+    }
+
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     let focusedLaborId: UUID?
@@ -17,56 +23,95 @@ struct LaborRecordView: View {
     @State private var newIsSettled = false
     @State private var newNote = ""
     @State private var newProjectId: UUID?
+    @State private var projectFilter: UUID?
+    @State private var operationMessage: String?
+    @FocusState private var laborFormFocusedField: LaborFormField?
 
     init(focusedLaborId: UUID? = nil) {
         self.focusedLaborId = focusedLaborId
     }
 
     private var filtered: [LaborRecord] {
-        if searchText.isEmpty { return store.laborRecords }
-        return store.laborRecords.filter {
-            $0.date.localizedStandardContains(searchText) ||
-            $0.note.localizedStandardContains(searchText)
+        let scopedRecords = store.laborRecords.filter { record in
+            projectFilter == nil || record.projectId == projectFilter
         }
+        return SearchMatcher.filter(scopedRecords, keyword: searchText)
     }
 
     var body: some View {
         List {
-            ForEach(filtered) { r in
-                Button {
-                    editingRecord = r
-                } label: {
-                    laborRow(r)
-                }
-                .buttonStyle(.plain)
+            Section {
+                ProjectContextStrip(
+                    title: "当前工程",
+                    projects: store.projects,
+                    selectedProjectId: $projectFilter,
+                    emptyText: "全部项目"
+                )
             }
-            .onDelete { idx in
-                let ids = idx.map { filtered[$0].id }
-                store.laborRecords.removeAll { ids.contains($0.id) }
-                store.scheduleSave()
+
+            if filtered.isEmpty {
+                Section {
+                    ContentUnavailableView("暂无人工记录", systemImage: "person.2", description: Text("添加人工后可按工程统计工时与成本。"))
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Label("添加人工记录", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.appPrimaryAction)
+                }
+            } else {
+                ForEach(filtered) { r in
+                    Button {
+                        editingRecord = r
+                    } label: {
+                        laborRow(r)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .onDelete { idx in
+                    let ids = idx.map { filtered[$0].id }
+                    store.laborRecords.removeAll { ids.contains($0.id) }
+                    store.scheduleSave()
+                    operationMessage = "已删除 \(ids.count) 条人工记录"
+                }
             }
         }
         .searchable(text: $searchText, prompt: "按日期或备注搜索")
         .navigationTitle("人工/辅材记录")
         .toolbar {
-            Button { showAdd = true } label: {
-                Image(systemName: "plus")
+            ToolbarItem(placement: .topBarTrailing) {
+                Button { showAdd = true } label: {
+                    Image(systemName: "plus").visibleIconStyle()
+                }
             }
         }
         .sheet(isPresented: $showAdd) {
             NavigationStack {
                 Form {
-                    DatePicker("日期", selection: $newDate, displayedComponents: .date)
-                    TextField("人数", text: $newWorkers).keyboardType(.numberPad)
-                    TextField("工时", text: $newHours).keyboardType(.numberPad)
-                    TextField("工价（每工时）", text: $newUnitRate).keyboardType(.decimalPad)
-                    TextField("工种", text: $newWorkType)
-                    TextField("班组", text: $newTeamName)
-                    Toggle("已结算", isOn: $newIsSettled)
-                    TextField("备注", text: $newNote)
-                    Picker("归属项目", selection: $newProjectId) {
-                        Text("无归属").tag(nil as UUID?)
-                        ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
+                    Section("必填信息") {
+                        DatePicker("日期", selection: $newDate, displayedComponents: .date)
+                        TextField("人数", text: $newWorkers).keyboardType(.numberPad)
+                            .focused($laborFormFocusedField, equals: .workers)
+                        TextField("工时", text: $newHours).keyboardType(.numberPad)
+                            .focused($laborFormFocusedField, equals: .hours)
+                        TextField("工价（每工时）", text: $newUnitRate).keyboardType(.decimalPad)
+                            .focused($laborFormFocusedField, equals: .unitRate)
+                    }
+                    Section("作业信息") {
+                        TextField("工种", text: $newWorkType)
+                        TextField("班组", text: $newTeamName)
+                        Toggle("已结算", isOn: $newIsSettled)
+                    }
+                    Section("归属项目") {
+                        Picker("归属项目", selection: $newProjectId) {
+                            Text("无归属").tag(nil as UUID?)
+                            ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
+                        }
+                    }
+                    Section("备注") {
+                        TextField("备注", text: $newNote, axis: .vertical)
+                            .lineLimit(2...4)
                     }
                 }
                 .navigationTitle("添加记录")
@@ -75,10 +120,14 @@ struct LaborRecordView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("取消") { showAdd = false }
                     }
-                    ToolbarItem(placement: .confirmationAction) {
+                ToolbarItem(placement: .confirmationAction) {
                         Button("保存") { save(); showAdd = false }
                             .disabled(!canSave)
                     }
+                    KeyboardNavigationToolbar(
+                        focusedField: $laborFormFocusedField,
+                        fields: [.workers, .hours, .unitRate]
+                    )
                 }
             }
         }
@@ -87,54 +136,37 @@ struct LaborRecordView: View {
                 if let index = store.laborRecords.firstIndex(where: { $0.id == updated.id }) {
                     store.laborRecords[index] = updated
                     store.scheduleSave()
+                    operationMessage = "已更新人工记录"
                 }
             } onDelete: { target in
                 store.laborRecords.removeAll { $0.id == target.id }
                 store.scheduleSave()
+                operationMessage = "已删除人工记录"
             }
         }
         .onAppear(perform: openFocusedLaborIfNeeded)
+        .operationToast(message: $operationMessage)
     }
 
     private func laborRow(_ r: LaborRecord) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(r.date).font(.body.weight(.medium))
-            HStack {
-                Text("\(r.workers) 人 × \(r.hours) \(UnitDisplay.translatedUnit("h", useMetric: useMetric))")
-                    .font(.caption).foregroundStyle(.secondary)
-                if !r.workType.isEmpty {
-                    Text("· \(r.workType)").font(.caption2).foregroundStyle(.secondary)
-                }
-                if !r.teamName.isEmpty {
-                    Text("· \(r.teamName)").font(.caption2).foregroundStyle(.secondary)
-                }
-                if ReportBuilder.number(r.unitRate) > 0 {
-                    Text("· 单价 \(ReportBuilder.money(ReportBuilder.number(r.unitRate)))")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Text("· 金额 \(ReportBuilder.money(ReportBuilder.laborLineTotal(r)))")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(.orange)
-                }
-                Text(r.isSettled ? "· 已结算" : "· 未结算")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(r.isSettled ? .green : .orange)
-                if let pid = r.projectId, let proj = store.projects.first(where: { $0.id == pid }) {
-                    Text("· \(proj.name)").font(.caption2).foregroundStyle(.blue)
-                }
-                if !r.note.isEmpty {
-                    Text("· \(r.note)")
-                        .font(.caption).foregroundStyle(.secondary)
-                }
-            }
-        }
+        let projectText = r.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
+        let meta = "\(r.date) · \(r.workers)人 × \(r.hours)\(UnitDisplay.translatedUnit("h", useMetric: useMetric)) · \(projectText)"
+        let note = [r.workType, r.teamName, r.note].filter { !$0.isEmpty }.joined(separator: " · ")
+        return BusinessRecordRow(
+            icon: "person.2.fill",
+            iconColor: r.isSettled ? Color.appSuccess : Color.appPrimaryAction,
+            title: r.workType.isEmpty ? "人工记录" : r.workType,
+            meta: meta,
+            note: note,
+            trailing: ReportBuilder.money(ReportBuilder.laborLineTotal(r)),
+            trailingColor: Color.appPrimaryAction
+        )
     }
 
     private func save() {
         guard canSave else { return }
-        let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd"
         store.laborRecords.append(LaborRecord(
-            date: df.string(from: newDate),
+            date: Formatters.date.string(from: newDate),
             workers: newWorkers,
             hours: newHours,
             unitRate: newUnitRate,
@@ -145,6 +177,7 @@ struct LaborRecordView: View {
             projectId: newProjectId
         ))
         store.scheduleSave()
+        operationMessage = "已新增人工记录"
         newWorkers = ""
         newHours = ""
         newUnitRate = ""
@@ -166,13 +199,20 @@ struct LaborRecordView: View {
               let record = store.laborRecords.first(where: { $0.id == focusedLaborId }) else { return }
         didOpenFocusedLabor = true
         searchText = ""
-        DispatchQueue.main.async {
+        projectFilter = record.projectId
+        Task { @MainActor in
             editingRecord = record
         }
     }
 }
 
 struct LaborRecordEditSheet: View {
+    private enum EditLaborFormField: Hashable {
+        case workers
+        case hours
+        case unitRate
+    }
+
     @Environment(\.dismiss) private var dismiss
     let record: LaborRecord
     let projects: [Project]
@@ -189,6 +229,7 @@ struct LaborRecordEditSheet: View {
     @State private var note: String
     @State private var projectId: UUID?
     @State private var showDeleteConfirm = false
+    @FocusState private var editLaborFormFocusedField: EditLaborFormField?
 
     init(record: LaborRecord, projects: [Project], onSave: @escaping (LaborRecord) -> Void, onDelete: @escaping (LaborRecord) -> Void) {
         self.record = record
@@ -212,8 +253,11 @@ struct LaborRecordEditSheet: View {
                 Section("人工") {
                     DatePicker("日期", selection: $date, displayedComponents: .date)
                     TextField("人数", text: $workers).keyboardType(.numberPad)
+                        .focused($editLaborFormFocusedField, equals: .workers)
                     TextField("工时", text: $hours).keyboardType(.numberPad)
+                        .focused($editLaborFormFocusedField, equals: .hours)
                     TextField("工价（每工时）", text: $unitRate).keyboardType(.decimalPad)
+                        .focused($editLaborFormFocusedField, equals: .unitRate)
                     TextField("工种", text: $workType)
                     TextField("班组", text: $teamName)
                     Toggle("已结算", isOn: $isSettled)
@@ -249,6 +293,10 @@ struct LaborRecordEditSheet: View {
                     }
                     .disabled(!canSave)
                 }
+                KeyboardNavigationToolbar(
+                    focusedField: $editLaborFormFocusedField,
+                    fields: [.workers, .hours, .unitRate]
+                )
             }
             .alert("删除这条人工记录？", isPresented: $showDeleteConfirm) {
                 Button("取消", role: .cancel) {}

@@ -1,26 +1,40 @@
 import Testing
 import Foundation
+import PDFKit
 @testable import sitekeeper
 
 @MainActor
 struct ReportBuilderTests {
+    private func makeSampleStore() -> DataStore {
+        TransferLimitPolicy.setRuntimeProfileOverride(.development)
+        let store = DataStore()
+        store.clearAllBusinessData(deleteStoredFiles: false)
+        store.importSampleData(replacingExisting: true)
+        return store
+    }
+
+    private func pdfText(_ data: Data) -> String {
+        guard let document = PDFDocument(data: data) else { return "" }
+        return (0..<document.pageCount)
+            .compactMap { document.page(at: $0)?.string }
+            .joined(separator: "\n")
+    }
 
     // MARK: - CSV Export
 
     @Test func makeCSVWithAllOptionsProducesData() throws {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         let options = ExportContentOptions()
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
         #expect(!csv.isEmpty)
         let text = try #require(String(data: csv, encoding: .utf8))
+        #expect(text.contains("[材料清单]"))
     }
 
     @Test func makeCSVMaterialsSection() {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         var options = ExportContentOptions()
@@ -50,8 +64,7 @@ struct ReportBuilderTests {
     // MARK: - Excel HTML Export
 
     @Test func makeExcelHTMLProducesData() throws {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: ExportContentOptions())
@@ -63,8 +76,7 @@ struct ReportBuilderTests {
     // MARK: - PDF Export
 
     @Test func makePDFProducesData() {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         let pdf = ReportBuilder.makePDF(snapshot: snapshot, options: ExportContentOptions())
@@ -82,8 +94,7 @@ struct ReportBuilderTests {
     // MARK: - Daily Report PDF
 
     @Test func makeDailyReportPDFProducesData() {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
         let pdf = ReportBuilder.makeDailyReportPDF(project: store.projects.first, logs: store.dailyLogs)
         #expect(!pdf.isEmpty)
     }
@@ -108,10 +119,10 @@ struct ReportBuilderTests {
 
     // MARK: - 不串项目测试
 
-    @Test func csvDoesNotLeakCrossProject() {
+    @Test func csvIncludesProjectIdsForTraceability() {
         let store = DataStore()
-        let p1 = Project(name: "项目A", location: "地址A", status: ProjectStatus.active.rawValue)
-        let p2 = Project(name: "项目B", location: "地址B", status: ProjectStatus.active.rawValue)
+        let p1 = Project(name: "项目A", location: "地址A", status: .active)
+        let p2 = Project(name: "项目B", location: "地址B", status: .active)
         store.projects = [p1, p2]
         store.materialItems = [
             MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
@@ -122,12 +133,12 @@ struct ReportBuilderTests {
             QuickNote(title: "笔记B", content: "项目B备注", projectId: p2.id)
         ]
         store.projectContacts = [
-            ProjectContact(projectId: p1.id, name: "张三", role: ProjectContactRole.owner.rawValue, phone: "13800138000"),
-            ProjectContact(projectId: p2.id, name: "李四", role: ProjectContactRole.team.rawValue, phone: "13900139000")
+            ProjectContact(projectId: p1.id, name: "张三", role: .owner, phone: "13800138000"),
+            ProjectContact(projectId: p2.id, name: "李四", role: .team, phone: "13900139000")
         ]
         store.paymentRecords = [
-            PaymentRecord(projectId: p1.id, date: "", amount: "1000", method: PaymentMethod.bankTransfer.rawValue),
-            PaymentRecord(projectId: p2.id, date: "", amount: "2000", method: PaymentMethod.cash.rawValue)
+            PaymentRecord(projectId: p1.id, date: "", amount: "1000", method: .bankTransfer),
+            PaymentRecord(projectId: p2.id, date: "", amount: "2000", method: .cash)
         ]
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
@@ -140,25 +151,26 @@ struct ReportBuilderTests {
         #expect(text.contains("笔记B"))
         #expect(text.contains("张三"))
         #expect(text.contains("李四"))
-        #expect(!text.contains(p1.id.uuidString))
-        #expect(!text.contains(p2.id.uuidString))
+        #expect(text.contains("项目ID"))
+        #expect(text.contains(p1.id.uuidString))
+        #expect(text.contains(p2.id.uuidString))
     }
 
-    @Test func pdfDoesNotLeakCrossProject() {
+    @Test func pdfFullExportIncludesContactsFromAllProjects() {
         let store = DataStore()
-        let p1 = Project(name: "项目A", location: "地址A", status: ProjectStatus.active.rawValue)
-        let p2 = Project(name: "项目B", location: "地址B", status: ProjectStatus.active.rawValue)
+        let p1 = Project(name: "项目A", location: "地址A", status: .active)
+        let p2 = Project(name: "项目B", location: "地址B", status: .active)
         store.projects = [p1, p2]
         store.projectContacts = [
-            ProjectContact(projectId: p1.id, name: "张三", role: ProjectContactRole.owner.rawValue, phone: "13800138000"),
-            ProjectContact(projectId: p2.id, name: "李四", role: ProjectContactRole.team.rawValue, phone: "13900139000")
+            ProjectContact(projectId: p1.id, name: "张三", role: .owner, phone: "13800138000"),
+            ProjectContact(projectId: p2.id, name: "李四", role: .team, phone: "13900139000")
         ]
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
         var options = ExportContentOptions()
         options.includeProjectContacts = true
         let pdf = ReportBuilder.makePDF(snapshot: snapshot, options: options)
-        let text = String(data: pdf, encoding: .utf8) ?? ""
+        let text = pdfText(pdf)
 
         #expect(text.contains("项目联系人"))
         #expect(text.contains("张三"))
@@ -168,8 +180,8 @@ struct ReportBuilderTests {
 
     @Test func filteredSnapshotDoesNotLeakCrossProject() {
         let store = DataStore()
-        let p1 = Project(name: "项目A", location: "地址A", status: ProjectStatus.active.rawValue)
-        let p2 = Project(name: "项目B", location: "地址B", status: ProjectStatus.active.rawValue)
+        let p1 = Project(name: "项目A", location: "地址A", status: .active)
+        let p2 = Project(name: "项目B", location: "地址B", status: .active)
         store.projects = [p1, p2]
         store.materialItems = [
             MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
@@ -190,8 +202,20 @@ struct ReportBuilderTests {
     }
 
     @Test func exportSupportsAllNewModules() {
-        let store = DataStore()
-        store.importSampleData(replacingExisting: false)
+        let store = makeSampleStore()
+        let projectId = store.projects.first?.id ?? UUID()
+        store.projectContacts = [
+            ProjectContact(projectId: projectId, name: "联系人测试", role: .owner, phone: "13800138000")
+        ]
+        store.projectDrawings = [
+            ProjectDrawing(projectId: projectId, name: "图纸测试", fileName: "drawing.pdf", fileType: "PDF")
+        ]
+        store.projectWarehouseMovements = [
+            ProjectWarehouseMovement(projectId: projectId, date: "2026-05-04", movementType: .inbound, materialName: "材料测试", quantity: "1")
+        ]
+        store.quickNotes = [
+            QuickNote(title: "随手记测试", content: "现场备注", projectId: projectId)
+        ]
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         var options = ExportContentOptions()
@@ -221,12 +245,12 @@ struct ReportBuilderTests {
         #expect(htmlText.contains("付款记录"))
 
         let pdf = ReportBuilder.makePDF(snapshot: snapshot, options: options)
-        let pdfText = String(data: pdf, encoding: .utf8) ?? ""
-        #expect(pdfText.contains("项目联系人"))
-        #expect(pdfText.contains("图纸索引"))
-        #expect(pdfText.contains("仓库流水"))
-        #expect(pdfText.contains("随手记"))
-        #expect(pdfText.contains("照明回路"))
-        #expect(pdfText.contains("付款记录"))
+        let extractedPDFText = pdfText(pdf)
+        #expect(extractedPDFText.contains("项目联系人"))
+        #expect(extractedPDFText.contains("图纸索引"))
+        #expect(extractedPDFText.contains("仓库流水"))
+        #expect(extractedPDFText.contains("随手记"))
+        #expect(extractedPDFText.contains("照明回路"))
+        #expect(extractedPDFText.contains("付款记录"))
     }
 }

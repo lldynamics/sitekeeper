@@ -5,7 +5,7 @@ struct ProjectPackageExportOverlayView: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: AppSpacing.normal) {
             Text("正在导出项目交付包")
                 .font(.headline)
             Text(progress.currentItem)
@@ -18,10 +18,13 @@ struct ProjectPackageExportOverlayView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("取消导出", role: .destructive, action: onCancel)
+                Button("取消导出", role: .destructive) {
+                    AppHaptics.warning()
+                    onCancel()
+                }
             }
         }
-        .padding(16)
+        .padding(AppSpacing.relaxed)
         .frame(maxWidth: 320)
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)

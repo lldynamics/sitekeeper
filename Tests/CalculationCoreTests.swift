@@ -19,6 +19,16 @@ struct CalculationCoreTests {
         #expect(EngineeringCalculations.unitConvert(value: 100, fromFactor: 10, toFactor: 0) == 0)
     }
 
+    @Test func unitConvertValidatedRejectsInvalidFactor() {
+        let result = EngineeringCalculations.unitConvertValidated(value: 100, fromFactor: 10, toFactor: 0)
+        switch result {
+        case .failure(.mustBeGreaterThanZero(field: "目标单位系数")):
+            #expect(true)
+        default:
+            #expect(false)
+        }
+    }
+
     // MARK: - circuitCurrent
 
     @Test func circuitCurrentSinglePhase() {
@@ -35,6 +45,16 @@ struct CalculationCoreTests {
         #expect(EngineeringCalculations.circuitCurrent(powerKW: 0, voltage: 220, powerFactor: 0.9, isThreePhase: false) == 0)
         #expect(EngineeringCalculations.circuitCurrent(powerKW: 10, voltage: 0, powerFactor: 0.9, isThreePhase: false) == 0)
         #expect(EngineeringCalculations.circuitCurrent(powerKW: 10, voltage: 220, powerFactor: 0, isThreePhase: false) == 0)
+    }
+
+    @Test func circuitCurrentValidatedRejectsOutOfRangePowerFactor() {
+        let result = EngineeringCalculations.circuitCurrentValidated(powerKW: 10, voltage: 220, powerFactor: 1.2, isThreePhase: false)
+        switch result {
+        case .failure(.outOfRange(field: "功率因数", min: 0, max: 1)):
+            #expect(true)
+        default:
+            #expect(false)
+        }
     }
 
     // MARK: - recommendedBreaker
@@ -87,6 +107,23 @@ struct CalculationCoreTests {
         #expect(d2.resistance < d1.resistance)
     }
 
+    @Test func voltageDropValidatedRejectsNaN() {
+        let result = EngineeringCalculations.voltageDropValidated(
+            current: .nan,
+            length: 50,
+            section: 4,
+            voltage: 220,
+            isLoopLength: false,
+            resistivity: 0.0175
+        )
+        switch result {
+        case .failure(.notFinite(field: "电流")):
+            #expect(true)
+        default:
+            #expect(false)
+        }
+    }
+
     // MARK: - recommendedWireSectionByAmpacity
 
     @Test func wireByAmpacityCopper() throws {
@@ -123,14 +160,24 @@ struct CalculationCoreTests {
         #expect(rate > 0 && rate < 1)
     }
 
-    @Test func recommendedConduit() throws {
-        let d = try #require(EngineeringCalculations.recommendedConduitDiameter(wireDiameter: 3.5, wireCount: 5))
-        #expect(d >= 20)
+    @Test func conduitFillRateValidatedRejectsBadCount() {
+        let result = EngineeringCalculations.conduitFillRateValidated(conduitInnerDiameter: 25, wireDiameter: 3.5, wireCount: 0)
+        switch result {
+        case .failure(.countOutOfRange(field: "导线根数", min: 1, max: 100_000)):
+            #expect(true)
+        default:
+            #expect(false)
+        }
     }
 
-    @Test func recommendedConduitMaxedOut() {
+    @Test func recommendedConduit() throws {
+        let d = try #require(EngineeringCalculations.recommendedConduitDiameter(wireDiameter: 3.5, wireCount: 5))
+        #expect(d == 16)
+    }
+
+    @Test func recommendedConduitUsesLargestCommonDiameterWhenNeeded() {
         let d = EngineeringCalculations.recommendedConduitDiameter(wireDiameter: 10, wireCount: 10)
-        #expect(d == nil)
+        #expect(d == 50)
     }
 
     // MARK: - trayFillRate
@@ -170,11 +217,21 @@ struct CalculationCoreTests {
         #expect(EngineeringCalculations.threePhaseImbalancePercent(phaseTotals: [0, 0, 0]) == 0)
     }
 
+    @Test func threePhaseIgnoresInvalidCurrents() {
+        let totals = EngineeringCalculations.phaseTotals(
+            currents: [.nan, .infinity, 30],
+            assignments: [0, 1, 2]
+        )
+        #expect(totals[0] == 0)
+        #expect(totals[1] == 0)
+        #expect(totals[2] == 30)
+    }
+
     // MARK: - cableArea
 
     @Test func cableAreaCalculation() {
         let area = EngineeringCalculations.cableArea(diameter: 10, count: 1)
-        let expected = .pi * 25
+        let expected = Double.pi * 25
         #expect(abs(area - expected) < 0.01)
     }
 }

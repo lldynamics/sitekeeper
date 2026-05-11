@@ -109,12 +109,12 @@ enum ProjectDetailFinanceDocumentActions {
             ProjectFinancialRecord(
                 projectId: project.id,
                 date: item.date,
-                direction: ProjectFinancialDirection.income.rawValue,
-                category: ProjectFinancialCategory.collection.rawValue,
+                direction: .income,
+                category: .collection,
                 amount: item.amount,
                 counterparty: project.customerName,
                 invoiceNumber: item.isInvoiced ? "已开票" : "",
-                note: [item.method, item.note].filter { !$0.isEmpty }.joined(separator: " · ")
+                note: [item.method.displayName, item.note].filter { !$0.isEmpty }.joined(separator: " · ")
             )
         }
         store.projectFinancialRecords.append(contentsOf: migrated)
@@ -326,8 +326,8 @@ enum ProjectDetailFinanceDocumentActions {
     ) {
         let document = ProjectDocument(
             projectId: projectId,
-            title: target.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? target.category.rawValue : target.title,
-            category: target.category.rawValue,
+            title: target.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? target.category.displayName : target.title,
+            category: target.category,
             fileName: fileName,
             fileType: fileType,
             pageCount: pageCount,

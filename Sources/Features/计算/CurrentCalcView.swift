@@ -2,14 +2,14 @@ import SwiftUI
 
 struct CurrentCalcView: View {
     @Environment(DataStore.self) private var store
-    @State private var power: String = ""
-    @State private var voltage: String = "220"
-    @State private var powerFactor: String = "0.85"
-    @State private var isThreePhase: Bool = false {
-        didSet { voltage = isThreePhase ? "380" : "220" }
-    }
+    @AppStorage("calc.current.power") private var power: String = ""
+    @AppStorage("calc.current.voltage") private var voltage: String = "220"
+    @AppStorage("calc.current.powerFactor") private var powerFactor: String = "0.85"
+    @AppStorage("calc.current.isThreePhase") private var isThreePhase: Bool = false
 
     @State private var resultText: String = ""
+    @State private var resultModel: CalculationResult?
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         Form {
@@ -18,39 +18,27 @@ struct CurrentCalcView: View {
                     TextField("例如 10", text: $power)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
+                CalculatorValidationHint(message: rangeMessage(power, min: 0.1, max: 5_000_000, hint: "请输入 0.1–5000000"))
+                CalculatorPresetChips(title: "常用功率", options: ["3", "5", "10", "20", "30", "50"], selection: $power)
                 LabeledContent("电压 (V)") {
                     TextField("220", text: $voltage)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
+                CalculatorValidationHint(message: rangeMessage(voltage, min: 12, max: 100_000, hint: "请输入 12–100000"))
+                CalculatorPresetChips(title: "电压预设", options: ["220", "380"], selection: $voltage)
                 LabeledContent("功率因数") {
                     TextField("0.85", text: $powerFactor)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
                 }
+                CalculatorValidationHint(message: rangeMessage(powerFactor, min: 0.01, max: 1, hint: "请输入 0.01–1"))
+                CalculatorPresetChips(title: "功率因数", options: ["0.80", "0.85", "0.90", "0.95"], selection: $powerFactor)
                 Toggle("三相电", isOn: $isThreePhase)
-
-                HStack(spacing: 8) {
-                    Text("电压预设:").font(.caption).foregroundStyle(.secondary)
-                    ForEach(["220", "380"], id: \.self) { v in
-                        Button(v + "V") { voltage = v }
-                            .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(voltage == v ? Color.orange : Color.gray.opacity(0.15))
-                            .foregroundStyle(voltage == v ? .white : .primary)
-                            .clipShape(Capsule())
-                    }
-                }
-                HStack(spacing: 8) {
-                    Text("功率因数:").font(.caption).foregroundStyle(.secondary)
-                    ForEach(["0.80", "0.85", "0.90", "0.95"], id: \.self) { pf in
-                        Button(pf) { powerFactor = pf }
-                            .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(powerFactor == pf ? Color.orange : Color.gray.opacity(0.15))
-                            .foregroundStyle(powerFactor == pf ? .white : .primary)
-                            .clipShape(Capsule())
-                    }
-                }
             }
 
             Section("公式") {
@@ -68,32 +56,66 @@ struct CurrentCalcView: View {
             }
 
             Section {
-                Button("计算") { calc() }
+                Button("计算") {
+                    isInputFocused = false
+                    calc()
+                }
                     .frame(maxWidth: .infinity)
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty {
+            if !resultText.isEmpty, let resultModel {
                 Section("计算结果") {
-                    Text(resultText)
-                        .font(.system(.body, design: .monospaced))
+                    CalculatorResultCard(
+                        title: "电流计算结果",
+                        result: resultModel,
+                        copyText: resultText
+                    )
                 }
             }
         }
         .navigationTitle("电流计算")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            KeyboardDismissToolbar {
+                isInputFocused = false
+            }
+        }
+        .onChange(of: isThreePhase) { _, enabled in
+            voltage = enabled ? "380" : "220"
+        }
     }
 
     private func calc() {
-        guard let p = Double(power), p > 0,
-              let v = Double(voltage), v > 0,
-              let pf = Double(powerFactor), pf > 0, pf <= 1 else {
-            resultText = "请输入有效数值"
+        guard let p = CalculatorInputParser.double(power),
+              let v = CalculatorInputParser.double(voltage),
+              let pf = CalculatorInputParser.double(powerFactor) else {
+            presentError("请输入有效数值")
             return
         }
-        let pWatts = p * 1000
-        let divisor = isThreePhase ? (sqrt(3) * v * pf) : (v * pf)
-        let current = pWatts / divisor
+        let current: Double
+        switch EngineeringCalculations.circuitCurrentValidated(
+            powerKW: p,
+            voltage: v,
+            powerFactor: pf,
+            isThreePhase: isThreePhase
+        ) {
+        case .success(let value):
+            current = value
+        case .failure(let error):
+            presentError(error.userMessage)
+            return
+        }
+        let warning = current > 100
+        resultModel = .singleSection(
+            headline: "电流 \(String(format: "%.2f", current)) A",
+            items: [
+                CalculationResult.item("功率", "\(String(format: "%.2f", p)) kW"),
+                CalculationResult.item("电压", "\(String(format: "%.0f", v)) V (\(isThreePhase ? "三相" : "单相"))"),
+                CalculationResult.item("功率因数", String(format: "%.2f", pf)),
+                CalculationResult.item("电流结果", "\(String(format: "%.2f", current)) A", status: warning ? .warning : .pass),
+            ]
+        )
         resultText = """
         功率: \(String(format: "%.2f", p)) kW
         电压: \(String(format: "%.0f", v)) V (\(isThreePhase ? "三相" : "单相"))
@@ -103,7 +125,24 @@ struct CurrentCalcView: View {
     }
 
     private func saveHistory(_ r: String) {
-        store.historyRecords.insert(HistoryRecord(tool: "电流计算", input: "\(power)kW / \(voltage)V", result: r, date: Formatters.now()), at: 0)
-        store.scheduleSave()
+        store.appendCalculationHistory(
+            tool: "电流计算",
+            input: "\(power)kW / \(voltage)V",
+            result: r
+        )
+    }
+
+    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = CalculatorInputParser.double(trimmed) else {
+            return "请输入数值"
+        }
+        return (value >= min && value <= max) ? nil : hint
+    }
+
+    private func presentError(_ message: String) {
+        resultText = message
+        resultModel = .error(message)
     }
 }

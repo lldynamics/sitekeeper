@@ -6,7 +6,7 @@ struct ProjectContactAddSheet: View {
     let onSave: (ProjectContact) -> Void
 
     @State private var name = ""
-    @State private var role = ProjectContactRole.owner.rawValue
+    @State private var role: ProjectContactRole = .owner
     @State private var company = ""
     @State private var phone = ""
     @State private var note = ""
@@ -35,7 +35,7 @@ struct ProjectContactAddSheet: View {
                         onSave(ProjectContact(
                             projectId: projectId,
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                            role: normalizedRole,
+                            role: role,
                             company: company,
                             phone: phone,
                             note: note
@@ -48,10 +48,6 @@ struct ProjectContactAddSheet: View {
         }
     }
 
-    private var normalizedRole: String {
-        let trimmed = role.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? ProjectContactRole.other.rawValue : trimmed
-    }
 }
 
 struct ProjectContactEditSheet: View {
@@ -61,7 +57,7 @@ struct ProjectContactEditSheet: View {
     let onDelete: (ProjectContact) -> Void
 
     @State private var name: String
-    @State private var role: String
+    @State private var role: ProjectContactRole
     @State private var company: String
     @State private var phone: String
     @State private var note: String
@@ -110,7 +106,7 @@ struct ProjectContactEditSheet: View {
                     Button("保存") {
                         var updated = contact
                         updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.role = normalizedRole
+                        updated.role = role
                         updated.company = company.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -130,8 +126,4 @@ struct ProjectContactEditSheet: View {
         }
     }
 
-    private var normalizedRole: String {
-        let trimmed = role.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? ProjectContactRole.other.rawValue : trimmed
-    }
 }

@@ -242,7 +242,7 @@ enum ProjectFileCollector {
                     RecentSeed(
                         id: "log-\(log.id.uuidString)-\(fileName)",
                         title: photo.note.isEmpty ? "施工日志照片" : photo.note,
-                        subtitle: "\(log.date) · \(photo.tag)",
+                        subtitle: "\(log.date) · \(photo.tag.displayName)",
                         fileType: url.pathExtension.isEmpty ? "jpg" : url.pathExtension,
                         url: url,
                         category: .images,
@@ -366,7 +366,7 @@ enum ProjectFileCollector {
                 RecentSeed(
                     id: "document-\(document.id.uuidString)",
                     title: document.title,
-                    subtitle: "\(document.category) · \(document.createdAt)",
+                    subtitle: "\(document.category.displayName) · \(document.createdAt)",
                     fileType: document.fileType,
                     url: url,
                     category: .documents,
@@ -390,7 +390,7 @@ enum ProjectFileCollector {
                 result.append(photoItem(
                     id: "log-\(log.id.uuidString)-\(photo.fileName)",
                     title: photo.note.isEmpty ? "施工日志照片" : photo.note,
-                    subtitle: "\(log.date) · \(photo.tag)",
+                    subtitle: "\(log.date) · \(photo.tag.displayName)",
                     sortText: log.date,
                     fileName: photo.fileName
                 ))
@@ -462,7 +462,7 @@ enum ProjectFileCollector {
                 return ProjectFileItem(
                     id: "document-\(document.id.uuidString)",
                     title: document.title,
-                    subtitle: "\(document.category) · \(document.createdAt)",
+                    subtitle: "\(document.category.displayName) · \(document.createdAt)",
                     fileType: document.fileType,
                     url: url,
                     exists: ProjectDocumentStorage.exists(fileName: document.fileName),

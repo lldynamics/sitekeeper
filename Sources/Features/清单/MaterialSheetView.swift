@@ -54,32 +54,41 @@ struct MaterialSheetView: View {
 
     private var priceSuggestions: [MaterialPriceEntry] {
         guard !searchText.isEmpty else { return [] }
-        return store.materialPriceEntries
-            .filter { $0.name.localizedStandardContains(searchText) || $0.specification.localizedStandardContains(searchText) }
-            .prefix(10).map { $0 }
+        return Array(SearchMatcher.filter(store.materialPriceEntries, keyword: searchText).prefix(10))
     }
     private var librarySuggestions: [CommonMaterial] {
         guard !searchText.isEmpty else { return [] }
-        return MaterialLibrary.all
-            .filter { $0.name.localizedStandardContains(searchText) || $0.specification.localizedStandardContains(searchText) }
-            .prefix(10).map { $0 }
+        return Array(SearchMatcher.filter(MaterialLibrary.all, keyword: searchText).prefix(10))
     }
     private var hasSearchResults: Bool { !priceSuggestions.isEmpty || !librarySuggestions.isEmpty }
 
+    private var totalEstimateValue: MoneyValue {
+        sheetItems.reduce(MoneyValue.zero) { total, item in
+            total + lineTotalValue(for: item)
+        }
+    }
+    private var totalLaborValue: MoneyValue {
+        sheetItems.reduce(MoneyValue.zero) { total, item in
+            total + MoneyValue(text: item.laborCost)
+        }
+    }
+    private var grandTotalValue: MoneyValue {
+        totalEstimateValue + totalLaborValue
+    }
     private var totalEstimate: Double {
-        sheetItems.reduce(0) { t, i in t + (Double(i.quantity) ?? 0) * (Double(i.unitPrice) ?? 0) }
+        totalEstimateValue.doubleValue
     }
     private var totalLabor: Double {
-        sheetItems.reduce(0) { t, i in t + (Double(i.laborCost) ?? 0) }
+        totalLaborValue.doubleValue
     }
     private var totalEstimateText: String {
-        String(format: "¥%.2f", totalEstimate)
+        String(format: "¥%.2f", totalEstimateValue.doubleValue)
     }
     private var totalLaborText: String {
-        String(format: "¥%.2f", totalLabor)
+        String(format: "¥%.2f", totalLaborValue.doubleValue)
     }
     private var grandTotalText: String {
-        String(format: "¥%.2f", totalEstimate + totalLabor)
+        String(format: "¥%.2f", grandTotalValue.doubleValue)
     }
 
     var body: some View {
@@ -152,7 +161,7 @@ struct MaterialSheetView: View {
             }
 
             // Summary
-            if totalEstimate > 0 || totalLabor > 0 {
+            if totalEstimateValue.isPositive || totalLaborValue.isPositive {
                 summarySection
             }
 
@@ -189,6 +198,9 @@ struct MaterialSheetView: View {
                         else { Image(systemName: "square.and.arrow.up") }
                     }.disabled(isExporting)
                 }
+            }
+            KeyboardDismissToolbar {
+                AppKeyboard.dismiss()
             }
         }
         .confirmationDialog("导出方式", isPresented: $showExportChoice) {
@@ -230,21 +242,21 @@ struct MaterialSheetView: View {
 
     private var summarySection: some View {
         Section("合计") {
-            if totalEstimate > 0 {
+            if totalEstimateValue.isPositive {
                 HStack {
                     Text("材料估价").font(.callout)
                     Spacer()
                     Text(totalEstimateText).font(.body.weight(.semibold)).foregroundStyle(.orange)
                 }
             }
-            if totalLabor > 0 {
+            if totalLaborValue.isPositive {
                 HStack {
                     Text("人工费").font(.callout)
                     Spacer()
                     Text(totalLaborText).font(.body.weight(.semibold)).foregroundStyle(.blue)
                 }
             }
-            if totalEstimate > 0, totalLabor > 0 {
+            if totalEstimateValue.isPositive, totalLaborValue.isPositive {
                 HStack {
                     Text("总计").font(.body.weight(.bold))
                     Spacer()
@@ -379,6 +391,7 @@ struct MaterialSheetView: View {
         else { itemExpanded.insert(id) }
     }
 
+    @ViewBuilder
     private func autoFillButton(for item: Binding<MaterialSheetItem>) -> some View {
         let name = item.wrappedValue.name
         let spec = item.wrappedValue.specification
@@ -386,14 +399,14 @@ struct MaterialSheetView: View {
             e.name.localizedCaseInsensitiveContains(name) && (spec.isEmpty || e.specification.localizedCaseInsensitiveContains(spec))
         }
         let price = match?.referencePrice ?? ""
-        guard !price.isEmpty, price != item.wrappedValue.unitPrice else { return AnyView(EmptyView()) }
-        return AnyView(
+        if !price.isEmpty, price != item.wrappedValue.unitPrice {
             Button { item.wrappedValue.unitPrice = price } label: {
                 Text("¥\(price)").font(.caption2.weight(.semibold))
                     .padding(.horizontal, 6).padding(.vertical, 3)
                     .background(.orange.opacity(0.15), in: Capsule()).foregroundStyle(.orange)
-            }.buttonStyle(.borderless)
-        )
+            }
+            .buttonStyle(.borderless)
+        }
     }
 
     // MARK: - Search Rows
@@ -489,11 +502,18 @@ struct MaterialSheetView: View {
                         showManualAdd = false
                     }.disabled(manualName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
             }
         }.presentationDetents([.medium, .large])
     }
 
     // MARK: - Helpers
+
+    private func lineTotalValue(for item: MaterialSheetItem) -> MoneyValue {
+        QuantityValue(text: item.quantity) * MoneyValue(text: item.unitPrice)
+    }
 
     private func addToSheet(name: String, spec: String, unit: String, price: String = "") {
         sheetItems.append(MaterialSheetItem(
@@ -505,7 +525,12 @@ struct MaterialSheetView: View {
     private func saveToMaterialList() {
         for item in sheetItems {
             let q = item.quantity.trimmingCharacters(in: .whitespacesAndNewlines)
-            let finalQty = (Double(q) != nil && Double(q)! > 0) ? q : "1"
+            let finalQty: String
+            if QuantityValue(text: q).isPositive {
+                finalQty = q
+            } else {
+                finalQty = "1"
+            }
             let price = item.unitPrice.trimmingCharacters(in: .whitespacesAndNewlines)
             store.materialItems.append(MaterialItem(
                 name: item.name, quantity: finalQty,
@@ -596,8 +621,8 @@ struct MaterialSheetView: View {
             }
 
             y += 8
-            if totalEstimate > 0 || totalLabor > 0 {
-                y = drawImageText("总计: ¥\(String(format: "%.2f", totalEstimate + totalLabor))", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .boldSystemFont(ofSize: 14))
+            if totalEstimateValue.isPositive || totalLaborValue.isPositive {
+                y = drawImageText("总计: ¥\(String(format: "%.2f", grandTotalValue.doubleValue))", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .boldSystemFont(ofSize: 14))
             }
             y += 8
             _ = drawImageText("—— 本材料单由工地掌柜生成 ——", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .systemFont(ofSize: 10), a: .center)
@@ -661,12 +686,12 @@ struct MaterialSheetView: View {
 
     private func itemRowValues(_ item: MaterialSheetItem) -> [String] {
         let q = item.quantity; let p = item.unitPrice
-        let lt = (Double(q) ?? 0) * (Double(p) ?? 0)
+        let lineTotal = lineTotalValue(for: item)
         var vs: [String] = ["", item.name, item.specification, item.unit, q]
         if exportOptions.showLocation { vs.append(item.usageLocation.isEmpty ? "-" : item.usageLocation) }
         if exportOptions.showPrice {
             vs.append(p.isEmpty ? "-" : p)
-            vs.append(lt > 0 ? String(format: "%.2f", lt) : "-")
+            vs.append(lineTotal.isPositive ? String(format: "%.2f", lineTotal.doubleValue) : "-")
         }
         if exportOptions.showLabor { vs.append(item.laborCost.isEmpty ? "-" : item.laborCost) }
         if exportOptions.showSupplier { vs.append(item.supplier.isEmpty ? "-" : item.supplier) }
@@ -687,12 +712,12 @@ struct MaterialSheetView: View {
     private func csvItemRow(_ item: MaterialSheetItem, index: Int) -> String {
         let esc: (String) -> String = { $0.replacingOccurrences(of: "\"", with: "\"\"") }
         let q = item.quantity; let p = item.unitPrice
-        let lt = (Double(q) ?? 0) * (Double(p) ?? 0)
+        let lineTotal = lineTotalValue(for: item)
         var vs = ["\"\(index + 1)\"", "\"\(esc(item.name))\"", "\"\(esc(item.specification))\"", "\"\(esc(item.unit))\"", "\"\(q)\""]
         if exportOptions.showLocation { vs.append("\"\(esc(item.usageLocation))\"") }
         if exportOptions.showPrice {
             vs.append("\"\(p)\"")
-            vs.append(lt > 0 ? "\"\(String(format: "%.2f", lt))\"" : "\"\"")
+            vs.append(lineTotal.isPositive ? "\"\(String(format: "%.2f", lineTotal.doubleValue))\"" : "\"\"")
         }
         if exportOptions.showLabor { vs.append("\"\(item.laborCost)\"") }
         if exportOptions.showSupplier { vs.append("\"\(esc(item.supplier))\"") }
@@ -731,14 +756,14 @@ struct MaterialSheetView: View {
             }
 
             y += 8
-            if exportOptions.showPrice, totalEstimate > 0 {
-                y = drawText("材料估价合计: ¥\(String(format: "%.2f", totalEstimate))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
+            if exportOptions.showPrice, totalEstimateValue.isPositive {
+                y = drawText("材料估价合计: ¥\(String(format: "%.2f", totalEstimateValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
             }
-            if exportOptions.showLabor, totalLabor > 0 {
-                y = drawText("人工费合计: ¥\(String(format: "%.2f", totalLabor))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
+            if exportOptions.showLabor, totalLaborValue.isPositive {
+                y = drawText("人工费合计: ¥\(String(format: "%.2f", totalLaborValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
             }
-            if totalEstimate > 0 || totalLabor > 0 {
-                y = drawText("总计: ¥\(String(format: "%.2f", totalEstimate + totalLabor))", at: CGPoint(x: m, y: y), w: mw, f: .boldSystemFont(ofSize: 12))
+            if totalEstimateValue.isPositive || totalLaborValue.isPositive {
+                y = drawText("总计: ¥\(String(format: "%.2f", grandTotalValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .boldSystemFont(ofSize: 12))
             }
             y += 16
             _ = drawText("—— 本材料单由 \(AppBrand.displayName) 生成 ——", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 8), a: .center)

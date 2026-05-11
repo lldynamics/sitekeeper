@@ -36,8 +36,18 @@ struct SiteTodoView: View {
     }
 
     private var filteredTodos: [SiteTodo] {
-        store.siteTodos
-            .filter(matchesFilters(_:))
+        let scopedTodos = store.siteTodos.filter { todo in
+            if let projectFilter, todo.projectId != projectFilter { return false }
+            if !statusFilter.matches(todo) { return false }
+            return true
+        }
+        return SearchMatcher.filter(
+            scopedTodos,
+            keyword: searchText,
+            extraFields: { todo in
+                [todo.priority.displayName, todo.issueType.displayName, projectName(todo.projectId)]
+            }
+        )
             .sorted { lhs, rhs in
                 if lhs.isDone != rhs.isDone { return !lhs.isDone && rhs.isDone }
                 if lhs.isOverdue != rhs.isOverdue { return lhs.isOverdue && !rhs.isOverdue }
@@ -166,24 +176,10 @@ struct SiteTodoView: View {
         }
     }
 
-    private func matchesFilters(_ todo: SiteTodo) -> Bool {
-        if let projectFilter, todo.projectId != projectFilter { return false }
-        if !statusFilter.matches(todo) { return false }
-        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return true }
-        return todo.title.localizedStandardContains(keyword)
-            || todo.owner.localizedStandardContains(keyword)
-            || todo.dueDate.localizedStandardContains(keyword)
-            || todo.priority.localizedStandardContains(keyword)
-            || todo.issueType.localizedStandardContains(keyword)
-            || todo.note.localizedStandardContains(keyword)
-            || projectName(todo.projectId).localizedStandardContains(keyword)
-    }
-
     private func autoOpenComposerIfNeeded() {
         guard autoOpenComposer, !didAutoOpenComposer else { return }
         didAutoOpenComposer = true
-        DispatchQueue.main.async { showAdd = true }
+        Task { @MainActor in showAdd = true }
     }
 
     private func openFocusedTodoIfNeeded() {
@@ -191,7 +187,7 @@ struct SiteTodoView: View {
               let todo = store.siteTodos.first(where: { $0.id == focusedTodoId }) else { return }
         didOpenFocusedTodo = true
         projectFilter = todo.projectId
-        DispatchQueue.main.async { editingTodo = todo }
+        Task { @MainActor in editingTodo = todo }
     }
 
     private func save(_ updated: SiteTodo) {
@@ -251,7 +247,7 @@ private struct SiteTodoRow: View {
             }
             HStack(spacing: 8) {
                 Text(todo.dueDate)
-                Text(todo.issueType)
+                Text(todo.issueType.displayName)
                 if !todo.owner.isEmpty { Text(todo.owner) }
                 if !projectName.isEmpty { Text(projectName).foregroundStyle(.blue) }
             }
@@ -278,9 +274,17 @@ private struct SiteTodoRow: View {
         .padding(.vertical, 4)
     }
 
-    private func priorityBadge(_ priority: String) -> some View {
-        let color: Color = priority == TodoPriority.high.rawValue ? .red : priority == TodoPriority.low.rawValue ? .gray : .orange
-        return Text(priority)
+    private func priorityBadge(_ priority: TodoPriority) -> some View {
+        let color: Color
+        switch priority {
+        case .high:
+            color = .red
+        case .medium:
+            color = .orange
+        case .low:
+            color = .gray
+        }
+        return Text(priority.displayName)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(color)
             .padding(.horizontal, 7)
@@ -340,6 +344,9 @@ private struct SiteTodoEditSheet: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var didImportInitialPhotos = false
+    @State private var beforePhotoImportTask: Task<Void, Never>?
+    @State private var afterPhotoImportTask: Task<Void, Never>?
+    @State private var initialPhotoImportTask: Task<Void, Never>?
 
     init(
         todo: SiteTodo?,
@@ -362,8 +369,8 @@ private struct SiteTodoEditSheet: View {
         _title = State(initialValue: todo?.title ?? "")
         _owner = State(initialValue: todo?.owner ?? "")
         _dueDate = State(initialValue: todo.flatMap { Formatters.date.date(from: $0.dueDate) } ?? Date())
-        _priority = State(initialValue: TodoPriority(rawValue: todo?.priority ?? "") ?? .medium)
-        _issueType = State(initialValue: TodoIssueType(rawValue: todo?.issueType ?? "") ?? .general)
+        _priority = State(initialValue: todo?.priority ?? .medium)
+        _issueType = State(initialValue: todo?.issueType ?? .general)
         _beforePhotoFileName = State(initialValue: todo?.rectificationBeforePhotoFileName)
         _afterPhotoFileName = State(initialValue: todo?.rectificationAfterPhotoFileName)
         _isDone = State(initialValue: todo?.isDone ?? false)
@@ -382,12 +389,12 @@ private struct SiteTodoEditSheet: View {
                     DatePicker("日期", selection: $dueDate, displayedComponents: .date)
                     Picker("优先级", selection: $priority) {
                         ForEach(TodoPriority.allCases, id: \.self) { item in
-                            Text(item.rawValue).tag(item)
+                            Text(item.displayName).tag(item)
                         }
                     }
                     Picker("问题类型", selection: $issueType) {
                         ForEach(TodoIssueType.allCases, id: \.self) { item in
-                            Text(item.rawValue).tag(item)
+                            Text(item.displayName).tag(item)
                         }
                     }
                     TextField("备注", text: $note, axis: .vertical)
@@ -446,12 +453,22 @@ private struct SiteTodoEditSheet: View {
                 Text(alertMessage)
             }
             .onChange(of: beforePhotoItem) { _, item in
-                Task { await importTodoPhoto(item, kind: .before) }
+                beforePhotoImportTask?.cancel()
+                beforePhotoImportTask = Task { await importTodoPhoto(item, kind: .before) }
             }
             .onChange(of: afterPhotoItem) { _, item in
-                Task { await importTodoPhoto(item, kind: .after) }
+                afterPhotoImportTask?.cancel()
+                afterPhotoImportTask = Task { await importTodoPhoto(item, kind: .after) }
             }
-            .onDisappear(perform: cleanupNewDraftFilesIfNeeded)
+            .onDisappear {
+                beforePhotoImportTask?.cancel()
+                afterPhotoImportTask?.cancel()
+                initialPhotoImportTask?.cancel()
+                beforePhotoImportTask = nil
+                afterPhotoImportTask = nil
+                initialPhotoImportTask = nil
+                cleanupNewDraftFilesIfNeeded()
+            }
             .onAppear(perform: importInitialPhotosIfNeeded)
         }
     }
@@ -483,7 +500,9 @@ private struct SiteTodoEditSheet: View {
     private func importTodoPhoto(_ item: PhotosPickerItem?, kind: TodoPhotoKind) async {
         guard let item,
               let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard !Task.isCancelled else { return }
         let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) ?? data
+        guard !Task.isCancelled else { return }
         await saveTodoPhotoData(normalizedData, kind: kind)
     }
 
@@ -514,12 +533,18 @@ private struct SiteTodoEditSheet: View {
     private func importInitialPhotosIfNeeded() {
         guard todo == nil, !didImportInitialPhotos else { return }
         didImportInitialPhotos = true
-        Task {
+        initialPhotoImportTask?.cancel()
+        initialPhotoImportTask = Task {
             if let initialBeforePhotoData {
+                guard !Task.isCancelled else { return }
                 await saveTodoPhotoData(initialBeforePhotoData, kind: .before)
             }
             if let initialAfterPhotoData {
+                guard !Task.isCancelled else { return }
                 await saveTodoPhotoData(initialAfterPhotoData, kind: .after)
+            }
+            await MainActor.run {
+                initialPhotoImportTask = nil
             }
         }
     }
@@ -545,8 +570,8 @@ private struct SiteTodoEditSheet: View {
         value.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         value.owner = owner.trimmingCharacters(in: .whitespacesAndNewlines)
         value.dueDate = Formatters.date.string(from: dueDate)
-        value.priority = priority.rawValue
-        value.issueType = issueType.rawValue
+        value.priority = priority
+        value.issueType = issueType
         value.rectificationBeforePhotoFileName = beforePhotoFileName
         value.rectificationAfterPhotoFileName = afterPhotoFileName
         value.isDone = isDone

@@ -8,14 +8,11 @@ struct ProjectWarehouseOverviewView: View {
     @State private var showImportError = false
 
     private var filteredProjects: [Project] {
-        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        return store.projects
-            .filter { project in
-                keyword.isEmpty
-                    || project.name.localizedStandardContains(keyword)
-                    || project.location.localizedStandardContains(keyword)
-            }
-            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        SearchMatcher.filter(
+            store.projects,
+            keyword: searchText,
+            sort: { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+        )
     }
 
     var body: some View {
@@ -227,8 +224,11 @@ struct ProjectWarehouseView: View {
     private var movementFlowSection: some View {
         Section("出入库流水") {
             if movements.isEmpty {
-                Text("暂无出入库记录")
-                    .foregroundStyle(.secondary)
+                ContentUnavailableView(
+                    "暂无出入库记录",
+                    systemImage: "arrow.left.arrow.right.square",
+                    description: Text("添加入库或出库后可追踪库存流向。")
+                )
             } else {
                 ForEach(movements) { movement in
                     NavigationLink {

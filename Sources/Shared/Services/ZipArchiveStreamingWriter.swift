@@ -41,7 +41,12 @@ struct StreamingZipArchiveWriter {
             withIntermediateDirectories: true
         )
         if FileManager.default.fileExists(atPath: fileURL.path) {
-            try FileManager.default.removeItem(at: fileURL)
+            do {
+                try FileManager.default.removeItem(at: fileURL)
+            } catch {
+                StorageIssueLog.record("创建 ZIP 前清理旧文件失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                throw error
+            }
         }
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         outputHandle = try FileHandle(forWritingTo: fileURL)
@@ -136,7 +141,11 @@ struct StreamingZipArchiveWriter {
     private mutating func copySourceFileData(from sourceFileURL: URL) throws -> (crc32: UInt32, written: UInt64) {
         let input = try FileHandle(forReadingFrom: sourceFileURL)
         defer {
-            try? input.close()
+            do {
+                try input.close()
+            } catch {
+                StorageIssueLog.record("ZIP 源文件句柄关闭失败：\(sourceFileURL.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
         let chunkSize = 256 * 1024
         var crc = StreamingCRC32()

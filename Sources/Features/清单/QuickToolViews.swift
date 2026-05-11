@@ -68,7 +68,13 @@ struct QuickToolCategoryListView: View {
     }
 
     private var watermarkCameraTool: QuickToolItem {
-        QuickToolItem(.watermarkCamera)
+        QuickToolItem(
+            icon: "camera.aperture",
+            title: "水印相机",
+            desc: "独立拍照并导出带工程水印的现场图片",
+            section: "通用",
+            destination: .watermarkCamera
+        )
     }
 }
 
@@ -78,12 +84,7 @@ struct QuickToolSectionView: View {
 
     private var tools: [QuickToolItem] {
         let items = CalculatorDestination.allCases.map(QuickToolItem.init).filter { $0.section == section }
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else { return items }
-        return items.filter {
-            $0.title.localizedStandardContains(query)
-            || $0.desc.localizedStandardContains(query)
-        }
+        return SearchMatcher.filter(items, keyword: searchText)
     }
 
     var body: some View {
@@ -119,7 +120,7 @@ private struct QuickToolNavigationRow: View {
 
     var body: some View {
         NavigationLink {
-            tool.destination.destination
+            tool.destination.view
                 .onAppear { rememberRecentTool() }
         } label: {
             ToolRow(
@@ -161,7 +162,7 @@ struct QuickToolItem: Identifiable {
     let title: String
     let desc: String
     let section: String
-    let destination: CalculatorDestination
+    let destination: QuickToolDestination
 
     var id: String { title }
 
@@ -170,15 +171,36 @@ struct QuickToolItem: Identifiable {
         title = def.title
         desc = def.desc
         section = def.section
-        destination = def
+        destination = .calculator(def)
     }
 
-    init(icon: String, title: String, desc: String, section: String, dest: CalculatorDestination) {
+    init(icon: String, title: String, desc: String, section: String, destination: QuickToolDestination) {
         self.icon = icon
         self.title = title
         self.desc = desc
         self.section = section
-        self.destination = dest
+        self.destination = destination
+    }
+}
+
+extension QuickToolItem: Searchable {
+    var searchableFields: [String] {
+        [title, desc]
+    }
+}
+
+enum QuickToolDestination {
+    case calculator(CalculatorDestination)
+    case watermarkCamera
+
+    @ViewBuilder
+    var view: some View {
+        switch self {
+        case .calculator(let destination):
+            destination.destination
+        case .watermarkCamera:
+            WatermarkCameraToolView()
+        }
     }
 }
 

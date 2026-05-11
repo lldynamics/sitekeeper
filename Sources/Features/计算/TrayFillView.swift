@@ -2,53 +2,117 @@ import SwiftUI
 
 struct TrayFillView: View {
     @Environment(DataStore.self) private var store
-    @State private var trayW = "200"; @State private var trayH = "100"
+    @AppStorage("calc.tray.width") private var trayW = "200"
+    @AppStorage("calc.tray.height") private var trayH = "100"
+    @AppStorage("calc.tray.cables") private var cablesDraft = ""
     @State private var cables: [CableEntry] = [CableEntry(odia: 12, count: 5), CableEntry(odia: 18, count: 3)]
     @State private var showAdd = false; @State private var newDia = ""; @State private var newCount = ""
     @State private var result = ""
+    @State private var resultModel: CalculationResult?
+    @FocusState private var isInputFocused: Bool
 
     var body: some View {
         Form {
             Section("桥架尺寸 (mm)") {
-                LabeledContent("宽") { TextField("200", text: $trayW).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
-                LabeledContent("高") { TextField("100", text: $trayH).keyboardType(.decimalPad).multilineTextAlignment(.trailing) }
+                LabeledContent("宽 (mm)") { TextField("200", text: $trayW).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                CalculatorValidationHint(message: rangeMessage(trayW, min: 50, max: 10_000, hint: "请输入 50–10000"))
+                CalculatorPresetChips(title: "常用宽度", options: ["100", "150", "200", "300", "400", "600"], selection: $trayW)
+                LabeledContent("高 (mm)") { TextField("100", text: $trayH).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                CalculatorValidationHint(message: rangeMessage(trayH, min: 30, max: 2000, hint: "请输入 30–2000"))
+                CalculatorPresetChips(title: "常用高度", options: ["50", "75", "100", "150", "200"], selection: $trayH)
             }
             Section("电缆列表") {
                 ForEach(cables.indices, id: \.self) { i in
                     HStack {
                         Text("Φ\(cables[i].odia, specifier: "%.0f")mm × \(cables[i].count) 根")
                         Spacer()
-                        Button { cables.remove(at: i) } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                        Button {
+                            cables.remove(at: i)
+                            persistCableDraft()
+                        } label: { Image(systemName: "trash").foregroundStyle(.red) }
                         .accessibilityLabel("删除此电缆")
                     }
                 }
                 Button { showAdd = true } label: { Label("添加电缆", systemImage: "plus") }
             }
-            Section { Button("计算") { calc() }.frame(maxWidth: .infinity).fontWeight(.semibold) }
-            if !result.isEmpty {
-                Section("结果") { Text(result).font(.system(.body, design: .monospaced)) }
+            Section {
+                Button("计算") {
+                    isInputFocused = false
+                    calc()
+                }
+                .frame(maxWidth: .infinity)
+                .fontWeight(.semibold)
+            }
+            if !result.isEmpty, let resultModel {
+                Section("结果") {
+                    CalculatorResultCard(
+                        title: "桥架填充率",
+                        result: resultModel,
+                        copyText: result
+                    )
+                }
             }
         }
         .alert("添加电缆", isPresented: $showAdd) {
-            TextField("外径 (mm)", text: $newDia)
-            TextField("根数", text: $newCount)
+            TextField("外径 (mm)", text: $newDia).keyboardType(.decimalPad).focused($isInputFocused)
+            TextField("根数 (根)", text: $newCount).keyboardType(.numberPad).focused($isInputFocused)
             Button("取消", role: .cancel) { newDia = ""; newCount = "" }
             Button("添加") {
-                if let d = Double(newDia), let c = Int(newCount), d > 0, c > 0 {
+                if let d = CalculatorInputParser.double(newDia),
+                   let c = CalculatorInputParser.int(newCount),
+                   d > 0, c > 0 {
                     cables.append(CableEntry(odia: d, count: c))
+                    persistCableDraft()
                 }
                 newDia = ""; newCount = ""
             }
         }
         .navigationTitle("桥架填充率").navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            KeyboardDismissToolbar {
+                isInputFocused = false
+            }
+        }
+        .onAppear(perform: restoreCableDraftIfNeeded)
     }
 
     private func calc() {
-        guard let w = Double(trayW), w > 0, let h = Double(trayH), h > 0 else { result = "请输入有效桥架尺寸"; return }
+        guard let w = CalculatorInputParser.double(trayW),
+              let h = CalculatorInputParser.double(trayH) else {
+            presentError("请输入有效桥架尺寸")
+            return
+        }
         let trayArea = w * h
-        let cableArea = cables.reduce(0.0) { $0 + EngineeringCalculations.cableArea(diameter: $1.odia, count: $1.count) }
-        let rate = EngineeringCalculations.trayFillRate(width: w, height: h, cableArea: cableArea) * 100
+        var cableArea = 0.0
+        for (index, cable) in cables.enumerated() {
+            switch EngineeringCalculations.cableAreaValidated(diameter: cable.odia, count: cable.count) {
+            case .success(let area):
+                cableArea += area
+            case .failure(let error):
+                presentError("第\(index + 1)项电缆：\(error.userMessage)")
+                return
+            }
+        }
+        let fillRate: Double
+        switch EngineeringCalculations.trayFillRateValidated(width: w, height: h, cableArea: cableArea) {
+        case .success(let rate):
+            fillRate = rate
+        case .failure(let error):
+            presentError(error.userMessage)
+            return
+        }
+        let rate = fillRate * 100
         let recommended = EngineeringCalculations.recommendedTraySize(cableArea: cableArea)
+        let pass = rate <= 40
+        resultModel = .singleSection(
+            headline: "填充率 \(fmt(rate))%",
+            items: [
+                CalculationResult.item("桥架截面积", "\(fmt(trayArea)) mm²"),
+                CalculationResult.item("电缆总截面积", "\(fmt(cableArea)) mm²"),
+                CalculationResult.item("规范校核", pass ? "符合规范（≤40%）" : "超出规范（>40%）", status: pass ? .pass : .warning),
+                CalculationResult.item("推荐桥架", recommended.map { "\(fmt($0.width))×\(fmt($0.height)) mm" } ?? "超出常用规格", status: pass ? .normal : .warning),
+            ]
+        )
         result = """
         桥架截面积: \(fmt(trayArea)) mm²
         电缆总截面积: \(fmt(cableArea)) mm²
@@ -56,16 +120,47 @@ struct TrayFillView: View {
         \(rate <= 40 ? "符合规范" : "超过 40%，请增大桥架")
         推荐桥架: \(recommended.map { "\(fmt($0.width))×\(fmt($0.height)) mm" } ?? "超出常用规格")
         """
-        store.historyRecords.insert(HistoryRecord(tool: "桥架填充率", input: "\(trayW)×\(trayH)mm, \(cables.count)种电缆", result: "\(fmt(rate))%", date: now()), at: 0)
-        store.scheduleSave()
+        store.appendCalculationHistory(
+            tool: "桥架填充率",
+            input: "\(trayW)×\(trayH)mm, \(cables.count)种电缆",
+            result: "\(fmt(rate))%"
+        )
     }
-
-    private func now() -> String { let df = DateFormatter(); df.dateFormat = "yyyy-MM-dd HH:mm"; return df.string(from: Date()) }
 
     private func fmt(_ v: Double) -> String {
         let f = NumberFormatter(); f.minimumFractionDigits = 1; f.maximumFractionDigits = 2
         return f.string(from: NSNumber(value: v)) ?? String(v)
     }
+
+    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
+        return (value >= min && value <= max) ? nil : hint
+    }
+
+    private func presentError(_ message: String) {
+        result = message
+        resultModel = .error(message)
+    }
+
+    private func restoreCableDraftIfNeeded() {
+        guard !cablesDraft.isEmpty,
+              let data = cablesDraft.data(using: .utf8),
+              let decoded = try? JSONDecoder().decode([CableEntry].self, from: data),
+              !decoded.isEmpty else {
+            return
+        }
+        cables = decoded
+    }
+
+    private func persistCableDraft() {
+        guard let data = try? JSONEncoder().encode(cables),
+              let encoded = String(data: data, encoding: .utf8) else {
+            return
+        }
+        cablesDraft = encoded
+    }
 }
 
-struct CableEntry { var odia: Double; var count: Int }
+struct CableEntry: Codable { var odia: Double; var count: Int }

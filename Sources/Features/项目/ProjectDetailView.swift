@@ -6,6 +6,8 @@ import PhotosUI
 
 struct ProjectDetailView: View {
     @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
+    @Environment(FinanceStore.self) private var financeStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     let projectId: UUID
@@ -13,41 +15,14 @@ struct ProjectDetailView: View {
     let autoOpenFinancialAdd: Bool
     let autoOpenDocumentScanSetup: Bool
 
-    @StateObject private var exportState = ProjectDetailExportStateModel()
-    @State private var detailMode: ProjectDetailMode = .overview
-    @State private var drawingFilter: DrawingListFilter = .all
-    @State private var showProjectEdit = false
-    @State private var showContactAdd = false
-    @State private var showFinancialAdd = false
-    @State private var showDocumentScanSetup = false
-    @State private var showDocumentFileImporter = false
-    @State private var showImagePicker = false
-    @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
-    @State private var selectedPhotoItem: PhotosPickerItem?
+    @State private var exportState = ProjectDetailExportStateModel()
+    @State private var routeState: ProjectDetailRouteState
+    @State private var financeState = ProjectDetailFinanceState()
+    @State private var assetState = ProjectDetailAssetState()
 
-    @State private var editingMaterial: MaterialItem?
-    @State private var editingQuote: QuoteItem?
-    @State private var editingLabor: LaborRecord?
-    @State private var editingProgress: ProgressTask?
-    @State private var editingDrawing: ProjectDrawing?
-    @State private var editingDocument: ProjectDocument?
-    @State private var editingFinancialRecord: ProjectFinancialRecord?
-    @State private var attachmentManagingRecord: ProjectFinancialRecord?
-    @State private var editingContact: ProjectContact?
-    @State private var timelineContext: DrawingTimelineContext?
-    @State private var selectedPhotoContext: ProjectPhotoContext?
-    @State private var quickLookURL: URL?
-    @State private var showDrawingImporter = false
-    @State private var scanTarget: ProjectScanTarget?
-    @State private var importErrorMessage = ""
-    @State private var showImportError = false
-    @State private var showFinancialDeleteConfirm = false
-    @State private var pendingDeleteFinancialRecordIDs: Set<UUID> = []
     @State private var didAutoOpenFinancialAdd = false
     @State private var didAutoOpenDocumentScanSetup = false
     @State private var didOpenFocusedItem = false
-
-    @State private var showSheet: DetailSheet?
 
     init(
         projectId: UUID,
@@ -60,7 +35,7 @@ struct ProjectDetailView: View {
         self.focus = focus
         self.autoOpenFinancialAdd = autoOpenFinancialAdd
         self.autoOpenDocumentScanSetup = autoOpenDocumentScanSetup
-        _detailMode = State(initialValue: initialMode ?? .overview)
+        _routeState = State(initialValue: ProjectDetailRouteState(mode: initialMode ?? .overview))
     }
 
     private static let drawingImportTypes: [UTType] = {
@@ -75,147 +50,141 @@ struct ProjectDetailView: View {
     }()
     private static let documentImportTypes: [UTType] = [.item]
 
-    private var project: Project? { store.projects.first { $0.id == projectId } }
-    private var relatedMaterials: [MaterialItem] { store.materialItems.filter { $0.projectId == projectId } }
-    private var relatedQuotes: [QuoteItem] { store.quoteItems.filter { $0.projectId == projectId } }
-    private var relatedLabor: [LaborRecord] { store.laborRecords.filter { $0.projectId == projectId } }
-    private var relatedWarehouseMovements: [ProjectWarehouseMovement] { store.projectWarehouseMovements.filter { $0.projectId == projectId } }
-    private var relatedLogs: [DailyLog] { store.dailyLogs.filter { $0.projectId == projectId } }
-    private var relatedProgress: [ProgressTask] { store.progressTasks.filter { $0.projectId == projectId } }
-    private var relatedDrawings: [ProjectDrawing] {
-        store.projectDrawings
-            .filter { $0.projectId == projectId }
-            .sorted { $0.importedAt > $1.importedAt }
-    }
-    private var relatedContacts: [ProjectContact] {
-        store.projectContacts
-            .filter { $0.projectId == projectId }
-            .sorted { $0.name < $1.name }
-    }
-    private var relatedFinancialRecords: [ProjectFinancialRecord] {
-        store.projectFinancialRecords
-            .filter { $0.projectId == projectId }
-            .sorted { $0.date > $1.date }
-    }
-    private var relatedDocuments: [ProjectDocument] {
-        store.projectDocuments
-            .filter { $0.projectId == projectId }
-            .sorted { $0.createdAt > $1.createdAt }
-    }
-    private var relatedQuickNotes: [QuickNote] {
-        store.quickNotes
-            .filter { $0.projectId == projectId }
-            .sorted { $0.createdAt > $1.createdAt }
-    }
-    private var filteredDrawings: [ProjectDrawing] {
-        switch drawingFilter {
-        case .all:
-            return relatedDrawings
-        case .current:
-            return relatedDrawings.filter(\.isCurrentVersion)
-        case .withIssue:
-            return relatedDrawings.filter {
-                let status = DrawingIssueStatus(rawValue: $0.issueStatus) ?? .none
-                return status == .open || status == .inProgress || !$0.issueNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            }
-        }
-    }
-    private var legacyPayments: [PaymentRecord] {
-        store.paymentRecords
-            .filter { $0.projectId == projectId }
-            .sorted { $0.date > $1.date }
+    private var project: Project? { projectStore.projects.first { $0.id == projectId } }
+    private var projectSnapshot: ProjectDetailSnapshot? {
+        guard let project else { return nil }
+        return ProjectDetailSnapshot(
+            project: project,
+            projectId: projectId,
+            projectStore: projectStore,
+            financeStore: financeStore
+        )
     }
 
-    private var quoteTotal: Double {
-        relatedQuotes.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
-    }
-
-    private var materialCostAuto: Double {
-        relatedMaterials.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
-    }
-
-    private var laborCostAuto: Double {
-        relatedLabor.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
-    }
-
-    private var laborHoursTotal: Double {
-        relatedLabor.reduce(0) { $0 + ReportBuilder.laborHours($1) }
-    }
-    private var projectBookIncome: Double {
-        relatedFinancialRecords
-            .filter { $0.direction == ProjectFinancialDirection.income.rawValue }
-            .reduce(0) { $0 + ReportBuilder.number($1.amount) }
-    }
-    private var projectBookExpense: Double {
-        relatedFinancialRecords
-            .filter { $0.direction == ProjectFinancialDirection.expense.rawValue }
-            .reduce(0) { $0 + ReportBuilder.number($1.amount) }
-    }
-    private var todayStr: String { Formatters.date.string(from: Date()) }
-    private var overdueProgressCount: Int {
-        relatedProgress.filter { task in
-            guard task.clampedCompletion < 1, let due = Formatters.date.date(from: task.dueDate) else { return false }
-            return due < Calendar.current.startOfDay(for: Date())
-        }.count
-    }
-    private var overdueTodoCount: Int {
-        store.siteTodos.filter { $0.projectId == projectId && $0.isOverdue }.count
-    }
-    private var openTodoCount: Int {
-        store.siteTodos.filter { $0.projectId == projectId && !$0.isDone }.count
-    }
-    private var unpricedQuoteCount: Int {
-        relatedQuotes.filter { ReportBuilder.number($0.unitPrice) <= 0 }.count
-    }
-    private var hasTodayLog: Bool {
-        relatedLogs.contains { $0.date == todayStr }
-    }
-
-    private var usesCockpitLayout: Bool {
+    private var usesWideDetailLayout: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    private var editingMaterialBinding: Binding<MaterialItem?> {
+        Binding(
+            get: {
+                guard case .material(let item) = routeState.editingRoute else { return nil }
+                return item
+            },
+            set: { value in
+                switch (routeState.editingRoute, value) {
+                case (_, .some(let item)):
+                    routeState.editingRoute = .material(item)
+                case (.material, .none):
+                    routeState.editingRoute = nil
+                default:
+                    break
+                }
+            }
+        )
+    }
+
+    private var editingQuoteBinding: Binding<QuoteItem?> {
+        Binding(
+            get: {
+                guard case .quote(let item) = routeState.editingRoute else { return nil }
+                return item
+            },
+            set: { value in
+                switch (routeState.editingRoute, value) {
+                case (_, .some(let item)):
+                    routeState.editingRoute = .quote(item)
+                case (.quote, .none):
+                    routeState.editingRoute = nil
+                default:
+                    break
+                }
+            }
+        )
+    }
+
+    private var editingLaborBinding: Binding<LaborRecord?> {
+        Binding(
+            get: {
+                guard case .labor(let item) = routeState.editingRoute else { return nil }
+                return item
+            },
+            set: { value in
+                switch (routeState.editingRoute, value) {
+                case (_, .some(let item)):
+                    routeState.editingRoute = .labor(item)
+                case (.labor, .none):
+                    routeState.editingRoute = nil
+                default:
+                    break
+                }
+            }
+        )
+    }
+
+    private var editingProgressBinding: Binding<ProgressTask?> {
+        Binding(
+            get: {
+                guard case .progress(let item) = routeState.editingRoute else { return nil }
+                return item
+            },
+            set: { value in
+                switch (routeState.editingRoute, value) {
+                case (_, .some(let item)):
+                    routeState.editingRoute = .progress(item)
+                case (.progress, .none):
+                    routeState.editingRoute = nil
+                default:
+                    break
+                }
+            }
+        )
     }
 
     var body: some View {
         Group {
-            if let project = project {
-                content(project: project)
+            if let snapshot = projectSnapshot {
+                content(snapshot: snapshot)
             } else {
                 ContentUnavailableView("项目不存在", systemImage: "questionmark.folder")
             }
         }
     }
 
-    private func content(project: Project) -> some View {
+    private func content(snapshot: ProjectDetailSnapshot) -> some View {
+        let project = snapshot.project
         let statusBinding = Binding(
             get: { project.status },
             set: { newVal in
-                if let idx = store.projects.firstIndex(where: { $0.id == projectId }) {
+                if let idx = projectStore.projects.firstIndex(where: { $0.id == projectId }) {
                     store.projects[idx].status = newVal
                     store.scheduleSave()
                 }
             }
         )
 
-        return detailScaffold(project: project, statusBinding: statusBinding)
+        return GeometryReader { proxy in
+            detailScaffold(
+                snapshot: snapshot,
+                statusBinding: statusBinding,
+                availableWidth: proxy.size.width
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
-                        showProjectEdit = true
+                        routeState.presentation = .editProject
                     } label: {
                         Label("编辑资料", systemImage: "square.and.pencil")
                     }
                     Button {
-                        requestExportProjectPackage(project)
+                        requestExportProjectPackage(project, snapshot: snapshot)
                     } label: {
                         Label("导出项目交付包 ZIP", systemImage: "archivebox.fill")
-                    }
-                    Button {
-                        exportDailyReport(project)
-                    } label: {
-                        Label("导出施工日报", systemImage: "doc.text.fill")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -229,18 +198,15 @@ struct ProjectDetailView: View {
             pendingPackageProject: $exportState.pendingPackageProject,
             packageSizeWarningMessage: $exportState.packageSizeWarningMessage,
             showPackageSizeWarning: $exportState.showPackageSizeWarning,
-            onContinuePackageExport: exportProjectPackage(_:)
+            onContinuePackageExport: { exportProjectPackage($0, snapshot: snapshot) }
         )
         .projectDetailEntrySheetCoordinator(
             project: project,
             projectId: projectId,
-            showSheet: $showSheet,
-            showProjectEdit: $showProjectEdit,
-            showContactAdd: $showContactAdd,
-            showFinancialAdd: $showFinancialAdd,
-            showDocumentScanSetup: $showDocumentScanSetup,
-            showImagePicker: $showImagePicker,
-            imagePickerSource: $imagePickerSource,
+            presentation: $routeState.presentation,
+            financialAddSeed: $financeState.financialAddSeed,
+            imagePickerSource: $assetState.imagePickerSource,
+            recentFinancialRecords: snapshot.relatedFinancialRecords,
             onUpdateProject: updateProject(_:),
             onCreateContact: { contact in
                 store.projectContacts.append(contact)
@@ -249,120 +215,111 @@ struct ProjectDetailView: View {
             onCreateFinancialRecord: { record, shouldScan in
                 store.projectFinancialRecords.append(record)
                 if shouldScan {
-                    scanTarget = scanTarget(for: record)
+                    assetState.scanTarget = scanTarget(for: record)
                 }
                 store.scheduleSave()
             },
             onCreateScanTarget: { target in
-                scanTarget = target
+                assetState.scanTarget = target
             },
             onImportCapturedImage: { image in
                 importCapturedImage(image)
             }
         )
         .projectDetailEditingSheetCoordinator(
-            editingMaterial: $editingMaterial,
-            editingQuote: $editingQuote,
-            editingLabor: $editingLabor,
-            editingProgress: $editingProgress,
-            selectedPhotoContext: $selectedPhotoContext,
-            editingDrawing: $editingDrawing,
-            editingDocument: $editingDocument,
-            editingContact: $editingContact,
-            editingFinancialRecord: $editingFinancialRecord,
-            attachmentManagingRecord: $attachmentManagingRecord,
-            scanTarget: $scanTarget,
-            timelineContext: $timelineContext,
-            useMetric: useMetric,
-            projects: store.projects,
-            relatedLogs: relatedLogs,
-            relatedFinancialRecords: relatedFinancialRecords,
-            linkedDocuments: linkedDocuments(for:),
-            attachmentSheetBuilder: { record in
-                AnyView(attachmentSheet(record: record))
+            editingMaterial: editingMaterialBinding,
+            editingQuote: editingQuoteBinding,
+            editingLabor: editingLaborBinding,
+            editingProgress: editingProgressBinding,
+            selectedPhotoContext: $assetState.selectedPhotoContext,
+            editingDrawing: $assetState.editingDrawing,
+            editingDocument: $assetState.editingDocument,
+            editingContact: $assetState.editingContact,
+            editingFinancialRecord: $financeState.editingFinancialRecord,
+            attachmentManagingRecord: $financeState.attachmentManagingRecord,
+            timelineContext: $assetState.timelineContext,
+            dependencies: ProjectDetailEditingCoordinatorDependencies(
+                useMetric: useMetric,
+                projects: projectStore.projects,
+                relatedLogs: snapshot.relatedLogs,
+                relatedFinancialRecords: snapshot.relatedFinancialRecords,
+                linkedDocuments: linkedDocuments(for:),
+                attachmentSheetBuilder: { record in
+                    attachmentSheet(record: record, documents: snapshot.relatedDocuments)
+                },
+                timelineDrawings: { name in
+                    timelineDrawings(name: name, drawings: snapshot.relatedDrawings)
+                }
+            ),
+            handlers: ProjectDetailEditingCoordinatorHandlers(
+                onSaveMaterial: saveMaterial,
+                onDeleteMaterial: deleteMaterial(id:),
+                onSaveQuote: saveQuote,
+                onDeleteQuote: deleteQuote(id:),
+                onSaveLabor: saveLabor,
+                onDeleteLabor: deleteLabor,
+                onSaveProgress: saveProgress,
+                onDeleteProgress: deleteProgress(id:),
+                onUpdatePhoto: { context, note, tag in
+                    updateProjectPhoto(context: context, note: note, tag: tag)
+                },
+                onDeletePhoto: { context in
+                    deleteProjectPhoto(context: context)
+                },
+                onSaveDrawing: saveDrawing(_:),
+                onDeleteDrawing: deleteDrawing(_:),
+                onPreviewDrawing: previewDrawing(_:),
+                onSaveDocument: saveDocumentEdit(_:),
+                onDeleteDocument: deleteDocument(_:),
+                onPreviewDocument: previewDocument(_:),
+                onSaveContact: saveContact(_:),
+                onDeleteContact: deleteContact(_:),
+                onSaveFinancialRecord: saveFinancialRecord,
+                onDeleteFinancialRecord: requestDeleteFinancialRecord(_:),
+                onScanFinancialRecord: { target in
+                    assetState.scanTarget = scanTarget(for: target)
+                },
+                onManageAttachments: { target in
+                    financeState.attachmentManagingRecord = target
+                },
+                onSetDrawingCurrentVersion: setDrawingAsCurrentVersion(_:),
+                onEditDrawingFromTimeline: { drawing in
+                    assetState.editingDrawing = drawing
+                }
+            )
+        )
+        .projectDetailImportFlowCoordinator(
+            showDrawingImporter: $assetState.showDrawingImporter,
+            drawingImportTypes: Self.drawingImportTypes,
+            onImportDrawings: importDrawings(_:),
+            showDocumentFileImporter: $assetState.showDocumentFileImporter,
+            documentImportTypes: Self.documentImportTypes,
+            onImportDocuments: { urls in
+                importProjectDocuments(urls)
             },
-            timelineDrawings: timelineDrawings(name:),
-            onSaveMaterial: saveMaterial,
-            onDeleteMaterial: deleteMaterial(id:),
-            onSaveQuote: saveQuote,
-            onDeleteQuote: deleteQuote(id:),
-            onSaveLabor: saveLabor,
-            onDeleteLabor: deleteLabor,
-            onSaveProgress: saveProgress,
-            onDeleteProgress: deleteProgress(id:),
-            onUpdatePhoto: { context, note, tag in
-                updateProjectPhoto(context: context, note: note, tag: tag)
+            selectedPhotoItem: $assetState.selectedPhotoItem,
+            onImportPhotoItem: { item in
+                await importPhotoItem(item)
             },
-            onDeletePhoto: { context in
-                deleteProjectPhoto(context: context)
-            },
-            onSaveDrawing: saveDrawing(_:),
-            onDeleteDrawing: deleteDrawing(_:),
-            onPreviewDrawing: previewDrawing(_:),
-            onSaveDocument: saveDocumentEdit(_:),
-            onDeleteDocument: deleteDocument(_:),
-            onPreviewDocument: previewDocument(_:),
-            onSaveContact: saveContact(_:),
-            onDeleteContact: deleteContact(_:),
-            onSaveFinancialRecord: saveFinancialRecord,
-            onDeleteFinancialRecord: requestDeleteFinancialRecord(_:),
-            onScanFinancialRecord: { target in
-                scanTarget = scanTarget(for: target)
-            },
-            onManageAttachments: { target in
-                attachmentManagingRecord = target
-            },
+            quickLookURL: $assetState.quickLookURL,
+            scanTarget: $assetState.scanTarget,
             onSaveScannedDocument: saveScannedDocument(target:data:pageCount:),
             onPresentImportError: presentImportError(_:),
-            onSetDrawingCurrentVersion: setDrawingAsCurrentVersion(_:),
-            onEditDrawingFromTimeline: { drawing in
-                editingDrawing = drawing
-            }
+            showImportError: $assetState.showImportError,
+            importErrorMessage: $assetState.importErrorMessage
         )
-        .fileImporter(
-            isPresented: $showDrawingImporter,
-            allowedContentTypes: Self.drawingImportTypes,
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                importDrawings(urls)
-            case .failure:
-                break
+        .onAppear {
+            handleOnAppear(snapshot: snapshot)
+        }
+        .onChange(of: routeState.mode) { _, newValue in
+            if newValue != .finance {
+                routeState.financeJumpFilter = .none
             }
         }
-        .fileImporter(
-            isPresented: $showDocumentFileImporter,
-            allowedContentTypes: Self.documentImportTypes,
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                importProjectDocuments(urls)
-            case .failure:
-                break
-            }
-        }
-        .onChange(of: selectedPhotoItem) { _, item in
-            guard let item else { return }
-            Task {
-                await importPhotoItem(item)
-                await MainActor.run {
-                    selectedPhotoItem = nil
-                }
-            }
-        }
-        .quickLookPreview($quickLookURL)
-        .onAppear(perform: handleOnAppear)
         .onDisappear {
             exportState.cancelExportTask()
         }
-        .alert("操作失败", isPresented: $showImportError) {
-            Button("知道了", role: .cancel) {}
-        } message: {
-            Text(importErrorMessage)
-        }
-        .confirmationDialog("删除账目", isPresented: $showFinancialDeleteConfirm, titleVisibility: .visible) {
+        .confirmationDialog("删除账目", isPresented: $financeState.showFinancialDeleteConfirm, titleVisibility: .visible) {
             Button("仅删除账目（保留票据）", role: .destructive) {
                 performDeleteFinancialRecords(deleteLinkedDocuments: false)
             }
@@ -370,10 +327,10 @@ struct ProjectDetailView: View {
                 performDeleteFinancialRecords(deleteLinkedDocuments: true)
             }
             Button("取消", role: .cancel) {
-                pendingDeleteFinancialRecordIDs.removeAll()
+                financeState.pendingDeleteFinancialRecordIDs.removeAll()
             }
         } message: {
-            Text(String(localized: "将删除 \(pendingDeleteFinancialRecordIDs.count) 条账目。可选择保留票据为项目资料。"))
+            Text(String(format: String(localized: "将删除 %d 条账目。可选择保留票据为项目资料。"), financeState.pendingDeleteFinancialRecordIDs.count))
         }
         .overlay {
             if exportState.isExportingProjectPackage {
@@ -390,231 +347,70 @@ struct ProjectDetailView: View {
     }
 
     @ViewBuilder
-    private func detailScaffold(project: Project, statusBinding: Binding<String>) -> some View {
-        if usesCockpitLayout {
-            cockpitScaffold(project: project, statusBinding: statusBinding)
-        } else {
-            compactScaffold(project: project, statusBinding: statusBinding)
-        }
-    }
-
-    private func compactScaffold(project: Project, statusBinding: Binding<String>) -> some View {
-        List {
-            projectHeader(project: project, statusBinding: statusBinding)
-            quickActionSection
-            Section {
-                Picker("内容", selection: $detailMode) {
-                    ForEach(ProjectDetailMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
+    private func detailScaffold(snapshot: ProjectDetailSnapshot, statusBinding: Binding<ProjectStatus>, availableWidth: CGFloat) -> some View {
+        let usesSinglePageLayout = usesInlineDetailLayout(for: availableWidth)
+        ProjectDetailContentView(
+            isWide: usesSinglePageLayout,
+            scrollRequest: routeState.anchorRequest,
+            jumpBar: {
+                if usesSinglePageLayout {
+                    anchorQuickNavigationSection
                 }
-                .pickerStyle(.segmented)
+            },
+            header: {
+                projectHeader(
+                    snapshot: snapshot,
+                    statusBinding: statusBinding,
+                    showsStatus: usesSinglePageLayout || routeState.mode == .overview
+                )
+            },
+            quickActions: {
+                quickActionSection
+            },
+            modePicker: {
+                if !usesSinglePageLayout {
+                    modePickerSection
+                }
+            },
+            content: {
+                detailContent(
+                    snapshot: snapshot,
+                    prefersInlineSections: usesSinglePageLayout,
+                    showsAllSections: usesSinglePageLayout
+                )
             }
-            detailContent(project: project)
-        }
+        )
     }
 
-    private func cockpitScaffold(project: Project, statusBinding: Binding<String>) -> some View {
-        HStack(alignment: .top, spacing: 14) {
-            cockpitSidebar(project: project, statusBinding: statusBinding)
-                .frame(minWidth: 276, maxWidth: 330, alignment: .topLeading)
-
-            List {
-                detailContent(project: project)
-            }
-            .listStyle(.insetGrouped)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-    }
-
-    private func cockpitSidebar(project: Project, statusBinding: Binding<String>) -> some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 10) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text(project.name)
-                                .font(.headline)
-                                .lineLimit(2)
-                            Text(project.location.isEmpty ? "未填写地址" : project.location)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
-                        }
-                        Spacer(minLength: 8)
-                        Picker("状态", selection: statusBinding) {
-                            ForEach(ProjectStatus.allCases, id: \.rawValue) { item in
-                                Text(item.displayName).tag(item.rawValue)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                    }
-
-                    HStack(spacing: 8) {
-                        cockpitMetric(title: "进度", value: "\(Int(averageProgress(relatedProgress) * 100))%", color: .orange)
-                        cockpitMetric(title: "报价", value: ReportBuilder.money(quoteTotal), color: .blue)
-                        cockpitMetric(title: "待办", value: "\(openTodoCount)", color: .orange)
-                    }
-
-                    ProjectDetailRiskStripView(
-                        overdueCount: overdueProgressCount + overdueTodoCount,
-                        unpaidAmount: unpaidAmount(project),
-                        unpricedQuoteCount: unpricedQuoteCount,
-                        hasTodayLog: hasTodayLog
-                    )
-
-                    if !project.customerName.isEmpty || !project.customerPhone.isEmpty {
-                        Text("客户: \(project.customerName) \(project.customerPhone)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    if !project.startDate.isEmpty || !project.expectedEndDate.isEmpty {
-                        Text("工期: \(project.startDate.isEmpty ? "未填写" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "未填写" : project.expectedEndDate)")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(12)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("内容导航")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(ProjectDetailMode.allCases, id: \.self) { mode in
-                        Button {
-                            detailMode = mode
-                        } label: {
-                            HStack(spacing: 8) {
-                                Image(systemName: icon(for: mode))
-                                    .font(.caption.weight(.semibold))
-                                    .frame(width: 16)
-                                Text(mode.displayName)
-                                    .font(.subheadline.weight(.medium))
-                                Spacer()
-                                if detailMode == mode {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.orange)
-                                }
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(detailMode == mode ? Color.orange.opacity(0.14) : Color(uiColor: .secondarySystemGroupedBackground))
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("快捷工具")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-
-                    cockpitActionButton("写日志", systemImage: "book.pages.fill", tint: .green) {
-                        showSheet = .log
-                    }
-                    cockpitActionButton("记账", systemImage: "receipt.fill", tint: .pink) {
-                        showFinancialAdd = true
-                    }
-                    cockpitActionButton("联系人", systemImage: "person.crop.circle.badge.plus", tint: .blue) {
-                        showContactAdd = true
-                    }
-                    cockpitActionButton("导入图纸", systemImage: "doc.viewfinder.fill", tint: .indigo) {
-                        showDrawingImporter = true
-                    }
-                    cockpitActionButton("添加材料", systemImage: "shippingbox.fill", tint: .orange) {
-                        showSheet = .material
-                    }
-                    cockpitActionButton("添加报价", systemImage: "doc.text.fill", tint: .brown) {
-                        showSheet = .quote
-                    }
-                    cockpitActionButton("记人工", systemImage: "person.2.fill", tint: .purple) {
-                        showSheet = .labor
-                    }
-                    NavigationLink {
-                        LightingCircuitPlannerView(initialProjectId: projectId)
-                    } label: {
-                        cockpitActionLabel("照明回路", systemImage: "tablecells.fill", tint: .teal)
-                    }
-                    .buttonStyle(.plain)
+    private var modePickerSection: some View {
+        Section {
+            Picker("内容", selection: $routeState.mode) {
+                ForEach(ProjectDetailMode.allCases, id: \.self) { mode in
+                    Text(mode.displayName).tag(mode)
                 }
             }
-            .padding(.vertical, 2)
+            .pickerStyle(.segmented)
         }
     }
 
-    private func cockpitMetric(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 7)
-        .background(RoundedRectangle(cornerRadius: 8).fill(Color(uiColor: .tertiarySystemGroupedBackground)))
-    }
-
-    private func cockpitActionButton(_ title: String, systemImage: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            cockpitActionLabel(title, systemImage: systemImage, tint: tint)
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func cockpitActionLabel(_ title: String, systemImage: String, tint: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: systemImage)
-                .foregroundStyle(tint)
-                .frame(width: 16)
-            Text(title)
-                .font(.subheadline)
-                .foregroundStyle(.primary)
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(uiColor: .secondarySystemGroupedBackground)))
-    }
-
-    private func icon(for mode: ProjectDetailMode) -> String {
-        switch mode {
-        case .overview:
-            return "square.grid.2x2"
-        case .records:
-            return "book.pages"
-        case .finance:
-            return "receipt"
-        case .assets:
-            return "folder"
-        }
-    }
-
-    private func projectHeader(project: Project, statusBinding: Binding<String>) -> some View {
-        ProjectDetailHeaderSection(
+    private func projectHeader(snapshot: ProjectDetailSnapshot, statusBinding: Binding<ProjectStatus>, showsStatus: Bool) -> some View {
+        let project = snapshot.project
+        let paidAmountValue = ProjectDetailMetrics.paidAmount(
+            project: project,
+            relatedFinancialRecords: snapshot.relatedFinancialRecords,
+            legacyPayments: snapshot.legacyPayments
+        )
+        return ProjectDetailHeaderSection(
             project: project,
             status: statusBinding,
-            progressValue: "\(Int(averageProgress(relatedProgress) * 100))%",
-            quoteValue: ReportBuilder.money(quoteTotal),
-            todoValue: "\(openTodoCount)",
-            riskStrip: AnyView(
-                ProjectDetailRiskStripView(
-                    overdueCount: overdueProgressCount + overdueTodoCount,
-                    unpaidAmount: unpaidAmount(project),
-                    unpricedQuoteCount: unpricedQuoteCount,
-                    hasTodayLog: hasTodayLog
-                )
+            progressValue: "\(Int(averageProgress(snapshot.relatedProgress) * 100))%",
+            quoteValue: ReportBuilder.money(snapshot.quoteTotal),
+            todoValue: "\(snapshot.openTodoCount)",
+            riskStrip: ProjectDetailRiskStripView(
+                overdueCount: snapshot.overdueProgressCount + snapshot.overdueTodoCount,
+                unpaidAmount: ProjectDetailMetrics.unpaidAmount(project: project, paidAmount: paidAmountValue),
+                unpricedQuoteCount: snapshot.unpricedQuoteCount,
+                hasTodayLog: snapshot.hasTodayLog
             ),
             customerLine: (!project.customerName.isEmpty || !project.customerPhone.isEmpty)
                 ? "客户: \(project.customerName) \(project.customerPhone)"
@@ -622,262 +418,189 @@ struct ProjectDetailView: View {
             periodLine: (!project.startDate.isEmpty || !project.expectedEndDate.isEmpty)
                 ? "工期: \(project.startDate.isEmpty ? "未填写" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "未填写" : project.expectedEndDate)"
                 : nil,
-            onEditProject: { showProjectEdit = true }
+            showsStatus: showsStatus,
+            onEditProject: { routeState.presentation = .editProject }
         )
     }
 
     private var quickActionSection: some View {
         ProjectDetailQuickActionSection(
-            onAddLog: { showSheet = .log },
-            onAddFinance: { showFinancialAdd = true },
-            onAddContact: { showContactAdd = true },
-            onImportDrawing: { showDrawingImporter = true },
-            onAddMaterial: { showSheet = .material },
-            onAddQuote: { showSheet = .quote },
-            onAddLabor: { showSheet = .labor },
-            lightingDestination: AnyView(LightingCircuitPlannerView(initialProjectId: projectId))
+            onAddLog: { routeState.presentation = .quickAdd(.log) },
+            onAddFinance: { routeState.presentation = .addFinancial },
+            onAddContact: { routeState.presentation = .addContact },
+            onImportDrawing: { assetState.showDrawingImporter = true },
+            onAddMaterial: { routeState.presentation = .quickAdd(.material) },
+            onAddQuote: { routeState.presentation = .quickAdd(.quote) },
+            onAddLabor: { routeState.presentation = .quickAdd(.labor) }
         )
     }
 
     @ViewBuilder
-    private func detailContent(project: Project) -> some View {
-        ProjectDetailModeContent(mode: detailMode) {
-            overviewSections(project: project)
-        } records: {
-            recordHubSections
-        } finance: {
-            financeHubSections(project: project)
-        } assets: {
-            assetHubSections
-        }
-    }
-
-    private func overviewSections(project: Project) -> some View {
-        ProjectOverviewView(
+    private func detailContent(snapshot: ProjectDetailSnapshot, prefersInlineSections: Bool, showsAllSections: Bool) -> some View {
+        let project = snapshot.project
+        let paidAmountValue = ProjectDetailMetrics.paidAmount(
             project: project,
-            paidAmount: paidAmount(project),
-            unpaidAmount: unpaidAmount(project),
-            materialCost: currentMaterialCost(project),
-            laborCost: currentLaborCost(project),
-            estimatedProfit: estimatedProfit(project),
-            laborHours: trim(laborHoursTotal),
-            projectBookIncome: projectBookIncome,
-            projectBookExpense: projectBookExpense,
-            logDayCount: Set(relatedLogs.map(\.date)).count,
-            materialCount: relatedMaterials.count,
-            contactCount: relatedContacts.count,
-            financialCount: relatedFinancialRecords.count,
-            documentCount: relatedDocuments.count,
-            recentLogs: relatedLogs,
-            todos: store.siteTodos.filter { $0.projectId == projectId && !$0.isDone },
-            logRow: { log in
-                ProjectDetailLogRowView(log: log)
-            }
+            relatedFinancialRecords: snapshot.relatedFinancialRecords,
+            legacyPayments: snapshot.legacyPayments
         )
-    }
-
-    private var recordHubSections: some View {
-        ProjectRecordHubSectionView(
-            logsCount: relatedLogs.count,
-            progressCount: relatedProgress.count,
-            photoCount: relatedLogs.flatMap(\.photoAttachments).count,
-            logsDestination: AnyView(List { logSections }),
-            progressDestination: AnyView(List { progressSections }),
-            photoDestination: AnyView(List { photoSections })
+        let materialCostValue = ProjectDetailMetrics.currentMaterialCost(
+            project: project,
+            materialCostAuto: snapshot.materialCostAuto
         )
-    }
-
-    private func financeHubSections(project: Project) -> some View {
-        ProjectFinanceHubSectionView(
-            financialCount: relatedFinancialRecords.count,
-            quoteCount: relatedQuotes.count,
-            materialCount: relatedMaterials.count,
-            laborCount: relatedLabor.count,
-            warehouseCount: relatedWarehouseMovements.count,
-            bookDestination: projectBookkeepingDestination,
-            quoteDestination: AnyView(List { quoteSections }),
-            materialDestination: AnyView(List { materialSections }),
-            laborDestination: AnyView(List { laborSections }),
-            warehouseDestination: AnyView(ProjectWarehouseView(project: project)),
-            legacyPaymentsCount: legacyPayments.count,
-            onMigrateLegacyPayments: { migrateLegacyPayments(project: project) }
+        let laborCostValue = ProjectDetailMetrics.currentLaborCost(
+            project: project,
+            laborCostAuto: snapshot.laborCostAuto
         )
-    }
-
-    private var assetHubSections: some View {
-        ProjectAssetHubSectionView(
-            drawingCount: relatedDrawings.count,
-            documentCount: relatedDocuments.count,
-            contactCount: relatedContacts.count,
-            drawingDestination: AnyView(List { drawingSections }),
-            documentDestination: projectDocumentDestination,
-            contactDestination: projectContactDestination
-        )
-    }
-
-    private var projectBookkeepingDestination: AnyView {
-        AnyView(
-            ProjectDetailPrimaryActionList(
-                title: "新增账目",
-                systemImage: "plus.circle.fill",
-                tint: .pink,
-                action: { showFinancialAdd = true }
-            ) {
-                projectBookkeepingSection
-            }
-        )
-    }
-
-    private var projectDocumentDestination: AnyView {
-        AnyView(
-            ProjectDetailPrimaryActionList(
-                title: "扫描并添加资料",
-                systemImage: "viewfinder",
-                tint: .brown,
-                action: { showDocumentScanSetup = true }
-            ) {
-                projectDocumentSections
-            }
-        )
-    }
-
-    private var projectContactDestination: AnyView {
-        AnyView(
-            ProjectDetailPrimaryActionList(
-                title: "添加联系人",
-                systemImage: "person.crop.circle.badge.plus",
-                tint: .blue,
-                action: { showContactAdd = true }
-            ) {
-                contactSections
-            }
-        )
-    }
-
-    private var logSections: some View {
-        ProjectLogSectionView(
-            logs: relatedLogs,
-            onAddLog: { showSheet = .log },
-            logRow: { log in ProjectDetailLogRowView(log: log) }
-        )
-    }
-
-    private var materialSections: some View {
-        ProjectMaterialSectionView(
-            items: relatedMaterials,
+        ProjectDetailModeSectionsView(
+            mode: routeState.mode,
+            project: project,
             useMetric: useMetric,
-            onAdd: { showSheet = .material },
-            onEdit: { editingMaterial = $0 }
-        )
-    }
-
-    private var quoteSections: some View {
-        ProjectQuoteSectionView(
-            items: relatedQuotes,
-            onAdd: { showSheet = .quote },
-            onEdit: { editingQuote = $0 }
-        )
-    }
-
-    private var laborSections: some View {
-        ProjectLaborSectionView(
-            items: relatedLabor,
-            onAdd: { showSheet = .labor },
-            onEdit: { editingLabor = $0 }
-        )
-    }
-
-    private var progressSections: some View {
-        ProjectProgressSectionView(tasks: relatedProgress) { editingProgress = $0 }
-    }
-
-    private var photoSections: some View {
-        ProjectPhotoSectionView(logs: relatedLogs) { selectedPhotoContext = $0 }
-    }
-
-    private var drawingSections: some View {
-        ProjectDrawingSectionView(
-            drawingFilter: $drawingFilter,
-            relatedDrawings: relatedDrawings,
-            filteredDrawings: filteredDrawings,
-            icon: ProjectDetailDrawingHelper.drawingIcon(_:),
-            onImportDrawing: { showDrawingImporter = true },
-            onEdit: { editingDrawing = $0 },
-            onTimeline: { timelineContext = DrawingTimelineContext(name: $0.name) },
-            onPreview: previewDrawing(_:),
-            onDelete: deleteDrawing(_:)
-        )
-    }
-
-    private var contactSections: some View {
-        ProjectContactsView(
-            contacts: relatedContacts,
-            onAdd: { showContactAdd = true },
-            onEdit: { editingContact = $0 }
-        ) { ids in
-            store.projectContacts.removeAll { ids.contains($0.id) }
-            store.scheduleSave()
-        }
-    }
-
-    private var projectBookkeepingSection: some View {
-        ProjectBookkeepingView(
-            records: relatedFinancialRecords,
+            paidAmount: paidAmountValue,
+            unpaidAmount: ProjectDetailMetrics.unpaidAmount(project: project, paidAmount: paidAmountValue),
+            materialCost: materialCostValue,
+            laborCost: laborCostValue,
+            estimatedProfit: ProjectDetailMetrics.estimatedProfit(
+                project: project,
+                materialCost: materialCostValue,
+                laborCost: laborCostValue
+            ),
+            laborHours: trim(snapshot.laborHoursTotal),
+            projectBookIncome: snapshot.projectBookIncome,
+            projectBookExpense: snapshot.projectBookExpense,
+            relatedMaterials: snapshot.relatedMaterials,
+            relatedQuotes: snapshot.relatedQuotes,
+            relatedLabor: snapshot.relatedLabor,
+            relatedWarehouseMovements: snapshot.relatedWarehouseMovements,
+            relatedLogs: snapshot.relatedLogs,
+            relatedProgress: snapshot.relatedProgress,
+            relatedDrawings: snapshot.relatedDrawings,
+            relatedContacts: snapshot.relatedContacts,
+            relatedFinancialRecords: snapshot.relatedFinancialRecords,
+            relatedDocuments: snapshot.relatedDocuments,
+            relatedQuickNotes: snapshot.relatedQuickNotes,
+            relatedTodos: snapshot.relatedTodos,
+            legacyPayments: snapshot.legacyPayments,
+            filteredDrawings: snapshot.filteredDrawings(for: routeState.drawingFilter),
+            financeJumpFilter: routeState.financeJumpFilter,
+            prefersInlineSections: prefersInlineSections,
+            showsAllSections: showsAllSections,
+            drawingFilter: $routeState.drawingFilter,
+            selectedPhotoItem: $assetState.selectedPhotoItem,
+            showDocumentFileImporter: $assetState.showDocumentFileImporter,
+            onAddLog: { routeState.presentation = .quickAdd(.log) },
+            onAddMaterial: { routeState.presentation = .quickAdd(.material) },
+            onAddQuote: { routeState.presentation = .quickAdd(.quote) },
+            onAddLabor: { routeState.presentation = .quickAdd(.labor) },
+            onAddFinancialRecord: { routeState.presentation = .addFinancial },
+            onAddContact: { routeState.presentation = .addContact },
+            onImportDrawing: { assetState.showDrawingImporter = true },
+            onOpenMode: { openMode($0, prefersInlineSections: prefersInlineSections) },
+            onScanDocument: { routeState.presentation = .documentScanSetup },
+            onCaptureDocumentPhoto: {
+                assetState.imagePickerSource = .camera
+                routeState.presentation = .imagePicker
+            },
+            onEditMaterial: { routeState.editingRoute = .material($0) },
+            onEditQuote: { routeState.editingRoute = .quote($0) },
+            onEditLabor: { routeState.editingRoute = .labor($0) },
+            onEditProgress: { routeState.editingRoute = .progress($0) },
+            onOpenPhotoContext: { assetState.selectedPhotoContext = $0 },
+            onEditDrawing: { assetState.editingDrawing = $0 },
+            onShowDrawingTimeline: { assetState.timelineContext = DrawingTimelineContext(name: $0) },
+            onPreviewDrawing: previewDrawing(_:),
+            onDeleteDrawing: deleteDrawing(_:),
+            onEditContact: { assetState.editingContact = $0 },
+            onDeleteContacts: { ids in
+                store.projectContacts.removeAll { ids.contains($0.id) }
+                store.scheduleSave()
+            },
+            onEditFinancialRecord: { financeState.editingFinancialRecord = $0 },
+            onDeleteFinancialRecords: deleteFinancialRecords(ids:),
+            onOpenDocument: { assetState.editingDocument = $0 },
+            onLinkDocumentToFinancialRecord: linkDocument(_:to:),
             linkedDocuments: linkedDocuments(for:),
-            onEdit: { editingFinancialRecord = $0 },
-            onDelete: deleteFinancialRecords(ids:),
-            onAddRecord: { showFinancialAdd = true }
+            onMigrateLegacyPayments: { migrateLegacyPayments(project: project, legacyPayments: snapshot.legacyPayments) },
+            onResetFinanceJumpFilter: resetFinanceJumpFilter
         )
     }
 
-    private var projectDocumentSections: some View {
-        Group {
-            ProjectDetailDocumentActionSection(
-                selectedPhotoItem: $selectedPhotoItem,
-                imagePickerSource: $imagePickerSource,
-                showImagePicker: $showImagePicker,
-                showDocumentScanSetup: $showDocumentScanSetup,
-                showDocumentFileImporter: $showDocumentFileImporter
-            )
-            ProjectDocumentsView(
-                documents: relatedDocuments,
-                icon: ProjectDetailFinanceDocumentHelper.documentIcon(_:),
-                onOpen: { editingDocument = $0 }
-            )
+    private var anchorQuickNavigationSection: some View {
+        Section("快速定位") {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.tight) {
+                    ForEach(
+                        [ProjectDetailAnchor.overview, .records, .assets, .finance, .timeline],
+                        id: \.rawValue
+                    ) { anchor in
+                        Button {
+                            requestAnchorScroll(anchor)
+                        } label: {
+                            Label(anchor.title, systemImage: anchor.systemImage)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(.orange)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
         }
     }
 
-    private func paidAmount(_ project: Project) -> Double {
+    private func openRecordsModeFromMetric() {
+        routeState.mode = .records
+    }
+
+    private func openFinanceModeFromQuoteMetric() {
+        openFinanceModeFromMetric(filter: .none)
+    }
+
+    private func openFinanceModeFromMetric(filter: ProjectFinanceJumpFilter) {
+        routeState.financeJumpFilter = filter
+        routeState.mode = .finance
+    }
+
+    private func resetFinanceJumpFilter() {
+        routeState.financeJumpFilter = .none
+    }
+
+    private func openMode(_ mode: ProjectDetailMode, prefersInlineSections: Bool) {
+        if prefersInlineSections {
+            switch mode {
+            case .overview:
+                requestAnchorScroll(.overview)
+            case .records:
+                requestAnchorScroll(.records)
+            case .assets:
+                requestAnchorScroll(.assets)
+            case .finance:
+                requestAnchorScroll(.finance)
+            case .timeline:
+                requestAnchorScroll(.timeline)
+            }
+            return
+        }
+        routeState.mode = mode
+    }
+
+    private func requestAnchorScroll(_ anchor: ProjectDetailAnchor) {
+        routeState.anchorRequest = ProjectDetailAnchorRequest(anchor: anchor)
+    }
+
+    private func usesInlineDetailLayout(for availableWidth: CGFloat) -> Bool {
+        usesWideDetailLayout && availableWidth >= 720
+    }
+
+    private func paidAmount(_ project: Project, snapshot: ProjectDetailSnapshot) -> Double {
         ProjectDetailMetrics.paidAmount(
             project: project,
-            relatedFinancialRecords: relatedFinancialRecords,
-            legacyPayments: legacyPayments
-        )
-    }
-
-    private func unpaidAmount(_ project: Project) -> Double {
-        ProjectDetailMetrics.unpaidAmount(project: project, paidAmount: paidAmount(project))
-    }
-
-    private func currentMaterialCost(_ project: Project) -> Double {
-        ProjectDetailMetrics.currentMaterialCost(project: project, materialCostAuto: materialCostAuto)
-    }
-
-    private func currentLaborCost(_ project: Project) -> Double {
-        ProjectDetailMetrics.currentLaborCost(project: project, laborCostAuto: laborCostAuto)
-    }
-
-    private func estimatedProfit(_ project: Project) -> Double {
-        ProjectDetailMetrics.estimatedProfit(
-            project: project,
-            materialCost: currentMaterialCost(project),
-            laborCost: currentLaborCost(project)
+            relatedFinancialRecords: snapshot.relatedFinancialRecords,
+            legacyPayments: snapshot.legacyPayments
         )
     }
 
     private func scanTarget(for record: ProjectFinancialRecord) -> ProjectScanTarget {
         ProjectScanTarget(
-            title: "\(record.category)-\(record.date)",
+            title: "\(record.category.displayName)-\(record.date)",
             category: ProjectDetailFinanceDocumentHelper.documentCategory(for: record.category),
             amount: record.amount,
             linkedFinancialRecordId: record.id,
@@ -885,15 +608,15 @@ struct ProjectDetailView: View {
         )
     }
 
-    private func requestExportProjectPackage(_ project: Project) {
+    private func requestExportProjectPackage(_ project: Project, snapshot: ProjectDetailSnapshot) {
         switch ProjectDetailExportWorkflow.packageRequestDecision(
-            documents: relatedDocuments,
-            drawings: relatedDrawings,
-            logs: relatedLogs,
-            quickNotes: relatedQuickNotes
+            documents: snapshot.relatedDocuments,
+            drawings: snapshot.relatedDrawings,
+            logs: snapshot.relatedLogs,
+            quickNotes: snapshot.relatedQuickNotes
         ) {
         case .proceed:
-            exportProjectPackage(project)
+            exportProjectPackage(project, snapshot: snapshot)
         case .warn(let warningMessage):
             exportState.pendingPackageProject = project
             exportState.packageSizeWarningMessage = warningMessage
@@ -903,7 +626,7 @@ struct ProjectDetailView: View {
         }
     }
 
-    private func exportProjectPackage(_ project: Project) {
+    private func exportProjectPackage(_ project: Project, snapshot: ProjectDetailSnapshot) {
         exportState.projectPackageExportTask?.cancel()
         exportState.isExportingProjectPackage = true
         exportState.projectPackageExportProgress = ProjectPackageExportProgress(completedSteps: 0, totalSteps: 1, currentItem: "准备导出")
@@ -911,18 +634,18 @@ struct ProjectDetailView: View {
         exportState.projectPackageExportTask = ProjectDetailExportWorkflow.makeProjectPackageExportTask(
             project: project,
             projectId: projectId,
-            materials: relatedMaterials,
-            quotes: relatedQuotes,
-            labor: relatedLabor,
-            logs: relatedLogs,
-            tasks: relatedProgress,
-            todos: store.siteTodos,
-            drawings: relatedDrawings,
-            contacts: relatedContacts,
-            financialRecords: relatedFinancialRecords,
-            documents: relatedDocuments,
-            quickNotes: relatedQuickNotes,
-            paidAmountOverride: paidAmount(project),
+            materials: snapshot.relatedMaterials,
+            quotes: snapshot.relatedQuotes,
+            labor: snapshot.relatedLabor,
+            logs: snapshot.relatedLogs,
+            tasks: snapshot.relatedProgress,
+            todos: snapshot.relatedTodos,
+            drawings: snapshot.relatedDrawings,
+            contacts: snapshot.relatedContacts,
+            financialRecords: snapshot.relatedFinancialRecords,
+            documents: snapshot.relatedDocuments,
+            quickNotes: snapshot.relatedQuickNotes,
+            paidAmountOverride: paidAmount(project, snapshot: snapshot),
             onProgress: { progress in
                 exportState.projectPackageExportProgress = progress
             },
@@ -955,11 +678,6 @@ struct ProjectDetailView: View {
         exportState.projectPackageExportTask?.cancel()
     }
 
-    private func exportDailyReport(_ project: Project) {
-        exportState.exportPayload = ProjectDetailExportWorkflow.makeDailyReportExport(project: project, logs: relatedLogs)
-        exportState.showExporter = true
-    }
-
     private func averageProgress(_ tasks: [ProgressTask]) -> Double {
         ProjectDetailMetrics.averageProgress(tasks)
     }
@@ -969,13 +687,13 @@ struct ProjectDetailView: View {
     }
 
     private func updateProject(_ updated: Project) {
-        guard let idx = store.projects.firstIndex(where: { $0.id == updated.id }) else { return }
+        guard let idx = projectStore.projects.firstIndex(where: { $0.id == updated.id }) else { return }
         store.projects[idx] = updated
         store.scheduleSave()
     }
 
     private func saveMaterial(_ updated: MaterialItem) {
-        if let index = store.materialItems.firstIndex(where: { $0.id == updated.id }) {
+        if let index = financeStore.materialItems.firstIndex(where: { $0.id == updated.id }) {
             store.materialItems[index] = updated
             store.scheduleSave()
         }
@@ -987,7 +705,7 @@ struct ProjectDetailView: View {
     }
 
     private func saveQuote(_ updated: QuoteItem) {
-        if let index = store.quoteItems.firstIndex(where: { $0.id == updated.id }) {
+        if let index = financeStore.quoteItems.firstIndex(where: { $0.id == updated.id }) {
             store.quoteItems[index] = updated
             store.scheduleSave()
         }
@@ -999,7 +717,7 @@ struct ProjectDetailView: View {
     }
 
     private func saveLabor(_ updated: LaborRecord) {
-        if let index = store.laborRecords.firstIndex(where: { $0.id == updated.id }) {
+        if let index = financeStore.laborRecords.firstIndex(where: { $0.id == updated.id }) {
             store.laborRecords[index] = updated
             store.scheduleSave()
         }
@@ -1011,7 +729,7 @@ struct ProjectDetailView: View {
     }
 
     private func saveProgress(_ updated: ProgressTask) {
-        if let index = store.progressTasks.firstIndex(where: { $0.id == updated.id }) {
+        if let index = projectStore.progressTasks.firstIndex(where: { $0.id == updated.id }) {
             store.progressTasks[index] = updated
             store.scheduleSave()
         }
@@ -1023,15 +741,15 @@ struct ProjectDetailView: View {
     }
 
     private func saveFinancialRecord(_ updated: ProjectFinancialRecord) {
-        if let index = store.projectFinancialRecords.firstIndex(where: { $0.id == updated.id }) {
+        if let index = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == updated.id }) {
             store.projectFinancialRecords[index] = updated
             store.scheduleSave()
         }
     }
 
-    private func updateProjectPhoto(context: ProjectPhotoContext, note: String, tag: String) {
-        guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = store.dailyLogs[logIndex]
+    private func updateProjectPhoto(context: ProjectPhotoContext, note: String, tag: PhotoTag) {
+        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
+        var log = projectStore.dailyLogs[logIndex]
         if let photoIndex = log.photos.firstIndex(where: { $0.id == context.photoId }) {
             log.photos[photoIndex].note = note
             log.photos[photoIndex].tag = tag
@@ -1043,8 +761,8 @@ struct ProjectDetailView: View {
     }
 
     private func deleteProjectPhoto(context: ProjectPhotoContext) {
-        guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = store.dailyLogs[logIndex]
+        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
+        var log = projectStore.dailyLogs[logIndex]
         if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
             let fileName = log.photos[index].fileName
             PhotoStorage.delete(fileName: fileName)
@@ -1063,6 +781,7 @@ struct ProjectDetailView: View {
     private func importDrawings(_ urls: [URL]) {
         var importedCount = 0
         var failedNames: [String] = []
+        var currentDrawings = projectStore.projectDrawings.filter { $0.projectId == projectId }
         for url in urls {
             let ext = url.pathExtension.lowercased()
             guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
@@ -1076,23 +795,24 @@ struct ProjectDetailView: View {
                 failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
                 continue
             }
-            let nextVersion = ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: relatedDrawings)
+            let nextVersion = ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: currentDrawings)
             var versioned = drawing
             versioned.version = nextVersion
             versioned.isCurrentVersion = true
             ProjectDetailAssetActions.updateCurrentVersionFlags(for: versioned, store: store)
             store.projectDrawings.append(versioned)
+            currentDrawings.append(versioned)
             importedCount += 1
         }
         if importedCount > 0 {
             store.scheduleSave()
         }
         if !failedNames.isEmpty {
-            importErrorMessage = "以下文件导入失败：\(failedNames.joined(separator: "、"))"
-            showImportError = true
+            assetState.importErrorMessage = "以下文件导入失败：\(failedNames.joined(separator: "、"))"
+            assetState.showImportError = true
         } else if importedCount == 0 {
-            importErrorMessage = "没有可导入的图纸文件，请选择 PDF / DWG / DXF。"
-            showImportError = true
+            assetState.importErrorMessage = "没有可导入的图纸文件，请选择 PDF / DWG / DXF。"
+            assetState.showImportError = true
         }
     }
 
@@ -1111,7 +831,7 @@ struct ProjectDetailView: View {
     private func previewDocument(_ document: ProjectDocument) {
         switch ProjectDetailAssetActions.previewDocumentURL(for: document) {
         case .success(let url):
-            quickLookURL = url
+            assetState.quickLookURL = url
         case .failure(let message):
             presentImportError(message)
         }
@@ -1135,13 +855,13 @@ struct ProjectDetailView: View {
 
     private func requestDeleteFinancialRecords(ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
-        pendingDeleteFinancialRecordIDs = ids
-        showFinancialDeleteConfirm = true
+        financeState.pendingDeleteFinancialRecordIDs = ids
+        financeState.showFinancialDeleteConfirm = true
     }
 
     private func performDeleteFinancialRecords(deleteLinkedDocuments: Bool) {
-        let ids = pendingDeleteFinancialRecordIDs
-        pendingDeleteFinancialRecordIDs.removeAll()
+        let ids = financeState.pendingDeleteFinancialRecordIDs
+        financeState.pendingDeleteFinancialRecordIDs.removeAll()
         guard !ids.isEmpty else { return }
         ProjectDetailFinanceDocumentActions.deleteFinancialRecords(
             ids: ids,
@@ -1150,12 +870,31 @@ struct ProjectDetailView: View {
         )
     }
 
-    private func migrateLegacyPayments(project: Project) {
+    private func migrateLegacyPayments(project: Project, legacyPayments: [PaymentRecord]) {
         ProjectDetailFinanceDocumentActions.migrateLegacyPayments(project: project, legacyPayments: legacyPayments, store: store)
     }
 
     private func linkedDocuments(for record: ProjectFinancialRecord) -> [ProjectDocument] {
-        ProjectDetailFinanceDocumentActions.linkedDocuments(for: record, documents: store.projectDocuments)
+        ProjectDetailFinanceDocumentActions.linkedDocuments(for: record, documents: projectStore.projectDocuments)
+    }
+
+    private func linkDocument(_ documentID: UUID, to recordID: UUID) {
+        guard let docIndex = projectStore.projectDocuments.firstIndex(where: { $0.id == documentID }),
+              let targetRecordIndex = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == recordID }) else {
+            return
+        }
+
+        let previousRecordID = projectStore.projectDocuments[docIndex].linkedFinancialRecordId
+        if let previousRecordID,
+           let previousRecordIndex = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == previousRecordID }) {
+            store.projectFinancialRecords[previousRecordIndex].linkedDocumentIds.removeAll { $0 == documentID }
+        }
+
+        store.projectDocuments[docIndex].linkedFinancialRecordId = recordID
+        if !projectStore.projectFinancialRecords[targetRecordIndex].linkedDocumentIds.contains(documentID) {
+            store.projectFinancialRecords[targetRecordIndex].linkedDocumentIds.append(documentID)
+        }
+        store.scheduleSave()
     }
 
     private func importProjectDocuments(_ urls: [URL], linkedFinancialRecordId: UUID? = nil) {
@@ -1195,11 +934,11 @@ struct ProjectDetailView: View {
     }
 
     private func presentImportError(_ message: String) {
-        importErrorMessage = message
-        showImportError = true
+        assetState.importErrorMessage = message
+        assetState.showImportError = true
     }
 
-    private func handleOnAppear() {
+    private func handleOnAppear(snapshot: ProjectDetailSnapshot) {
         let routing = ProjectDetailOnAppearRouter.resolve(
             autoOpenFinancialAdd: autoOpenFinancialAdd,
             didAutoOpenFinancialAdd: didAutoOpenFinancialAdd,
@@ -1207,40 +946,40 @@ struct ProjectDetailView: View {
             didAutoOpenDocumentScanSetup: didAutoOpenDocumentScanSetup,
             focus: focus,
             didOpenFocusedItem: didOpenFocusedItem,
-            financialRecords: relatedFinancialRecords,
-            documents: relatedDocuments,
-            contacts: relatedContacts
+            financialRecords: snapshot.relatedFinancialRecords,
+            documents: snapshot.relatedDocuments,
+            contacts: snapshot.relatedContacts
         )
         if routing.shouldOpenFinancialAdd {
             didAutoOpenFinancialAdd = true
-            detailMode = .finance
-            showFinancialAdd = true
+            routeState.mode = .finance
+            routeState.presentation = .addFinancial
         }
         if routing.shouldOpenDocumentScanSetup {
             didAutoOpenDocumentScanSetup = true
-            detailMode = .assets
-            showDocumentScanSetup = true
+            routeState.mode = .assets
+            routeState.presentation = .documentScanSetup
         }
         if routing.shouldConsumeFocusRequest {
             didOpenFocusedItem = true
             guard let focusedItem = routing.focusedItem else { return }
-            detailMode = focusedItem.mode
-            DispatchQueue.main.async {
+            routeState.mode = focusedItem.mode
+            Task { @MainActor in
                 ProjectDetailFocusedItemApplier.apply(
                     focusedItem,
-                    setFinancialRecord: { editingFinancialRecord = $0 },
-                    setDocument: { editingDocument = $0 },
-                    setContact: { editingContact = $0 }
+                    setFinancialRecord: { financeState.editingFinancialRecord = $0 },
+                    setDocument: { assetState.editingDocument = $0 },
+                    setContact: { assetState.editingContact = $0 }
                 )
             }
         }
     }
 
     @ViewBuilder
-    private func attachmentSheet(record: ProjectFinancialRecord) -> some View {
+    private func attachmentSheet(record: ProjectFinancialRecord, documents: [ProjectDocument]) -> some View {
         ProjectFinancialAttachmentSheet(
             record: record,
-            documents: relatedDocuments,
+            documents: documents,
             onDetach: { document in
                 ProjectDetailFinanceDocumentActions.detachDocument(document, from: record, store: store)
             },
@@ -1249,13 +988,13 @@ struct ProjectDetailView: View {
             },
             onBulkSetCategory: { documents, category in
                 let ids = Set(documents.map(\.id))
-                for index in store.projectDocuments.indices where ids.contains(store.projectDocuments[index].id) {
-                    store.projectDocuments[index].category = category.rawValue
+                for index in projectStore.projectDocuments.indices where ids.contains(projectStore.projectDocuments[index].id) {
+                    store.projectDocuments[index].category = category
                 }
                 store.scheduleSave()
             },
             onScan: {
-                scanTarget = scanTarget(for: record)
+                assetState.scanTarget = scanTarget(for: record)
             },
             onImportFiles: { urls in
                 importProjectDocuments(urls, linkedFinancialRecordId: record.id)
@@ -1271,7 +1010,7 @@ struct ProjectDetailView: View {
     }
 
     private func saveContact(_ updated: ProjectContact) {
-        if let index = store.projectContacts.firstIndex(where: { $0.id == updated.id }) {
+        if let index = projectStore.projectContacts.firstIndex(where: { $0.id == updated.id }) {
             store.projectContacts[index] = updated
             store.scheduleSave()
         }
@@ -1289,7 +1028,7 @@ struct ProjectDetailView: View {
     private func previewDrawing(_ drawing: ProjectDrawing) {
         switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
         case .success(let url):
-            quickLookURL = url
+            assetState.quickLookURL = url
         case .failure(let message):
             presentImportError(message)
         }
@@ -1299,8 +1038,8 @@ struct ProjectDetailView: View {
         ProjectDetailAssetActions.deleteDrawing(drawing, store: store)
     }
 
-    private func timelineDrawings(name: String) -> [ProjectDrawing] {
-        ProjectDetailAssetActions.timelineDrawings(name: name, relatedDrawings: relatedDrawings)
+    private func timelineDrawings(name: String, drawings: [ProjectDrawing]) -> [ProjectDrawing] {
+        ProjectDetailAssetActions.timelineDrawings(name: name, relatedDrawings: drawings)
     }
 }
 

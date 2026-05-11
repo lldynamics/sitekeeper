@@ -138,7 +138,7 @@ struct ProjectPackageAndStorageTests {
 
         let movement = ProjectWarehouseMovement(
             projectId: UUID(),
-            movementType: WarehouseMovementType.inbound.rawValue,
+            movementType: .inbound,
             materialName: "测试材料",
             unit: "个",
             quantity: "1"

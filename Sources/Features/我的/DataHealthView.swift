@@ -28,15 +28,20 @@ struct DataHealthView: View {
     }
 
     private var missingQuickNoteAttachmentFiles: [String] {
-        store.quickNotes
-            .flatMap(\.attachments)
+        let allAttachments = store.quickNotes.flatMap(\.attachments)
+            + store.constructionMethods.flatMap(\.attachments)
+            + store.constructionMethods.flatMap(\.tutorialAttachments)
+        return allAttachments
             .filter { !QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
             .map(\.fileName)
             .sorted()
     }
 
     private var orphanQuickNoteAttachmentFiles: [String] {
-        QuickNoteAttachmentStorage.orphanFileNames(for: store.quickNotes)
+        QuickNoteAttachmentStorage.orphanFileNames(
+            for: store.quickNotes,
+            extraAttachments: store.constructionMethods.flatMap(\.attachments) + store.constructionMethods.flatMap(\.tutorialAttachments)
+        )
     }
 
     private var orphanPhotoFiles: [String] {
@@ -80,6 +85,43 @@ struct DataHealthView: View {
         return StorageIssueLog.entries()
     }
 
+    private var widgetHealth: WidgetDataHealthSnapshot {
+        guard let defaults = UserDefaults(suiteName: "group.com.chengjinfang.sitekeeper") else {
+            return WidgetDataHealthSnapshot(
+                appGroupReadable: false,
+                lastUpdatedAt: nil,
+                projectCount: 0,
+                pendingTodos: 0
+            )
+        }
+        let data: WidgetExportData
+        if let raw = defaults.data(forKey: "widget_data"),
+           let decoded = try? JSONDecoder().decode(WidgetExportData.self, from: raw) {
+            data = decoded
+        } else {
+            data = WidgetExportData(projects: [], pendingTodos: 0, materialStockCount: 0, lowStockCount: 0)
+        }
+        let timestamp = defaults.double(forKey: "widget_data_updated_at")
+        return WidgetDataHealthSnapshot(
+            appGroupReadable: true,
+            lastUpdatedAt: timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : nil,
+            projectCount: data.projects.count,
+            pendingTodos: data.pendingTodos
+        )
+    }
+
+    private var photoThumbnailCacheBytes: Int {
+        PhotoStorage.thumbnailCacheUsageBytes()
+    }
+
+    private var quickNoteThumbnailCacheBytes: Int {
+        QuickNoteAttachmentStorage.thumbnailCacheUsageBytes()
+    }
+
+    private var mediaThumbnailCacheBytes: Int {
+        photoThumbnailCacheBytes + quickNoteThumbnailCacheBytes
+    }
+
     private var missingPhotoFileIssues: [DataHealthIssue] {
         var issues: [DataHealthIssue] = []
         for log in store.dailyLogs {
@@ -102,7 +144,7 @@ struct DataHealthView: View {
                     DataHealthIssue(
                         id: "missing-log-photo-\(log.id.uuidString)-\(photo.id.uuidString)",
                         title: "日志照片缺失",
-                        detail: issueDetail([projectName(log.projectId), log.date, photo.tag, photo.fileName]),
+                        detail: issueDetail([projectName(log.projectId), log.date, photo.tag.displayName, photo.fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .red,
                         actionTitle: "打开日志",
@@ -204,7 +246,7 @@ struct DataHealthView: View {
                 return DataHealthIssue(
                     id: "orphan-financial-attachment-\(record.id.uuidString)-\(docId.uuidString)",
                     title: "账目附件映射悬空",
-                    detail: issueDetail([projectName(record.projectId), record.date, record.category, "缺失票据ID \(shortId(docId))"]),
+                    detail: issueDetail([projectName(record.projectId), record.date, record.category.displayName, "缺失票据ID \(shortId(docId))"]),
                     systemImage: "receipt.badge.exclamationmark",
                     color: .orange,
                     actionTitle: "打开账目",
@@ -360,7 +402,7 @@ struct DataHealthView: View {
             return manualInvalidProjectIssue(
                 id: "invalid-financial-project-\(item.id.uuidString)",
                 title: "财务项目关联无效",
-                detail: issueDetail([item.date, item.category, "原项目ID \(shortId(item.projectId))"]),
+                detail: issueDetail([item.date, item.category.displayName, "原项目ID \(shortId(item.projectId))"]),
                 systemImage: "receipt"
             )
         }
@@ -383,14 +425,14 @@ struct DataHealthView: View {
             )
         }
         issues += store.paymentRecords.compactMap { item in
-            guard !projectIdSet.contains(item.projectId) else { return nil }
-            return manualInvalidProjectIssue(
-                id: "invalid-payment-project-\(item.id.uuidString)",
-                title: "付款记录项目关联无效",
-                detail: issueDetail([item.date, item.method, "原项目ID \(shortId(item.projectId))"]),
-                systemImage: "creditcard"
-            )
-        }
+                guard !projectIdSet.contains(item.projectId) else { return nil }
+                return manualInvalidProjectIssue(
+                    id: "invalid-payment-project-\(item.id.uuidString)",
+                    title: "付款记录项目关联无效",
+                    detail: issueDetail([item.date, item.method.displayName, "原项目ID \(shortId(item.projectId))"]),
+                    systemImage: "creditcard"
+                )
+            }
         return issues
     }
 
@@ -458,6 +500,25 @@ struct DataHealthView: View {
                 LabeledContent("可自动修复项目关联", value: "\(autoFixableInvalidProjectRefs.count)")
                 LabeledContent("需手动处理项目关联", value: "\(manualInvalidProjectRefs.count)")
                 LabeledContent("存储错误记录", value: "\(storageIssues.count)")
+            }
+
+            Section("Widget 与缓存") {
+                LabeledContent("App Group 可读", value: widgetHealth.appGroupReadable ? "是" : "否")
+                LabeledContent("Widget 项目数", value: "\(widgetHealth.projectCount)")
+                LabeledContent("Widget 待办数", value: "\(widgetHealth.pendingTodos)")
+                LabeledContent(
+                    "Widget 最近同步",
+                    value: widgetHealth.lastUpdatedAt.map { Formatters.dateTime.string(from: $0) } ?? "暂无"
+                )
+                LabeledContent("照片缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(photoThumbnailCacheBytes))
+                LabeledContent("附件缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(quickNoteThumbnailCacheBytes))
+                LabeledContent("缩略图缓存合计", value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
+                Button(role: .destructive) {
+                    clearMediaThumbnailCaches()
+                } label: {
+                    Label("清理缩略图缓存", systemImage: "trash")
+                }
+                .disabled(mediaThumbnailCacheBytes == 0)
             }
 
             Section("处理") {
@@ -593,7 +654,7 @@ struct DataHealthView: View {
         case .financialRecord(let projectId, let recordId):
             ProjectDetailView(projectId: projectId, initialMode: .finance, focus: .financialRecord(recordId))
         case .document(let projectId, let documentId):
-            ProjectDetailView(projectId: projectId, initialMode: .assets, focus: .document(documentId))
+            ProjectDetailView(projectId: projectId, initialMode: .records, focus: .document(documentId))
         case .dailyLog(let projectId, let logId):
             DailyLogView(initialProjectId: projectId, focusedLogId: logId)
         case .siteTodo(let projectId, let todoId):
@@ -758,6 +819,12 @@ struct DataHealthView: View {
         }
 
         store.scheduleSave()
+    }
+
+    private func clearMediaThumbnailCaches() {
+        PhotoStorage.clearThumbnailCache()
+        QuickNoteAttachmentStorage.clearThumbnailCache()
+        storageIssuesVersion = UUID()
     }
 
     private func cleanupOrphanFiles() {

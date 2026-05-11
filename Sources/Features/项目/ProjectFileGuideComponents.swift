@@ -293,7 +293,7 @@ struct ProjectFileThumbnail: View {
         .clipShape(RoundedRectangle(cornerRadius: 8))
         .overlay(
             RoundedRectangle(cornerRadius: 8)
-                .stroke(item.exists ? Color.clear : Color.red.opacity(0.5), lineWidth: 1)
+                .stroke(item.exists ? Color.clear : Color.appStrokeError, lineWidth: 1)
         )
         .task(id: item.id) {
             await loadThumbnailIfNeeded()

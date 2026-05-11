@@ -52,7 +52,7 @@ struct CalendarDayCell: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isToday && !isSelected ? Color.orange.opacity(0.6) : Color.clear, lineWidth: 1)
+                    .stroke(isToday && !isSelected ? Color.appStrokeWarning : Color.clear, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -62,7 +62,7 @@ struct CalendarDayCell: View {
     private var backgroundColor: Color {
         if date == nil { return .clear }
         if isSelected { return .orange }
-        if !logs.isEmpty { return Color.orange.opacity(0.12) }
+        if !logs.isEmpty { return Color.appPrimarySurfaceSubtle }
         return Color(uiColor: .secondarySystemGroupedBackground)
     }
 }
@@ -103,7 +103,7 @@ struct SelectedPhotoContext: Identifiable {
 struct PhotoDetailSheet: View {
     let context: SelectedPhotoContext
     let allLogs: [DailyLog]
-    let onSave: (String, String) -> Void
+    let onSave: (String, PhotoTag) -> Void
     let onDelete: () -> Void
 
     @Environment(\.dismiss) private var dismiss
@@ -151,7 +151,7 @@ struct PhotoDetailSheet: View {
                 }
                 Section {
                     Button("保存备注") {
-                        onSave(note, tag.rawValue)
+                        onSave(note, tag)
                         dismiss()
                     }
                     .frame(maxWidth: .infinity)
@@ -170,7 +170,7 @@ struct PhotoDetailSheet: View {
             }
             .onAppear {
                 note = selectedPhoto?.note ?? ""
-                tag = PhotoTag(rawValue: selectedPhoto?.tag ?? "") ?? .general
+                tag = selectedPhoto?.tag ?? .general
             }
             .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {

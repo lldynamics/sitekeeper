@@ -2,7 +2,9 @@ import SwiftUI
 
 struct QuickNoteView: View {
     @Environment(DataStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let focusedNoteId: UUID?
+    let embedsNavigationStack: Bool
     @State private var searchText = ""
     @State private var draftContent = ""
     @State private var draftProjectId: UUID?
@@ -11,14 +13,18 @@ struct QuickNoteView: View {
     @State private var editingNote: QuickNote?
     @State private var previewAttachment: QuickNoteAttachment?
     @State private var showComposer = false
+    @State private var showClearComposerConfirm = false
+    @State private var composerDetent: PresentationDetent = .large
     @State private var didOpenFocusedNote = false
     @State private var didRestoreDraft = false
+    @State private var hasRecoveredDraft = false
     @AppStorage("quickNoteDraftContent") private var storedDraftContent = ""
     @AppStorage("quickNoteDraftProjectId") private var storedDraftProjectId = ""
     @AppStorage("quickNoteDraftAttachments") private var storedDraftAttachments = ""
 
-    init(focusedNoteId: UUID? = nil) {
+    init(focusedNoteId: UUID? = nil, embedsNavigationStack: Bool = true) {
         self.focusedNoteId = focusedNoteId
+        self.embedsNavigationStack = embedsNavigationStack
     }
 
     private var filteredNotes: [QuickNote] {
@@ -31,99 +37,189 @@ struct QuickNoteView: View {
         !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftAttachments.isEmpty
     }
 
-    var body: some View {
-        NavigationStack {
-            List {
-                QuickNoteTimelineView(
-                    notes: filteredNotes,
-                    projects: store.projects,
-                    onCreate: { showComposer = true },
-                    onEdit: { editingNote = $0 },
-                    onConvert: { editingNote = $0 },
-                    onDelete: deleteNotes(_:),
-                    onPreview: { previewAttachment = $0 }
-                )
-            }
-            .navigationTitle("随手记")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        showComposer = true
-                    } label: {
-                        Text("发布")
-                    }
+    private var useFullScreenComposer: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    private var composerSheetPresented: Binding<Bool> {
+        Binding(
+            get: { showComposer && !useFullScreenComposer },
+            set: { newValue in
+                if !newValue {
+                    showComposer = false
                 }
             }
-            .searchable(text: $searchText, prompt: "搜索随手记")
-            .scrollDismissesKeyboard(.interactively)
-            .onChange(of: draftContent) { _, _ in saveDraftState() }
-            .onChange(of: draftProjectId) { _, _ in saveDraftState() }
-            .sheet(isPresented: $showComposer) {
-                NavigationStack {
-                    List {
-                        QuickNoteComposerView(
-                            projects: store.projects,
-                            content: $draftContent,
-                            projectId: $draftProjectId,
-                            attachments: $draftAttachments,
-                            onPublish: {
-                                publishDraft()
-                                if !canPublishDraft {
-                                    showComposer = false
-                                }
-                            },
-                            onPreview: { previewAttachment = $0 },
-                            onAttachmentAdded: { attachment in
-                                draftAttachmentFileNames.insert(attachment.fileName)
-                                saveDraftState()
-                            },
-                            onAttachmentRemoved: { attachment in
-                                draftAttachmentFileNames.remove(attachment.fileName)
-                                saveDraftState()
-                            },
-                            onDraftCleared: { removed in
-                                draftAttachmentFileNames.subtract(removed.map(\.fileName))
-                                clearStoredDraft()
-                            }
-                        )
-                    }
-                    .navigationTitle("发布随手记")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .scrollDismissesKeyboard(.interactively)
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") { showComposer = false }
+        )
+    }
+
+    private var composerFullScreenPresented: Binding<Bool> {
+        Binding(
+            get: { showComposer && useFullScreenComposer },
+            set: { newValue in
+                if !newValue {
+                    showComposer = false
+                }
+            }
+        )
+    }
+
+    var body: some View {
+        if embedsNavigationStack {
+            NavigationStack {
+                quickNoteSurface
+            }
+        } else {
+            quickNoteSurface
+        }
+    }
+
+    private var quickNoteSurface: some View {
+        List {
+            QuickNoteTimelineView(
+                notes: filteredNotes,
+                projects: store.projects,
+                onCreate: { showComposer = true },
+                onEdit: { editingNote = $0 },
+                onConvert: { editingNote = $0 },
+                onDelete: deleteNotes(_:),
+                onPreview: { previewAttachment = $0 }
+            )
+        }
+        .navigationTitle("随手记")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showComposer = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Text("发布")
+                        if hasRecoveredDraft && canPublishDraft {
+                            Circle()
+                                .fill(.orange)
+                                .frame(width: 7, height: 7)
+                            Text("恢复草稿")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
                         }
                     }
                 }
-                .presentationDetents([.medium, .large])
+                .accessibilityLabel(hasRecoveredDraft && canPublishDraft ? "发布，检测到未发布草稿" : "发布")
+                .accessibilityHint("双击打开随手记发布面板")
             }
-            .sheet(item: $editingNote) { note in
-                QuickNoteEditSheet(note: note, projects: store.projects) { updated in
-                    saveEditedNote(original: note, updated: updated)
-                } onDelete: { target in
-                    deleteNotes([target])
+        }
+        .searchable(text: $searchText, prompt: "搜索随手记")
+        .scrollDismissesKeyboard(.interactively)
+        .onChange(of: draftContent) { _, _ in saveDraftState() }
+        .onChange(of: draftProjectId) { _, _ in saveDraftState() }
+        .sheet(isPresented: composerSheetPresented) {
+            composerPresentation
+                .presentationDetents([.large], selection: $composerDetent)
+                .presentationContentInteraction(.scrolls)
+                .presentationDragIndicator(.visible)
+        }
+        .fullScreenCover(isPresented: composerFullScreenPresented) {
+            composerPresentation
+        }
+        .sheet(item: $editingNote) { note in
+            QuickNoteEditSheet(note: note, projects: store.projects) { updated in
+                saveEditedNote(original: note, updated: updated)
+            } onDelete: { target in
+                deleteNotes([target])
+            }
+        }
+        .sheet(item: $previewAttachment) { attachment in
+            QuickNoteAttachmentPreview(attachment: attachment)
+        }
+        .onAppear {
+            restoreDraftIfNeeded()
+            openFocusedNoteIfNeeded()
+        }
+        .onDisappear(perform: saveDraftState)
+    }
+
+    private var composerPresentation: some View {
+        NavigationStack {
+            List {
+                QuickNoteComposerView(
+                    projects: store.projects,
+                    content: $draftContent,
+                    projectId: $draftProjectId,
+                    attachments: $draftAttachments,
+                    onPublish: {
+                        publishDraft()
+                        if !canPublishDraft {
+                            showComposer = false
+                        }
+                    },
+                    onPreview: { previewAttachment = $0 },
+                    onAttachmentAdded: { attachment in
+                        draftAttachmentFileNames.insert(attachment.fileName)
+                        saveDraftState()
+                    },
+                    onAttachmentRemoved: { attachment in
+                        draftAttachmentFileNames.remove(attachment.fileName)
+                        saveDraftState()
+                    },
+                    onDraftCleared: { removed in
+                        draftAttachmentFileNames.subtract(removed.map(\.fileName))
+                        hasRecoveredDraft = false
+                        clearStoredDraft()
+                    },
+                    onDiscardDraftRequest: {
+                        showClearComposerConfirm = true
+                    }
+                )
+            }
+            .navigationTitle("发布随手记")
+            .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("关闭") { showComposer = false }
+                }
+                ToolbarItemGroup(placement: .topBarTrailing) {
+                    if hasRecoveredDraft && canPublishDraft {
+                        HStack(spacing: 4) {
+                            Circle()
+                                .fill(.orange)
+                                .frame(width: 7, height: 7)
+                            Text("恢复草稿")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.orange)
+                        }
+                        .accessibilityElement(children: .combine)
+                        .accessibilityLabel("存在未发布草稿")
+                    }
+                    Button("清空", role: .destructive) {
+                        showClearComposerConfirm = true
+                    }
+                    .disabled(!canPublishDraft)
+                    Button("发布") {
+                        publishDraft()
+                        if !canPublishDraft {
+                            showComposer = false
+                        }
+                    }
+                    .disabled(!canPublishDraft)
                 }
             }
-            .sheet(item: $previewAttachment) { attachment in
-                QuickNoteAttachmentPreview(attachment: attachment)
+            .confirmationDialog("清空当前草稿？", isPresented: $showClearComposerConfirm, titleVisibility: .visible) {
+                Button("清空草稿", role: .destructive) {
+                    clearComposerDraft(deleteFiles: true)
+                }
+                Button("取消", role: .cancel) {}
+            } message: {
+                Text("将清空文字、附件和关联工程。")
             }
-            .onAppear {
-                restoreDraftIfNeeded()
-                openFocusedNoteIfNeeded()
-            }
-            .onDisappear(perform: saveDraftState)
         }
     }
 
     private func matchesSearch(_ note: QuickNote) -> Bool {
-        let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return true }
-        return note.title.localizedStandardContains(keyword)
-            || note.content.localizedStandardContains(keyword)
-            || note.createdAt.localizedStandardContains(keyword)
-            || QuickNoteText.attachmentSummary(note.attachments).localizedStandardContains(keyword)
-            || projectName(note.projectId).localizedStandardContains(keyword)
+        SearchMatcher.filter(
+            [note],
+            keyword: searchText,
+            extraFields: { note in [projectName(note.projectId)] }
+        ).isEmpty == false
     }
 
     private func publishDraft() {
@@ -141,6 +237,7 @@ struct QuickNoteView: View {
         draftContent = ""
         draftAttachments = []
         draftAttachmentFileNames.removeAll()
+        hasRecoveredDraft = false
         clearStoredDraft()
         store.scheduleSave()
     }
@@ -166,7 +263,7 @@ struct QuickNoteView: View {
         guard let focusedNoteId, !didOpenFocusedNote,
               let note = store.quickNotes.first(where: { $0.id == focusedNoteId }) else { return }
         didOpenFocusedNote = true
-        DispatchQueue.main.async {
+        Task { @MainActor in
             editingNote = note
         }
     }
@@ -181,6 +278,7 @@ struct QuickNoteView: View {
             draftAttachments = decoded.filter { QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
             draftAttachmentFileNames = Set(draftAttachments.map(\.fileName))
         }
+        hasRecoveredDraft = !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftAttachments.isEmpty
         saveDraftState()
     }
 
@@ -198,6 +296,18 @@ struct QuickNoteView: View {
         storedDraftContent = ""
         storedDraftProjectId = ""
         storedDraftAttachments = ""
+    }
+
+    private func clearComposerDraft(deleteFiles: Bool) {
+        if deleteFiles {
+            QuickNoteAttachmentStorage.delete(attachments: draftAttachments)
+        }
+        draftContent = ""
+        draftProjectId = nil
+        draftAttachments = []
+        draftAttachmentFileNames.removeAll()
+        hasRecoveredDraft = false
+        clearStoredDraft()
     }
 
     private func projectName(_ id: UUID?) -> String {

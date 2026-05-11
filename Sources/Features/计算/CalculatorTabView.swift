@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum CalculatorDestination: CaseIterable {
-    case current, voltageDrop, conduitFill, trayFill, breakerSelect, lightingPlanner, lightingCalc, concrete, rebar, tile, wallArea, unitConverter, watermarkCamera
+    case current, voltageDrop, conduitFill, trayFill, breakerSelect, lightingPlanner, lightingCalc, concrete, rebar, tile, wallArea, unitConverter
 
     var icon: String {
         switch self {
@@ -17,7 +17,6 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "square.grid.3x3"
         case .wallArea: "square.split.2x2"
         case .unitConverter: "arrow.left.arrow.right"
-        case .watermarkCamera: "camera.aperture"
         }
     }
 
@@ -35,7 +34,6 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "地砖排料"
         case .wallArea: "墙面面积"
         case .unitConverter: "单位换算"
-        case .watermarkCamera: "水印相机"
         }
     }
 
@@ -53,7 +51,6 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "片数 / 箱数 / 胶粘剂"
         case .wallArea: "扣除门窗后净面积"
         case .unitConverter: "长度、面积、重量"
-        case .watermarkCamera: "独立拍照并导出带工程水印的现场图片"
         }
     }
 
@@ -62,7 +59,7 @@ enum CalculatorDestination: CaseIterable {
         case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect, .lightingPlanner: "电气"
         case .lightingCalc: "照明"
         case .concrete, .rebar, .tile, .wallArea: "土建"
-        case .unitConverter, .watermarkCamera: "通用"
+        case .unitConverter: "通用"
         }
     }
 
@@ -81,7 +78,6 @@ enum CalculatorDestination: CaseIterable {
         case .tile: TileCalcView()
         case .wallArea: WallAreaView()
         case .unitConverter: UnitConverterView()
-        case .watermarkCamera: WatermarkCameraToolView()
         }
     }
 }
@@ -94,7 +90,7 @@ struct CalculatorTabView: View {
     }
 
     private var sortedDefs: [CalculatorDestination] {
-        let defs = CalculatorDestination.allCases.filter { $0 != .watermarkCamera }
+        let defs = CalculatorDestination.allCases
         let favs = defs.filter { favSet.contains($0.title) }
         let rest = defs.filter { !favSet.contains($0.title) }
         return favs + rest
@@ -116,6 +112,11 @@ struct CalculatorTabView: View {
                             }
                         }
                     }
+                }
+                Section {
+                    Text(String(localized: "辅助估算，现场以规范和专业判断为准。"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("计算")
