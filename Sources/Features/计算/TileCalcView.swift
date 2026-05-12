@@ -2,12 +2,12 @@ import SwiftUI
 
 struct TileCalcView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.tile.roomLength") private var rl = "6"
-    @AppStorage("calc.tile.roomWidth") private var rw = "4"
-    @AppStorage("calc.tile.tileLength") private var tl = "600"
-    @AppStorage("calc.tile.tileWidth") private var tw = "600"
-    @AppStorage("calc.tile.waste") private var waste = "8"
-    @AppStorage("calc.tile.box") private var box = "4"
+    @AppStorage(UserPreferenceKeys.Calculator.tileRoomLength) private var rl = "6"
+    @AppStorage(UserPreferenceKeys.Calculator.tileRoomWidth) private var rw = "4"
+    @AppStorage(UserPreferenceKeys.Calculator.tileTileLength) private var tl = "600"
+    @AppStorage(UserPreferenceKeys.Calculator.tileTileWidth) private var tw = "600"
+    @AppStorage(UserPreferenceKeys.Calculator.tileWaste) private var waste = "8"
+    @AppStorage(UserPreferenceKeys.Calculator.tileBox) private var box = "4"
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -79,6 +79,7 @@ struct TileCalcView: View {
         let boxes = Int(ceil(Double(count) / bp))
         resultModel = .singleSection(
             headline: "需瓷砖 \(count) 片 / \(boxes) 箱",
+            formula: "片数=ceil(含损耗面积÷单片面积)；箱数=ceil(片数÷每箱片数)",
             items: [
                 CalculationResult.item("地面面积", "\(fmt(area)) m²"),
                 CalculationResult.item("含损耗面积", "\(fmt(ra)) m²"),

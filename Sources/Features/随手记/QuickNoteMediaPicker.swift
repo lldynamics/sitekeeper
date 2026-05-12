@@ -12,12 +12,10 @@ struct QuickNoteAttachmentPickerBar: View {
     @State private var showFileImporter = false
     @State private var alertMessage = ""
     @State private var showAlert = false
-    @State private var audioRecorder = QuickNoteAudioRecorder()
     @State private var isImportingMedia = false
     @State private var mediaImportMessage = ""
     @State private var mediaImportTask: Task<Void, Never>?
     @State private var fileImportTask: Task<Void, Never>?
-    @State private var recordingTask: Task<Void, Never>?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -34,15 +32,6 @@ struct QuickNoteAttachmentPickerBar: View {
                     }
                     .accessibilityLabel("拍照添加")
                     .accessibilityHint("打开相机拍照并加入随手记")
-                    Button {
-                        recordingTask?.cancel()
-                        recordingTask = Task { await toggleRecording() }
-                    } label: {
-                        toolLabel(audioRecorder.isRecording ? "停止" : "语音", systemImage: audioRecorder.isRecording ? "stop.circle.fill" : "mic")
-                    }
-                    .tint(audioRecorder.isRecording ? .red : .orange)
-                    .accessibilityLabel(audioRecorder.isRecording ? "停止录音" : "开始录音")
-                    .accessibilityHint("录制语音附件")
                     if mode == .full {
                         Button { showDrawing = true } label: {
                             toolLabel("手绘/标注", systemImage: "pencil.and.outline")
@@ -98,10 +87,8 @@ struct QuickNoteAttachmentPickerBar: View {
         .onDisappear {
             mediaImportTask?.cancel()
             fileImportTask?.cancel()
-            recordingTask?.cancel()
             mediaImportTask = nil
             fileImportTask = nil
-            recordingTask = nil
         }
     }
 
@@ -181,19 +168,6 @@ struct QuickNoteAttachmentPickerBar: View {
             return
         }
         onAppend(QuickNoteAttachment(kind: kind, fileName: fileName))
-    }
-
-    @MainActor
-    private func toggleRecording() async {
-        do {
-            if let attachment = try await audioRecorder.toggleRecording() {
-                onAppend(attachment)
-            }
-        } catch let error as QuickNoteAudioRecorderError {
-            showError(error.userMessage)
-        } catch {
-            showError("录音处理失败。")
-        }
     }
 
     private func handleFileImportResult(_ result: Result<[URL], Error>) {

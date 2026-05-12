@@ -5,8 +5,11 @@ struct ProjectListFiltersSection: View {
     @Binding var statusFilter: ProjectStatus?
     @Binding var sortOption: ProjectSortOption
     @Binding var overviewFilter: ProjectOverviewFilter?
+    let allowedStatuses: [ProjectStatus]
+    let searchSuggestions: [RealtimeSearchSuggestion]
     let hasAnyFilterApplied: Bool
     let isSplitNavigation: Bool
+    let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
     let onClearAll: () -> Void
 
     var body: some View {
@@ -29,6 +32,14 @@ struct ProjectListFiltersSection: View {
                 }
             }
 
+            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !searchSuggestions.isEmpty {
+                RealtimeSearchSuggestionInlineList(
+                    suggestions: searchSuggestions,
+                    onSelect: onSelectSuggestion
+                )
+                .padding(.top, 2)
+            }
+
             if isSplitNavigation {
                 splitToolbar
             } else {
@@ -36,11 +47,19 @@ struct ProjectListFiltersSection: View {
             }
 
             if overviewFilter != nil {
-                Button {
-                    overviewFilter = nil
-                } label: {
-                    Label("清除概况筛选", systemImage: "xmark.circle")
-                        .font(.caption.weight(.semibold))
+                HStack(spacing: AppSpacing.tight) {
+                    if let overviewFilter {
+                        Label("概况筛选：\(overviewFilter.displayName)", systemImage: "scope")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    Button {
+                        overviewFilter = nil
+                    } label: {
+                        Label("清除概况筛选", systemImage: "xmark.circle")
+                            .font(.caption.weight(.semibold))
+                    }
                 }
             }
         } header: {
@@ -52,7 +71,7 @@ struct ProjectListFiltersSection: View {
         HStack(spacing: AppSpacing.tight) {
             Menu {
                 Button("全部状态") { statusFilter = nil }
-                ForEach(ProjectStatus.allCases, id: \.rawValue) { status in
+                ForEach(allowedStatuses, id: \.rawValue) { status in
                     Button(status.displayName) {
                         statusFilter = status
                     }
@@ -97,7 +116,7 @@ struct ProjectListFiltersSection: View {
                     FilterChip(title: "全部", isSelected: statusFilter == nil) {
                         statusFilter = nil
                     }
-                    ForEach(ProjectStatus.allCases, id: \.rawValue) { status in
+                    ForEach(allowedStatuses, id: \.rawValue) { status in
                         FilterChip(title: status.displayName, isSelected: statusFilter == status) {
                             statusFilter = status
                         }
@@ -119,7 +138,7 @@ struct ProjectListFiltersSection: View {
                 if hasAnyFilterApplied {
                     Button("清除筛选", action: onClearAll)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.appPrimaryAction)
                 }
             }
         }

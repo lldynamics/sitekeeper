@@ -135,8 +135,14 @@ enum CloudBackupService {
     }
 
     private static func cloudBackupFile(from url: URL) -> CloudBackupFile? {
-        guard let values = try? url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey]),
-              values.isRegularFile != false else {
+        let values: URLResourceValues
+        do {
+            values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey])
+        } catch {
+            StorageIssueLog.record("读取云备份元信息失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            return nil
+        }
+        guard values.isRegularFile != false else {
             return nil
         }
         return CloudBackupFile(
@@ -149,10 +155,20 @@ enum CloudBackupService {
     }
 
     private static func ensureCloudFileIsReady(_ url: URL) throws {
-        let values = try? url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+        let values: URLResourceValues?
+        do {
+            values = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
+        } catch {
+            StorageIssueLog.record("读取云端下载状态失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            values = nil
+        }
         if let status = values?.ubiquitousItemDownloadingStatus,
            status != .current {
-            try? FileManager.default.startDownloadingUbiquitousItem(at: url)
+            do {
+                try FileManager.default.startDownloadingUbiquitousItem(at: url)
+            } catch {
+                StorageIssueLog.record("触发云备份下载失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            }
             throw CloudBackupError.cloudFileNotDownloaded
         }
     }

@@ -2,9 +2,9 @@ import SwiftUI
 
 struct TrayFillView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.tray.width") private var trayW = "200"
-    @AppStorage("calc.tray.height") private var trayH = "100"
-    @AppStorage("calc.tray.cables") private var cablesDraft = ""
+    @AppStorage(UserPreferenceKeys.Calculator.trayWidth) private var trayW = "200"
+    @AppStorage(UserPreferenceKeys.Calculator.trayHeight) private var trayH = "100"
+    @AppStorage(UserPreferenceKeys.Calculator.trayCables) private var cablesDraft = ""
     @State private var cables: [CableEntry] = [CableEntry(odia: 12, count: 5), CableEntry(odia: 18, count: 3)]
     @State private var showAdd = false; @State private var newDia = ""; @State private var newCount = ""
     @State private var result = ""
@@ -29,7 +29,7 @@ struct TrayFillView: View {
                         Button {
                             cables.remove(at: i)
                             persistCableDraft()
-                        } label: { Image(systemName: "trash").foregroundStyle(.red) }
+                        } label: { Image(systemName: "trash").foregroundStyle(.appRisk) }
                         .accessibilityLabel("删除此电缆")
                     }
                 }
@@ -106,6 +106,7 @@ struct TrayFillView: View {
         let pass = rate <= 40
         resultModel = .singleSection(
             headline: "填充率 \(fmt(rate))%",
+            formula: "填充率 = (电缆总截面积 ÷ 桥架截面积)×100%",
             items: [
                 CalculationResult.item("桥架截面积", "\(fmt(trayArea)) mm²"),
                 CalculationResult.item("电缆总截面积", "\(fmt(cableArea)) mm²"),

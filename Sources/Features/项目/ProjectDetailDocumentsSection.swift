@@ -3,6 +3,7 @@ import SwiftUI
 struct ProjectDocumentsView: View {
     let documents: [ProjectDocument]
     let financialRecords: [ProjectFinancialRecord]
+    let constructionMethods: [ConstructionMethod]
     let icon: (ProjectDocumentCategory) -> String
     let onOpen: (ProjectDocument) -> Void
     let onLink: (UUID, UUID) -> Void
@@ -34,9 +35,11 @@ struct ProjectDocumentsView: View {
 
     private var suggestedMatches: [DocumentFinancialMatch] {
         filteredDocuments.compactMap { document in
-            guard document.linkedFinancialRecordId == nil,
-                  let record = bestMatch(for: document) else { return nil }
-            return DocumentFinancialMatch(document: document, record: record)
+            guard document.linkedFinancialRecordId == nil else { return nil }
+            return ProjectFinancialDocumentMatcher.bestMatch(
+                for: document,
+                in: financialRecords
+            )
         }
     }
 
@@ -75,7 +78,7 @@ struct ProjectDocumentsView: View {
                         VStack(alignment: .leading, spacing: AppSpacing.tight) {
                             Label("缺票自动匹配建议", systemImage: "wand.and.stars")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(Color.appWarning)
                             ForEach(suggestedMatches) { match in
                                 HStack(alignment: .top, spacing: AppSpacing.tight) {
                                     VStack(alignment: .leading, spacing: 3) {
@@ -94,7 +97,7 @@ struct ProjectDocumentsView: View {
                                         onLink(match.document.id, match.record.id)
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    .tint(.orange)
+                                    .tint(Color.appPrimaryAction)
                                     .font(.caption2.weight(.semibold))
                                 }
                             }
@@ -102,7 +105,7 @@ struct ProjectDocumentsView: View {
                         .padding(AppSpacing.tight)
                         .background(
                             RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                                .fill(Color.orange.opacity(0.08))
+                                .fill(Color.appPeachSurfaceSubtle)
                         )
                     }
                     ForEach(filteredDocuments) { document in
@@ -111,7 +114,7 @@ struct ProjectDocumentsView: View {
                         } label: {
                             HStack(spacing: AppSpacing.normal) {
                                 Image(systemName: icon(document.category))
-                                    .foregroundStyle(.indigo)
+                                    .foregroundStyle(Color.appDoc)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(document.title).font(.callout.weight(.medium)).foregroundStyle(.primary)
                                     HStack(spacing: AppSpacing.tight) {
@@ -126,6 +129,13 @@ struct ProjectDocumentsView: View {
                                     Text(document.createdAt)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
+                                    let linkedTitles = linkedMethodTitles(for: document)
+                                    if !linkedTitles.isEmpty {
+                                        Text("工艺: \(linkedTitles.joined(separator: "、"))")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
                                 }
                                 Spacer()
                                 Image(systemName: "chevron.right")
@@ -230,55 +240,21 @@ struct ProjectDocumentsView: View {
         return Formatters.date.date(from: text)
     }
 
-    private func bestMatch(for document: ProjectDocument) -> ProjectFinancialRecord? {
-        let docAmount = document.amountValue.doubleValue
-        let docDate = parseDate(document.createdAt)
-        let docCategory = document.category
-        let docText = [document.title, document.note]
-            .joined(separator: " ")
-            .lowercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-
-        let candidates = financialRecords.compactMap { record -> (ProjectFinancialRecord, Int)? in
-            var score = 0
-            let recordAmount = record.amountValue.doubleValue
-            let amountDelta = abs(recordAmount - docAmount)
-            if docAmount > 0 {
-                if amountDelta <= 1 {
-                    score += 4
-                } else if amountDelta <= max(1, docAmount * 0.02) {
-                    score += 3
-                } else if amountDelta <= max(2, docAmount * 0.05) {
-                    score += 1
-                }
-            }
-
-            if let docDate, let recordDate = parseDate(record.date) {
-                let dayDelta = abs(Calendar.current.dateComponents([.day], from: docDate, to: recordDate).day ?? 99)
-                if dayDelta <= 3 {
-                    score += 2
-                } else if dayDelta <= 7 {
-                    score += 1
-                }
-            }
-
-            let counterparty = record.counterparty.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            if !counterparty.isEmpty && docText.contains(counterparty) {
-                score += 2
-            }
-
-            if docCategory.matchesFinancialCategory(record.category) {
-                score += 1
-            }
-
-            return score >= 3 ? (record, score) : nil
-        }
-        .sorted { lhs, rhs in
-            if lhs.1 != rhs.1 { return lhs.1 > rhs.1 }
-            return lhs.0.date > rhs.0.date
-        }
-        return candidates.first?.0
+    private func linkedMethodTitles(for document: ProjectDocument) -> [String] {
+        guard !document.linkedConstructionMethodIDs.isEmpty else { return [] }
+        let lookup = Dictionary(uniqueKeysWithValues: constructionMethods.map { method in
+            (method.id, methodTitle(method))
+        })
+        return document.linkedConstructionMethodIDs.compactMap { lookup[$0] }
     }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title.isEmpty ? "未命名工艺" : title
+        return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
+    }
+
 }
 
 private enum DocumentCategoryFilter: String, CaseIterable {
@@ -322,26 +298,4 @@ private enum DocumentRelationFilter: String, CaseIterable {
     }
 }
 
-private struct DocumentFinancialMatch: Identifiable {
-    let id = UUID()
-    let document: ProjectDocument
-    let record: ProjectFinancialRecord
-}
-
-private extension ProjectDocumentCategory {
-    func matchesFinancialCategory(_ category: ProjectFinancialCategory) -> Bool {
-        switch self {
-        case .invoice:
-            return category == .invoice
-        case .receipt:
-            return category == .receipt
-        case .paymentRequest:
-            return category == .paymentRequest
-        case .construction:
-            return category == .material
-                || category == .labor
-        case .contract, .acceptance, .other:
-            return false
-        }
-    }
-}
+private typealias DocumentFinancialMatch = ProjectDocumentMatchSuggestion

@@ -24,7 +24,6 @@ struct ExportView: View {
     @State private var includeWarehouseMovements = true
     @State private var includeQuickNotes = true
     @State private var includeLightingCircuits = true
-    @State private var includePaymentRecords = true
     @State private var filterProjectId: UUID?
     @State private var enableDateFilter = false
     @State private var filterStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
@@ -45,10 +44,6 @@ struct ExportView: View {
 
     private var usesWideLayout: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
-
-    private var hasLegacyPaymentRecords: Bool {
-        !store.paymentRecords.isEmpty
     }
 
     private var exportSurface: some View {
@@ -254,9 +249,6 @@ struct ExportView: View {
             Toggle("仓库流水", isOn: $includeWarehouseMovements)
             Toggle("随手记", isOn: $includeQuickNotes)
             Toggle("照明回路", isOn: $includeLightingCircuits)
-            if hasLegacyPaymentRecords {
-                Toggle("付款记录", isOn: $includePaymentRecords)
-            }
         }
     }
 
@@ -292,15 +284,12 @@ struct ExportView: View {
             LabeledContent("仓库流水条数", value: includeWarehouseMovements ? "\(snapshot.projectWarehouseMovements.count)" : "-")
             LabeledContent("随手记条数", value: includeQuickNotes ? "\(snapshot.quickNotes.count)" : "-")
             LabeledContent("回路方案数", value: includeLightingCircuits ? "\(snapshot.lightingCircuitPlans.count)" : "-")
-            if hasLegacyPaymentRecords {
-                LabeledContent("付款记录条数", value: includePaymentRecords ? "\(snapshot.paymentRecords.count)" : "-")
-            }
             LabeledContent("日期格式异常", value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
             LabeledContent("文件名", value: previewFilename)
             if enableDateFilter, previewResult.invalidDateCount > 0 {
                 Text(String(localized: "有 \(previewResult.invalidDateCount) 条记录日期格式异常，已按\"不命中日期筛选\"处理。"))
                     .font(.caption2)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.appWarning)
             }
         }
     }
@@ -318,7 +307,7 @@ struct ExportView: View {
     // MARK: - 导出逻辑
 
     private var hasSelectedContent: Bool {
-        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeLightingCircuits || (hasLegacyPaymentRecords && includePaymentRecords)
+        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeLightingCircuits
     }
 
     private var options: ExportContentOptions {
@@ -335,8 +324,7 @@ struct ExportView: View {
             includeProjectDrawings: includeProjectDrawings,
             includeWarehouseMovements: includeWarehouseMovements,
             includeQuickNotes: includeQuickNotes,
-            includeLightingCircuits: includeLightingCircuits,
-            includePaymentRecords: hasLegacyPaymentRecords && includePaymentRecords
+            includeLightingCircuits: includeLightingCircuits
         )
     }
 
@@ -411,7 +399,6 @@ struct ExportView: View {
             snapshot.projectContacts = snapshot.projectContacts.filter { $0.projectId == pid }
             snapshot.projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId == pid }
             snapshot.projectDocuments = snapshot.projectDocuments.filter { $0.projectId == pid }
-            snapshot.paymentRecords = snapshot.paymentRecords.filter { $0.projectId == pid }
             snapshot.projectDrawings = snapshot.projectDrawings.filter { $0.projectId == pid }
             snapshot.projectWarehouseMovements = snapshot.projectWarehouseMovements.filter { $0.projectId == pid }
             snapshot.quickNotes = snapshot.quickNotes.filter { $0.projectId == pid }
@@ -444,9 +431,6 @@ struct ExportView: View {
         }
         snapshot.quoteItems = snapshot.quoteItems.filter {
             isWithinDateRange($0.customerConfirmedDate, format: Formatters.date, invalidDateCount: &invalidDateCount)
-        }
-        snapshot.paymentRecords = snapshot.paymentRecords.filter {
-            isWithinDateRange($0.date, format: Formatters.date, invalidDateCount: &invalidDateCount)
         }
         snapshot.projectDrawings = snapshot.projectDrawings.filter {
             isWithinDateRange($0.importedAt, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)

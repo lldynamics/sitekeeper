@@ -34,7 +34,15 @@ final class WidgetDataStore {
         guard let defaults,
               let data = defaults.data(forKey: widgetDataKey),
               let widgetData = try? JSONDecoder().decode(WidgetExportData.self, from: data) else {
-            return WidgetExportData(projects: [], pendingTodos: 0, materialStockCount: 0, lowStockCount: 0)
+            return WidgetExportData(
+                projects: [],
+                pendingTodos: 0,
+                materialStockCount: 0,
+                lowStockCount: 0,
+                missingReceiptCount: 0,
+                priceSpikeCount: 0,
+                backupOverdueCount: 0
+            )
         }
         return widgetData
     }

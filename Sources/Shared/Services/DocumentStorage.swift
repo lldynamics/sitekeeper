@@ -70,9 +70,20 @@ enum ProjectDocumentStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("项目资料读取失败：\(fileName)")
+            StorageIssueLog.record("项目资料读取失败：\(fileName)，\(error.localizedDescription)")
             return nil
         }
+    }
+
+    static func dataAsync(for fileName: String) async -> Data? {
+        let url = fileURL(for: fileName)
+        return await DocumentStorageBackgroundReader.data(
+            from: url,
+            missingFileCode: .fileReadNoSuchFile,
+            missingLogPrefix: nil,
+            failureLogPrefix: "项目资料读取失败",
+            fileName: fileName
+        )
     }
 
     static func delete(fileName: String) {
@@ -103,8 +114,15 @@ enum ProjectDocumentStorage {
 
     static func fileSize(for fileName: String) -> Int {
         let url = fileURL(for: fileName)
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-        return values?.fileSize ?? values?.totalFileAllocatedSize ?? 0
+        do {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            return values.fileSize ?? values.totalFileAllocatedSize ?? 0
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return 0
+        } catch {
+            StorageIssueLog.record("项目资料文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            return 0
+        }
     }
 
     static func backupFiles(for documents: [ProjectDocument]) -> [ProjectDocumentBackupFile] {
@@ -262,14 +280,32 @@ enum DrawingStorage {
         }
     }
 
+    static func dataAsync(for fileName: String) async -> Data? {
+        let url = fileURL(for: fileName)
+        return await DocumentStorageBackgroundReader.data(
+            from: url,
+            missingFileCode: .fileReadNoSuchFile,
+            missingLogPrefix: nil,
+            failureLogPrefix: "图纸读取失败",
+            fileName: fileName
+        )
+    }
+
     static func exists(fileName: String) -> Bool {
         FileManager.default.fileExists(atPath: fileURL(for: fileName).path)
     }
 
     static func fileSize(for fileName: String) -> Int {
         let url = fileURL(for: fileName)
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-        return values?.fileSize ?? values?.totalFileAllocatedSize ?? 0
+        do {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            return values.fileSize ?? values.totalFileAllocatedSize ?? 0
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return 0
+        } catch {
+            StorageIssueLog.record("图纸文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            return 0
+        }
     }
 
     static func backupFiles(for drawings: [ProjectDrawing]) -> [DrawingBackupFile] {
@@ -417,10 +453,15 @@ enum QuickNoteAttachmentStorage {
         let byteSize = fileSize(for: fileName)
         let durationSeconds: Double? = await {
             let asset = AVURLAsset(url: target)
-            guard let duration = try? await asset.load(.duration) else { return nil }
-            let seconds = CMTimeGetSeconds(duration)
-            guard seconds.isFinite, seconds > 0 else { return nil }
-            return seconds
+            do {
+                let duration = try await asset.load(.duration)
+                let seconds = CMTimeGetSeconds(duration)
+                guard seconds.isFinite, seconds > 0 else { return nil }
+                return seconds
+            } catch {
+                StorageIssueLog.record("随手记视频时长读取失败：\(source.lastPathComponent)，\(error.localizedDescription)")
+                return nil
+            }
         }()
         return (fileName, source.lastPathComponent, byteSize, durationSeconds)
     }
@@ -440,6 +481,17 @@ enum QuickNoteAttachmentStorage {
         }
     }
 
+    static func dataAsync(for fileName: String) async -> Data? {
+        let url = fileURL(for: fileName)
+        return await DocumentStorageBackgroundReader.data(
+            from: url,
+            missingFileCode: .fileReadNoSuchFile,
+            missingLogPrefix: nil,
+            failureLogPrefix: "随手记附件读取失败",
+            fileName: fileName
+        )
+    }
+
     static func exists(fileName: String) -> Bool {
         FileManager.default.fileExists(atPath: fileURL(for: fileName).path)
     }
@@ -449,8 +501,15 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func fileSize(at url: URL) -> Int {
-        let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-        return values?.fileSize ?? values?.totalFileAllocatedSize ?? 0
+        do {
+            let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            return values.fileSize ?? values.totalFileAllocatedSize ?? 0
+        } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+            return 0
+        } catch {
+            StorageIssueLog.record("随手记附件体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            return 0
+        }
     }
 
     static func formattedFileSize(for fileName: String) -> String? {
@@ -566,7 +625,13 @@ enum QuickNoteAttachmentStorage {
         let asset = AVAsset(url: fileURL(for: fileName))
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
-        guard let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil) else { return nil }
+        let cgImage: CGImage
+        do {
+            cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
+        } catch {
+            StorageIssueLog.record("随手记视频缩略图生成失败：\(fileName)，\(error.localizedDescription)")
+            return nil
+        }
         let image = UIImage(cgImage: cgImage)
         if let data = image.jpegData(compressionQuality: 0.72) {
             _ = saveData(data, fileName: thumbName)
@@ -584,8 +649,13 @@ enum QuickNoteAttachmentStorage {
         }
         return files.reduce(0) { total, url in
             guard url.lastPathComponent.hasPrefix("thumb-") else { return total }
-            let values = try? url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-            return total + (values?.fileSize ?? values?.totalFileAllocatedSize ?? 0)
+            do {
+                let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+                return total + (values.fileSize ?? values.totalFileAllocatedSize ?? 0)
+            } catch {
+                StorageIssueLog.record("随手记缩略图体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                return total
+            }
         }
     }
 
@@ -656,5 +726,29 @@ private extension UIImage {
         return renderer.image { _ in
             draw(in: CGRect(origin: .zero, size: newSize))
         }
+    }
+}
+
+private enum DocumentStorageBackgroundReader {
+    static func data(
+        from url: URL,
+        missingFileCode: CocoaError.Code,
+        missingLogPrefix: String?,
+        failureLogPrefix: String,
+        fileName: String
+    ) async -> Data? {
+        await Task.detached(priority: .utility) {
+            do {
+                return try Data(contentsOf: url, options: .mappedIfSafe)
+            } catch let cocoaError as CocoaError where cocoaError.code == missingFileCode {
+                if let missingLogPrefix {
+                    StorageIssueLog.record("\(missingLogPrefix)：\(fileName)")
+                }
+                return nil
+            } catch {
+                StorageIssueLog.record("\(failureLogPrefix)：\(fileName)，\(error.localizedDescription)")
+                return nil
+            }
+        }.value
     }
 }

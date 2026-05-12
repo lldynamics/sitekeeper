@@ -90,12 +90,5 @@ enum ReportBuilderPDFSections {
                 "- \($0.name) [\($0.supplyType.displayName)] \($0.voltage)V  \($0.loads.count)个负荷"
             }
         }
-        if options.includePaymentRecords && !snapshot.paymentRecords.isEmpty {
-            lines.append("")
-            lines.append(String(localized: "付款记录"))
-            lines += snapshot.paymentRecords.map {
-                "- \($0.date) \(ReportBuilder.money(ReportBuilder.number($0.amount))) [\($0.normalizedMethod.displayName)] \($0.note)"
-            }
-        }
     }
 }

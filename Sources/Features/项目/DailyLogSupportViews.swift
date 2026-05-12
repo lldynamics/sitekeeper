@@ -33,12 +33,12 @@ struct CalendarDayCell: View {
                     HStack(spacing: 2) {
                         if !logs.isEmpty {
                             Circle()
-                                .fill(isSelected ? Color.white : Color.orange)
+                                .fill(isSelected ? Color.white : Color.appPrimaryAction)
                                 .frame(width: 5, height: 5)
                             if logs.contains(where: { !$0.photoAttachments.isEmpty }) {
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: 7))
-                                    .foregroundStyle(isSelected ? .white : .blue)
+                                    .foregroundStyle(isSelected ? .white : Color.appDoc)
                             }
                         }
                     }
@@ -61,7 +61,7 @@ struct CalendarDayCell: View {
 
     private var backgroundColor: Color {
         if date == nil { return .clear }
-        if isSelected { return .orange }
+        if isSelected { return .appPrimaryAction }
         if !logs.isEmpty { return Color.appPrimarySurfaceSubtle }
         return Color(uiColor: .secondarySystemGroupedBackground)
     }
@@ -110,6 +110,8 @@ struct PhotoDetailSheet: View {
     @State private var note = ""
     @State private var tag: PhotoTag = .general
     @State private var showDeleteConfirm = false
+    @State private var previewImage: UIImage?
+    @State private var didAttemptLoadImage = false
 
     private var selectedPhoto: LogPhoto? {
         allLogs.first(where: { $0.id == context.logId })?
@@ -121,19 +123,14 @@ struct PhotoDetailSheet: View {
         NavigationStack {
             Form {
                 Section("照片预览") {
-                    if let fileName = selectedPhoto?.fileName,
-                       let data = PhotoStorage.data(for: fileName),
-                       let image = UIImage(data: data) {
-                        Image(uiImage: image)
+                    if let previewImage {
+                        Image(uiImage: previewImage)
                             .resizable()
                             .scaledToFit()
                             .frame(maxHeight: 360)
                             .frame(maxWidth: .infinity)
-                    } else if let image = PhotoStorage.thumbnail(for: selectedPhoto?.fileName) {
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxHeight: 280)
+                    } else if !didAttemptLoadImage {
+                        ProgressView("加载中…")
                             .frame(maxWidth: .infinity)
                     } else {
                         Text("图片已丢失或不可读取")
@@ -172,6 +169,9 @@ struct PhotoDetailSheet: View {
                 note = selectedPhoto?.note ?? ""
                 tag = selectedPhoto?.tag ?? .general
             }
+            .task(id: selectedPhoto?.fileName) {
+                await loadPreviewImage()
+            }
             .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {
                     onDelete()
@@ -182,6 +182,25 @@ struct PhotoDetailSheet: View {
                 Text("该操作仅删除当前照片，不会删除整条日志。")
             }
         }
+    }
+
+    private func loadPreviewImage() async {
+        didAttemptLoadImage = false
+        previewImage = nil
+        guard let fileName = selectedPhoto?.fileName else {
+            didAttemptLoadImage = true
+            return
+        }
+        if let data = await PhotoStorage.dataAsync(for: fileName),
+           let image = UIImage(data: data) {
+            previewImage = image
+            didAttemptLoadImage = true
+            return
+        }
+        if let thumbnail = await PhotoStorage.thumbnailAsync(for: fileName) {
+            previewImage = thumbnail
+        }
+        didAttemptLoadImage = true
     }
 }
 

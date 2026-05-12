@@ -59,6 +59,7 @@ struct ContactPickerRowView: View {
     let projectName: String
     var showsProjectName = true
     var showsPhoneActions = false
+    var crmSummary: String? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -68,7 +69,7 @@ struct ContactPickerRowView: View {
                 Spacer(minLength: AppSpacing.tight)
                 Text(contact.roleDisplayName)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appDoc)
                     .padding(.horizontal, 7)
                     .padding(.vertical, 3)
                     .background(Color.appDocSurfaceSubtle)
@@ -80,12 +81,18 @@ struct ContactPickerRowView: View {
             if showsProjectName {
                 Text(projectName)
                     .font(.caption)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
             }
             if !contact.company.isEmpty || !contact.phone.isEmpty {
                 Text([contact.company, contact.phone].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+            }
+            if let crmSummary,
+               !crmSummary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(crmSummary)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.appPrimaryAction)
             }
             if !contact.note.isEmpty {
                 Text(contact.note)

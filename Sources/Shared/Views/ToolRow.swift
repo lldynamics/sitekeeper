@@ -5,7 +5,7 @@ struct ToolRow: View {
     let icon: String
     let title: String
     let desc: String
-    var color: Color = .orange
+    var color: Color = .appPrimaryAction
 
     var body: some View {
         HStack(spacing: 12) {

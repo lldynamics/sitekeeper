@@ -281,7 +281,13 @@ enum BackupArchiveService {
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         if ext == "json" {
             report(0, totalBytes, "读取备份索引")
-            let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            let data: Data
+            do {
+                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            } catch {
+                StorageIssueLog.record("备份预览读取失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                throw error
+            }
             try failIfCancelled()
             let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
             report(totalBytes, totalBytes, "读取完成")
@@ -332,10 +338,14 @@ enum BackupArchiveService {
             )
         } catch SimpleZipArchiveReader.ZipReadError.cancelled {
             throw BackupArchiveError.cancelled
+        } catch {
+            StorageIssueLog.record("备份预览扫描失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            throw error
         }
 
         try failIfCancelled()
         guard let metadataData else {
+            StorageIssueLog.record("备份预览失败：缺少数据索引 \(metadataPath)")
             throw BackupArchiveError.missingMetadata
         }
         let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: metadataData)
@@ -368,7 +378,13 @@ enum BackupArchiveService {
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         if ext == "json" {
             report(0, totalBytes, "读取旧版备份")
-            let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            let data: Data
+            do {
+                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            } catch {
+                StorageIssueLog.record("备份解码读取失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                throw error
+            }
             try failIfCancelled()
             report(totalBytes, totalBytes, "解析完成")
             return try decodeJSONSnapshot(from: data)
@@ -412,10 +428,14 @@ enum BackupArchiveService {
             )
         } catch SimpleZipArchiveReader.ZipReadError.cancelled {
             throw BackupArchiveError.cancelled
+        } catch {
+            StorageIssueLog.record("备份解码扫描失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            throw error
         }
 
         try failIfCancelled()
         guard let metadataData else {
+            StorageIssueLog.record("备份解码失败：缺少数据索引 \(metadataPath)")
             throw BackupArchiveError.missingMetadata
         }
         var snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: metadataData)
@@ -457,6 +477,7 @@ enum BackupArchiveService {
             do {
                 try data.write(to: directory.appendingPathComponent(fileName), options: .atomic)
             } catch {
+                StorageIssueLog.record("\(failureMessage)：\(fileName)，\(error.localizedDescription)")
                 throw BackupArchiveError.restoreFailed("\(failureMessage)：\(fileName)")
             }
         }
@@ -474,6 +495,7 @@ enum BackupArchiveService {
             } catch SimpleZipArchiveReader.ZipReadError.cancelled {
                 throw BackupArchiveError.cancelled
             } catch {
+                StorageIssueLog.record("\(failureMessage)：\(fileName)，\(error.localizedDescription)")
                 throw BackupArchiveError.restoreFailed("\(failureMessage)：\(fileName)")
             }
         }
@@ -484,6 +506,7 @@ enum BackupArchiveService {
             try FileManager.default.createDirectory(at: documentStage, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: quickNoteStage, withIntermediateDirectories: true)
         } catch {
+            StorageIssueLog.record("创建导入暂存目录失败：\(stageRoot.lastPathComponent)，\(error.localizedDescription)")
             throw BackupArchiveError.restoreFailed("创建导入暂存目录失败：\(error.localizedDescription)")
         }
 
@@ -497,7 +520,13 @@ enum BackupArchiveService {
 
         if ext == "json" {
             report(0, totalBytes, "读取旧版备份附件")
-            let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            let data: Data
+            do {
+                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
+            } catch {
+                StorageIssueLog.record("读取旧版备份附件失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                throw error
+            }
             try failIfCancelled()
             let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
             for file in snapshot.photoFiles {
@@ -553,6 +582,9 @@ enum BackupArchiveService {
                 )
             } catch SimpleZipArchiveReader.ZipReadError.cancelled {
                 throw BackupArchiveError.cancelled
+            } catch {
+                StorageIssueLog.record("备份附件恢复扫描失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                throw error
             }
         }
 
@@ -621,11 +653,17 @@ enum BackupArchiveService {
             let sourceURL = fileURLProvider(fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
                 missingFiles.append("\(displayName) \(fileName)")
+                StorageIssueLog.record("备份打包缺失原文件：\(displayName) \(fileName)")
                 onStep("检查\(displayName) \(fileName)")
                 continue
             }
 
-            try zip.addFile(path: prefix + fileName, sourceFileURL: sourceURL)
+            do {
+                try zip.addFile(path: prefix + fileName, sourceFileURL: sourceURL)
+            } catch {
+                StorageIssueLog.record("备份打包写入失败：\(displayName) \(fileName)，\(error.localizedDescription)")
+                throw error
+            }
             includedFileCount += 1
             let estimatedFileSize = max(sizeProvider(fileName), QuickNoteAttachmentStorage.fileSize(at: sourceURL))
             rawFilesBytes += estimatedFileSize
@@ -646,6 +684,7 @@ enum BackupArchiveService {
             seen.insert(fileName)
             guard exists(fileName) else {
                 missingFiles.append("\(displayName) \(fileName)")
+                StorageIssueLog.record("备份体积估算缺失原文件：\(displayName) \(fileName)")
                 continue
             }
             rawFilesBytes += size(fileName)
@@ -687,6 +726,7 @@ enum BackupArchiveService {
                 }
                 committedFileNames.append(fileName)
             } catch {
+                StorageIssueLog.record("提交备份原文件失败：\(fileName)，\(error.localizedDescription)")
                 throw BackupArchiveError.restoreFailed("提交原文件失败：\(fileName)")
             }
         }

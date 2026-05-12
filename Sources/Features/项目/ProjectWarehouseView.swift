@@ -198,7 +198,7 @@ struct ProjectWarehouseView: View {
                     Label("材料出入库", systemImage: "shippingbox.and.arrow.backward.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(Color.appPrimaryAction)
             } else {
                 ForEach(stockLines) { line in
                     HStack {
@@ -212,7 +212,7 @@ struct ProjectWarehouseView: View {
                         Spacer()
                         Text(WarehouseStockCalculator.quantityText(line.quantity))
                             .font(.callout.weight(.semibold))
-                            .foregroundStyle(line.quantity < 0 ? .red : .orange)
+                            .foregroundStyle(line.quantity < 0 ? .appRisk : Color.appPrimaryAction)
                     }
                     .accessibilityElement(children: .combine)
                     .accessibilityLabel("\(line.materialName)，库存 \(WarehouseStockCalculator.quantityText(line.quantity))")

@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 enum UserPreferenceKeys {
     static let useMetric = "useMetric"
@@ -25,11 +26,90 @@ enum UserPreferenceKeys {
     static let cloudBackupAutoInterval = "cloudBackup.autoInterval"
     static let cloudBackupAutoRequiresWiFi = "cloudBackup.autoRequiresWiFi"
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
+    static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
+    static let backupHealthReminderDays = "backup.health.reminderDays"
     static let cloudBackupAutoLastAttemptAt = "cloudBackup.autoLastAttemptAt"
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
+    static let userAvatarData = "userAvatarData"
     static let cadPreviewEngine = "cad.preview.engine"
     static let showTemplates = "feature.showTemplates"
+    static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
+    static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
+    static let materialLibraryPromptAfterAdd = "materialLibrary.promptAfterAdd"
+    static let materialLibraryLastTargetMode = "materialLibrary.lastTargetMode"
+    static let materialLibraryLastDraftID = "materialLibrary.lastDraftID"
+    static let materialLibraryLastProjectID = "materialLibrary.lastProjectID"
+    static let materialLibraryKeepAppending = "materialLibrary.keepAppending"
+    static let appTheme = "app.theme"
+    static let dashboardIgnoredBackupRiskDay = "dashboard.risk.ignore.backup.day"
+    static let dashboardIgnoredMissingReceiptRiskDay = "dashboard.risk.ignore.missingReceipt.day"
+    static let dashboardIgnoredPriceSpikeRiskDay = "dashboard.risk.ignore.priceSpike.day"
+    static let dashboardIgnoredNegativeStockRiskDay = "dashboard.risk.ignore.negativeStock.day"
+
+    enum Calculator {
+        static let breakerCurrent = "calc.breaker.current"
+        static let breakerLoadType = "calc.breaker.loadType"
+        static let concreteGrade = "calc.concrete.grade"
+        static let concreteLength = "calc.concrete.length"
+        static let concreteThickness = "calc.concrete.thickness"
+        static let concreteWaste = "calc.concrete.waste"
+        static let concreteWidth = "calc.concrete.width"
+        static let conduitInnerDia = "calc.conduit.innerDia"
+        static let conduitWireCount = "calc.conduit.wireCount"
+        static let conduitWireDia = "calc.conduit.wireDia"
+        static let currentIsThreePhase = "calc.current.isThreePhase"
+        static let currentPower = "calc.current.power"
+        static let currentPowerFactor = "calc.current.powerFactor"
+        static let currentVoltage = "calc.current.voltage"
+        static let lightingLumensPerFixture = "calc.lighting.lumensPerFixture"
+        static let lightingMaintenanceFactor = "calc.lighting.maintenanceFactor"
+        static let lightingRoomLength = "calc.lighting.roomLength"
+        static let lightingRoomWidth = "calc.lighting.roomWidth"
+        static let lightingTargetLux = "calc.lighting.targetLux"
+        static let lightingUtilizationFactor = "calc.lighting.utilizationFactor"
+        static let lightingPlannerBreakerFactor = "calc.lightingPlanner.breakerFactor"
+        static let lightingPlannerDemandFactor = "calc.lightingPlanner.demandFactor"
+        static let lightingPlannerImbalanceLimitPercent = "calc.lightingPlanner.imbalanceLimitPercent"
+        static let lightingPlannerIsCopper = "calc.lightingPlanner.isCopper"
+        static let lightingPlannerMainBreakerLimitA = "calc.lightingPlanner.mainBreakerLimitA"
+        static let lightingPlannerPlanName = "calc.lightingPlanner.planName"
+        static let lightingPlannerPowerFactor = "calc.lightingPlanner.powerFactor"
+        static let lightingPlannerRows = "calc.lightingPlanner.rows"
+        static let lightingPlannerSupplyType = "calc.lightingPlanner.supplyType"
+        static let lightingPlannerVoltage = "calc.lightingPlanner.voltage"
+        static let lightingPlannerWireFactor = "calc.lightingPlanner.wireFactor"
+        static let rebarDia = "calc.rebar.dia"
+        static let rebarLen = "calc.rebar.len"
+        static let rebarPrice = "calc.rebar.price"
+        static let rebarQty = "calc.rebar.qty"
+        static let tileBox = "calc.tile.box"
+        static let tileRoomLength = "calc.tile.roomLength"
+        static let tileRoomWidth = "calc.tile.roomWidth"
+        static let tileTileLength = "calc.tile.tileLength"
+        static let tileTileWidth = "calc.tile.tileWidth"
+        static let tileWaste = "calc.tile.waste"
+        static let trayCables = "calc.tray.cables"
+        static let trayHeight = "calc.tray.height"
+        static let trayWidth = "calc.tray.width"
+        static let unitCategory = "calc.unit.category"
+        static let unitFromUnit = "calc.unit.fromUnit"
+        static let unitInputValue = "calc.unit.inputValue"
+        static let unitToUnit = "calc.unit.toUnit"
+        static let voltageDropCurrent = "calc.voltageDrop.current"
+        static let voltageDropIsLoopLength = "calc.voltageDrop.isLoopLength"
+        static let voltageDropLength = "calc.voltageDrop.length"
+        static let voltageDropMaterial = "calc.voltageDrop.material"
+        static let voltageDropSection = "calc.voltageDrop.section"
+        static let voltageDropVoltage = "calc.voltageDrop.voltage"
+        static let wallDoors = "calc.wall.doors"
+        static let wallHeight = "calc.wall.height"
+        static let wallL1 = "calc.wall.l1"
+        static let wallL2 = "calc.wall.l2"
+        static let wallL3 = "calc.wall.l3"
+        static let wallL4 = "calc.wall.l4"
+        static let wallWindows = "calc.wall.windows"
+    }
 }
 
 enum AppAppearanceMode: String, CaseIterable {
@@ -78,6 +158,182 @@ enum AppLanguage: String, CaseIterable {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
         let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
         UserDefaults.standard.set([lang.appleLanguageCode], forKey: "AppleLanguages")
+    }
+}
+
+// MARK: - 主题色
+
+struct ThemePalette {
+    let primary: Color
+    let success: Color
+    let warning: Color
+    let risk: Color
+    let doc: Color
+    let finance: Color
+    let inventory: Color
+    let people: Color
+    let journal: Color
+    let photo: Color
+    let calculations: Color
+    let quotation: Color
+    let primaryUIColor: UIColor
+    let successUIColor: UIColor
+    let warningUIColor: UIColor
+    let riskUIColor: UIColor
+    let docUIColor: UIColor
+    let financeUIColor: UIColor
+    let inventoryUIColor: UIColor
+    let peopleUIColor: UIColor
+    let journalUIColor: UIColor
+    let photoUIColor: UIColor
+    let calculationsUIColor: UIColor
+    let quotationUIColor: UIColor
+}
+
+enum AppTheme: String, CaseIterable {
+    case dropboxBlue = "dropbox_blue"
+    case jiangnanSpring = "jiangnan_spring"
+    case warmAmber = "warm_amber"
+
+    var displayName: String {
+        switch self {
+        case .dropboxBlue: return "晴空蓝"
+        case .jiangnanSpring: return "江南春"
+        case .warmAmber: return "暖橙"
+        }
+    }
+
+    static var current: AppTheme {
+        let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.appTheme) ?? ""
+        return StringEnumFallback.value(stored, default: .dropboxBlue)
+    }
+
+    func apply() {
+        UserDefaults.standard.set(rawValue, forKey: UserPreferenceKeys.appTheme)
+    }
+
+    var palette: ThemePalette {
+        switch self {
+        case .dropboxBlue:
+            return ThemePalette(
+                primary: Color(light: UIColor(red: 0.00, green: 0.38, blue: 1.00, alpha: 1),
+                               dark: UIColor(red: 0.25, green: 0.55, blue: 1.00, alpha: 1)),
+                success: Color(light: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                               dark: UIColor(red: 0.50, green: 0.82, blue: 0.46, alpha: 1)),
+                warning: Color(light: UIColor(red: 0.84, green: 0.55, blue: 0.11, alpha: 1),
+                               dark: UIColor(red: 0.92, green: 0.65, blue: 0.22, alpha: 1)),
+                risk: Color(light: UIColor(red: 0.78, green: 0.16, blue: 0.16, alpha: 1),
+                            dark: UIColor(red: 0.90, green: 0.30, blue: 0.30, alpha: 1)),
+                doc: Color(light: UIColor(red: 0.39, green: 0.40, blue: 0.95, alpha: 1),
+                           dark: UIColor(red: 0.55, green: 0.55, blue: 1.00, alpha: 1)),
+                finance: Color(light: UIColor(red: 0.00, green: 0.38, blue: 1.00, alpha: 1),
+                               dark: UIColor(red: 0.25, green: 0.55, blue: 1.00, alpha: 1)),
+                inventory: Color(light: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                                 dark: UIColor(red: 0.50, green: 0.82, blue: 0.46, alpha: 1)),
+                people: Color(light: UIColor(red: 0.55, green: 0.55, blue: 0.67, alpha: 1),
+                              dark: UIColor(red: 0.68, green: 0.68, blue: 0.78, alpha: 1)),
+                journal: Color(light: UIColor(red: 0.75, green: 0.69, blue: 0.56, alpha: 1),
+                               dark: UIColor(red: 0.82, green: 0.76, blue: 0.64, alpha: 1)),
+                photo: Color(light: UIColor(red: 0.72, green: 0.44, blue: 0.44, alpha: 1),
+                             dark: UIColor(red: 0.80, green: 0.54, blue: 0.54, alpha: 1)),
+                calculations: Color(light: UIColor(red: 0.35, green: 0.56, blue: 0.77, alpha: 1),
+                                    dark: UIColor(red: 0.50, green: 0.68, blue: 0.85, alpha: 1)),
+                quotation: Color(light: UIColor(red: 0.48, green: 0.63, blue: 0.62, alpha: 1),
+                                 dark: UIColor(red: 0.60, green: 0.73, blue: 0.72, alpha: 1)),
+                primaryUIColor: UIColor(red: 0.00, green: 0.38, blue: 1.00, alpha: 1),
+                successUIColor: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                warningUIColor: UIColor(red: 0.84, green: 0.55, blue: 0.11, alpha: 1),
+                riskUIColor: UIColor(red: 0.78, green: 0.16, blue: 0.16, alpha: 1),
+                docUIColor: UIColor(red: 0.39, green: 0.40, blue: 0.95, alpha: 1),
+                financeUIColor: UIColor(red: 0.00, green: 0.38, blue: 1.00, alpha: 1),
+                inventoryUIColor: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                peopleUIColor: UIColor(red: 0.55, green: 0.55, blue: 0.67, alpha: 1),
+                journalUIColor: UIColor(red: 0.75, green: 0.69, blue: 0.56, alpha: 1),
+                photoUIColor: UIColor(red: 0.72, green: 0.44, blue: 0.44, alpha: 1),
+                calculationsUIColor: UIColor(red: 0.35, green: 0.56, blue: 0.77, alpha: 1),
+                quotationUIColor: UIColor(red: 0.48, green: 0.63, blue: 0.62, alpha: 1)
+            )
+
+        case .jiangnanSpring:
+            return ThemePalette(
+                primary: Color(light: UIColor(red: 0.48, green: 0.69, blue: 0.42, alpha: 1),
+                               dark: UIColor(red: 0.58, green: 0.78, blue: 0.52, alpha: 1)),
+                success: Color(light: UIColor(red: 0.35, green: 0.62, blue: 0.35, alpha: 1),
+                               dark: UIColor(red: 0.50, green: 0.75, blue: 0.48, alpha: 1)),
+                warning: Color(light: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
+                               dark: UIColor(red: 0.85, green: 0.62, blue: 0.68, alpha: 1)),
+                risk: Color(light: UIColor(red: 0.35, green: 0.31, blue: 0.28, alpha: 1),
+                            dark: UIColor(red: 0.55, green: 0.50, blue: 0.45, alpha: 1)),
+                doc: Color(light: UIColor(red: 0.55, green: 0.66, blue: 0.73, alpha: 1),
+                           dark: UIColor(red: 0.65, green: 0.75, blue: 0.80, alpha: 1)),
+                finance: Color(light: UIColor(red: 0.83, green: 0.66, blue: 0.33, alpha: 1),
+                               dark: UIColor(red: 0.88, green: 0.72, blue: 0.44, alpha: 1)),
+                inventory: Color(light: UIColor(red: 0.61, green: 0.55, blue: 0.71, alpha: 1),
+                                dark: UIColor(red: 0.70, green: 0.64, blue: 0.78, alpha: 1)),
+                people: Color(light: UIColor(red: 0.49, green: 0.65, blue: 0.65, alpha: 1),
+                              dark: UIColor(red: 0.60, green: 0.74, blue: 0.74, alpha: 1)),
+                journal: Color(light: UIColor(red: 0.78, green: 0.72, blue: 0.59, alpha: 1),
+                               dark: UIColor(red: 0.85, green: 0.79, blue: 0.67, alpha: 1)),
+                photo: Color(light: UIColor(red: 0.72, green: 0.44, blue: 0.42, alpha: 1),
+                             dark: UIColor(red: 0.80, green: 0.54, blue: 0.52, alpha: 1)),
+                calculations: Color(light: UIColor(red: 0.42, green: 0.62, blue: 0.71, alpha: 1),
+                                    dark: UIColor(red: 0.54, green: 0.72, blue: 0.80, alpha: 1)),
+                quotation: Color(light: UIColor(red: 0.77, green: 0.61, blue: 0.48, alpha: 1),
+                                 dark: UIColor(red: 0.84, green: 0.69, blue: 0.56, alpha: 1)),
+                primaryUIColor: UIColor(red: 0.48, green: 0.69, blue: 0.42, alpha: 1),
+                successUIColor: UIColor(red: 0.35, green: 0.62, blue: 0.35, alpha: 1),
+                warningUIColor: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
+                riskUIColor: UIColor(red: 0.35, green: 0.31, blue: 0.28, alpha: 1),
+                docUIColor: UIColor(red: 0.55, green: 0.66, blue: 0.73, alpha: 1),
+                financeUIColor: UIColor(red: 0.83, green: 0.66, blue: 0.33, alpha: 1),
+                inventoryUIColor: UIColor(red: 0.61, green: 0.55, blue: 0.71, alpha: 1),
+                peopleUIColor: UIColor(red: 0.49, green: 0.65, blue: 0.65, alpha: 1),
+                journalUIColor: UIColor(red: 0.78, green: 0.72, blue: 0.59, alpha: 1),
+                photoUIColor: UIColor(red: 0.72, green: 0.44, blue: 0.42, alpha: 1),
+                calculationsUIColor: UIColor(red: 0.42, green: 0.62, blue: 0.71, alpha: 1),
+                quotationUIColor: UIColor(red: 0.77, green: 0.61, blue: 0.48, alpha: 1)
+            )
+
+        case .warmAmber:
+            return ThemePalette(
+                primary: Color(light: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                               dark: UIColor(red: 0.94, green: 0.52, blue: 0.29, alpha: 1)),
+                success: Color(light: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                               dark: UIColor(red: 0.50, green: 0.82, blue: 0.46, alpha: 1)),
+                warning: Color(light: UIColor(red: 0.88, green: 0.50, blue: 0.08, alpha: 1),
+                               dark: UIColor(red: 0.94, green: 0.60, blue: 0.20, alpha: 1)),
+                risk: Color(light: UIColor(red: 0.78, green: 0.16, blue: 0.16, alpha: 1),
+                            dark: UIColor(red: 0.90, green: 0.30, blue: 0.30, alpha: 1)),
+                doc: Color(light: UIColor(red: 0.30, green: 0.55, blue: 0.75, alpha: 1),
+                           dark: UIColor(red: 0.45, green: 0.65, blue: 0.82, alpha: 1)),
+                finance: Color(light: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                               dark: UIColor(red: 0.94, green: 0.52, blue: 0.29, alpha: 1)),
+                inventory: Color(light: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                                 dark: UIColor(red: 0.50, green: 0.82, blue: 0.46, alpha: 1)),
+                people: Color(light: UIColor(red: 0.30, green: 0.55, blue: 0.75, alpha: 1),
+                              dark: UIColor(red: 0.45, green: 0.65, blue: 0.82, alpha: 1)),
+                journal: Color(light: UIColor(red: 0.77, green: 0.66, blue: 0.49, alpha: 1),
+                               dark: UIColor(red: 0.84, green: 0.74, blue: 0.58, alpha: 1)),
+                photo: Color(light: UIColor(red: 0.72, green: 0.44, blue: 0.44, alpha: 1),
+                             dark: UIColor(red: 0.80, green: 0.54, blue: 0.54, alpha: 1)),
+                calculations: Color(light: UIColor(red: 0.83, green: 0.56, blue: 0.35, alpha: 1),
+                                    dark: UIColor(red: 0.90, green: 0.65, blue: 0.44, alpha: 1)),
+                quotation: Color(light: UIColor(red: 0.77, green: 0.61, blue: 0.38, alpha: 1),
+                                 dark: UIColor(red: 0.84, green: 0.69, blue: 0.48, alpha: 1)),
+                primaryUIColor: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                successUIColor: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                warningUIColor: UIColor(red: 0.88, green: 0.50, blue: 0.08, alpha: 1),
+                riskUIColor: UIColor(red: 0.78, green: 0.16, blue: 0.16, alpha: 1),
+                docUIColor: UIColor(red: 0.30, green: 0.55, blue: 0.75, alpha: 1),
+                financeUIColor: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                inventoryUIColor: UIColor(red: 0.18, green: 0.56, blue: 0.25, alpha: 1),
+                peopleUIColor: UIColor(red: 0.30, green: 0.55, blue: 0.75, alpha: 1),
+                journalUIColor: UIColor(red: 0.77, green: 0.66, blue: 0.49, alpha: 1),
+                photoUIColor: UIColor(red: 0.72, green: 0.44, blue: 0.44, alpha: 1),
+                calculationsUIColor: UIColor(red: 0.83, green: 0.56, blue: 0.35, alpha: 1),
+                quotationUIColor: UIColor(red: 0.77, green: 0.61, blue: 0.38, alpha: 1)
+            )
+        }
     }
 }
 

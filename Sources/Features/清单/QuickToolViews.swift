@@ -127,7 +127,7 @@ private struct QuickToolNavigationRow: View {
                 icon: isFavorite ? "star.fill" : tool.icon,
                 title: tool.title,
                 desc: tool.desc,
-                color: isFavorite ? .yellow : color
+                color: isFavorite ? .appWarning : color
             )
         }
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -136,7 +136,7 @@ private struct QuickToolNavigationRow: View {
             } label: {
                 Label(isFavorite ? "取消常用" : "设为常用", systemImage: isFavorite ? "star.slash" : "star.fill")
             }
-            .tint(isFavorite ? .gray : .yellow)
+            .tint(isFavorite ? .appMuted : .appWarning)
         }
     }
 
@@ -220,12 +220,12 @@ private func quickToolIcon(for section: String) -> String {
 private func quickToolColor(for section: String) -> Color {
     switch section {
     case "电气":
-        return .orange
+        return .appCalculations
     case "照明":
-        return .yellow
+        return .appWarning
     case "土建":
-        return .brown
+        return .appInventory
     default:
-        return .indigo
+        return .appDoc
     }
 }

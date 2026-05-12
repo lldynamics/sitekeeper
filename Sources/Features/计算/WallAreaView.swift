@@ -2,13 +2,13 @@ import SwiftUI
 
 struct WallAreaView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.wall.l1") private var l1 = ""
-    @AppStorage("calc.wall.l2") private var l2 = ""
-    @AppStorage("calc.wall.l3") private var l3 = ""
-    @AppStorage("calc.wall.l4") private var l4 = ""
-    @AppStorage("calc.wall.height") private var height = "2.8"
-    @AppStorage("calc.wall.doors") private var doors = ""
-    @AppStorage("calc.wall.windows") private var windows = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallL1) private var l1 = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallL2) private var l2 = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallL3) private var l3 = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallL4) private var l4 = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallHeight) private var height = "2.8"
+    @AppStorage(UserPreferenceKeys.Calculator.wallDoors) private var doors = ""
+    @AppStorage(UserPreferenceKeys.Calculator.wallWindows) private var windows = ""
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -70,6 +70,7 @@ struct WallAreaView: View {
         let net = max(gross - d - w, 0)
         resultModel = .singleSection(
             headline: "净面积 \(fmt(net)) m²",
+            formula: "净面积 = (墙体总周长×层高) - 门窗总面积",
             items: [
                 CalculationResult.item("周长", "\(fmt(perimeter)) m"),
                 CalculationResult.item("毛面积", "\(fmt(gross)) m²"),

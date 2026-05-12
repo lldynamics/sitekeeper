@@ -20,6 +20,11 @@ struct QuickNoteEditSheet: View {
     @State private var didCommit = false
     @State private var showFinancialDraft = false
     @State private var showDailyLogDraft = false
+    @State private var preparedDailyLogSeedPhotos: [DailyLogSeedPhoto] = []
+    @State private var isPreparingDailyLogDraft = false
+    @State private var isPreparingProjectDocument = false
+    @State private var dailyLogPreparationTask: Task<Void, Never>?
+    @State private var projectDocumentGenerationTask: Task<Void, Never>?
     @FocusState private var isContentFocused: Bool
 
     init(note: QuickNote, projects: [Project], onSave: @escaping (QuickNote) -> Void, onDelete: @escaping (QuickNote) -> Void) {
@@ -49,7 +54,7 @@ struct QuickNoteEditSheet: View {
                 }
                 Section("附件") {
                     if attachments.isEmpty {
-                        Text("可追加媒体、拍照、语音、手绘或 PDF/CAD/文档附件")
+                        Text("可追加媒体、拍照、手绘或 PDF/CAD/文档附件")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -130,12 +135,20 @@ struct QuickNoteEditSheet: View {
                     DailyLogView(
                         initialProjectId: projectId,
                         autoOpenComposer: true,
-                        initialPhotoDrafts: dailyLogSeedPhotos,
+                        initialPhotoDrafts: preparedDailyLogSeedPhotos,
                         initialContent: currentText.isEmpty ? updatedNote.title : currentText
                     )
                 }
             }
-            .onDisappear(perform: cleanupTemporaryAttachmentsIfNeeded)
+            .onDisappear {
+                dailyLogPreparationTask?.cancel()
+                dailyLogPreparationTask = nil
+                projectDocumentGenerationTask?.cancel()
+                projectDocumentGenerationTask = nil
+                isPreparingDailyLogDraft = false
+                isPreparingProjectDocument = false
+                cleanupTemporaryAttachmentsIfNeeded()
+            }
         }
     }
 
@@ -149,10 +162,14 @@ struct QuickNoteEditSheet: View {
             }
             Button { convertToTodo() } label: { Label("转为现场待办", systemImage: "checklist") }
                 .disabled(projectId == nil)
-            Button { convertToDailyLog() } label: { Label("转为施工日志", systemImage: "book.pages.fill") }
-                .disabled(projectId == nil)
-            Button { convertToProjectDocument() } label: { Label("转为项目资料 PDF", systemImage: "doc.richtext") }
-                .disabled(projectId == nil)
+            Button { convertToDailyLog() } label: {
+                Label(isPreparingDailyLogDraft ? "准备日志草稿…" : "转为施工日志", systemImage: isPreparingDailyLogDraft ? "hourglass" : "book.pages.fill")
+            }
+                .disabled(projectId == nil || isPreparingDailyLogDraft)
+            Button { convertToProjectDocument() } label: {
+                Label(isPreparingProjectDocument ? "生成项目资料中…" : "转为项目资料 PDF", systemImage: isPreparingProjectDocument ? "hourglass" : "doc.richtext")
+            }
+                .disabled(projectId == nil || isPreparingProjectDocument)
             Button { convertToFinancialMemo() } label: { Label("转为记账备注", systemImage: "receipt") }
                 .disabled(projectId == nil)
         }
@@ -206,43 +223,75 @@ struct QuickNoteEditSheet: View {
 
     private func convertToDailyLog() {
         guard projectId != nil else { return showNeedProject() }
-        showDailyLogDraft = true
+        dailyLogPreparationTask?.cancel()
+        isPreparingDailyLogDraft = true
+        dailyLogPreparationTask = Task {
+            let seedPhotos = await buildDailyLogSeedPhotos()
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                preparedDailyLogSeedPhotos = seedPhotos
+                isPreparingDailyLogDraft = false
+                showDailyLogDraft = true
+                dailyLogPreparationTask = nil
+            }
+        }
     }
 
-    private var dailyLogSeedPhotos: [DailyLogSeedPhoto] {
-        attachments.prefix(6).compactMap { attachment in
-            guard [.photo, .drawing].contains(attachment.attachmentKind),
-                  let data = QuickNoteAttachmentStorage.data(for: attachment.fileName) else { return nil }
-            return DailyLogSeedPhoto(
-                data: data,
-                note: String(localized: "来源: 随手记\n记录时间: \(note.createdAt)"),
-                tag: .general,
-                capturedAt: Formatters.dateTime.date(from: note.createdAt)
+    private func buildDailyLogSeedPhotos() async -> [DailyLogSeedPhoto] {
+        let candidates = Array(attachments.prefix(6))
+        let seedNote = String(localized: "来源: 随手记\n记录时间: \(note.createdAt)")
+        let capturedAt = Formatters.dateTime.date(from: note.createdAt)
+        var seedPhotos: [DailyLogSeedPhoto] = []
+        for attachment in candidates where [.photo, .drawing].contains(attachment.attachmentKind) {
+            guard !Task.isCancelled else { break }
+            guard let data = await QuickNoteAttachmentStorage.dataAsync(for: attachment.fileName) else { continue }
+            seedPhotos.append(
+                DailyLogSeedPhoto(
+                    data: data,
+                    note: seedNote,
+                    tag: .general,
+                    capturedAt: capturedAt
+                )
             )
         }
+        return seedPhotos
     }
 
     private func convertToProjectDocument() {
         guard let projectId else { return showNeedProject() }
-        let pdfData = makeProjectDocumentPDF()
-        let fileName: String
-        do {
-            fileName = try ProjectDocumentStorage.savePDFOrThrow(data: pdfData, projectId: projectId)
-        } catch {
-            showMessage("项目资料生成失败：\(error.localizedDescription)")
-            return
+        projectDocumentGenerationTask?.cancel()
+        isPreparingProjectDocument = true
+        projectDocumentGenerationTask = Task {
+            let imageDataByFileName = await buildProjectDocumentImageDataMap()
+            guard !Task.isCancelled else { return }
+            let pdfData = makeProjectDocumentPDF(imageDataByFileName: imageDataByFileName)
+            let fileName: String
+            do {
+                fileName = try ProjectDocumentStorage.savePDFOrThrow(data: pdfData, projectId: projectId)
+            } catch {
+                await MainActor.run {
+                    isPreparingProjectDocument = false
+                    projectDocumentGenerationTask = nil
+                    showMessage("项目资料生成失败：\(error.localizedDescription)")
+                }
+                return
+            }
+            await MainActor.run {
+                store.projectDocuments.append(ProjectDocument(
+                    projectId: projectId,
+                    title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
+                    category: .construction,
+                    fileName: fileName,
+                    fileType: "pdf",
+                    pageCount: 1,
+                    note: "由随手记转入"
+                ))
+                store.scheduleSave()
+                isPreparingProjectDocument = false
+                projectDocumentGenerationTask = nil
+                showMessage("已生成项目资料 PDF。")
+            }
         }
-        store.projectDocuments.append(ProjectDocument(
-            projectId: projectId,
-            title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
-            category: .construction,
-            fileName: fileName,
-            fileType: "pdf",
-            pageCount: 1,
-            note: "由随手记转入"
-        ))
-        store.scheduleSave()
-        showMessage("已生成项目资料 PDF。")
     }
 
     private func convertToFinancialMemo() {
@@ -263,7 +312,7 @@ struct QuickNoteEditSheet: View {
         showAlert = true
     }
 
-    private func makeProjectDocumentPDF() -> Data {
+    private func makeProjectDocumentPDF(imageDataByFileName: [String: Data]) -> Data {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842)
         let margin: CGFloat = 36
         let renderer = UIGraphicsPDFRenderer(bounds: page)
@@ -277,7 +326,7 @@ struct QuickNoteEditSheet: View {
             }
             y = drawText(currentText.isEmpty ? updatedNote.title : currentText, atY: y + 18, font: .systemFont(ofSize: 14), page: page, margin: margin)
             for attachment in attachments where [.photo, .drawing].contains(attachment.attachmentKind) {
-                guard let data = QuickNoteAttachmentStorage.data(for: attachment.fileName), let image = UIImage(data: data) else { continue }
+                guard let data = imageDataByFileName[attachment.fileName], let image = UIImage(data: data) else { continue }
                 if y > page.height - 260 {
                     context.beginPage()
                     y = margin
@@ -289,6 +338,17 @@ struct QuickNoteEditSheet: View {
                 y += size.height + 22
             }
         }
+    }
+
+    private func buildProjectDocumentImageDataMap() async -> [String: Data] {
+        let imageAttachments = attachments.filter { [.photo, .drawing].contains($0.attachmentKind) }
+        var dataByFileName: [String: Data] = [:]
+        for attachment in imageAttachments {
+            guard !Task.isCancelled else { break }
+            guard let data = await QuickNoteAttachmentStorage.dataAsync(for: attachment.fileName) else { continue }
+            dataByFileName[attachment.fileName] = data
+        }
+        return dataByFileName
     }
 
     private func drawText(_ text: String, atY y: CGFloat, font: UIFont, color: UIColor = .label, page: CGRect, margin: CGFloat) -> CGFloat {

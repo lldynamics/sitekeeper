@@ -308,12 +308,13 @@ struct LaborRecord: Identifiable, Codable {
     }
 }
 
-struct PaymentRecord: Identifiable, Codable {
+/// 仅用于兼容旧备份中的 `paymentRecords` 字段，业务侧不再使用。
+struct LegacyPaymentRecord: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var date: String
     @NonNegativeNumberText var amount: String
-    var method: PaymentMethod
+    var method: String
     var note: String
     var isInvoiced: Bool
 
@@ -322,7 +323,7 @@ struct PaymentRecord: Identifiable, Codable {
         projectId: UUID,
         date: String,
         amount: String,
-        method: PaymentMethod = .bankTransfer,
+        method: String = "",
         note: String = "",
         isInvoiced: Bool = false
     ) {
@@ -345,17 +346,29 @@ struct PaymentRecord: Identifiable, Codable {
         projectId = try container.decode(UUID.self, forKey: .projectId)
         date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.date.string(from: Date())
         amount = try container.decodeIfPresent(String.self, forKey: .amount) ?? ""
-        method = try container.decodeStringEnum(
-            PaymentMethod.self,
-            forKey: .method,
-            default: .bankTransfer
-        )
+        method = try container.decodeIfPresent(String.self, forKey: .method) ?? ""
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         isInvoiced = try container.decodeIfPresent(Bool.self, forKey: .isInvoiced) ?? false
     }
 
-    var normalizedMethod: PaymentMethod {
-        method
+    var normalizedMethodDisplayName: String {
+        let value = method.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch value {
+        case "转账", "bankTransfer":
+            return "转账"
+        case "现金", "cash":
+            return "现金"
+        case "微信", "wechat":
+            return "微信"
+        case "支付宝", "alipay":
+            return "支付宝"
+        case "其他", "other":
+            return "其他"
+        case "":
+            return "其他"
+        default:
+            return value
+        }
     }
 }
 
@@ -484,16 +497,6 @@ enum PaymentStatus: String, CaseIterable, Codable {
     case unpaid = "未收款"
     case partial = "部分收款"
     case paid = "已收款"
-
-    var displayName: String { rawValue }
-}
-
-enum PaymentMethod: String, CaseIterable, Codable {
-    case bankTransfer = "转账"
-    case cash = "现金"
-    case wechat = "微信"
-    case alipay = "支付宝"
-    case other = "其他"
 
     var displayName: String { rawValue }
 }

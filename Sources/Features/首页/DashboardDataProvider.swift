@@ -58,6 +58,71 @@ extension DashboardView {
         projectStore.projectFinancialRecords.filter { activeProjectIDs.contains($0.projectId) }
     }
 
+    var dashboardBusinessSummary: ProjectBusinessSummary {
+        guard !activeProjects.isEmpty else {
+            return ProjectBusinessSummary(
+                quoteTotal: 0,
+                contractAmount: 0,
+                paidAmount: 0,
+                receivableAmount: 0,
+                receivableAgeDays: nil,
+                recentCollection: nil,
+                materialCost: 0,
+                laborCostAmount: 0,
+                pendingMaterialCount: 0,
+                unpricedQuoteCount: 0
+            )
+        }
+
+        let projectIDs = activeProjectIDs
+        let quotes = financeStore.quoteItems.filter { item in
+            guard let projectId = item.projectId else { return false }
+            return projectIDs.contains(projectId)
+        }
+        let materials = financeStore.materialItems.filter { item in
+            guard let projectId = item.projectId else { return false }
+            return projectIDs.contains(projectId)
+        }
+        let laborRecords = financeStore.laborRecords.filter { item in
+            guard let projectId = item.projectId else { return false }
+            return projectIDs.contains(projectId)
+        }
+
+        let quoteTotal = quotes.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
+        let contractAmount = activeProjects.reduce(0) { $0 + $1.contractAmountValue.doubleValue }
+        let paidByRecords = activeProjects.reduce(0) { $0 + dashboardCollectedAmount(for: $1.id) }
+        let paidAmountFallback = activeProjects.reduce(0) { $0 + $1.paidAmountValue.doubleValue }
+        let paidAmount = paidByRecords > 0 ? paidByRecords : paidAmountFallback
+
+        let materialAutoCost = materials.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
+        let laborAutoCost = laborRecords.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
+        let materialFallback = activeProjects.reduce(0) { $0 + $1.materialCostValue.doubleValue }
+        let laborFallback = activeProjects.reduce(0) { $0 + $1.laborCostValue.doubleValue }
+        let materialCost = materialAutoCost > 0 ? materialAutoCost : materialFallback
+        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : laborFallback
+
+        let receivableAmount = max(contractAmount - paidAmount, 0)
+        let receivableAgeDays = activeProjects.compactMap { project -> Int? in
+            let projectPaid = dashboardCollectedAmount(for: project.id)
+            let paid = projectPaid > 0 ? projectPaid : project.paidAmountValue.doubleValue
+            let receivable = max(project.contractAmountValue.doubleValue - paid, 0)
+            return dashboardReceivableAgeDays(for: project, receivableAmount: receivable)
+        }.max()
+
+        return ProjectBusinessSummary(
+            quoteTotal: quoteTotal,
+            contractAmount: contractAmount,
+            paidAmount: paidAmount,
+            receivableAmount: receivableAmount,
+            receivableAgeDays: receivableAgeDays,
+            recentCollection: dashboardLatestCollection(),
+            materialCost: materialCost,
+            laborCostAmount: laborCostAmount,
+            pendingMaterialCount: materials.filter { $0.quantityValue.doubleValue == 0 }.count,
+            unpricedQuoteCount: quotes.filter { $0.unitPriceValue.doubleValue == 0 }.count
+        )
+    }
+
     var warehouseMovementsForActiveProjects: [ProjectWarehouseMovement] {
         projectStore.projectWarehouseMovements.filter { activeProjectIDs.contains($0.projectId) }
     }
@@ -171,8 +236,103 @@ extension DashboardView {
         }.count
     }
 
+    var materialPriceSpikeCount: Int {
+        activeProjects.reduce(0) { total, project in
+            total + financeStore.materialPriceSpikeCount(for: project.id)
+        }
+    }
+
+    var materialPriceSpikeProjectCount: Int {
+        activeProjects.filter { financeStore.materialPriceSpikeCount(for: $0.id) > 0 }.count
+    }
+
+    var effectiveBackupReminderDays: Int {
+        let raw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
+        return max(1, raw == 0 ? 7 : raw)
+    }
+
+    var latestSuccessfulBackupDate: Date? {
+        let localRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
+        let cloudRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        let localDate = localRaw > 0 ? Date(timeIntervalSince1970: localRaw) : nil
+        let cloudDate = cloudRaw > 0 ? Date(timeIntervalSince1970: cloudRaw) : nil
+        switch (localDate, cloudDate) {
+        case let (lhs?, rhs?):
+            return max(lhs, rhs)
+        case let (lhs?, nil):
+            return lhs
+        case let (nil, rhs?):
+            return rhs
+        case (nil, nil):
+            return nil
+        }
+    }
+
+    var daysSinceLastSuccessfulBackup: Int? {
+        guard let latestSuccessfulBackupDate else { return nil }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: latestSuccessfulBackupDate)
+        let today = calendar.startOfDay(for: Date())
+        return max(calendar.dateComponents([.day], from: start, to: today).day ?? 0, 0)
+    }
+
+    var isBackupReminderOverdue: Bool {
+        guard let daysSinceLastSuccessfulBackup else { return true }
+        return daysSinceLastSuccessfulBackup >= effectiveBackupReminderDays
+    }
+
+    var backupReminderValue: String {
+        if isIgnoringBackupReminderToday { return String(localized: "已忽略") }
+        guard let daysSinceLastSuccessfulBackup else { return String(localized: "未备份") }
+        return "\(daysSinceLastSuccessfulBackup)天"
+    }
+
+    var backupReminderRiskCount: Int {
+        isBackupReminderOverdue ? 1 : 0
+    }
+
+    private var isIgnoringBackupReminderToday: Bool {
+        ignoredBackupRiskDay == todayStr
+    }
+
+    private var isIgnoringMissingReceiptToday: Bool {
+        ignoredMissingReceiptRiskDay == todayStr
+    }
+
+    private var isIgnoringPriceSpikeToday: Bool {
+        ignoredPriceSpikeRiskDay == todayStr
+    }
+
+    private var isIgnoringNegativeStockToday: Bool {
+        ignoredNegativeStockRiskDay == todayStr
+    }
+
+    var displayedMissingReceiptCount: Int {
+        isIgnoringMissingReceiptToday ? 0 : unattachedReceiptCount
+    }
+
+    var displayedPriceSpikeCount: Int {
+        isIgnoringPriceSpikeToday ? 0 : materialPriceSpikeCount
+    }
+
+    var displayedNegativeStockCount: Int {
+        isIgnoringNegativeStockToday ? 0 : warehouseNegativeCount
+    }
+
+    var isDisplayedBackupReminderOverdue: Bool {
+        guard !isIgnoringBackupReminderToday else { return false }
+        return isBackupReminderOverdue
+    }
+
     var dashboardRiskTotal: Int {
-        overdueCount + todayTodos.count + projectsWithoutTodayLogCount + unattachedReceiptCount + unsettledFinancialCount
+        overdueCount
+            + todayTodos.count
+            + projectsWithoutTodayLogCount
+            + displayedMissingReceiptCount
+            + unsettledFinancialCount
+            + displayedPriceSpikeCount
+            + displayedNegativeStockCount
+            + (isDisplayedBackupReminderOverdue ? 1 : 0)
     }
 
     var hasDashboardRisk: Bool {
@@ -303,68 +463,16 @@ extension DashboardView {
         return actions
     }
 
-    var dashboardSearchSuggestions: [DashboardSearchSuggestion] {
-        let keyword = dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else { return [] }
-        let query = keyword.lowercased()
-
-        var ranked: [(score: Int, suggestion: DashboardSearchSuggestion)] = []
-
-        for project in projectStore.projects {
-            let fields = [project.name, project.location, project.customerName, project.managerName]
-            guard let score = searchMatchScore(query: query, fields: fields) else { continue }
-            let subtitle = [
-                project.status.displayName,
-                project.location,
-                project.customerName
-            ]
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .joined(separator: " · ")
-            let activeBoost = (project.status == .active || project.status == .paused) ? 20 : 0
-            ranked.append(
-                (
-                    score + activeBoost,
-                    DashboardSearchSuggestion(
-                        id: "project-\(project.id.uuidString)",
-                        title: project.name,
-                        subtitle: subtitle,
-                        systemImage: "building.2",
-                        tint: project.status == .active || project.status == .paused ? .orange : .secondary,
-                        destination: .projectDetail(projectId: project.id)
-                    )
-                )
-            )
-        }
-
-        for contact in projectStore.projectContacts {
-            let projectName = projectNameByID[contact.projectId] ?? String(localized: "未知项目")
-            let fields = [contact.name, contact.roleDisplayName, contact.company, contact.phone, contact.note, projectName]
-            guard let score = searchMatchScore(query: query, fields: fields) else { continue }
-            let subtitle = [contact.roleDisplayName, contact.phone, projectName]
-                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-                .joined(separator: " · ")
-            ranked.append(
-                (
-                    score,
-                    DashboardSearchSuggestion(
-                        id: "contact-\(contact.id.uuidString)",
-                        title: contact.name.isEmpty ? String(localized: "未命名联系人") : contact.name,
-                        subtitle: subtitle,
-                        systemImage: "person.crop.rectangle.stack",
-                        tint: .blue,
-                        destination: .projectContacts(focusedContactId: contact.id)
-                    )
-                )
-            )
-        }
-
-        return ranked
-            .sorted { lhs, rhs in
-                if lhs.score != rhs.score { return lhs.score > rhs.score }
-                return lhs.suggestion.title.localizedStandardCompare(rhs.suggestion.title) == .orderedAscending
-            }
-            .prefix(8)
-            .map(\.suggestion)
+    var dashboardSearchSuggestions: [RealtimeSearchSuggestion] {
+        RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: dashboardSearchText,
+            categories: [.project, .contact, .supplier, .material],
+            projects: projectStore.projects,
+            contacts: projectStore.projectContacts,
+            suppliers: store.supplierProfiles,
+            materials: store.materialPriceEntries,
+            limit: 10
+        )
     }
 
     func collectRecentActivities(limit: Int) -> [TimelineActivity] {
@@ -533,26 +641,47 @@ extension DashboardView {
         return projectNameByID[id]
     }
 
+    func dashboardDestination(for suggestion: RealtimeSearchSuggestion) -> DashboardDestination {
+        switch suggestion.category {
+        case .project:
+            return .projectDetail(projectId: suggestion.entityId)
+        case .contact:
+            return .projectContacts(focusedContactId: suggestion.entityId)
+        case .supplier:
+            return .supplierDatabase(focusedSupplierId: suggestion.entityId)
+        case .material:
+            return .materialPriceDatabase(focusedEntryId: suggestion.entityId)
+        case .method:
+            return .constructionMethodLibrary(focusedMethodId: suggestion.entityId)
+        }
+    }
+
     func warehouseLinkedDocuments(for movement: ProjectWarehouseMovement) -> [ProjectDocument] {
         let documentIds = Set(movement.linkedDocumentIds)
         guard !documentIds.isEmpty else { return [] }
         return projectStore.projectDocuments.filter { documentIds.contains($0.id) }
     }
 
-    private func searchMatchScore(query: String, fields: [String]) -> Int? {
-        var bestScore = 0
-        for field in fields {
-            let normalized = field.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard !normalized.isEmpty else { continue }
-            if normalized == query {
-                bestScore = max(bestScore, 300)
-            } else if normalized.hasPrefix(query) {
-                bestScore = max(bestScore, 220)
-            } else if normalized.contains(query) {
-                bestScore = max(bestScore, 140)
-            }
-        }
-        return bestScore > 0 ? bestScore : nil
+    func dashboardCollectedAmount(for projectId: UUID) -> Double {
+        let financial = projectStore.projectFinancialRecords(for: projectId)
+        let byFinancialRecords = ProjectFinancialMetrics.collectionAmount(financial)
+        return byFinancialRecords > 0 ? byFinancialRecords : 0
+    }
+
+    func dashboardReceivableAgeDays(for project: Project, receivableAmount: Double) -> Int? {
+        guard receivableAmount > 0 else { return nil }
+        guard let endDate = Formatters.date.date(from: project.expectedEndDate) else { return nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        let dueDate = Calendar.current.startOfDay(for: endDate)
+        let days = Calendar.current.dateComponents([.day], from: dueDate, to: today).day ?? 0
+        return max(days, 0)
+    }
+
+    func dashboardLatestCollection() -> CollectionSnapshot? {
+        ProjectFinancialMetrics.latestCollection(
+            records: activeFinancialRecords,
+            projectName: { projectName($0) }
+        )
     }
 
     func parseLocalDate(_ text: String) -> Date? {
@@ -571,6 +700,11 @@ extension DashboardView {
     @MainActor
     func showQuickActionFeedback(title: String) {
         quickActionToastMessage = String(localized: "已打开\(title)")
+    }
+
+    @MainActor
+    func showDashboardActionFeedback(_ message: String) {
+        quickActionToastMessage = message
     }
 
     @MainActor
@@ -604,30 +738,35 @@ extension DashboardView {
         let overdue = overdueCount(for: project)
         let todayTodo = todayTodoCount(for: project)
         let missingReceipt = unattachedReceiptCount(for: project)
+        let priceSpike = materialPriceSpikeCount(for: project)
         let missingLog = !hasTodayLog(for: project)
         let openTodos = openTodoCount(for: project)
         let score = overdue * 1000
             + todayTodo * 420
             + missingReceipt * 240
+            + priceSpike * 200
             + (missingLog ? 120 : 0)
             + openTodos * 20
 
         if overdue > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "延期 \(overdue)"), color: .red, score: score)
+            return DashboardProjectSignal(subtitle: String(localized: "延期 \(overdue)"), color: .appRisk, score: score)
         }
         if todayTodo > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "今日 \(todayTodo)"), color: .orange, score: score)
+            return DashboardProjectSignal(subtitle: String(localized: "今日 \(todayTodo)"), color: .appPrimaryAction, score: score)
         }
         if missingReceipt > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "缺票 \(missingReceipt)"), color: .pink, score: score)
+            return DashboardProjectSignal(subtitle: String(localized: "缺票 \(missingReceipt)"), color: .appPrimaryAction, score: score)
+        }
+        if priceSpike > 0 {
+            return DashboardProjectSignal(subtitle: String(localized: "价格异动 \(priceSpike)"), color: .appPrimaryAction, score: score)
         }
         if missingLog {
-            return DashboardProjectSignal(subtitle: String(localized: "未写日志"), color: .blue, score: score)
+            return DashboardProjectSignal(subtitle: String(localized: "未写日志"), color: .appDoc, score: score)
         }
         if openTodos > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "待办 \(openTodos)"), color: .orange, score: score)
+            return DashboardProjectSignal(subtitle: String(localized: "待办 \(openTodos)"), color: .appPrimaryAction, score: score)
         }
-        return DashboardProjectSignal(subtitle: String(localized: "最近使用"), color: .green, score: score)
+        return DashboardProjectSignal(subtitle: String(localized: "最近使用"), color: .appSuccess, score: score)
     }
 
     func overdueCount(for project: Project) -> Int {
@@ -661,8 +800,216 @@ extension DashboardView {
         }.count
     }
 
+    func materialPriceSpikeCount(for project: Project) -> Int {
+        financeStore.materialPriceSpikeCount(for: project.id)
+    }
+
     func hasTodayLog(for project: Project) -> Bool {
         projectStore.hasTodayLog(for: project.id)
+    }
+
+    var backupReminderRiskActions: [DashboardRiskQuickAction] {
+        guard isDisplayedBackupReminderOverdue else { return [] }
+        return [
+            DashboardRiskQuickAction(
+                id: "backup.ignore",
+                title: String(localized: "忽略今日提醒"),
+                systemImage: "eye.slash",
+                action: ignoreBackupReminderForToday
+            ),
+            DashboardRiskQuickAction(
+                id: "backup.threshold",
+                title: String(localized: "阈值 +1 天"),
+                systemImage: "slider.horizontal.3",
+                action: raiseBackupReminderThreshold
+            ),
+            DashboardRiskQuickAction(
+                id: "backup.todo",
+                title: String(localized: "生成待办"),
+                systemImage: "checklist",
+                action: createBackupFollowupTodo
+            )
+        ]
+    }
+
+    var missingReceiptRiskActions: [DashboardRiskQuickAction] {
+        guard displayedMissingReceiptCount > 0 else { return [] }
+        return [
+            DashboardRiskQuickAction(
+                id: "receipt.ignore",
+                title: String(localized: "忽略今日提醒"),
+                systemImage: "eye.slash",
+                action: ignoreMissingReceiptForToday
+            ),
+            DashboardRiskQuickAction(
+                id: "receipt.todo",
+                title: String(localized: "生成待办"),
+                systemImage: "checklist",
+                action: createMissingReceiptTodo
+            )
+        ]
+    }
+
+    var priceSpikeRiskActions: [DashboardRiskQuickAction] {
+        guard displayedPriceSpikeCount > 0 else { return [] }
+        return [
+            DashboardRiskQuickAction(
+                id: "spike.ignore",
+                title: String(localized: "忽略今日提醒"),
+                systemImage: "eye.slash",
+                action: ignorePriceSpikeForToday
+            ),
+            DashboardRiskQuickAction(
+                id: "spike.threshold",
+                title: String(localized: "上调阈值 +5%"),
+                systemImage: "slider.horizontal.3",
+                action: raisePriceSpikeThreshold
+            ),
+            DashboardRiskQuickAction(
+                id: "spike.todo",
+                title: String(localized: "生成待办"),
+                systemImage: "checklist",
+                action: createPriceSpikeTodo
+            )
+        ]
+    }
+
+    var negativeStockRiskActions: [DashboardRiskQuickAction] {
+        guard displayedNegativeStockCount > 0 else { return [] }
+        return [
+            DashboardRiskQuickAction(
+                id: "stock.ignore",
+                title: String(localized: "忽略今日提醒"),
+                systemImage: "eye.slash",
+                action: ignoreNegativeStockForToday
+            ),
+            DashboardRiskQuickAction(
+                id: "stock.todo",
+                title: String(localized: "生成待办"),
+                systemImage: "checklist",
+                action: createNegativeStockTodo
+            )
+        ]
+    }
+
+    func ignoreBackupReminderForToday() {
+        ignoredBackupRiskDay = todayStr
+        AppHaptics.impact(.light)
+        showDashboardActionFeedback(String(localized: "已忽略今日“备份超期”提醒"))
+    }
+
+    func ignoreMissingReceiptForToday() {
+        ignoredMissingReceiptRiskDay = todayStr
+        AppHaptics.impact(.light)
+        showDashboardActionFeedback(String(localized: "已忽略今日“缺票”提醒"))
+    }
+
+    func ignorePriceSpikeForToday() {
+        ignoredPriceSpikeRiskDay = todayStr
+        AppHaptics.impact(.light)
+        showDashboardActionFeedback(String(localized: "已忽略今日“价格异动”提醒"))
+    }
+
+    func ignoreNegativeStockForToday() {
+        ignoredNegativeStockRiskDay = todayStr
+        AppHaptics.impact(.light)
+        showDashboardActionFeedback(String(localized: "已忽略今日“负库存”提醒"))
+    }
+
+    func raisePriceSpikeThreshold() {
+        let current = financeStore.materialPriceSpikeThreshold
+        let raised = min(current + 0.05, 0.50)
+        guard abs(raised - current) > 0.0001 else {
+            AppHaptics.warning()
+            showDashboardActionFeedback(String(localized: "阈值已到上限"))
+            return
+        }
+        financeStore.setMaterialPriceSpikeThreshold(raised)
+        AppHaptics.success()
+        showDashboardActionFeedback("已上调阈值到 \(Int((raised * 100).rounded()))%")
+    }
+
+    func raiseBackupReminderThreshold() {
+        let raw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
+        let current = max(1, raw == 0 ? 7 : raw)
+        let raised = min(current + 1, 30)
+        guard raised != current else {
+            AppHaptics.warning()
+            showDashboardActionFeedback(String(localized: "备份提醒阈值已到上限"))
+            return
+        }
+        UserDefaults.standard.set(raised, forKey: UserPreferenceKeys.backupHealthReminderDays)
+        AppHaptics.success()
+        showDashboardActionFeedback("备份提醒阈值已调整为 \(raised) 天")
+    }
+
+    func createBackupFollowupTodo() {
+        createRiskTodo(
+            marker: "[dashboard-risk:backup-overdue]",
+            title: "检查备份策略",
+            note: "工作台检测到备份超期，请检查本地和云端备份是否成功。",
+            projectId: nil
+        )
+    }
+
+    func createMissingReceiptTodo() {
+        let projectId = currentProject?.id
+        let projectNameText = currentProject?.name ?? String(localized: "全部项目")
+        createRiskTodo(
+            marker: "[dashboard-risk:missing-receipt]",
+            title: "补齐票据资料",
+            note: "\(projectNameText) 当前有 \(displayedMissingReceiptCount) 笔账目缺票，请补齐附件并关联账目。",
+            projectId: projectId
+        )
+    }
+
+    func createPriceSpikeTodo() {
+        let projectId = currentProject?.id
+        let projectNameText = currentProject?.name ?? String(localized: "全部项目")
+        createRiskTodo(
+            marker: "[dashboard-risk:price-spike]",
+            title: "处理材料价格异动",
+            note: "\(projectNameText) 当前有 \(displayedPriceSpikeCount) 项价格异动，请复核采购价或调整阈值。",
+            projectId: projectId
+        )
+    }
+
+    func createNegativeStockTodo() {
+        let projectId = currentProject?.id
+        let projectNameText = currentProject?.name ?? String(localized: "全部项目")
+        createRiskTodo(
+            marker: "[dashboard-risk:negative-stock]",
+            title: "核对负库存",
+            note: "\(projectNameText) 当前有 \(displayedNegativeStockCount) 项负库存，请补录入库或修正数量。",
+            projectId: projectId
+        )
+    }
+
+    func createRiskTodo(marker: String, title: String, note: String, projectId: UUID?) {
+        let hasDuplicate = store.siteTodos.contains { todo in
+            !todo.isDone
+                && todo.note.contains(marker)
+                && todo.projectId == projectId
+        }
+        guard !hasDuplicate else {
+            AppHaptics.warning()
+            showDashboardActionFeedback(String(localized: "相同提醒待办已存在"))
+            return
+        }
+
+        let todo = SiteTodo(
+            title: title,
+            owner: "",
+            dueDate: todayStr,
+            priority: .medium,
+            issueType: .general,
+            note: "\(note)\n\(marker)",
+            projectId: projectId
+        )
+        store.siteTodos.insert(todo, at: 0)
+        store.scheduleSave()
+        AppHaptics.success()
+        showDashboardActionFeedback(String(localized: "已生成处理待办"))
     }
 
     func recentActivityDate(for project: Project) -> Date {
@@ -670,9 +1017,6 @@ extension DashboardView {
         var latest = projectStore.projectActivitySummary(for: projectId).latestActivityDate ?? .distantPast
         if let startDate = Formatters.parseDateOrDateTime(project.startDate) {
             latest = max(latest, startDate)
-        }
-        if let latestPayment = financeStore.latestPaymentDate(for: projectId) {
-            latest = max(latest, latestPayment)
         }
         if let latestLabor = financeStore.latestLaborDate(for: projectId) {
             latest = max(latest, latestLabor)

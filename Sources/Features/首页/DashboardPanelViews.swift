@@ -1,36 +1,69 @@
 import SwiftUI
 
+struct DashboardRiskQuickAction: Identifiable {
+    let id: String
+    let title: String
+    let systemImage: String
+    var role: ButtonRole? = nil
+    let action: () -> Void
+}
+
 struct DashboardRiskPill: View {
     let title: String
     let value: String
     let color: Color
     let hasRisk: Bool
     let destination: DashboardDestination
+    var quickActions: [DashboardRiskQuickAction] = []
 
     var body: some View {
-        NavigationLink {
-            dashboardDestinationView(destination)
-        } label: {
-            HStack(spacing: AppSpacing.tight * 0.75) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(hasRisk ? Color.white : color)
-                Text(value)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(hasRisk ? Color.white : color)
+        HStack(spacing: AppSpacing.tight * 0.5) {
+            NavigationLink {
+                dashboardDestinationView(destination)
+            } label: {
+                HStack(spacing: AppSpacing.tight * 0.75) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(hasRisk ? Color.white : color)
+                    Text(value)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(hasRisk ? Color.white : color)
+                }
+                .padding(.horizontal, AppSpacing.normal - 2)
+                .padding(.vertical, AppSpacing.tight - 1)
+                .background(
+                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                        .fill(hasRisk ? color : color.opacity(0.12))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                        .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
+                )
             }
-            .padding(.horizontal, AppSpacing.normal - 2)
-            .padding(.vertical, AppSpacing.tight - 1)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                    .fill(hasRisk ? color : color.opacity(0.12))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                    .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
-            )
+            .buttonStyle(.plain)
+
+            if !quickActions.isEmpty {
+                Menu {
+                    ForEach(quickActions) { action in
+                        Button(role: action.role) {
+                            action.action()
+                        } label: {
+                            Label(action.title, systemImage: action.systemImage)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: AppSpacing.tight * 0.75, style: .continuous)
+                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                        )
+                }
+            }
         }
-        .buttonStyle(.plain)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title)：\(value)")
         .accessibilityHint(String(localized: "打开\(title)详情"))
@@ -158,7 +191,7 @@ struct LogPreviewRow: View {
             HStack {
                 Text(log.weather)
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.appSuccess)
                 if !log.workers.isEmpty {
                     Text(log.workers)
                         .font(.caption)
@@ -168,7 +201,7 @@ struct LogPreviewRow: View {
                 if let projectName {
                     Text(projectName)
                         .font(.caption2)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.appDoc)
                         .lineLimit(1)
                 }
             }
@@ -188,7 +221,7 @@ struct TodoPreviewRow: View {
     var body: some View {
         HStack(spacing: AppSpacing.tight + 2) {
             Image(systemName: todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
-                .foregroundStyle(todo.isOverdue ? .red : .orange)
+                .foregroundStyle(todo.isOverdue ? Color.appRisk : Color.appPrimaryAction)
             VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
                 Text(todo.title)
                     .font(.callout.weight(.medium))
@@ -198,14 +231,14 @@ struct TodoPreviewRow: View {
                     Text(todo.priority.displayName)
                     Text(todo.issueType.displayName)
                     if !todo.owner.isEmpty { Text(todo.owner) }
-                    if let projectName { Text(projectName).foregroundStyle(.blue) }
+                    if let projectName { Text(projectName).foregroundStyle(Color.appDoc) }
                 }
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 if let completedAt = todo.completedAt, todo.isDone {
                     Text(String(localized: "完成 \(completedAt)"))
                         .font(.caption2)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.appSuccess)
                 }
             }
             Spacer()

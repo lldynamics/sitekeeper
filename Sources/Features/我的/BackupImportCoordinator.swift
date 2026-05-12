@@ -32,10 +32,11 @@ enum BackupImportCoordinator {
             appendUniqueByID(snapshot.progressTasks, to: &store.progressTasks)
             appendUniqueByID(snapshot.lightingCircuitPlans, to: &store.lightingCircuitPlans)
             appendUniqueByID(snapshot.siteTodos, to: &store.siteTodos)
-            appendUniqueByID(snapshot.paymentRecords, to: &store.paymentRecords)
             appendUniqueByID(snapshot.projectDrawings, to: &store.projectDrawings)
             appendUniqueByID(snapshot.projectContacts, to: &store.projectContacts)
             appendUniqueByID(snapshot.projectFinancialRecords, to: &store.projectFinancialRecords)
+            let migratedLegacyRecords = migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: store.projects)
+            appendUniqueByID(migratedLegacyRecords, to: &store.projectFinancialRecords)
             appendUniqueByID(snapshot.projectDocuments, to: &store.projectDocuments)
             appendUniqueByID(snapshot.quickNotes, to: &store.quickNotes)
             appendUniqueByID(snapshot.projectWarehouseMovements, to: &store.projectWarehouseMovements)
@@ -58,10 +59,12 @@ enum BackupImportCoordinator {
             store.progressTasks = snapshot.progressTasks
             store.lightingCircuitPlans = snapshot.lightingCircuitPlans
             store.siteTodos = snapshot.siteTodos
-            store.paymentRecords = snapshot.paymentRecords
             store.projectDrawings = snapshot.projectDrawings
             store.projectContacts = snapshot.projectContacts
-            store.projectFinancialRecords = snapshot.projectFinancialRecords
+            store.projectFinancialRecords = mergeUniqueByID(
+                snapshot.projectFinancialRecords,
+                migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: snapshot.projects)
+            )
             store.projectDocuments = snapshot.projectDocuments
             store.quickNotes = snapshot.quickNotes
             store.projectWarehouseMovements = snapshot.projectWarehouseMovements
@@ -74,6 +77,9 @@ enum BackupImportCoordinator {
             store.userMaterials = snapshot.userMaterials
             store.deletedUserMaterials = snapshot.deletedUserMaterials
             store.hiddenPresetKeys = snapshot.hiddenPresetKeys
+        }
+        if !snapshot.legacyPaymentRecords.isEmpty {
+            StorageIssueLog.record("导入备份时已迁移旧收款记录 \(snapshot.legacyPaymentRecords.count) 条到财务流水")
         }
         store.enforceCalculationHistoryRetention()
         sanitizeMaterialProjectReferences(in: store)
@@ -111,6 +117,30 @@ enum BackupImportCoordinator {
             seen.insert(key)
         }
         return merged
+    }
+
+    private static func mergeUniqueByID<T: Identifiable>(_ primary: [T], _ secondary: [T]) -> [T] where T.ID: Hashable {
+        var merged = primary
+        var knownIDs = Set(primary.map(\.id))
+        for item in secondary where knownIDs.insert(item.id).inserted {
+            merged.append(item)
+        }
+        return merged
+    }
+
+    private static func migratedLegacyPaymentRecords(
+        _ records: [LegacyPaymentRecord],
+        projects: [Project]
+    ) -> [ProjectFinancialRecord] {
+        guard !records.isEmpty else { return [] }
+        let counterpartyByProjectID = Dictionary(
+            uniqueKeysWithValues: projects.map { ($0.id, $0.customerName) }
+        )
+        return records.map { record in
+            record.migratedFinancialRecord(
+                counterparty: counterpartyByProjectID[record.projectId] ?? ""
+            )
+        }
     }
 
     @MainActor

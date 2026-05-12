@@ -15,7 +15,6 @@ struct ExportContentOptions {
     var includeWarehouseMovements = true
     var includeQuickNotes = true
     var includeLightingCircuits = true
-    var includePaymentRecords = true
 }
 
 struct ExportPayload {

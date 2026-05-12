@@ -253,7 +253,7 @@ struct ProjectFileBrowserView: View {
                         ProjectFileGuidePanel()
                     }
                 }
-                .navigationTitle("项目文件使用指引")
+                .navigationTitle("全局文件检索指引")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -295,7 +295,7 @@ struct ProjectFileBrowserView: View {
             if shouldShowRootGuide {
                 Section {
                     ProjectFileGuideHintStrip(
-                        title: "项目文件使用指引",
+                        title: "全局文件检索指引",
                         subtitle: "点 ? 查看快速步骤",
                         isExpanded: false,
                         onToggleExpand: {
@@ -360,7 +360,7 @@ struct ProjectFileBrowserView: View {
                     Section("建议下一步") {
                         ProjectFileMicroGuideRow(
                             icon: "sparkle.magnifyingglass",
-                            color: .indigo,
+                            color: .appDoc,
                             title: "已命中文件，可直接预览",
                             detail: "点条目可查看，点右侧菜单可分享或打开。"
                         )
@@ -368,7 +368,7 @@ struct ProjectFileBrowserView: View {
                         if missingResultCount > 0 {
                             ProjectFileMicroGuideRow(
                                 icon: "exclamationmark.triangle.fill",
-                                color: .red,
+                                color: .appRisk,
                                 title: String(localized: "发现 \(missingResultCount) 个缺失文件"),
                                 detail: "建议回到项目详情重新导入图纸或资料，避免交付时缺件。"
                             )
@@ -387,7 +387,7 @@ struct ProjectFileBrowserView: View {
                 if normalizedQuery.isEmpty {
                     Section("建议下一步") {
                         ContentUnavailableView(
-                            "暂无项目文件",
+                            "暂无全局文件",
                             systemImage: "folder",
                             description: Text("先新建项目并补充日志、图纸或票据，这里会自动聚合显示。")
                         )
@@ -397,7 +397,7 @@ struct ProjectFileBrowserView: View {
                             Label("去新建项目", systemImage: "plus.circle.fill")
                         }
                         .buttonStyle(.borderedProminent)
-                        .tint(.orange)
+                        .tint(Color.appPrimaryAction)
                     }
                 } else {
                     Section("建议下一步") {
@@ -426,7 +426,7 @@ struct ProjectFileBrowserView: View {
                 }
             }
         }
-        .navigationTitle("项目文件")
+        .navigationTitle("全局文件检索")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -439,7 +439,7 @@ struct ProjectFileBrowserView: View {
                 .accessibilityLabel("查看使用提示")
             }
         }
-        .searchable(text: $searchText, prompt: "搜索项目或文件")
+        .searchable(text: $searchText, prompt: "搜索全部项目或文件")
     }
 
     private var splitBrowserLayout: some View {
@@ -448,7 +448,7 @@ struct ProjectFileBrowserView: View {
                 if shouldShowRootGuide {
                     Section {
                         ProjectFileGuideHintStrip(
-                            title: "项目文件使用指引",
+                            title: "全局文件检索指引",
                             subtitle: "点 ? 查看快速步骤",
                             isExpanded: false,
                             onToggleExpand: {
@@ -504,7 +504,7 @@ struct ProjectFileBrowserView: View {
                     }
                 }
 
-                Section("项目") {
+                Section("全部项目") {
                     if filteredProjects.isEmpty {
                         Text(normalizedQuery.isEmpty ? "暂无项目" : "未找到匹配项目")
                             .font(.caption)
@@ -525,8 +525,8 @@ struct ProjectFileBrowserView: View {
                     }
                 }
             }
-            .navigationTitle("项目文件")
-            .searchable(text: $searchText, prompt: "搜索项目或文件")
+            .navigationTitle("全局文件检索")
+            .searchable(text: $searchText, prompt: "搜索全部项目或文件")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -602,7 +602,7 @@ struct ProjectFileBrowserView: View {
                     ContentUnavailableView(
                         "请选择项目",
                         systemImage: "building.2.crop.circle",
-                        description: Text("在左侧选择项目后，中栏显示文件分类与列表。")
+                        description: Text("左侧是全局项目列表；选择后查看该项目文件。")
                     )
                 }
             }
@@ -648,7 +648,7 @@ struct ProjectFileBrowserView: View {
                             } else {
                                 Text("该文件在本地已缺失，请回到项目详情重新导入。")
                                     .font(.caption)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(.appRisk)
                             }
                         }
                         .padding(AppSpacing.relaxed)
@@ -701,7 +701,7 @@ private struct ProjectFileProjectRow: View {
     var body: some View {
         HStack(spacing: AppSpacing.normal) {
             RoundedRectangle(cornerRadius: 1.5)
-                .fill(isSelected ? Color.orange : Color.clear)
+                .fill(isSelected ? Color.appPrimaryAction : Color.clear)
                 .frame(width: 3)
                 .padding(.vertical, 2)
 
@@ -713,13 +713,13 @@ private struct ProjectFileProjectRow: View {
                     Spacer()
                     Text("\(summary.totalCount) 个文件")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(summary.totalCount > 0 ? .orange : .secondary)
+                        .foregroundStyle(summary.totalCount > 0 ? Color.appPrimaryAction : .secondary)
                 }
                 HStack(spacing: AppSpacing.tight) {
-                    ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .blue)
-                    ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .indigo)
-                    ProjectFileCountChip(title: "资料", value: summary.documentCount, color: .brown)
-                    ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .orange)
+                    ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .appDoc)
+                    ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .appPrimaryAction)
+                    ProjectFileCountChip(title: "资料", value: summary.documentCount, color: .appPrimaryAction)
+                    ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
                 }
                 if !project.location.isEmpty {
                     Text(project.location)
@@ -760,17 +760,17 @@ private struct ProjectFileSplitItemRow: View {
                     Text(item.formattedSize)
                 }
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(item.exists ? Color.secondary : Color.red)
+                .foregroundStyle(item.exists ? Color.secondary : Color.appRisk)
             }
             Spacer(minLength: 6)
             if isSelected {
                 Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
             }
         }
         .padding(.horizontal, AppSpacing.tight)
         .padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.orange.opacity(0.12) : Color.clear))
+        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? Color.appPrimarySurfaceSubtle : Color.clear))
     }
 }
 

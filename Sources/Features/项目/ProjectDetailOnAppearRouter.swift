@@ -3,6 +3,7 @@ import Foundation
 struct ProjectDetailOnAppearRouting {
     let shouldOpenFinancialAdd: Bool
     let shouldOpenDocumentScanSetup: Bool
+    let shouldOpenDeliveryGuide: Bool
     let shouldConsumeFocusRequest: Bool
     let focusedItem: ProjectDetailFocusedItem?
 }
@@ -13,6 +14,8 @@ enum ProjectDetailOnAppearRouter {
         didAutoOpenFinancialAdd: Bool,
         autoOpenDocumentScanSetup: Bool,
         didAutoOpenDocumentScanSetup: Bool,
+        autoOpenDeliveryGuide: Bool,
+        didAutoOpenDeliveryGuide: Bool,
         focus: ProjectDetailFocus?,
         didOpenFocusedItem: Bool,
         financialRecords: [ProjectFinancialRecord],
@@ -21,6 +24,7 @@ enum ProjectDetailOnAppearRouter {
     ) -> ProjectDetailOnAppearRouting {
         let shouldOpenFinancialAdd = autoOpenFinancialAdd && !didAutoOpenFinancialAdd
         let shouldOpenDocumentScanSetup = autoOpenDocumentScanSetup && !didAutoOpenDocumentScanSetup
+        let shouldOpenDeliveryGuide = autoOpenDeliveryGuide && !didAutoOpenDeliveryGuide
         let shouldConsumeFocusRequest = focus != nil && !didOpenFocusedItem
 
         let focusedItem: ProjectDetailFocusedItem?
@@ -38,6 +42,7 @@ enum ProjectDetailOnAppearRouter {
         return ProjectDetailOnAppearRouting(
             shouldOpenFinancialAdd: shouldOpenFinancialAdd,
             shouldOpenDocumentScanSetup: shouldOpenDocumentScanSetup,
+            shouldOpenDeliveryGuide: shouldOpenDeliveryGuide,
             shouldConsumeFocusRequest: shouldConsumeFocusRequest,
             focusedItem: focusedItem
         )

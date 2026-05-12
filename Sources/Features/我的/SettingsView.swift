@@ -2,24 +2,20 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
-    @AppStorage(UserPreferenceKeys.autoSave) private var autoSave = true
-    @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
-    @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
     @AppStorage(UserPreferenceKeys.hasSeenBackupGuide) private var hasSeenBackupGuide = false
     @AppStorage(UserPreferenceKeys.hasSeenProjectFileRootGuide) private var hasSeenProjectFileRootGuide = false
     @AppStorage(UserPreferenceKeys.hasSeenProjectFileCategoryGuide) private var hasSeenProjectFileCategoryGuide = false
     @AppStorage(UserPreferenceKeys.hasCompletedBackupExportTask) private var hasCompletedBackupExportTask = false
-    @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
-    @AppStorage(UserPreferenceKeys.userName) private var userName = ""
+    @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
+    @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) private var materialLibraryPromptAfterAdd = true
+    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.dropboxBlue.rawValue
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataConfirm = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
     @State private var clearLocalDataPhase = ""
     @State private var guideResetFeedback = ""
-    @State private var languageSwitchFeedback = ""
 
     private var allowsSampleDataImport: Bool {
         AppFeatureFlags.allowsSampleDataImport
@@ -27,48 +23,14 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("偏好") {
-                Toggle("公制单位", isOn: $useMetric)
-                Toggle("自动保存记录", isOn: $autoSave)
-                Picker("主题", selection: $appearanceMode) {
-                    ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
-                        Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
+            Section("显示与主题") {
+                Picker("配色", selection: $appTheme) {
+                    ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                        Text(theme.displayName).tag(theme.rawValue)
                     }
                 }
-                .pickerStyle(.segmented)
-                Picker("语言", selection: $languageCode) {
-                    ForEach(AppLanguage.allCases, id: \.rawValue) { lang in
-                        Text(LocalizedStringKey(lang.displayName)).tag(lang.rawValue)
-                    }
-                }
-                .onChange(of: languageCode) { _, newCode in
-                    if let lang = AppLanguage(rawValue: newCode) {
-                        AppLanguage.apply(lang)
-                        languageSwitchFeedback = String(localized: "settings_language_switch_feedback")
-                    }
-                }
-                if !languageSwitchFeedback.isEmpty {
-                    Text(languageSwitchFeedback)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                if !autoSave {
-                    Text(String(localized: "settings_auto_save_disabled_hint"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            Section("账号") {
-                TextField("用户名", text: $userName)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .onChange(of: userName) { _, newValue in
-                        let normalized = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                        if normalized != newValue {
-                            userName = normalized
-                        }
-                    }
-                Text("用于在“我的”页面显示。")
+                .pickerStyle(.menu)
+                Text("公制单位、自动保存、主题和语言已放到“我的”首页快捷设置。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -83,6 +45,16 @@ struct SettingsView: View {
                 }
             }
             Section("数据管理") {
+                Stepper(value: $backupHealthReminderDays, in: 1 ... 30) {
+                    LabeledContent("备份健康提醒阈值", value: "\(backupHealthReminderDays) 天")
+                }
+                Text("超过该天数未成功备份时，工作台会显示“备份超期”提醒。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Toggle("材料添加后提示前往材料单", isOn: $materialLibraryPromptAfterAdd)
+                Text("关闭后，材料库添加成功将只显示顶部提示，不再弹窗询问是否跳转。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 Button("清空本机全部数据（不可恢复）", role: .destructive) {
                     showClearLocalDataConfirm = true
                 }
@@ -118,7 +90,7 @@ struct SettingsView: View {
                 if !guideResetFeedback.isEmpty {
                     Text(guideResetFeedback)
                         .font(.caption)
-                        .foregroundStyle(.green)
+                        .foregroundStyle(.appSuccess)
                 }
             }
             Section("关于") {
@@ -167,14 +139,8 @@ struct SettingsView: View {
             }
         }
         .onAppear {
-            migrateLegacyAppearanceIfNeeded()
+            backupHealthReminderDays = min(max(backupHealthReminderDays, 1), 30)
         }
-    }
-
-    private func migrateLegacyAppearanceIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: UserPreferenceKeys.appearanceMode) == nil else { return }
-        appearanceMode = legacyDarkMode ? AppAppearanceMode.dark.rawValue : AppAppearanceMode.system.rawValue
     }
 
     private func resetGuideState() {
@@ -198,7 +164,7 @@ private struct FavoriteCalcEditor: View {
         List {
             ForEach(all, id: \.title) { def in
                 HStack {
-                    ToolRow(icon: def.icon, title: def.title, desc: def.desc, color: .orange)
+                    ToolRow(icon: def.icon, title: def.title, desc: def.desc, color: .appWarning)
                     Spacer()
                     let isFav = favSet.contains(def.title)
                     Button {
@@ -207,7 +173,7 @@ private struct FavoriteCalcEditor: View {
                         data = set.sorted().joined(separator: ",")
                     } label: {
                         Image(systemName: isFav ? "star.fill" : "star")
-                            .foregroundStyle(isFav ? .yellow : .gray)
+                            .foregroundStyle(isFav ? .appWarning : .appMuted)
                     }
                 }
             }
@@ -234,7 +200,7 @@ private struct ClearLocalDataConfirmationSheet: View {
             VStack(spacing: 20) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 48))
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.appRisk)
                     .padding(.top, 24)
 
                 Text("即将清空本机全部数据")

@@ -1,6 +1,5 @@
 "CFBundleDisplayName" = "工地掌柜";
 "NSCameraUsageDescription" = "Used to scan invoices/receipts, capture site photos, and attach notes.";
 "NSLocationWhenInUseUsageDescription" = "Used to add capture location to watermark photos when enabled by you.";
-"NSMicrophoneUsageDescription" = "Used to record on-site voice notes.";
 "NSPhotoLibraryUsageDescription" = "Used to pick photos and files for projects, receipts, and quick notes.";
 "NSPhotoLibraryAddUsageDescription" = "Used to save watermark photos to your system photo library.";

@@ -38,7 +38,7 @@ struct TemplateView: View {
                         .padding(.vertical, 2)
                         .swipeActions(edge: .leading) {
                             Button { applyTarget = tpl } label: { Label("应用", systemImage: "arrow.turn.down.right") }
-                                .tint(.blue)
+                                .tint(.appPrimaryAction)
                         }
                     }
                     .onDelete { idx in
@@ -91,11 +91,11 @@ private extension TemplateCategory {
     var tintColor: Color {
         switch self {
         case .quotation:
-            return Color.appFinance
+            return Color.appPrimaryAction
         case .dailyLog:
             return Color.appDoc
         case .material:
-            return Color.appInventory
+            return Color.appPrimaryAction
         }
     }
 
@@ -192,7 +192,7 @@ struct ApplyTemplateSheet: View {
                 if materialParseResult.items.isEmpty {
                     Text("未识别到可导入材料，请按“名称 × 数量单位”格式填写。")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                 } else {
                     ForEach(Array(materialParseResult.items.prefix(6))) { item in
                         Text("\(item.name) · \(item.quantity) \(item.unit)")
@@ -207,7 +207,7 @@ struct ApplyTemplateSheet: View {
                 if !materialParseResult.rejectedLines.isEmpty {
                     Text("以下行未识别，不会导入：")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                     ForEach(Array(materialParseResult.rejectedLines.prefix(3)), id: \.self) { line in
                         Text(line)
                             .font(.caption2)
@@ -221,7 +221,7 @@ struct ApplyTemplateSheet: View {
                 if quotationParseResult.items.isEmpty {
                     Text("未识别到可导入报价，请按“名称 ¥ 单价”格式填写。")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                 } else {
                     ForEach(Array(quotationParseResult.items.prefix(6))) { item in
                         Text("\(item.name) · ¥\(item.unitPrice)")
@@ -236,7 +236,7 @@ struct ApplyTemplateSheet: View {
                 if !quotationParseResult.rejectedLines.isEmpty {
                     Text("以下行未识别，不会导入：")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                     ForEach(Array(quotationParseResult.rejectedLines.prefix(3)), id: \.self) { line in
                         Text(line)
                             .font(.caption2)

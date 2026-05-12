@@ -58,14 +58,6 @@ enum ProjectDetailImportExportActions {
         }
     }
 
-    static func makeDailyReportExport(project: Project, logs: [DailyLog]) -> ExportPayload {
-        ExportPayload(
-            data: ReportBuilder.makeDailyReportPDF(project: project, logs: logs),
-            contentType: .pdf,
-            defaultFilename: "\(project.name)_施工日报.pdf"
-        )
-    }
-
     static func estimatedProjectPackageBytes(
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],

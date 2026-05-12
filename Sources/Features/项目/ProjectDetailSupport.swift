@@ -83,7 +83,7 @@ struct ProjectDrawingTimelineSheet: View {
                                 if drawing.isCurrentVersion {
                                     Text("当前版")
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(Color.appSuccess)
                                 }
                                 Spacer()
                                 Text(drawing.importedAt)
@@ -98,12 +98,12 @@ struct ProjectDrawingTimelineSheet: View {
                             if drawing.issueStatus != .none {
                                 Text("状态: \(drawing.issueStatus.displayName)")
                                     .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.appPrimaryAction)
                             }
                             if !drawing.issueNote.isEmpty {
                                 Text("问题: \(drawing.issueNote)")
                                     .font(.caption2)
-                                    .foregroundStyle(.red)
+                                    .foregroundStyle(.appRisk)
                             }
                             HStack(spacing: 16) {
                                 Button("预览") {
@@ -518,6 +518,8 @@ struct ProjectPhotoDetailSheet: View {
     @State private var note = ""
     @State private var tag: PhotoTag = .general
     @State private var showDeleteConfirm = false
+    @State private var previewImage: UIImage?
+    @State private var didAttemptLoadImage = false
 
     private var selectedPhoto: LogPhoto? {
         allLogs.first(where: { $0.id == context.logId })?
@@ -529,13 +531,14 @@ struct ProjectPhotoDetailSheet: View {
         NavigationStack {
             Form {
                 Section("照片预览") {
-                    if let fileName = selectedPhoto?.fileName,
-                       let data = PhotoStorage.data(for: fileName),
-                       let image = UIImage(data: data) {
-                        Image(uiImage: image)
+                    if let previewImage {
+                        Image(uiImage: previewImage)
                             .resizable()
                             .scaledToFit()
                             .frame(maxHeight: 360)
+                            .frame(maxWidth: .infinity)
+                    } else if !didAttemptLoadImage {
+                        ProgressView("加载中…")
                             .frame(maxWidth: .infinity)
                     } else {
                         Text("图片已丢失或不可读取")
@@ -574,6 +577,9 @@ struct ProjectPhotoDetailSheet: View {
                 note = selectedPhoto?.note ?? ""
                 tag = selectedPhoto?.tag ?? .general
             }
+            .task(id: selectedPhoto?.fileName) {
+                await loadPreviewImage()
+            }
             .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
                 Button("删除", role: .destructive) {
                     onDelete()
@@ -585,6 +591,25 @@ struct ProjectPhotoDetailSheet: View {
             }
         }
     }
+
+    private func loadPreviewImage() async {
+        didAttemptLoadImage = false
+        previewImage = nil
+        guard let fileName = selectedPhoto?.fileName else {
+            didAttemptLoadImage = true
+            return
+        }
+        if let data = await PhotoStorage.dataAsync(for: fileName),
+           let image = UIImage(data: data) {
+            previewImage = image
+            didAttemptLoadImage = true
+            return
+        }
+        if let thumbnail = await PhotoStorage.thumbnailAsync(for: fileName) {
+            previewImage = thumbnail
+        }
+        didAttemptLoadImage = true
+    }
 }
 
 struct QuickAddSheet: View {
@@ -592,6 +617,7 @@ struct QuickAddSheet: View {
     @Environment(\.dismiss) private var dismiss
     let sheet: DetailSheet
     let projectId: UUID
+    let constructionMethods: [ConstructionMethod]
 
     @State private var name = ""; @State private var qty = ""; @State private var unit = ""
     @State private var unitPrice = ""
@@ -615,6 +641,7 @@ struct QuickAddSheet: View {
     @State private var rectification = ""; @State private var confirmer = ""
     @State private var logDate = Date()
     @State private var laborDate = Date()
+    @State private var linkedMethodIDs: Set<UUID> = []
 
     var body: some View {
         NavigationStack {
@@ -683,6 +710,30 @@ struct QuickAddSheet: View {
                     TextField("质量问题", text: $qualityIssue, axis: .vertical).lineLimit(2...4)
                     TextField("整改记录", text: $rectification, axis: .vertical).lineLimit(2...4)
                     TextField("现场确认人", text: $confirmer)
+                    Section("关联施工工艺") {
+                        if constructionMethods.isEmpty {
+                            Text("暂无可关联工艺，请先在施工工艺库新增条目。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ForEach(constructionMethods) { method in
+                                Toggle(isOn: methodBinding(for: method.id)) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(methodTitle(method))
+                                        HStack(spacing: 6) {
+                                            if !method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                                Text(method.trade)
+                                            }
+                                            Text(method.versionName.isEmpty ? "V1" : method.versionName)
+                                            Text(method.publishStatus.displayName)
+                                        }
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                    }
+                                }
+                            }
+                        }
+                    }
                 case .labor:
                     DatePicker("日期", selection: $laborDate, displayedComponents: .date)
                     TextField("班组（可选）", text: $laborTeamName)
@@ -802,6 +853,7 @@ struct QuickAddSheet: View {
                 qualityIssue: qualityIssue,
                 rectification: rectification,
                 confirmer: confirmer,
+                linkedConstructionMethodIDs: sortedLinkedMethodIDs(),
                 projectId: projectId
             ), at: 0)
             store.scheduleSave()
@@ -861,6 +913,30 @@ struct QuickAddSheet: View {
                   InputValidator.nonNegativeNumber(hours) else { return false }
             return unitRate.isEmpty || InputValidator.nonNegativeNumber(unitRate)
         }
+    }
+
+    private func methodBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { linkedMethodIDs.contains(id) },
+            set: { isOn in
+                if isOn {
+                    linkedMethodIDs.insert(id)
+                } else {
+                    linkedMethodIDs.remove(id)
+                }
+            }
+        )
+    }
+
+    private func sortedLinkedMethodIDs() -> [UUID] {
+        linkedMethodIDs.sorted { lhs, rhs in
+            lhs.uuidString < rhs.uuidString
+        }
+    }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "未命名工艺" : title
     }
 }
 

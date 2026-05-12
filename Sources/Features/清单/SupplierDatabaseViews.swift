@@ -5,6 +5,8 @@ import AVFoundation
 
 struct SupplierDatabaseView: View {
     @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
+    @Environment(FinanceStore.self) private var financeStore
     let focusedSupplierId: UUID?
     @State private var searchText = ""
     @State private var showAdd = false
@@ -23,6 +25,15 @@ struct SupplierDatabaseView: View {
         )
     }
 
+    private var searchSuggestions: [RealtimeSearchSuggestion] {
+        RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: searchText,
+            categories: [.supplier],
+            suppliers: store.supplierProfiles,
+            limit: 6
+        )
+    }
+
     var body: some View {
         SearchableDatabaseView(
             title: "供应商库",
@@ -32,10 +43,21 @@ struct SupplierDatabaseView: View {
             emptyTitle: "暂无供应商",
             emptySystemImage: "person.2.badge.gearshape",
             emptyDescription: Text("记录常用供应商、联系人、电话和供货范围。"),
+            searchSuggestions: searchSuggestions,
             onSelect: { supplier in
                 editingSupplier = supplier
             },
-            onDelete: deleteSuppliers,
+            onSelectSuggestion: { suggestion in
+                guard suggestion.category == .supplier else { return }
+                if let supplier = store.supplierProfiles.first(where: { $0.id == suggestion.entityId }) {
+                    editingSupplier = supplier
+                }
+            },
+            deleteConfig: SearchableDatabaseDeleteConfig(
+                title: "删除供应商？",
+                itemNoun: "供应商记录"
+            ),
+            onDeleteConfirmed: deleteSuppliers,
             rowContent: { supplier in
                 VStack(alignment: .leading, spacing: 5) {
                     Text(supplier.name.isEmpty ? "未命名供应商" : supplier.name)
@@ -44,6 +66,11 @@ struct SupplierDatabaseView: View {
                     Text([supplier.category, supplier.contact, supplier.phone].filter { !$0.isEmpty }.joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                    if let crmSummary = supplierCRMSummary(for: supplier) {
+                        Text(crmSummary)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.appWarning)
+                    }
                     if !supplier.note.isEmpty {
                         Text(supplier.note)
                             .font(.caption2)
@@ -87,8 +114,9 @@ struct SupplierDatabaseView: View {
         }
     }
 
-    private func deleteSuppliers(_ offsets: IndexSet, _ items: [SupplierProfile]) {
-        let ids = offsets.compactMap { items.indices.contains($0) ? items[$0].id : nil }
+    private func deleteSuppliers(_ items: [SupplierProfile]) {
+        let ids = Set(items.map(\.id))
+        guard !ids.isEmpty else { return }
         store.supplierProfiles.removeAll { ids.contains($0.id) }
         store.scheduleSave()
     }
@@ -101,6 +129,63 @@ struct SupplierDatabaseView: View {
         Task { @MainActor in
             editingSupplier = supplier
         }
+    }
+
+    private func supplierCRMSummary(for supplier: SupplierProfile) -> String? {
+        let projectIds = relatedProjectIDs(for: supplier)
+        guard !projectIds.isEmpty else { return nil }
+
+        let sortedProjectIDs = projectIds.sorted { lhs, rhs in
+            recentActivityDate(for: lhs) > recentActivityDate(for: rhs)
+        }
+        let projectNames = sortedProjectIDs
+            .prefix(2)
+            .compactMap { id in
+                store.projects.first(where: { $0.id == id })?.name
+            }
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        let projectPreview = projectNames.isEmpty ? "暂无项目" : projectNames.joined(separator: "、")
+        let unpaidTotal = sortedProjectIDs.reduce(0.0) { total, projectId in
+            total + unpaidAmount(for: projectId)
+        }
+        if unpaidTotal > 0 {
+            return "最近合作：\(projectPreview) · 待收 \(ReportBuilder.money(unpaidTotal))"
+        }
+        return "最近合作：\(projectPreview)"
+    }
+
+    private func relatedProjectIDs(for supplier: SupplierProfile) -> [UUID] {
+        let supplierName = supplier.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !supplierName.isEmpty else { return [] }
+        return Array(
+            Set(
+                financeStore.materialItems.compactMap { item in
+                    guard let projectId = item.projectId else { return nil }
+                    let itemSupplier = item.supplier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    guard !itemSupplier.isEmpty else { return nil }
+                    if itemSupplier.contains(supplierName) || supplierName.contains(itemSupplier) {
+                        return projectId
+                    }
+                    return nil
+                }
+            )
+        )
+    }
+
+    private func recentActivityDate(for projectId: UUID) -> Date {
+        let summaryDate = projectStore.projectActivitySummary(for: projectId).latestActivityDate
+        let startDate = store.projects.first(where: { $0.id == projectId })
+            .flatMap { Formatters.parseDateOrDateTime($0.startDate) }
+            ?? .distantPast
+        return max(summaryDate ?? .distantPast, startDate)
+    }
+
+    private func unpaidAmount(for projectId: UUID) -> Double {
+        guard let project = store.projects.first(where: { $0.id == projectId }) else { return 0 }
+        let contract = project.contractAmountValue.doubleValue
+        let paidFromSummary = projectStore.projectActivitySummary(for: projectId).collectedIncomeAmount
+        let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
+        return max(contract - paid, 0)
     }
 }
 

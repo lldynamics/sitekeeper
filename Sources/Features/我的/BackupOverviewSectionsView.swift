@@ -30,12 +30,12 @@ struct BackupOverviewSectionsView: View {
                 if !backupEstimate.missingFiles.isEmpty {
                     Text(String(localized: "发现 \(backupEstimate.missingFiles.count) 个原文件缺失，备份包会记录缺失清单。"))
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                 }
                 if backupEstimate.estimatedBytes >= BackupArchiveService.largeArchiveWarningBytes {
                     Text("预计体积较大，导出可能持续较久；请保持 App 在前台、电量充足，并预留导出包体积以上的可用空间。")
                         .font(.caption)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                 }
             }
 

@@ -111,6 +111,14 @@ enum ProjectStatus: String, CaseIterable, Codable {
             return String(localized: "project_status_archived")
         }
     }
+
+    var isActiveOrPaused: Bool {
+        self == .active || self == .paused
+    }
+
+    var isArchiveLike: Bool {
+        self == .completed || self == .settled || self == .archived
+    }
 }
 
 struct DailyLog: Identifiable, Codable {
@@ -127,6 +135,7 @@ struct DailyLog: Identifiable, Codable {
     var qualityIssue: String
     var rectification: String
     var confirmer: String
+    var linkedConstructionMethodIDs: [UUID]
     var projectId: UUID?
 
     init(
@@ -143,6 +152,7 @@ struct DailyLog: Identifiable, Codable {
         qualityIssue: String = "",
         rectification: String = "",
         confirmer: String = "",
+        linkedConstructionMethodIDs: [UUID] = [],
         projectId: UUID? = nil
     ) {
         self.id = id
@@ -158,12 +168,13 @@ struct DailyLog: Identifiable, Codable {
         self.qualityIssue = qualityIssue
         self.rectification = rectification
         self.confirmer = confirmer
+        self.linkedConstructionMethodIDs = linkedConstructionMethodIDs
         self.projectId = projectId
     }
 
     enum CodingKeys: String, CodingKey {
         case id, date, weather, content, workers, photoFileName, photos, safety, materials
-        case tomorrowPlan, qualityIssue, rectification, confirmer, projectId
+        case tomorrowPlan, qualityIssue, rectification, confirmer, linkedConstructionMethodIDs, projectId
     }
 
     init(from decoder: Decoder) throws {
@@ -181,6 +192,7 @@ struct DailyLog: Identifiable, Codable {
         qualityIssue = try container.decodeIfPresent(String.self, forKey: .qualityIssue) ?? ""
         rectification = try container.decodeIfPresent(String.self, forKey: .rectification) ?? ""
         confirmer = try container.decodeIfPresent(String.self, forKey: .confirmer) ?? ""
+        linkedConstructionMethodIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedConstructionMethodIDs) ?? []
         projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
     }
 }
@@ -227,6 +239,7 @@ struct SiteTodo: Identifiable, Codable {
     var isDone: Bool
     var completedAt: String?
     var note: String
+    var linkedConstructionMethodIDs: [UUID]
     var projectId: UUID?
 
     init(
@@ -241,6 +254,7 @@ struct SiteTodo: Identifiable, Codable {
         isDone: Bool = false,
         completedAt: String? = nil,
         note: String = "",
+        linkedConstructionMethodIDs: [UUID] = [],
         projectId: UUID? = nil
     ) {
         self.id = id
@@ -254,13 +268,14 @@ struct SiteTodo: Identifiable, Codable {
         self.isDone = isDone
         self.completedAt = completedAt
         self.note = note
+        self.linkedConstructionMethodIDs = linkedConstructionMethodIDs
         self.projectId = projectId
     }
 
     enum CodingKeys: String, CodingKey {
         case id, title, owner, dueDate, priority, issueType
         case rectificationBeforePhotoFileName, rectificationAfterPhotoFileName
-        case isDone, completedAt, note, projectId
+        case isDone, completedAt, note, linkedConstructionMethodIDs, projectId
     }
 
     init(from decoder: Decoder) throws {
@@ -284,6 +299,7 @@ struct SiteTodo: Identifiable, Codable {
         isDone = try container.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
         completedAt = try container.decodeIfPresent(String.self, forKey: .completedAt)
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        linkedConstructionMethodIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedConstructionMethodIDs) ?? []
         projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
     }
 
@@ -810,6 +826,7 @@ struct ProjectDocument: Identifiable, Codable {
     var pageCount: Int
     @NonNegativeNumberText var amount: String
     var linkedFinancialRecordId: UUID?
+    var linkedConstructionMethodIDs: [UUID]
     var createdAt: String
     var note: String
 
@@ -823,6 +840,7 @@ struct ProjectDocument: Identifiable, Codable {
         pageCount: Int = 1,
         amount: String = "",
         linkedFinancialRecordId: UUID? = nil,
+        linkedConstructionMethodIDs: [UUID] = [],
         createdAt: String = Formatters.now(),
         note: String = ""
     ) {
@@ -835,12 +853,13 @@ struct ProjectDocument: Identifiable, Codable {
         self.pageCount = pageCount
         self.amount = amount
         self.linkedFinancialRecordId = linkedFinancialRecordId
+        self.linkedConstructionMethodIDs = linkedConstructionMethodIDs
         self.createdAt = createdAt
         self.note = note
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, createdAt, note
+        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, linkedConstructionMethodIDs, createdAt, note
     }
 
     init(from decoder: Decoder) throws {
@@ -858,6 +877,7 @@ struct ProjectDocument: Identifiable, Codable {
         pageCount = try container.decodeIfPresent(Int.self, forKey: .pageCount) ?? 1
         amount = try container.decodeIfPresent(String.self, forKey: .amount) ?? ""
         linkedFinancialRecordId = try container.decodeIfPresent(UUID.self, forKey: .linkedFinancialRecordId)
+        linkedConstructionMethodIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedConstructionMethodIDs) ?? []
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }

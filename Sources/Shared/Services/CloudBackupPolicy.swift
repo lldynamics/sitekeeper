@@ -178,7 +178,6 @@ extension BackupSnapshot {
             snapshot.progressTasks = []
             snapshot.lightingCircuitPlans = []
             snapshot.siteTodos = []
-            snapshot.paymentRecords = []
             snapshot.projectContacts = []
             snapshot.projectFinancialRecords = []
             snapshot.projectWarehouseMovements = []
@@ -367,7 +366,6 @@ private extension BackupSnapshot {
         !progressTasks.isEmpty ||
         !lightingCircuitPlans.isEmpty ||
         !siteTodos.isEmpty ||
-        !paymentRecords.isEmpty ||
         !projectDrawings.isEmpty ||
         !projectContacts.isEmpty ||
         !projectFinancialRecords.isEmpty ||

@@ -1,16 +1,28 @@
 import SwiftUI
 
 struct ProjectDetailHeaderSection<RiskStrip: View>: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let project: Project
     @Binding var status: ProjectStatus
     let progressValue: String
     let quoteValue: String
     let todoValue: String
+    let unpaidAmount: Double
     let riskStrip: RiskStrip
     let customerLine: String?
     let periodLine: String?
     let showsStatus: Bool
+    let onOpenRecords: () -> Void
+    let onOpenFinanceFromQuote: () -> Void
+    let onOpenTodoFilter: () -> Void
+    let onOpenFinanceFromUnpaid: () -> Void
     let onEditProject: () -> Void
+    let canExportDeliveryPackage: Bool
+    let onExportDeliveryPackage: () -> Void
+
+    private var usesPadOverviewCards: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
 
     var body: some View {
         Section {
@@ -32,11 +44,7 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                         .pickerStyle(.menu)
                     }
                 }
-                HStack {
-                    metric("进度", progressValue, .orange)
-                    metric("报价", quoteValue, .blue)
-                    metric("待办", todoValue, .orange)
-                }
+                overviewMetrics
                 riskStrip
                 if let customerLine {
                     Text(customerLine)
@@ -54,24 +62,105 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                     Label("编辑项目资料", systemImage: "square.and.pencil")
                         .font(.caption.weight(.semibold))
                 }
+                if canExportDeliveryPackage {
+                    Button {
+                        onExportDeliveryPackage()
+                    } label: {
+                        Label("一键导出交付包", systemImage: "archivebox.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(Color.appPrimaryAction)
+                }
             }
             .padding(.vertical, 4)
         }
     }
 
-    private func metric(_ title: String, _ value: String, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+    @ViewBuilder
+    private var overviewMetrics: some View {
+        if usesPadOverviewCards {
+            let columns: [GridItem] = [
+                GridItem(.flexible(), spacing: AppSpacing.normal),
+                GridItem(.flexible(), spacing: AppSpacing.normal)
+            ]
+            LazyVGrid(columns: columns, spacing: AppSpacing.normal) {
+                metricCard(
+                    title: "进度",
+                    value: progressValue,
+                    color: .appWarning,
+                    systemImage: "gauge.with.dots.needle.50percent",
+                    action: onOpenRecords
+                )
+                metricCard(
+                    title: "报价",
+                    value: quoteValue,
+                    color: .appDoc,
+                    systemImage: "doc.text.fill",
+                    action: onOpenFinanceFromQuote
+                )
+                metricCard(
+                    title: "待办",
+                    value: todoValue,
+                    color: .appWarning,
+                    systemImage: "checklist",
+                    action: onOpenTodoFilter
+                )
+                metricCard(
+                    title: "未收款",
+                    value: unpaidAmount > 0 ? ReportBuilder.money(unpaidAmount) : "已收清",
+                    color: unpaidAmount > 0 ? .appPrimaryAction : .appSuccess,
+                    systemImage: "yensign.circle.fill",
+                    action: onOpenFinanceFromUnpaid
+                )
+            }
+        } else {
+            HStack {
+                metric("进度", progressValue, .appWarning, action: onOpenRecords)
+                metric("报价", quoteValue, .appDoc, action: onOpenFinanceFromQuote)
+                metric("待办", todoValue, .appWarning, action: onOpenTodoFilter)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    private func metric(_ title: String, _ value: String, _ color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func metricCard(title: String, value: String, color: Color, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                Label(title, systemImage: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(color)
+                    .lineLimit(1)
+                Text(value)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .frame(maxWidth: .infinity, minHeight: 58, alignment: .leading)
+            .padding(.horizontal, AppSpacing.normal)
+            .padding(.vertical, AppSpacing.tight)
+            .background(Color.appPrimarySurfaceSubtle, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        }
+        .buttonStyle(.plain)
+    }
+
 }
 
 struct ProjectDetailQuickActionSection: View {
@@ -87,13 +176,13 @@ struct ProjectDetailQuickActionSection: View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.tight) {
-                    actionChip("日志", systemImage: "book.pages.fill", color: .green, action: onAddLog)
-                    actionChip("记账", systemImage: "receipt.fill", color: .pink, action: onAddFinance)
-                    actionChip("联系人", systemImage: "person.crop.circle.badge.plus", color: .blue, action: onAddContact)
-                    actionChip("图纸", systemImage: "doc.viewfinder.fill", color: .indigo, action: onImportDrawing)
-                    actionChip("材料", systemImage: "shippingbox.fill", color: .orange, action: onAddMaterial)
-                    actionChip("报价", systemImage: "doc.text.fill", color: .brown, action: onAddQuote)
-                    actionChip("人工", systemImage: "person.2.fill", color: .purple, action: onAddLabor)
+                    actionChip("日志", systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
+                    actionChip("记账", systemImage: "receipt.fill", color: .appFinance, action: onAddFinance)
+                    actionChip("联系人", systemImage: "person.crop.circle.badge.plus", color: .appDoc, action: onAddContact)
+                    actionChip("图纸", systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
+                    actionChip("材料", systemImage: "shippingbox.fill", color: .appInventory, action: onAddMaterial)
+                    actionChip("报价", systemImage: "doc.text.fill", color: .appFinance, action: onAddQuote)
+                    actionChip("人工", systemImage: "person.2.fill", color: .appSuccess, action: onAddLabor)
                 }
                 .padding(.vertical, 2)
             }

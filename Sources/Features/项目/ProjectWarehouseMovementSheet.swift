@@ -421,7 +421,7 @@ private struct ProjectWarehouseMaterialSuggestionRow: View {
         Button(action: onSelect) {
             HStack(spacing: 10) {
                 Image(systemName: "shippingbox.fill")
-                    .foregroundStyle(.brown)
+                    .foregroundStyle(Color.appPrimaryAction)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(suggestion.name)

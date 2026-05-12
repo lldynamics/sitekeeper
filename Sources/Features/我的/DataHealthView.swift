@@ -8,6 +8,11 @@ struct DataHealthView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var storageIssuesVersion = UUID()
+    private let showsNavigationTitle: Bool
+
+    init(showsNavigationTitle: Bool = true) {
+        self.showsNavigationTitle = showsNavigationTitle
+    }
 
     private var projectIdSet: Set<UUID> {
         Set(store.projects.map(\.id))
@@ -122,6 +127,61 @@ struct DataHealthView: View {
         photoThumbnailCacheBytes + quickNoteThumbnailCacheBytes
     }
 
+    private var referencedPhotoFileNames: Set<String> {
+        let logNames = store.dailyLogs.flatMap(\.allPhotoFileNames)
+        let todoNames = store.siteTodos.flatMap { [$0.rectificationBeforePhotoFileName, $0.rectificationAfterPhotoFileName] }
+            .compactMap { $0 }
+        return Set(logNames + todoNames)
+    }
+
+    private var photoStorageBytes: Int {
+        referencedPhotoFileNames.reduce(0) { total, fileName in
+            total + PhotoStorage.fileSize(for: fileName)
+        }
+    }
+
+    private var projectDocumentBytes: Int {
+        Set(store.projectDocuments.map(\.fileName)).reduce(0) { total, fileName in
+            total + ProjectDocumentStorage.fileSize(for: fileName)
+        }
+    }
+
+    private var projectDrawingBytes: Int {
+        Set(store.projectDrawings.map(\.fileName)).reduce(0) { total, fileName in
+            total + DrawingStorage.fileSize(for: fileName)
+        }
+    }
+
+    private var quickNoteAttachmentBytes: Int {
+        let attachments = store.quickNotes.flatMap(\.attachments)
+            + store.constructionMethods.flatMap(\.attachments)
+            + store.constructionMethods.flatMap(\.tutorialAttachments)
+        let names = Set(attachments.map(\.fileName))
+        return names.reduce(0) { total, fileName in
+            total + QuickNoteAttachmentStorage.fileSize(for: fileName)
+        }
+    }
+
+    private var projectAssetBytes: Int {
+        projectDocumentBytes + projectDrawingBytes + quickNoteAttachmentBytes
+    }
+
+    private var cloudBackupBytes: Int {
+        (try? CloudBackupService.listBackups().reduce(0) { $0 + $1.byteSize }) ?? 0
+    }
+
+    private var historyRecordBytes: Int {
+        (try? JSONEncoder().encode(store.historyRecords).count) ?? 0
+    }
+
+    private var totalStorageBytes: Int {
+        photoStorageBytes
+            + projectAssetBytes
+            + mediaThumbnailCacheBytes
+            + cloudBackupBytes
+            + historyRecordBytes
+    }
+
     private var missingPhotoFileIssues: [DataHealthIssue] {
         var issues: [DataHealthIssue] = []
         for log in store.dailyLogs {
@@ -133,7 +193,7 @@ struct DataHealthView: View {
                         title: "日志照片缺失",
                         detail: issueDetail([projectName(log.projectId), log.date, fileName]),
                         systemImage: "photo.badge.exclamationmark",
-                        color: .red,
+                        color: .appRisk,
                         actionTitle: "打开日志",
                         route: .dailyLog(projectId: log.projectId, logId: log.id)
                     )
@@ -146,7 +206,7 @@ struct DataHealthView: View {
                         title: "日志照片缺失",
                         detail: issueDetail([projectName(log.projectId), log.date, photo.tag.displayName, photo.fileName]),
                         systemImage: "photo.badge.exclamationmark",
-                        color: .red,
+                        color: .appRisk,
                         actionTitle: "打开日志",
                         route: .dailyLog(projectId: log.projectId, logId: log.id)
                     )
@@ -162,7 +222,7 @@ struct DataHealthView: View {
                         title: "待办整改前照片缺失",
                         detail: issueDetail([projectName(todo.projectId), todo.title, "整改前", fileName]),
                         systemImage: "photo.badge.exclamationmark",
-                        color: .red,
+                        color: .appRisk,
                         actionTitle: "打开待办",
                         route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
                     )
@@ -176,7 +236,7 @@ struct DataHealthView: View {
                         title: "待办整改后照片缺失",
                         detail: issueDetail([projectName(todo.projectId), todo.title, "整改后", fileName]),
                         systemImage: "photo.badge.exclamationmark",
-                        color: .red,
+                        color: .appRisk,
                         actionTitle: "打开待办",
                         route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
                     )
@@ -196,7 +256,7 @@ struct DataHealthView: View {
                     title: "项目资料原文件缺失",
                     detail: issueDetail([projectName(document.projectId), document.title, document.fileName]),
                     systemImage: "doc.badge.exclamationmark",
-                    color: .red,
+                    color: .appRisk,
                     actionTitle: "打开资料",
                     route: .document(projectId: document.projectId, documentId: document.id)
                 )
@@ -213,7 +273,7 @@ struct DataHealthView: View {
                         title: "随手记附件缺失",
                         detail: issueDetail([note.title.isEmpty ? note.createdAt : note.title, attachment.displayName]),
                         systemImage: "paperclip.badge.ellipsis",
-                        color: .red,
+                        color: .appRisk,
                         actionTitle: "打开随手记",
                         route: .quickNote(noteId: note.id)
                     )
@@ -223,19 +283,19 @@ struct DataHealthView: View {
     }
 
     private var orphanPhotoFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanPhotoFiles, title: "孤立照片文件", systemImage: "photo.stack", color: .orange)
+        fileOnlyIssues(orphanPhotoFiles, title: "孤立照片文件", systemImage: "photo.stack", color: .appWarning)
     }
 
     private var orphanDrawingFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDrawingFiles, title: "孤立图纸文件", systemImage: "doc.viewfinder", color: .orange)
+        fileOnlyIssues(orphanDrawingFiles, title: "孤立图纸文件", systemImage: "doc.viewfinder", color: .appWarning)
     }
 
     private var orphanDocumentFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDocumentFiles, title: "孤立票据文件", systemImage: "doc.richtext", color: .orange)
+        fileOnlyIssues(orphanDocumentFiles, title: "孤立票据文件", systemImage: "doc.richtext", color: .appWarning)
     }
 
     private var orphanQuickNoteAttachmentIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: "孤立随手记附件", systemImage: "paperclip", color: .orange)
+        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: "孤立随手记附件", systemImage: "paperclip", color: .appWarning)
     }
 
     private var orphanAttachmentMappingIssues: [DataHealthIssue] {
@@ -248,7 +308,7 @@ struct DataHealthView: View {
                     title: "账目附件映射悬空",
                     detail: issueDetail([projectName(record.projectId), record.date, record.category.displayName, "缺失票据ID \(shortId(docId))"]),
                     systemImage: "receipt.badge.exclamationmark",
-                    color: .orange,
+                    color: .appWarning,
                     actionTitle: "打开账目",
                     route: .financialRecord(projectId: record.projectId, recordId: record.id)
                 )
@@ -267,7 +327,7 @@ struct DataHealthView: View {
                     title: "仓库附件映射悬空",
                     detail: issueDetail([projectName(movement.projectId), movement.date, material, "缺失附件ID \(shortId(docId))"]),
                     systemImage: "shippingbox.and.arrow.backward",
-                    color: .orange,
+                    color: .appWarning,
                     actionTitle: "打开仓库",
                     route: .warehouseProject(projectId: movement.projectId)
                 )
@@ -285,7 +345,7 @@ struct DataHealthView: View {
                 title: "资料关联账目缺失",
                 detail: issueDetail([projectName(document.projectId), document.title, "缺失账目ID \(shortId(linkedId))"]),
                 systemImage: "link.badge.plus",
-                color: .orange,
+                color: .appWarning,
                 actionTitle: "打开资料",
                 route: .document(projectId: document.projectId, documentId: document.id)
             )
@@ -424,15 +484,6 @@ struct DataHealthView: View {
                 systemImage: "shippingbox"
             )
         }
-        issues += store.paymentRecords.compactMap { item in
-                guard !projectIdSet.contains(item.projectId) else { return nil }
-                return manualInvalidProjectIssue(
-                    id: "invalid-payment-project-\(item.id.uuidString)",
-                    title: "付款记录项目关联无效",
-                    detail: issueDetail([item.date, item.method.displayName, "原项目ID \(shortId(item.projectId))"]),
-                    systemImage: "creditcard"
-                )
-            }
         return issues
     }
 
@@ -443,7 +494,7 @@ struct DataHealthView: View {
                 title: "存储错误记录",
                 detail: text,
                 systemImage: "externaldrive.badge.exclamationmark",
-                color: .red,
+                color: .appRisk,
                 actionTitle: nil,
                 route: nil
             )
@@ -500,6 +551,15 @@ struct DataHealthView: View {
                 LabeledContent("可自动修复项目关联", value: "\(autoFixableInvalidProjectRefs.count)")
                 LabeledContent("需手动处理项目关联", value: "\(manualInvalidProjectRefs.count)")
                 LabeledContent("存储错误记录", value: "\(storageIssues.count)")
+            }
+
+            Section("存储空间") {
+                LabeledContent("照片", value: QuickNoteAttachmentStorage.formattedFileSize(photoStorageBytes))
+                LabeledContent("资料（票据/图纸/附件）", value: QuickNoteAttachmentStorage.formattedFileSize(projectAssetBytes))
+                LabeledContent("备份（iCloud）", value: QuickNoteAttachmentStorage.formattedFileSize(cloudBackupBytes))
+                LabeledContent("历史计算", value: "\(store.historyRecords.count) 条 · \(QuickNoteAttachmentStorage.formattedFileSize(historyRecordBytes))")
+                LabeledContent("缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
+                LabeledContent("合计", value: QuickNoteAttachmentStorage.formattedFileSize(totalStorageBytes))
             }
 
             Section("Widget 与缓存") {
@@ -563,8 +623,10 @@ struct DataHealthView: View {
             issueSection(title: "无效项目关联（需手动处理）", items: manualInvalidProjectRefIssues)
             issueSection(title: "存储错误记录", items: storageIssueRows)
         }
-        .navigationTitle("数据健康检查")
-        .navigationBarTitleDisplayMode(.inline)
+        .modifier(OptionalInlineTitleModifier(
+            isEnabled: showsNavigationTitle,
+            title: "数据健康检查"
+        ))
         .alert("修复引用与关联？", isPresented: $showReferenceFixConfirm) {
             Button("取消", role: .cancel) {}
             Button("修复", role: .destructive) {
@@ -637,7 +699,7 @@ struct DataHealthView: View {
                 if let actionTitle = item.actionTitle {
                     Text(canNavigate ? actionTitle : "\(actionTitle)（目标不可用）")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(canNavigate ? .orange : .secondary)
+                        .foregroundStyle(canNavigate ? .appWarning : .secondary)
                 }
             }
         }
@@ -704,7 +766,7 @@ struct DataHealthView: View {
             title: title,
             detail: detail,
             systemImage: systemImage,
-            color: .orange,
+            color: .appWarning,
             actionTitle: "打开记录",
             route: route
         )
@@ -722,7 +784,7 @@ struct DataHealthView: View {
             title: title,
             detail: detail,
             systemImage: systemImage,
-            color: .orange,
+            color: .appWarning,
             actionTitle: route == nil ? "需手动处理" : "打开记录",
             route: route
         )
@@ -877,6 +939,21 @@ struct DataHealthView: View {
             defaultFilename: "数据健康报告.txt"
         )
         showExporter = true
+    }
+}
+
+private struct OptionalInlineTitleModifier: ViewModifier {
+    let isEnabled: Bool
+    let title: String
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+        } else {
+            content
+        }
     }
 }
 

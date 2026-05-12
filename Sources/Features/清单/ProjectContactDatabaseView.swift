@@ -3,6 +3,7 @@ import UniformTypeIdentifiers
 
 struct ProjectContactDatabaseView: View {
     @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
     let focusedContactId: UUID?
     @State private var searchText = ""
     @State private var selectedProjectId: UUID?
@@ -16,11 +17,14 @@ struct ProjectContactDatabaseView: View {
         self.focusedContactId = focusedContactId
     }
 
-    private var filteredContacts: [ProjectContact] {
-        let scopedContacts = store.projectContacts.filter { contact in
+    private var scopedContacts: [ProjectContact] {
+        store.projectContacts.filter { contact in
             guard let selectedProjectId else { return true }
             return contact.projectId == selectedProjectId
         }
+    }
+
+    private var filteredContacts: [ProjectContact] {
         return SearchMatcher.filter(
             scopedContacts,
             keyword: searchText,
@@ -33,6 +37,16 @@ struct ProjectContactDatabaseView: View {
             extraFields: { contact in
                 [projectName(contact.projectId)]
             }
+        )
+    }
+
+    private var searchSuggestions: [RealtimeSearchSuggestion] {
+        RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: searchText,
+            categories: [.contact],
+            projects: store.projects,
+            contacts: scopedContacts,
+            limit: 6
         )
     }
 
@@ -53,16 +67,28 @@ struct ProjectContactDatabaseView: View {
             emptyTitle: "暂无联系人",
             emptySystemImage: "person.crop.rectangle.stack",
             emptyDescription: Text("项目联系人会统一显示在这里，可按项目筛选。"),
+            searchSuggestions: searchSuggestions,
             onSelect: { contact in
                 editingContact = contact
             },
-            onDelete: deleteContacts,
+            onSelectSuggestion: { suggestion in
+                guard suggestion.category == .contact else { return }
+                guard let contact = store.projectContacts.first(where: { $0.id == suggestion.entityId }) else { return }
+                selectedProjectId = contact.projectId
+                editingContact = contact
+            },
+            deleteConfig: SearchableDatabaseDeleteConfig(
+                title: "删除联系人？",
+                itemNoun: "联系人"
+            ),
+            onDeleteConfirmed: deleteContacts,
             rowContent: { contact in
                 ContactPickerRowView(
                     contact: contact,
                     projectName: projectName(contact.projectId),
                     showsProjectName: true,
-                    showsPhoneActions: false
+                    showsPhoneActions: false,
+                    crmSummary: contactCRMSummary(for: contact)
                 )
             },
             headerContent: {
@@ -84,7 +110,8 @@ struct ProjectContactDatabaseView: View {
                                             contact: contact,
                                             projectName: projectName(contact.projectId),
                                             showsProjectName: true,
-                                            showsPhoneActions: false
+                                            showsPhoneActions: false,
+                                            crmSummary: contactCRMSummary(for: contact)
                                         )
                                     }
                                     .buttonStyle(.plain)
@@ -167,7 +194,7 @@ struct ProjectContactDatabaseView: View {
                 .foregroundStyle(isSelected ? .white : .primary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.orange : Color(.secondarySystemBackground))
+                .background(isSelected ? Color.appWarning : Color(.secondarySystemBackground))
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -195,9 +222,8 @@ struct ProjectContactDatabaseView: View {
         store.scheduleSave()
     }
 
-    private func deleteContacts(_ offsets: IndexSet, _ items: [ProjectContact]) {
-        let ids = offsets.compactMap { items.indices.contains($0) ? items[$0].id : nil }
-        deleteContacts(Set(ids))
+    private func deleteContacts(_ items: [ProjectContact]) {
+        deleteContacts(Set(items.map(\.id)))
     }
 
     private func exportContactsCSV() {
@@ -227,6 +253,57 @@ struct ProjectContactDatabaseView: View {
         values
             .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
             .joined(separator: ",")
+    }
+
+    private func contactCRMSummary(for contact: ProjectContact) -> String? {
+        let cluster = contactCluster(for: contact)
+        let projectIds = Array(Set(cluster.map(\.projectId)))
+        guard !projectIds.isEmpty else { return nil }
+
+        let sortedProjects = projectIds.sorted { lhs, rhs in
+            recentActivityDate(for: lhs) > recentActivityDate(for: rhs)
+        }
+        let projectNames = sortedProjects
+            .prefix(2)
+            .map { projectName($0) }
+            .filter { !$0.isEmpty && $0 != "未知项目" }
+        let projectPreview = projectNames.isEmpty ? "暂无项目" : projectNames.joined(separator: "、")
+        let unpaid = sortedProjects.reduce(0.0) { total, projectId in
+            total + unpaidAmount(for: projectId)
+        }
+
+        if unpaid > 0 {
+            return "最近合作：\(projectPreview) · 待收 \(ReportBuilder.money(unpaid))"
+        }
+        return "最近合作：\(projectPreview)"
+    }
+
+    private func contactCluster(for contact: ProjectContact) -> [ProjectContact] {
+        let phoneKey = normalizedPhone(contact.phone)
+        if !phoneKey.isEmpty {
+            return store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
+        }
+        let nameKey = contact.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !nameKey.isEmpty else { return [contact] }
+        return store.projectContacts.filter {
+            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nameKey
+        }
+    }
+
+    private func recentActivityDate(for projectId: UUID) -> Date {
+        let summaryDate = projectStore.projectActivitySummary(for: projectId).latestActivityDate
+        let startDate = store.projects.first(where: { $0.id == projectId })
+            .flatMap { Formatters.parseDateOrDateTime($0.startDate) }
+            ?? .distantPast
+        return max(summaryDate ?? .distantPast, startDate)
+    }
+
+    private func unpaidAmount(for projectId: UUID) -> Double {
+        guard let project = store.projects.first(where: { $0.id == projectId }) else { return 0 }
+        let contract = project.contractAmountValue.doubleValue
+        let paidFromSummary = projectStore.projectActivitySummary(for: projectId).collectedIncomeAmount
+        let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
+        return max(contract - paid, 0)
     }
 }
 

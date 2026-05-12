@@ -4,17 +4,17 @@ import UniformTypeIdentifiers
 struct LightingCircuitPlannerView: View {
     @Environment(DataStore.self) private var store
 
-    @AppStorage("calc.lightingPlanner.planName") private var savedPlanName: String = ""
-    @AppStorage("calc.lightingPlanner.supplyType") private var savedSupplyTypeRawValue: String = CircuitSupplyType.singlePhase.rawValue
-    @AppStorage("calc.lightingPlanner.voltage") private var savedVoltage: String = "220"
-    @AppStorage("calc.lightingPlanner.powerFactor") private var savedPowerFactor: String = "0.90"
-    @AppStorage("calc.lightingPlanner.demandFactor") private var savedDemandFactor: String = "0.90"
-    @AppStorage("calc.lightingPlanner.breakerFactor") private var savedBreakerFactor: String = "1.25"
-    @AppStorage("calc.lightingPlanner.wireFactor") private var savedWireFactor: String = "1.15"
-    @AppStorage("calc.lightingPlanner.mainBreakerLimitA") private var savedMainBreakerLimitA: String = "100"
-    @AppStorage("calc.lightingPlanner.imbalanceLimitPercent") private var savedImbalanceLimitPercent: String = "15"
-    @AppStorage("calc.lightingPlanner.isCopper") private var savedIsCopper: Bool = true
-    @AppStorage("calc.lightingPlanner.rows") private var savedRowsJSON: String = ""
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerPlanName) private var savedPlanName: String = ""
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerSupplyType) private var savedSupplyTypeRawValue: String = CircuitSupplyType.singlePhase.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerVoltage) private var savedVoltage: String = "220"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerPowerFactor) private var savedPowerFactor: String = "0.90"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerDemandFactor) private var savedDemandFactor: String = "0.90"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerBreakerFactor) private var savedBreakerFactor: String = "1.25"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerWireFactor) private var savedWireFactor: String = "1.15"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerMainBreakerLimitA) private var savedMainBreakerLimitA: String = "100"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerImbalanceLimitPercent) private var savedImbalanceLimitPercent: String = "15"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerIsCopper) private var savedIsCopper: Bool = true
+    @AppStorage(UserPreferenceKeys.Calculator.lightingPlannerRows) private var savedRowsJSON: String = ""
 
     @State private var selectedProjectId: UUID?
     @State private var selectedPlanId: UUID?
@@ -404,6 +404,7 @@ struct LightingCircuitPlannerView: View {
         }
         resultModel = CalculationResult(
             headline: warnings.isEmpty ? "未触发预警" : "\(warnings.count) 项预警",
+            formula: "单回路电流 I=P(kW)×1000÷(U×功率因数)，总电流为各回路电流求和",
             sections: [
                 .init(title: "汇总", items: summaryItems),
                 .init(title: "回路明细", items: rowItems),

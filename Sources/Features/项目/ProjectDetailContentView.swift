@@ -14,8 +14,8 @@ struct ProjectDetailContentView<JumpBar: View, Header: View, QuickActions: View,
             List {
                 jumpBar()
                 header()
-                quickActions()
                 modePicker()
+                quickActions()
                 content()
             }
             .onChange(of: scrollRequest?.id) { _, _ in

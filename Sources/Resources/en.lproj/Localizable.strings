@@ -16,7 +16,7 @@
 "知道了" = "Got it";
 "数据读写异常" = "Data Read/Write Error";
 "今日工作台" = "Today's Dashboard";
-"今日关注工程" = "Today's Focused Projects";
+"今日关注工程" = "Active Projects";
 "当前：" = "Current: ";
 "选择工程后，快捷记录会自动带入项目" = "After selecting a project, quick records auto-populate the project";
 "按风险排序" = "Sort by Risk";
@@ -290,7 +290,6 @@
 "删除项目及全部关联数据" = "Delete Project & All Related Data";
 "编辑资料" = "Edit Info";
 "导出项目交付包 ZIP" = "Export Delivery Package ZIP";
-"导出施工日报" = "Export Daily Report";
 "当前设备不支持扫描" = "Device doesn't support scanning";
 "请在支持相机扫描的 iPhone 或 iPad 上使用" = "Please use on an iPhone or iPad that supports camera scanning.";
 "项目记账" = "Project Accounting";
@@ -729,6 +728,9 @@
 "widget_label_project_progress" = "Progress";
 "widget_label_material_types" = "Materials";
 "widget_label_low_stock" = "Low Stock";
+"widget_label_missing_receipt" = "Missing Receipt";
+"widget_label_price_spike" = "Price Spike";
+"widget_label_backup_overdue" = "Backup Overdue";
 "widget_pending_items_text" = "pending";
 "widget_no_active_projects" = "No active projects";
 "widget_project_status_active" = "Active";
@@ -737,3 +739,5 @@
 "widget_project_status_settled" = "Settled";
 "widget_project_status_archived" = "Archived";
 "widget_project_status_unknown" = "Unknown";
+"上一个" = "Previous";
+"下一个" = "Next";

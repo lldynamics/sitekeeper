@@ -47,15 +47,7 @@ struct QuickNoteAttachmentStrip: View {
             ZStack {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color(.secondarySystemBackground))
-                if let image = previewImage(for: attachment) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(systemName: attachment.attachmentKind.systemImage)
-                        .font(.title2)
-                        .foregroundStyle(.orange)
-                }
+                attachmentPreview(attachment)
                 if attachment.attachmentKind == .video {
                     Image(systemName: "play.circle.fill")
                         .font(.title2)
@@ -73,15 +65,33 @@ struct QuickNoteAttachmentStrip: View {
         .frame(width: 82)
     }
 
-    private func previewImage(for attachment: QuickNoteAttachment) -> UIImage? {
+    @ViewBuilder
+    private func attachmentPreview(_ attachment: QuickNoteAttachment) -> some View {
         switch attachment.attachmentKind {
         case .photo, .drawing:
-            guard let data = QuickNoteAttachmentStorage.data(for: attachment.fileName) else { return nil }
-            return UIImage(data: data)
+            AsyncQuickNoteAttachmentImageView(fileName: attachment.fileName) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Image(systemName: attachment.attachmentKind.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(.appWarning)
+            }
         case .video:
-            return QuickNoteAttachmentStorage.videoThumbnail(for: attachment.fileName)
+            if let image = QuickNoteAttachmentStorage.videoThumbnail(for: attachment.fileName) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image(systemName: attachment.attachmentKind.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(.appWarning)
+            }
         case .audio, .file:
-            return nil
+            Image(systemName: attachment.attachmentKind.systemImage)
+                .font(.title2)
+                .foregroundStyle(.appWarning)
         }
     }
 
@@ -103,6 +113,8 @@ struct QuickNoteAttachmentStrip: View {
 struct QuickNoteAttachmentPreview: View {
     @Environment(\.dismiss) private var dismiss
     let attachment: QuickNoteAttachment
+    @State private var previewImage: UIImage?
+    @State private var attemptedImageLoad = false
 
     var body: some View {
         NavigationStack {
@@ -130,18 +142,35 @@ struct QuickNoteAttachmentPreview: View {
 
     @ViewBuilder
     private var imagePreview: some View {
-        if let data = QuickNoteAttachmentStorage.data(for: attachment.fileName),
-           let image = UIImage(data: data) {
-            QuickNoteImagePreviewController(image: image)
+        if let previewImage {
+            QuickNoteImagePreviewController(image: previewImage)
                 .ignoresSafeArea(edges: .bottom)
-        } else {
+        } else if attemptedImageLoad {
             ContentUnavailableView("文件不存在", systemImage: "exclamationmark.triangle")
+        } else {
+            ProgressView("加载中…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task(id: attachment.fileName) {
+                    await loadImagePreview()
+                }
         }
+    }
+
+    private func loadImagePreview() async {
+        attemptedImageLoad = false
+        guard let data = await QuickNoteAttachmentStorage.dataAsync(for: attachment.fileName),
+              let image = UIImage(data: data) else {
+            previewImage = nil
+            attemptedImageLoad = true
+            return
+        }
+        previewImage = image
+        attemptedImageLoad = true
     }
 
     @ViewBuilder
     private var videoPreview: some View {
-        if QuickNoteAttachmentStorage.data(for: attachment.fileName) != nil {
+        if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
             VideoPlayer(player: AVPlayer(url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)))
         } else {
             ContentUnavailableView("视频文件不存在", systemImage: "exclamationmark.triangle")
@@ -150,7 +179,7 @@ struct QuickNoteAttachmentPreview: View {
 
     @ViewBuilder
     private var audioPreview: some View {
-        if QuickNoteAttachmentStorage.data(for: attachment.fileName) != nil {
+        if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
             QuickNoteAudioPlayer(url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName))
                 .padding()
         } else {
@@ -160,8 +189,8 @@ struct QuickNoteAttachmentPreview: View {
 
     @ViewBuilder
     private var filePreview: some View {
-        let url = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
-        if FileManager.default.fileExists(atPath: url.path) {
+        if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
+            let url = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
             VStack(spacing: 0) {
                 QuickNoteFilePreviewController(url: url)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -201,7 +230,7 @@ struct QuickNoteAudioPlayer: View {
         VStack(spacing: 16) {
             Image(systemName: "waveform.circle.fill")
                 .font(.system(size: 64))
-                .foregroundStyle(.orange)
+                .foregroundStyle(.appWarning)
             Slider(value: Binding(
                 get: { currentTime },
                 set: { seek(to: $0) }

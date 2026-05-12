@@ -77,6 +77,7 @@ struct ProjectDetailAnchorRequest: Identifiable {
 enum ProjectDetailPresentation: Identifiable, Equatable {
     case quickAdd(DetailSheet)
     case editProject
+    case deliveryGuide
     case addContact
     case addFinancial
     case documentScanSetup
@@ -88,6 +89,8 @@ enum ProjectDetailPresentation: Identifiable, Equatable {
             return "quickAdd-\(sheet.rawValue)"
         case .editProject:
             return "editProject"
+        case .deliveryGuide:
+            return "deliveryGuide"
         case .addContact:
             return "addContact"
         case .addFinancial:

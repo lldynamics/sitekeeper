@@ -22,7 +22,7 @@ enum ProjectFileCategory: CaseIterable {
         case .images: return "施工日志、待办整改、随手记图片"
         case .drawings: return "DWG、DXF、PDF 图纸"
         case .documents: return "发票、收据、合同、施工资料"
-        case .quickNoteAttachments: return "视频、语音、文档、表格等附件"
+        case .quickNoteAttachments: return "视频、文档、表格等附件"
         }
     }
 
@@ -37,10 +37,10 @@ enum ProjectFileCategory: CaseIterable {
 
     var tint: Color {
         switch self {
-        case .images: return .blue
-        case .drawings: return .indigo
-        case .documents: return .brown
-        case .quickNoteAttachments: return .orange
+        case .images: return .appDoc
+        case .drawings: return .appPrimaryAction
+        case .documents: return .appPrimaryAction
+        case .quickNoteAttachments: return .appPrimaryAction
         }
     }
 }
@@ -104,24 +104,28 @@ enum ProjectFileThumbnailToken: Hashable {
         }
     }
 
-    func loadImage() -> UIImage? {
+    func loadImageAsync() async -> UIImage? {
         switch self {
         case .photo(let fileName):
-            return PhotoStorage.thumbnail(for: fileName)
+            return await PhotoStorage.thumbnailAsync(for: fileName)
         case .quickNote(let kind, let fileName):
             switch kind {
             case .photo, .drawing:
-                guard let data = QuickNoteAttachmentStorage.data(for: fileName) else { return nil }
-                return downsampleImage(data, maxPixelSize: 256)
+                guard let data = await QuickNoteAttachmentStorage.dataAsync(for: fileName) else { return nil }
+                return await Task.detached(priority: .utility) {
+                    Self.downsampleImage(data, maxPixelSize: 256)
+                }.value
             case .video:
-                return QuickNoteAttachmentStorage.videoThumbnail(for: fileName)
+                return await Task.detached(priority: .utility) {
+                    QuickNoteAttachmentStorage.videoThumbnail(for: fileName)
+                }.value
             case .audio, .file:
                 return nil
             }
         }
     }
 
-    private func downsampleImage(_ data: Data, maxPixelSize: CGFloat) -> UIImage? {
+    private static func downsampleImage(_ data: Data, maxPixelSize: CGFloat) -> UIImage? {
         let options: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
         guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
         let thumbnailOptions: CFDictionary = [

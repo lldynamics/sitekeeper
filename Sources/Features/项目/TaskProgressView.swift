@@ -258,7 +258,7 @@ struct TaskProgressView: View {
                 let span = timelineSpan(task, range: range, width: proxy.size.width)
                 ZStack(alignment: .leading) {
                     Capsule()
-                        .fill(Color.gray.opacity(0.16))
+                        .fill(Color.appMutedSurface)
                         .frame(height: 12)
                     Capsule()
                         .fill(taskColor(task).opacity(0.28))
@@ -381,9 +381,9 @@ struct TaskProgressView: View {
     }
 
     private func taskColor(_ task: ProgressTask) -> Color {
-        if task.clampedCompletion >= 1 { return .green }
-        if isOverdue(task) { return .red }
-        return .orange
+        if task.clampedCompletion >= 1 { return .appSuccess }
+        if isOverdue(task) { return .appRisk }
+        return .appWarning
     }
 
     private func timelineRange(for tasks: [ProgressTask]) -> DateInterval? {

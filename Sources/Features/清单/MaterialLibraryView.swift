@@ -1,6 +1,16 @@
 import SwiftUI
 
 struct MaterialLibraryView: View {
+    private enum PendingMaterialDeleteTarget {
+        case preset(CommonMaterial)
+        case user(UserMaterial)
+    }
+
+    private enum MaterialSheetTargetMode: String, CaseIterable, Hashable {
+        case existing
+        case create
+    }
+
     private enum AppendMaterialField: Hashable {
         case quantity
         case unitPrice
@@ -15,10 +25,32 @@ struct MaterialLibraryView: View {
     @State private var priceEditorContext: MaterialPriceEditorContext?
     @State private var pendingAddContext: PendingMaterialAppendContext?
     @State private var pendingAddQuantity = "1"
+    @State private var selectedDefaultMaterialSheetDraftID: UUID?
     @State private var pendingAddProjectId: UUID?
     @State private var pendingAddUnitPrice = ""
+    @State private var pendingAddTargetMode: MaterialSheetTargetMode = .existing
+    @State private var pendingAddDraftId: UUID?
+    @State private var pendingAddDraftTitle = ""
+    @State private var pendingDeleteTarget: PendingMaterialDeleteTarget?
+    @State private var showDeleteConfirm = false
+    @State private var operationMessage: String?
+    @State private var isBatchSelectionMode = false
+    @State private var selectedBatchMaterialContextsByKey: [String: PendingMaterialAppendContext] = [:]
+    @State private var pendingBatchAddContext: PendingBatchMaterialAppendContext?
+    @State private var pendingBatchAddQuantity = "1"
+    @State private var recentlyAddedDraftID: UUID?
+    @State private var recentlyAddedDraftTitle = ""
+    @State private var recentlyAddedItemCount = 0
+    @State private var showOpenMaterialSheetPrompt = false
+    @State private var navigateToMaterialSheet = false
+    @State private var deferredOperationMessage: String?
     @FocusState private var appendMaterialFocusedField: AppendMaterialField?
     @AppStorage("recentMaterialSearches") private var recentSearchKeywordsRaw = ""
+    @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) private var promptAfterAdd = true
+    @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) private var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+    @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) private var lastAppendDraftIDRaw = ""
+    @AppStorage(UserPreferenceKeys.materialLibraryLastProjectID) private var lastAppendProjectIDRaw = ""
+    @AppStorage(UserPreferenceKeys.materialLibraryKeepAppending) private var keepAppendingAfterAdd = false
 
     private var visiblePresetMaterials: [CommonMaterial] {
         MaterialLibrary.all.filter { !isPresetHidden($0) }
@@ -118,6 +150,31 @@ struct MaterialLibraryView: View {
         !store.deletedUserMaterials.isEmpty || !store.hiddenPresetKeys.isEmpty
     }
 
+    private var selectedBatchMaterialContexts: [PendingMaterialAppendContext] {
+        selectedBatchMaterialContextsByKey.values
+            .sorted { lhs, rhs in
+                lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
+            }
+    }
+
+    private var activeMaterialSheetDraftIDs: [UUID] {
+        activeMaterialSheetDrafts.map(\.id)
+    }
+
+    private var defaultTargetMaterialSheetDraft: MaterialSheetDraft? {
+        let activeDrafts = activeMaterialSheetDrafts
+        guard !activeDrafts.isEmpty else { return nil }
+        if let selectedDefaultMaterialSheetDraftID,
+           let selected = activeDrafts.first(where: { $0.id == selectedDefaultMaterialSheetDraftID }) {
+            return selected
+        }
+        if let rememberedId = UUID(uuidString: lastAppendDraftIDRaw),
+           let remembered = activeDrafts.first(where: { $0.id == rememberedId }) {
+            return remembered
+        }
+        return activeDrafts.first
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
@@ -140,7 +197,7 @@ struct MaterialLibraryView: View {
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.gray.opacity(0.15))
+                        .background(Color.appPrimarySurfaceSubtle)
                         .foregroundStyle(.primary)
                         .clipShape(Capsule())
                     }
@@ -150,6 +207,8 @@ struct MaterialLibraryView: View {
                 .padding(.horizontal).padding(.vertical, 8)
             }
             .background(.ultraThinMaterial)
+
+            defaultMaterialSheetTargetBar
 
             List {
                 if !recentSearchKeywords.isEmpty && searchText.isEmpty {
@@ -176,14 +235,14 @@ struct MaterialLibraryView: View {
                             case .preset(let material):
                                 presetMaterialRow(material)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(.orange)
-                                        Button("删除材料", role: .destructive) { hidePresetMaterial(material) }
+                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(Color.appWarning)
+                                        Button("删除材料", role: .destructive) { requestDeletePresetMaterial(material) }
                                     }
                             case .user(let material):
                                 userMaterialRow(material)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(.orange)
-                                        Button("删除", role: .destructive) { deleteUserMaterial(material) }
+                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(Color.appWarning)
+                                        Button("删除", role: .destructive) { requestDeleteUserMaterial(material) }
                                     }
                             }
                         }
@@ -195,7 +254,7 @@ struct MaterialLibraryView: View {
                         ForEach(filteredUser) { mat in
                             userMaterialRow(mat)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button("删除", role: .destructive) { deleteUserMaterial(mat) }
+                                    Button("删除", role: .destructive) { requestDeleteUserMaterial(mat) }
                                 }
                         }
                     }
@@ -205,7 +264,7 @@ struct MaterialLibraryView: View {
                     ForEach(filteredPreset) { mat in
                         presetMaterialRow(mat)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button("删除材料", role: .destructive) { hidePresetMaterial(mat) }
+                                Button("删除材料", role: .destructive) { requestDeletePresetMaterial(mat) }
                             }
                     }
                 }
@@ -232,7 +291,22 @@ struct MaterialLibraryView: View {
         }
         .navigationTitle("材料库")
         .toolbar {
-            Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel("添加自定义材料")
+            if isBatchSelectionMode {
+                Button("取消") {
+                    exitBatchSelectionMode()
+                }
+                Button {
+                    openBatchAppendSheet()
+                } label: {
+                    Label("批量加入", systemImage: "square.and.arrow.down.on.square")
+                }
+                .disabled(selectedBatchMaterialContexts.isEmpty)
+            } else {
+                Button("批量") {
+                    isBatchSelectionMode = true
+                }
+                Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel("添加自定义材料")
+            }
         }
         .sheet(isPresented: $showAddSheet) {
             AddMaterialSheet(
@@ -298,15 +372,22 @@ struct MaterialLibraryView: View {
                         TextField("单价（可选）", text: $pendingAddUnitPrice)
                             .keyboardType(.decimalPad)
                             .focused($appendMaterialFocusedField, equals: .unitPrice)
-                        Picker("归属项目", selection: $pendingAddProjectId) {
-                            Text("无归属").tag(nil as UUID?)
-                            ForEach(store.projects) { project in
-                                Text(project.name).tag(project.id as UUID?)
-                            }
+                        Toggle("添加后继续", isOn: $keepAppendingAfterAdd)
+                    }
+                    Section("默认目标材料单") {
+                        if let draft = defaultTargetMaterialSheetDraft {
+                            Text(materialSheetDraftPickerTitle(draft))
+                            Text("可在材料库顶部切换默认目标。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Text("暂无可用材料单，添加时会自动创建新的材料单。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
-                .navigationTitle("添加到材料清单")
+                .navigationTitle("添加到材料单")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
@@ -316,8 +397,19 @@ struct MaterialLibraryView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("添加") {
-                            confirmAppendMaterial(context)
-                            pendingAddContext = nil
+                            let closesSheetAfterAppend = !keepAppendingAfterAdd
+                            let appended = confirmAppendMaterialToDefaultSheet(
+                                context,
+                                showPostAddPrompt: false,
+                                deferToastUntilSheetDismissal: closesSheetAfterAppend
+                            )
+                            guard appended else { return }
+                            if keepAppendingAfterAdd {
+                                pendingAddQuantity = "1"
+                                appendMaterialFocusedField = .quantity
+                            } else {
+                                pendingAddContext = nil
+                            }
                         }
                     }
                     KeyboardNavigationToolbar(
@@ -326,6 +418,10 @@ struct MaterialLibraryView: View {
                     )
                 }
             }
+            .operationToast(message: $operationMessage)
+        }
+        .sheet(item: $pendingBatchAddContext) { context in
+            batchAppendMaterialSheet(context)
         }
         .sheet(isPresented: $showCategoryManager) {
             NavigationStack {
@@ -336,6 +432,129 @@ struct MaterialLibraryView: View {
             if !isShowing, let selectedCategory, !availableCategories.contains(selectedCategory) {
                 self.selectedCategory = nil
             }
+        }
+        .confirmationDialog("删除材料", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                confirmPendingDeleteMaterial()
+            }
+            Button("取消", role: .cancel) {
+                pendingDeleteTarget = nil
+            }
+        } message: {
+            Text(deleteConfirmMessage)
+        }
+        .operationToast(message: $operationMessage)
+        .safeAreaInset(edge: .bottom) {
+            if isBatchSelectionMode {
+                batchAppendActionBar
+            }
+        }
+        .alert("已添加到材料单", isPresented: $showOpenMaterialSheetPrompt) {
+            Button("不再提示") {
+                promptAfterAdd = false
+            }
+            Button("稍后", role: .cancel) {}
+            Button("前往材料单") {
+                navigateToMaterialSheet = true
+            }
+        } message: {
+            let title = recentlyAddedDraftTitle.isEmpty ? "未命名材料单" : recentlyAddedDraftTitle
+            if recentlyAddedItemCount > 1 {
+                Text("已将 \(recentlyAddedItemCount) 项材料添加到「\(title)」")
+            } else {
+                Text("已添加到「\(title)」")
+            }
+        }
+        .navigationDestination(isPresented: $navigateToMaterialSheet) {
+            MaterialSheetView(initialDraftID: recentlyAddedDraftID)
+        }
+        .onAppear {
+            ensureDefaultMaterialSheetSelection()
+        }
+        .onChange(of: activeMaterialSheetDraftIDs) { _, _ in
+            ensureDefaultMaterialSheetSelection()
+        }
+        .onChange(of: selectedDefaultMaterialSheetDraftID) { _, newValue in
+            guard let newValue else {
+                lastAppendDraftIDRaw = ""
+                return
+            }
+            guard let draft = activeMaterialSheetDrafts.first(where: { $0.id == newValue }) else { return }
+            lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+            lastAppendDraftIDRaw = newValue.uuidString
+            lastAppendProjectIDRaw = draft.projectId?.uuidString ?? ""
+        }
+        .onChange(of: pendingAddContext?.id) { _, newValue in
+            guard newValue == nil else { return }
+            flushDeferredOperationMessage()
+        }
+        .onChange(of: pendingBatchAddContext?.id) { _, newValue in
+            guard newValue == nil else { return }
+            flushDeferredOperationMessage()
+        }
+    }
+
+    private var defaultMaterialSheetTargetBar: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            if let draft = defaultTargetMaterialSheetDraft {
+                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
+                    Label("默认材料单", systemImage: "tray.full.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.appPrimaryAction)
+                    Spacer()
+                    Picker("默认材料单", selection: $selectedDefaultMaterialSheetDraftID) {
+                        ForEach(activeMaterialSheetDrafts) { item in
+                            Text(materialSheetDraftPickerTitle(item)).tag(item.id as UUID?)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                }
+
+                HStack(alignment: .top, spacing: AppSpacing.tight) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(draft.title.isEmpty ? "未命名材料单" : draft.title)
+                            .font(.subheadline.weight(.medium))
+                            .lineLimit(1)
+                        Text("项目归属：\(projectName(for: draft.projectId) ?? "无归属") · 当前 \(draft.items.count) 项\(recentlyAddedSummary(for: draft))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: AppSpacing.tight)
+                    Button {
+                        recentlyAddedDraftID = draft.id
+                        navigateToMaterialSheet = true
+                    } label: {
+                        Image(systemName: "arrow.right.circle.fill")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.appPrimaryAction)
+                    .accessibilityLabel("打开当前材料单")
+                }
+            } else {
+                HStack(spacing: AppSpacing.tight) {
+                    Label("暂无默认材料单", systemImage: "tray")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button {
+                        createAndSelectDefaultMaterialSheetDraft()
+                    } label: {
+                        Label("创建", systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.small)
+                    .tint(Color.appPrimaryAction)
+                }
+            }
+        }
+        .padding(.horizontal)
+        .padding(.vertical, AppSpacing.tight)
+        .background(Color(uiColor: .secondarySystemGroupedBackground))
+        .overlay(alignment: .bottom) {
+            Divider()
         }
     }
 
@@ -354,18 +573,20 @@ struct MaterialLibraryView: View {
     private func presetMaterialRow(_ item: CommonMaterial) -> some View {
         let entry = priceEntry(for: item)
         let hasPrice = entry?.referencePrice.isEmpty == false
+        let context = makeAppendContext(
+            name: item.name,
+            specification: item.specification,
+            unit: item.unit,
+            key: materialKey(item),
+            priceEntry: entry
+        )
         return materialRowContent(
             name: item.name, spec: item.specification, unit: item.unit,
             hasPrice: hasPrice, price: entry?.referencePrice,
+            appendContext: context,
             onEdit: { openPriceEditSheet(name: item.name, spec: item.specification, unit: item.unit, category: item.category.rawValue, entry: entry) },
             onAdd: {
-                prepareAppendMaterial(
-                    name: item.name,
-                    specification: item.specification,
-                    unit: item.unit,
-                    key: materialKey(item),
-                    priceEntry: entry
-                )
+                prepareAppendMaterial(context)
             }
         )
     }
@@ -375,18 +596,20 @@ struct MaterialLibraryView: View {
     private func userMaterialRow(_ item: UserMaterial) -> some View {
         let entry = priceEntry(forUser: item)
         let hasPrice = entry?.referencePrice.isEmpty == false
+        let context = makeAppendContext(
+            name: item.name,
+            specification: item.specification,
+            unit: item.unit,
+            key: materialKey(name: item.name, specification: item.specification, unit: item.unit),
+            priceEntry: entry
+        )
         return materialRowContent(
             name: item.name, spec: item.specification, unit: item.unit,
             hasPrice: hasPrice, price: entry?.referencePrice,
+            appendContext: context,
             onEdit: { openPriceEditSheet(name: item.name, spec: item.specification, unit: item.unit, category: item.category, entry: entry) },
             onAdd: {
-                prepareAppendMaterial(
-                    name: item.name,
-                    specification: item.specification,
-                    unit: item.unit,
-                    key: materialKey(name: item.name, specification: item.specification, unit: item.unit),
-                    priceEntry: entry
-                )
+                prepareAppendMaterial(context)
             }
         )
     }
@@ -396,46 +619,254 @@ struct MaterialLibraryView: View {
     private func materialRowContent(
         name: String, spec: String, unit: String,
         hasPrice: Bool, price: String?,
+        appendContext: PendingMaterialAppendContext,
         onEdit: @escaping () -> Void,
         onAdd: @escaping () -> Void
     ) -> some View {
-        HStack {
-            Button(action: onEdit) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(name).font(.body.weight(.medium))
-                    Text(spec).font(.caption).foregroundStyle(.secondary)
+        let isSelected = selectedBatchMaterialContextsByKey[appendContext.key] != nil
+        return HStack {
+            if isBatchSelectionMode {
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .foregroundStyle(isSelected ? Color.appPrimaryAction : .secondary)
+                    .font(.title3)
+            }
+
+            Group {
+                if isBatchSelectionMode {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(name).font(.body.weight(.medium))
+                        Text(spec).font(.caption).foregroundStyle(.secondary)
+                    }
+                } else {
+                    Button(action: onEdit) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(name).font(.body.weight(.medium))
+                            Text(spec).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
                 }
             }
-            .buttonStyle(.plain)
 
             Spacer()
 
-            if hasPrice, let price {
-                Button(action: onEdit) {
+            Group {
+                if hasPrice, let price {
                     Text("¥\(price)/\(unit)")
                         .font(.caption2.weight(.medium))
-                        .foregroundStyle(.orange)
-                }
-                .buttonStyle(.plain)
-            } else {
-                Button(action: onEdit) {
+                        .foregroundStyle(Color.appPrimaryAction)
+                } else {
                     HStack(spacing: 4) {
                         Image(systemName: "tag").font(.caption)
                         Text("标价").font(.caption2)
                     }
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
                     .padding(.horizontal, 8).padding(.vertical, 4)
                     .background(Color.appPrimarySurfaceSubtle)
                     .clipShape(Capsule())
                 }
-                .buttonStyle(.plain)
+            }
+            .onTapGesture {
+                guard !isBatchSelectionMode else { return }
+                onEdit()
             }
 
-            Button(action: onAdd) {
-                Image(systemName: "plus.circle.fill").foregroundStyle(.blue).font(.title3)
+            if isBatchSelectionMode {
+                if isSelected {
+                    Text("已选")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(Color.appPrimaryAction)
+                }
+            } else {
+                Button(action: onAdd) {
+                    Image(systemName: "plus.circle.fill")
+                        .foregroundStyle(Color.appPrimaryAction)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("添加\(name)到材料单")
+                .accessibilityValue(materialAccessibilityLabel(name: name, spec: spec, unit: unit, price: price))
             }
         }
         .padding(.vertical, 4)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard isBatchSelectionMode else { return }
+            toggleBatchMaterialSelection(appendContext)
+        }
+    }
+
+    private func makeAppendContext(
+        name: String,
+        specification: String,
+        unit: String,
+        key: String,
+        priceEntry: MaterialPriceEntry?
+    ) -> PendingMaterialAppendContext {
+        PendingMaterialAppendContext(
+            name: name,
+            specification: specification,
+            unit: unit,
+            key: key,
+            defaultBrand: priceEntry?.brand ?? "",
+            defaultSupplier: priceEntry?.supplier ?? "",
+            defaultUnitPrice: priceEntry?.referencePrice ?? ""
+        )
+    }
+
+    private func materialAccessibilityLabel(name: String, spec: String, unit: String, price: String?) -> String {
+        var parts = [name]
+        let trimmedSpec = spec.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedSpec.isEmpty {
+            parts.append("规格 \(trimmedSpec)")
+        }
+        parts.append("单位 \(unit)")
+        if let price, !price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            parts.append("参考价 \(price) 元每 \(unit)")
+        } else {
+            parts.append("未标价")
+        }
+        return parts.joined(separator: "，")
+    }
+
+    private func toggleBatchMaterialSelection(_ context: PendingMaterialAppendContext) {
+        if selectedBatchMaterialContextsByKey[context.key] != nil {
+            selectedBatchMaterialContextsByKey.removeValue(forKey: context.key)
+        } else {
+            selectedBatchMaterialContextsByKey[context.key] = context
+        }
+    }
+
+    private func exitBatchSelectionMode() {
+        isBatchSelectionMode = false
+        selectedBatchMaterialContextsByKey.removeAll()
+        pendingBatchAddContext = nil
+    }
+
+    @ViewBuilder
+    private var batchAppendActionBar: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text(selectedBatchMaterialContexts.isEmpty ? "多选模式：勾选后可批量加入材料单" : "已选择 \(selectedBatchMaterialContexts.count) 项材料")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                if !selectedBatchMaterialContexts.isEmpty {
+                    Button("清空") {
+                        selectedBatchMaterialContextsByKey.removeAll()
+                    }
+                    .font(.footnote)
+                }
+            }
+            Button {
+                openBatchAppendSheet()
+            } label: {
+                Label("批量加入材料单", systemImage: "square.and.arrow.down.on.square")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.appPrimaryAction)
+            .disabled(selectedBatchMaterialContexts.isEmpty)
+        }
+        .padding(.horizontal)
+        .padding(.top, 10)
+        .padding(.bottom, 12)
+        .background(.regularMaterial)
+    }
+
+    private func openBatchAppendSheet() {
+        let contexts = selectedBatchMaterialContexts
+        guard !contexts.isEmpty else {
+            operationMessage = "请先选择材料"
+            return
+        }
+        pendingBatchAddQuantity = "1"
+        pendingAddProjectId = nil
+        applyRememberedAppendTarget()
+        pendingAddDraftTitle = defaultMaterialSheetDraftTitle(projectId: pendingAddProjectId)
+        pendingBatchAddContext = PendingBatchMaterialAppendContext(materials: contexts)
+    }
+
+    private func batchAppendMaterialSheet(_ context: PendingBatchMaterialAppendContext) -> some View {
+        NavigationStack {
+            Form {
+                Section("已选材料 (\(context.materials.count))") {
+                    ForEach(context.materials.prefix(5)) { item in
+                        Text(item.displayName)
+                    }
+                    if context.materials.count > 5 {
+                        Text("其余 \(context.materials.count - 5) 项将在保存后一并加入")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Section("添加参数") {
+                    TextField("数量", text: $pendingBatchAddQuantity)
+                        .keyboardType(.decimalPad)
+                }
+
+                Section("保存到材料单") {
+                    Picker("目标", selection: $pendingAddTargetMode) {
+                        Text("已有材料单").tag(MaterialSheetTargetMode.existing)
+                        Text("新建材料单").tag(MaterialSheetTargetMode.create)
+                    }
+                    .pickerStyle(.segmented)
+
+                    if pendingAddTargetMode == .existing {
+                        if activeMaterialSheetDrafts.isEmpty {
+                            Text("暂无可用材料单，请切换到“新建材料单”")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            Picker("材料单", selection: $pendingAddDraftId) {
+                                ForEach(activeMaterialSheetDrafts) { draft in
+                                    Text(materialSheetDraftPickerTitle(draft)).tag(draft.id as UUID?)
+                                }
+                            }
+                        }
+                    } else {
+                        TextField("材料单名称", text: $pendingAddDraftTitle)
+                        Picker("归属项目", selection: $pendingAddProjectId) {
+                            Text("无归属").tag(nil as UUID?)
+                            ForEach(store.projects) { project in
+                                Text(project.name).tag(project.id as UUID?)
+                            }
+                        }
+                    }
+                }
+            }
+            .navigationTitle("批量加入材料单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        pendingBatchAddContext = nil
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("添加") {
+                        let appended = confirmAppendMaterials(
+                            context.materials,
+                            quantityText: pendingBatchAddQuantity,
+                            deferToastUntilSheetDismissal: true
+                        )
+                        guard appended else { return }
+                        pendingBatchAddContext = nil
+                        selectedBatchMaterialContextsByKey.removeAll()
+                    }
+                    .disabled(!canAppendMaterialToSheet)
+                }
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
+            }
+            .onChange(of: pendingAddTargetMode) { _, mode in
+                guard mode == .existing else { return }
+                pendingAddDraftId = pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
+            }
+        }
+        .operationToast(message: $operationMessage)
     }
 
     // MARK: - Recycle bin rows
@@ -458,7 +889,7 @@ struct MaterialLibraryView: View {
             .font(.caption)
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
-            .tint(.green)
+            .tint(.appSuccess)
         }
     }
 
@@ -478,7 +909,7 @@ struct MaterialLibraryView: View {
             .font(.caption)
             .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
-            .tint(.green)
+            .tint(.appSuccess)
         }
     }
 
@@ -497,45 +928,285 @@ struct MaterialLibraryView: View {
         }
     }
 
-    private func prepareAppendMaterial(
-        name: String,
-        specification: String,
-        unit: String,
-        key: String,
-        priceEntry: MaterialPriceEntry?
-    ) {
-        pendingAddContext = PendingMaterialAppendContext(
-            name: name,
-            specification: specification,
-            unit: unit,
-            key: key,
-            defaultBrand: priceEntry?.brand ?? "",
-            defaultSupplier: priceEntry?.supplier ?? ""
-        )
+    private func prepareAppendMaterial(_ context: PendingMaterialAppendContext) {
+        pendingAddContext = context
         pendingAddQuantity = "1"
-        pendingAddProjectId = nil
-        pendingAddUnitPrice = priceEntry?.referencePrice ?? ""
+        pendingAddUnitPrice = context.defaultUnitPrice
+        ensureDefaultMaterialSheetSelection()
     }
 
-    private func confirmAppendMaterial(_ context: PendingMaterialAppendContext) {
-        let quantityText = pendingAddQuantity.trimmingCharacters(in: .whitespacesAndNewlines)
-        let validQuantity = QuantityValue(text: quantityText).isPositive ? quantityText : "1"
-        let unitPriceText = pendingAddUnitPrice.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayName = context.specification.isEmpty ? context.name : "\(context.name) \(context.specification)"
-        store.materialItems.append(
-            MaterialItem(
-                name: displayName,
-                quantity: validQuantity,
-                unit: context.unit,
-                unitPrice: unitPriceText,
+    @discardableResult
+    private func confirmAppendMaterialToDefaultSheet(
+        _ context: PendingMaterialAppendContext,
+        showPostAddPrompt: Bool = false,
+        deferToastUntilSheetDismissal: Bool = false
+    ) -> Bool {
+        let draftID = resolveDefaultMaterialSheetDraftIDForAppend()
+        pendingAddTargetMode = .existing
+        pendingAddDraftId = draftID
+        return appendMaterialsToSheet(
+            [context],
+            quantityText: pendingAddQuantity,
+            showPostAddPrompt: showPostAddPrompt,
+            deferToastUntilSheetDismissal: deferToastUntilSheetDismissal
+        ) { _ in
+            pendingAddUnitPrice
+        }
+    }
+
+    @discardableResult
+    private func confirmAppendMaterials(
+        _ contexts: [PendingMaterialAppendContext],
+        quantityText: String,
+        showPostAddPrompt: Bool = true,
+        deferToastUntilSheetDismissal: Bool = false
+    ) -> Bool {
+        appendMaterialsToSheet(
+            contexts,
+            quantityText: quantityText,
+            showPostAddPrompt: showPostAddPrompt,
+            deferToastUntilSheetDismissal: deferToastUntilSheetDismissal
+        ) { context in
+            context.defaultUnitPrice
+        }
+    }
+
+    @discardableResult
+    private func appendMaterialsToSheet(
+        _ contexts: [PendingMaterialAppendContext],
+        quantityText: String,
+        showPostAddPrompt: Bool = true,
+        deferToastUntilSheetDismissal: Bool = false,
+        unitPriceResolver: (PendingMaterialAppendContext) -> String
+    ) -> Bool {
+        guard !contexts.isEmpty else { return false }
+        let trimmedQuantity = quantityText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let validQuantity = QuantityValue(text: trimmedQuantity).isPositive ? trimmedQuantity : "1"
+        let draftItems = contexts.map { context in
+            MaterialSheetDraftItem(
+                name: context.name,
                 specification: context.specification,
-                brand: context.defaultBrand,
-                supplier: context.defaultSupplier,
-                projectId: pendingAddProjectId
+                unit: context.unit,
+                quantity: validQuantity,
+                unitPrice: unitPriceResolver(context).trimmingCharacters(in: .whitespacesAndNewlines),
+                supplier: context.defaultSupplier
             )
-        )
-        appendRecentMaterialKey(context.key)
+        }
+        let now = Formatters.now()
+        var drafts = store.materialSheetDrafts
+        let title: String
+        let targetDraftID: UUID
+
+        switch pendingAddTargetMode {
+        case .existing:
+            guard let draftId = pendingAddDraftId,
+                  let draftIndex = drafts.firstIndex(where: { $0.id == draftId })
+            else {
+                operationMessage = "未找到可用材料单，请切换到“新建材料单”后重试"
+                pendingAddTargetMode = .create
+                pendingAddDraftId = nil
+                return false
+            }
+            drafts[draftIndex].items.insert(contentsOf: draftItems, at: 0)
+            drafts[draftIndex].updatedAt = now
+            title = drafts[draftIndex].title
+            targetDraftID = drafts[draftIndex].id
+            lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+            lastAppendDraftIDRaw = targetDraftID.uuidString
+            lastAppendProjectIDRaw = drafts[draftIndex].projectId?.uuidString ?? ""
+        case .create:
+            let projectId = pendingAddProjectId
+            let resolvedTitle = resolvedMaterialSheetDraftTitle(projectId: projectId)
+            let newDraft = MaterialSheetDraft(
+                title: resolvedTitle,
+                projectId: projectId,
+                exportProjectName: projectName(for: projectId) ?? "",
+                items: draftItems,
+                createdAt: now,
+                updatedAt: now
+            )
+            drafts.insert(newDraft, at: 0)
+            title = resolvedTitle
+            targetDraftID = newDraft.id
+            lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+            lastAppendDraftIDRaw = targetDraftID.uuidString
+            lastAppendProjectIDRaw = projectId?.uuidString ?? ""
+            pendingAddTargetMode = .existing
+            pendingAddDraftId = targetDraftID
+            selectedDefaultMaterialSheetDraftID = targetDraftID
+        }
+
+        store.materialSheetDrafts = drafts
+        contexts.forEach { appendRecentMaterialKey($0.key) }
         store.scheduleSave()
+        let resolvedTitle = title.isEmpty ? "未命名材料单" : title
+        let successMessage: String
+        if contexts.count > 1 {
+            successMessage = "已添加 \(contexts.count) 项到「\(resolvedTitle)」"
+        } else {
+            successMessage = "已添加到「\(resolvedTitle)」"
+        }
+        showOperationMessage(successMessage, deferUntilDismissal: deferToastUntilSheetDismissal)
+        selectedDefaultMaterialSheetDraftID = targetDraftID
+        recentlyAddedDraftID = targetDraftID
+        recentlyAddedDraftTitle = title
+        recentlyAddedItemCount = contexts.count
+        showOpenMaterialSheetPrompt = promptAfterAdd && showPostAddPrompt
+        return true
+    }
+
+    private func showOperationMessage(_ message: String, deferUntilDismissal: Bool = false) {
+        if deferUntilDismissal {
+            deferredOperationMessage = message
+        } else {
+            operationMessage = message
+        }
+    }
+
+    private func flushDeferredOperationMessage() {
+        guard let message = deferredOperationMessage else { return }
+        deferredOperationMessage = nil
+        operationMessage = message
+    }
+
+    private var activeMaterialSheetDrafts: [MaterialSheetDraft] {
+        store.materialSheetDrafts
+            .filter { !$0.isArchived }
+            .sorted { lhs, rhs in
+                let lhsDate = Formatters.parseDateOrDateTime(lhs.updatedAt) ?? .distantPast
+                let rhsDate = Formatters.parseDateOrDateTime(rhs.updatedAt) ?? .distantPast
+                if lhsDate != rhsDate {
+                    return lhsDate > rhsDate
+                }
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    private func applyRememberedAppendTarget() {
+        let rememberedMode = MaterialSheetTargetMode(rawValue: lastAppendTargetModeRaw) ?? .existing
+        let rememberedDraftID = UUID(uuidString: lastAppendDraftIDRaw)
+        let rememberedProjectID = UUID(uuidString: lastAppendProjectIDRaw)
+
+        switch rememberedMode {
+        case .existing:
+            if let rememberedDraftID,
+               activeMaterialSheetDrafts.contains(where: { $0.id == rememberedDraftID }) {
+                pendingAddTargetMode = .existing
+                pendingAddDraftId = rememberedDraftID
+                pendingAddProjectId = nil
+                return
+            }
+            if let firstDraftID = activeMaterialSheetDrafts.first?.id {
+                pendingAddTargetMode = .existing
+                pendingAddDraftId = firstDraftID
+                pendingAddProjectId = nil
+                return
+            }
+            pendingAddTargetMode = .create
+            pendingAddDraftId = nil
+            pendingAddProjectId = normalizedRememberedProjectID(rememberedProjectID)
+        case .create:
+            pendingAddTargetMode = .create
+            pendingAddDraftId = activeMaterialSheetDrafts.first?.id
+            pendingAddProjectId = normalizedRememberedProjectID(rememberedProjectID)
+        }
+    }
+
+    private func ensureDefaultMaterialSheetSelection() {
+        if let selectedDefaultMaterialSheetDraftID,
+           activeMaterialSheetDrafts.contains(where: { $0.id == selectedDefaultMaterialSheetDraftID }) {
+            return
+        }
+        if let rememberedId = UUID(uuidString: lastAppendDraftIDRaw),
+           activeMaterialSheetDrafts.contains(where: { $0.id == rememberedId }) {
+            selectedDefaultMaterialSheetDraftID = rememberedId
+            return
+        }
+        selectedDefaultMaterialSheetDraftID = activeMaterialSheetDrafts.first?.id
+    }
+
+    @discardableResult
+    private func createAndSelectDefaultMaterialSheetDraft() -> UUID {
+        let now = Formatters.now()
+        let newDraft = MaterialSheetDraft(
+            title: defaultMaterialSheetDraftTitle(projectId: nil),
+            items: [],
+            createdAt: now,
+            updatedAt: now
+        )
+        var drafts = store.materialSheetDrafts
+        drafts.insert(newDraft, at: 0)
+        store.materialSheetDrafts = drafts
+        store.scheduleSave()
+        selectedDefaultMaterialSheetDraftID = newDraft.id
+        lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+        lastAppendDraftIDRaw = newDraft.id.uuidString
+        lastAppendProjectIDRaw = ""
+        operationMessage = "已创建默认材料单「\(newDraft.title)」"
+        return newDraft.id
+    }
+
+    private func resolveDefaultMaterialSheetDraftIDForAppend() -> UUID {
+        ensureDefaultMaterialSheetSelection()
+        if let selectedDefaultMaterialSheetDraftID,
+           activeMaterialSheetDrafts.contains(where: { $0.id == selectedDefaultMaterialSheetDraftID }) {
+            return selectedDefaultMaterialSheetDraftID
+        }
+        if let firstDraftID = activeMaterialSheetDrafts.first?.id {
+            selectedDefaultMaterialSheetDraftID = firstDraftID
+            return firstDraftID
+        }
+        return createAndSelectDefaultMaterialSheetDraft()
+    }
+
+    private func normalizedRememberedProjectID(_ projectID: UUID?) -> UUID? {
+        guard let projectID,
+              store.projects.contains(where: { $0.id == projectID }) else {
+            return nil
+        }
+        return projectID
+    }
+
+    private var canAppendMaterialToSheet: Bool {
+        switch pendingAddTargetMode {
+        case .existing:
+            return pendingAddDraftId != nil
+        case .create:
+            return true
+        }
+    }
+
+    private func materialSheetDraftPickerTitle(_ draft: MaterialSheetDraft) -> String {
+        let resolvedTitle = draft.title.isEmpty ? "未命名材料单" : draft.title
+        let projectPart = projectName(for: draft.projectId) ?? "无归属"
+        return "\(resolvedTitle) · \(projectPart)"
+    }
+
+    private func projectName(for projectId: UUID?) -> String? {
+        guard let projectId else { return nil }
+        return store.projects.first(where: { $0.id == projectId })?.name
+    }
+
+    private func recentlyAddedSummary(for draft: MaterialSheetDraft) -> String {
+        guard recentlyAddedDraftID == draft.id, recentlyAddedItemCount > 0 else {
+            return ""
+        }
+        return " · 最近添加 \(recentlyAddedItemCount) 项"
+    }
+
+    private func defaultMaterialSheetDraftTitle(projectId: UUID?) -> String {
+        if let name = projectName(for: projectId), !name.isEmpty {
+            return "\(name)-材料单"
+        }
+        return "材料单-\(Formatters.date.string(from: Date()))"
+    }
+
+    private func resolvedMaterialSheetDraftTitle(projectId: UUID?) -> String {
+        let input = pendingAddDraftTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !input.isEmpty {
+            return input
+        }
+        return defaultMaterialSheetDraftTitle(projectId: projectId)
     }
 
     private func appendRecentMaterialKey(_ key: String) {
@@ -561,6 +1232,40 @@ struct MaterialLibraryView: View {
 
     private func removeRecentSearchKeyword(_ term: String) {
         recentSearchKeywordsRaw = recentSearchKeywords.filter { $0 != term }.joined(separator: "\n")
+    }
+
+    private var deleteConfirmMessage: String {
+        switch pendingDeleteTarget {
+        case .preset(let item):
+            let name = item.specification.isEmpty ? item.name : "\(item.name) \(item.specification)"
+            return "确认删除材料「\(name)」吗？可在回收站恢复。"
+        case .user(let item):
+            let name = item.specification.isEmpty ? item.name : "\(item.name) \(item.specification)"
+            return "确认删除自定义材料「\(name)」吗？可在回收站恢复。"
+        case .none:
+            return "确认删除所选材料吗？"
+        }
+    }
+
+    private func requestDeletePresetMaterial(_ item: CommonMaterial) {
+        pendingDeleteTarget = .preset(item)
+        showDeleteConfirm = true
+    }
+
+    private func requestDeleteUserMaterial(_ item: UserMaterial) {
+        pendingDeleteTarget = .user(item)
+        showDeleteConfirm = true
+    }
+
+    private func confirmPendingDeleteMaterial() {
+        guard let pendingDeleteTarget else { return }
+        switch pendingDeleteTarget {
+        case .preset(let item):
+            hidePresetMaterial(item)
+        case .user(let item):
+            deleteUserMaterial(item)
+        }
+        self.pendingDeleteTarget = nil
     }
 
     private func hidePresetMaterial(_ item: CommonMaterial) {
@@ -694,6 +1399,20 @@ private struct PendingMaterialAppendContext: Identifiable {
     let key: String
     let defaultBrand: String
     let defaultSupplier: String
+    let defaultUnitPrice: String
+
+    var displayName: String {
+        let trimmedSpec = specification.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedSpec.isEmpty {
+            return name
+        }
+        return "\(name) \(trimmedSpec)"
+    }
+}
+
+private struct PendingBatchMaterialAppendContext: Identifiable {
+    let id = UUID()
+    let materials: [PendingMaterialAppendContext]
 }
 
 private struct RecentMaterialItem: Identifiable {
@@ -719,7 +1438,7 @@ private struct CategoryChip: View {
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.orange : Color.gray.opacity(0.15))
+                .background(isSelected ? Color.appPrimaryAction : Color(uiColor: .tertiarySystemGroupedBackground))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())
         }
@@ -785,7 +1504,7 @@ private struct MaterialCategoryManagementView: View {
                                 renameTarget = usage.name
                                 showRenameSheet = true
                             }
-                            .tint(.blue)
+                            .tint(Color.appDoc)
                         }
                     }
                 }

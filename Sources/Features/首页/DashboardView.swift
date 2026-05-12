@@ -9,6 +9,10 @@ struct DashboardView: View {
     @State var showDashboardProjectPicker = false
     @State var quickActionToastMessage: String?
     @AppStorage("dashboardCurrentProjectId") var selectedProjectIdRaw = ""
+    @AppStorage(UserPreferenceKeys.dashboardIgnoredBackupRiskDay) var ignoredBackupRiskDay = ""
+    @AppStorage(UserPreferenceKeys.dashboardIgnoredMissingReceiptRiskDay) var ignoredMissingReceiptRiskDay = ""
+    @AppStorage(UserPreferenceKeys.dashboardIgnoredPriceSpikeRiskDay) var ignoredPriceSpikeRiskDay = ""
+    @AppStorage(UserPreferenceKeys.dashboardIgnoredNegativeStockRiskDay) var ignoredNegativeStockRiskDay = ""
     let dashboardProjectDisplayLimit = 5
 
     var body: some View {
@@ -51,11 +55,16 @@ struct DashboardView: View {
 
     @State private var showMoreOverview = false
     private var hasCompactOverviewSignal: Bool {
-        hasDashboardRisk
+        !activeProjects.isEmpty
+            || hasDashboardRisk
             || !warehouseStockLines.isEmpty
             || overdueCount > 0
             || !todayTodos.isEmpty
             || !todayLogs.isEmpty
+    }
+
+    private var showsBusinessOverviewPanel: Bool {
+        !activeProjects.isEmpty
     }
 
     private var compactDashboardContent: some View {
@@ -67,6 +76,9 @@ struct DashboardView: View {
             if hasCompactOverviewSignal {
                 DisclosureGroup(isExpanded: $showMoreOverview) {
                     VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                        if showsBusinessOverviewPanel {
+                            businessOverviewPanel
+                        }
                         warehousePanel
                         overduePanel
                         todayTodoPanel
@@ -93,7 +105,7 @@ struct DashboardView: View {
                 VStack(spacing: AppSpacing.normal) {
                     Image(systemName: "checkmark.seal.fill")
                         .font(.system(size: 40, weight: .semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.appSuccess)
                     Text(String(localized: "全部良好"))
                         .font(.title3.weight(.semibold))
                     Text(String(localized: "暂无新增提醒，继续保持"))
@@ -131,10 +143,10 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: AppSpacing.normal) {
             DashboardPanel(title: String(localized: "今日快捷动作"), systemImage: "bolt.fill") {
                 VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                    TodayMiniAction(title: String(localized: "写日志"), systemImage: "book.pages.fill", color: .green, destination: logEntryDestination, quickActions: logQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "写日志")) })
-                    TodayMiniAction(title: String(localized: "加待办"), systemImage: "checklist", color: .orange, destination: todoEntryDestination, quickActions: todoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "加待办")) })
-                    TodayMiniAction(title: String(localized: "拍照片"), systemImage: "camera.fill", color: .blue, destination: photoEntryDestination, quickActions: photoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "拍照片")) })
-                    TodayMiniAction(title: String(localized: "记账"), systemImage: "receipt.fill", color: .pink, destination: bookkeepingEntryDestination, quickActions: bookkeepingQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) })
+                    TodayMiniAction(title: String(localized: "写日志"), systemImage: "book.pages.fill", color: .appSuccess, destination: logEntryDestination, quickActions: logQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "写日志")) })
+                    TodayMiniAction(title: String(localized: "加待办"), systemImage: "checklist", color: .appWarning, destination: todoEntryDestination, quickActions: todoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "加待办")) })
+                    TodayMiniAction(title: String(localized: "拍照片"), systemImage: "camera.fill", color: .appDoc, destination: photoEntryDestination, quickActions: photoQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "拍照片")) })
+                    TodayMiniAction(title: String(localized: "记账"), systemImage: "receipt.fill", color: .appFinance, destination: bookkeepingEntryDestination, quickActions: bookkeepingQuickActions, onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) })
                 }
             }
 
@@ -149,6 +161,9 @@ struct DashboardView: View {
             : [GridItem(.flexible(), spacing: AppSpacing.normal)]
 
         return LazyVGrid(columns: columns, alignment: .leading, spacing: AppSpacing.normal) {
+            if showsBusinessOverviewPanel {
+                businessOverviewPanel
+            }
             warehousePanel
             overduePanel
             todayTodoPanel
@@ -164,7 +179,7 @@ struct DashboardView: View {
             HStack(spacing: AppSpacing.tight + 2) {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField(String(localized: "搜索项目、联系人"), text: $dashboardSearchText)
+                TextField(String(localized: "搜索项目、联系人、供应商、材料"), text: $dashboardSearchText)
                     .textInputAutocapitalization(.never)
                     .submitLabel(.done)
                 if hasSearchKeyword {
@@ -185,7 +200,7 @@ struct DashboardView: View {
                 Divider()
                     .padding(.horizontal, AppSpacing.normal)
                 if dashboardSearchSuggestions.isEmpty {
-                    Text(String(localized: "未找到匹配项目或联系人"))
+                    Text(String(localized: "未找到匹配内容"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, AppSpacing.normal)
@@ -194,9 +209,13 @@ struct DashboardView: View {
                     VStack(spacing: 0) {
                         ForEach(Array(dashboardSearchSuggestions.enumerated()), id: \.element.id) { index, suggestion in
                             NavigationLink {
-                                dashboardDestinationView(suggestion.destination)
+                                dashboardDestinationView(dashboardDestination(for: suggestion))
                             } label: {
-                                DashboardSearchSuggestionRow(suggestion: suggestion)
+                                RealtimeSearchSuggestionRow(
+                                    suggestion: suggestion,
+                                    showsCategoryBadge: true,
+                                    showsChevron: true
+                                )
                             }
                             .buttonStyle(.plain)
 
@@ -217,7 +236,7 @@ struct DashboardView: View {
         if activeProjects.isEmpty {
             emptyCurrentProjectSelector
         } else {
-            focusedProjectSelector
+            focusedProjectScrollerShell
         }
     }
 
@@ -228,7 +247,7 @@ struct DashboardView: View {
                 Spacer()
                 Text(String(localized: "去添加"))
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
             }
         }
         .buttonStyle(.plain)
@@ -237,132 +256,44 @@ struct DashboardView: View {
         .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
     }
 
-    private var focusedProjectSelector: some View {
+    private var focusedProjectScrollerShell: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            focusedProjectHeader
-            focusedCurrentProjectPrimaryRow
-            if activeProjects.count > 1 {
-                focusedProjectScroller
+            HStack(spacing: AppSpacing.tight) {
+                Label(String(localized: "进行中的工程"), systemImage: "scope")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Spacer()
+                if activeProjects.count > dashboardProjectDisplayLimit {
+                    Text(String(localized: "共 \(activeProjects.count) 个"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.tight) {
+                    ForEach(dashboardVisibleProjectRows) { row in
+                        dashboardProjectButton(row)
+                    }
+
+                    if hiddenDashboardProjectCount > 0 {
+                        Button {
+                            showDashboardProjectPicker = true
+                        } label: {
+                            DashboardProjectChip(
+                                title: String(localized: "更多 \(hiddenDashboardProjectCount)"),
+                                subtitle: String(localized: "查看全部"),
+                                isSelected: false,
+                                color: .appDoc
+                            )
+                        }
+                    }
+                }
             }
         }
         .padding(.horizontal, AppSpacing.normal)
         .padding(.vertical, AppSpacing.tight + 1)
         .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
-    }
-
-    private var focusedProjectHeader: some View {
-        HStack(spacing: AppSpacing.tight) {
-            Label(String(localized: "今日关注工程"), systemImage: "scope")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.primary)
-            Spacer()
-            if activeProjects.count > dashboardProjectDisplayLimit {
-                Text(String(localized: "关注 \(dashboardVisibleProjectRows.count)/\(activeProjects.count)"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else if activeProjects.count > 1, currentProject == nil {
-                Text(String(localized: "请选择工程"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var focusedCurrentProjectPrimaryRow: some View {
-        if let currentProject {
-            NavigationLink {
-                ProjectDetailView(projectId: currentProject.id)
-            } label: {
-                HStack(spacing: AppSpacing.tight + 2) {
-                    Image(systemName: "pin.fill")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.orange)
-                    VStack(alignment: .leading, spacing: AppSpacing.tight * 0.25) {
-                        Text(String(localized: "当前工程"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(currentProject.name)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        if !currentProject.location.isEmpty {
-                            Text(currentProject.location)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                        }
-                    }
-                    Spacer()
-                }
-                .padding(.horizontal, AppSpacing.normal - 2)
-                .padding(.vertical, AppSpacing.tight + 1)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
-                        .fill(Color.appPrimarySurfaceSubtle)
-                )
-                .overlay(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 1)
-                        .fill(Color.orange)
-                        .frame(width: 3)
-                }
-            }
-            .buttonStyle(.plain)
-        } else {
-            Button {
-                showDashboardProjectPicker = true
-            } label: {
-                HStack(spacing: AppSpacing.tight + 2) {
-                    Image(systemName: "hand.tap")
-                        .font(.callout.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    VStack(alignment: .leading, spacing: AppSpacing.tight * 0.25) {
-                        Text(String(localized: "当前工程"))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        Text(String(localized: "请选择工程"))
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                    Spacer()
-                    Label(String(localized: "选择"), systemImage: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.orange)
-                }
-                .padding(.horizontal, AppSpacing.normal - 2)
-                .padding(.vertical, AppSpacing.tight + 1)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
-                        .fill(Color(uiColor: .tertiarySystemGroupedBackground))
-                )
-            }
-            .buttonStyle(.plain)
-        }
-    }
-
-    private var focusedProjectScroller: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppSpacing.tight) {
-                ForEach(dashboardVisibleProjectRows) { row in
-                    dashboardProjectButton(row)
-                }
-
-                if hiddenDashboardProjectCount > 0 {
-                    Button {
-                        showDashboardProjectPicker = true
-                    } label: {
-                        DashboardProjectChip(
-                            title: String(localized: "更多 \(hiddenDashboardProjectCount)"),
-                            subtitle: String(localized: "查看全部"),
-                            isSelected: false,
-                            color: .blue
-                        )
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-        }
     }
 
     private func dashboardProjectButton(_ row: DashboardProjectRow) -> some View {
@@ -420,7 +351,7 @@ struct DashboardView: View {
                 TodayMiniAction(
                     title: String(localized: "写日志"),
                     systemImage: "book.pages.fill",
-                    color: .green,
+                    color: .appSuccess,
                     destination: logEntryDestination,
                     quickActions: logQuickActions,
                     onTrigger: { showQuickActionFeedback(title: String(localized: "写日志")) }
@@ -428,7 +359,7 @@ struct DashboardView: View {
                 TodayMiniAction(
                     title: String(localized: "加待办"),
                     systemImage: "checklist",
-                    color: .orange,
+                    color: .appWarning,
                     destination: todoEntryDestination,
                     quickActions: todoQuickActions,
                     onTrigger: { showQuickActionFeedback(title: String(localized: "加待办")) }
@@ -436,7 +367,7 @@ struct DashboardView: View {
                 TodayMiniAction(
                     title: String(localized: "拍照片"),
                     systemImage: "camera.fill",
-                    color: .blue,
+                    color: .appDoc,
                     destination: photoEntryDestination,
                     quickActions: photoQuickActions,
                     onTrigger: { showQuickActionFeedback(title: String(localized: "拍照片")) }
@@ -444,7 +375,7 @@ struct DashboardView: View {
                 TodayMiniAction(
                     title: String(localized: "记账"),
                     systemImage: "receipt.fill",
-                    color: .pink,
+                    color: .appFinance,
                     destination: bookkeepingEntryDestination,
                     quickActions: bookkeepingQuickActions,
                     onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) }
@@ -459,11 +390,42 @@ struct DashboardView: View {
             if hasDashboardRisk {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.tight) {
-                        DashboardRiskPill(title: String(localized: "延期"), value: "\(overdueCount)", color: overdueCount > 0 ? .red : .green, hasRisk: overdueCount > 0, destination: .projectList(initialOverviewFilter: .overdue))
-                        DashboardRiskPill(title: String(localized: "今日待办"), value: "\(todayTodos.count)", color: !todayTodos.isEmpty ? .orange : .green, hasRisk: !todayTodos.isEmpty, destination: .projectList(initialOverviewFilter: .todo))
-                        DashboardRiskPill(title: String(localized: "应收付"), value: "\(unsettledFinancialCount)", color: unsettledFinancialCount > 0 ? .yellow : .green, hasRisk: unsettledFinancialCount > 0, destination: .projectList(initialOverviewFilter: .financialDue))
-                        DashboardRiskPill(title: String(localized: "未写日志"), value: "\(projectsWithoutTodayLogCount)", color: projectsWithoutTodayLogCount > 0 ? .blue : .green, hasRisk: projectsWithoutTodayLogCount > 0, destination: .projectList(initialOverviewFilter: .missingTodayLog))
-                        DashboardRiskPill(title: String(localized: "缺票"), value: "\(unattachedReceiptCount)", color: unattachedReceiptCount > 0 ? .pink : .green, hasRisk: unattachedReceiptCount > 0, destination: .projectList(initialOverviewFilter: .missingReceipt))
+                        DashboardRiskPill(title: String(localized: "延期"), value: "\(overdueCount)", color: overdueCount > 0 ? .appRisk : .appSuccess, hasRisk: overdueCount > 0, destination: .projectList(initialOverviewFilter: .overdue))
+                        DashboardRiskPill(title: String(localized: "今日待办"), value: "\(todayTodos.count)", color: !todayTodos.isEmpty ? .appWarning : .appSuccess, hasRisk: !todayTodos.isEmpty, destination: .projectList(initialOverviewFilter: .todo))
+                        DashboardRiskPill(title: String(localized: "应收付"), value: "\(unsettledFinancialCount)", color: unsettledFinancialCount > 0 ? .appWarning : .appSuccess, hasRisk: unsettledFinancialCount > 0, destination: .projectList(initialOverviewFilter: .financialDue))
+                        DashboardRiskPill(title: String(localized: "未写日志"), value: "\(projectsWithoutTodayLogCount)", color: projectsWithoutTodayLogCount > 0 ? .appDoc : .appSuccess, hasRisk: projectsWithoutTodayLogCount > 0, destination: .projectList(initialOverviewFilter: .missingTodayLog))
+                        DashboardRiskPill(
+                            title: String(localized: "缺票"),
+                            value: "\(displayedMissingReceiptCount)",
+                            color: displayedMissingReceiptCount > 0 ? .appFinance : .appSuccess,
+                            hasRisk: displayedMissingReceiptCount > 0,
+                            destination: .projectList(initialOverviewFilter: .missingReceipt),
+                            quickActions: missingReceiptRiskActions
+                        )
+                        DashboardRiskPill(
+                            title: String(localized: "价格异动"),
+                            value: "\(displayedPriceSpikeCount)",
+                            color: displayedPriceSpikeCount > 0 ? .appFinance : .appSuccess,
+                            hasRisk: displayedPriceSpikeCount > 0,
+                            destination: .materialPriceSpikeDetails,
+                            quickActions: priceSpikeRiskActions
+                        )
+                        DashboardRiskPill(
+                            title: String(localized: "负库存"),
+                            value: "\(displayedNegativeStockCount)",
+                            color: displayedNegativeStockCount > 0 ? .appRisk : .appSuccess,
+                            hasRisk: displayedNegativeStockCount > 0,
+                            destination: warehouseOverviewDestination,
+                            quickActions: negativeStockRiskActions
+                        )
+                        DashboardRiskPill(
+                            title: String(localized: "备份超期"),
+                            value: backupReminderValue,
+                            color: isDisplayedBackupReminderOverdue ? .appRisk : .appSuccess,
+                            hasRisk: isDisplayedBackupReminderOverdue,
+                            destination: .dataManagement(initialTab: "备份"),
+                            quickActions: backupReminderRiskActions
+                        )
                     }
                     .padding(.vertical, AppSpacing.tight * 0.25)
                 }
@@ -471,10 +433,10 @@ struct DashboardView: View {
                 HStack(spacing: AppSpacing.tight) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.appSuccess)
                     Text(String(localized: "今日无风险"))
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(.green)
+                        .foregroundStyle(Color.appSuccess)
                     Spacer()
                     Text(String(localized: "继续保持"))
                         .font(.caption2)
@@ -484,9 +446,22 @@ struct DashboardView: View {
                 .padding(.vertical, AppSpacing.tight + 1)
                 .background(
                     RoundedRectangle(cornerRadius: AppSpacing.normal - 2)
-                        .fill(Color.green.opacity(0.12))
+                        .fill(Color.appWillowSurfaceSubtle)
                 )
             }
+        }
+    }
+
+    private var businessOverviewPanel: some View {
+        DashboardPanel(
+            title: String(localized: "经营概况"),
+            systemImage: "chart.xyaxis.line",
+            destination: .projectList()
+        ) {
+            ProjectBusinessCardsView(summary: dashboardBusinessSummary)
+            Text(String(localized: "已关注 \(activeProjects.count) 个工程"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 
@@ -587,7 +562,7 @@ struct DashboardView: View {
                         NavigationLink {
                             SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
                         } label: {
-                            IssueRow(title: todo.title, value: todo.dueDate, color: .red)
+                            IssueRow(title: todo.title, value: todo.dueDate, color: .appRisk)
                         }
                         .buttonStyle(.plain)
                     }
@@ -595,7 +570,7 @@ struct DashboardView: View {
                         NavigationLink {
                             TaskProgressView(initialProjectId: task.projectId)
                         } label: {
-                            IssueRow(title: task.title, value: task.dueDate, color: .red)
+                            IssueRow(title: task.title, value: task.dueDate, color: .appRisk)
                         }
                         .buttonStyle(.plain)
                     }
@@ -608,9 +583,9 @@ struct DashboardView: View {
         DashboardPanel(title: String(localized: "库存情况"), systemImage: "shippingbox.fill", destination: warehouseOverviewDestination) {
             let lines = warehouseStockLines
             HStack(spacing: AppSpacing.tight) {
-                DashboardInventoryPill(title: String(localized: "材料种类"), value: "\(lines.count)", color: .orange, destination: warehouseOverviewDestination)
-                DashboardInventoryPill(title: String(localized: "今日出入库"), value: "\(warehouseTodayMovementCount)", color: warehouseTodayMovementCount > 0 ? .blue : Color.secondary, destination: warehouseMovementDestination)
-                DashboardInventoryPill(title: String(localized: "负库存"), value: "\(warehouseNegativeCount)", color: warehouseNegativeCount > 0 ? .red : .green, destination: warehouseOverviewDestination)
+                DashboardInventoryPill(title: String(localized: "材料种类"), value: "\(lines.count)", color: .appPrimaryAction, destination: warehouseOverviewDestination)
+                DashboardInventoryPill(title: String(localized: "今日出入库"), value: "\(warehouseTodayMovementCount)", color: warehouseTodayMovementCount > 0 ? .appDoc : Color.secondary, destination: warehouseMovementDestination)
+                DashboardInventoryPill(title: String(localized: "负库存"), value: "\(warehouseNegativeCount)", color: warehouseNegativeCount > 0 ? .appRisk : .appSuccess, destination: warehouseOverviewDestination)
             }
             if recentWarehouseMovements.isEmpty {
                 EmptyDashboardRow(text: String(localized: "暂无仓库出入库记录"))

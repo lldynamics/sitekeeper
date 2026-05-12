@@ -26,6 +26,7 @@ struct DailyLogView: View {
     @State private var newQualityIssue = ""
     @State private var newRectification = ""
     @State private var newConfirmer = ""
+    @State private var newLinkedMethodIDs: Set<UUID> = []
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var photoDrafts: [PhotoDraft] = []
     @State private var showLogCamera = false
@@ -57,9 +58,11 @@ struct DailyLogView: View {
     @State private var editQualityIssue = ""
     @State private var editRectification = ""
     @State private var editConfirmer = ""
+    @State private var editLinkedMethodIDs: Set<UUID> = []
     @State private var editProjectId: UUID?
     @State private var alertMessage = ""
     @State private var showAlert = false
+    @State private var photoWallExportTask: Task<Void, Never>?
 
     init(
         initialProjectId: UUID? = nil,
@@ -90,7 +93,13 @@ struct DailyLogView: View {
         if let filterProjectId {
             result = result.filter { $0.projectId == filterProjectId }
         }
-        result = SearchMatcher.filter(result, keyword: searchText)
+        result = SearchMatcher.filter(
+            result,
+            keyword: searchText,
+            extraFields: { log in
+                linkedMethodTitles(for: log.linkedConstructionMethodIDs)
+            }
+        )
         if isDateFilterActive {
             let df = Formatters.date
             let start = Calendar.current.startOfDay(for: filterStart)
@@ -120,6 +129,14 @@ struct DailyLogView: View {
         }
         let trailing = (7 - ((leading + days.count) % 7)) % 7
         return Array(repeating: nil, count: leading) + days + Array(repeating: nil, count: trailing)
+    }
+
+    private var isCalendarOnCurrentMonth: Bool {
+        Calendar.current.isDate(calendarMonth, equalTo: Date(), toGranularity: .month)
+    }
+
+    private var isTodaySelected: Bool {
+        Calendar.current.isDateInToday(selectedCalendarDate)
     }
 
     private var usesSplitLogLayout: Bool {
@@ -230,6 +247,10 @@ struct DailyLogView: View {
             newProjectId = initialProjectId
             showAdd = true
         }
+        .onDisappear {
+            photoWallExportTask?.cancel()
+            photoWallExportTask = nil
+        }
     }
 
     private var compactLogLayout: some View {
@@ -251,7 +272,7 @@ struct DailyLogView: View {
                         Label("新建施工日志", systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 }
             }
             .navigationTitle("日志筛选")
@@ -305,9 +326,9 @@ struct DailyLogView: View {
                 logRow(log)
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
                         Button("复制") { copyLogToToday(log) }
-                            .tint(.blue)
+                            .tint(Color.appDoc)
                         Button("编辑") { startEdit(log) }
-                            .tint(.orange)
+                            .tint(Color.appPrimaryAction)
                     }
             }
             .onDelete(perform: deleteLogs)
@@ -332,9 +353,21 @@ struct DailyLogView: View {
                         .accessibilityLabel("上个月")
                         .accessibilityHint("查看上个月日志")
                         Spacer()
-                        Text(monthTitle(calendarMonth))
-                            .font(.headline)
-                        Spacer()
+                        Button {
+                            jumpToToday()
+                        } label: {
+                            Text(isCalendarOnCurrentMonth && isTodaySelected ? "今天" : "回到今天")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(Color.appPrimarySurfaceSubtle)
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("回到今天")
+                        .accessibilityHint("返回本月并选中今天")
                         Button {
                             moveMonth(1)
                         } label: {
@@ -343,6 +376,17 @@ struct DailyLogView: View {
                         .buttonStyle(.borderless)
                         .accessibilityLabel("下个月")
                         .accessibilityHint("查看下个月日志")
+                    }
+                    .overlay {
+                        Button {
+                            jumpToToday()
+                        } label: {
+                            Text(monthTitle(calendarMonth))
+                                .font(.headline)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("当前月份，双击回到今天")
+                        .accessibilityHint("返回本月并选中今天")
                     }
 
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
@@ -381,9 +425,9 @@ struct DailyLogView: View {
                         logRow(log)
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                                 Button("复制") { copyLogToToday(log) }
-                                    .tint(.blue)
+                                    .tint(Color.appDoc)
                                 Button("编辑") { startEdit(log) }
-                                    .tint(.orange)
+                                    .tint(Color.appPrimaryAction)
                             }
                     }
                     .onDelete { offsets in
@@ -404,7 +448,7 @@ struct DailyLogView: View {
                 Text(log.workers).font(.caption).foregroundStyle(.secondary)
             }
             if let pid = log.projectId, let project = store.projects.first(where: { $0.id == pid }) {
-                Text(project.name).font(.caption2).foregroundStyle(.blue)
+                Text(project.name).font(.caption2).foregroundStyle(Color.appDoc)
             }
             Text(log.content).font(.callout).foregroundStyle(.secondary).lineLimit(3)
             if !log.safety.isEmpty {
@@ -428,7 +472,14 @@ struct DailyLogView: View {
             if !log.qualityIssue.isEmpty || !log.rectification.isEmpty {
                 Label(log.qualityIssue.isEmpty ? log.rectification : log.qualityIssue, systemImage: "wrench.and.screwdriver.fill")
                     .font(.caption)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.appRisk)
+                    .lineLimit(2)
+            }
+            let linkedTitles = linkedMethodTitles(for: log.linkedConstructionMethodIDs)
+            if !linkedTitles.isEmpty {
+                Label(linkedTitles.joined(separator: " · "), systemImage: "book.pages")
+                    .font(.caption)
+                    .foregroundStyle(Color.appPrimaryAction)
                     .lineLimit(2)
             }
             if !log.photoAttachments.isEmpty {
@@ -436,23 +487,32 @@ struct DailyLogView: View {
                     HStack(alignment: .top, spacing: AppSpacing.tight) {
                         ForEach(log.photoAttachments) { photo in
                             VStack(alignment: .leading, spacing: 4) {
-                                if let thumbnail = PhotoStorage.thumbnail(for: photo.fileName) {
-                                    Button {
-                                            selectedPhotoContext = SelectedPhotoContext(logId: log.id, photoId: photo.id, legacyFileName: photo.fileName)
-                                    } label: {
-                                        Image(uiImage: thumbnail)
+                                Button {
+                                    selectedPhotoContext = SelectedPhotoContext(logId: log.id, photoId: photo.id, legacyFileName: photo.fileName)
+                                } label: {
+                                    AsyncPhotoThumbnailImageView(fileName: photo.fileName) { image in
+                                        image
                                             .resizable()
                                             .scaledToFill()
                                             .frame(width: 110, height: 82)
                                             .clipShape(RoundedRectangle(cornerRadius: 8))
-                                        }
-                                    .buttonStyle(.plain)
-                                    .accessibilityLabel("查看日志照片，标签 \(photo.tag.displayName)")
-                                    .accessibilityHint("打开照片详情")
+                                    } placeholder: {
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .fill(Color(uiColor: .secondarySystemFill))
+                                            .frame(width: 110, height: 82)
+                                            .overlay {
+                                                Image(systemName: "photo")
+                                                    .font(.caption)
+                                                    .foregroundStyle(.secondary)
+                                            }
+                                    }
                                 }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("查看日志照片，标签 \(photo.tag.displayName)")
+                                .accessibilityHint("打开照片详情")
                                 Text(photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(Color.appDoc)
                                 if !photo.note.isEmpty {
                                     Text(photo.note)
                                         .font(.caption2)
@@ -533,8 +593,8 @@ struct DailyLogView: View {
                             }
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                if let image = PhotoStorage.thumbnail(for: item.photo.fileName) {
-                                    Image(uiImage: image)
+                                AsyncPhotoThumbnailImageView(fileName: item.photo.fileName) { image in
+                                    image
                                         .resizable()
                                         .scaledToFill()
                                         .frame(height: 88)
@@ -544,14 +604,22 @@ struct DailyLogView: View {
                                             if isPhotoSelecting {
                                                 let selected = selectedPhotoKeys.contains(photoSelectionKey(item))
                                                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                                                    .foregroundStyle(selected ? .orange : .white)
+                                                    .foregroundStyle(selected ? Color.appPrimaryAction : .white)
                                                     .padding(4)
                                             }
                                         }
-                                } else {
+                                } placeholder: {
                                     RoundedRectangle(cornerRadius: 8)
                                         .fill(Color(uiColor: .secondarySystemFill))
                                         .frame(height: 88)
+                                        .overlay(alignment: .topTrailing) {
+                                            if isPhotoSelecting {
+                                                let selected = selectedPhotoKeys.contains(photoSelectionKey(item))
+                                                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                                    .foregroundStyle(selected ? Color.appPrimaryAction : .secondary)
+                                                    .padding(4)
+                                            }
+                                        }
                                 }
                                 Text(item.logDate)
                                     .font(.caption2)
@@ -559,13 +627,13 @@ struct DailyLogView: View {
                                     .lineLimit(1)
                                 Text(item.photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(Color.appDoc)
                                     .lineLimit(1)
                                 if hasRectificationPair(logId: item.logId),
                                    (item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter) {
                                     Text("已配对")
                                         .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(.green)
+                                        .foregroundStyle(Color.appSuccess)
                                 }
                                 if !item.photo.note.isEmpty {
                                     Text(item.photo.note)
@@ -576,7 +644,7 @@ struct DailyLogView: View {
                                 if let project = item.projectId.flatMap({ pid in store.projects.first(where: { $0.id == pid }) }) {
                                     Text(project.name)
                                         .font(.caption2)
-                                        .foregroundStyle(.blue)
+                                        .foregroundStyle(Color.appDoc)
                                         .lineLimit(1)
                                 }
                             }
@@ -660,9 +728,16 @@ struct DailyLogView: View {
                 fileName: item.photo.fileName
             )
         }
-        let data = ReportBuilder.makePhotoWallPDF(title: "\(projectName)-现场照片页", items: payloads)
-        exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "\(projectName)_现场照片页.pdf")
-        showExporter = true
+        photoWallExportTask?.cancel()
+        photoWallExportTask = Task {
+            let data = await ReportBuilder.makePhotoWallPDFAsync(title: "\(projectName)-现场照片页", items: payloads)
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "\(projectName)_现场照片页.pdf")
+                showExporter = true
+                photoWallExportTask = nil
+            }
+        }
     }
 
     private var addLogForm: some View {
@@ -725,6 +800,7 @@ struct DailyLogView: View {
                         .lineLimit(2...4)
                     TextField("现场确认人", text: $newConfirmer)
                 }
+                constructionMethodLinkSection(selection: $newLinkedMethodIDs)
                 DailyLogWatermarkPhotoSection(
                     cameraPhotoTag: $cameraPhotoTag,
                     selectedPhotos: $selectedPhotos,
@@ -818,6 +894,7 @@ struct DailyLogView: View {
                         .lineLimit(2...4)
                     TextField("现场确认人", text: $editConfirmer)
                 }
+                constructionMethodLinkSection(selection: $editLinkedMethodIDs)
             }
             .navigationTitle("编辑日志")
             .navigationBarTitleDisplayMode(.inline)
@@ -864,6 +941,7 @@ struct DailyLogView: View {
             qualityIssue: newQualityIssue,
             rectification: newRectification,
             confirmer: newConfirmer,
+            linkedConstructionMethodIDs: sortedLinkedMethodIDs(newLinkedMethodIDs),
             projectId: newProjectId
         ), at: 0)
         store.scheduleSave()
@@ -925,6 +1003,12 @@ struct DailyLogView: View {
         calendarMonth = Calendar.current.date(byAdding: .month, value: value, to: calendarMonth) ?? calendarMonth
     }
 
+    private func jumpToToday() {
+        let today = Date()
+        selectedCalendarDate = today
+        calendarMonth = today
+    }
+
     private func monthTitle(_ date: Date) -> String {
         DailyLogDateFormatters.monthTitle.string(from: date)
     }
@@ -946,6 +1030,7 @@ struct DailyLogView: View {
         newQualityIssue = ""
         newRectification = ""
         newConfirmer = ""
+        newLinkedMethodIDs.removeAll()
         newWeather = autoWeatherNow()
     }
 
@@ -961,6 +1046,7 @@ struct DailyLogView: View {
         editQualityIssue = log.qualityIssue
         editRectification = log.rectification
         editConfirmer = log.confirmer
+        editLinkedMethodIDs = Set(log.linkedConstructionMethodIDs)
         editProjectId = log.projectId
         showEdit = true
     }
@@ -991,6 +1077,7 @@ struct DailyLogView: View {
         log.qualityIssue = editQualityIssue
         log.rectification = editRectification
         log.confirmer = editConfirmer
+        log.linkedConstructionMethodIDs = sortedLinkedMethodIDs(editLinkedMethodIDs)
         log.projectId = editProjectId
         store.dailyLogs[index] = log
         store.scheduleSave()
@@ -1007,6 +1094,7 @@ struct DailyLogView: View {
         newQualityIssue = log.qualityIssue
         newRectification = log.rectification
         newConfirmer = log.confirmer
+        newLinkedMethodIDs = Set(log.linkedConstructionMethodIDs)
         newProjectId = log.projectId
         selectedPhotos = []
         photoDrafts = []
@@ -1025,6 +1113,65 @@ struct DailyLogView: View {
         }
         if items.isEmpty { return "" }
         return items.map { "• \($0.title)" }.joined(separator: "\n")
+    }
+
+    @ViewBuilder
+    private func constructionMethodLinkSection(selection: Binding<Set<UUID>>) -> some View {
+        Section("关联施工工艺") {
+            if store.constructionMethods.isEmpty {
+                Text("暂无工艺条目，可先在工具箱-施工工艺库新增")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(store.constructionMethods) { method in
+                    Toggle(isOn: methodSelectionBinding(method.id, selection: selection)) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(constructionMethodTitle(method))
+                            HStack(spacing: 6) {
+                                if !method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                    Text(method.trade)
+                                }
+                                Text(method.versionName.isEmpty ? "V1" : method.versionName)
+                                Text(method.publishStatus.displayName)
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    .toggleStyle(.switch)
+                }
+            }
+        }
+    }
+
+    private func methodSelectionBinding(_ id: UUID, selection: Binding<Set<UUID>>) -> Binding<Bool> {
+        Binding(
+            get: { selection.wrappedValue.contains(id) },
+            set: { isSelected in
+                if isSelected {
+                    selection.wrappedValue.insert(id)
+                } else {
+                    selection.wrappedValue.remove(id)
+                }
+            }
+        )
+    }
+
+    private func constructionMethodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "未命名工艺" : title
+    }
+
+    private func linkedMethodTitles(for ids: [UUID]) -> [String] {
+        guard !ids.isEmpty else { return [] }
+        let lookup = Dictionary(uniqueKeysWithValues: store.constructionMethods.map { ($0.id, constructionMethodTitle($0)) })
+        return ids.compactMap { lookup[$0] }
+    }
+
+    private func sortedLinkedMethodIDs(_ selectedIDs: Set<UUID>) -> [UUID] {
+        store.constructionMethods
+            .map(\.id)
+            .filter { selectedIDs.contains($0) }
     }
 
     private func applyDailyLogTemplate(_ template: ProjectTemplate) {

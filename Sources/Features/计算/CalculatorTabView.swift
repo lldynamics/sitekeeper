@@ -99,6 +99,19 @@ struct CalculatorTabView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section("记录") {
+                    NavigationLink {
+                        CalculationHistoryView()
+                    } label: {
+                        ToolRow(
+                            icon: "clock.arrow.circlepath",
+                            title: "计算历史",
+                            desc: "查看、删除历史计算结果",
+                            color: .appCalculations
+                        )
+                    }
+                }
+
                 let grouped = Dictionary(grouping: sortedDefs, by: { $0.section })
                 let order = ["电气", "照明", "土建", "通用"]
                 ForEach(order, id: \.self) { section in
@@ -107,7 +120,7 @@ struct CalculatorTabView: View {
                             ForEach(items.indices, id: \.self) { i in
                                 let item = items[i]
                                 NavigationLink { item.destination } label: {
-                                    ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: .orange)
+                                    ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: .appPrimaryAction)
                                 }
                             }
                         }

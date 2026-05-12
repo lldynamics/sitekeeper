@@ -29,6 +29,7 @@ struct BackupView: View {
     @AppStorage(UserPreferenceKeys.cloudBackupIncludeAttachments) private var cloudIncludeAttachments = true
     @AppStorage(UserPreferenceKeys.cloudBackupAutoInterval) private var cloudAutoIntervalRawValue = CloudBackupAutoInterval.disabled.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupAutoRequiresWiFi) private var cloudAutoBackupRequiresWiFi = false
+    @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupAutoLastStatus) private var cloudAutoLastStatus = ""
     @State private var statusMessage = ""
@@ -76,7 +77,6 @@ struct BackupView: View {
         hasher.combine(store.progressTasks.count)
         hasher.combine(store.lightingCircuitPlans.count)
         hasher.combine(store.siteTodos.count)
-        hasher.combine(store.paymentRecords.count)
         hasher.combine(store.projectDrawings.count)
         hasher.combine(store.projectContacts.count)
         hasher.combine(store.projectFinancialRecords.count)
@@ -252,6 +252,7 @@ struct BackupView: View {
                 FileURLDocumentExporter(fileURL: exportFileURL) { result in
                     if case .success = result {
                         setStatus(exportSummary.isEmpty ? "导出成功" : exportSummary)
+                        localBackupLastSuccessAt = Date().timeIntervalSince1970
                         hasCompletedBackupExportTask = true
                         lastExportSucceeded = true
                         lastImportSucceeded = false
@@ -359,7 +360,7 @@ struct BackupView: View {
                                 Spacer()
                                 if selectedBackupSection == section {
                                     Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(.appWarning)
                                 }
                             }
                             .padding(.horizontal, 10)
@@ -385,7 +386,7 @@ struct BackupView: View {
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
-                    .tint(.green)
+                    .tint(.appSuccess)
                     .disabled(isBusy)
 
                     Button {
@@ -404,7 +405,7 @@ struct BackupView: View {
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
-                    .tint(.blue)
+                    .tint(.appPrimaryAction)
                     .disabled(isBusy)
                 }
 
@@ -482,7 +483,7 @@ struct BackupView: View {
                 if estimateState.backupEstimate.missingFiles.count > 0 {
                     BackupMicroGuideRow(
                         icon: "exclamationmark.triangle.fill",
-                        color: .orange,
+                        color: .appWarning,
                         title: String(localized: "检测到 \(estimateState.backupEstimate.missingFiles.count) 个原文件缺失"),
                         detail: "建议先到项目文件页抽查缺件，再导出正式备份。"
                     )
@@ -497,7 +498,7 @@ struct BackupView: View {
                 if lastExportSucceeded {
                     BackupMicroGuideRow(
                         icon: "checkmark.seal.fill",
-                        color: .green,
+                        color: .appSuccess,
                         title: "备份已导出，建议立即做一次导入预览",
                         detail: "提前验证恢复链路，换机或误删时更稳。"
                     )
@@ -507,13 +508,13 @@ struct BackupView: View {
                         Label("马上验证导入", systemImage: "arrow.down.doc.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(.appWarning)
                 }
 
                 if lastImportSucceeded {
                     BackupMicroGuideRow(
                         icon: "doc.text.magnifyingglass",
-                        color: .blue,
+                        color: .appPrimaryAction,
                         title: "导入完成，建议抽查关键资料",
                         detail: "优先核对最近图纸、票据和随手记附件是否完整。"
                     )

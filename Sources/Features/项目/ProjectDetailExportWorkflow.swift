@@ -112,8 +112,4 @@ enum ProjectDetailExportWorkflow {
             }
         }
     }
-
-    static func makeDailyReportExport(project: Project, logs: [DailyLog]) -> ExportPayload {
-        ProjectDetailImportExportActions.makeDailyReportExport(project: project, logs: logs)
-    }
 }

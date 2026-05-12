@@ -30,7 +30,7 @@ enum PhotoStorage {
         do {
             return try saveOrThrow(original: original, fileName: fileName)
         } catch {
-            StorageIssueLog.record("照片保存失败：\(fileName)")
+            StorageIssueLog.record("照片保存失败：\(fileName)，\(error.localizedDescription)")
             return nil
         }
     }
@@ -88,6 +88,11 @@ enum PhotoStorage {
         return PhotoCache.shared.thumbnail(for: name)
     }
 
+    static func thumbnailAsync(for fileName: String?) async -> UIImage? {
+        guard let name = fileName else { return nil }
+        return await PhotoCache.shared.thumbnailAsync(for: name)
+    }
+
     /// 公开文件 URL（供缓存使用）
     static func thumbnailURL(for fileName: String) -> URL {
         let url = thumbnailFileURL(for: fileName)
@@ -108,7 +113,7 @@ enum PhotoStorage {
         do {
             try deleteOrThrow(fileName: name)
         } catch {
-            StorageIssueLog.record("照片删除失败：\(name)")
+            StorageIssueLog.record("照片删除失败：\(name)，\(error.localizedDescription)")
         }
         PhotoCache.shared.invalidate(fileName: name)
     }
@@ -140,9 +145,23 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("照片读取失败：\(fileName)")
+            StorageIssueLog.record("照片读取失败：\(fileName)，\(error.localizedDescription)")
             return nil
         }
+    }
+
+    static func dataAsync(for fileName: String) async -> Data? {
+        let url = fileURL(for: fileName)
+        return await Task.detached(priority: .utility) {
+            do {
+                return try Data(contentsOf: url, options: .mappedIfSafe)
+            } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+                return nil
+            } catch {
+                StorageIssueLog.record("照片读取失败：\(fileName)，\(error.localizedDescription)")
+                return nil
+            }
+        }.value
     }
 
     static func exists(fileName: String) -> Bool {
@@ -218,7 +237,7 @@ enum PhotoStorage {
             try thumbData.write(to: thumbnailFileURL(for: fileName), options: .atomic)
             PhotoCache.shared.invalidate(fileName: fileName)
         } catch {
-            StorageIssueLog.record("照片缩略图生成失败：\(fileName)")
+            StorageIssueLog.record("照片缩略图生成失败：\(fileName)，\(error.localizedDescription)")
         }
     }
 

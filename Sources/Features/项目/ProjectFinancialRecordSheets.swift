@@ -23,6 +23,12 @@ struct ProjectFinancialRecordAddSheet: View {
     @State private var reminderStatus: ProjectFinancialReminderStatus = .pending
     @State private var note = ""
     @State private var scanAfterSave = false
+    @State private var showOCRImporter = false
+    @State private var isRecognizingReceipt = false
+    @State private var ocrPreview: ReceiptOCRResult?
+    @State private var ocrErrorMessage = ""
+    @State private var showOCRError = false
+    @State private var ocrTask: Task<Void, Never>?
     @FocusState private var isInputFocused: Bool
 
     private var availableCategories: [ProjectFinancialCategory] {
@@ -54,6 +60,31 @@ struct ProjectFinancialRecordAddSheet: View {
                         }
                         if let lastExpense = recentRecords.first(where: { $0.normalizedDirection == .expense }) {
                             Button("套用最近支出") { apply(record: lastExpense) }
+                        }
+                    }
+                }
+                Section("智能录入（票据 OCR）") {
+                    Button {
+                        showOCRImporter = true
+                    } label: {
+                        Label("从图片/PDF识别金额、日期、单位", systemImage: "text.viewfinder")
+                    }
+                    .disabled(isRecognizingReceipt)
+
+                    if isRecognizingReceipt {
+                        ProgressView("识别中…")
+                            .font(.caption)
+                    }
+
+                    if let ocrPreview {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("识别结果")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            ForEach(ProjectFinancialReceiptOCRSupport.summaryLines(from: ocrPreview), id: \.self) { line in
+                                Text(line)
+                                    .font(.caption2)
+                            }
                         }
                     }
                 }
@@ -140,6 +171,21 @@ struct ProjectFinancialRecordAddSheet: View {
                     apply(record: preset)
                 }
             }
+            .fileImporter(
+                isPresented: $showOCRImporter,
+                allowedContentTypes: ProjectFinancialReceiptOCRSupport.allowedImportTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                handleOCRImportResult(result)
+            }
+            .alert("票据识别失败", isPresented: $showOCRError) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(ocrErrorMessage)
+            }
+            .onDisappear {
+                ocrTask?.cancel()
+            }
         }
     }
 
@@ -159,11 +205,75 @@ struct ProjectFinancialRecordAddSheet: View {
         }
         note = record.note
     }
+
+    @MainActor
+    private func handleOCRImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let size = QuickNoteAttachmentStorage.fileSize(at: url)
+            if size > ImportLimitPolicy.maxImportBytes {
+                ocrErrorMessage = ImportLimitPolicy.fileTooLargeMessage(fileName: url.lastPathComponent, size: size)
+                showOCRError = true
+                AppHaptics.warning()
+                return
+            }
+            startOCR(for: url)
+        case .failure(let error):
+            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            showOCRError = true
+            AppHaptics.error()
+        }
+    }
+
+    @MainActor
+    private func startOCR(for url: URL) {
+        ocrTask?.cancel()
+        isRecognizingReceipt = true
+        ocrTask = Task { @MainActor in
+            defer {
+                isRecognizingReceipt = false
+                ocrTask = nil
+            }
+            do {
+                let parsed = try await ReceiptOCRService.recognize(from: url)
+                applyOCRResult(parsed)
+                ocrPreview = parsed
+                AppHaptics.success()
+            } catch is CancellationError {
+                return
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                ocrErrorMessage = message
+                showOCRError = true
+                AppHaptics.error()
+            }
+        }
+    }
+
+    @MainActor
+    private func applyOCRResult(_ result: ReceiptOCRResult) {
+        if let amountText = result.amount, !amountText.isEmpty {
+            amount = amountText
+        }
+        if let party = result.counterparty, !party.isEmpty {
+            counterparty = party
+        }
+        if let number = result.invoiceNumber, !number.isEmpty {
+            invoiceNumber = number
+        }
+        if let dateText = result.date,
+           let recognizedDate = Formatters.date.date(from: dateText) {
+            date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
+        }
+    }
 }
 
 struct ProjectFinancialRecordEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let record: ProjectFinancialRecord
+    let linkedDocuments: [ProjectDocument]
     let linkedAttachmentCount: Int
     let onSave: (ProjectFinancialRecord) -> Void
     let onDelete: (ProjectFinancialRecord) -> Void
@@ -182,14 +292,25 @@ struct ProjectFinancialRecordEditSheet: View {
     @State private var reminderStatus: ProjectFinancialReminderStatus
     @State private var note: String
     @State private var showDeleteConfirm = false
+    @State private var showOCRImporter = false
+    @State private var isRecognizingReceipt = false
+    @State private var ocrPreview: ReceiptOCRResult?
+    @State private var ocrErrorMessage = ""
+    @State private var showOCRError = false
+    @State private var ocrTask: Task<Void, Never>?
     @FocusState private var isInputFocused: Bool
 
     private var availableCategories: [ProjectFinancialCategory] {
         ProjectFinancialCategory.allowed(for: direction)
     }
 
+    private var linkedOCRCandidates: [ProjectDocument] {
+        ProjectFinancialReceiptOCRSupport.ocrCandidates(from: linkedDocuments)
+    }
+
     init(
         record: ProjectFinancialRecord,
+        linkedDocuments: [ProjectDocument],
         linkedAttachmentCount: Int,
         onSave: @escaping (ProjectFinancialRecord) -> Void,
         onDelete: @escaping (ProjectFinancialRecord) -> Void,
@@ -197,6 +318,7 @@ struct ProjectFinancialRecordEditSheet: View {
         onManageAttachments: @escaping (ProjectFinancialRecord) -> Void
     ) {
         self.record = record
+        self.linkedDocuments = linkedDocuments
         self.linkedAttachmentCount = linkedAttachmentCount
         self.onSave = onSave
         self.onDelete = onDelete
@@ -220,6 +342,45 @@ struct ProjectFinancialRecordEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("智能录入（票据 OCR）") {
+                    Button {
+                        showOCRImporter = true
+                    } label: {
+                        Label("从图片/PDF识别金额、日期、单位", systemImage: "text.viewfinder")
+                    }
+                    .disabled(isRecognizingReceipt)
+
+                    if linkedAttachmentCount > 0 {
+                        Button {
+                            startOCRFromLinkedDocuments()
+                        } label: {
+                            Label(
+                                linkedOCRCandidates.isEmpty
+                                ? "已关联票据暂不支持识别（仅图片/PDF）"
+                                : "从已关联票据一键回填（\(linkedOCRCandidates.count)）",
+                                systemImage: "doc.text.viewfinder"
+                            )
+                        }
+                        .disabled(isRecognizingReceipt || linkedOCRCandidates.isEmpty)
+                    }
+
+                    if isRecognizingReceipt {
+                        ProgressView("识别中…")
+                            .font(.caption)
+                    }
+
+                    if let ocrPreview {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("识别结果")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            ForEach(ProjectFinancialReceiptOCRSupport.summaryLines(from: ocrPreview), id: \.self) { line in
+                                Text(line)
+                                    .font(.caption2)
+                            }
+                        }
+                    }
+                }
                 Section("账目") {
                     DatePicker("日期时间", selection: $date, displayedComponents: [.date, .hourAndMinute])
                     Picker("类型", selection: $direction) {
@@ -302,6 +463,21 @@ struct ProjectFinancialRecordEditSheet: View {
                     dismiss()
                 }
             }
+            .fileImporter(
+                isPresented: $showOCRImporter,
+                allowedContentTypes: ProjectFinancialReceiptOCRSupport.allowedImportTypes,
+                allowsMultipleSelection: false
+            ) { result in
+                handleOCRImportResult(result)
+            }
+            .alert("票据识别失败", isPresented: $showOCRError) {
+                Button("知道了", role: .cancel) {}
+            } message: {
+                Text(ocrErrorMessage)
+            }
+            .onDisappear {
+                ocrTask?.cancel()
+            }
         }
     }
 
@@ -318,6 +494,172 @@ struct ProjectFinancialRecordEditSheet: View {
         value.reminderStatus = hasDueDate ? reminderStatus : .none
         value.note = note
         return value
+    }
+
+    @MainActor
+    private func handleOCRImportResult(_ result: Result<[URL], Error>) {
+        switch result {
+        case .success(let urls):
+            guard let url = urls.first else { return }
+            let size = QuickNoteAttachmentStorage.fileSize(at: url)
+            if size > ImportLimitPolicy.maxImportBytes {
+                ocrErrorMessage = ImportLimitPolicy.fileTooLargeMessage(fileName: url.lastPathComponent, size: size)
+                showOCRError = true
+                AppHaptics.warning()
+                return
+            }
+            startOCR(for: url)
+        case .failure(let error):
+            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            showOCRError = true
+            AppHaptics.error()
+        }
+    }
+
+    @MainActor
+    private func startOCR(for url: URL) {
+        ocrTask?.cancel()
+        isRecognizingReceipt = true
+        ocrTask = Task { @MainActor in
+            defer {
+                isRecognizingReceipt = false
+                ocrTask = nil
+            }
+            do {
+                let parsed = try await ReceiptOCRService.recognize(from: url)
+                applyOCRResult(parsed)
+                ocrPreview = parsed
+                AppHaptics.success()
+            } catch is CancellationError {
+                return
+            } catch {
+                let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                ocrErrorMessage = message
+                showOCRError = true
+                AppHaptics.error()
+            }
+        }
+    }
+
+    @MainActor
+    private func startOCRFromLinkedDocuments() {
+        let candidates = linkedOCRCandidates
+        guard !candidates.isEmpty else {
+            ocrErrorMessage = "已关联票据暂不支持识别，请使用图片或 PDF。"
+            showOCRError = true
+            AppHaptics.warning()
+            return
+        }
+        ocrTask?.cancel()
+        isRecognizingReceipt = true
+        ocrTask = Task { @MainActor in
+            defer {
+                isRecognizingReceipt = false
+                ocrTask = nil
+            }
+            var firstFailureMessage: String?
+            for document in candidates {
+                if Task.isCancelled { return }
+                let url = ProjectDocumentStorage.fileURL(for: document.fileName)
+                do {
+                    let parsed = try await ReceiptOCRService.recognize(from: url)
+                    applyOCRResult(parsed)
+                    ocrPreview = parsed
+                    AppHaptics.success()
+                    return
+                } catch is CancellationError {
+                    return
+                } catch {
+                    let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+                    StorageIssueLog.record("关联票据 OCR 识别失败：\(document.fileName)，\(message)")
+                    if firstFailureMessage == nil {
+                        firstFailureMessage = message
+                    }
+                }
+            }
+            if let firstFailureMessage {
+                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段（\(firstFailureMessage)）。"
+            } else {
+                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段。"
+            }
+            showOCRError = true
+            AppHaptics.error()
+        }
+    }
+
+    @MainActor
+    private func applyOCRResult(_ result: ReceiptOCRResult) {
+        if let amountText = result.amount, !amountText.isEmpty {
+            amount = amountText
+        }
+        if let party = result.counterparty, !party.isEmpty {
+            counterparty = party
+        }
+        if let number = result.invoiceNumber, !number.isEmpty {
+            invoiceNumber = number
+        }
+        if let dateText = result.date,
+           let recognizedDate = Formatters.date.date(from: dateText) {
+            date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
+        }
+    }
+}
+
+private enum ProjectFinancialReceiptOCRSupport {
+    static let allowedImportTypes: [UTType] = [.image, .pdf]
+
+    static func ocrCandidates(from documents: [ProjectDocument]) -> [ProjectDocument] {
+        documents
+            .filter { isRecognizableDocument($0) }
+            .sorted { lhs, rhs in
+                let left = Formatters.parseDateOrDateTime(lhs.createdAt) ?? .distantPast
+                let right = Formatters.parseDateOrDateTime(rhs.createdAt) ?? .distantPast
+                return left > right
+            }
+    }
+
+    static func summaryLines(from result: ReceiptOCRResult) -> [String] {
+        var lines: [String] = []
+        if let amount = result.amount, !amount.isEmpty {
+            lines.append("金额：\(amount)")
+        }
+        if let date = result.date, !date.isEmpty {
+            lines.append("日期：\(date)")
+        }
+        if let counterparty = result.counterparty, !counterparty.isEmpty {
+            lines.append("单位：\(counterparty)")
+        }
+        if let invoice = result.invoiceNumber, !invoice.isEmpty {
+            lines.append("票号：\(invoice)")
+        }
+        if lines.isEmpty {
+            lines.append("未提取到结构化字段，可手动补录。")
+        }
+        return lines
+    }
+
+    static func mergeDate(_ recognizedDay: Date, keepingTimeOf reference: Date) -> Date {
+        let calendar = Calendar.current
+        var dayComponents = calendar.dateComponents([.year, .month, .day], from: recognizedDay)
+        let timeComponents = calendar.dateComponents([.hour, .minute], from: reference)
+        dayComponents.hour = timeComponents.hour
+        dayComponents.minute = timeComponents.minute
+        return calendar.date(from: dayComponents) ?? recognizedDay
+    }
+
+    private static func isRecognizableDocument(_ document: ProjectDocument) -> Bool {
+        let ext = normalizedExtension(for: document)
+        if ext == "pdf" { return true }
+        guard !ext.isEmpty,
+              let type = UTType(filenameExtension: ext) else { return false }
+        return type.conforms(to: .image)
+    }
+
+    private static func normalizedExtension(for document: ProjectDocument) -> String {
+        let fileType = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if !fileType.isEmpty { return fileType }
+        return URL(fileURLWithPath: document.fileName).pathExtension.lowercased()
     }
 }
 
@@ -360,6 +702,14 @@ struct ProjectFinancialAttachmentSheet: View {
 
     private var selectedDocumentURLs: [URL] {
         selectedDocuments.map { ProjectDocumentStorage.fileURL(for: $0.fileName) }
+    }
+
+    private var autoMatchedDocuments: [FinancialRecordDocumentSuggestion] {
+        ProjectFinancialDocumentMatcher.suggestedDocuments(
+            for: record,
+            in: unlinkedDocuments,
+            limit: 3
+        )
     }
 
     var body: some View {
@@ -434,6 +784,45 @@ struct ProjectFinancialAttachmentSheet: View {
                         Button("拍照保存") {
                             imagePickerSource = .camera
                             showImagePicker = true
+                        }
+                    }
+                }
+
+                Section("缺票自动匹配") {
+                    if autoMatchedDocuments.isEmpty {
+                        ContentUnavailableView(
+                            "暂无匹配建议",
+                            systemImage: "wand.and.stars",
+                            description: Text("建议先在资料里补录金额、日期或单位名称，再回来一键关联。")
+                        )
+                    } else {
+                        ForEach(autoMatchedDocuments) { suggestion in
+                            HStack(alignment: .top, spacing: AppSpacing.tight) {
+                                VStack(alignment: .leading, spacing: 3) {
+                                    Text(suggestion.document.title)
+                                        .font(.callout.weight(.semibold))
+                                        .lineLimit(1)
+                                    HStack(spacing: 6) {
+                                        Text(suggestion.document.category.displayName)
+                                        if suggestion.document.amountValue.isPositive {
+                                            Text(ReportBuilder.money(suggestion.document.amountValue.doubleValue))
+                                        }
+                                    }
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    Text(suggestion.document.createdAt)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                Button("关联") {
+                                    onAttach(suggestion.document)
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .tint(Color.appPrimaryAction)
+                                .font(.caption2.weight(.semibold))
+                            }
+                            .padding(.vertical, 2)
                         }
                     }
                 }
@@ -543,7 +932,7 @@ private struct ProjectFinancialAttachmentRow: View {
         HStack(spacing: 10) {
             Button(action: onToggleSelection) {
                 Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? .orange : .secondary)
+                    .foregroundStyle(isSelected ? Color.appPrimaryAction : .secondary)
             }
             .buttonStyle(.plain)
             ProjectDocumentPDFThumbnail(document: document)
@@ -556,7 +945,7 @@ private struct ProjectFinancialAttachmentRow: View {
                 if let warning {
                     Text(warning)
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.appPrimaryAction)
                 }
             }
             Spacer()
@@ -574,6 +963,7 @@ private struct ProjectFinancialAttachmentRow: View {
 
 private struct ProjectDocumentPDFThumbnail: View {
     let document: ProjectDocument
+    @State private var thumbnail: UIImage?
 
     var body: some View {
         Group {
@@ -584,7 +974,7 @@ private struct ProjectDocumentPDFThumbnail: View {
             } else {
                 Image(systemName: fallbackIcon)
                     .font(.title3)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appDoc)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color.appDocSurfaceSubtle)
             }
@@ -592,16 +982,25 @@ private struct ProjectDocumentPDFThumbnail: View {
         .frame(width: 44, height: 54)
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.appStrokeSeparator, lineWidth: 0.5))
+        .task(id: document.fileName) {
+            await loadThumbnail()
+        }
     }
 
-    private var thumbnail: UIImage? {
-        guard let data = ProjectDocumentStorage.data(for: document.fileName) else { return nil }
-        if document.fileType.lowercased() != "pdf", let image = UIImage(data: data) {
-            return image
-        }
-        guard let pdf = PDFDocument(data: data),
-              let page = pdf.page(at: 0) else { return nil }
-        return page.thumbnail(of: CGSize(width: 88, height: 108), for: .cropBox)
+    private func loadThumbnail() async {
+        thumbnail = nil
+        guard let data = await ProjectDocumentStorage.dataAsync(for: document.fileName) else { return }
+        let fileType = document.fileType.lowercased()
+        let loaded = await Task.detached(priority: .utility) { () -> UIImage? in
+            if fileType != "pdf", let image = UIImage(data: data) {
+                return image
+            }
+            guard let pdf = PDFDocument(data: data),
+                  let page = pdf.page(at: 0) else { return nil }
+            return page.thumbnail(of: CGSize(width: 88, height: 108), for: .cropBox)
+        }.value
+        guard !Task.isCancelled else { return }
+        thumbnail = loaded
     }
 
     private var fallbackIcon: String {

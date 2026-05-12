@@ -2,9 +2,9 @@ import SwiftUI
 
 struct ConduitFillView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.conduit.innerDia") private var conduitInnerDia = "16"
-    @AppStorage("calc.conduit.wireDia") private var wireDia = "2.5"
-    @AppStorage("calc.conduit.wireCount") private var wireCount = "3"
+    @AppStorage(UserPreferenceKeys.Calculator.conduitInnerDia) private var conduitInnerDia = "16"
+    @AppStorage(UserPreferenceKeys.Calculator.conduitWireDia) private var wireDia = "2.5"
+    @AppStorage(UserPreferenceKeys.Calculator.conduitWireCount) private var wireCount = "3"
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -73,6 +73,7 @@ struct ConduitFillView: View {
         let pass = rate <= 40
         resultModel = .singleSection(
             headline: "穿线率 \(fmt(rate))%",
+            formula: "穿线率 = (导线总截面积 ÷ 线管截面积)×100%",
             items: [
                 CalculationResult.item("线管截面积", "\(fmt(conduitArea)) mm²"),
                 CalculationResult.item("导线总截面积", "\(fmt(wireArea)) mm²"),
