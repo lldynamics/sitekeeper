@@ -102,27 +102,6 @@ enum ProjectDetailFinanceDocumentActions {
         store.scheduleSave()
     }
 
-    @MainActor
-    static func migrateLegacyPayments(project: Project, legacyPayments: [PaymentRecord], store: DataStore) {
-        guard !legacyPayments.isEmpty else { return }
-        let migrated = legacyPayments.map { item in
-            ProjectFinancialRecord(
-                projectId: project.id,
-                date: item.date,
-                direction: .income,
-                category: .collection,
-                amount: item.amount,
-                counterparty: project.customerName,
-                invoiceNumber: item.isInvoiced ? "已开票" : "",
-                note: [item.method.displayName, item.note].filter { !$0.isEmpty }.joined(separator: " · ")
-            )
-        }
-        store.projectFinancialRecords.append(contentsOf: migrated)
-        let ids = Set(legacyPayments.map(\.id))
-        store.paymentRecords.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
-    }
-
     static func linkedDocuments(for record: ProjectFinancialRecord, documents: [ProjectDocument]) -> [ProjectDocument] {
         guard !record.linkedDocumentIds.isEmpty else { return [] }
         let idSet = Set(record.linkedDocumentIds)
@@ -195,6 +174,7 @@ enum ProjectDetailFinanceDocumentActions {
                     category: category,
                     amount: "",
                     linkedFinancialRecordId: linkedFinancialRecordId,
+                    linkedConstructionMethodIDs: [],
                     note: "来源: 文件导入"
                 ),
                 projectId: projectId,
@@ -216,14 +196,42 @@ enum ProjectDetailFinanceDocumentActions {
         linkedFinancialRecordId: UUID?,
         store: DataStore
     ) -> String? {
+        switch importAttachmentDocumentData(
+            data,
+            fileExtension: fileExtension,
+            title: title,
+            category: category,
+            note: note,
+            projectId: projectId,
+            linkedFinancialRecordId: linkedFinancialRecordId,
+            store: store
+        ) {
+        case .success:
+            return nil
+        case .failure(let message):
+            return message
+        }
+    }
+
+    @MainActor
+    static func importAttachmentDocumentData(
+        _ data: Data,
+        fileExtension: String,
+        title: String,
+        category: ProjectDocumentCategory = .other,
+        note: String,
+        projectId: UUID,
+        linkedFinancialRecordId: UUID?,
+        store: DataStore
+    ) -> ProjectDetailActionResult<ProjectDocument> {
         let ext = fileExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let fileName: String
         do {
             fileName = try ProjectDocumentStorage.saveDataOrThrow(data: data, projectId: projectId, fileExtension: ext.isEmpty ? "dat" : ext)
         } catch {
-            return "附件保存失败：\(error.localizedDescription)"
+            return .failure("附件保存失败：\(error.localizedDescription)")
         }
-        appendProjectDocument(
+        let document = appendProjectDocument(
             fileName: fileName,
             pageCount: 1,
             target: ProjectScanTarget(
@@ -231,13 +239,14 @@ enum ProjectDetailFinanceDocumentActions {
                 category: category,
                 amount: "",
                 linkedFinancialRecordId: linkedFinancialRecordId,
+                linkedConstructionMethodIDs: [],
                 note: note
             ),
             projectId: projectId,
             store: store,
             fileType: ext.isEmpty ? "dat" : ext
         )
-        return nil
+        return .success(document)
     }
 
     static func image(from item: PhotosPickerItem) async -> ProjectDetailActionResult<UIImage> {
@@ -276,6 +285,7 @@ enum ProjectDetailFinanceDocumentActions {
                 category: category,
                 amount: "",
                 linkedFinancialRecordId: linkedFinancialRecordId,
+                linkedConstructionMethodIDs: [],
                 note: note
             ),
             projectId: projectId,
@@ -315,6 +325,7 @@ enum ProjectDetailFinanceDocumentActions {
     }
 
     @MainActor
+    @discardableResult
     private static func appendProjectDocument(
         fileName: String,
         pageCount: Int,
@@ -323,7 +334,7 @@ enum ProjectDetailFinanceDocumentActions {
         createdAt: String = Formatters.now(),
         store: DataStore,
         fileType: String = "pdf"
-    ) {
+    ) -> ProjectDocument {
         let document = ProjectDocument(
             projectId: projectId,
             title: target.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? target.category.displayName : target.title,
@@ -333,6 +344,7 @@ enum ProjectDetailFinanceDocumentActions {
             pageCount: pageCount,
             amount: target.amount,
             linkedFinancialRecordId: target.linkedFinancialRecordId,
+            linkedConstructionMethodIDs: target.linkedConstructionMethodIDs,
             createdAt: createdAt,
             note: target.note
         )
@@ -344,6 +356,7 @@ enum ProjectDetailFinanceDocumentActions {
             }
         }
         store.scheduleSave()
+        return document
     }
 
     @MainActor

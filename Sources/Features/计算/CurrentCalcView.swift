@@ -2,10 +2,10 @@ import SwiftUI
 
 struct CurrentCalcView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.current.power") private var power: String = ""
-    @AppStorage("calc.current.voltage") private var voltage: String = "220"
-    @AppStorage("calc.current.powerFactor") private var powerFactor: String = "0.85"
-    @AppStorage("calc.current.isThreePhase") private var isThreePhase: Bool = false
+    @AppStorage(UserPreferenceKeys.Calculator.currentPower) private var power: String = ""
+    @AppStorage(UserPreferenceKeys.Calculator.currentVoltage) private var voltage: String = "220"
+    @AppStorage(UserPreferenceKeys.Calculator.currentPowerFactor) private var powerFactor: String = "0.85"
+    @AppStorage(UserPreferenceKeys.Calculator.currentIsThreePhase) private var isThreePhase: Bool = false
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
@@ -109,6 +109,9 @@ struct CurrentCalcView: View {
         let warning = current > 100
         resultModel = .singleSection(
             headline: "电流 \(String(format: "%.2f", current)) A",
+            formula: isThreePhase
+                ? "I = P×1000 ÷ (√3×U×cosφ)"
+                : "I = P×1000 ÷ (U×cosφ)",
             items: [
                 CalculationResult.item("功率", "\(String(format: "%.2f", p)) kW"),
                 CalculationResult.item("电压", "\(String(format: "%.0f", v)) V (\(isThreePhase ? "三相" : "单相"))"),

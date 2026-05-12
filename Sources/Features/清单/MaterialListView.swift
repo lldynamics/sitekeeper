@@ -6,6 +6,13 @@ struct MaterialListView: View {
         case unitPrice
     }
 
+    private struct PendingMaterialDeletePlan {
+        let ids: Set<UUID>
+        let message: String
+        let successMessage: String
+        let endSelectionAfterDelete: Bool
+    }
+
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     let focusedMaterialId: UUID?
@@ -30,6 +37,8 @@ struct MaterialListView: View {
     @State private var isSelecting = false
     @State private var bulkProjectId: UUID?
     @State private var operationMessage: String?
+    @State private var pendingDeletePlan: PendingMaterialDeletePlan?
+    @State private var showDeleteConfirm = false
     @FocusState private var addMaterialFocusedField: AddMaterialField?
 
     init(focusedMaterialId: UUID? = nil) {
@@ -87,10 +96,11 @@ struct MaterialListView: View {
                 }
                 .onDelete { offsets in
                     let ids = offsets.compactMap { filtered.indices.contains($0) ? filtered[$0].id : nil }
-                    store.materialItems.removeAll { ids.contains($0.id) }
-                    selection.subtract(ids)
-                    store.scheduleSave()
-                    operationMessage = "已删除 \(ids.count) 条材料"
+                    requestDeleteMaterials(
+                        ids: ids,
+                        message: "确认删除这 \(ids.count) 条材料吗？",
+                        successMessage: "已删除 \(ids.count) 条材料"
+                    )
                 }
             }
         }
@@ -108,14 +118,16 @@ struct MaterialListView: View {
                 HStack(spacing: 12) {
                     if !selection.isEmpty {
                         Button("批量归属") { showBulkProjectSheet = true }
-                            .font(.caption)
+                        .font(.caption)
                         Button("删除(\(selection.count))") {
-                            store.materialItems.removeAll { selection.contains($0.id) }
-                            selection.removeAll()
-                            isSelecting = false
-                            store.scheduleSave()
+                            requestDeleteMaterials(
+                                ids: Array(selection),
+                                message: "确认删除已选 \(selection.count) 条材料吗？",
+                                successMessage: "已删除 \(selection.count) 条材料",
+                                endSelectionAfterDelete: true
+                            )
                         }
-                        .font(.caption).foregroundStyle(.red)
+                        .font(.caption).foregroundStyle(.appRisk)
                     }
                     Menu {
                         Button(isSelecting ? "结束选择" : "选择材料") {
@@ -145,6 +157,21 @@ struct MaterialListView: View {
                 operationMessage = "已清空全部材料"
             }
             Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "删除材料",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible,
+            presenting: pendingDeletePlan
+        ) { plan in
+            Button("删除", role: .destructive) {
+                confirmDeleteMaterials(plan)
+            }
+            Button("取消", role: .cancel) {
+                pendingDeletePlan = nil
+            }
+        } message: { plan in
+            Text(plan.message)
         }
         .sheet(isPresented: $showAdd) {
             NavigationStack {
@@ -212,9 +239,11 @@ struct MaterialListView: View {
                     store.scheduleSave()
                 }
             } onDelete: { id in
-                store.materialItems.removeAll { $0.id == id }
-                selection.remove(id)
-                store.scheduleSave()
+                requestDeleteMaterials(
+                    ids: [id],
+                    message: "确认删除这条材料记录吗？",
+                    successMessage: "已删除材料"
+                )
             }
         }
         .onAppear(perform: openFocusedMaterialIfNeeded)
@@ -228,7 +257,7 @@ struct MaterialListView: View {
                     toggleSelection(item.id)
                 } label: {
                     Image(systemName: selection.contains(item.id) ? "checkmark.circle.fill" : "circle")
-                        .foregroundStyle(selection.contains(item.id) ? .orange : .secondary)
+                        .foregroundStyle(selection.contains(item.id) ? .appWarning : .secondary)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("选择材料")
@@ -254,11 +283,13 @@ struct MaterialListView: View {
             Spacer()
             if !isSelecting {
                 Button {
-                    store.materialItems.removeAll { $0.id == item.id }
-                    store.scheduleSave()
-                    operationMessage = "已删除材料"
+                    requestDeleteMaterials(
+                        ids: [item.id],
+                        message: "确认删除材料「\(item.name)」吗？",
+                        successMessage: "已删除材料"
+                    )
                 } label: {
-                    Image(systemName: "trash").foregroundStyle(.red)
+                    Image(systemName: "trash").foregroundStyle(.appRisk)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("删除材料")
@@ -320,6 +351,37 @@ struct MaterialListView: View {
         } else {
             selection.insert(id)
         }
+    }
+
+    private func requestDeleteMaterials(
+        ids: [UUID],
+        message: String,
+        successMessage: String,
+        endSelectionAfterDelete: Bool = false
+    ) {
+        let normalizedIDs = Set(ids)
+        guard !normalizedIDs.isEmpty else { return }
+        pendingDeletePlan = PendingMaterialDeletePlan(
+            ids: normalizedIDs,
+            message: message,
+            successMessage: successMessage,
+            endSelectionAfterDelete: endSelectionAfterDelete
+        )
+        showDeleteConfirm = true
+    }
+
+    private func confirmDeleteMaterials(_ plan: PendingMaterialDeletePlan) {
+        store.materialItems.removeAll { plan.ids.contains($0.id) }
+        selection.subtract(plan.ids)
+        if plan.endSelectionAfterDelete {
+            selection.removeAll()
+            isSelecting = false
+        } else if selection.isEmpty {
+            isSelecting = false
+        }
+        store.scheduleSave()
+        operationMessage = plan.successMessage
+        pendingDeletePlan = nil
     }
 
     private func applyBulkProject() {
@@ -394,9 +456,9 @@ struct MaterialListView: View {
     private func purchaseStatusColor(_ status: MaterialPurchaseStatus) -> Color {
         switch status {
         case .notPurchased: return .secondary
-        case .purchased: return .orange
-        case .arrived: return .blue
-        case .used: return .green
+        case .purchased: return .appWarning
+        case .arrived: return .appInventory
+        case .used: return .appSuccess
         }
     }
 }

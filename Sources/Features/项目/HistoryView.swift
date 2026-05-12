@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct HistoryView: View {
+struct CalculationHistoryView: View {
     @Environment(DataStore.self) private var store
     @State private var selectedRecord: HistoryRecord?
     @State private var showClearConfirm = false

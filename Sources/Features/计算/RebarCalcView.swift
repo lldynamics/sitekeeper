@@ -2,10 +2,10 @@ import SwiftUI
 
 struct RebarCalcView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.rebar.dia") private var dia = "12"
-    @AppStorage("calc.rebar.len") private var len = "9"
-    @AppStorage("calc.rebar.qty") private var qty = "30"
-    @AppStorage("calc.rebar.price") private var price = ""
+    @AppStorage(UserPreferenceKeys.Calculator.rebarDia) private var dia = "12"
+    @AppStorage(UserPreferenceKeys.Calculator.rebarLen) private var len = "9"
+    @AppStorage(UserPreferenceKeys.Calculator.rebarQty) private var qty = "30"
+    @AppStorage(UserPreferenceKeys.Calculator.rebarPrice) private var price = ""
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -70,7 +70,11 @@ struct RebarCalcView: View {
         if let p = CalculatorInputParser.double(price), p > 0 {
             items.append(CalculationResult.item("造价", "\(fmt(tw * p)) 元"))
         }
-        resultModel = .singleSection(headline: "总重 \(fmt(tw)) kg", items: items)
+        resultModel = .singleSection(
+            headline: "总重 \(fmt(tw)) kg",
+            formula: "单位重(kg/m)=d²÷162；总重=单位重×长度×根数",
+            items: items
+        )
         result = lines.joined(separator: "\n")
         saveHistory("总重 \(fmt(tw)) kg")
     }

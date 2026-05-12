@@ -16,7 +16,7 @@
 "知道了" = "知道了";
 "数据读写异常" = "数据读写异常";
 "今日工作台" = "今日工作台";
-"今日关注工程" = "今日关注工程";
+"今日关注工程" = "进行中的工程";
 "当前：" = "当前：";
 "选择工程后，快捷记录会自动带入项目" = "选择工程后，快捷记录会自动带入项目";
 "按风险排序" = "按风险排序";
@@ -290,7 +290,6 @@
 "删除项目及全部关联数据" = "删除项目及全部关联数据";
 "编辑资料" = "编辑资料";
 "导出项目交付包 ZIP" = "导出项目交付包 ZIP";
-"导出施工日报" = "导出施工日报";
 "当前设备不支持扫描" = "当前设备不支持扫描";
 "请在支持相机扫描的 iPhone 或 iPad 上使用" = "请在支持相机扫描的 iPhone 或 iPad 上使用";
 "项目记账" = "项目记账";
@@ -729,6 +728,9 @@
 "widget_label_project_progress" = "项目进度";
 "widget_label_material_types" = "材料种类";
 "widget_label_low_stock" = "库存不足";
+"widget_label_missing_receipt" = "缺票";
+"widget_label_price_spike" = "价格异动";
+"widget_label_backup_overdue" = "备份超期";
 "widget_pending_items_text" = "项待处理";
 "widget_no_active_projects" = "暂无进行中的项目";
 "widget_project_status_active" = "进行中";
@@ -737,3 +739,5 @@
 "widget_project_status_settled" = "已结算";
 "widget_project_status_archived" = "已归档";
 "widget_project_status_unknown" = "未知";
+"上一个" = "上一个";
+"下一个" = "下一个";

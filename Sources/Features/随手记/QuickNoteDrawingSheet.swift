@@ -56,9 +56,9 @@ struct QuickNoteDrawingSheet: View {
                         Label("照片标注", systemImage: "photo")
                     }
                     Button { isEraser = false } label: { Label("画笔", systemImage: "pencil") }
-                        .tint(isEraser ? .gray : .orange)
+                        .tint(isEraser ? .appMuted : .appWarning)
                     Button { isEraser = true } label: { Label("橡皮", systemImage: "eraser") }
-                        .tint(isEraser ? .orange : .gray)
+                        .tint(isEraser ? .appWarning : .appMuted)
                     Button(role: .destructive) {
                         canvasView.drawing = PKDrawing()
                         backgroundImage = nil

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ProjectOverviewView<LogRowContent: View>: View {
     let project: Project
+    let businessSummary: ProjectBusinessSummary
     let paidAmount: Double
     let unpaidAmount: Double
     let materialCost: Double
@@ -23,8 +24,12 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     let missingReceiptCount: Int
     let hasTodayLog: Bool
     let onOpenFinance: () -> Void
+    let onOpenFinanceUnsettled: () -> Void
+    let onOpenFinanceMissingReceipt: () -> Void
     let onOpenRecords: () -> Void
     let onOpenAssets: () -> Void
+    let onOpenLogs: () -> Void
+    let onOpenTodos: () -> Void
     let onAddLog: () -> Void
     let onEditProgress: (ProgressTask) -> Void
     let logRow: (DailyLog) -> LogRowContent
@@ -32,48 +37,61 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     var body: some View {
         Group {
             Section("经营概览") {
+                ProjectBusinessCardsView(
+                    summary: businessSummary,
+                    onOpenCore: onOpenFinance,
+                    onOpenInsight: onOpenFinanceUnsettled
+                )
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: AppSpacing.tight)], spacing: AppSpacing.tight) {
                     ProjectOverviewSummaryCard(
-                        title: "合同 / 收款",
-                        systemImage: "yensign.circle.fill",
-                        tint: .pink,
+                        title: "资料",
+                        systemImage: "folder.badge.gearshape.fill",
+                        tint: .appDoc,
                         metrics: [
-                            .init(title: "合同", value: ReportBuilder.money(project.contractAmountValue.doubleValue)),
-                            .init(title: "已收", value: ReportBuilder.money(paidAmount), color: .green),
-                            .init(title: "未收", value: ReportBuilder.money(unpaidAmount), color: unpaidAmount > 0 ? .orange : .secondary),
-                            .init(title: "状态", value: paymentStatus.displayName)
-                        ],
-                        action: onOpenFinance
-                    )
-                    ProjectOverviewSummaryCard(
-                        title: "成本 / 利润",
-                        systemImage: "chart.pie.fill",
-                        tint: .orange,
-                        metrics: [
-                            .init(title: "材料", value: ReportBuilder.money(materialCost)),
-                            .init(title: "人工", value: ReportBuilder.money(laborCost)),
-                            .init(title: "工时", value: laborHours),
-                            .init(title: "毛利", value: ReportBuilder.money(estimatedProfit), color: estimatedProfit >= 0 ? .green : .red)
-                        ],
-                        action: onOpenFinance
-                    )
-                    ProjectOverviewSummaryCard(
-                        title: "记录 / 资料",
-                        systemImage: "folder.badge.gearshape",
-                        tint: .blue,
-                        metrics: [
-                            .init(title: "日志", value: "\(logDayCount) 天"),
-                            .init(title: "记账", value: "\(financialCount) 笔"),
-                            .init(title: "材料", value: "\(materialCount) 项"),
-                            .init(title: "资料", value: "\(documentCount) 份")
+                            .init(title: "资料", value: "\(documentCount) 份"),
+                            .init(title: "联系人", value: "\(contactCount) 人"),
+                            .init(title: "记账附件", value: "\(missingReceiptCount) 缺票", color: missingReceiptCount > 0 ? .appFinance : .secondary)
                         ],
                         action: onOpenAssets
+                    )
+                    ProjectOverviewSummaryCard(
+                        title: "日志",
+                        systemImage: "book.pages.fill",
+                        tint: .appSuccess,
+                        metrics: [
+                            .init(title: "日志天数", value: "\(logDayCount) 天"),
+                            .init(title: "今日日志", value: hasTodayLog ? "已填写" : "未填写", color: hasTodayLog ? .appSuccess : .appWarning)
+                        ],
+                        action: onOpenLogs
+                    )
+                    ProjectOverviewSummaryCard(
+                        title: "待办",
+                        systemImage: "checklist.checked",
+                        tint: .appWarning,
+                        metrics: [
+                            .init(title: "未完成", value: "\(todos.count) 项"),
+                            .init(title: "延期", value: "\(todos.filter(\.isOverdue).count) 项", color: todos.contains(where: \.isOverdue) ? .appRisk : .secondary)
+                        ],
+                        action: onOpenTodos
+                    )
+                    ProjectOverviewSummaryCard(
+                        title: "风险",
+                        systemImage: "exclamationmark.triangle.fill",
+                        tint: .appRisk,
+                        metrics: [
+                            .init(title: "延期事项", value: "\(overdueCount) 项", color: overdueCount > 0 ? .appRisk : .secondary),
+                            .init(title: "缺票账目", value: "\(missingReceiptCount) 笔", color: missingReceiptCount > 0 ? .appFinance : .secondary),
+                            .init(title: "今日日志", value: hasTodayLog ? "已填写" : "未填写", color: hasTodayLog ? .appSuccess : .appWarning),
+                            .init(title: "未回款", value: ReportBuilder.money(unpaidAmount), color: unpaidAmount > 0 ? .appFinance : .appSuccess)
+                        ],
+                        style: .risk(hasRisk: hasActiveRisk),
+                        action: riskCardAction
                     )
                 }
                 Button {
                     onOpenRecords()
                 } label: {
-                    Label("查看现场记录和进度", systemImage: "checklist.checked")
+                    Label("查看现场、资料与财务明细", systemImage: "checklist.checked")
                 }
             }
 
@@ -131,7 +149,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                             Spacer()
                             Text(todo.isOverdue ? "延期" : todo.dueDate)
                                 .font(.caption)
-                                .foregroundStyle(todo.isOverdue ? .red : .secondary)
+                                .foregroundStyle(todo.isOverdue ? Color.appRisk : .secondary)
                         }
                     }
                 }
@@ -142,19 +160,19 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     private var nextStepSuggestions: [ProjectNextStepSuggestion] {
         var suggestions: [ProjectNextStepSuggestion] = []
         if !hasTodayLog {
-            suggestions.append(.init(title: "补写今日日志", subtitle: "今天还没有施工日志", systemImage: "book.pages.fill", tint: .green, action: .addLog))
+            suggestions.append(.init(title: "补写今日日志", subtitle: "今天还没有施工日志", systemImage: "book.pages.fill", tint: .appSuccess, action: .addLog))
         }
         if overdueCount > 0 {
-            suggestions.append(.init(title: "处理延期事项", subtitle: "\(overdueCount) 项需要跟进", systemImage: "calendar.badge.exclamationmark", tint: .red, action: .records))
+            suggestions.append(.init(title: "处理延期事项", subtitle: "\(overdueCount) 项需要跟进", systemImage: "calendar.badge.exclamationmark", tint: .appRisk, action: .records))
         }
         if unpaidAmount > 0 {
-            suggestions.append(.init(title: "跟进未收款", subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .orange, action: .finance))
+            suggestions.append(.init(title: "跟进未收款", subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .appFinance, action: .finance))
         }
         if missingReceiptCount > 0 {
-            suggestions.append(.init(title: "补齐票据资料", subtitle: "\(missingReceiptCount) 笔账目缺票", systemImage: "doc.badge.plus", tint: .brown, action: .assets))
+            suggestions.append(.init(title: "补齐票据资料", subtitle: "\(missingReceiptCount) 笔账目缺票", systemImage: "doc.badge.plus", tint: .appDoc, action: .assets))
         }
         if progressTasks.isEmpty {
-            suggestions.append(.init(title: "添加进度任务", subtitle: "用项目看板跟踪节点", systemImage: "checklist.checked", tint: .blue, action: .records))
+            suggestions.append(.init(title: "添加进度任务", subtitle: "用项目看板跟踪节点", systemImage: "checklist.checked", tint: .appWarning, action: .records))
         }
         return Array(suggestions.prefix(4))
     }
@@ -166,6 +184,30 @@ struct ProjectOverviewView<LogRowContent: View>: View {
         if contract <= 0 { return .partial }
         return .partial
     }
+
+    private var hasActiveRisk: Bool {
+        overdueCount > 0 || missingReceiptCount > 0 || !hasTodayLog || unpaidAmount > 0
+    }
+
+    private func riskCardAction() {
+        if missingReceiptCount > 0 {
+            onOpenFinanceMissingReceipt()
+            return
+        }
+        if unpaidAmount > 0 {
+            onOpenFinanceUnsettled()
+            return
+        }
+        if !hasTodayLog {
+            onOpenLogs()
+            return
+        }
+        if overdueCount > 0 {
+            onOpenTodos()
+            return
+        }
+        onOpenRecords()
+    }
 }
 
 private struct ProjectOverviewSummaryMetric: Identifiable {
@@ -176,10 +218,16 @@ private struct ProjectOverviewSummaryMetric: Identifiable {
 }
 
 private struct ProjectOverviewSummaryCard: View {
+    enum Style {
+        case regular
+        case risk(hasRisk: Bool)
+    }
+
     let title: String
     let systemImage: String
     let tint: Color
     let metrics: [ProjectOverviewSummaryMetric]
+    var style: Style = .regular
     let action: () -> Void
 
     var body: some View {
@@ -187,24 +235,25 @@ private struct ProjectOverviewSummaryCard: View {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 HStack(spacing: AppSpacing.tight * 0.75) {
                     Image(systemName: systemImage)
-                        .foregroundStyle(tint)
+                        .foregroundStyle(headerIconColor)
                     Text(title)
                         .font(.caption.weight(.semibold))
+                        .foregroundStyle(primaryTextColor)
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(secondaryTextColor)
                 }
 
                 ForEach(metrics) { metric in
                     HStack(alignment: .firstTextBaseline) {
                         Text(metric.title)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(secondaryTextColor)
                         Spacer(minLength: AppSpacing.tight)
                         Text(metric.value)
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(metric.color)
+                            .foregroundStyle(metricValueColor(metric))
                             .lineLimit(1)
                             .minimumScaleFactor(0.75)
                     }
@@ -214,11 +263,70 @@ private struct ProjectOverviewSummaryCard: View {
             .padding(AppSpacing.normal)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                    .fill(backgroundColor)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
+                    .strokeBorder(borderColor, lineWidth: borderWidth)
             )
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
+        .accessibilityLabel(accessibilityLabelText)
+    }
+
+    private var isSolidRisk: Bool {
+        if case .risk(let hasRisk) = style {
+            return hasRisk
+        }
+        return false
+    }
+
+    private var isSafeRisk: Bool {
+        if case .risk(let hasRisk) = style {
+            return !hasRisk
+        }
+        return false
+    }
+
+    private var backgroundColor: Color {
+        switch style {
+        case .regular:
+            return Color(uiColor: .secondarySystemGroupedBackground)
+        case .risk(let hasRisk):
+            return hasRisk ? Color.appRisk : Color.appSuccessSurfaceSubtle
+        }
+    }
+
+    private var borderColor: Color {
+        isSafeRisk ? Color.appSuccess.opacity(0.35) : Color.clear
+    }
+
+    private var borderWidth: CGFloat {
+        isSafeRisk ? 1 : 0
+    }
+
+    private var headerIconColor: Color {
+        if isSolidRisk { return .white }
+        if isSafeRisk { return .appSuccess }
+        return tint
+    }
+
+    private var primaryTextColor: Color {
+        isSolidRisk ? .white : .primary
+    }
+
+    private var secondaryTextColor: Color {
+        isSolidRisk ? Color.white.opacity(0.82) : .secondary
+    }
+
+    private func metricValueColor(_ metric: ProjectOverviewSummaryMetric) -> Color {
+        isSolidRisk ? .white : metric.color
+    }
+
+    private var accessibilityLabelText: String {
+        let values = metrics.map { "\($0.title)\($0.value)" }.joined(separator: "，")
+        return "\(title)，\(values)"
     }
 }
 
@@ -250,7 +358,7 @@ private struct ProjectNextStepSuggestionsView: View {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
                 Label("当前项目状态良好", systemImage: "checkmark.seal.fill")
                     .font(.callout.weight(.semibold))
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.appSuccess)
                 Text("暂无需要优先处理的日志、延期、回款或票据问题。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -355,7 +463,7 @@ private struct ProjectProgressGanttView: View {
                         Spacer()
                         Text("今天")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.appPrimaryAction)
                         Text("共 \(bars.count) 项")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -387,7 +495,7 @@ private struct ProjectProgressGanttView: View {
                         .offset(x: CGFloat(offset) * dayWidth)
                 }
                 Rectangle()
-                    .fill(Color.orange.opacity(0.65))
+                    .fill(Color.appPrimaryAction.opacity(0.65))
                     .frame(width: 2)
                     .offset(x: CGFloat(30) * dayWidth)
             }
@@ -436,12 +544,12 @@ private struct ProjectProgressGanttView: View {
         var id: UUID { task.id }
 
         var color: Color {
-            if task.clampedCompletion >= 1 { return .green }
+            if task.clampedCompletion >= 1 { return .appSuccess }
             if let due = Formatters.date.date(from: task.dueDate),
                due < Calendar.current.startOfDay(for: Date()) {
-                return .red
+                return .appRisk
             }
-            return .orange
+            return .appWarning
         }
     }
 }

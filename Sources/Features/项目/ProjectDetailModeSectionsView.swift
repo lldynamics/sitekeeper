@@ -22,11 +22,16 @@ struct ProjectDetailModeSectionsView: View {
     let relatedProgress: [ProgressTask]
     let relatedDrawings: [ProjectDrawing]
     let relatedContacts: [ProjectContact]
+    let allProjectContacts: [ProjectContact]
+    let constructionMethods: [ConstructionMethod]
+    let supplierProfiles: [SupplierProfile]
+    let allProjects: [Project]
+    let allFinancialRecords: [ProjectFinancialRecord]
     let relatedFinancialRecords: [ProjectFinancialRecord]
+    let allDocuments: [ProjectDocument]
     let relatedDocuments: [ProjectDocument]
     let relatedQuickNotes: [QuickNote]
     let relatedTodos: [SiteTodo]
-    let legacyPayments: [PaymentRecord]
     let filteredDrawings: [ProjectDrawing]
     let financeJumpFilter: ProjectFinanceJumpFilter
     let prefersInlineSections: Bool
@@ -43,6 +48,8 @@ struct ProjectDetailModeSectionsView: View {
     let onAddContact: () -> Void
     let onImportDrawing: () -> Void
     let onOpenMode: (ProjectDetailMode) -> Void
+    let onOpenFinanceFilter: (ProjectFinanceJumpFilter) -> Void
+    let onOpenTodoFilter: () -> Void
     let onScanDocument: () -> Void
     let onCaptureDocumentPhoto: () -> Void
     let onEditMaterial: (MaterialItem) -> Void
@@ -61,7 +68,6 @@ struct ProjectDetailModeSectionsView: View {
     let onOpenDocument: (ProjectDocument) -> Void
     let onLinkDocumentToFinancialRecord: (UUID, UUID) -> Void
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
-    let onMigrateLegacyPayments: () -> Void
     let onResetFinanceJumpFilter: () -> Void
 
     var body: some View {
@@ -106,7 +112,6 @@ struct ProjectDetailModeSectionsView: View {
                     Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
                 }
             }
-            legacyPaymentMigrationSection
             anchorMarker(.timeline)
             ProjectTimelineSectionView(items: timelineItems)
         }
@@ -115,6 +120,7 @@ struct ProjectDetailModeSectionsView: View {
     private var overviewSections: some View {
         ProjectOverviewView(
             project: project,
+            businessSummary: overviewBusinessSummary,
             paidAmount: paidAmount,
             unpaidAmount: unpaidAmount,
             materialCost: materialCost,
@@ -135,14 +141,53 @@ struct ProjectDetailModeSectionsView: View {
             overdueCount: overviewOverdueCount,
             missingReceiptCount: overviewMissingReceiptCount,
             hasTodayLog: overviewHasTodayLog,
-            onOpenFinance: { onOpenMode(.finance) },
+            onOpenFinance: { onOpenFinanceFilter(.none) },
+            onOpenFinanceUnsettled: {
+                onOpenFinanceFilter(.unsettled)
+            },
+            onOpenFinanceMissingReceipt: {
+                onOpenFinanceFilter(.missingReceipt)
+            },
             onOpenRecords: { onOpenMode(.records) },
             onOpenAssets: { onOpenMode(.assets) },
+            onOpenLogs: { onOpenMode(.records) },
+            onOpenTodos: onOpenTodoFilter,
             onAddLog: onAddLog,
             onEditProgress: onEditProgress,
             logRow: { log in
                 ProjectDetailLogRowView(log: log)
             }
+        )
+    }
+
+    private var overviewBusinessSummary: ProjectBusinessSummary {
+        ProjectBusinessSummary(
+            quoteTotal: relatedQuotes.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) },
+            contractAmount: project.contractAmountValue.doubleValue,
+            paidAmount: paidAmount,
+            receivableAmount: unpaidAmount,
+            receivableAgeDays: overviewReceivableAgeDays,
+            recentCollection: overviewRecentCollection,
+            materialCost: materialCost,
+            laborCostAmount: laborCost,
+            pendingMaterialCount: relatedMaterials.filter { $0.quantityValue.doubleValue == 0 }.count,
+            unpricedQuoteCount: relatedQuotes.filter { $0.unitPriceValue.doubleValue == 0 }.count
+        )
+    }
+
+    private var overviewReceivableAgeDays: Int? {
+        guard unpaidAmount > 0 else { return nil }
+        guard let endDate = Formatters.date.date(from: project.expectedEndDate) else { return nil }
+        let today = Calendar.current.startOfDay(for: Date())
+        let dueDate = Calendar.current.startOfDay(for: endDate)
+        let days = Calendar.current.dateComponents([.day], from: dueDate, to: today).day ?? 0
+        return max(days, 0)
+    }
+
+    private var overviewRecentCollection: CollectionSnapshot? {
+        ProjectFinancialMetrics.latestCollection(
+            records: relatedFinancialRecords,
+            projectName: { _ in project.name }
         )
     }
 
@@ -179,7 +224,6 @@ struct ProjectDetailModeSectionsView: View {
                         Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
                     }
                 }
-                legacyPaymentMigrationSection
             } else if financeJumpFilter == .none {
                 ProjectFinanceHubSectionView(
                     financialCount: relatedFinancialRecords.count,
@@ -191,9 +235,7 @@ struct ProjectDetailModeSectionsView: View {
                     quoteDestination: { List { quoteSections } },
                     materialDestination: { List { materialSections } },
                     laborDestination: { List { laborSections } },
-                    warehouseDestination: { ProjectWarehouseView(project: project) },
-                    legacyPaymentsCount: legacyPayments.count,
-                    onMigrateLegacyPayments: onMigrateLegacyPayments
+                    warehouseDestination: { ProjectWarehouseView(project: project) }
                 )
             } else {
                 projectBookkeepingDestination
@@ -224,7 +266,7 @@ struct ProjectDetailModeSectionsView: View {
         ProjectDetailPrimaryActionList(
             title: "新增账目",
             systemImage: "plus.circle.fill",
-            tint: .pink,
+            tint: .appPrimaryAction,
             action: onAddFinancialRecord
         ) {
             projectBookkeepingSection
@@ -235,7 +277,7 @@ struct ProjectDetailModeSectionsView: View {
         ProjectDetailPrimaryActionList(
             title: "扫描并添加资料",
             systemImage: "viewfinder",
-            tint: .brown,
+            tint: .appDoc,
             action: {
                 onScanDocument()
             }
@@ -248,7 +290,7 @@ struct ProjectDetailModeSectionsView: View {
         ProjectDetailPrimaryActionList(
             title: "添加联系人",
             systemImage: "person.crop.circle.badge.plus",
-            tint: .blue,
+            tint: .appPrimaryAction,
             action: onAddContact
         ) {
             contactSections
@@ -323,6 +365,12 @@ struct ProjectDetailModeSectionsView: View {
     private var projectBookkeepingSection: some View {
         ProjectBookkeepingView(
             records: relatedFinancialRecords,
+            supplierProfiles: supplierProfiles,
+            projectContacts: allProjectContacts,
+            projects: allProjects,
+            allFinancialRecords: allFinancialRecords,
+            allProjectDocuments: allDocuments,
+            projectCustomerName: project.customerName,
             linkedDocuments: linkedDocuments,
             onEdit: onEditFinancialRecord,
             onDelete: onDeleteFinancialRecords,
@@ -345,6 +393,7 @@ struct ProjectDetailModeSectionsView: View {
             ProjectDocumentsView(
                 documents: relatedDocuments,
                 financialRecords: relatedFinancialRecords,
+                constructionMethods: constructionMethods,
                 icon: ProjectDetailFinanceDocumentHelper.documentIcon(_:),
                 onOpen: onOpenDocument,
                 onLink: onLinkDocumentToFinancialRecord
@@ -399,19 +448,5 @@ struct ProjectDetailModeSectionsView: View {
     private var overviewHasTodayLog: Bool {
         let today = Formatters.date.string(from: Date())
         return relatedLogs.contains { $0.date == today }
-    }
-
-    @ViewBuilder
-    private var legacyPaymentMigrationSection: some View {
-        if legacyPayments.count > 0 {
-            Section("旧版收款记录") {
-                Text(String(format: String(localized: "检测到 %d 条历史收款记录，建议迁移到\"项目财务流水\"统一管理。"), legacyPayments.count))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button("迁移收款到财务流水") {
-                    onMigrateLegacyPayments()
-                }
-            }
-        }
     }
 }

@@ -2,12 +2,12 @@ import SwiftUI
 
 struct VoltageDropView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.voltageDrop.current") private var current: String = ""
-    @AppStorage("calc.voltageDrop.length") private var length: String = ""
-    @AppStorage("calc.voltageDrop.material") private var materialRawValue: String = WireMaterial.copper.rawValue
-    @AppStorage("calc.voltageDrop.section") private var section: String = "2.5"
-    @AppStorage("calc.voltageDrop.voltage") private var voltage: String = "220"
-    @AppStorage("calc.voltageDrop.isLoopLength") private var isLoopLength: Bool = false  // true = 回路长度(已含来回), false = 单程距离
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropCurrent) private var current: String = ""
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropLength) private var length: String = ""
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropMaterial) private var materialRawValue: String = WireMaterial.copper.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropSection) private var section: String = "2.5"
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropVoltage) private var voltage: String = "220"
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropIsLoopLength) private var isLoopLength: Bool = false  // true = 回路长度(已含来回), false = 单程距离
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
@@ -60,7 +60,7 @@ struct VoltageDropView: View {
                                 AppHaptics.impact(.light, intensity: 0.65)
                             }
                                 .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4)
-                                .background(section == s ? Color.orange : Color(uiColor: .secondarySystemGroupedBackground))
+                                .background(section == s ? Color.appPrimaryAction : Color(uiColor: .secondarySystemGroupedBackground))
                                 .foregroundStyle(section == s ? .white : .primary)
                                 .clipShape(Capsule())
                         }
@@ -83,7 +83,7 @@ struct VoltageDropView: View {
                             VStack(spacing: 2) {
                                 Text(formatSection(item)).font(.caption2)
                                 Text("\(Int(EngineeringCalculations.ampacity(for: item, isCopper: material == .copper)))A")
-                                    .font(.caption.weight(.medium)).foregroundStyle(.blue)
+                                    .font(.caption.weight(.medium)).foregroundStyle(Color.appDoc)
                             }
                             .padding(6)
                             .background(formatSection(item) == section ? Color.appDocSurfaceSubtle : Color.clear)
@@ -156,6 +156,7 @@ struct VoltageDropView: View {
         let warning = dropPercent > 5
         resultModel = .singleSection(
             headline: "压降 \(String(format: "%.2f", dropPercent))%",
+            formula: "ΔU = I×(ρ×L有效÷S)，压降% = (ΔU÷U)×100%",
             items: [
                 CalculationResult.item("材质", material == .copper ? "铜" : "铝"),
                 CalculationResult.item("有效长度", "\(String(format: "%.1f", effectiveLength)) m"),

@@ -20,11 +20,41 @@ struct ChecklistTabView: View {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
 
+    private func normalizedQuickToolID(_ id: String) -> String {
+        switch id {
+        case "warehouse", "material-sheet", "material-library":
+            return "material-center"
+        case "global-calc":
+            return "calculators"
+        case "business-board":
+            return "bookkeeping"
+        default:
+            return id
+        }
+    }
+
+    private var practicalTools: [QuickToolEntry] {
+        ToolboxCatalog.practicalTools
+    }
+
     private var quickSelectedToolIDs: [String] {
-        let rawIDs = quickToolOrderRaw.split(separator: ",").map(String.init).filter { !$0.isEmpty }
-        let validRawIDs = rawIDs.filter { id in ToolboxCatalog.practicalTools.contains(where: { $0.id == id }) }
+        let rawIDs = quickToolOrderRaw
+            .split(separator: ",")
+            .map(String.init)
+            .filter { !$0.isEmpty }
+            .map(normalizedQuickToolID(_:))
+
+        var deduplicatedIDs: [String] = []
+        var seen = Set<String>()
+        for id in rawIDs where seen.insert(id).inserted {
+            deduplicatedIDs.append(id)
+        }
+
+        let validRawIDs = deduplicatedIDs.filter { id in
+            practicalTools.contains(where: { $0.id == id })
+        }
         if !quickToolCustomized && validRawIDs.isEmpty {
-            return ToolboxCatalog.defaultQuickToolIDs.filter { id in ToolboxCatalog.practicalTools.contains(where: { $0.id == id }) }
+            return ToolboxCatalog.defaultQuickToolIDs.filter { id in practicalTools.contains(where: { $0.id == id }) }
         }
         return validRawIDs
     }
@@ -35,7 +65,7 @@ struct ChecklistTabView: View {
 
     private var orderedVisibleTools: [QuickToolEntry] {
         quickSelectedToolIDs.compactMap { id in
-            ToolboxCatalog.practicalTools.first(where: { $0.id == id })
+            practicalTools.first(where: { $0.id == id })
         }
     }
 
@@ -44,7 +74,7 @@ struct ChecklistTabView: View {
     }
 
     private var practicalUnselectedTools: [QuickToolEntry] {
-        ToolboxCatalog.practicalTools.filter { !selectedQuickToolIDSet.contains($0.id) }
+        practicalTools.filter { !selectedQuickToolIDSet.contains($0.id) }
     }
 
     private var toolboxSections: [ToolboxSection] {
@@ -58,8 +88,7 @@ struct ChecklistTabView: View {
             )
         }
         var otherItems: [ToolboxItem] = [
-            ToolboxItem(icon: "stethoscope", title: "数据健康检查", desc: "缺失文件和无效关联检查", color: .orange, destination: .dataHealth),
-            ToolboxItem(icon: "person.2.badge.gearshape.fill", title: "供应商库", desc: "联系人、电话、供货范围和备注", color: .blue, destination: .supplierDatabase)
+            ToolboxItem(icon: "person.2.badge.gearshape.fill", title: "供应商库", desc: "联系人、电话、供货范围和备注", color: .appDoc, destination: .supplierDatabase)
         ]
         if showTemplates {
             otherItems.insert(
@@ -67,7 +96,7 @@ struct ChecklistTabView: View {
                     icon: "doc.text",
                     title: "模板管理",
                     desc: "常用日志、待办和项目模板（应用前先预览确认）",
-                    color: .purple,
+                    color: .appQuotation,
                     destination: .template
                 ),
                 at: 1
@@ -115,7 +144,7 @@ struct ChecklistTabView: View {
                                     .foregroundStyle(.secondary)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 6)
-                                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.orange.opacity(0.1)))
+                                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.appPrimarySurfaceSubtle))
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
@@ -136,7 +165,7 @@ struct ChecklistTabView: View {
                         if practicalUnselectedTools.isEmpty {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color.appSuccess)
                                 Text("已添加全部工具，长按拖拽可排序")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
@@ -196,14 +225,14 @@ struct ChecklistTabView: View {
                             Text("长按拖拽可排序，点击自定义可增删")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
-                                .listRowBackground(Color.orange.opacity(0.08))
+                                .listRowBackground(Color.appPrimarySurfaceSubtle)
                         }
                     }
                     if practicalUnselectedTools.isEmpty {
                         Section {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(.green)
+                                    .foregroundStyle(Color.appSuccess)
                                 Text("已添加全部工具，长按拖拽可排序")
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
@@ -242,7 +271,7 @@ struct ChecklistTabView: View {
             QuickToolEditorView(
                 currentOrderIDs: quickSelectedToolIDs,
                 defaultOrderIDs: ToolboxCatalog.defaultQuickToolIDs,
-                allTools: ToolboxCatalog.practicalTools,
+                allTools: practicalTools,
                 onSave: { newIDs in
                     quickToolCustomized = true
                     quickToolOrderRaw = newIDs.joined(separator: ",")
@@ -267,20 +296,14 @@ struct ChecklistTabView: View {
         switch destination {
         case .watermark:
             WatermarkCameraToolView()
-        case .warehouse:
-            ProjectWarehouseOverviewView()
+        case .materialCenter:
+            MaterialCenterView()
         case .files:
             ProjectFileBrowserView()
         case .calculators:
             QuickToolCategoryListView()
-        case .globalCalc:
-            HistoryView()
         case .bookkeeping:
             BookkeepingQuickEntryView()
-        case .businessBoard:
-            ProjectBusinessView()
-        case .materialSheet:
-            MaterialSheetView()
         case .quotation:
             QuotationView()
         case .labor:
@@ -289,16 +312,10 @@ struct ChecklistTabView: View {
             ProjectContactDatabaseView()
         case .methods:
             ConstructionMethodLibraryView()
-        case .quoteTemplates:
-            QuotationTemplateLibraryView()
-        case .materialLibrary:
-            MaterialLibraryView()
         case .export:
             DataManagementView(initialTab: "导出")
         case .template:
             TemplateView()
-        case .dataHealth:
-            DataHealthView()
         case .supplierDatabase:
             SupplierDatabaseView()
         }

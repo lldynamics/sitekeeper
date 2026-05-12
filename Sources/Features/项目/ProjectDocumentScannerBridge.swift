@@ -55,6 +55,7 @@ struct ProjectScanTarget: Identifiable {
     var category: ProjectDocumentCategory
     var amount: String
     var linkedFinancialRecordId: UUID?
+    var linkedConstructionMethodIDs: [UUID] = []
     var note: String
 }
 

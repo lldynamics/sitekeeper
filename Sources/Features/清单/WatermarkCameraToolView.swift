@@ -559,9 +559,9 @@ private enum WatermarkToastStyle {
     var tint: Color {
         switch self {
         case .success:
-            return .green
+            return .appSuccess
         case .error:
-            return .red
+            return .appRisk
         }
     }
 
@@ -638,7 +638,7 @@ private struct WatermarkQuickActionsBar: View {
                 .padding(.vertical, 8)
         }
         .buttonStyle(.borderedProminent)
-        .tint(.orange)
+        .tint(.appWarning)
         .disabled(disabled)
     }
 }
@@ -709,7 +709,7 @@ private struct WatermarkCameraCaptureView: View {
                     } label: {
                         ZStack {
                             Circle().fill(.white).frame(width: 74, height: 74)
-                            Circle().stroke(.orange, lineWidth: 4).frame(width: 62, height: 62)
+                            Circle().stroke(.appWarning, lineWidth: 4).frame(width: 62, height: 62)
                         }
                     }
                     .disabled(isCapturing)

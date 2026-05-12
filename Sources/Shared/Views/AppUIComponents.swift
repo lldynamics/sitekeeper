@@ -17,9 +17,9 @@ enum AppIconButtonTone {
         case .normal:
             return .primary
         case .primary:
-            return .orange
+            return .appPrimaryAction
         case .destructive:
-            return .red
+            return .appRisk
         }
     }
 
@@ -125,19 +125,19 @@ struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
 
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .keyboard) {
-            Button("上一个") {
+            Button(String(localized: "上一个")) {
                 move(delta: -1)
             }
             .disabled(!canMovePrevious)
 
-            Button("下一个") {
+            Button(String(localized: "下一个")) {
                 move(delta: 1)
             }
             .disabled(!canMoveNext)
 
             Spacer()
 
-            Button("完成") {
+            Button(String(localized: "完成")) {
                 focusedField.wrappedValue = nil
             }
         }
@@ -157,7 +157,7 @@ struct KeyboardDismissToolbar: ToolbarContent {
     var body: some ToolbarContent {
         ToolbarItemGroup(placement: .keyboard) {
             Spacer()
-            Button("完成", action: onDone)
+            Button(String(localized: "完成"), action: onDone)
         }
     }
 }
@@ -185,17 +185,45 @@ extension Color {
         Color(light: base.withAlphaComponent(lightOpacity), dark: base.withAlphaComponent(darkOpacity))
     }
 
-    static let appPrimaryAction = Color.orange
-    static let appSuccess = Color.green
-    static let appRisk = Color.red
-    static let appFinance = Color.pink
-    static let appDoc = Color.blue
-    static let appInventory = Color.teal
-    static let appPrimarySurface = Color.appDynamicTint(.systemOrange, lightOpacity: 0.16, darkOpacity: 0.30)
-    static let appPrimarySurfaceSubtle = Color.appDynamicTint(.systemOrange, lightOpacity: 0.12, darkOpacity: 0.24)
-    static let appRiskSurface = Color.appDynamicTint(.systemRed, lightOpacity: 0.14, darkOpacity: 0.28)
-    static let appDocSurfaceSubtle = Color.appDynamicTint(.systemBlue, lightOpacity: 0.10, darkOpacity: 0.22)
-    static let appSuccessSurfaceSubtle = Color.appDynamicTint(.systemGreen, lightOpacity: 0.12, darkOpacity: 0.24)
+    // MARK: 动态主题色
+
+    static var appPrimaryAction: Color { AppTheme.current.palette.primary }
+    static var appSuccess: Color { AppTheme.current.palette.success }
+    static var appWarning: Color { AppTheme.current.palette.warning }
+    static var appRisk: Color { AppTheme.current.palette.risk }
+    static var appDoc: Color { AppTheme.current.palette.doc }
+    static var appPrimarySurface: Color { Color.appDynamicTint(AppTheme.current.palette.primaryUIColor, lightOpacity: 0.14, darkOpacity: 0.28) }
+    static var appPrimarySurfaceSubtle: Color { Color.appDynamicTint(AppTheme.current.palette.primaryUIColor, lightOpacity: 0.08, darkOpacity: 0.20) }
+    static var appRiskSurface: Color { Color.appDynamicTint(AppTheme.current.palette.riskUIColor, lightOpacity: 0.14, darkOpacity: 0.28) }
+    static var appDocSurfaceSubtle: Color { Color.appDynamicTint(AppTheme.current.palette.docUIColor, lightOpacity: 0.10, darkOpacity: 0.22) }
+    static var appSuccessSurfaceSubtle: Color { Color.appDynamicTint(AppTheme.current.palette.successUIColor, lightOpacity: 0.10, darkOpacity: 0.22) }
+    static var appWillowSurfaceSubtle: Color { appSuccessSurfaceSubtle }
+
+    // MARK: - 新维度色（按功能域独立）
+
+    static var appFinance: Color { AppTheme.current.palette.finance }
+    static var appInventory: Color { AppTheme.current.palette.inventory }
+    static var appPeople: Color { AppTheme.current.palette.people }
+    static var appMuted: Color { AppTheme.current.palette.people }
+    static var appJournal: Color { AppTheme.current.palette.journal }
+    static var appPhoto: Color { AppTheme.current.palette.photo }
+    static var appCalculations: Color { AppTheme.current.palette.calculations }
+    static var appQuotation: Color { AppTheme.current.palette.quotation }
+    static var appFinanceSurface: Color { Color.appDynamicTint(AppTheme.current.palette.financeUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appInventorySurface: Color { Color.appDynamicTint(AppTheme.current.palette.inventoryUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appPeopleSurface: Color { Color.appDynamicTint(AppTheme.current.palette.peopleUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appMutedSurface: Color { Color.appDynamicTint(AppTheme.current.palette.peopleUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appJournalSurface: Color { Color.appDynamicTint(AppTheme.current.palette.journalUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appPhotoSurface: Color { Color.appDynamicTint(AppTheme.current.palette.photoUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appCalculationsSurface: Color { Color.appDynamicTint(AppTheme.current.palette.calculationsUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+    static var appQuotationSurface: Color { Color.appDynamicTint(AppTheme.current.palette.quotationUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
+
+    // MARK: - 桥接别名（兼容旧名称，逐步迁移）
+
+    static var appPeach: Color { appPrimaryAction }
+    static var appPeachSurface: Color { appPrimarySurface }
+    static var appPeachSurfaceSubtle: Color { appPrimarySurfaceSubtle }
+
     static let appStrokeWarning = Color("StrokeWarning")
     static let appStrokeInfo = Color("StrokeInfo")
     static let appStrokeSuccess = Color("StrokeSuccess")
@@ -204,6 +232,23 @@ extension Color {
     static let appStrokeSeparator = Color("StrokeSeparator")
     static let appStrokeLightOverlay = Color("StrokeLightOverlay")
     static let appStrokeNeutral = Color("StrokeNeutral")
+}
+
+// MARK: - ShapeStyle 桥接（允许 .appRisk / .appWarning 等不加 Color. 前缀）
+
+extension ShapeStyle where Self == Color {
+    static var appPrimaryAction: Color { Color.appPrimaryAction }
+    static var appSuccess: Color { Color.appSuccess }
+    static var appWarning: Color { Color.appWarning }
+    static var appRisk: Color { Color.appRisk }
+    static var appDoc: Color { Color.appDoc }
+    static var appFinance: Color { Color.appFinance }
+    static var appInventory: Color { Color.appInventory }
+    static var appPeople: Color { Color.appPeople }
+    static var appJournal: Color { Color.appJournal }
+    static var appPhoto: Color { Color.appPhoto }
+    static var appCalculations: Color { Color.appCalculations }
+    static var appQuotation: Color { Color.appQuotation }
 }
 
 struct ProjectContextStrip: View {
@@ -269,7 +314,7 @@ struct BusinessRecordRow: View {
     let meta: String
     let note: String
     let trailing: String
-    var trailingColor: Color = .orange
+    var trailingColor: Color = .appPrimaryAction
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {

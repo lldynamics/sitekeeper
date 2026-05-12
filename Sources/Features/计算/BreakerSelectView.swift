@@ -2,8 +2,8 @@ import SwiftUI
 
 struct BreakerSelectView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.breaker.current") private var calcCurrent = ""
-    @AppStorage("calc.breaker.loadType") private var loadTypeRawValue: String = LoadType.lighting.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.breakerCurrent) private var calcCurrent = ""
+    @AppStorage(UserPreferenceKeys.Calculator.breakerLoadType) private var loadTypeRawValue: String = LoadType.lighting.rawValue
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -64,6 +64,7 @@ struct BreakerSelectView: View {
         let warning = rated > 100
         resultModel = .singleSection(
             headline: "推荐 \(breaker)A / \(loadType.poles)",
+            formula: "整定值 = 计算电流×负载系数；断路器规格取≥整定值的最小标准档",
             items: [
                 CalculationResult.item("计算电流", "\(fmt(i)) A"),
                 CalculationResult.item("推荐整定值", "\(fmt(rated)) A", status: warning ? .warning : .pass),

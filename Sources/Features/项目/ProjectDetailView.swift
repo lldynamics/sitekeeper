@@ -5,36 +5,40 @@ import VisionKit
 import PhotosUI
 
 struct ProjectDetailView: View {
-    @Environment(DataStore.self) private var store
-    @Environment(ProjectStore.self) private var projectStore
+    @Environment(DataStore.self) var store
+    @Environment(ProjectStore.self) var projectStore
     @Environment(FinanceStore.self) private var financeStore
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     let projectId: UUID
     let focus: ProjectDetailFocus?
     let autoOpenFinancialAdd: Bool
     let autoOpenDocumentScanSetup: Bool
+    let autoOpenDeliveryGuide: Bool
 
     @State private var exportState = ProjectDetailExportStateModel()
     @State private var routeState: ProjectDetailRouteState
     @State private var financeState = ProjectDetailFinanceState()
-    @State private var assetState = ProjectDetailAssetState()
+    @State var assetState = ProjectDetailAssetState()
 
     @State private var didAutoOpenFinancialAdd = false
     @State private var didAutoOpenDocumentScanSetup = false
+    @State private var didAutoOpenDeliveryGuide = false
     @State private var didOpenFocusedItem = false
+    @State private var showTodoFilterView = false
 
     init(
         projectId: UUID,
         initialMode: ProjectDetailMode? = nil,
         focus: ProjectDetailFocus? = nil,
         autoOpenFinancialAdd: Bool = false,
-        autoOpenDocumentScanSetup: Bool = false
+        autoOpenDocumentScanSetup: Bool = false,
+        autoOpenDeliveryGuide: Bool = false
     ) {
         self.projectId = projectId
         self.focus = focus
         self.autoOpenFinancialAdd = autoOpenFinancialAdd
         self.autoOpenDocumentScanSetup = autoOpenDocumentScanSetup
+        self.autoOpenDeliveryGuide = autoOpenDeliveryGuide
         _routeState = State(initialValue: ProjectDetailRouteState(mode: initialMode ?? .overview))
     }
 
@@ -61,8 +65,8 @@ struct ProjectDetailView: View {
         )
     }
 
-    private var usesWideDetailLayout: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    private var usesSingleCanvasLayoutOnPad: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad
     }
 
     private var editingMaterialBinding: Binding<MaterialItem?> {
@@ -182,6 +186,11 @@ struct ProjectDetailView: View {
                         Label("编辑资料", systemImage: "square.and.pencil")
                     }
                     Button {
+                        routeState.presentation = .deliveryGuide
+                    } label: {
+                        Label("完工交付向导", systemImage: "checklist.checked")
+                    }
+                    Button {
                         requestExportProjectPackage(project, snapshot: snapshot)
                     } label: {
                         Label("导出项目交付包 ZIP", systemImage: "archivebox.fill")
@@ -206,7 +215,16 @@ struct ProjectDetailView: View {
             presentation: $routeState.presentation,
             financialAddSeed: $financeState.financialAddSeed,
             imagePickerSource: $assetState.imagePickerSource,
+            deliveryGuideData: deliveryGuideData(snapshot: snapshot),
+            constructionMethods: store.constructionMethods,
             recentFinancialRecords: snapshot.relatedFinancialRecords,
+            onOpenModeFromDeliveryGuide: { mode in
+                routeState.mode = mode
+                focusModeInSingleCanvas(mode)
+            },
+            onStartDeliveryExport: {
+                requestExportProjectPackage(project, snapshot: snapshot)
+            },
             onUpdateProject: updateProject(_:),
             onCreateContact: { contact in
                 store.projectContacts.append(contact)
@@ -241,6 +259,7 @@ struct ProjectDetailView: View {
             dependencies: ProjectDetailEditingCoordinatorDependencies(
                 useMetric: useMetric,
                 projects: projectStore.projects,
+                constructionMethods: store.constructionMethods,
                 relatedLogs: snapshot.relatedLogs,
                 relatedFinancialRecords: snapshot.relatedFinancialRecords,
                 linkedDocuments: linkedDocuments(for:),
@@ -310,14 +329,24 @@ struct ProjectDetailView: View {
         )
         .onAppear {
             handleOnAppear(snapshot: snapshot)
+            if usesSingleCanvasLayoutOnPad {
+                focusModeInSingleCanvas(routeState.mode)
+            }
         }
         .onChange(of: routeState.mode) { _, newValue in
             if newValue != .finance {
                 routeState.financeJumpFilter = .none
             }
+            if usesSingleCanvasLayoutOnPad {
+                focusModeInSingleCanvas(newValue)
+            }
         }
         .onDisappear {
             exportState.cancelExportTask()
+        }
+        .navigationDestination(isPresented: $showTodoFilterView) {
+            SiteTodoView(initialProjectId: projectId)
+                .navigationBarTitleDisplayMode(.inline)
         }
         .confirmationDialog("删除账目", isPresented: $financeState.showFinancialDeleteConfirm, titleVisibility: .visible) {
             Button("仅删除账目（保留票据）", role: .destructive) {
@@ -353,9 +382,7 @@ struct ProjectDetailView: View {
             isWide: usesSinglePageLayout,
             scrollRequest: routeState.anchorRequest,
             jumpBar: {
-                if usesSinglePageLayout {
-                    anchorQuickNavigationSection
-                }
+                EmptyView()
             },
             header: {
                 projectHeader(
@@ -368,9 +395,7 @@ struct ProjectDetailView: View {
                 quickActionSection
             },
             modePicker: {
-                if !usesSinglePageLayout {
-                    modePickerSection
-                }
+                modePickerSection(prefersInlineSections: usesSinglePageLayout)
             },
             content: {
                 detailContent(
@@ -382,9 +407,18 @@ struct ProjectDetailView: View {
         )
     }
 
-    private var modePickerSection: some View {
-        Section {
-            Picker("内容", selection: $routeState.mode) {
+    private func modePickerSection(prefersInlineSections: Bool) -> some View {
+        let modeBinding = Binding<ProjectDetailMode>(
+            get: { routeState.mode },
+            set: { newMode in
+                routeState.mode = newMode
+                if prefersInlineSections {
+                    requestAnchorScroll(anchor(for: newMode))
+                }
+            }
+        )
+        return Section {
+            Picker("内容", selection: modeBinding) {
                 ForEach(ProjectDetailMode.allCases, id: \.self) { mode in
                     Text(mode.displayName).tag(mode)
                 }
@@ -397,18 +431,19 @@ struct ProjectDetailView: View {
         let project = snapshot.project
         let paidAmountValue = ProjectDetailMetrics.paidAmount(
             project: project,
-            relatedFinancialRecords: snapshot.relatedFinancialRecords,
-            legacyPayments: snapshot.legacyPayments
+            relatedFinancialRecords: snapshot.relatedFinancialRecords
         )
+        let unpaidAmountValue = ProjectDetailMetrics.unpaidAmount(project: project, paidAmount: paidAmountValue)
         return ProjectDetailHeaderSection(
             project: project,
             status: statusBinding,
             progressValue: "\(Int(averageProgress(snapshot.relatedProgress) * 100))%",
             quoteValue: ReportBuilder.money(snapshot.quoteTotal),
             todoValue: "\(snapshot.openTodoCount)",
+            unpaidAmount: unpaidAmountValue,
             riskStrip: ProjectDetailRiskStripView(
                 overdueCount: snapshot.overdueProgressCount + snapshot.overdueTodoCount,
-                unpaidAmount: ProjectDetailMetrics.unpaidAmount(project: project, paidAmount: paidAmountValue),
+                unpaidAmount: unpaidAmountValue,
                 unpricedQuoteCount: snapshot.unpricedQuoteCount,
                 hasTodayLog: snapshot.hasTodayLog
             ),
@@ -419,7 +454,13 @@ struct ProjectDetailView: View {
                 ? "工期: \(project.startDate.isEmpty ? "未填写" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "未填写" : project.expectedEndDate)"
                 : nil,
             showsStatus: showsStatus,
-            onEditProject: { routeState.presentation = .editProject }
+            onOpenRecords: openRecordsModeFromMetric,
+            onOpenFinanceFromQuote: openFinanceModeFromQuoteMetric,
+            onOpenTodoFilter: openTodoFilterFromMetric,
+            onOpenFinanceFromUnpaid: { openFinanceModeFromMetric(filter: .none) },
+            onEditProject: { routeState.presentation = .editProject },
+            canExportDeliveryPackage: project.status == .completed || project.status == .settled,
+            onExportDeliveryPackage: { routeState.presentation = .deliveryGuide }
         )
     }
 
@@ -440,8 +481,7 @@ struct ProjectDetailView: View {
         let project = snapshot.project
         let paidAmountValue = ProjectDetailMetrics.paidAmount(
             project: project,
-            relatedFinancialRecords: snapshot.relatedFinancialRecords,
-            legacyPayments: snapshot.legacyPayments
+            relatedFinancialRecords: snapshot.relatedFinancialRecords
         )
         let materialCostValue = ProjectDetailMetrics.currentMaterialCost(
             project: project,
@@ -475,11 +515,16 @@ struct ProjectDetailView: View {
             relatedProgress: snapshot.relatedProgress,
             relatedDrawings: snapshot.relatedDrawings,
             relatedContacts: snapshot.relatedContacts,
+            allProjectContacts: projectStore.projectContacts,
+            constructionMethods: store.constructionMethods,
+            supplierProfiles: store.supplierProfiles,
+            allProjects: projectStore.projects,
+            allFinancialRecords: projectStore.projectFinancialRecords,
             relatedFinancialRecords: snapshot.relatedFinancialRecords,
+            allDocuments: projectStore.projectDocuments,
             relatedDocuments: snapshot.relatedDocuments,
             relatedQuickNotes: snapshot.relatedQuickNotes,
             relatedTodos: snapshot.relatedTodos,
-            legacyPayments: snapshot.legacyPayments,
             filteredDrawings: snapshot.filteredDrawings(for: routeState.drawingFilter),
             financeJumpFilter: routeState.financeJumpFilter,
             prefersInlineSections: prefersInlineSections,
@@ -495,6 +540,8 @@ struct ProjectDetailView: View {
             onAddContact: { routeState.presentation = .addContact },
             onImportDrawing: { assetState.showDrawingImporter = true },
             onOpenMode: { openMode($0, prefersInlineSections: prefersInlineSections) },
+            onOpenFinanceFilter: openFinanceModeFromMetric(filter:),
+            onOpenTodoFilter: openTodoFilterFromMetric,
             onScanDocument: { routeState.presentation = .documentScanSetup },
             onCaptureDocumentPhoto: {
                 assetState.imagePickerSource = .camera
@@ -519,44 +566,25 @@ struct ProjectDetailView: View {
             onOpenDocument: { assetState.editingDocument = $0 },
             onLinkDocumentToFinancialRecord: linkDocument(_:to:),
             linkedDocuments: linkedDocuments(for:),
-            onMigrateLegacyPayments: { migrateLegacyPayments(project: project, legacyPayments: snapshot.legacyPayments) },
             onResetFinanceJumpFilter: resetFinanceJumpFilter
         )
     }
 
-    private var anchorQuickNavigationSection: some View {
-        Section("快速定位") {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.tight) {
-                    ForEach(
-                        [ProjectDetailAnchor.overview, .records, .assets, .finance, .timeline],
-                        id: \.rawValue
-                    ) { anchor in
-                        Button {
-                            requestAnchorScroll(anchor)
-                        } label: {
-                            Label(anchor.title, systemImage: anchor.systemImage)
-                        }
-                        .buttonStyle(.bordered)
-                        .tint(.orange)
-                    }
-                }
-                .padding(.vertical, 2)
-            }
-        }
-    }
-
     private func openRecordsModeFromMetric() {
-        routeState.mode = .records
+        openMode(.records, prefersInlineSections: usesSingleCanvasLayoutOnPad)
     }
 
     private func openFinanceModeFromQuoteMetric() {
         openFinanceModeFromMetric(filter: .none)
     }
 
+    private func openTodoFilterFromMetric() {
+        showTodoFilterView = true
+    }
+
     private func openFinanceModeFromMetric(filter: ProjectFinanceJumpFilter) {
         routeState.financeJumpFilter = filter
-        routeState.mode = .finance
+        openMode(.finance, prefersInlineSections: usesSingleCanvasLayoutOnPad)
     }
 
     private func resetFinanceJumpFilter() {
@@ -565,18 +593,8 @@ struct ProjectDetailView: View {
 
     private func openMode(_ mode: ProjectDetailMode, prefersInlineSections: Bool) {
         if prefersInlineSections {
-            switch mode {
-            case .overview:
-                requestAnchorScroll(.overview)
-            case .records:
-                requestAnchorScroll(.records)
-            case .assets:
-                requestAnchorScroll(.assets)
-            case .finance:
-                requestAnchorScroll(.finance)
-            case .timeline:
-                requestAnchorScroll(.timeline)
-            }
+            routeState.mode = mode
+            requestAnchorScroll(anchor(for: mode))
             return
         }
         routeState.mode = mode
@@ -586,26 +604,35 @@ struct ProjectDetailView: View {
         routeState.anchorRequest = ProjectDetailAnchorRequest(anchor: anchor)
     }
 
+    private func focusModeInSingleCanvas(_ mode: ProjectDetailMode) {
+        guard mode != .overview else { return }
+        requestAnchorScroll(anchor(for: mode))
+    }
+
+    private func anchor(for mode: ProjectDetailMode) -> ProjectDetailAnchor {
+        switch mode {
+        case .overview:
+            .overview
+        case .records:
+            .records
+        case .assets:
+            .assets
+        case .finance:
+            .finance
+        case .timeline:
+            .timeline
+        }
+    }
+
     private func usesInlineDetailLayout(for availableWidth: CGFloat) -> Bool {
         _ = availableWidth
-        return usesWideDetailLayout
+        return usesSingleCanvasLayoutOnPad
     }
 
     private func paidAmount(_ project: Project, snapshot: ProjectDetailSnapshot) -> Double {
         ProjectDetailMetrics.paidAmount(
             project: project,
-            relatedFinancialRecords: snapshot.relatedFinancialRecords,
-            legacyPayments: snapshot.legacyPayments
-        )
-    }
-
-    private func scanTarget(for record: ProjectFinancialRecord) -> ProjectScanTarget {
-        ProjectScanTarget(
-            title: "\(record.category.displayName)-\(record.date)",
-            category: ProjectDetailFinanceDocumentHelper.documentCategory(for: record.category),
-            amount: record.amount,
-            linkedFinancialRecordId: record.id,
-            note: record.note
+            relatedFinancialRecords: snapshot.relatedFinancialRecords
         )
     }
 
@@ -625,6 +652,42 @@ struct ProjectDetailView: View {
         case .reject(let errorMessage):
             presentImportError(errorMessage)
         }
+    }
+
+    private func deliveryGuideData(snapshot: ProjectDetailSnapshot) -> ProjectDeliveryGuideData {
+        ProjectDeliveryGuideData(
+            projectName: snapshot.project.name,
+            logCount: snapshot.relatedLogs.count,
+            drawingCount: snapshot.relatedDrawings.count,
+            drawingWithoutCurrentCount: drawingWithoutCurrentCount(snapshot.relatedDrawings),
+            documentCount: snapshot.relatedDocuments.count,
+            contactCount: snapshot.relatedContacts.count,
+            missingReceiptCount: snapshot.missingReceiptCount,
+            unsettledFinancialCount: snapshot.unsettledFinancialCount,
+            missingOriginalEntries: ProjectDetailImportExportActions.missingProjectPackageFiles(
+                documents: snapshot.relatedDocuments,
+                drawings: snapshot.relatedDrawings,
+                logs: snapshot.relatedLogs,
+                quickNotes: snapshot.relatedQuickNotes
+            ),
+            estimatedPackageBytes: ProjectDetailImportExportActions.estimatedProjectPackageBytes(
+                documents: snapshot.relatedDocuments,
+                drawings: snapshot.relatedDrawings,
+                logs: snapshot.relatedLogs,
+                quickNotes: snapshot.relatedQuickNotes
+            )
+        )
+    }
+
+    private func drawingWithoutCurrentCount(_ drawings: [ProjectDrawing]) -> Int {
+        guard !drawings.isEmpty else { return 0 }
+        let grouped = Dictionary(grouping: drawings) { drawing in
+            let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? drawing.fileName : name
+        }
+        return grouped.values.filter { group in
+            !group.contains(where: \.isCurrentVersion)
+        }.count
     }
 
     private func exportProjectPackage(_ project: Project, snapshot: ProjectDetailSnapshot) {
@@ -779,65 +842,6 @@ struct ProjectDetailView: View {
         store.scheduleSave()
     }
 
-    private func importDrawings(_ urls: [URL]) {
-        var importedCount = 0
-        var failedNames: [String] = []
-        var currentDrawings = projectStore.projectDrawings.filter { $0.projectId == projectId }
-        for url in urls {
-            let ext = url.pathExtension.lowercased()
-            guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
-                failedNames.append(url.lastPathComponent)
-                continue
-            }
-            let drawing: ProjectDrawing
-            do {
-                drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
-            } catch {
-                failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
-                continue
-            }
-            let nextVersion = ProjectDetailDrawingHelper.nextDrawingVersion(name: drawing.name, drawings: currentDrawings)
-            var versioned = drawing
-            versioned.version = nextVersion
-            versioned.isCurrentVersion = true
-            ProjectDetailAssetActions.updateCurrentVersionFlags(for: versioned, store: store)
-            store.projectDrawings.append(versioned)
-            currentDrawings.append(versioned)
-            importedCount += 1
-        }
-        if importedCount > 0 {
-            store.scheduleSave()
-        }
-        if !failedNames.isEmpty {
-            assetState.importErrorMessage = "以下文件导入失败：\(failedNames.joined(separator: "、"))"
-            assetState.showImportError = true
-        } else if importedCount == 0 {
-            assetState.importErrorMessage = "没有可导入的图纸文件，请选择 PDF / DWG / DXF。"
-            assetState.showImportError = true
-        }
-    }
-
-    private func saveScannedDocument(target: ProjectScanTarget, data: Data, pageCount: Int) {
-        if let error = ProjectDetailAssetActions.saveScannedDocument(
-            target: target,
-            data: data,
-            pageCount: pageCount,
-            projectId: projectId,
-            store: store
-        ) {
-            presentImportError(error)
-        }
-    }
-
-    private func previewDocument(_ document: ProjectDocument) {
-        switch ProjectDetailAssetActions.previewDocumentURL(for: document) {
-        case .success(let url):
-            assetState.quickLookURL = url
-        case .failure(let message):
-            presentImportError(message)
-        }
-    }
-
     private func deleteDocument(_ document: ProjectDocument) {
         ProjectDetailAssetActions.deleteDocument(document, store: store)
     }
@@ -871,10 +875,6 @@ struct ProjectDetailView: View {
         )
     }
 
-    private func migrateLegacyPayments(project: Project, legacyPayments: [PaymentRecord]) {
-        ProjectDetailFinanceDocumentActions.migrateLegacyPayments(project: project, legacyPayments: legacyPayments, store: store)
-    }
-
     private func linkedDocuments(for record: ProjectFinancialRecord) -> [ProjectDocument] {
         ProjectDetailFinanceDocumentActions.linkedDocuments(for: record, documents: projectStore.projectDocuments)
     }
@@ -898,53 +898,14 @@ struct ProjectDetailView: View {
         store.scheduleSave()
     }
 
-    private func importProjectDocuments(_ urls: [URL], linkedFinancialRecordId: UUID? = nil) {
-        let failures = ProjectDetailAssetActions.importProjectDocuments(
-            urls,
-            projectId: projectId,
-            linkedFinancialRecordId: linkedFinancialRecordId,
-            store: store
-        )
-        if !failures.isEmpty {
-            presentImportError("以下资料导入失败：\(failures.joined(separator: "、"))")
-        }
-    }
-
-    private func importPhotoItem(_ item: PhotosPickerItem, linkedFinancialRecordId: UUID? = nil) async {
-        let result = await ProjectDetailFinanceDocumentActions.image(from: item)
-        await MainActor.run {
-            switch result {
-            case .success(let image):
-                importCapturedImage(image, note: "来源: 相册", linkedFinancialRecordId: linkedFinancialRecordId)
-            case .failure(let message):
-                presentImportError(message)
-            }
-        }
-    }
-
-    private func importCapturedImage(_ image: UIImage, note: String = "来源: 拍照", linkedFinancialRecordId: UUID? = nil) {
-        if let error = ProjectDetailAssetActions.importCapturedImage(
-            image,
-            note: note,
-            projectId: projectId,
-            linkedFinancialRecordId: linkedFinancialRecordId,
-            store: store
-        ) {
-            presentImportError(error)
-        }
-    }
-
-    private func presentImportError(_ message: String) {
-        assetState.importErrorMessage = message
-        assetState.showImportError = true
-    }
-
     private func handleOnAppear(snapshot: ProjectDetailSnapshot) {
         let routing = ProjectDetailOnAppearRouter.resolve(
             autoOpenFinancialAdd: autoOpenFinancialAdd,
             didAutoOpenFinancialAdd: didAutoOpenFinancialAdd,
             autoOpenDocumentScanSetup: autoOpenDocumentScanSetup,
             didAutoOpenDocumentScanSetup: didAutoOpenDocumentScanSetup,
+            autoOpenDeliveryGuide: autoOpenDeliveryGuide,
+            didAutoOpenDeliveryGuide: didAutoOpenDeliveryGuide,
             focus: focus,
             didOpenFocusedItem: didOpenFocusedItem,
             financialRecords: snapshot.relatedFinancialRecords,
@@ -960,6 +921,11 @@ struct ProjectDetailView: View {
             didAutoOpenDocumentScanSetup = true
             routeState.mode = .assets
             routeState.presentation = .documentScanSetup
+        }
+        if routing.shouldOpenDeliveryGuide {
+            didAutoOpenDeliveryGuide = true
+            routeState.mode = .overview
+            routeState.presentation = .deliveryGuide
         }
         if routing.shouldConsumeFocusRequest {
             didOpenFocusedItem = true
@@ -1024,15 +990,6 @@ struct ProjectDetailView: View {
 
     private func setDrawingAsCurrentVersion(_ drawing: ProjectDrawing) {
         ProjectDetailAssetActions.setDrawingAsCurrentVersion(drawing, store: store)
-    }
-
-    private func previewDrawing(_ drawing: ProjectDrawing) {
-        switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
-        case .success(let url):
-            assetState.quickLookURL = url
-        case .failure(let message):
-            presentImportError(message)
-        }
     }
 
     private func deleteDrawing(_ drawing: ProjectDrawing) {

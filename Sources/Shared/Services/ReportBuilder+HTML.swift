@@ -77,11 +77,6 @@ extension ReportBuilder {
                 [$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? locYes : locNo, "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]
             })
         }
-        if options.includePaymentRecords {
-            table(loc("付款记录"), headers: ["日期", "金额", "方式", "备注", "是否开票", "项目ID"], rows: snapshot.paymentRecords.map {
-                [$0.date, $0.amount, $0.normalizedMethod.displayName, $0.note, $0.isInvoiced ? locYes : locNo, $0.projectId.uuidString]
-            })
-        }
         body += "</body></html>"
         return Data(body.utf8)
     }

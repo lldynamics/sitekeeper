@@ -40,19 +40,19 @@ struct ProjectFileCategoryView: View {
                         Spacer()
                         Text("\(summary.totalCount)")
                             .font(.title.weight(.bold))
-                            .foregroundStyle(summary.totalCount > 0 ? .orange : .secondary)
+                            .foregroundStyle(summary.totalCount > 0 ? Color.appPrimaryAction : .secondary)
                         Text("个文件")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: summaryColumns, alignment: .leading, spacing: 8) {
-                        ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .blue)
+                        ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .appDoc)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .indigo)
+                        ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "票据", value: summary.documentCount, color: .brown)
+                        ProjectFileCountChip(title: "票据", value: summary.documentCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .orange)
+                        ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
@@ -178,7 +178,7 @@ struct ProjectFileListView: View {
         case .documents:
             return "先去项目详情添加票据或扫描资料。"
         case .quickNoteAttachments:
-            return "先去随手记添加视频、语音或文档附件。"
+            return "先去随手记添加视频或文档附件。"
         }
     }
 
@@ -201,7 +201,7 @@ struct ProjectFileListView: View {
         case .images:
             DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
         case .drawings:
-            ProjectDetailView(projectId: project.id, initialMode: .records)
+            ProjectDetailView(projectId: project.id, initialMode: .assets)
         case .documents:
             ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
         case .quickNoteAttachments:
@@ -224,14 +224,14 @@ struct ProjectFileListView: View {
                         Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 }
             } else {
                 if missingItemCount > 0 {
                     Section("建议下一步") {
                         ProjectFileMicroGuideRow(
                             icon: "exclamationmark.triangle.fill",
-                            color: .red,
+                            color: .appRisk,
                             title: String(localized: "本分类有 \(missingItemCount) 个文件缺失"),
                             detail: "建议尽快补齐，避免预览、分享或导出时失败。"
                         )

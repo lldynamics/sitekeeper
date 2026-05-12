@@ -13,7 +13,7 @@ struct ProjectContextRow: View {
                 Spacer()
                 Text(project.status.displayName)
                     .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
             }
             HStack(spacing: 8) {
                 if !project.location.isEmpty {
@@ -47,46 +47,6 @@ struct DashboardProjectSignal {
     let subtitle: String
     let color: Color
     let score: Int
-}
-
-struct DashboardSearchSuggestion: Identifiable {
-    let id: String
-    let title: String
-    let subtitle: String
-    let systemImage: String
-    let tint: Color
-    let destination: DashboardDestination
-}
-
-struct DashboardSearchSuggestionRow: View {
-    let suggestion: DashboardSearchSuggestion
-
-    var body: some View {
-        HStack(spacing: AppSpacing.tight) {
-            Image(systemName: suggestion.systemImage)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(suggestion.tint)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(suggestion.title)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption2.weight(.semibold))
-                .foregroundStyle(.tertiary)
-        }
-        .padding(.horizontal, AppSpacing.normal)
-        .padding(.vertical, AppSpacing.tight)
-    }
 }
 
 struct DashboardProjectPickerSheet: View {
@@ -242,17 +202,17 @@ struct TimelineActivityRow: View {
 
     private var tint: Color {
         switch activity.type {
-        case .log: return .blue
-        case .todo: return .orange
-        case .financial: return .green
-        case .progress: return .orange
-        case .material: return .blue
-        case .drawing: return .indigo
-        case .quote: return .teal
-        case .labor: return .purple
-        case .document: return .brown
-        case .warehouse: return .indigo
-        case .note: return .pink
+        case .log: return .appDoc
+        case .todo: return .appWarning
+        case .financial: return .appSuccess
+        case .progress: return .appWarning
+        case .material: return .appInventory
+        case .drawing: return .appDoc
+        case .quote: return .appFinance
+        case .labor: return .appFinance
+        case .document: return .appDoc
+        case .warehouse: return .appInventory
+        case .note: return .appFinance
         }
     }
 
@@ -304,10 +264,10 @@ struct PanelSummaryLabel: View {
                     .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: AppSpacing.tight * 0.75) {
-                    if warehouse > 0 { tag(String(localized: "📦 \(warehouse)"), color: .brown) }
-                    if overdue > 0   { tag(String(localized: "⚠️ \(overdue)"), color: .red) }
-                    if todos > 0     { tag(String(localized: "✅ \(todos)"), color: .orange) }
-                    if logs > 0      { tag(String(localized: "📝 \(logs)"), color: .blue) }
+                    if warehouse > 0 { tag(String(localized: "📦 \(warehouse)"), color: .appInventory) }
+                    if overdue > 0   { tag(String(localized: "⚠️ \(overdue)"), color: .appRisk) }
+                    if todos > 0     { tag(String(localized: "✅ \(todos)"), color: .appWarning) }
+                    if logs > 0      { tag(String(localized: "📝 \(logs)"), color: .appDoc) }
                 }
             }
         }

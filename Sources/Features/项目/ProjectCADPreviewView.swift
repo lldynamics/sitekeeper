@@ -116,11 +116,15 @@ private enum LegacyCADOverlayStorage {
 
     static func load(for fileURL: URL) -> CADOverlaySnapshot? {
         let key = key(for: fileURL)
-        guard let raw = UserDefaults.standard.data(forKey: key),
-              let value = try? JSONDecoder().decode(CADOverlaySnapshot.self, from: raw) else {
+        guard let raw = UserDefaults.standard.data(forKey: key) else {
             return nil
         }
-        return value
+        do {
+            return try JSONDecoder().decode(CADOverlaySnapshot.self, from: raw)
+        } catch {
+            StorageIssueLog.record("CAD 旧快照解析失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            return nil
+        }
     }
 }
 
@@ -175,7 +179,7 @@ struct ProjectCADPreviewView: View {
                 VStack(spacing: 8) {
                     HStack(spacing: 8) {
                         Image(systemName: "viewfinder")
-                            .foregroundStyle(.indigo)
+                            .foregroundStyle(Color.appDoc)
                         Text("\(String(localized: "预览模式"))：\(engineTitle)")
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -194,7 +198,7 @@ struct ProjectCADPreviewView: View {
                                         .font(.caption.weight(.semibold))
                                 }
                                 .buttonStyle(.bordered)
-                                .tint(tool == candidate ? .orange : .secondary)
+                                .tint(tool == candidate ? .appPrimaryAction : .secondary)
                             }
                         }
                     }
@@ -233,7 +237,7 @@ struct ProjectCADPreviewView: View {
                     Button(role: .destructive) {
                         showResetConfirm = true
                     } label: {
-                        Image(systemName: "trash").visibleIconStyle().foregroundStyle(.red)
+                        Image(systemName: "trash").visibleIconStyle().foregroundStyle(.appRisk)
                     }
                     .accessibilityLabel(String(localized: "清空覆盖层"))
                 }
@@ -282,7 +286,7 @@ struct ProjectCADPreviewView: View {
 
             ForEach(snapshot.lengthMeasurements) { measurement in
                 measurementPolyline(measurement.points.map(\.cgPoint))
-                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: measurement.points.count > 2 ? [4, 2] : []))
+                    .stroke(Color.appStrokeInfo, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: measurement.points.count > 2 ? [4, 2] : []))
                 if let center = centerPoint(of: measurement.points.map(\.cgPoint)) {
                     measurementBadge(text: lengthLabel(for: measurement.points.map(\.cgPoint)))
                         .position(center)
@@ -308,7 +312,7 @@ struct ProjectCADPreviewView: View {
                         }
                         path.closeSubpath()
                     }
-                    .stroke(Color.green, style: StrokeStyle(lineWidth: 2, lineJoin: .round, dash: [5, 3]))
+                    .stroke(Color.appStrokeSuccess, style: StrokeStyle(lineWidth: 2, lineJoin: .round, dash: [5, 3]))
 
                     if let center = centerPoint(of: points) {
                         measurementBadge(text: areaLabel(for: points))
@@ -346,7 +350,7 @@ struct ProjectCADPreviewView: View {
 
             if !activeDragLengthPoints.isEmpty {
                 measurementPolyline(activeDragLengthPoints)
-                    .stroke(Color.blue, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(Color.appStrokeInfo, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 if let center = centerPoint(of: activeDragLengthPoints) {
                     measurementBadge(text: lengthLabel(for: activeDragLengthPoints))
                         .position(center)
@@ -591,7 +595,7 @@ struct ProjectCADPreviewView: View {
                                 }
                                 Text("\(String(localized: "小计"))：¥\(Formatters.money(quantitySubtotal(item)))")
                                     .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.orange)
+                                    .foregroundStyle(Color.appPrimaryAction)
                             }
                             .swipeActions {
                                 Button(role: .destructive) {
@@ -696,16 +700,25 @@ struct ProjectCADPreviewView: View {
 
     private func decodedSnapshotData(_ raw: String) -> CADOverlaySnapshot? {
         guard !raw.isEmpty,
-              let data = Data(base64Encoded: raw),
-              let snapshot = try? JSONDecoder().decode(CADOverlaySnapshot.self, from: data) else {
+              let data = Data(base64Encoded: raw) else {
             return nil
         }
-        return snapshot
+        do {
+            return try JSONDecoder().decode(CADOverlaySnapshot.self, from: data)
+        } catch {
+            StorageIssueLog.record("CAD 快照解析失败：\(request.displayName)，\(error.localizedDescription)")
+            return nil
+        }
     }
 
     private func encodedSnapshotData(_ snapshot: CADOverlaySnapshot) -> String {
-        guard let data = try? JSONEncoder().encode(snapshot) else { return "" }
-        return data.base64EncodedString()
+        do {
+            let data = try JSONEncoder().encode(snapshot)
+            return data.base64EncodedString()
+        } catch {
+            StorageIssueLog.record("CAD 快照编码失败：\(request.displayName)，\(error.localizedDescription)")
+            return ""
+        }
     }
 
     private func clearInProgress() {
@@ -731,9 +744,9 @@ struct ProjectCADPreviewView: View {
     private func strokeColor(_ kind: CADStroke.StrokeKind) -> Color {
         switch kind {
         case .annotation:
-            return .yellow
+            return .appPrimaryAction
         case .redline:
-            return .red
+            return .appRisk
         }
     }
 

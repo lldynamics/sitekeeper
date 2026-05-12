@@ -165,7 +165,11 @@ struct SimpleZipArchiveReader {
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         let handle = try FileHandle(forReadingFrom: fileURL)
         defer {
-            try? handle.close()
+            do {
+                try handle.close()
+            } catch {
+                StorageIssueLog.record("ZIP 扫描句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
 
         var offset: UInt64 = 0
@@ -229,7 +233,11 @@ struct SimpleZipArchiveReader {
                         }
                         let readHandle = try FileHandle(forReadingFrom: fileURL)
                         defer {
-                            try? readHandle.close()
+                            do {
+                                try readHandle.close()
+                            } catch {
+                                StorageIssueLog.record("ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                            }
                         }
                         try readHandle.seek(toOffset: dataOffset)
                         let data = try readExactly(from: readHandle, count: dataSize)
@@ -289,8 +297,16 @@ struct SimpleZipArchiveReader {
         let readHandle = try FileHandle(forReadingFrom: archiveURL)
         let writeHandle = try FileHandle(forWritingTo: destinationURL)
         defer {
-            try? readHandle.close()
-            try? writeHandle.close()
+            do {
+                try readHandle.close()
+            } catch {
+                StorageIssueLog.record("ZIP 读取句柄关闭失败：\(archiveURL.lastPathComponent)，\(error.localizedDescription)")
+            }
+            do {
+                try writeHandle.close()
+            } catch {
+                StorageIssueLog.record("ZIP 写入句柄关闭失败：\(destinationURL.lastPathComponent)，\(error.localizedDescription)")
+            }
         }
 
         try readHandle.seek(toOffset: dataOffset)

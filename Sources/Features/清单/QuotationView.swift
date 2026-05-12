@@ -164,13 +164,13 @@ struct QuotationView: View {
             Section {
                 VStack(spacing: 4) {
                     HStack { Text("小计").foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
-                    if totalTaxValue.isPositive { HStack { Text("税额").foregroundStyle(.red); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.red) } }
-                    if totalDiscountValue.isPositive { HStack { Text("折扣").foregroundStyle(.green); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.green) } }
+                    if totalTaxValue.isPositive { HStack { Text("税额").foregroundStyle(.appRisk); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
+                    if totalDiscountValue.isPositive { HStack { Text("折扣").foregroundStyle(.appSuccess); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
                     Divider()
                     HStack {
                         Text("合计").font(.title3.weight(.bold))
                         Spacer()
-                        Text(ReportBuilder.money(grandTotalValue.doubleValue)).font(.title3.weight(.bold)).foregroundStyle(.orange)
+                        Text(ReportBuilder.money(grandTotalValue.doubleValue)).font(.title3.weight(.bold)).foregroundStyle(.appWarning)
                     }
                 }
             }
@@ -544,7 +544,7 @@ struct QuotationView: View {
                     if !isCompanyProfileComplete {
                         Text("请补全公司信息后再导出。")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.appWarning)
                     }
                 }
                 Section {
@@ -623,8 +623,8 @@ struct QuotationView: View {
     private func statusColor(_ status: QuoteStatus) -> Color {
         switch status {
         case .draft: return .secondary
-        case .sent: return .orange
-        case .confirmed: return .green
+        case .sent: return .appWarning
+        case .confirmed: return .appSuccess
         }
     }
 

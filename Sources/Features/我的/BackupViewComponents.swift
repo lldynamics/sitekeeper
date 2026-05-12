@@ -12,7 +12,7 @@ struct CloudBackupListRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: isLatest ? "clock.arrow.circlepath" : "icloud")
-                .foregroundStyle(isLatest ? .orange : .blue)
+                .foregroundStyle(isLatest ? .appWarning : .appPrimaryAction)
                 .frame(width: 20)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
@@ -21,7 +21,7 @@ struct CloudBackupListRow: View {
                     if isLatest {
                         Text("最近")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.appWarning)
                     }
                 }
                 Text(file.formattedSize)
@@ -75,7 +75,7 @@ struct BackupQuickStartCard: View {
             HStack(alignment: .firstTextBaseline) {
                 Label("先完成首份备份", systemImage: "shield.lefthalf.filled.badge.checkmark")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(.appWarning)
                 Spacer()
                 Button("不再提示", action: onDismiss)
                     .font(.caption.weight(.semibold))
@@ -89,7 +89,7 @@ struct BackupQuickStartCard: View {
                 Label("立即导出首份备份 ZIP", systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.borderedProminent)
-            .tint(.orange)
+            .tint(.appWarning)
 
             Text("导入备份可在下方“本地备份”中选择 ZIP；旧版备份会自动兼容。")
                 .font(.caption2)
@@ -172,7 +172,6 @@ struct BackupImportPreviewView: View {
                     LabeledContent("项目", value: "\(snapshot.projects.count) 个")
                     LabeledContent("回路方案", value: "\(snapshot.lightingCircuitPlans.count) 条")
                     LabeledContent("现场待办", value: "\(snapshot.siteTodos.count) 条")
-                    LabeledContent("收款记录", value: "\(snapshot.paymentRecords.count) 条")
                     LabeledContent("项目图纸", value: "\(snapshot.projectDrawings.count) 份")
                     LabeledContent("项目联系人", value: "\(snapshot.projectContacts.count) 位")
                     LabeledContent("零星收支", value: "\(snapshot.projectFinancialRecords.count) 条")
@@ -198,7 +197,7 @@ struct BackupImportPreviewView: View {
                     if importMode == .overwrite {
                         Text("覆盖会删除当前本机数据，请先导出备份。")
                             .font(.caption)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(.appWarning)
                     }
                 }
                 Section {
@@ -206,7 +205,7 @@ struct BackupImportPreviewView: View {
                         Button("确认导入", action: onApplyImport)
                             .frame(maxWidth: .infinity)
                             .fontWeight(.semibold)
-                            .tint(.orange)
+                            .tint(.appWarning)
                     } else if isOverwriteImportArmed {
                         Button("确认覆盖导入", role: .destructive, action: onApplyImport)
                         Button("返回合并导入", role: .cancel) {

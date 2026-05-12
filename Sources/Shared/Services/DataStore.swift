@@ -46,18 +46,6 @@ final class DataStore {
             }
         }
     }
-    var paymentRecords: [PaymentRecord] {
-        get {
-            access(keyPath: \.paymentRecords)
-            return financeStore.paymentRecords
-        }
-        set {
-            withMutation(keyPath: \.paymentRecords) {
-                financeStore.setPaymentRecords(newValue)
-            }
-        }
-    }
-
     // 项目
     var projects: [Project] {
         get {
@@ -480,12 +468,6 @@ final class DataStore {
             SiteTodo(title: "样板间吊顶收口确认", owner: "赵工", dueDate: day(-45), priority: .low, issueType: .general, isDone: true, completedAt: dateTime(-46, 17, 40), note: "", projectId: projectByName["锦绣府样板间精装"])
         ]
 
-        paymentRecords = [
-            requiredProjectID("阳光花园 3# 楼").map { PaymentRecord(projectId: $0, date: day(-5), amount: "18000", method: .bankTransfer, note: "二期进度款", isInvoiced: false) },
-            requiredProjectID("云栖写字楼配电改造").map { PaymentRecord(projectId: $0, date: day(-6), amount: "12000", method: .wechat, note: "材料预付款", isInvoiced: false) },
-            requiredProjectID("科技园弱电升级").map { PaymentRecord(projectId: $0, date: day(-25), amount: "24000", method: .bankTransfer, note: "尾款", isInvoiced: true) }
-        ].compactMap { $0 }
-
         projectDrawings = []
         projectDocuments = []
 
@@ -582,6 +564,10 @@ final class DataStore {
     }
 
     private func applyLoadedSnapshot(_ snapshot: BackupSnapshot) {
+        let migratedLegacyRecords = Self.migrateLegacyPaymentRecords(
+            snapshot.legacyPaymentRecords,
+            projects: snapshot.projects
+        )
         materialItems = snapshot.materialItems
         quoteItems = snapshot.quoteItems
         laborRecords = snapshot.laborRecords
@@ -591,10 +577,12 @@ final class DataStore {
         progressTasks = snapshot.progressTasks
         lightingCircuitPlans = snapshot.lightingCircuitPlans
         siteTodos = snapshot.siteTodos
-        paymentRecords = snapshot.paymentRecords
         projectDrawings = snapshot.projectDrawings
         projectContacts = snapshot.projectContacts
-        projectFinancialRecords = snapshot.projectFinancialRecords
+        projectFinancialRecords = Self.mergeFinancialRecords(
+            existing: snapshot.projectFinancialRecords,
+            incoming: migratedLegacyRecords
+        )
         projectDocuments = snapshot.projectDocuments
         quickNotes = snapshot.quickNotes
         projectWarehouseMovements = snapshot.projectWarehouseMovements
@@ -608,6 +596,10 @@ final class DataStore {
         userMaterials = snapshot.userMaterials
         deletedUserMaterials = snapshot.deletedUserMaterials
         hiddenPresetKeys = snapshot.hiddenPresetKeys
+        if !snapshot.legacyPaymentRecords.isEmpty {
+            StorageIssueLog.record("检测到旧收款记录 \(snapshot.legacyPaymentRecords.count) 条，已自动迁移为财务流水")
+            needsSaveAfterInitialLoad = true
+        }
         refreshSearchIndexVersion()
         dataVersion = UUID()
         publishWidgetData()
@@ -624,7 +616,6 @@ final class DataStore {
             progressTasks: progressTasks,
             lightingCircuitPlans: lightingCircuitPlans,
             siteTodos: siteTodos,
-            paymentRecords: paymentRecords,
             projectDrawings: projectDrawings,
             projectContacts: projectContacts,
             projectFinancialRecords: projectFinancialRecords,
@@ -769,7 +760,6 @@ final class DataStore {
         !progressTasks.isEmpty ||
         !lightingCircuitPlans.isEmpty ||
         !siteTodos.isEmpty ||
-        !paymentRecords.isEmpty ||
         !projectDrawings.isEmpty ||
         !projectContacts.isEmpty ||
         !projectFinancialRecords.isEmpty ||
@@ -783,6 +773,14 @@ final class DataStore {
         !constructionMethods.isEmpty ||
         !userMaterials.isEmpty ||
         !deletedUserMaterials.isEmpty
+    }
+
+    var historyRetentionTotalLimit: Int {
+        historyRecordMaxTotalCount
+    }
+
+    var historyRetentionPerToolLimit: Int {
+        historyRecordMaxCountPerTool
     }
 
     func importSampleData(replacingExisting: Bool) {
@@ -830,7 +828,6 @@ final class DataStore {
             + summary.progressTaskCount
             + projectStore.lightingCircuitPlans(for: projectId).count
             + summary.todoCount
-            + financeStore.paymentRecords(for: projectId).count
             + projectStore.projectDrawings(for: projectId).count
             + projectStore.projectContacts(for: projectId).count
             + projectStore.projectFinancialRecords(for: projectId).count
@@ -875,7 +872,6 @@ final class DataStore {
         progressTasks.removeAll { $0.projectId == projectId }
         lightingCircuitPlans.removeAll { $0.projectId == projectId }
         siteTodos.removeAll { $0.projectId == projectId }
-        paymentRecords.removeAll { $0.projectId == projectId }
         projectDrawings.removeAll { $0.projectId == projectId }
         projectContacts.removeAll { $0.projectId == projectId }
         projectFinancialRecords.removeAll { $0.projectId == projectId }
@@ -948,7 +944,6 @@ final class DataStore {
         progressTasks = []
         lightingCircuitPlans = []
         siteTodos = []
-        paymentRecords = []
         projectDrawings = []
         projectContacts = []
         projectFinancialRecords = []
@@ -974,14 +969,81 @@ final class DataStore {
         searchIndexVersion &+= 1
     }
 
+    private static func migrateLegacyPaymentRecords(
+        _ legacyRecords: [LegacyPaymentRecord],
+        projects: [Project]
+    ) -> [ProjectFinancialRecord] {
+        guard !legacyRecords.isEmpty else { return [] }
+        let counterpartyByProjectID = Dictionary(
+            uniqueKeysWithValues: projects.map { ($0.id, $0.customerName) }
+        )
+        return legacyRecords.map { legacy in
+            legacy.migratedFinancialRecord(
+                counterparty: counterpartyByProjectID[legacy.projectId] ?? ""
+            )
+        }
+    }
+
+    private static func mergeFinancialRecords(
+        existing: [ProjectFinancialRecord],
+        incoming: [ProjectFinancialRecord]
+    ) -> [ProjectFinancialRecord] {
+        guard !incoming.isEmpty else { return existing }
+        var merged = existing
+        var knownIDs = Set(existing.map(\.id))
+        for record in incoming where knownIDs.insert(record.id).inserted {
+            merged.append(record)
+        }
+        return merged
+    }
+
     func publishWidgetData() {
         guard let defaults = UserDefaults(suiteName: "group.com.chengjinfang.sitekeeper") else { return }
         let activeProjects = projects.filter {
             $0.status == .active || $0.status == .paused
         }
+        let activeProjectIDs = Set(activeProjects.map(\.id))
         let stockLines = activeProjects.flatMap {
             WarehouseStockCalculator.stockLines(for: $0.id, movements: projectWarehouseMovements)
         }
+        let activeFinancialRecords = projectFinancialRecords.filter {
+            activeProjectIDs.contains($0.projectId) && $0.normalizedStatus == .active
+        }
+        let missingReceiptCount = activeFinancialRecords.filter { record in
+            guard record.requiresAttachment else { return false }
+            let linkedByRecord = !record.linkedDocumentIds.isEmpty
+            let linkedByDocument = projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
+            return !(linkedByRecord || linkedByDocument)
+        }.count
+        let priceSpikeCount = activeProjects.reduce(0) { count, project in
+            count + financeStore.materialPriceSpikeCount(for: project.id)
+        }
+        let reminderDaysRaw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
+        let reminderDays = max(1, reminderDaysRaw == 0 ? 7 : reminderDaysRaw)
+        let localBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
+        let cloudBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        let localBackupDate = localBackupRaw > 0 ? Date(timeIntervalSince1970: localBackupRaw) : nil
+        let cloudBackupDate = cloudBackupRaw > 0 ? Date(timeIntervalSince1970: cloudBackupRaw) : nil
+        let latestBackupDate: Date? = {
+            switch (localBackupDate, cloudBackupDate) {
+            case let (lhs?, rhs?):
+                return max(lhs, rhs)
+            case let (lhs?, nil):
+                return lhs
+            case let (nil, rhs?):
+                return rhs
+            case (nil, nil):
+                return nil
+            }
+        }()
+        let backupOverdueCount: Int = {
+            guard let latestBackupDate else { return 1 }
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: latestBackupDate)
+            let today = calendar.startOfDay(for: Date())
+            let days = max(calendar.dateComponents([.day], from: start, to: today).day ?? 0, 0)
+            return days >= reminderDays ? 1 : 0
+        }()
         let widgetData = WidgetDataBuilder.build(
             projects: activeProjects.map {
                 WidgetBuilderProjectInput(
@@ -993,7 +1055,10 @@ final class DataStore {
             },
             todos: siteTodos.map { WidgetBuilderTodoInput(projectId: $0.projectId, isDone: $0.isDone, dueDate: $0.dueDate) },
             tasks: progressTasks.map { WidgetBuilderTaskInput(projectId: $0.projectId, completion: $0.completion) },
-            stockLines: stockLines.map { WidgetBuilderStockInput(quantity: $0.quantity) }
+            stockLines: stockLines.map { WidgetBuilderStockInput(quantity: $0.quantity) },
+            missingReceiptCount: missingReceiptCount,
+            priceSpikeCount: priceSpikeCount,
+            backupOverdueCount: backupOverdueCount
         )
         let data: Data
         do {

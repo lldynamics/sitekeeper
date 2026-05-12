@@ -23,6 +23,15 @@ struct MaterialPriceDatabaseView: View {
         )
     }
 
+    private var searchSuggestions: [RealtimeSearchSuggestion] {
+        RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: searchText,
+            categories: [.material],
+            materials: store.materialPriceEntries,
+            limit: 6
+        )
+    }
+
     var body: some View {
         SearchableDatabaseView(
             title: "材料价格库",
@@ -32,10 +41,21 @@ struct MaterialPriceDatabaseView: View {
             emptyTitle: "暂无材料价格",
             emptySystemImage: "yensign.circle",
             emptyDescription: Text("记录常用材料的品牌、规格、供应商和参考价。"),
+            searchSuggestions: searchSuggestions,
             onSelect: { entry in
                 editingEntry = entry
             },
-            onDelete: deleteEntries,
+            onSelectSuggestion: { suggestion in
+                guard suggestion.category == .material else { return }
+                if let entry = store.materialPriceEntries.first(where: { $0.id == suggestion.entityId }) {
+                    editingEntry = entry
+                }
+            },
+            deleteConfig: SearchableDatabaseDeleteConfig(
+                title: "删除材料价格？",
+                itemNoun: "材料价格记录"
+            ),
+            onDeleteConfirmed: deleteEntries,
             rowContent: { entry in
                 MaterialPriceRow(entry: entry)
             },
@@ -75,8 +95,9 @@ struct MaterialPriceDatabaseView: View {
         }
     }
 
-    private func deleteEntries(_ offsets: IndexSet, _ items: [MaterialPriceEntry]) {
-        let ids = offsets.compactMap { items.indices.contains($0) ? items[$0].id : nil }
+    private func deleteEntries(_ items: [MaterialPriceEntry]) {
+        let ids = Set(items.map(\.id))
+        guard !ids.isEmpty else { return }
         store.materialPriceEntries.removeAll { ids.contains($0.id) }
         store.scheduleSave()
     }
@@ -166,7 +187,7 @@ struct AddMaterialSheet: View {
                                 ForEach(suggestedCategories, id: \.self) { value in
                                     Button(value) { category = value }
                                         .buttonStyle(.bordered)
-                                        .tint(category == value ? .orange : .gray)
+                                        .tint(category == value ? .appWarning : .appMuted)
                                 }
                             }
                             .padding(.vertical, 2)
@@ -211,7 +232,7 @@ private struct MaterialPriceRow: View {
                 if !entry.referencePrice.isEmpty {
                     Text("¥\(entry.referencePrice)")
                         .font(.callout.weight(.semibold))
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(.appWarning)
                 }
             }
             Text([entry.specification, entry.brand, entry.unit].filter { !$0.isEmpty }.joined(separator: " · "))

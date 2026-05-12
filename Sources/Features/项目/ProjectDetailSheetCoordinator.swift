@@ -4,6 +4,7 @@ import UIKit
 struct ProjectDetailEditingCoordinatorDependencies<AttachmentSheet: View> {
     let useMetric: Bool
     let projects: [Project]
+    let constructionMethods: [ConstructionMethod]
     let relatedLogs: [DailyLog]
     let relatedFinancialRecords: [ProjectFinancialRecord]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
@@ -45,7 +46,11 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
     @Binding var financialAddSeed: ProjectFinancialRecord?
     @Binding var imagePickerSource: UIImagePickerController.SourceType
 
+    let deliveryGuideData: ProjectDeliveryGuideData
+    let constructionMethods: [ConstructionMethod]
     let recentFinancialRecords: [ProjectFinancialRecord]
+    let onOpenModeFromDeliveryGuide: (ProjectDetailMode) -> Void
+    let onStartDeliveryExport: () -> Void
     let onUpdateProject: (Project) -> Void
     let onCreateContact: (ProjectContact) -> Void
     let onCreateFinancialRecord: (ProjectFinancialRecord, Bool) -> Void
@@ -59,11 +64,27 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
             }) { presentation in
                 switch presentation {
                 case .quickAdd(let sheet):
-                    QuickAddSheet(sheet: sheet, projectId: projectId)
+                    QuickAddSheet(
+                        sheet: sheet,
+                        projectId: projectId,
+                        constructionMethods: constructionMethods
+                    )
                 case .editProject:
                     ProjectEditSheet(project: project) { updated in
                         onUpdateProject(updated)
                     }
+                case .deliveryGuide:
+                    ProjectDeliveryGuideView(
+                        data: deliveryGuideData,
+                        onStartExport: {
+                            self.presentation = nil
+                            onStartDeliveryExport()
+                        },
+                        onOpenMode: { mode in
+                            self.presentation = nil
+                            onOpenModeFromDeliveryGuide(mode)
+                        }
+                    )
                 case .addContact:
                     ProjectContactAddSheet(projectId: projectId) { contact in
                         onCreateContact(contact)
@@ -78,7 +99,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         financialAddSeed = nil
                     }
                 case .documentScanSetup:
-                    ProjectDocumentScanSetupSheet(projectId: projectId) { target in
+                    ProjectDocumentScanSetupSheet(projectId: projectId, constructionMethods: constructionMethods) { target in
                         onCreateScanTarget(target)
                     }
                 case .imagePicker:
@@ -105,6 +126,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
 
     let useMetric: Bool
     let projects: [Project]
+    let constructionMethods: [ConstructionMethod]
     let relatedLogs: [DailyLog]
     let relatedFinancialRecords: [ProjectFinancialRecord]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
@@ -185,7 +207,8 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
             .sheet(item: $editingDocument) { document in
                 ProjectDocumentDetailSheet(
                     document: document,
-                    financialRecords: relatedFinancialRecords
+                    financialRecords: relatedFinancialRecords,
+                    constructionMethods: constructionMethods
                 ) { target in
                     onPreviewDocument(target)
                 } onSave: { updated in
@@ -204,6 +227,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
             .sheet(item: $editingFinancialRecord) { record in
                 ProjectFinancialRecordEditSheet(
                     record: record,
+                    linkedDocuments: linkedDocuments(record),
                     linkedAttachmentCount: linkedDocuments(record).count
                 ) { updated in
                     onSaveFinancialRecord(updated)
@@ -243,7 +267,11 @@ extension View {
         presentation: Binding<ProjectDetailPresentation?>,
         financialAddSeed: Binding<ProjectFinancialRecord?>,
         imagePickerSource: Binding<UIImagePickerController.SourceType>,
+        deliveryGuideData: ProjectDeliveryGuideData,
+        constructionMethods: [ConstructionMethod],
         recentFinancialRecords: [ProjectFinancialRecord],
+        onOpenModeFromDeliveryGuide: @escaping (ProjectDetailMode) -> Void,
+        onStartDeliveryExport: @escaping () -> Void,
         onUpdateProject: @escaping (Project) -> Void,
         onCreateContact: @escaping (ProjectContact) -> Void,
         onCreateFinancialRecord: @escaping (ProjectFinancialRecord, Bool) -> Void,
@@ -257,7 +285,11 @@ extension View {
                 presentation: presentation,
                 financialAddSeed: financialAddSeed,
                 imagePickerSource: imagePickerSource,
+                deliveryGuideData: deliveryGuideData,
+                constructionMethods: constructionMethods,
                 recentFinancialRecords: recentFinancialRecords,
+                onOpenModeFromDeliveryGuide: onOpenModeFromDeliveryGuide,
+                onStartDeliveryExport: onStartDeliveryExport,
                 onUpdateProject: onUpdateProject,
                 onCreateContact: onCreateContact,
                 onCreateFinancialRecord: onCreateFinancialRecord,
@@ -297,6 +329,7 @@ extension View {
                 timelineContext: timelineContext,
                 useMetric: dependencies.useMetric,
                 projects: dependencies.projects,
+                constructionMethods: dependencies.constructionMethods,
                 relatedLogs: dependencies.relatedLogs,
                 relatedFinancialRecords: dependencies.relatedFinancialRecords,
                 linkedDocuments: dependencies.linkedDocuments,

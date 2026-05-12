@@ -2,12 +2,12 @@ import SwiftUI
 
 struct LightingCalcView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.lighting.roomLength") private var roomLength: String = "6"
-    @AppStorage("calc.lighting.roomWidth") private var roomWidth: String = "4"
-    @AppStorage("calc.lighting.targetLux") private var targetLux: String = "300"
-    @AppStorage("calc.lighting.lumensPerFixture") private var lumensPerFixture: String = "2400"
-    @AppStorage("calc.lighting.utilizationFactor") private var utilizationFactor: String = "0.6"
-    @AppStorage("calc.lighting.maintenanceFactor") private var maintenanceFactor: String = "0.8"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingRoomLength) private var roomLength: String = "6"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingRoomWidth) private var roomWidth: String = "4"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingTargetLux) private var targetLux: String = "300"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingLumensPerFixture) private var lumensPerFixture: String = "2400"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingUtilizationFactor) private var utilizationFactor: String = "0.6"
+    @AppStorage(UserPreferenceKeys.Calculator.lightingMaintenanceFactor) private var maintenanceFactor: String = "0.8"
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
@@ -48,7 +48,7 @@ struct LightingCalcView: View {
                                 targetLux = String(preset.lux)
                             }
                             .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4)
-                            .background(targetLux == String(preset.lux) ? Color.orange : Color.gray.opacity(0.15))
+                            .background(targetLux == String(preset.lux) ? Color.appPrimaryAction : Color(uiColor: .tertiarySystemGroupedBackground))
                             .foregroundStyle(targetLux == String(preset.lux) ? .white : .primary)
                             .clipShape(Capsule())
                         }
@@ -124,6 +124,7 @@ struct LightingCalcView: View {
         let perArea = Double(count) / area
         resultModel = .singleSection(
             headline: "建议 \(count) 盏",
+            formula: "需总光通量 = 面积×照度 ÷ (利用系数×维护系数)",
             items: [
                 CalculationResult.item("房间面积", "\(String(format: "%.2f", area)) m²"),
                 CalculationResult.item("总光通量需求", "\(String(format: "%.0f", totalLumens)) lm"),

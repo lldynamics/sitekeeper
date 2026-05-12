@@ -11,6 +11,7 @@ struct RootView: View {
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @State private var showOnboarding = false
     @State private var showOnboardingBackupImport = false
+    @State private var widgetDeepLinkDestination: WidgetDeepLinkDestination?
     @State private var projectComposerOpenToken = 0
     @State private var padDetailResetToken = 0
     @State private var padShellResetToken = 0
@@ -77,7 +78,7 @@ struct RootView: View {
                 .ignoresSafeArea()
             }
         }
-        .tint(.orange)
+        .tint(Color.appPrimaryAction)
         .preferredColorScheme(preferredAppearance)
         .environment(\.locale, preferredLocale)
         .alert("数据读写异常", isPresented: persistenceErrorBinding) {
@@ -89,7 +90,19 @@ struct RootView: View {
         }
         .sheet(isPresented: $showOnboardingBackupImport) {
             NavigationStack {
-                BackupView(autoOpenImporter: true)
+                DataManagementView(initialTab: "导入恢复")
+            }
+        }
+        .sheet(item: $widgetDeepLinkDestination) { destination in
+            NavigationStack {
+                widgetDeepLinkView(for: destination)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("关闭") {
+                                widgetDeepLinkDestination = nil
+                            }
+                        }
+                    }
             }
         }
         .onAppear {
@@ -100,6 +113,7 @@ struct RootView: View {
         .onChange(of: store.hasAnyBusinessData) { _, _ in
             refreshOnboardingState()
         }
+        .onOpenURL(perform: handleIncomingURL)
     }
 
     @ViewBuilder
@@ -144,12 +158,20 @@ struct RootView: View {
                     Button {
                         switchPadModule(to: tab)
                     } label: {
-                        Label(tab.title, systemImage: tab.systemImage)
-                            .font(.body.weight(selectedTab == tab ? .semibold : .regular))
-                            .foregroundStyle(selectedTab == tab ? .orange : .primary)
+                        HStack(spacing: AppSpacing.tight) {
+                            if selectedTab == tab {
+                                RoundedRectangle(cornerRadius: 1.5)
+                                    .fill(Color.appPrimaryAction)
+                                    .frame(width: 3, height: 22)
+                            }
+                            Label(tab.title, systemImage: tab.systemImage)
+                                .font(.body.weight(selectedTab == tab ? .semibold : .regular))
+                            Spacer(minLength: 0)
+                        }
+                        .foregroundStyle(selectedTab == tab ? Color.appPrimaryAction : Color.primary)
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(selectedTab == tab ? Color.orange.opacity(0.12) : Color.clear)
+                    .listRowBackground(selectedTab == tab ? Color.appPrimarySurfaceSubtle : Color.clear)
                 }
             }
             .navigationTitle(AppBrand.displayName)
@@ -171,7 +193,7 @@ struct RootView: View {
             NavigationStack {
                 ProjectListView(
                     autoOpenComposerToken: projectComposerOpenToken,
-                    prefersSplitNavigation: true
+                    prefersSplitNavigation: false
                 )
             }
         case .checklist:
@@ -229,6 +251,108 @@ struct RootView: View {
         let defaults = UserDefaults.standard
         guard defaults.object(forKey: UserPreferenceKeys.appearanceMode) == nil else { return }
         appearanceMode = legacyDarkMode ? AppAppearanceMode.dark.rawValue : AppAppearanceMode.system.rawValue
+    }
+
+    @ViewBuilder
+    private func widgetDeepLinkView(for destination: WidgetDeepLinkDestination) -> some View {
+        switch destination {
+        case .todos:
+            SiteTodoView()
+                .navigationTitle("现场待办")
+                .navigationBarTitleDisplayMode(.inline)
+        case .lowStock:
+            MaterialCenterView(initialTab: .warehouse)
+        case .missingReceipt:
+            ProjectListView(initialOverviewFilter: .missingReceipt)
+        case .backupOverdue:
+            DataManagementView(initialTab: "备份")
+        case .priceSpike:
+            MaterialPriceSpikeDetailView()
+        case .project(let projectId):
+            if store.projects.contains(where: { $0.id == projectId }) {
+                ProjectDetailView(projectId: projectId)
+            } else {
+                ContentUnavailableView(
+                    "项目不存在",
+                    systemImage: "exclamationmark.triangle",
+                    description: Text("该项目可能已被删除或尚未同步到本机。")
+                )
+            }
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard let destination = WidgetDeepLinkDestination(url: url) else { return }
+        switch destination {
+        case .todos:
+            selectedTab = .dashboard
+        case .lowStock:
+            selectedTab = .checklist
+        case .missingReceipt:
+            selectedTab = .records
+        case .backupOverdue:
+            selectedTab = .profile
+        case .priceSpike:
+            selectedTab = .dashboard
+        case .project:
+            selectedTab = .records
+        }
+        widgetDeepLinkDestination = destination
+    }
+}
+
+private enum WidgetDeepLinkDestination: Identifiable, Equatable {
+    case todos
+    case lowStock
+    case missingReceipt
+    case backupOverdue
+    case priceSpike
+    case project(UUID)
+
+    var id: String {
+        switch self {
+        case .todos:
+            return "todos"
+        case .lowStock:
+            return "low-stock"
+        case .missingReceipt:
+            return "missing-receipt"
+        case .backupOverdue:
+            return "backup-overdue"
+        case .priceSpike:
+            return "price-spike"
+        case .project(let projectId):
+            return "project-\(projectId.uuidString)"
+        }
+    }
+
+    init?(url: URL) {
+        guard url.scheme?.lowercased() == "sitekeeper",
+              url.host?.lowercased() == "widget" else {
+            return nil
+        }
+        let route = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        switch route {
+        case "todos":
+            self = .todos
+        case "low-stock":
+            self = .lowStock
+        case "missing-receipt":
+            self = .missingReceipt
+        case "backup-overdue":
+            self = .backupOverdue
+        case "price-spike":
+            self = .priceSpike
+        case "project":
+            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
+                  let projectIDText = components.queryItems?.first(where: { $0.name == "id" })?.value,
+                  let projectID = UUID(uuidString: projectIDText) else {
+                return nil
+            }
+            self = .project(projectID)
+        default:
+            return nil
+        }
     }
 }
 
@@ -295,7 +419,7 @@ private struct FirstLaunchOnboardingView: View {
                         actionRow(title: "新建项目", subtitle: "从空白开始创建你的第一个工程", icon: "building.2.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                     Button(action: onImportBackup) {
                         actionRow(title: "导入备份", subtitle: "从 ZIP 恢复已有项目数据", icon: "square.and.arrow.down.fill")
                     }

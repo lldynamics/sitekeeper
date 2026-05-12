@@ -27,14 +27,20 @@ enum ProjectTimelineBuilder {
         var items: [ProjectTimelineItem] = []
 
         items += logs.map {
-            ProjectTimelineItem(
+            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            return ProjectTimelineItem(
                 id: "log-\($0.id.uuidString)",
                 date: $0.date,
                 type: String(localized: "日志"),
                 title: $0.content.isEmpty ? String(localized: "施工日志") : $0.content,
-                subtitle: [$0.weather, $0.workers.isEmpty ? "" : "\($0.workers) \(String(localized: "人"))", $0.photoAttachments.isEmpty ? "" : "\($0.photoAttachments.count) \(String(localized: "张照片"))"].filter { !$0.isEmpty }.joined(separator: " · "),
+                subtitle: [
+                    $0.weather,
+                    $0.workers.isEmpty ? "" : "\($0.workers) \(String(localized: "人"))",
+                    $0.photoAttachments.isEmpty ? "" : "\($0.photoAttachments.count) \(String(localized: "张照片"))",
+                    methodSummary
+                ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "book.pages.fill",
-                tint: .green
+                tint: .appSuccess
             )
         }
 
@@ -46,19 +52,25 @@ enum ProjectTimelineBuilder {
                 title: $0.title,
                 subtitle: "\(Int($0.clampedCompletion * 100))% · \($0.startDate)-\($0.dueDate)",
                 systemImage: "checklist.checked",
-                tint: .orange
+                tint: .appPrimaryAction
             )
         }
 
         items += siteTodos.map {
-            ProjectTimelineItem(
+            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            return ProjectTimelineItem(
                 id: "todo-\($0.id.uuidString)",
                 date: $0.completedAt ?? $0.dueDate,
                 type: String(localized: "待办"),
                 title: $0.title,
-                subtitle: [$0.owner, $0.priority.displayName, $0.isDone ? String(localized: "已完成") : String(localized: "未完成")].filter { !$0.isEmpty }.joined(separator: " · "),
+                subtitle: [
+                    $0.owner,
+                    $0.priority.displayName,
+                    $0.isDone ? String(localized: "已完成") : String(localized: "未完成"),
+                    methodSummary
+                ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: $0.isDone ? "checkmark.circle.fill" : "checklist",
-                tint: $0.isDone ? .green : .orange
+                tint: $0.isDone ? .appSuccess : .appPrimaryAction
             )
         }
 
@@ -70,7 +82,7 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: [$0.specification, "\($0.quantity)\($0.unit)", $0.purchaseStatus.displayName].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "shippingbox.fill",
-                tint: .blue
+                tint: .appPrimaryAction
             )
         }
 
@@ -82,7 +94,7 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: [$0.version, $0.fileType.uppercased(), $0.isCurrentVersion ? String(localized: "当前版本") : String(localized: "历史版本")].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "doc.richtext",
-                tint: .indigo
+                tint: .appDoc
             )
         }
 
@@ -94,7 +106,7 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: "\($0.status.displayName) · \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0)))",
                 systemImage: "doc.text.fill",
-                tint: .teal
+                tint: .appPrimaryAction
             )
         }
 
@@ -106,7 +118,7 @@ enum ProjectTimelineBuilder {
                 title: $0.workType.isEmpty ? String(localized: "人工记录") : $0.workType,
                 subtitle: "\($0.workers) \(String(localized: "人")) · \($0.hours) \(String(localized: "小时")) · \(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))",
                 systemImage: "person.2.fill",
-                tint: .purple
+                tint: .appSuccess
             )
         }
 
@@ -118,19 +130,23 @@ enum ProjectTimelineBuilder {
                 title: "\($0.normalizedDirection.displayName) \(ReportBuilder.money($0.amountValue.doubleValue))",
                 subtitle: [$0.normalizedCategory.displayName, $0.normalizedStatus.displayName, $0.counterparty].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "receipt.fill",
-                tint: $0.normalizedDirection == .income ? .green : .red
+                tint: $0.normalizedDirection == .income ? .appSuccess : .appRisk
             )
         }
 
         items += documents.map {
-            ProjectTimelineItem(
+            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            return ProjectTimelineItem(
                 id: "document-\($0.id.uuidString)",
                 date: $0.createdAt,
                 type: String(localized: "资料"),
                 title: $0.title,
-                subtitle: "\($0.category.displayName) · \($0.pageCount) \(String(localized: "页"))",
+                subtitle: [
+                    "\($0.category.displayName) · \($0.pageCount) \(String(localized: "页"))",
+                    methodSummary
+                ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "doc.viewfinder.fill",
-                tint: .brown
+                tint: .appDoc
             )
         }
 
@@ -142,7 +158,7 @@ enum ProjectTimelineBuilder {
                 title: "\($0.normalizedMovementType.displayName) \($0.materialName)",
                 subtitle: "\($0.quantity)\($0.unit) · \($0.counterparty)",
                 systemImage: "shippingbox.and.arrow.backward.fill",
-                tint: .indigo
+                tint: .appPrimaryAction
             )
         }
 
@@ -154,7 +170,7 @@ enum ProjectTimelineBuilder {
                 title: $0.title.isEmpty ? String(localized: "随手记") : $0.title,
                 subtitle: $0.content,
                 systemImage: "square.and.pencil",
-                tint: .pink
+                tint: .appPrimaryAction
             )
         }
 

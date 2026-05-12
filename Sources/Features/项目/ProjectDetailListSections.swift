@@ -24,7 +24,7 @@ struct ProjectLogSectionView<LogRow: View>: View {
                         Label("写施工日志", systemImage: "square.and.pencil")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 } else {
                     ForEach(logs.sorted { $0.date > $1.date }) { log in
                         logRow(log)
@@ -60,7 +60,7 @@ struct ProjectMaterialSectionView: View {
                         Label("添加材料", systemImage: "shippingbox.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 } else {
                     ForEach(items) { item in
                         Button {
@@ -78,7 +78,7 @@ struct ProjectMaterialSectionView: View {
                                 VStack(alignment: .trailing, spacing: 5) {
                                     Text(ReportBuilder.money(ReportBuilder.materialLineTotal(item)))
                                         .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.appFinance)
                                     Text(item.purchaseStatus.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(materialStatusColor(item.purchaseStatus))
@@ -102,10 +102,10 @@ struct ProjectMaterialSectionView: View {
 
     private func materialStatusColor(_ status: MaterialPurchaseStatus) -> Color {
         switch status {
-        case .notPurchased: return .gray
-        case .purchased: return .blue
-        case .arrived: return .green
-        case .used: return .orange
+        case .notPurchased: return .appMuted
+        case .purchased: return .appDoc
+        case .arrived: return .appSuccess
+        case .used: return .appWarning
         }
     }
 }
@@ -134,7 +134,7 @@ struct ProjectQuoteSectionView: View {
                         Label("添加报价", systemImage: "doc.text.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 } else {
                     ForEach(items) { item in
                         Button {
@@ -152,7 +152,7 @@ struct ProjectQuoteSectionView: View {
                                 VStack(alignment: .trailing, spacing: 5) {
                                     Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(item)))
                                         .font(.caption.weight(.medium))
-                                        .foregroundStyle(.orange)
+                                        .foregroundStyle(Color.appFinance)
                                     Text(item.status.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(quoteStatusColor(item.status))
@@ -176,9 +176,9 @@ struct ProjectQuoteSectionView: View {
 
     private func quoteStatusColor(_ status: QuoteStatus) -> Color {
         switch status {
-        case .draft: return .gray
-        case .sent: return .blue
-        case .confirmed: return .green
+        case .draft: return .appMuted
+        case .sent: return .appDoc
+        case .confirmed: return .appSuccess
         }
     }
 }
@@ -228,7 +228,7 @@ struct ProjectLaborSectionView: View {
                         Label("记人工", systemImage: "person.2.fill")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 } else {
                     Picker("结算", selection: $settlementFilter) {
                         ForEach(LaborSettlementFilter.allCases, id: \.self) { filter in
@@ -347,18 +347,28 @@ struct ProjectPhotoSectionView: View {
                             onOpen(ProjectPhotoContext(logId: item.logId, photoId: item.photo.id, legacyFileName: item.photo.fileName))
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
-                                if let image = PhotoStorage.thumbnail(for: item.photo.fileName) {
-                                    Image(uiImage: image)
+                                AsyncPhotoThumbnailImageView(fileName: item.photo.fileName) { image in
+                                    image
                                         .resizable()
                                         .scaledToFill()
                                         .aspectRatio(1, contentMode: .fill)
                                         .frame(maxWidth: .infinity)
                                         .clipShape(RoundedRectangle(cornerRadius: 8))
                                         .clipped()
+                                } placeholder: {
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .fill(Color(uiColor: .secondarySystemFill))
+                                        .aspectRatio(1, contentMode: .fill)
+                                        .frame(maxWidth: .infinity)
+                                        .overlay {
+                                            Image(systemName: "photo")
+                                                .font(.caption)
+                                                .foregroundStyle(.secondary)
+                                        }
                                 }
                                 Text(item.photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
-                                    .foregroundStyle(.blue)
+                                    .foregroundStyle(Color.appDoc)
                                 Text(item.date)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -458,7 +468,7 @@ struct ProjectDrawingSectionView: View {
                     Label("导入图纸", systemImage: "doc.viewfinder.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(Color.appPrimaryAction)
             } else if filteredDrawings.isEmpty {
                 Text("当前筛选下暂无图纸。")
                     .foregroundStyle(.secondary)
@@ -505,7 +515,7 @@ struct ProjectDrawingSectionView: View {
         } label: {
             HStack(spacing: AppSpacing.normal) {
                 Image(systemName: icon(drawing.fileType))
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appDoc)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
                         Text(drawing.name)
@@ -519,7 +529,7 @@ struct ProjectDrawingSectionView: View {
                         if drawing.isCurrentVersion {
                             Text("当前版")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.green)
+                                .foregroundStyle(Color.appSuccess)
                         } else {
                             Text("历史版")
                                 .font(.caption2.weight(.semibold))
@@ -538,12 +548,12 @@ struct ProjectDrawingSectionView: View {
                     if drawing.issueStatus != .none {
                         Text("状态: \(drawing.issueStatus.displayName)")
                             .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.appWarning)
                     }
                     if !drawing.issueNote.isEmpty {
                         Text("问题: \(drawing.issueNote)")
                             .font(.caption2)
-                            .foregroundStyle(.red)
+                            .foregroundStyle(Color.appRisk)
                             .lineLimit(1)
                     }
                     if !drawing.note.isEmpty {
@@ -585,7 +595,7 @@ struct ProjectDrawingSectionView: View {
             } label: {
                 Label("预览", systemImage: "eye")
             }
-            .tint(.blue)
+            .tint(Color.appDoc)
         }
     }
 }

@@ -38,21 +38,21 @@ struct ProjectRecordHubSectionView<LogsDestination: View, ProgressDestination: V
                 title: "施工日志",
                 subtitle: "\(logsCount) 条",
                 systemImage: "book.pages.fill",
-                tint: .green,
+                tint: .appSuccess,
                 destination: logsDestination
             )
             ProjectModeHubRow(
                 title: "进度任务",
                 subtitle: "\(progressCount) 项",
                 systemImage: "checklist.checked",
-                tint: .orange,
+                tint: .appPrimaryAction,
                 destination: progressDestination
             )
             ProjectModeHubRow(
                 title: "现场照片",
                 subtitle: "\(photoCount) 张",
                 systemImage: "photo.on.rectangle.angled",
-                tint: .blue,
+                tint: .appDoc,
                 destination: photoDestination
             )
         }
@@ -70,58 +70,44 @@ struct ProjectFinanceHubSectionView<BookDestination: View, QuoteDestination: Vie
     @ViewBuilder let materialDestination: () -> MaterialDestination
     @ViewBuilder let laborDestination: () -> LaborDestination
     @ViewBuilder let warehouseDestination: () -> WarehouseDestination
-    let legacyPaymentsCount: Int
-    let onMigrateLegacyPayments: () -> Void
 
     var body: some View {
-        Group {
-            ProjectModeHubSection(title: "财务") {
-                ProjectModeHubRow(
-                    title: "项目财务流水",
-                    subtitle: "\(financialCount) 笔",
-                    systemImage: "receipt.long.fill",
-                    tint: .pink,
-                    destination: bookDestination
-                )
-                ProjectModeHubRow(
-                    title: "报价明细",
-                    subtitle: "\(quoteCount) 项",
-                    systemImage: "doc.text.fill",
-                    tint: .orange,
-                    destination: quoteDestination
-                )
-                ProjectModeHubRow(
-                    title: "材料清单",
-                    subtitle: "\(materialCount) 项",
-                    systemImage: "shippingbox.fill",
-                    tint: .blue,
-                    destination: materialDestination
-                )
-                ProjectModeHubRow(
-                    title: "人工记录",
-                    subtitle: "\(laborCount) 条",
-                    systemImage: "person.2.fill",
-                    tint: .purple,
-                    destination: laborDestination
-                )
-                ProjectModeHubRow(
-                    title: "项目仓库",
-                    subtitle: "\(warehouseCount) 条出入库",
-                    systemImage: "shippingbox.and.arrow.backward.fill",
-                    tint: .brown,
-                    destination: warehouseDestination
-                )
-            }
-            if legacyPaymentsCount > 0 {
-                Section("旧版收款记录") {
-                    Text(String(format: String(localized: "检测到 %d 条历史收款记录，建议迁移到\"项目财务流水\"统一管理。"), legacyPaymentsCount))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button("迁移收款到财务流水") {
-                        onMigrateLegacyPayments()
-                    }
-                }
-            }
+        ProjectModeHubSection(title: "财务") {
+            ProjectModeHubRow(
+                title: "项目财务流水",
+                subtitle: "\(financialCount) 笔",
+                systemImage: "receipt.long.fill",
+                tint: .appPrimaryAction,
+                destination: bookDestination
+            )
+            ProjectModeHubRow(
+                title: "报价明细",
+                subtitle: "\(quoteCount) 项",
+                systemImage: "doc.text.fill",
+                tint: .appPrimaryAction,
+                destination: quoteDestination
+            )
+            ProjectModeHubRow(
+                title: "材料清单",
+                subtitle: "\(materialCount) 项",
+                systemImage: "shippingbox.fill",
+                tint: .appPrimaryAction,
+                destination: materialDestination
+            )
+            ProjectModeHubRow(
+                title: "人工记录",
+                subtitle: "\(laborCount) 条",
+                systemImage: "person.2.fill",
+                tint: .appSuccess,
+                destination: laborDestination
+            )
+            ProjectModeHubRow(
+                title: "项目仓库",
+                subtitle: "\(warehouseCount) 条出入库",
+                systemImage: "shippingbox.and.arrow.backward.fill",
+                tint: .appPrimaryAction,
+                destination: warehouseDestination
+            )
         }
     }
 }
@@ -135,26 +121,29 @@ struct ProjectAssetHubSectionView<DrawingDestination: View, DocumentDestination:
     @ViewBuilder let contactDestination: () -> ContactDestination
 
     var body: some View {
-        ProjectModeHubSection(title: "资料") {
+        ProjectModeHubSection(title: "本项目资料") {
+            Text("仅显示当前项目资料；跨项目检索请前往工具箱“全局文件检索”。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
             ProjectModeHubRow(
                 title: "图纸",
                 subtitle: "\(drawingCount) 份",
                 systemImage: "doc.viewfinder.fill",
-                tint: .indigo,
+                tint: .appDoc,
                 destination: drawingDestination
             )
             ProjectModeHubRow(
-                title: "票据与资料",
+                title: "票据与本项目资料",
                 subtitle: "\(documentCount) 份",
                 systemImage: "doc.richtext.fill",
-                tint: .brown,
+                tint: .appDoc,
                 destination: documentDestination
             )
             ProjectModeHubRow(
                 title: "联系人",
                 subtitle: "\(contactCount) 位",
                 systemImage: "person.crop.circle.badge.plus",
-                tint: .blue,
+                tint: .appPrimaryAction,
                 destination: contactDestination
             )
         }

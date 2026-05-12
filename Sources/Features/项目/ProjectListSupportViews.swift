@@ -7,6 +7,26 @@ enum ProjectOverviewFilter: String {
     case missingReceipt
     case financialDue
     case missingTodayLog
+    case priceSpike
+
+    var displayName: String {
+        switch self {
+        case .active:
+            return "进行中"
+        case .overdue:
+            return "延期"
+        case .todo:
+            return "待办"
+        case .missingReceipt:
+            return "缺票"
+        case .financialDue:
+            return "应收付"
+        case .missingTodayLog:
+            return "未写日志"
+        case .priceSpike:
+            return "价格异动"
+        }
+    }
 }
 
 enum ProjectSortOption: String, CaseIterable {
@@ -30,10 +50,9 @@ struct ProjectRowContent: View {
     let badges: [ProjectRiskBadge]
 
     private var riskColor: Color {
-        if badges.contains(where: { $0.color == .red }) { return .red }
-        if badges.contains(where: { $0.color == .orange }) { return .orange }
-        if badges.contains(where: { $0.color == .pink }) { return .pink }
-        return isSelected ? .orange : .clear
+        if badges.contains(where: { $0.color == .appRisk }) { return .appRisk }
+        if badges.contains(where: { $0.color == .appPrimaryAction }) { return .appPrimaryAction }
+        return isSelected ? .appPrimaryAction : .clear
     }
 
     var body: some View {
@@ -77,7 +96,7 @@ struct ProjectRowContent: View {
                     if unpaidAmount > 0 {
                         Text("未收 \(ReportBuilder.money(unpaidAmount))")
                             .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.appPrimaryAction)
                     }
                     Spacer(minLength: 0)
                 }
@@ -98,6 +117,19 @@ struct ProjectRowContent: View {
             }
         }
         .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(projectAccessibilityLabel)
+    }
+
+    private var projectAccessibilityLabel: String {
+        var parts = [project.name, project.status.displayName]
+        if !project.location.isEmpty { parts.append(project.location) }
+        if !project.customerName.isEmpty { parts.append(project.customerName) }
+        if unpaidAmount > 0 { parts.append("未收 \(ReportBuilder.money(unpaidAmount))") }
+        if !badges.isEmpty {
+            parts.append("风险 \(badges.prefix(3).map(\.title).joined(separator: "，"))")
+        }
+        return parts.joined(separator: "，")
     }
 }
 
@@ -106,11 +138,11 @@ struct ProjectStatusBadge: View {
 
     private var color: Color {
         switch status {
-        case .active: return .orange
-        case .paused: return .yellow
-        case .completed: return .green
-        case .settled: return .blue
-        case .archived: return .gray
+        case .active: return .appPrimaryAction
+        case .paused: return .appPrimaryAction
+        case .completed: return .appSuccess
+        case .settled: return .appDoc
+        case .archived: return .appMuted
         }
     }
 
@@ -150,7 +182,7 @@ struct FilterChip: View {
                 .font(.caption.weight(.medium))
                 .padding(.horizontal, AppSpacing.normal)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.orange : Color.gray.opacity(0.15))
+                .background(isSelected ? Color.appPrimaryAction : Color(uiColor: .tertiarySystemGroupedBackground))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .clipShape(Capsule())
         }

@@ -45,7 +45,7 @@ struct ProjectContactsView: View {
                         Label("添加联系人", systemImage: "person.crop.circle.badge.plus")
                     }
                     .buttonStyle(.borderedProminent)
-                    .tint(.orange)
+                    .tint(Color.appPrimaryAction)
                 }
             }
         }

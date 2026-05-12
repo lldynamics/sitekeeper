@@ -1,10 +1,10 @@
 import SwiftUI
 
 struct UnitConverterView: View {
-    @AppStorage("calc.unit.category") private var categoryRawValue: String = ConvCategory.length.rawValue
-    @AppStorage("calc.unit.inputValue") private var inputValue: String = "1"
-    @AppStorage("calc.unit.fromUnit") private var fromUnit: String = "米"
-    @AppStorage("calc.unit.toUnit") private var toUnit: String = "英尺"
+    @AppStorage(UserPreferenceKeys.Calculator.unitCategory) private var categoryRawValue: String = ConvCategory.length.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.unitInputValue) private var inputValue: String = "1"
+    @AppStorage(UserPreferenceKeys.Calculator.unitFromUnit) private var fromUnit: String = "米"
+    @AppStorage(UserPreferenceKeys.Calculator.unitToUnit) private var toUnit: String = "英尺"
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
@@ -128,6 +128,7 @@ struct UnitConverterView: View {
         }
         resultModel = .singleSection(
             headline: "\(trim(converted)) \(toUnit)",
+            formula: "输出值 = 输入值×源单位系数÷目标单位系数",
             items: [
                 CalculationResult.item("输入", "\(trim(value)) \(fromUnit)"),
                 CalculationResult.item("类别", category.displayName),

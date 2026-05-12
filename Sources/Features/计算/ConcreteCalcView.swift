@@ -2,11 +2,11 @@ import SwiftUI
 
 struct ConcreteCalcView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage("calc.concrete.length") private var length = "10"
-    @AppStorage("calc.concrete.width") private var width = "8"
-    @AppStorage("calc.concrete.thickness") private var thickness = "12"
-    @AppStorage("calc.concrete.waste") private var waste = "5"
-    @AppStorage("calc.concrete.grade") private var gradeRawValue = ConcreteGrade.c25.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.concreteLength) private var length = "10"
+    @AppStorage(UserPreferenceKeys.Calculator.concreteWidth) private var width = "8"
+    @AppStorage(UserPreferenceKeys.Calculator.concreteThickness) private var thickness = "12"
+    @AppStorage(UserPreferenceKeys.Calculator.concreteWaste) private var waste = "5"
+    @AppStorage(UserPreferenceKeys.Calculator.concreteGrade) private var gradeRawValue = ConcreteGrade.c25.rawValue
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
@@ -75,6 +75,7 @@ struct ConcreteCalcView: View {
         let gravel = total * grade.gravelM3PerM3
         resultModel = .singleSection(
             headline: "含损耗 \(fmt(total)) m³",
+            formula: "净方量 = 长×宽×厚(cm)÷100；含损耗 = 净方量×(1+损耗%)",
             items: [
                 CalculationResult.item("净方量", "\(fmt(net)) m³"),
                 CalculationResult.item("水泥", "\(fmt(cement)) kg (\(Int(ceil(cement / 50))) 袋)", status: .pass),

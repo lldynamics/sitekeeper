@@ -3,15 +3,11 @@ import Foundation
 enum ProjectDetailMetrics {
     static func paidAmount(
         project: Project,
-        relatedFinancialRecords: [ProjectFinancialRecord],
-        legacyPayments: [PaymentRecord]
+        relatedFinancialRecords: [ProjectFinancialRecord]
     ) -> Double {
         let paidByFinancialFlow = ProjectFinancialMetrics.collectionAmount(relatedFinancialRecords)
         if paidByFinancialFlow > 0 {
             return paidByFinancialFlow
-        }
-        if !legacyPayments.isEmpty {
-            return legacyPayments.reduce(0) { $0 + $1.amountValue.doubleValue }
         }
         return project.paidAmountValue.doubleValue
     }

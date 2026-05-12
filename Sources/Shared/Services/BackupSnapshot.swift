@@ -10,7 +10,8 @@ struct BackupSnapshot: Codable {
     var progressTasks: [ProgressTask]
     var lightingCircuitPlans: [LightingCircuitPlan]
     var siteTodos: [SiteTodo]
-    var paymentRecords: [PaymentRecord]
+    /// 旧版 `paymentRecords` 兼容字段：仅用于导入历史备份并迁移到 ProjectFinancialRecord。
+    var legacyPaymentRecords: [LegacyPaymentRecord]
     var projectDrawings: [ProjectDrawing]
     var projectContacts: [ProjectContact]
     var projectFinancialRecords: [ProjectFinancialRecord]
@@ -42,7 +43,7 @@ struct BackupSnapshot: Codable {
         progressTasks: [ProgressTask] = [],
         lightingCircuitPlans: [LightingCircuitPlan] = [],
         siteTodos: [SiteTodo] = [],
-        paymentRecords: [PaymentRecord] = [],
+        legacyPaymentRecords: [LegacyPaymentRecord] = [],
         projectDrawings: [ProjectDrawing] = [],
         projectContacts: [ProjectContact] = [],
         projectFinancialRecords: [ProjectFinancialRecord] = [],
@@ -73,7 +74,7 @@ struct BackupSnapshot: Codable {
         self.progressTasks = progressTasks
         self.lightingCircuitPlans = lightingCircuitPlans
         self.siteTodos = siteTodos
-        self.paymentRecords = paymentRecords
+        self.legacyPaymentRecords = legacyPaymentRecords
         self.projectDrawings = projectDrawings
         self.projectContacts = projectContacts
         self.projectFinancialRecords = projectFinancialRecords
@@ -98,7 +99,7 @@ struct BackupSnapshot: Codable {
 
     enum CodingKeys: String, CodingKey {
         case materialItems, quoteItems, laborRecords, projects, dailyLogs, historyRecords
-        case progressTasks, lightingCircuitPlans, siteTodos, paymentRecords, projectDrawings
+        case progressTasks, lightingCircuitPlans, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
         case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
@@ -116,7 +117,7 @@ struct BackupSnapshot: Codable {
         progressTasks = try container.decodeIfPresent([ProgressTask].self, forKey: .progressTasks) ?? []
         lightingCircuitPlans = try container.decodeIfPresent([LightingCircuitPlan].self, forKey: .lightingCircuitPlans) ?? []
         siteTodos = try container.decodeIfPresent([SiteTodo].self, forKey: .siteTodos) ?? []
-        paymentRecords = try container.decodeIfPresent([PaymentRecord].self, forKey: .paymentRecords) ?? []
+        legacyPaymentRecords = try container.decodeIfPresent([LegacyPaymentRecord].self, forKey: .legacyPaymentRecords) ?? []
         projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []
         projectContacts = try container.decodeIfPresent([ProjectContact].self, forKey: .projectContacts) ?? []
         projectFinancialRecords = try container.decodeIfPresent([ProjectFinancialRecord].self, forKey: .projectFinancialRecords) ?? []

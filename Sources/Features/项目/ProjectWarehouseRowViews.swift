@@ -14,7 +14,7 @@ struct ProjectWarehouseProjectRow: View {
                 Spacer()
                 Text("\(stockCount) 种")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(stockCount == 0 ? Color.secondary : .orange)
+                    .foregroundStyle(stockCount == 0 ? Color.secondary : Color.appPrimaryAction)
             }
             Text("出入库记录 \(movementCount) 条")
                 .font(.caption)
@@ -33,7 +33,7 @@ struct ProjectWarehouseAttachmentDraftRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: attachment.systemImage)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.appDoc)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 2) {
                 Text(attachment.title)
@@ -59,7 +59,7 @@ struct ProjectWarehouseAttachmentDocumentRow: View {
         Button(action: onPreview) {
             HStack(spacing: 10) {
                 Image(systemName: icon)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appDoc)
                     .frame(width: 24)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(document.title)
@@ -117,7 +117,7 @@ struct WarehouseMovementRow: View {
     var body: some View {
         HStack(spacing: 10) {
             Image(systemName: movementType.systemImage)
-                .foregroundStyle(movementType == .inbound ? .green : .orange)
+                .foregroundStyle(movementType == .inbound ? Color.appSuccess : Color.appWarning)
                 .frame(width: 24)
             VStack(alignment: .leading, spacing: 3) {
                 Text(movement.materialName)
@@ -128,14 +128,14 @@ struct WarehouseMovementRow: View {
                 if !movement.linkedDocumentIds.isEmpty {
                     Label("\(movement.linkedDocumentIds.count) 个附件", systemImage: "paperclip")
                         .font(.caption2)
-                        .foregroundStyle(.orange)
+                        .foregroundStyle(Color.appDoc)
                 }
             }
             Spacer()
             VStack(alignment: .trailing, spacing: 3) {
                 Text("\(movementType == .inbound ? "+" : "-")\(movement.quantity) \(movement.unit)")
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(movementType == .inbound ? .green : .orange)
+                    .foregroundStyle(movementType == .inbound ? Color.appSuccess : Color.appWarning)
                 Text(movement.date)
                     .font(.caption2)
                     .foregroundStyle(.secondary)

@@ -41,6 +41,10 @@ struct ProjectListView: View {
         self.prefersSplitNavigation = prefersSplitNavigation
     }
 
+    private var allowedStatuses: [ProjectStatus] {
+        ProjectStatus.allCases
+    }
+
     private var filtered: [Project] {
         var result = projectStore.projects
         result = SearchMatcher.filter(result, keyword: searchText)
@@ -51,7 +55,7 @@ struct ProjectListView: View {
             result = result.filter { project in
                 switch overviewFilter {
                 case .active:
-                    return project.status == .active || project.status == .paused
+                    return project.status.isActiveOrPaused
                 case .overdue:
                     return hasOverdueItem(for: project)
                 case .todo:
@@ -62,6 +66,8 @@ struct ProjectListView: View {
                     return hasUnsettledFinancial(for: project)
                 case .missingTodayLog:
                     return missingTodayLog(for: project)
+                case .priceSpike:
+                    return materialPriceSpikeCount(for: project) > 0
                 }
             }
         }
@@ -81,32 +87,21 @@ struct ProjectListView: View {
         }
     }
 
-    private var activeProjectCount: Int {
-        projectStore.activeOrPausedProjectCount
-    }
-
-    private var overdueCount: Int { projectStore.totalOverdueItemCount }
-
-    private var openTodoCount: Int { projectStore.totalOpenTodoCount }
-
-    private var unattachedReceiptCount: Int {
-        projectStore.totalUnattachedReceiptCount
-    }
-
-    private var unsettledFinancialCount: Int {
-        projectStore.totalUnsettledFinancialCount
-    }
-
-    private var missingTodayLogCount: Int {
-        projectStore.missingTodayLogActiveProjectCount
-    }
-
     private var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var hasAnyFilterApplied: Bool {
         !normalizedSearchText.isEmpty || statusFilter != nil || overviewFilter != nil
+    }
+
+    private var projectSearchSuggestions: [RealtimeSearchSuggestion] {
+        RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: searchText,
+            categories: [.project],
+            projects: projectStore.projects,
+            limit: 6
+        )
     }
 
     private var shouldUseSplitNavigation: Bool {
@@ -218,7 +213,7 @@ struct ProjectListView: View {
             } label: {
                 Image(systemName: "folder")
             }
-            .accessibilityLabel("项目文件浏览")
+            .accessibilityLabel("全局文件检索")
             Button {
                 showAdd = true
             } label: {
@@ -250,8 +245,11 @@ struct ProjectListView: View {
             statusFilter: $statusFilter,
             sortOption: $sortOption,
             overviewFilter: $overviewFilter,
+            allowedStatuses: allowedStatuses,
+            searchSuggestions: projectSearchSuggestions,
             hasAnyFilterApplied: hasAnyFilterApplied,
             isSplitNavigation: isSplitNavigation,
+            onSelectSuggestion: applyProjectSuggestion,
             onClearAll: clearAllFilters
         )
     }
@@ -284,7 +282,7 @@ struct ProjectListView: View {
                     Label("新建第一个项目", systemImage: "plus.circle.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(Color.appPrimaryAction)
             }
         }
     }
@@ -307,7 +305,7 @@ struct ProjectListView: View {
                         )
                     }
                     .buttonStyle(.plain)
-                    .listRowBackground(selectedProjectId == project.id ? Color.orange.opacity(0.14) : Color.clear)
+                    .listRowBackground(selectedProjectId == project.id ? Color.appPeachSurfaceSubtle : Color.clear)
                 } else {
                     NavigationLink {
                         ProjectDetailView(projectId: project.id)
@@ -327,21 +325,21 @@ struct ProjectListView: View {
                 } label: {
                     Label("记账", systemImage: "receipt.fill")
                 }
-                .tint(.pink)
+                .tint(Color.appFinance)
 
                 NavigationLink {
                     DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
                 } label: {
                     Label("写日志", systemImage: "book.pages.fill")
                 }
-                .tint(.green)
+                .tint(Color.appSuccess)
 
                 NavigationLink {
                     ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
                 } label: {
                     Label("加资料", systemImage: "doc.badge.plus")
                 }
-                .tint(.indigo)
+                .tint(Color.appDoc)
             }
             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
                 if let url = customerPhoneURL(for: project) {
@@ -350,7 +348,7 @@ struct ProjectListView: View {
                     } label: {
                         Label("联系客户", systemImage: "phone.fill")
                     }
-                    .tint(.blue)
+                    .tint(Color.appDoc)
                 }
             }
         }
@@ -464,9 +462,6 @@ struct ProjectListView: View {
         if summary.collectedIncomeAmount > 0 {
             return summary.collectedIncomeAmount
         }
-        if financeStore.hasLegacyPaymentRecord(for: projectId) {
-            return financeStore.legacyPaymentAmount(for: projectId)
-        }
         return project.paidAmountValue.doubleValue
     }
 
@@ -484,24 +479,34 @@ struct ProjectListView: View {
     private func projectRiskBadges(for project: Project) -> [ProjectRiskBadge] {
         var badges: [ProjectRiskBadge] = []
         if hasOverdueItem(for: project) {
-            badges.append(ProjectRiskBadge(title: "延期", systemImage: "exclamationmark.triangle.fill", color: .red))
+            badges.append(ProjectRiskBadge(title: "延期", systemImage: "exclamationmark.triangle.fill", color: .appRisk))
         }
         let todos = openTodoCount(for: project)
         if todos > 0 {
-            badges.append(ProjectRiskBadge(title: "\(todos)待办", systemImage: "checklist", color: .orange))
+            badges.append(ProjectRiskBadge(title: "\(todos)待办", systemImage: "checklist", color: .appWarning))
         }
         let missingReceipts = unattachedReceiptCount(for: project)
         if missingReceipts > 0 {
-            badges.append(ProjectRiskBadge(title: "\(missingReceipts)缺票", systemImage: "doc.badge.exclamationmark", color: .pink))
+            badges.append(ProjectRiskBadge(title: "\(missingReceipts)缺票", systemImage: "doc.badge.exclamationmark", color: .appFinance))
+        }
+        let priceSpikes = materialPriceSpikeCount(for: project)
+        if priceSpikes > 0 {
+            badges.append(ProjectRiskBadge(title: "\(priceSpikes)价格异动", systemImage: "arrow.up.right.circle.fill", color: .appFinance))
         }
         if unpaidAmount(for: project) > 0 {
-            badges.append(ProjectRiskBadge(title: "未收", systemImage: "yensign.circle.fill", color: .blue))
+            badges.append(ProjectRiskBadge(title: "未收", systemImage: "yensign.circle.fill", color: .appDoc))
         }
         return Array(badges.prefix(4))
     }
 
-    private func toggleOverviewFilter(_ filter: ProjectOverviewFilter) {
-        overviewFilter = overviewFilter == filter ? nil : filter
+    private func applyProjectSuggestion(_ suggestion: RealtimeSearchSuggestion) {
+        guard suggestion.category == .project else { return }
+        if let project = projectStore.projects.first(where: { $0.id == suggestion.entityId }) {
+            searchText = project.name
+            selectedProjectId = project.id
+        } else {
+            searchText = suggestion.title
+        }
     }
 
     private func hasOverdueItem(for project: Project) -> Bool {
@@ -520,8 +525,12 @@ struct ProjectListView: View {
         projectStore.projectActivitySummary(for: project.id).hasUnsettledFinancial
     }
 
+    private func materialPriceSpikeCount(for project: Project) -> Int {
+        financeStore.materialPriceSpikeCount(for: project.id)
+    }
+
     private func missingTodayLog(for project: Project) -> Bool {
-        guard project.status == .active || project.status == .paused else {
+        guard project.status.isActiveOrPaused else {
             return false
         }
         return !projectStore.hasTodayLog(for: project.id)
@@ -532,9 +541,6 @@ struct ProjectListView: View {
         var latest = projectStore.projectActivitySummary(for: projectId).latestActivityDate ?? .distantPast
         if let startDate = Formatters.parseDateOrDateTime(project.startDate) {
             latest = max(latest, startDate)
-        }
-        if let latestPayment = financeStore.latestPaymentDate(for: projectId) {
-            latest = max(latest, latestPayment)
         }
         if let latestLabor = financeStore.latestLaborDate(for: projectId) {
             latest = max(latest, latestLabor)

@@ -45,7 +45,7 @@ struct SiteTodoView: View {
             scopedTodos,
             keyword: searchText,
             extraFields: { todo in
-                [todo.priority.displayName, todo.issueType.displayName, projectName(todo.projectId)]
+                [todo.priority.displayName, todo.issueType.displayName, projectName(todo.projectId)] + methodTitles(for: todo.linkedConstructionMethodIDs)
             }
         )
             .sorted { lhs, rhs in
@@ -84,6 +84,7 @@ struct SiteTodoView: View {
             SiteTodoEditSheet(
                 todo: nil,
                 projects: store.projects,
+                constructionMethods: store.constructionMethods,
                 initialProjectId: projectFilter ?? initialProjectId,
                 initialBeforePhotoData: initialBeforePhotoData,
                 initialAfterPhotoData: initialAfterPhotoData
@@ -94,7 +95,12 @@ struct SiteTodoView: View {
             }
         }
         .sheet(item: $editingTodo) { todo in
-            SiteTodoEditSheet(todo: todo, projects: store.projects, initialProjectId: todo.projectId) { updated in
+            SiteTodoEditSheet(
+                todo: todo,
+                projects: store.projects,
+                constructionMethods: store.constructionMethods,
+                initialProjectId: todo.projectId
+            ) { updated in
                 save(updated)
             } onDelete: { target in
                 deleteTodo(target)
@@ -123,7 +129,7 @@ struct SiteTodoView: View {
                     Label("新建待办", systemImage: "plus.circle.fill")
                 }
                 .buttonStyle(.borderedProminent)
-                .tint(.orange)
+                .tint(Color.appPrimaryAction)
             }
         }
         .navigationTitle("筛选")
@@ -159,7 +165,11 @@ struct SiteTodoView: View {
             } else {
                 ForEach(filteredTodos) { todo in
                     Button { editingTodo = todo } label: {
-                        SiteTodoRow(todo: todo, projectName: projectName(todo.projectId))
+                        SiteTodoRow(
+                            todo: todo,
+                            projectName: projectName(todo.projectId),
+                            methodTitles: methodTitles(for: todo.linkedConstructionMethodIDs)
+                        )
                     }
                     .buttonStyle(.plain)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
@@ -168,7 +178,7 @@ struct SiteTodoView: View {
                         } label: {
                             Label(todo.isDone ? "重开" : "完成", systemImage: todo.isDone ? "arrow.uturn.backward" : "checkmark.circle.fill")
                         }
-                        .tint(todo.isDone ? .orange : .green)
+                        .tint(todo.isDone ? Color.appWarning : Color.appSuccess)
                     }
                 }
                 .onDelete(perform: deleteTodos)
@@ -228,17 +238,27 @@ struct SiteTodoView: View {
         guard let id else { return "" }
         return store.projects.first(where: { $0.id == id })?.name ?? ""
     }
+
+    private func methodTitles(for ids: [UUID]) -> [String] {
+        guard !ids.isEmpty else { return [] }
+        let lookup = Dictionary(uniqueKeysWithValues: store.constructionMethods.map { method in
+            let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            return (method.id, title.isEmpty ? "未命名工艺" : title)
+        })
+        return ids.compactMap { lookup[$0] }
+    }
 }
 
 private struct SiteTodoRow: View {
     let todo: SiteTodo
     let projectName: String
+    let methodTitles: [String]
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
-                    .foregroundStyle(todo.isDone ? .green : todo.isOverdue ? .red : .orange)
+                    .foregroundStyle(todo.isDone ? Color.appSuccess : todo.isOverdue ? .appRisk : Color.appWarning)
                 Text(todo.title.isEmpty ? "未命名事项" : todo.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(todo.isDone ? .secondary : .primary)
@@ -249,7 +269,7 @@ private struct SiteTodoRow: View {
                 Text(todo.dueDate)
                 Text(todo.issueType.displayName)
                 if !todo.owner.isEmpty { Text(todo.owner) }
-                if !projectName.isEmpty { Text(projectName).foregroundStyle(.blue) }
+                if !projectName.isEmpty { Text(projectName).foregroundStyle(Color.appDoc) }
             }
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -258,6 +278,16 @@ private struct SiteTodoRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+            }
+            if !methodTitles.isEmpty {
+                HStack(spacing: 6) {
+                    Image(systemName: "wrench.and.screwdriver.fill")
+                        .foregroundStyle(Color.appWarning)
+                    Text(methodTitles.joined(separator: " · "))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
             }
             if todo.rectificationBeforePhotoFileName != nil || todo.rectificationAfterPhotoFileName != nil {
                 HStack(spacing: 8) {
@@ -268,7 +298,7 @@ private struct SiteTodoRow: View {
             if let completedAt = todo.completedAt, todo.isDone {
                 Text("完成时间: \(completedAt)")
                     .font(.caption2)
-                    .foregroundStyle(.green)
+                    .foregroundStyle(Color.appSuccess)
             }
         }
         .padding(.vertical, 4)
@@ -278,11 +308,11 @@ private struct SiteTodoRow: View {
         let color: Color
         switch priority {
         case .high:
-            color = .red
+            color = .appRisk
         case .medium:
-            color = .orange
+            color = .appWarning
         case .low:
-            color = .gray
+            color = .appMuted
         }
         return Text(priority.displayName)
             .font(.caption2.weight(.semibold))
@@ -294,14 +324,25 @@ private struct SiteTodoRow: View {
 
     @ViewBuilder
     private func thumbnail(title: String, fileName: String?) -> some View {
-        if let image = PhotoStorage.thumbnail(for: fileName) {
+        if fileName != nil {
             ZStack(alignment: .topLeading) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 64, height: 48)
-                    .clipped()
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
+                AsyncPhotoThumbnailImageView(fileName: fileName) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 64, height: 48)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color(uiColor: .secondarySystemFill))
+                        .frame(width: 64, height: 48)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                }
                 Text(title)
                     .font(.caption2.weight(.bold))
                     .padding(.horizontal, 5)
@@ -319,6 +360,7 @@ private struct SiteTodoEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let todo: SiteTodo?
     let projects: [Project]
+    let constructionMethods: [ConstructionMethod]
     let initialProjectId: UUID?
     let initialBeforePhotoData: Data?
     let initialAfterPhotoData: Data?
@@ -336,6 +378,7 @@ private struct SiteTodoEditSheet: View {
     @State private var isDone: Bool
     @State private var completedAt: String?
     @State private var note: String
+    @State private var linkedMethodIDs: Set<UUID>
     @State private var projectId: UUID?
     @State private var beforePhotoItem: PhotosPickerItem?
     @State private var afterPhotoItem: PhotosPickerItem?
@@ -351,6 +394,7 @@ private struct SiteTodoEditSheet: View {
     init(
         todo: SiteTodo?,
         projects: [Project],
+        constructionMethods: [ConstructionMethod],
         initialProjectId: UUID?,
         initialBeforePhotoData: Data? = nil,
         initialAfterPhotoData: Data? = nil,
@@ -359,6 +403,7 @@ private struct SiteTodoEditSheet: View {
     ) {
         self.todo = todo
         self.projects = projects
+        self.constructionMethods = constructionMethods
         self.initialProjectId = initialProjectId
         self.initialBeforePhotoData = initialBeforePhotoData
         self.initialAfterPhotoData = initialAfterPhotoData
@@ -376,6 +421,7 @@ private struct SiteTodoEditSheet: View {
         _isDone = State(initialValue: todo?.isDone ?? false)
         _completedAt = State(initialValue: todo?.completedAt)
         _note = State(initialValue: todo?.note ?? "")
+        _linkedMethodIDs = State(initialValue: Set(todo?.linkedConstructionMethodIDs ?? []))
         _projectId = State(initialValue: todo?.projectId ?? initialProjectId)
     }
 
@@ -399,6 +445,31 @@ private struct SiteTodoEditSheet: View {
                     }
                     TextField("备注", text: $note, axis: .vertical)
                         .lineLimit(2...5)
+                }
+                Section("关联施工工艺") {
+                    if constructionMethods.isEmpty {
+                        Text("暂无工艺条目，可先在工具箱-施工工艺库新增")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(constructionMethods) { method in
+                            Toggle(isOn: methodBinding(for: method.id)) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(methodTitle(method))
+                                    HStack(spacing: 6) {
+                                        if !method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                                            Text(method.trade)
+                                        }
+                                        Text(method.versionName.isEmpty ? "V1" : method.versionName)
+                                        Text(method.publishStatus.displayName)
+                                    }
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                            .toggleStyle(.switch)
+                        }
+                    }
                 }
                 Section("归属项目") {
                     Picker("项目", selection: $projectId) {
@@ -485,12 +556,23 @@ private struct SiteTodoEditSheet: View {
                         .font(.caption)
                 }
             }
-            if let image = PhotoStorage.thumbnail(for: fileName) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 150)
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+            if fileName != nil {
+                AsyncPhotoThumbnailImageView(fileName: fileName) { image in
+                    image
+                        .resizable()
+                        .scaledToFit()
+                        .frame(maxHeight: 150)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                } placeholder: {
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(uiColor: .secondarySystemFill))
+                        .frame(maxWidth: .infinity, minHeight: 88, maxHeight: 150)
+                        .overlay {
+                            Image(systemName: "photo")
+                                .font(.title3)
+                                .foregroundStyle(.secondary)
+                        }
+                }
             }
         }
     }
@@ -577,8 +659,29 @@ private struct SiteTodoEditSheet: View {
         value.isDone = isDone
         value.completedAt = isDone ? (completedAt ?? Formatters.now()) : nil
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.linkedConstructionMethodIDs = constructionMethods
+            .map(\.id)
+            .filter { linkedMethodIDs.contains($0) }
         value.projectId = projectId
         return value
+    }
+
+    private func methodBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { linkedMethodIDs.contains(id) },
+            set: { isLinked in
+                if isLinked {
+                    linkedMethodIDs.insert(id)
+                } else {
+                    linkedMethodIDs.remove(id)
+                }
+            }
+        )
+    }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "未命名工艺" : title
     }
 
     private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {

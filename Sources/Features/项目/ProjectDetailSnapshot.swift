@@ -16,7 +16,6 @@ struct ProjectDetailSnapshot {
     let relatedDocuments: [ProjectDocument]
     let relatedQuickNotes: [QuickNote]
     let relatedTodos: [SiteTodo]
-    let legacyPayments: [PaymentRecord]
 
     init(project: Project, projectId: UUID, projectStore: ProjectStore, financeStore: FinanceStore) {
         self.project = project
@@ -39,8 +38,6 @@ struct ProjectDetailSnapshot {
             .sorted { $0.createdAt > $1.createdAt }
         relatedTodos = projectStore.siteTodos(for: projectId)
             .sorted { ($0.dueDate, $0.title) < ($1.dueDate, $1.title) }
-        legacyPayments = financeStore.paymentRecords(for: projectId)
-            .sorted { $0.date > $1.date }
     }
 
     func filteredDrawings(for filter: DrawingListFilter) -> [ProjectDrawing] {

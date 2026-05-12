@@ -3,8 +3,8 @@ import PhotosUI
 
 // MARK: - Material Sheet Item
 
-struct MaterialSheetItem: Identifiable {
-    let id = UUID()
+struct MaterialSheetItem: Identifiable, Equatable {
+    var id: UUID = UUID()
     var name: String
     var specification: String
     var unit: String
@@ -19,6 +19,43 @@ struct MaterialSheetItem: Identifiable {
 
     var hasAttachment: Bool { attachmentData != nil }
     var isExpanded: Bool = false
+}
+
+private extension MaterialSheetItem {
+    init(draftItem: MaterialSheetDraftItem) {
+        self.init(
+            id: draftItem.id,
+            name: draftItem.name,
+            specification: draftItem.specification,
+            unit: draftItem.unit,
+            quantity: draftItem.quantity,
+            unitPrice: draftItem.unitPrice,
+            laborCost: draftItem.laborCost,
+            supplier: draftItem.supplier,
+            usageLocation: draftItem.usageLocation,
+            note: draftItem.note,
+            attachmentData: draftItem.attachmentData,
+            attachmentFileName: draftItem.attachmentFileName,
+            isExpanded: false
+        )
+    }
+
+    var draftItem: MaterialSheetDraftItem {
+        MaterialSheetDraftItem(
+            id: id,
+            name: name,
+            specification: specification,
+            unit: unit,
+            quantity: quantity,
+            unitPrice: unitPrice,
+            laborCost: laborCost,
+            supplier: supplier,
+            usageLocation: usageLocation,
+            note: note,
+            attachmentData: attachmentData,
+            attachmentFileName: attachmentFileName
+        )
+    }
 }
 
 // MARK: - Export Column Toggles
@@ -36,12 +73,21 @@ struct MaterialSheetExportOptions {
 struct MaterialSheetView: View {
     @Environment(DataStore.self) private var store
     @State private var sheetItems: [MaterialSheetItem] = []
+    @State private var selectedDraftID: UUID?
+    @State private var isApplyingDraftState = false
+    @State private var showCreateDraftSheet = false
+    @State private var showRenameDraftSheet = false
+    @State private var draftTitleInput = ""
+    @State private var renameDraftTitleInput = ""
+    @State private var draftProjectIdInput: UUID?
     @State private var searchText = ""
     @State private var manualName = ""; @State private var manualSpec = ""; @State private var manualUnit = ""
     @State private var manualQty = "1"; @State private var manualPrice = ""; @State private var manualLabor = ""
     @State private var manualSupplier = ""; @State private var manualNote = ""; @State private var manualLocation = ""
     @State private var showManualAdd = false
     @State private var showClearConfirm = false
+    @State private var pendingDeleteSheetItemIDs: Set<UUID> = []
+    @State private var showDeleteItemConfirm = false
     @State private var exportFileURL: URL?
     @State private var showExporter = false
     @State private var showExportChoice = false
@@ -51,6 +97,32 @@ struct MaterialSheetView: View {
     @State private var itemExpanded: Set<UUID> = []
     @State private var exportProjectName = ""
     @State private var exportPreparer = ""
+
+    init(initialDraftID: UUID? = nil) {
+        _selectedDraftID = State(initialValue: initialDraftID)
+    }
+
+    private var activeMaterialSheetDrafts: [MaterialSheetDraft] {
+        store.materialSheetDrafts
+            .filter { !$0.isArchived }
+            .sorted { lhs, rhs in
+                let lhsDate = Formatters.parseDateOrDateTime(lhs.updatedAt) ?? .distantPast
+                let rhsDate = Formatters.parseDateOrDateTime(rhs.updatedAt) ?? .distantPast
+                if lhsDate != rhsDate {
+                    return lhsDate > rhsDate
+                }
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    private var activeMaterialSheetDraftIDs: [UUID] {
+        activeMaterialSheetDrafts.map(\.id)
+    }
+
+    private var selectedDraft: MaterialSheetDraft? {
+        guard let selectedDraftID else { return nil }
+        return activeMaterialSheetDrafts.first(where: { $0.id == selectedDraftID })
+    }
 
     private var priceSuggestions: [MaterialPriceEntry] {
         guard !searchText.isEmpty else { return [] }
@@ -93,33 +165,9 @@ struct MaterialSheetView: View {
 
     var body: some View {
         List {
-            // Search
-            Section("添加材料") {
-                HStack {
-                    Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                    TextField("搜索材料库或输入新材料名称", text: $searchText).submitLabel(.search)
-                }
-                if !searchText.isEmpty {
-                    if !hasSearchResults {
-                        Button {
-                            manualName = searchText; manualSpec = ""; manualUnit = ""; manualQty = "1"
-                            manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
-                            showManualAdd = true
-                        } label: { Label("手动添加「\(searchText)」", systemImage: "plus.circle.fill") }
-                    }
-                    ForEach(priceSuggestions) { librarySearchRow(entry: $0) }
-                    ForEach(librarySuggestions) { presetSearchRow(material: $0) }
-                }
-            }
-
-            // Manual add
-            Section {
-                Button {
-                    manualName = ""; manualSpec = ""; manualUnit = ""; manualQty = "1"
-                    manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
-                    showManualAdd = true
-                } label: { Label("手动输入材料", systemImage: "square.and.pencil") }
-            }
+            draftSelectorSection
+            materialSearchSection
+            manualInputSection
 
             // Sheet items
             Section {
@@ -135,7 +183,10 @@ struct MaterialSheetView: View {
                     }
                 } else {
                     ForEach($sheetItems) { $item in materialItemRow($item) }
-                        .onDelete { sheetItems.remove(atOffsets: $0) }
+                        .onDelete { offsets in
+                            let ids = offsets.compactMap { sheetItems.indices.contains($0) ? sheetItems[$0].id : nil }
+                            requestDeleteSheetItems(ids: ids)
+                        }
                 }
             } header: {
                 HStack {
@@ -223,11 +274,41 @@ struct MaterialSheetView: View {
                     .padding()
             }
         }
+        .sheet(isPresented: $showCreateDraftSheet) { createDraftSheet }
+        .sheet(isPresented: $showRenameDraftSheet) { renameDraftSheet }
         .sheet(isPresented: $showManualAdd) { manualAddSheet }
         .alert("清空材料单？", isPresented: $showClearConfirm) {
             Button("取消", role: .cancel) {}
             Button("清空", role: .destructive) { sheetItems.removeAll() }
         } message: { Text("当前材料单中的 \(sheetItems.count) 项材料将被移除。") }
+        .confirmationDialog("删除材料项", isPresented: $showDeleteItemConfirm, titleVisibility: .visible) {
+            Button("删除", role: .destructive) {
+                confirmDeleteSheetItems()
+            }
+            Button("取消", role: .cancel) {
+                pendingDeleteSheetItemIDs.removeAll()
+            }
+        } message: {
+            Text("确认删除 \(pendingDeleteSheetItemIDs.count) 项材料吗？")
+        }
+        .onAppear {
+            ensureDraftSelection()
+        }
+        .onChange(of: activeMaterialSheetDraftIDs) { _, _ in
+            ensureDraftSelection()
+        }
+        .onChange(of: selectedDraftID) { _, _ in
+            loadSelectedDraftIntoEditor()
+        }
+        .onChange(of: sheetItems) { _, _ in
+            persistCurrentDraft()
+        }
+        .onChange(of: exportProjectName) { _, _ in
+            persistCurrentDraft()
+        }
+        .onChange(of: exportPreparer) { _, _ in
+            persistCurrentDraft()
+        }
     }
 
     private var exportColumnToggleSection: some View {
@@ -246,24 +327,299 @@ struct MaterialSheetView: View {
                 HStack {
                     Text("材料估价").font(.callout)
                     Spacer()
-                    Text(totalEstimateText).font(.body.weight(.semibold)).foregroundStyle(.orange)
+                    Text(totalEstimateText).font(.body.weight(.semibold)).foregroundStyle(Color.appPrimaryAction)
                 }
             }
             if totalLaborValue.isPositive {
                 HStack {
                     Text("人工费").font(.callout)
                     Spacer()
-                    Text(totalLaborText).font(.body.weight(.semibold)).foregroundStyle(.blue)
+                    Text(totalLaborText).font(.body.weight(.semibold)).foregroundStyle(Color.appSuccess)
                 }
             }
             if totalEstimateValue.isPositive, totalLaborValue.isPositive {
                 HStack {
                     Text("总计").font(.body.weight(.bold))
                     Spacer()
-                    Text(grandTotalText).font(.title3.weight(.bold)).foregroundStyle(.orange)
+                    Text(grandTotalText).font(.title3.weight(.bold)).foregroundStyle(Color.appPrimaryAction)
                 }
             }
         }
+    }
+
+    private var draftSelectorSection: some View {
+        Section("材料单草稿") {
+            if activeMaterialSheetDrafts.isEmpty {
+                ContentUnavailableView(
+                    "暂无材料单",
+                    systemImage: "doc.badge.plus",
+                    description: Text("可从材料库点击 + 直接创建，或先在这里新建一个。")
+                )
+                Button {
+                    prepareCreateDraftSheet()
+                } label: {
+                    Label("新建材料单", systemImage: "plus.circle.fill")
+                }
+            } else {
+                Picker("当前材料单", selection: $selectedDraftID) {
+                    ForEach(activeMaterialSheetDrafts) { draft in
+                        Text(draftDisplayName(draft)).tag(draft.id as UUID?)
+                    }
+                }
+                .pickerStyle(.menu)
+
+                if let selectedDraft {
+                    let updatedAt = selectedDraft.updatedAt
+                    let count = selectedDraft.items.count
+                    let projectName = selectedDraft.projectId.flatMap(projectName(for:)) ?? "无归属项目"
+                    Text("\(projectName) · \(count) 项 · 更新于 \(updatedAt)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Menu {
+                        Button {
+                            prepareRenameDraftSheet()
+                        } label: {
+                            Label("重命名当前材料单", systemImage: "pencil")
+                        }
+                        Button(role: .destructive) {
+                            archiveSelectedDraft()
+                        } label: {
+                            Label("归档当前材料单", systemImage: "archivebox")
+                        }
+                    } label: {
+                        Label("管理当前材料单", systemImage: "ellipsis.circle")
+                    }
+                }
+
+                Button {
+                    prepareCreateDraftSheet()
+                } label: {
+                    Label("新建材料单", systemImage: "plus")
+                }
+            }
+        }
+    }
+
+    private var materialSearchSection: some View {
+        Section("添加材料") {
+            HStack {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+                TextField("搜索材料库或输入新材料名称", text: $searchText)
+                    .submitLabel(.search)
+            }
+            if !searchText.isEmpty {
+                if !hasSearchResults {
+                    Button {
+                        manualName = searchText; manualSpec = ""; manualUnit = ""; manualQty = "1"
+                        manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
+                        showManualAdd = true
+                    } label: {
+                        Label("手动添加「\(searchText)」", systemImage: "plus.circle.fill")
+                    }
+                }
+                ForEach(priceSuggestions) { librarySearchRow(entry: $0) }
+                ForEach(librarySuggestions) { presetSearchRow(material: $0) }
+            }
+        }
+    }
+
+    private var manualInputSection: some View {
+        Section {
+            Button {
+                manualName = ""; manualSpec = ""; manualUnit = ""; manualQty = "1"
+                manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
+                showManualAdd = true
+            } label: {
+                Label("手动输入材料", systemImage: "square.and.pencil")
+            }
+        }
+    }
+
+    private var createDraftSheet: some View {
+        NavigationStack {
+            Form {
+                Section("基本信息") {
+                    TextField("材料单名称", text: $draftTitleInput)
+                    Picker("归属项目", selection: $draftProjectIdInput) {
+                        Text("无归属").tag(nil as UUID?)
+                        ForEach(store.projects) { project in
+                            Text(project.name).tag(project.id as UUID?)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("新建材料单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showCreateDraftSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("创建") {
+                        createDraftAndSelect(title: draftTitleInput, projectId: draftProjectIdInput)
+                        showCreateDraftSheet = false
+                    }
+                }
+            }
+        }
+    }
+
+    private var renameDraftSheet: some View {
+        NavigationStack {
+            Form {
+                Section("材料单名称") {
+                    TextField("材料单名称", text: $renameDraftTitleInput)
+                }
+            }
+            .navigationTitle("重命名材料单")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showRenameDraftSheet = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        renameSelectedDraft(to: renameDraftTitleInput)
+                        showRenameDraftSheet = false
+                    }
+                }
+            }
+        }
+    }
+
+    private func draftDisplayName(_ draft: MaterialSheetDraft) -> String {
+        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "未命名材料单" : title
+    }
+
+    private func projectName(for projectId: UUID) -> String? {
+        store.projects.first(where: { $0.id == projectId })?.name
+    }
+
+    private func defaultDraftTitle(projectId: UUID?) -> String {
+        if let projectId,
+           let projectName = projectName(for: projectId),
+           !projectName.isEmpty {
+            return "\(projectName)-材料单"
+        }
+        return "材料单-\(Formatters.date.string(from: Date()))"
+    }
+
+    private func prepareCreateDraftSheet() {
+        draftProjectIdInput = selectedDraft?.projectId
+        draftTitleInput = defaultDraftTitle(projectId: draftProjectIdInput)
+        showCreateDraftSheet = true
+    }
+
+    private func prepareRenameDraftSheet() {
+        guard let selectedDraft else { return }
+        renameDraftTitleInput = draftDisplayName(selectedDraft)
+        showRenameDraftSheet = true
+    }
+
+    private func createDraftAndSelect(title: String, projectId: UUID?) {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedTitle = normalizedTitle.isEmpty ? defaultDraftTitle(projectId: projectId) : normalizedTitle
+        let now = Formatters.now()
+        let newDraft = MaterialSheetDraft(
+            title: resolvedTitle,
+            projectId: projectId,
+            exportProjectName: projectId.flatMap(projectName(for:)) ?? "",
+            items: [],
+            createdAt: now,
+            updatedAt: now
+        )
+        var drafts = store.materialSheetDrafts
+        drafts.insert(newDraft, at: 0)
+        store.materialSheetDrafts = drafts
+        store.scheduleSave()
+        selectedDraftID = newDraft.id
+    }
+
+    private func renameSelectedDraft(to title: String) {
+        guard let selectedDraftID,
+              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
+            return
+        }
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedTitle.isEmpty else { return }
+        var drafts = store.materialSheetDrafts
+        drafts[index].title = normalizedTitle
+        drafts[index].updatedAt = Formatters.now()
+        store.materialSheetDrafts = drafts
+        store.scheduleSave()
+    }
+
+    private func archiveSelectedDraft() {
+        guard let selectedDraftID,
+              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
+            return
+        }
+        var drafts = store.materialSheetDrafts
+        drafts[index].isArchived = true
+        drafts[index].updatedAt = Formatters.now()
+        store.materialSheetDrafts = drafts
+        store.scheduleSave()
+    }
+
+    private func ensureDraftSelection() {
+        if activeMaterialSheetDrafts.isEmpty {
+            selectedDraftID = nil
+            isApplyingDraftState = true
+            sheetItems = []
+            exportProjectName = ""
+            exportPreparer = ""
+            itemExpanded.removeAll()
+            rowPhotoSelections.removeAll()
+            pendingDeleteSheetItemIDs.removeAll()
+            isApplyingDraftState = false
+            return
+        }
+        if let selectedDraftID,
+           activeMaterialSheetDraftIDs.contains(selectedDraftID) {
+            return
+        }
+        self.selectedDraftID = activeMaterialSheetDrafts.first?.id
+    }
+
+    private func loadSelectedDraftIntoEditor() {
+        guard let selectedDraft else { return }
+        isApplyingDraftState = true
+        sheetItems = selectedDraft.items.map(MaterialSheetItem.init(draftItem:))
+        if selectedDraft.exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let projectId = selectedDraft.projectId,
+           let projectName = projectName(for: projectId) {
+            exportProjectName = projectName
+        } else {
+            exportProjectName = selectedDraft.exportProjectName
+        }
+        exportPreparer = selectedDraft.exportPreparer
+        itemExpanded.removeAll()
+        rowPhotoSelections.removeAll()
+        pendingDeleteSheetItemIDs.removeAll()
+        isApplyingDraftState = false
+    }
+
+    private func persistCurrentDraft() {
+        guard !isApplyingDraftState,
+              let selectedDraftID,
+              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
+            return
+        }
+        var drafts = store.materialSheetDrafts
+        drafts[index].items = sheetItems.map(\.draftItem)
+        drafts[index].exportProjectName = exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts[index].exportPreparer = exportPreparer.trimmingCharacters(in: .whitespacesAndNewlines)
+        drafts[index].exportDate = Formatters.date.string(from: Date())
+        drafts[index].updatedAt = Formatters.now()
+        store.materialSheetDrafts = drafts
+        store.scheduleSave()
     }
 
     private func saveSheetToMaterialListAndClear() {
@@ -312,7 +668,7 @@ struct MaterialSheetView: View {
                     }
                     Spacer()
                     HStack(spacing: 6) {
-                        Text(item.wrappedValue.quantity).font(.callout.weight(.semibold)).foregroundStyle(.orange)
+                        Text(item.wrappedValue.quantity).font(.callout.weight(.semibold)).foregroundStyle(Color.appPrimaryAction)
                         Text(item.wrappedValue.unit).font(.caption).foregroundStyle(.secondary)
                     }
                     Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
@@ -320,6 +676,8 @@ struct MaterialSheetView: View {
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(materialItemAccessibilityLabel(item.wrappedValue, isExpanded: isExpanded))
+            .accessibilityHint(isExpanded ? "双击收起编辑项" : "双击展开编辑项")
 
             // Expanded detail
             if isExpanded {
@@ -357,6 +715,7 @@ struct MaterialSheetView: View {
                                 .font(.caption)
                         }
                         .buttonStyle(.bordered).controlSize(.small)
+                        .accessibilityLabel("\(item.wrappedValue.name)添加或更换照片")
 
                         if item.wrappedValue.hasAttachment {
                             Text(item.wrappedValue.attachmentFileName ?? "附件")
@@ -366,7 +725,9 @@ struct MaterialSheetView: View {
                                 item.wrappedValue.attachmentFileName = nil
                             } label: {
                                 Image(systemName: "xmark.circle.fill").font(.caption).foregroundStyle(.secondary)
-                            }.buttonStyle(.borderless)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel("移除\(item.wrappedValue.name)照片")
                         }
                         Spacer()
                     }
@@ -375,10 +736,12 @@ struct MaterialSheetView: View {
                     HStack {
                         Spacer()
                         Button(role: .destructive) {
-                            sheetItems.removeAll { $0.id == item.wrappedValue.id }
+                            requestDeleteSheetItems(ids: [item.wrappedValue.id])
                         } label: {
                             Label("删除此项", systemImage: "trash").font(.caption)
-                        }.buttonStyle(.borderless)
+                        }
+                        .buttonStyle(.borderless)
+                        .accessibilityLabel("删除\(item.wrappedValue.name)")
                     }
                 }
             }
@@ -386,9 +749,34 @@ struct MaterialSheetView: View {
         .padding(.vertical, 6)
     }
 
+    private func materialItemAccessibilityLabel(_ item: MaterialSheetItem, isExpanded: Bool) -> String {
+        var parts = [item.name]
+        if !item.specification.isEmpty { parts.append("规格 \(item.specification)") }
+        parts.append("数量 \(item.quantity)\(item.unit)")
+        if !item.unitPrice.isEmpty { parts.append("估价 \(item.unitPrice) 元") }
+        parts.append(isExpanded ? "已展开" : "已收起")
+        return parts.joined(separator: "，")
+    }
+
     private func toggleExpand(_ id: UUID) {
         if itemExpanded.contains(id) { itemExpanded.remove(id) }
         else { itemExpanded.insert(id) }
+    }
+
+    private func requestDeleteSheetItems(ids: [UUID]) {
+        let normalizedIDs = Set(ids)
+        guard !normalizedIDs.isEmpty else { return }
+        pendingDeleteSheetItemIDs = normalizedIDs
+        showDeleteItemConfirm = true
+    }
+
+    private func confirmDeleteSheetItems() {
+        let ids = pendingDeleteSheetItemIDs
+        guard !ids.isEmpty else { return }
+        sheetItems.removeAll { ids.contains($0.id) }
+        itemExpanded.subtract(ids)
+        rowPhotoSelections = rowPhotoSelections.filter { !ids.contains($0.key) }
+        pendingDeleteSheetItemIDs.removeAll()
     }
 
     @ViewBuilder
@@ -403,7 +791,7 @@ struct MaterialSheetView: View {
             Button { item.wrappedValue.unitPrice = price } label: {
                 Text("¥\(price)").font(.caption2.weight(.semibold))
                     .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(.orange.opacity(0.15), in: Capsule()).foregroundStyle(.orange)
+                    .background(Color.appPrimarySurfaceSubtle, in: Capsule()).foregroundStyle(Color.appPrimaryAction)
             }
             .buttonStyle(.borderless)
         }
@@ -423,12 +811,12 @@ struct MaterialSheetView: View {
                 }
                 Spacer()
                 HStack(spacing: 4) {
-                    if !entry.referencePrice.isEmpty { Text("¥\(entry.referencePrice)").font(.caption).foregroundStyle(.orange) }
+                    if !entry.referencePrice.isEmpty { Text("¥\(entry.referencePrice)").font(.caption).foregroundStyle(Color.appPrimaryAction) }
                     Text(entry.unit).font(.caption).foregroundStyle(.secondary)
                     Text("材料库").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 2).background(.quaternary, in: Capsule())
                 }
-                Image(systemName: "plus.circle.fill").foregroundStyle(.orange).font(.title3)
+                Image(systemName: "plus.circle.fill").foregroundStyle(Color.appPrimaryAction).font(.title3)
             }
         }
     }
@@ -449,7 +837,7 @@ struct MaterialSheetView: View {
                     Text("预置材料").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 2).background(.quaternary, in: Capsule())
                 }
-                Image(systemName: "plus.circle.fill").foregroundStyle(.orange).font(.title3)
+                Image(systemName: "plus.circle.fill").foregroundStyle(Color.appPrimaryAction).font(.title3)
             }
         }
     }
@@ -516,13 +904,33 @@ struct MaterialSheetView: View {
     }
 
     private func addToSheet(name: String, spec: String, unit: String, price: String = "") {
-        sheetItems.append(MaterialSheetItem(
+        let newItem = MaterialSheetItem(
             name: name, specification: spec, unit: unit,
             quantity: "1", unitPrice: price
-        ))
+        )
+        if selectedDraft == nil {
+            let now = Formatters.now()
+            let newDraft = MaterialSheetDraft(
+                title: defaultDraftTitle(projectId: nil),
+                projectId: nil,
+                items: [newItem.draftItem],
+                createdAt: now,
+                updatedAt: now
+            )
+            var drafts = store.materialSheetDrafts
+            drafts.insert(newDraft, at: 0)
+            store.materialSheetDrafts = drafts
+            store.scheduleSave()
+            selectedDraftID = newDraft.id
+            sheetItems = [newItem]
+            exportProjectName = ""
+            return
+        }
+        sheetItems.append(newItem)
     }
 
     private func saveToMaterialList() {
+        let projectId = selectedDraft?.projectId
         for item in sheetItems {
             let q = item.quantity.trimmingCharacters(in: .whitespacesAndNewlines)
             let finalQty: String
@@ -535,7 +943,10 @@ struct MaterialSheetView: View {
             store.materialItems.append(MaterialItem(
                 name: item.name, quantity: finalQty,
                 unit: item.unit.isEmpty ? "个" : item.unit,
-                unitPrice: price, specification: item.specification
+                unitPrice: price,
+                specification: item.specification,
+                supplier: item.supplier,
+                projectId: projectId
             ))
         }
         store.scheduleSave()

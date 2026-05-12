@@ -26,7 +26,7 @@ struct BackupCloudSectionView: View {
 
     private var cloudStatusHintColor: Color {
         if cloudStatusMessage.contains("失败") || cloudStatusMessage.contains("未能") {
-            return .orange
+            return .appWarning
         }
         return .secondary
     }

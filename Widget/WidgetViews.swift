@@ -12,40 +12,72 @@ struct SmallWidgetView: View {
     }
 
     var body: some View {
+        let riskLinkItems = widgetRiskLinkItems(for: data)
+
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Image(systemName: "checklist")
-                    .font(.caption2)
-                    .foregroundStyle(.orange)
-                Text(String(localized: "widget_label_todo"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
+            Link(destination: WidgetDeepLinkURL.todos) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Image(systemName: "checklist")
+                            .font(.caption2)
+                            .foregroundStyle(.orange)
+                        Text(String(localized: "widget_label_todo"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("\(data.pendingTodos)")
+                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(String(localized: "widget_pending_items_text"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
-            Text("\(data.pendingTodos)")
-                .font(.system(size: 32, weight: .bold, design: .rounded))
-                .foregroundStyle(.primary)
-            Text(String(localized: "widget_pending_items_text"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            .buttonStyle(.plain)
 
             Spacer(minLength: 4)
 
-            HStack(spacing: 4) {
-                Image(systemName: "shippingbox")
-                    .font(.caption2)
-                Text(widgetLocalizedCount("widget_material_stock_count_format", data.materialStockCount))
-                    .font(.caption2)
+            Link(destination: WidgetDeepLinkURL.lowStock) {
+                HStack(spacing: 4) {
+                    Image(systemName: "shippingbox")
+                        .font(.caption2)
+                    Text(widgetLocalizedCount("widget_material_stock_count_format", data.materialStockCount))
+                        .font(.caption2)
+                }
             }
+            .buttonStyle(.plain)
             .foregroundStyle(.secondary)
 
             if data.lowStockCount > 0 {
-                HStack(spacing: 4) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.caption2)
-                    Text(widgetLocalizedCount("widget_low_stock_count_format", data.lowStockCount))
-                        .font(.caption2)
+                Link(destination: WidgetDeepLinkURL.lowStock) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption2)
+                        Text(widgetLocalizedCount("widget_low_stock_count_format", data.lowStockCount))
+                            .font(.caption2)
+                    }
                 }
+                .buttonStyle(.plain)
                 .foregroundStyle(.orange)
+            }
+
+            if !riskLinkItems.isEmpty {
+                HStack(spacing: 4) {
+                    ForEach(riskLinkItems.prefix(2)) { item in
+                        Link(destination: item.destination) {
+                            Text(item.badgeText)
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule()
+                                        .fill(item.tint.opacity(0.16))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(item.tint)
+                    }
+                }
             }
 
             Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
@@ -66,24 +98,29 @@ struct MediumWidgetView: View {
     }
 
     var body: some View {
+        let riskLinkItems = widgetRiskLinkItems(for: data)
+
         HStack(alignment: .top, spacing: 12) {
             // 左侧：待办统计
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Image(systemName: "checklist")
-                        .foregroundStyle(.orange)
-                    Text(String(localized: "widget_label_today_todos"))
-                        .font(.caption)
+            Link(destination: WidgetDeepLinkURL.todos) {
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Image(systemName: "checklist")
+                            .foregroundStyle(.orange)
+                        Text(String(localized: "widget_label_today_todos"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Text("\(data.pendingTodos)")
+                        .font(.system(size: 36, weight: .bold, design: .rounded))
+                        .foregroundStyle(.primary)
+                    Text(String(localized: "widget_pending_items_text"))
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
+                    Spacer()
                 }
-                Text("\(data.pendingTodos)")
-                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                    .foregroundStyle(.primary)
-                Text(String(localized: "widget_pending_items_text"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer()
             }
+            .buttonStyle(.plain)
             .frame(maxWidth: .infinity, alignment: .leading)
 
             // 右侧：项目进度列表
@@ -100,18 +137,39 @@ struct MediumWidgetView: View {
                 } else {
                     ForEach(data.projects.prefix(3), id: \.id) { project in
                         let status = WidgetProjectStatus.parse(project.status)
-                        VStack(alignment: .leading, spacing: 2) {
-                            HStack {
-                                Text(project.name)
-                                    .font(.caption2)
-                                    .lineLimit(1)
-                                Spacer()
-                                Text("\(Int(project.progress * 100))%")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
+                        Link(destination: WidgetDeepLinkURL.project(id: project.id)) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                HStack {
+                                    Text(project.name)
+                                        .font(.caption2)
+                                        .lineLimit(1)
+                                    Spacer()
+                                    Text("\(Int(project.progress * 100))%")
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
+                                }
+                                ProgressView(value: project.progress)
+                                    .tint(status.isCompleted ? .green : .orange)
                             }
-                            ProgressView(value: project.progress)
-                                .tint(status.isCompleted ? .green : .orange)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if !riskLinkItems.isEmpty {
+                    HStack(spacing: 6) {
+                        ForEach(riskLinkItems.prefix(3)) { item in
+                            Link(destination: item.destination) {
+                                Text(item.badgeText)
+                                    .font(.caption2.weight(.semibold))
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(item.tint.opacity(0.16))
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(item.tint)
                         }
                     }
                 }
@@ -135,32 +193,62 @@ struct LargeWidgetView: View {
     }
 
     var body: some View {
+        let riskLinkItems = widgetRiskLinkItems(for: data)
+
         VStack(alignment: .leading, spacing: 10) {
             // 顶部摘要行
             HStack(spacing: 16) {
-                SummaryBlock(
-                    icon: "checklist",
-                    value: "\(data.pendingTodos)",
-                    label: String(localized: "widget_label_todo"),
-                    color: .orange
-                )
-                SummaryBlock(
-                    icon: "shippingbox",
-                    value: "\(data.materialStockCount)",
-                    label: String(localized: "widget_label_material_types"),
-                    color: .blue
-                )
-                if data.lowStockCount > 0 {
+                Link(destination: WidgetDeepLinkURL.todos) {
                     SummaryBlock(
-                        icon: "exclamationmark.triangle.fill",
-                        value: "\(data.lowStockCount)",
-                        label: String(localized: "widget_label_low_stock"),
-                        color: .red
+                        icon: "checklist",
+                        value: "\(data.pendingTodos)",
+                        label: String(localized: "widget_label_todo"),
+                        color: .orange
                     )
+                }
+                .buttonStyle(.plain)
+                Link(destination: WidgetDeepLinkURL.lowStock) {
+                    SummaryBlock(
+                        icon: "shippingbox",
+                        value: "\(data.materialStockCount)",
+                        label: String(localized: "widget_label_material_types"),
+                        color: .blue
+                    )
+                }
+                .buttonStyle(.plain)
+                if data.lowStockCount > 0 {
+                    Link(destination: WidgetDeepLinkURL.lowStock) {
+                        SummaryBlock(
+                            icon: "exclamationmark.triangle.fill",
+                            value: "\(data.lowStockCount)",
+                            label: String(localized: "widget_label_low_stock"),
+                            color: .red
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
             }
 
             Divider()
+
+            if !riskLinkItems.isEmpty {
+                HStack(spacing: 8) {
+                    ForEach(riskLinkItems) { item in
+                        Link(destination: item.destination) {
+                            Text(item.badgeText)
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(
+                                    Capsule()
+                                        .fill(item.tint.opacity(0.16))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(item.tint)
+                    }
+                }
+            }
 
             // 项目列表
             if data.projects.isEmpty {
@@ -177,39 +265,42 @@ struct LargeWidgetView: View {
                 ForEach(data.projects, id: \.id) { project in
                     let status = WidgetProjectStatus.parse(project.status)
                     let isCompleted = status.isCompleted
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack {
-                            Text(project.name)
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .lineLimit(1)
-                            Spacer()
-                            Text(status.displayName)
-                                .font(.caption2)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(isCompleted ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
-                                )
-                                .foregroundStyle(isCompleted ? .green : .orange)
-                        }
+                    Link(destination: WidgetDeepLinkURL.project(id: project.id)) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            HStack {
+                                Text(project.name)
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .lineLimit(1)
+                                Spacer()
+                                Text(status.displayName)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 6)
+                                    .padding(.vertical, 2)
+                                    .background(
+                                        Capsule()
+                                            .fill(isCompleted ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                                    )
+                                    .foregroundStyle(isCompleted ? .green : .orange)
+                            }
 
-                        HStack(spacing: 12) {
-                            ProgressView(value: project.progress)
-                                .tint(isCompleted ? .green : .orange)
-                            Text("\(Int(project.progress * 100))%")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .frame(width: 32, alignment: .trailing)
-                        }
+                            HStack(spacing: 12) {
+                                ProgressView(value: project.progress)
+                                    .tint(isCompleted ? .green : .orange)
+                                Text("\(Int(project.progress * 100))%")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .frame(width: 32, alignment: .trailing)
+                            }
 
-                        if project.todoCount > 0 {
-                            Text(widgetLocalizedCount("widget_project_todo_count_format", project.todoCount))
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
+                            if project.todoCount > 0 {
+                                Text(widgetLocalizedCount("widget_project_todo_count_format", project.todoCount))
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
                 Text(widgetLocalizedUpdate("widget_updated_datetime_format", WidgetDateFormatters.dateTime.string(from: entry.date)))
                     .font(.caption2)
@@ -248,6 +339,77 @@ private func widgetLocalizedCount(_ key: String, _ count: Int) -> String {
 private func widgetLocalizedUpdate(_ key: String, _ value: String) -> String {
     let format = NSLocalizedString(key, comment: "")
     return String.localizedStringWithFormat(format, value)
+}
+
+private enum WidgetDeepLinkURL {
+    static let todos = staticURL("sitekeeper://widget/todos")
+    static let lowStock = staticURL("sitekeeper://widget/low-stock")
+    static let missingReceipt = staticURL("sitekeeper://widget/missing-receipt")
+    static let backupOverdue = staticURL("sitekeeper://widget/backup-overdue")
+    static let priceSpike = staticURL("sitekeeper://widget/price-spike")
+
+    static func project(id: UUID) -> URL {
+        var components = URLComponents()
+        components.scheme = "sitekeeper"
+        components.host = "widget"
+        components.path = "/project"
+        components.queryItems = [URLQueryItem(name: "id", value: id.uuidString)]
+        return components.url ?? staticURL("sitekeeper://widget/project")
+    }
+
+    private static func staticURL(_ rawValue: String) -> URL {
+        URL(string: rawValue) ?? URL(fileURLWithPath: "/")
+    }
+}
+
+private struct WidgetRiskLinkItem: Identifiable {
+    let id: String
+    let title: String
+    let count: Int
+    let tint: Color
+    let destination: URL
+
+    var badgeText: String {
+        count > 0 ? "\(title) \(count)" : title
+    }
+}
+
+private func widgetRiskLinkItems(for data: WidgetExportData) -> [WidgetRiskLinkItem] {
+    var items: [WidgetRiskLinkItem] = []
+    if data.missingReceiptCount > 0 {
+        items.append(
+            WidgetRiskLinkItem(
+                id: "missing-receipt",
+                title: String(localized: "widget_label_missing_receipt"),
+                count: data.missingReceiptCount,
+                tint: .orange,
+                destination: WidgetDeepLinkURL.missingReceipt
+            )
+        )
+    }
+    if data.priceSpikeCount > 0 {
+        items.append(
+            WidgetRiskLinkItem(
+                id: "price-spike",
+                title: String(localized: "widget_label_price_spike"),
+                count: data.priceSpikeCount,
+                tint: .red,
+                destination: WidgetDeepLinkURL.priceSpike
+            )
+        )
+    }
+    if data.backupOverdueCount > 0 {
+        items.append(
+            WidgetRiskLinkItem(
+                id: "backup-overdue",
+                title: String(localized: "widget_label_backup_overdue"),
+                count: 0,
+                tint: .purple,
+                destination: WidgetDeepLinkURL.backupOverdue
+            )
+        )
+    }
+    return items
 }
 
 private struct SummaryBlock: View {

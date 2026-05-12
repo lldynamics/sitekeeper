@@ -13,6 +13,9 @@ struct WidgetExportData: Codable {
     let pendingTodos: Int
     let materialStockCount: Int
     let lowStockCount: Int
+    let missingReceiptCount: Int
+    let priceSpikeCount: Int
+    let backupOverdueCount: Int
     let lastUpdatedAt: TimeInterval
 
     init(
@@ -20,12 +23,18 @@ struct WidgetExportData: Codable {
         pendingTodos: Int,
         materialStockCount: Int,
         lowStockCount: Int,
+        missingReceiptCount: Int = 0,
+        priceSpikeCount: Int = 0,
+        backupOverdueCount: Int = 0,
         lastUpdatedAt: TimeInterval = Date().timeIntervalSince1970
     ) {
         self.projects = projects
         self.pendingTodos = pendingTodos
         self.materialStockCount = materialStockCount
         self.lowStockCount = lowStockCount
+        self.missingReceiptCount = missingReceiptCount
+        self.priceSpikeCount = priceSpikeCount
+        self.backupOverdueCount = backupOverdueCount
         self.lastUpdatedAt = lastUpdatedAt
     }
 
@@ -34,6 +43,9 @@ struct WidgetExportData: Codable {
         case pendingTodos
         case materialStockCount
         case lowStockCount
+        case missingReceiptCount
+        case priceSpikeCount
+        case backupOverdueCount
         case lastUpdatedAt
     }
 
@@ -43,6 +55,9 @@ struct WidgetExportData: Codable {
         pendingTodos = try container.decodeIfPresent(Int.self, forKey: .pendingTodos) ?? 0
         materialStockCount = try container.decodeIfPresent(Int.self, forKey: .materialStockCount) ?? 0
         lowStockCount = try container.decodeIfPresent(Int.self, forKey: .lowStockCount) ?? 0
+        missingReceiptCount = try container.decodeIfPresent(Int.self, forKey: .missingReceiptCount) ?? 0
+        priceSpikeCount = try container.decodeIfPresent(Int.self, forKey: .priceSpikeCount) ?? 0
+        backupOverdueCount = try container.decodeIfPresent(Int.self, forKey: .backupOverdueCount) ?? 0
         lastUpdatedAt = try container.decodeIfPresent(TimeInterval.self, forKey: .lastUpdatedAt) ?? 0
     }
 
@@ -135,6 +150,9 @@ enum WidgetDataBuilder {
         todos: [WidgetBuilderTodoInput],
         tasks: [WidgetBuilderTaskInput],
         stockLines: [WidgetBuilderStockInput],
+        missingReceiptCount: Int = 0,
+        priceSpikeCount: Int = 0,
+        backupOverdueCount: Int = 0,
         now: Date = Date()
     ) -> WidgetExportData {
         let activeProjects = projects.filter(\.isActive)
@@ -191,6 +209,9 @@ enum WidgetDataBuilder {
             pendingTodos: pendingTodosCount,
             materialStockCount: availableStockLineCount,
             lowStockCount: negativeStockLineCount,
+            missingReceiptCount: max(missingReceiptCount, 0),
+            priceSpikeCount: max(priceSpikeCount, 0),
+            backupOverdueCount: max(backupOverdueCount, 0),
             lastUpdatedAt: now.timeIntervalSince1970
         )
     }

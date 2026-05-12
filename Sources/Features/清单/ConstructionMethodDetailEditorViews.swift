@@ -169,9 +169,12 @@ struct ConstructionMethodDetailView: View {
 }
 
 private struct ConstructionMethodDetailContent: View {
+    @Environment(DataStore.self) private var store
     let method: ConstructionMethod
     var onPreviewAttachment: ((QuickNoteAttachment) -> Void)? = nil
     @State private var showOnlyPendingItems = false
+    @State private var referenceAction: ConstructionMethodReferenceAction?
+    @State private var operationMessage: String?
 
     var body: some View {
         ScrollView {
@@ -190,6 +193,9 @@ private struct ConstructionMethodDetailContent: View {
                     Toggle("仅看未完成", isOn: $showOnlyPendingItems)
                         .toggleStyle(.switch)
                         .font(.callout)
+                }
+                ConstructionMethodReferenceBlock { action in
+                    referenceAction = action
                 }
                 ConstructionMethodDetailBlock(
                     title: "施工步骤",
@@ -220,7 +226,253 @@ private struct ConstructionMethodDetailContent: View {
             }
             .padding(16)
         }
+        .sheet(item: $referenceAction) { action in
+            ConstructionMethodReferenceSheet(
+                method: method,
+                action: action,
+                projects: store.projects,
+                onSave: createReference(_:projectId:)
+            )
+        }
+        .operationToast(message: $operationMessage)
     }
+
+    @MainActor
+    private func createReference(_ action: ConstructionMethodReferenceAction, projectId: UUID?) {
+        switch action {
+        case .todo:
+            store.siteTodos.insert(
+                SiteTodo(
+                    title: "按工艺检查：\(methodDisplayTitle(method))",
+                    dueDate: Formatters.date.string(from: Date()),
+                    priority: .medium,
+                    issueType: .quality,
+                    note: constructionMethodReferenceText(method),
+                    linkedConstructionMethodIDs: [method.id],
+                    projectId: projectId
+                ),
+                at: 0
+            )
+            operationMessage = "已生成现场待办"
+        case .dailyLog:
+            store.dailyLogs.insert(
+                DailyLog(
+                    date: Formatters.date.string(from: Date()),
+                    weather: autoWeatherNow(),
+                    content: "引用施工工艺：\(methodDisplayTitle(method))\n\n\(constructionMethodReferenceText(method))",
+                    workers: "0",
+                    safety: method.safetyChecklist.joined(separator: "\n"),
+                    tomorrowPlan: "按《\(methodDisplayTitle(method))》复核现场执行情况",
+                    qualityIssue: "",
+                    rectification: "",
+                    linkedConstructionMethodIDs: [method.id],
+                    projectId: projectId
+                ),
+                at: 0
+            )
+            operationMessage = "已生成施工日志"
+        case .rectification:
+            store.siteTodos.insert(
+                SiteTodo(
+                    title: "整改复核：\(methodDisplayTitle(method))",
+                    dueDate: Formatters.date.string(from: Date()),
+                    priority: .high,
+                    issueType: .quality,
+                    note: "整改依据：\n\(constructionMethodReferenceText(method))",
+                    linkedConstructionMethodIDs: [method.id],
+                    projectId: projectId
+                ),
+                at: 0
+            )
+            operationMessage = "已生成整改待办"
+        }
+        store.scheduleSave()
+        AppHaptics.success()
+    }
+}
+
+private enum ConstructionMethodReferenceAction: String, CaseIterable, Identifiable {
+    case todo
+    case dailyLog
+    case rectification
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .todo:
+            return "生成待办"
+        case .dailyLog:
+            return "写入日志"
+        case .rectification:
+            return "生成整改"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .todo:
+            return "用于现场检查、复核或安排执行"
+        case .dailyLog:
+            return "把工艺依据写入今天的施工日志"
+        case .rectification:
+            return "生成质量整改待办并关联该工艺"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .todo:
+            return "checklist.checked"
+        case .dailyLog:
+            return "book.pages.fill"
+        case .rectification:
+            return "wrench.and.screwdriver.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .todo:
+            return .appDoc
+        case .dailyLog:
+            return .appSuccess
+        case .rectification:
+            return .appRisk
+        }
+    }
+}
+
+private struct ConstructionMethodReferenceBlock: View {
+    let onSelect: (ConstructionMethodReferenceAction) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            Label("引用到现场", systemImage: "link.badge.plus")
+                .font(.headline)
+            Text("把这条工艺直接变成待办、日志或整改依据。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            HStack(spacing: AppSpacing.tight) {
+                ForEach(ConstructionMethodReferenceAction.allCases) { action in
+                    Button {
+                        onSelect(action)
+                    } label: {
+                        VStack(spacing: 6) {
+                            Image(systemName: action.systemImage)
+                                .font(.headline)
+                            Text(action.title)
+                                .font(.caption.weight(.semibold))
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.roundedRectangle(radius: 8))
+                    .tint(action.tint)
+                    .accessibilityLabel(action.title)
+                    .accessibilityHint(action.detail)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+private struct ConstructionMethodReferenceSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    let method: ConstructionMethod
+    let action: ConstructionMethodReferenceAction
+    let projects: [Project]
+    let onSave: (ConstructionMethodReferenceAction, UUID?) -> Void
+
+    @State private var selectedProjectId: UUID?
+
+    private var sortedProjects: [Project] {
+        projects.sorted { lhs, rhs in
+            lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("工艺") {
+                    LabeledContent("名称", value: methodDisplayTitle(method))
+                    LabeledContent("专业", value: method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未分类" : method.trade)
+                    LabeledContent("动作", value: action.title)
+                }
+                Section("归属项目") {
+                    Picker("项目", selection: $selectedProjectId) {
+                        Text("不关联项目").tag(nil as UUID?)
+                        ForEach(sortedProjects) { project in
+                            Text(project.name).tag(project.id as UUID?)
+                        }
+                    }
+                }
+                Section("将写入") {
+                    Text(action.detail)
+                        .font(.callout)
+                    Text(constructionMethodReferenceText(method))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(8)
+                }
+            }
+            .navigationTitle(action.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("生成") {
+                        onSave(action, selectedProjectId)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+private func methodDisplayTitle(_ method: ConstructionMethod) -> String {
+    let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    return title.isEmpty ? "未命名工艺" : title
+}
+
+private func constructionMethodReferenceText(_ method: ConstructionMethod) -> String {
+    var sections: [String] = []
+    let title = methodDisplayTitle(method)
+    let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
+    sections.append("工艺：\(title)")
+    if !trade.isEmpty {
+        sections.append("专业：\(trade)")
+    }
+    if !method.versionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        sections.append("版本：\(method.versionName)")
+    }
+    if !method.procedureSteps.isEmpty {
+        sections.append("施工步骤：\n\(numberedLines(method.procedureSteps))")
+    }
+    if !method.qualityChecklist.isEmpty {
+        sections.append("质量要点：\n\(numberedLines(method.qualityChecklist))")
+    }
+    if !method.safetyChecklist.isEmpty {
+        sections.append("安全注意：\n\(numberedLines(method.safetyChecklist))")
+    }
+    return sections.joined(separator: "\n\n")
+}
+
+private func numberedLines(_ lines: [String]) -> String {
+    lines
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .enumerated()
+        .map { "\($0.offset + 1). \($0.element)" }
+        .joined(separator: "\n")
 }
 
 private struct ConstructionMethodTutorialBlock: View {

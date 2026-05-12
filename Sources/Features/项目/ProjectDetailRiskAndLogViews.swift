@@ -8,9 +8,9 @@ struct ProjectDetailRiskStripView: View {
 
     private var level: Color {
         if overdueCount > 0 || unpaidAmount > 0 || unpricedQuoteCount > 0 || !hasTodayLog {
-            return overdueCount >= 2 || unpaidAmount > 10000 ? .red : .orange
+            return overdueCount >= 2 || unpaidAmount > 10000 ? .appRisk : .appPrimaryAction
         }
-        return .green
+        return .appSuccess
     }
 
     var body: some View {
@@ -27,22 +27,22 @@ struct ProjectDetailRiskStripView: View {
                 HStack(spacing: AppSpacing.tight) {
                     ProjectDetailRiskChipView(
                         text: "延期 \(overdueCount)",
-                        color: overdueCount > 0 ? .red : .green,
+                        color: overdueCount > 0 ? .appRisk : .appSuccess,
                         hasRisk: overdueCount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: "未收 \(ReportBuilder.money(unpaidAmount))",
-                        color: unpaidAmount > 0 ? .orange : .green,
+                        color: unpaidAmount > 0 ? .appPrimaryAction : .appSuccess,
                         hasRisk: unpaidAmount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: "待补报价 \(unpricedQuoteCount)",
-                        color: unpricedQuoteCount > 0 ? .orange : .green,
+                        color: unpricedQuoteCount > 0 ? .appPrimaryAction : .appSuccess,
                         hasRisk: unpricedQuoteCount > 0
                     )
                     ProjectDetailRiskChipView(
                         text: hasTodayLog ? "今日日志已写" : "今日日志未写",
-                        color: hasTodayLog ? .green : .red,
+                        color: hasTodayLog ? .appSuccess : .appRisk,
                         hasRisk: !hasTodayLog
                     )
                 }
@@ -108,13 +108,18 @@ struct ProjectDetailLogRowView: View {
             if !log.qualityIssue.isEmpty {
                 Text("质量: \(log.qualityIssue)")
                     .font(.caption2)
-                    .foregroundStyle(.red)
+                    .foregroundStyle(.appRisk)
                     .lineLimit(1)
             }
             if !log.photoAttachments.isEmpty {
                 Label("\(log.photoAttachments.count) 张照片", systemImage: "camera.fill")
                     .font(.caption2)
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appDoc)
+            }
+            if !log.linkedConstructionMethodIDs.isEmpty {
+                Label("关联工艺 \(log.linkedConstructionMethodIDs.count) 条", systemImage: "link.badge.plus")
+                    .font(.caption2)
+                    .foregroundStyle(Color.appPrimaryAction)
             }
         }
         .accessibilityElement(children: .combine)

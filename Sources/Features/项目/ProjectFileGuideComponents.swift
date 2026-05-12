@@ -12,7 +12,7 @@ struct ProjectFileGuideHintStrip: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: "lightbulb.min")
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.appWarning)
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -81,7 +81,7 @@ struct ProjectFileGuideIllustration: View {
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [.indigo.opacity(0.2), .blue.opacity(0.16), .cyan.opacity(0.14)],
+                        colors: [Color.appDocSurfaceSubtle, Color.appPrimarySurfaceSubtle, Color.appSuccessSurfaceSubtle],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -99,12 +99,12 @@ struct ProjectFileGuideIllustration: View {
                         .frame(width: 48, height: 48)
                     Image(systemName: "folder.fill")
                         .font(.system(size: 22, weight: .semibold))
-                        .foregroundStyle(.indigo)
+                        .foregroundStyle(Color.appDoc)
                 }
 
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.indigo.opacity(0.8))
+                    .foregroundStyle(Color.appDoc.opacity(0.8))
 
                 ZStack {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -112,7 +112,7 @@ struct ProjectFileGuideIllustration: View {
                         .frame(width: 48, height: 48)
                     Image(systemName: "doc.richtext.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.appPrimaryAction)
                 }
 
                 Spacer(minLength: 0)
@@ -122,7 +122,7 @@ struct ProjectFileGuideIllustration: View {
                     Label("预览", systemImage: "eye.fill")
                 }
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.appDoc)
             }
             .padding(12)
         }
@@ -136,7 +136,7 @@ struct ProjectFileCategoryIllustration: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [.indigo.opacity(0.14), .blue.opacity(0.1)],
+                        colors: [Color.appDocSurfaceSubtle, Color.appPrimarySurfaceSubtle],
                         startPoint: .leading,
                         endPoint: .trailing
                     )
@@ -144,13 +144,13 @@ struct ProjectFileCategoryIllustration: View {
 
             HStack(spacing: 18) {
                 Image(systemName: "photo.on.rectangle")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(Color.appDoc)
                 Image(systemName: "doc.viewfinder")
-                    .foregroundStyle(.indigo)
+                    .foregroundStyle(Color.appPrimaryAction)
                 Image(systemName: "doc.richtext")
-                    .foregroundStyle(.brown)
+                    .foregroundStyle(Color.appWarning)
                 Image(systemName: "paperclip")
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appSuccess)
             }
             .font(.system(size: 18, weight: .semibold))
         }
@@ -167,7 +167,7 @@ struct ProjectFileGuideStep: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.indigo)
+                .foregroundStyle(Color.appDoc)
                 .frame(width: 16)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title)
@@ -239,11 +239,11 @@ struct ProjectFileItemRow: View {
                     Text(item.formattedSize)
                     if !item.exists {
                         Text("文件缺失")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(.appRisk)
                     }
                 }
                 .font(.caption2.weight(.semibold))
-                .foregroundStyle(item.exists ? Color.secondary : Color.red)
+                .foregroundStyle(item.exists ? Color.secondary : Color.appRisk)
             }
             Spacer(minLength: 8)
             if item.exists {
@@ -316,9 +316,7 @@ struct ProjectFileThumbnail: View {
 
         loadTask?.cancel()
         loadTask = Task {
-            let loaded = await Task.detached(priority: .utility) {
-                token.loadImage()
-            }.value
+            let loaded = await token.loadImageAsync()
             guard !Task.isCancelled else { return }
             await MainActor.run {
                 if let loaded {

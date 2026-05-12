@@ -21,6 +21,9 @@ struct SitekeeperProvider: TimelineProvider {
                 pendingTodos: 8,
                 materialStockCount: 42,
                 lowStockCount: 3,
+                missingReceiptCount: 2,
+                priceSpikeCount: 1,
+                backupOverdueCount: 1,
                 lastUpdatedAt: Date().timeIntervalSince1970
             )
         )

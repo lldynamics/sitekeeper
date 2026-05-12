@@ -3,12 +3,14 @@ import SwiftUI
 struct ProjectDocumentScanSetupSheet: View {
     @Environment(\.dismiss) private var dismiss
     let projectId: UUID
+    let constructionMethods: [ConstructionMethod]
     let onScan: (ProjectScanTarget) -> Void
 
     @State private var title = ""
     @State private var category: ProjectDocumentCategory = .construction
     @State private var amount = ""
     @State private var note = ""
+    @State private var linkedMethodIDs: Set<UUID> = []
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
@@ -32,6 +34,17 @@ struct ProjectDocumentScanSetupSheet: View {
                         .lineLimit(2...4)
                         .focused($isInputFocused)
                 }
+                Section("关联施工工艺") {
+                    if constructionMethods.isEmpty {
+                        Text("暂无可关联的施工工艺，请先到工具箱维护工艺库。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(constructionMethods) { method in
+                            Toggle(methodTitle(method), isOn: methodBinding(for: method.id))
+                        }
+                    }
+                }
             }
             .navigationTitle("扫描项目资料")
             .navigationBarTitleDisplayMode(.inline)
@@ -47,6 +60,7 @@ struct ProjectDocumentScanSetupSheet: View {
                             category: category,
                             amount: amount,
                             linkedFinancialRecordId: nil,
+                            linkedConstructionMethodIDs: sortedLinkedMethodIDs(),
                             note: note
                         ))
                         dismiss()
@@ -59,12 +73,37 @@ struct ProjectDocumentScanSetupSheet: View {
             }
         }
     }
+
+    private func methodBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { linkedMethodIDs.contains(id) },
+            set: { isLinked in
+                if isLinked {
+                    linkedMethodIDs.insert(id)
+                } else {
+                    linkedMethodIDs.remove(id)
+                }
+            }
+        )
+    }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title.isEmpty ? "未命名工艺" : title
+        return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
+    }
+
+    private func sortedLinkedMethodIDs() -> [UUID] {
+        constructionMethods.map(\.id).filter { linkedMethodIDs.contains($0) }
+    }
 }
 
 struct ProjectDocumentDetailSheet: View {
     @Environment(\.dismiss) private var dismiss
     let document: ProjectDocument
     let financialRecords: [ProjectFinancialRecord]
+    let constructionMethods: [ConstructionMethod]
     let onPreview: (ProjectDocument) -> Void
     let onSave: (ProjectDocument) -> Void
     let onDelete: (ProjectDocument) -> Void
@@ -83,6 +122,9 @@ struct ProjectDocumentDetailSheet: View {
                         LabeledContent("金额", value: ReportBuilder.money(document.amountValue.doubleValue))
                     }
                     LabeledContent("创建时间", value: document.createdAt)
+                    if !linkedMethodTitles.isEmpty {
+                        LabeledContent("关联工艺", value: linkedMethodTitles.joined(separator: "、"))
+                    }
                     if !document.note.isEmpty {
                         Text(document.note)
                     }
@@ -120,11 +162,30 @@ struct ProjectDocumentDetailSheet: View {
                 Text("删除后，关联账目的附件标记会同步清除。")
             }
             .sheet(isPresented: $showEditSheet) {
-                ProjectDocumentEditSheet(document: document, financialRecords: financialRecords) { updated in
+                ProjectDocumentEditSheet(
+                    document: document,
+                    financialRecords: financialRecords,
+                    constructionMethods: constructionMethods
+                ) { updated in
                     onSave(updated)
                 }
             }
         }
+    }
+
+    private var linkedMethodTitles: [String] {
+        guard !document.linkedConstructionMethodIDs.isEmpty else { return [] }
+        let lookup = Dictionary(uniqueKeysWithValues: constructionMethods.map { method in
+            (method.id, methodTitle(method))
+        })
+        return document.linkedConstructionMethodIDs.compactMap { lookup[$0] }
+    }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title.isEmpty ? "未命名工艺" : title
+        return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
     }
 }
 
@@ -132,6 +193,7 @@ struct ProjectDocumentEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     let document: ProjectDocument
     let financialRecords: [ProjectFinancialRecord]
+    let constructionMethods: [ConstructionMethod]
     let onSave: (ProjectDocument) -> Void
 
     @State private var title: String
@@ -139,21 +201,25 @@ struct ProjectDocumentEditSheet: View {
     @State private var amount: String
     @State private var note: String
     @State private var linkedFinancialRecordId: UUID?
+    @State private var linkedMethodIDs: Set<UUID>
     @FocusState private var isInputFocused: Bool
 
     init(
         document: ProjectDocument,
         financialRecords: [ProjectFinancialRecord],
+        constructionMethods: [ConstructionMethod],
         onSave: @escaping (ProjectDocument) -> Void
     ) {
         self.document = document
         self.financialRecords = financialRecords
+        self.constructionMethods = constructionMethods
         self.onSave = onSave
         _title = State(initialValue: document.title)
         _category = State(initialValue: document.category)
         _amount = State(initialValue: document.amount)
         _note = State(initialValue: document.note)
         _linkedFinancialRecordId = State(initialValue: document.linkedFinancialRecordId)
+        _linkedMethodIDs = State(initialValue: Set(document.linkedConstructionMethodIDs))
     }
 
     var body: some View {
@@ -180,6 +246,18 @@ struct ProjectDocumentEditSheet: View {
                         Text("不关联").tag(nil as UUID?)
                         ForEach(financialRecords) { item in
                             Text(recordLabel(item)).tag(item.id as UUID?)
+                        }
+                    }
+                }
+
+                Section("关联施工工艺") {
+                    if constructionMethods.isEmpty {
+                        Text("暂无可关联的施工工艺，请先到工具箱维护工艺库。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ForEach(constructionMethods) { method in
+                            Toggle(methodTitle(method), isOn: methodBinding(for: method.id))
                         }
                     }
                 }
@@ -218,6 +296,31 @@ struct ProjectDocumentEditSheet: View {
         value.amount = amount
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         value.linkedFinancialRecordId = linkedFinancialRecordId
+        value.linkedConstructionMethodIDs = sortedLinkedMethodIDs()
         return value
+    }
+
+    private func methodBinding(for id: UUID) -> Binding<Bool> {
+        Binding(
+            get: { linkedMethodIDs.contains(id) },
+            set: { isLinked in
+                if isLinked {
+                    linkedMethodIDs.insert(id)
+                } else {
+                    linkedMethodIDs.remove(id)
+                }
+            }
+        )
+    }
+
+    private func methodTitle(_ method: ConstructionMethod) -> String {
+        let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
+        let displayTitle = title.isEmpty ? "未命名工艺" : title
+        return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
+    }
+
+    private func sortedLinkedMethodIDs() -> [UUID] {
+        constructionMethods.map(\.id).filter { linkedMethodIDs.contains($0) }
     }
 }

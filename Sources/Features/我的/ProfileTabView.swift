@@ -1,8 +1,10 @@
 import SwiftUI
+import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
+    @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.autoSave) private var autoSaveEnabled = true
     @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
@@ -15,6 +17,9 @@ struct ProfileTabView: View {
     @State private var isRefreshingStorageUsage = false
     @State private var lastStorageSampleAt: Date?
     @State private var hasLoadedStorageUsage = false
+    @State private var showUserNameEditor = false
+    @State private var userNameDraft = ""
+    @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
 
     init(embedsNavigationStack: Bool = true) {
@@ -28,6 +33,15 @@ struct ProfileTabView: View {
     private var displayUserName: String {
         let value = userName.trimmingCharacters(in: .whitespacesAndNewlines)
         return value.isEmpty ? "未设置用户名" : value
+    }
+
+    private var avatarUIImage: UIImage? {
+        guard !userAvatarData.isEmpty else { return nil }
+        return UIImage(data: userAvatarData)
+    }
+
+    private var hasCustomAvatar: Bool {
+        !userAvatarData.isEmpty
     }
 
     private var backupStatusText: String {
@@ -58,12 +72,23 @@ struct ProfileTabView: View {
         List {
             Section {
                 HStack(spacing: 14) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 48))
-                        .foregroundStyle(.orange)
+                    avatarPicker
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(displayUserName)
-                            .font(.title3.weight(.semibold))
+                        Button {
+                            userNameDraft = userName
+                            showUserNameEditor = true
+                        } label: {
+                            HStack(spacing: 6) {
+                                Text(displayUserName)
+                                    .font(.title3.weight(.semibold))
+                                    .foregroundStyle(.primary)
+                                Image(systemName: "pencil")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("编辑用户名")
                         Text("\(AppBrand.displayName) · v\(appVersion)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -100,10 +125,16 @@ struct ProfileTabView: View {
             Section("数据安全") {
                 backupStatusCard
                 NavigationLink { DataManagementView(initialTab: "导出") } label: {
-                    Label("数据管理", systemImage: "externaldrive")
-                }
-                NavigationLink { DataHealthView() } label: {
-                    Label("数据健康检查", systemImage: "stethoscope")
+                    HStack(spacing: AppSpacing.tight) {
+                        Image(systemName: "externaldrive")
+                            .foregroundStyle(Color.appPrimaryAction)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("数据管理")
+                            Text("导出、备份、导入恢复、体检与清理")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
                 }
             }
 
@@ -147,6 +178,16 @@ struct ProfileTabView: View {
                 await refreshLocalStorageUsage()
             }
         }
+        .onChange(of: selectedAvatarItem) { _, newItem in
+            guard let newItem else { return }
+            Task {
+                await updateAvatar(from: newItem)
+                selectedAvatarItem = nil
+            }
+        }
+        .sheet(isPresented: $showUserNameEditor) {
+            userNameEditorSheet
+        }
     }
 
     private var backupStatusCard: some View {
@@ -154,7 +195,7 @@ struct ProfileTabView: View {
             HStack(alignment: .top, spacing: AppSpacing.tight) {
                 Image(systemName: "internaldrive")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color.appPrimaryAction)
                     .frame(width: 18, height: 18)
                     .padding(.top, 1)
 
@@ -202,6 +243,96 @@ struct ProfileTabView: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.appStrokeSecondary, lineWidth: 1)
         )
+    }
+
+    private var avatarPicker: some View {
+        PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let avatarUIImage {
+                        Image(uiImage: avatarUIImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .padding(2)
+                            .foregroundStyle(Color.appPrimaryAction)
+                    }
+                }
+                .frame(width: 56, height: 56)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(Color.appStrokeSecondary, lineWidth: 1)
+                )
+
+                Image(systemName: "camera.fill")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .padding(5)
+                    .background(Color.appPrimaryAction, in: Circle())
+                    .offset(x: 1, y: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("修改头像")
+        .contextMenu {
+            if hasCustomAvatar {
+                Button(role: .destructive) {
+                    userAvatarData = Data()
+                } label: {
+                    Label("恢复默认头像", systemImage: "arrow.counterclockwise")
+                }
+            }
+        }
+    }
+
+    private var userNameEditorSheet: some View {
+        NavigationStack {
+            Form {
+                Section("用户名") {
+                    TextField("请输入用户名", text: $userNameDraft)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                    Text("留空将显示“未设置用户名”。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("编辑用户名")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") {
+                        showUserNameEditor = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        userName = userNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        showUserNameEditor = false
+                    }
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func updateAvatar(from item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            return
+        }
+
+        let thumbnail = await Task.detached(priority: .userInitiated) {
+            image.preparingThumbnail(of: CGSize(width: 320, height: 320)) ?? image
+        }.value
+
+        if let compressed = thumbnail.jpegData(compressionQuality: 0.82) {
+            userAvatarData = compressed
+        }
     }
 
     private func migrateLegacyAppearanceIfNeeded() {

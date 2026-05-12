@@ -30,9 +30,13 @@ targets:
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSCameraUsageDescription: 用于扫描项目发票、收据、施工资料和随手记拍照。
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: 用于在水印照片中带入拍摄位置。
-        INFOPLIST_KEY_NSMicrophoneUsageDescription: 用于随手记录现场语音。
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: 用于从相册选择项目照片、票据、施工资料和随手记素材。
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 用于将水印现场照片保存到系统相册。
+        INFOPLIST_KEY_CFBundleURLTypes:
+          - CFBundleTypeRole: Editor
+            CFBundleURLName: com.chengjinfang.sitekeeper
+            CFBundleURLSchemes:
+              - sitekeeper
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: NO
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen

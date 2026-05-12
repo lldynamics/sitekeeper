@@ -95,11 +95,11 @@ struct QuickNoteView: View {
                         Text("发布")
                         if hasRecoveredDraft && canPublishDraft {
                             Circle()
-                                .fill(.orange)
+                                .fill(.appWarning)
                                 .frame(width: 7, height: 7)
                             Text("恢复草稿")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.appWarning)
                         }
                     }
                 }
@@ -181,11 +181,11 @@ struct QuickNoteView: View {
                     if hasRecoveredDraft && canPublishDraft {
                         HStack(spacing: 4) {
                             Circle()
-                                .fill(.orange)
+                                .fill(.appWarning)
                                 .frame(width: 7, height: 7)
                             Text("恢复草稿")
                                 .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.orange)
+                                .foregroundStyle(.appWarning)
                         }
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel("存在未发布草稿")

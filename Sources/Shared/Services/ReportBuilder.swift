@@ -202,42 +202,31 @@ enum ReportBuilder {
         }
     }
 
-    static func makeDailyReportPDF(project: Project?, logs: [DailyLog]) -> Data {
-        let title = project.map { "\($0.name)-施工日报" } ?? "施工日报"
-        var lines: [String] = [title, "生成时间: \(Formatters.now())", ""]
-        if let project {
-            lines.append("客户: \(project.customerName.isEmpty ? "未填写" : project.customerName)")
-            lines.append("地址: \(project.location)")
-            lines.append("负责人: \(project.managerName.isEmpty ? "未填写" : project.managerName)")
-            lines.append("")
-        }
-        if logs.isEmpty {
-            lines.append("暂无施工日志")
-            return pdfData(lines: lines)
-        }
-        for log in logs.sorted(by: { $0.date > $1.date }) {
-            lines.append("\(log.date)  \(log.weather)  \(log.workers)")
-            lines.append("施工内容: \(log.content)")
-            if !log.safety.isEmpty { lines.append("安全事项: \(log.safety)") }
-            if !log.materials.isEmpty { lines.append("材料进场: \(log.materials)") }
-            if !log.tomorrowPlan.isEmpty { lines.append("明日计划: \(log.tomorrowPlan)") }
-            if !log.qualityIssue.isEmpty { lines.append("质量问题: \(log.qualityIssue)") }
-            if !log.rectification.isEmpty { lines.append("整改记录: \(log.rectification)") }
-            if !log.confirmer.isEmpty { lines.append("现场确认: \(log.confirmer)") }
-            if !log.photoAttachments.isEmpty {
-                let photoText = log.photoAttachments.map { "\($0.tag): \($0.note.isEmpty ? $0.fileName : $0.note)" }.joined(separator: "；")
-                lines.append("照片: \(photoText)")
-            }
-            lines.append("")
-        }
-        return pdfData(lines: lines)
+    static func makePhotoWallPDF(title: String, items: [ReportPhotoItem]) -> Data {
+        renderPhotoWallPDF(title: title, items: items, thumbnailsByFileName: [:])
     }
 
-    static func makePhotoWallPDF(title: String, items: [ReportPhotoItem]) -> Data {
+    static func makePhotoWallPDFAsync(title: String, items: [ReportPhotoItem]) async -> Data {
+        let thumbnailsByFileName = await preloadPhotoWallThumbnails(for: items)
+        return renderPhotoWallPDF(title: title, items: items, thumbnailsByFileName: thumbnailsByFileName)
+    }
+
+    private static func renderPhotoWallPDF(
+        title: String,
+        items: [ReportPhotoItem],
+        thumbnailsByFileName: [String: UIImage]
+    ) -> Data {
         let page = CGRect(x: 0, y: 0, width: 595, height: 842)
         let renderer = UIGraphicsPDFRenderer(bounds: page)
         return renderer.pdfData { context in
-            drawPhotoWallPages(title: title, items: items, context: context, page: page, margin: 36)
+            drawPhotoWallPages(
+                title: title,
+                items: items,
+                context: context,
+                page: page,
+                margin: 36,
+                thumbnailsByFileName: thumbnailsByFileName
+            )
         }
     }
 
@@ -699,6 +688,7 @@ enum ReportBuilder {
             let fileBytes = ProjectDocumentStorage.fileSize(for: document.fileName)
             let sourceURL = ProjectDocumentStorage.fileURL(for: document.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+                StorageIssueLog.record("项目交付包缺少票据原件：\(document.fileName)")
                 reportProgress("检查票据 \(document.title)")
                 continue
             }
@@ -719,6 +709,7 @@ enum ReportBuilder {
             let fileBytes = DrawingStorage.fileSize(for: drawing.fileName)
             let sourceURL = DrawingStorage.fileURL(for: drawing.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+                StorageIssueLog.record("项目交付包缺少图纸原件：\(drawing.fileName)")
                 reportProgress("检查图纸 \(drawing.name)")
                 continue
             }
@@ -739,6 +730,7 @@ enum ReportBuilder {
                 let fileBytes = PhotoStorage.fileSize(for: photo.fileName)
                 let sourceURL = PhotoStorage.fileURL(for: photo.fileName)
                 guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+                    StorageIssueLog.record("项目交付包缺少现场照片原件：\(photo.fileName)")
                     reportProgress("检查照片 \(log.date) \(photo.tag.displayName)")
                     continue
                 }
@@ -773,6 +765,7 @@ enum ReportBuilder {
                     let fileBytes = QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
                     let sourceURL = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
                     guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+                        StorageIssueLog.record("项目交付包缺少随手记附件原件：\(attachment.fileName)")
                         reportProgress("检查随手记附件 \(note.title.isEmpty ? note.createdAt : note.title)")
                         continue
                     }
@@ -816,7 +809,12 @@ enum ReportBuilder {
         path: String,
         stagedRawBytes: inout Int
     ) throws {
-        try zip.addFile(path: path, data: data)
+        do {
+            try zip.addFile(path: path, data: data)
+        } catch {
+            StorageIssueLog.record("项目交付包写入生成文件失败：\(path)，\(error.localizedDescription)")
+            throw error
+        }
         stagedRawBytes += data.count
     }
 
@@ -828,7 +826,12 @@ enum ReportBuilder {
         stagedRawBytes: inout Int
     ) throws {
         let resolvedFileBytes = max(fileBytes, QuickNoteAttachmentStorage.fileSize(at: sourceFileURL))
-        try zip.addFile(path: path, sourceFileURL: sourceFileURL)
+        do {
+            try zip.addFile(path: path, sourceFileURL: sourceFileURL)
+        } catch {
+            StorageIssueLog.record("项目交付包写入原件失败：\(sourceFileURL.lastPathComponent) -> \(path)，\(error.localizedDescription)")
+            throw error
+        }
         stagedRawBytes += resolvedFileBytes
     }
 
@@ -923,7 +926,8 @@ enum ReportBuilder {
         items: [ReportPhotoItem],
         context: UIGraphicsPDFRendererContext,
         page: CGRect,
-        margin: CGFloat
+        margin: CGFloat,
+        thumbnailsByFileName: [String: UIImage] = [:]
     ) {
         let colCount = 2
         let rowCount = 3
@@ -955,7 +959,7 @@ enum ReportBuilder {
                     let cardRect = CGRect(x: x, y: y, width: cardWidth, height: cardHeight)
                     UIBezierPath(roundedRect: cardRect, cornerRadius: 8).stroke()
                     let imageRect = CGRect(x: x + 8, y: y + 8, width: cardWidth - 16, height: 146)
-                    if let image = PhotoStorage.thumbnail(for: item.fileName) {
+                    if let image = thumbnailsByFileName[item.fileName] ?? PhotoStorage.thumbnail(for: item.fileName) {
                         image.draw(in: imageRect)
                     } else {
                         UIColor.secondarySystemFill.setFill()
@@ -968,6 +972,27 @@ enum ReportBuilder {
                     index += 1
                 }
             }
+        }
+    }
+
+    private static func preloadPhotoWallThumbnails(for items: [ReportPhotoItem]) async -> [String: UIImage] {
+        let fileNames = Array(Set(items.map(\.fileName).filter { !$0.isEmpty }))
+        guard !fileNames.isEmpty else { return [:] }
+
+        return await withTaskGroup(of: (String, UIImage?).self) { group in
+            for fileName in fileNames {
+                group.addTask {
+                    (fileName, await PhotoStorage.thumbnailAsync(for: fileName))
+                }
+            }
+
+            var imagesByFileName: [String: UIImage] = [:]
+            for await (fileName, image) in group {
+                if let image {
+                    imagesByFileName[fileName] = image
+                }
+            }
+            return imagesByFileName
         }
     }
 
