@@ -176,11 +176,16 @@ struct DailyLogView: View {
                         }
                     } label: {
                         Image(systemName: filterProjectId != nil || isDateFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
+                            .visibleIconStyle()
                     }
+                    .buttonStyle(.appIcon())
                     .accessibilityLabel("筛选与排序")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: { Image(systemName: "plus") }
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus").visibleIconStyle()
+                    }
+                    .buttonStyle(.appIcon())
                         .accessibilityLabel("新建施工日志")
                 }
             }

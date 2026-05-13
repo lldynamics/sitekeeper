@@ -3,11 +3,8 @@ import QuickLook
 
 struct ProjectFileCategoryView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage(UserPreferenceKeys.hasSeenProjectFileCategoryGuide) private var hasSeenCategoryGuide = false
     @State private var searchText = ""
     @State private var previewURL: URL?
-    @State private var shouldShowCategoryGuide = false
-    @State private var isCategoryGuideExpanded = false
     let project: Project
     private let summaryColumns: [GridItem] = [
         GridItem(.flexible(minimum: 80), spacing: 8, alignment: .leading),
@@ -59,34 +56,6 @@ struct ProjectFileCategoryView: View {
                 .padding(.vertical, 4)
             }
 
-            if shouldShowCategoryGuide {
-                Section {
-                    ProjectFileGuideHintStrip(
-                        title: "分类页操作指引",
-                        subtitle: isCategoryGuideExpanded ? "再次点 ? 收起详细说明" : "点 ? 查看分类页用法",
-                        isExpanded: isCategoryGuideExpanded,
-                        onToggleExpand: {
-                            hasSeenCategoryGuide = true
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isCategoryGuideExpanded.toggle()
-                            }
-                        },
-                        onDismiss: {
-                            hasSeenCategoryGuide = true
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                shouldShowCategoryGuide = false
-                                isCategoryGuideExpanded = false
-                            }
-                        }
-                    )
-
-                    if isCategoryGuideExpanded {
-                        ProjectFileCategoryGuidePanel()
-                            .padding(.top, 2)
-                    }
-                }
-            }
-
             Section("文件分类") {
                 ForEach(ProjectFileCategory.allCases, id: \.self) { category in
                     let count = summary.count(for: category)
@@ -126,30 +95,8 @@ struct ProjectFileCategoryView: View {
         }
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    hasSeenCategoryGuide = true
-                    shouldShowCategoryGuide = true
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        isCategoryGuideExpanded.toggle()
-                    }
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .accessibilityLabel("查看使用提示")
-            }
-        }
         .searchable(text: $searchText, prompt: "搜索本项目的文件")
         .quickLookPreview($previewURL)
-        .onAppear {
-            let shouldAutoShowGuide = !hasSeenCategoryGuide
-            shouldShowCategoryGuide = shouldAutoShowGuide
-            isCategoryGuideExpanded = false
-            if shouldAutoShowGuide {
-                hasSeenCategoryGuide = true
-            }
-        }
     }
 }
 

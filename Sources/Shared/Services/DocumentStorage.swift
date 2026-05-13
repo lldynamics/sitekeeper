@@ -2,6 +2,7 @@ import AVFoundation
 import Foundation
 import UIKit
 import AVFoundation
+import UniformTypeIdentifiers
 
 struct ProjectDocumentBackupFile: Identifiable, Codable {
     var id: String { fileName }
@@ -211,7 +212,10 @@ enum DrawingStorage {
     }
 
     static func saveImportedFileOrThrow(from sourceURL: URL, projectId: UUID) throws -> ProjectDrawing {
-        let ext = sourceURL.pathExtension.lowercased()
+        guard let ext = drawingFileExtension(for: sourceURL) else {
+            let rawType = sourceURL.pathExtension.lowercased()
+            throw FileStorageError.unsupportedFileType(rawType.isEmpty ? "未知类型" : rawType)
+        }
         guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
             throw FileStorageError.unsupportedFileType(ext)
         }
@@ -234,11 +238,74 @@ enum DrawingStorage {
             throw FileStorageError.copyFailed(sourceURL.lastPathComponent)
         }
 
-        return ProjectDrawing(
+        return makeDrawing(
+            projectId: projectId,
+            displayName: displayName,
+            storedFileName: storedFileName,
+            fileType: ext
+        )
+    }
+
+    static func saveImportedDataOrThrow(data: Data, sourceFileName: String, projectId: UUID) throws -> ProjectDrawing {
+        let ext = (sourceFileName as NSString).pathExtension.lowercased()
+        guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
+            throw FileStorageError.unsupportedFileType(ext.isEmpty ? "未知类型" : ext)
+        }
+        let rawBaseName = ((sourceFileName as NSString).lastPathComponent as NSString).deletingPathExtension
+        let displayName = rawBaseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? "图纸"
+            : rawBaseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let storedFileName = "\(UUID().uuidString).\(ext)"
+        let targetURL = drawingDir.appendingPathComponent(storedFileName)
+        try ensureDirectoryExists()
+        do {
+            try data.write(to: targetURL, options: .atomic)
+        } catch {
+            throw FileStorageError.writeFailed(sourceFileName)
+        }
+        return makeDrawing(
+            projectId: projectId,
+            displayName: displayName,
+            storedFileName: storedFileName,
+            fileType: ext
+        )
+    }
+
+    private static func drawingFileExtension(for sourceURL: URL) -> String? {
+        let ext = sourceURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if ProjectDrawing.allowedFileExtensions.contains(ext) {
+            return ext
+        }
+
+        if let contentType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType {
+            if contentType.conforms(to: .pdf) {
+                return "pdf"
+            }
+            if let preferred = contentType.preferredFilenameExtension?.lowercased(),
+               ProjectDrawing.allowedFileExtensions.contains(preferred) {
+                return preferred
+            }
+        }
+
+        // 某些文件提供器会返回无后缀 URL，fallback 到文件名推断。
+        let lowerName = sourceURL.lastPathComponent.lowercased()
+        if lowerName.hasSuffix(".dwg") { return "dwg" }
+        if lowerName.hasSuffix(".dxf") { return "dxf" }
+        if lowerName.hasSuffix(".pdf") { return "pdf" }
+        return nil
+    }
+
+    private static func makeDrawing(
+        projectId: UUID,
+        displayName: String,
+        storedFileName: String,
+        fileType: String
+    ) -> ProjectDrawing {
+        ProjectDrawing(
             projectId: projectId,
             name: displayName,
             fileName: storedFileName,
-            fileType: ext,
+            fileType: fileType,
             importedAt: Formatters.now()
         )
     }

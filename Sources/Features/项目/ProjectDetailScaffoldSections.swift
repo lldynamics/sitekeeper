@@ -176,13 +176,10 @@ struct ProjectDetailQuickActionSection: View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.tight) {
-                    actionChip("日志", systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
+                    actionChip("写日志", systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
                     actionChip("记账", systemImage: "receipt.fill", color: .appFinance, action: onAddFinance)
-                    actionChip("联系人", systemImage: "person.crop.circle.badge.plus", color: .appDoc, action: onAddContact)
-                    actionChip("图纸", systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
-                    actionChip("材料", systemImage: "shippingbox.fill", color: .appInventory, action: onAddMaterial)
-                    actionChip("报价", systemImage: "doc.text.fill", color: .appFinance, action: onAddQuote)
-                    actionChip("人工", systemImage: "person.2.fill", color: .appSuccess, action: onAddLabor)
+                    actionChip("导资料", systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
+                    moreActionsMenu
                 }
                 .padding(.vertical, 2)
             }
@@ -200,5 +197,29 @@ struct ProjectDetailQuickActionSection: View {
                 .background(color.opacity(0.12), in: Capsule())
         }
         .buttonStyle(.plain)
+    }
+
+    private var moreActionsMenu: some View {
+        Menu {
+            Button(action: onAddContact) {
+                Label("联系人", systemImage: "person.crop.circle.badge.plus")
+            }
+            Button(action: onAddMaterial) {
+                Label("材料", systemImage: "shippingbox.fill")
+            }
+            Button(action: onAddQuote) {
+                Label("报价", systemImage: "doc.text.fill")
+            }
+            Button(action: onAddLabor) {
+                Label("人工", systemImage: "person.2.fill")
+            }
+        } label: {
+            Label("更多", systemImage: "ellipsis.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.appPrimaryAction)
+                .padding(.horizontal, AppSpacing.normal)
+                .padding(.vertical, 7)
+                .background(Color.appPrimaryAction.opacity(0.12), in: Capsule())
+        }
     }
 }

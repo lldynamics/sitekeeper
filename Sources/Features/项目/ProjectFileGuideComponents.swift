@@ -255,8 +255,9 @@ struct ProjectFileItemRow: View {
                         Label("分享/打开", systemImage: "square.and.arrow.up")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
+                .buttonStyle(.appIcon())
                 .accessibilityLabel("预览与分享")
             }
         }

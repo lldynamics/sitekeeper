@@ -7,11 +7,17 @@ struct ProjectContactDatabaseView: View {
     let focusedContactId: UUID?
     @State private var searchText = ""
     @State private var selectedProjectId: UUID?
+    @State private var roleFilter: ProjectContactRole?
     @State private var showAdd = false
     @State private var editingContact: ProjectContact?
     @State private var didOpenFocusedContact = false
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
+    @State private var showSystemContactPicker = false
+    @State private var importFeedbackMessage = ""
+    @State private var showImportFeedbackAlert = false
+    @State private var mergeConfirmPhone: String?
+    @State private var showMergeConfirm = false
 
     init(focusedContactId: UUID? = nil) {
         self.focusedContactId = focusedContactId
@@ -20,7 +26,11 @@ struct ProjectContactDatabaseView: View {
     private var scopedContacts: [ProjectContact] {
         store.projectContacts.filter { contact in
             guard let selectedProjectId else { return true }
-            return contact.projectId == selectedProjectId
+            return contact.isLinked(to: selectedProjectId)
+        }
+        .filter {
+            guard let roleFilter else { return true }
+            return $0.role == roleFilter
         }
     }
 
@@ -35,7 +45,7 @@ struct ProjectContactDatabaseView: View {
                 return lhs.name < rhs.name
             },
             extraFields: { contact in
-                [projectName(contact.projectId)]
+                [projectName(contact.projectId)] + projectNames(for: contact.relatedProjectIds)
             }
         )
     }
@@ -87,13 +97,14 @@ struct ProjectContactDatabaseView: View {
                     contact: contact,
                     projectName: projectName(contact.projectId),
                     showsProjectName: true,
-                    showsPhoneActions: false,
-                    crmSummary: contactCRMSummary(for: contact)
+                    showsPhoneActions: true,
+                    crmSummary: contactCRMSummary(for: contact),
+                    linkedProjectNames: linkedProjectNames(for: contact)
                 )
             },
             headerContent: {
                 Section {
-                    projectFilterBar
+                    filterBars
                         .listRowInsets(EdgeInsets())
                         .listRowBackground(Color.clear)
                 }
@@ -103,18 +114,21 @@ struct ProjectContactDatabaseView: View {
                         ForEach(duplicatePhoneGroups, id: \.phone) { group in
                             DisclosureGroup("\(group.phone) · \(group.contacts.count) 条") {
                                 ForEach(group.contacts) { contact in
-                                    Button {
-                                        editingContact = contact
-                                    } label: {
-                                        ContactPickerRowView(
-                                            contact: contact,
-                                            projectName: projectName(contact.projectId),
-                                            showsProjectName: true,
-                                            showsPhoneActions: false,
-                                            crmSummary: contactCRMSummary(for: contact)
-                                        )
-                                    }
-                                    .buttonStyle(.plain)
+                                    ContactPickerRowView(
+                                        contact: contact,
+                                        projectName: projectName(contact.projectId),
+                                        showsProjectName: true,
+                                        showsPhoneActions: true,
+                                        linkedProjectNames: linkedProjectNames(for: contact)
+                                    )
+                                }
+                                Button {
+                                    mergeConfirmPhone = group.phone
+                                    showMergeConfirm = true
+                                } label: {
+                                    Label("合并为同一联系人", systemImage: "arrow.triangle.merge")
+                                        .font(.subheadline.weight(.semibold))
+                                        .foregroundStyle(Color.appWarning)
                                 }
                             }
                         }
@@ -127,9 +141,14 @@ struct ProjectContactDatabaseView: View {
             toolbarContent: {
                 Menu {
                     Button {
-                        exportContactsCSV()
+                        beginSystemContactImport()
                     } label: {
-                        Label("导出联系人 CSV", systemImage: "square.and.arrow.up")
+                        Label("导入本机联系人", systemImage: "person.badge.plus")
+                    }
+                    Button {
+                        exportContactsVCard()
+                    } label: {
+                        Label("导出联系人 vCard", systemImage: "square.and.arrow.up")
                     }
                     Button {
                         showAdd = true
@@ -137,8 +156,9 @@ struct ProjectContactDatabaseView: View {
                         Label("新增联系人", systemImage: "plus")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
+                .buttonStyle(.appIcon())
                 .accessibilityLabel("更多操作")
             }
         )
@@ -165,36 +185,85 @@ struct ProjectContactDatabaseView: View {
         .fileExporter(
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
-            contentType: exportPayload?.contentType ?? .commaSeparatedText,
-            defaultFilename: exportPayload?.defaultFilename ?? "项目联系人.csv"
+            contentType: exportPayload?.contentType ?? .vCard,
+            defaultFilename: exportPayload?.defaultFilename ?? "项目联系人.vcf"
         ) { _ in }
-    }
-
-    private var projectFilterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                contactFilterChip(title: "全部", isSelected: selectedProjectId == nil) {
-                    selectedProjectId = nil
-                }
-                ForEach(store.projects.sorted { $0.name < $1.name }) { project in
-                    contactFilterChip(title: project.name, isSelected: selectedProjectId == project.id) {
-                        selectedProjectId = project.id
-                    }
+        .sheet(isPresented: $showSystemContactPicker) {
+            SystemContactPicker(
+                onSelect: { imported in
+                    importSystemContact(imported)
+                },
+                onCancel: {}
+            )
+        }
+        .alert("联系人导入", isPresented: $showImportFeedbackAlert) {
+            Button("确定", role: .cancel) {}
+        } message: {
+            Text(importFeedbackMessage)
+        }
+        .confirmationDialog("合并联系人？", isPresented: $showMergeConfirm, titleVisibility: .visible) {
+            Button("合并，保留第一个项目的联系人", role: .destructive) {
+                if let phone = mergeConfirmPhone {
+                    mergeDuplicateContacts(phone: phone)
                 }
             }
-            .padding(.horizontal)
-            .padding(.vertical, 6)
+            Button("取消", role: .cancel) {}
+        } message: {
+            if let phone = mergeConfirmPhone,
+               let group = duplicatePhoneGroups.first(where: { $0.phone == phone }) {
+                Text("将删除 \(group.contacts.count - 1) 个重复联系人，仅保留每个项目中身份信息最完整的记录。")
+            }
         }
     }
 
-    private func contactFilterChip(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+    private var filterBars: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            // 项目筛选
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    contactFilterChip(title: "全部项目", isSelected: selectedProjectId == nil && roleFilter == nil, isColored: false) {
+                        selectedProjectId = nil
+                        roleFilter = nil
+                    }
+                    ForEach(store.projects.sorted { $0.name < $1.name }) { project in
+                        contactFilterChip(title: project.name, isSelected: selectedProjectId == project.id, isColored: true) {
+                            selectedProjectId = project.id
+                            roleFilter = nil
+                        }
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+            }
+
+            // 角色筛选
+            if selectedProjectId == nil {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        contactFilterChip(title: "全部", isSelected: roleFilter == nil, isColored: false) {
+                            roleFilter = nil
+                        }
+                        ForEach(ProjectContactRole.allCases, id: \.rawValue) { role in
+                            contactFilterChip(title: role.displayName, isSelected: roleFilter == role, isColored: true) {
+                                roleFilter = role
+                            }
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.vertical, 2)
+                }
+            }
+        }
+    }
+
+    private func contactFilterChip(title: String, isSelected: Bool, isColored: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(isSelected ? .white : .primary)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
-                .background(isSelected ? Color.appWarning : Color(.secondarySystemBackground))
+                .background(isSelected ? Color.appPrimaryAction : Color(.secondarySystemBackground))
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
@@ -226,17 +295,73 @@ struct ProjectContactDatabaseView: View {
         deleteContacts(Set(items.map(\.id)))
     }
 
-    private func exportContactsCSV() {
-        var rows = ["项目,姓名/单位,角色,公司/班组,电话,备注,重复手机号"]
-        rows += filteredContacts.map { contact in
-            let phoneKey = normalizedPhone(contact.phone)
-            let duplicateMark = duplicatePhoneGroups.contains { $0.phone == phoneKey } ? "是" : ""
-            return csv([projectName(contact.projectId), contact.name, contact.roleDisplayName, contact.company, contact.phone, contact.note, duplicateMark])
+    /// 同一手机号关联的项目名列表
+    private func linkedProjectNames(for contact: ProjectContact) -> [String] {
+        let phoneKey = normalizedPhone(contact.phone)
+        var projectIDs = Set(contact.relatedProjectIds)
+        if !phoneKey.isEmpty {
+            let all = store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey && $0.id != contact.id }
+            projectIDs.formUnion(all.map(\.projectId))
+            projectIDs.formUnion(all.flatMap(\.relatedProjectIds))
         }
+        projectIDs.remove(contact.projectId)
+        return projectNames(for: Array(projectIDs))
+    }
+
+    /// 合并同一手机号的重复联系人（每个项目仅保留一条最完整的记录）
+    private func mergeDuplicateContacts(phone: String) {
+        let phoneKey = normalizedPhone(phone)
+        let all = store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
+        guard all.count > 1 else { return }
+        // 按项目分组，每个项目只保留一条
+        var toKeep = Set<UUID>()
+        let grouped = Dictionary(grouping: all, by: \.projectId)
+        for (_, contacts) in grouped {
+            let best = contacts.max { a, b in
+                let scoreA = [a.name, a.company, a.phone, a.note].filter { !$0.isEmpty }.count
+                let scoreB = [b.name, b.company, b.phone, b.note].filter { !$0.isEmpty }.count
+                return scoreA < scoreB
+            }
+            if let best {
+                toKeep.insert(best.id)
+            }
+        }
+        store.projectContacts.removeAll { !toKeep.contains($0.id) }
+        store.scheduleSave()
+    }
+
+    /// 导出 vCard
+    private func exportContactsVCard() {
+        var lines: [String] = []
+        for contact in filteredContacts {
+            lines.append("BEGIN:VCARD")
+            lines.append("VERSION:3.0")
+            lines.append("FN:\(contact.name)")
+            let cleaned = normalizedPhone(contact.phone)
+            if !cleaned.isEmpty {
+                lines.append("TEL;TYPE=CELL:\(cleaned)")
+            }
+            if !contact.company.isEmpty {
+                lines.append("ORG:\(contact.company)")
+            }
+            if !contact.note.isEmpty {
+                lines.append("NOTE:\(contact.note)")
+            }
+            let projectRef = projectName(contact.projectId)
+            if !projectRef.isEmpty {
+                lines.append("NOTE:项目:\(projectRef)")
+            }
+            let relatedNames = projectNames(for: contact.relatedProjectIds)
+            if !relatedNames.isEmpty {
+                lines.append("NOTE:历史项目:\(relatedNames.joined(separator: "、"))")
+            }
+            lines.append("END:VCARD")
+        }
+        let data = lines.joined(separator: "\r\n").data(using: .utf8) ?? Data()
         exportPayload = ExportPayload(
-            data: rows.joined(separator: "\n").data(using: .utf8) ?? Data(),
-            contentType: .commaSeparatedText,
-            defaultFilename: "项目联系人.csv"
+            data: data,
+            contentType: .vCard,
+            defaultFilename: "项目联系人.vcf"
         )
         showExporter = true
     }
@@ -245,14 +370,14 @@ struct ProjectContactDatabaseView: View {
         store.projects.first(where: { $0.id == id })?.name ?? "未知项目"
     }
 
-    private func normalizedPhone(_ raw: String) -> String {
-        raw.filter(\.isNumber)
+    private func projectNames(for ids: [UUID]) -> [String] {
+        ids.compactMap { id in
+            store.projects.first(where: { $0.id == id })?.name
+        }
     }
 
-    private func csv(_ values: [String]) -> String {
-        values
-            .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
-            .joined(separator: ",")
+    private func normalizedPhone(_ raw: String) -> String {
+        raw.filter(\.isNumber)
     }
 
     private func contactCRMSummary(for contact: ProjectContact) -> String? {
@@ -305,6 +430,76 @@ struct ProjectContactDatabaseView: View {
         let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
         return max(contract - paid, 0)
     }
+
+    private func beginSystemContactImport() {
+        guard !store.projects.isEmpty else {
+            showImportFeedback("请先创建项目，再导入联系人。")
+            return
+        }
+        guard targetProjectIdForImport() != nil else {
+            showImportFeedback("请先在顶部筛选中选择一个项目，再导入联系人。")
+            return
+        }
+        showSystemContactPicker = true
+    }
+
+    private func targetProjectIdForImport() -> UUID? {
+        if let selectedProjectId {
+            return selectedProjectId
+        }
+        if store.projects.count == 1 {
+            return store.projects[0].id
+        }
+        return nil
+    }
+
+    private func importSystemContact(_ imported: ImportedSystemContact) {
+        showSystemContactPicker = false
+        guard let projectId = targetProjectIdForImport() else {
+            showImportFeedback("请先选择项目，再导入联系人。")
+            return
+        }
+
+        let resolvedName = imported.fullName.isEmpty
+            ? (imported.organizationName.isEmpty ? "未命名联系人" : imported.organizationName)
+            : imported.fullName
+
+        let normalizedPrimary = normalizedPhone(imported.primaryPhone)
+        if !normalizedPrimary.isEmpty,
+           let existing = store.projectContacts.first(where: {
+               normalizedPhone($0.phone) == normalizedPrimary && $0.isLinked(to: projectId)
+           }) {
+            selectedProjectId = projectId
+            editingContact = existing
+            showImportFeedback("该号码已存在，已定位到现有联系人。")
+            return
+        }
+
+        var noteLines: [String] = []
+        if imported.phoneNumbers.count > 1 {
+            noteLines.append("备用号码：\(imported.phoneNumbers.dropFirst().joined(separator: "、"))")
+        }
+
+        let contact = ProjectContact(
+            projectId: projectId,
+            relatedProjectIds: [],
+            name: resolvedName,
+            role: .other,
+            company: imported.organizationName,
+            phone: imported.primaryPhone,
+            note: noteLines.joined(separator: "\n")
+        )
+        store.projectContacts.insert(contact, at: 0)
+        store.scheduleSave()
+        selectedProjectId = projectId
+        AppHaptics.success()
+        showImportFeedback("已导入联系人：\(resolvedName)")
+    }
+
+    private func showImportFeedback(_ message: String) {
+        importFeedbackMessage = message
+        showImportFeedbackAlert = true
+    }
 }
 
 private struct ProjectContactDatabaseEditSheet: View {
@@ -316,12 +511,14 @@ private struct ProjectContactDatabaseEditSheet: View {
     var onDelete: ((ProjectContact) -> Void)?
 
     @State private var projectId: UUID?
+    @State private var relatedProjectIDs: Set<UUID>
     @State private var name: String
     @State private var role: ProjectContactRole
     @State private var company: String
     @State private var phone: String
     @State private var note: String
     @State private var showDeleteConfirm = false
+    @State private var showSystemContactPicker = false
 
     init(
         contact: ProjectContact?,
@@ -336,6 +533,7 @@ private struct ProjectContactDatabaseEditSheet: View {
         self.onSave = onSave
         self.onDelete = onDelete
         _projectId = State(initialValue: contact?.projectId ?? initialProjectId ?? projects.first?.id)
+        _relatedProjectIDs = State(initialValue: Set(contact?.relatedProjectIds ?? []))
         _name = State(initialValue: contact?.name ?? "")
         _role = State(initialValue: contact?.role ?? .owner)
         _company = State(initialValue: contact?.company ?? "")
@@ -352,8 +550,18 @@ private struct ProjectContactDatabaseEditSheet: View {
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
+                    ProjectTagMultiSelectView(
+                        projects: projects,
+                        primaryProjectId: projectId,
+                        selectedProjectIDs: $relatedProjectIDs
+                    )
                 }
                 Section("联系人") {
+                    Button {
+                        showSystemContactPicker = true
+                    } label: {
+                        Label("从通讯录导入", systemImage: "person.badge.plus")
+                    }
                     TextField("姓名/单位", text: $name)
                     ProjectContactRoleField(role: $role)
                     TextField("公司/班组", text: $company)
@@ -389,6 +597,14 @@ private struct ProjectContactDatabaseEditSheet: View {
                     dismiss()
                 }
             }
+            .sheet(isPresented: $showSystemContactPicker) {
+                SystemContactPicker(
+                    onSelect: { imported in
+                        applyImportedContact(imported)
+                    },
+                    onCancel: {}
+                )
+            }
         }
     }
 
@@ -400,11 +616,30 @@ private struct ProjectContactDatabaseEditSheet: View {
         let targetProjectId = projectId ?? initialProjectId ?? projects.first?.id ?? UUID()
         var value = contact ?? ProjectContact(projectId: targetProjectId, name: "")
         value.projectId = targetProjectId
+        value.relatedProjectIds = Array(relatedProjectIDs.filter { $0 != targetProjectId })
         value.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
         value.role = role
         value.company = company.trimmingCharacters(in: .whitespacesAndNewlines)
         value.phone = phone.trimmingCharacters(in: .whitespacesAndNewlines)
         value.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         return value
+    }
+
+    private func applyImportedContact(_ imported: ImportedSystemContact) {
+        showSystemContactPicker = false
+        if !imported.fullName.isEmpty { name = imported.fullName }
+        if !imported.organizationName.isEmpty { company = imported.organizationName }
+        if !imported.primaryPhone.isEmpty { phone = imported.primaryPhone }
+        appendSparePhones(imported)
+    }
+
+    private func appendSparePhones(_ imported: ImportedSystemContact) {
+        guard imported.phoneNumbers.count > 1 else { return }
+        let spareText = imported.phoneNumbers.dropFirst().joined(separator: "、")
+        guard !spareText.isEmpty else { return }
+        let marker = "备用号码：\(spareText)"
+        if note.contains(marker) { return }
+        note = note.trimmingCharacters(in: .whitespacesAndNewlines)
+        note = note.isEmpty ? marker : "\(note)\n\(marker)"
     }
 }

@@ -97,9 +97,6 @@ struct QuickNoteView: View {
                             Circle()
                                 .fill(.appWarning)
                                 .frame(width: 7, height: 7)
-                            Text("恢复草稿")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.appWarning)
                         }
                     }
                 }
@@ -179,16 +176,10 @@ struct QuickNoteView: View {
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
                     if hasRecoveredDraft && canPublishDraft {
-                        HStack(spacing: 4) {
-                            Circle()
-                                .fill(.appWarning)
-                                .frame(width: 7, height: 7)
-                            Text("恢复草稿")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(.appWarning)
-                        }
-                        .accessibilityElement(children: .combine)
-                        .accessibilityLabel("存在未发布草稿")
+                        Circle()
+                            .fill(.appWarning)
+                            .frame(width: 7, height: 7)
+                            .accessibilityHidden(true)
                     }
                     Button("清空", role: .destructive) {
                         showClearComposerConfirm = true

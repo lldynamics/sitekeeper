@@ -5,14 +5,13 @@ enum ToolboxDestination: String, Hashable {
     case materialCenter
     case files
     case calculators
-    case bookkeeping
     case quotation
     case labor
     case contacts
     case methods
+    case cadViewer
     case export
     case template
-    case supplierDatabase
 }
 
 struct QuickToolEntry: Identifiable {
@@ -35,7 +34,7 @@ struct QuickToolEntry: Identifiable {
 
 enum ToolboxCatalog {
     static let defaultQuickToolIDs: [String] = [
-        "watermark", "material-center", "files", "calculators", "bookkeeping"
+        "watermark", "material-center", "files", "calculators"
     ]
 
     static let practicalTools: [QuickToolEntry] = [
@@ -43,10 +42,10 @@ enum ToolboxCatalog {
         QuickToolEntry(id: "material-center", icon: "shippingbox.fill", title: "材料中心", desc: "仓库、材料单和材料库统一入口", color: .appPrimaryAction, destination: .materialCenter),
         QuickToolEntry(id: "files", icon: "folder.fill", title: "全局文件检索", desc: "跨项目搜索照片、图纸、票据与随手记附件", color: .appDoc, destination: .files),
         QuickToolEntry(id: "calculators", icon: "bolt.square.fill", title: "快速计算", desc: "按电气、照明、土建、通用分类选择工具", color: .appPrimaryAction, destination: .calculators),
-        QuickToolEntry(id: "bookkeeping", icon: "receipt.fill", title: "记账", desc: "按项目快速进入收支记账", color: .appPrimaryAction, destination: .bookkeeping),
         QuickToolEntry(id: "quotation", icon: "doc.text.fill", title: "预结算信息", desc: "版本、状态和客户确认信息", color: .appQuotation, destination: .quotation),
-        QuickToolEntry(id: "labor", icon: "person.2.fill", title: "人工/辅材记录", desc: "工种、单价、金额和结算状态", color: .appSuccess, destination: .labor),
+        QuickToolEntry(id: "labor", icon: "person.2.fill", title: "人工记录", desc: "工种、人数、工价、金额和结算状态", color: .appSuccess, destination: .labor),
         QuickToolEntry(id: "contacts", icon: "person.crop.rectangle.stack.fill", title: "联系人", desc: "汇总所有项目联系人，按项目筛选", color: .appPeople, destination: .contacts),
+        QuickToolEntry(id: "cad-viewer", icon: "compass.drawing", title: "CAD 看图", desc: "最近浏览图纸，按项目查看 PDF / DWG / DXF", color: .appDoc, destination: .cadViewer),
         QuickToolEntry(id: "methods", icon: "hammer.fill", title: "施工工艺库", desc: "标准做法、质量要求和安全注意", color: .appSuccess, destination: .methods)
     ]
 }

@@ -873,7 +873,14 @@ final class DataStore {
         lightingCircuitPlans.removeAll { $0.projectId == projectId }
         siteTodos.removeAll { $0.projectId == projectId }
         projectDrawings.removeAll { $0.projectId == projectId }
-        projectContacts.removeAll { $0.projectId == projectId }
+        projectContacts = projectContacts.compactMap { contact in
+            if contact.projectId == projectId {
+                return nil
+            }
+            var cleaned = contact
+            cleaned.relatedProjectIds.removeAll { $0 == projectId }
+            return cleaned
+        }
         projectFinancialRecords.removeAll { $0.projectId == projectId }
         projectDocuments.removeAll { $0.projectId == projectId }
         quickNotes.removeAll { $0.projectId == projectId }

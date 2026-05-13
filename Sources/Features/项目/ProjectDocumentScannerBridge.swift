@@ -16,11 +16,20 @@ enum CameraWatermarkTemplate: String, CaseIterable {
         case .receipt: "票据留存"
         }
     }
+
+    var icon: String {
+        switch self {
+        case .constructionLog: "book.pages.fill"
+        case .rectification: "wrench.adjustable.fill"
+        case .paymentProof: "doc.text.magnifyingglass"
+        case .receipt: "receipt.fill"
+        }
+    }
 }
 
 struct CameraWatermarkContext {
     var projectName: String?
-    var template: String = CameraWatermarkTemplate.constructionLog.rawValue
+    var template: CameraWatermarkTemplate = .constructionLog
     var tag: String = ""
     var photographer: String = ""
     var locationText: String = ""
@@ -31,11 +40,7 @@ struct CameraWatermarkContext {
             "工程: \(normalizedProject.isEmpty ? "未指定项目" : normalizedProject)",
             "时间: \(Formatters.dateTime.string(from: capturedAt))"
         ]
-        let normalizedTemplate = template.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !normalizedTemplate.isEmpty {
-            let displayTemplate = CameraWatermarkTemplate(rawValue: normalizedTemplate)?.displayName ?? normalizedTemplate
-            result.append("模板: \(displayTemplate)")
-        }
+        result.append("模板: \(template.displayName)")
         if !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             result.append("标签: \(tag)")
         }

@@ -4,7 +4,6 @@ import QuickLook
 struct ProjectFileBrowserView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @AppStorage(UserPreferenceKeys.hasSeenProjectFileRootGuide) private var hasSeenRootGuide = false
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
     @State private var searchResultIDs: [String] = []
@@ -13,8 +12,6 @@ struct ProjectFileBrowserView: View {
     @State private var fileSearchService = ProjectFileSearchIndexService()
     @State private var isBuildingFileIndex = false
     @State private var isSearchingFiles = false
-    @State private var shouldShowRootGuide = false
-    @State private var showRootGuideDetail = false
     @State private var previewURL: URL?
     @State private var selectedProjectId: UUID?
     @State private var selectedCategory: ProjectFileCategory = .images
@@ -246,31 +243,8 @@ struct ProjectFileBrowserView: View {
                 compactBrowserLayout
             }
         }
-        .sheet(isPresented: $showRootGuideDetail) {
-            NavigationStack {
-                List {
-                    Section {
-                        ProjectFileGuidePanel()
-                    }
-                }
-                .navigationTitle("全局文件检索指引")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("完成") {
-                            showRootGuideDetail = false
-                        }
-                    }
-                }
-            }
-        }
         .quickLookPreview($previewURL)
         .onAppear {
-            let shouldAutoShowGuide = !hasSeenRootGuide
-            shouldShowRootGuide = shouldAutoShowGuide
-            if shouldAutoShowGuide {
-                hasSeenRootGuide = true
-            }
             syncSplitSelectionIfNeeded()
         }
         .task(id: fileSearchExecutionKey) {
@@ -292,26 +266,6 @@ struct ProjectFileBrowserView: View {
 
     private var compactBrowserLayout: some View {
         List {
-            if shouldShowRootGuide {
-                Section {
-                    ProjectFileGuideHintStrip(
-                        title: "全局文件检索指引",
-                        subtitle: "点 ? 查看快速步骤",
-                        isExpanded: false,
-                        onToggleExpand: {
-                            hasSeenRootGuide = true
-                            showRootGuideDetail = true
-                        },
-                        onDismiss: {
-                            hasSeenRootGuide = true
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                shouldShowRootGuide = false
-                            }
-                        }
-                    )
-                }
-            }
-
             if !normalizedQuery.isEmpty {
                 Section("文件搜索结果") {
                     if isSearchingFiles || isBuildingFileIndex || normalizedQuery != normalizedDebouncedQuery {
@@ -428,43 +382,12 @@ struct ProjectFileBrowserView: View {
         }
         .navigationTitle("全局文件检索")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    hasSeenRootGuide = true
-                    showRootGuideDetail = true
-                } label: {
-                    Image(systemName: "questionmark.circle")
-                }
-                .accessibilityLabel("查看使用提示")
-            }
-        }
         .searchable(text: $searchText, prompt: "搜索全部项目或文件")
     }
 
     private var splitBrowserLayout: some View {
         NavigationSplitView {
             List {
-                if shouldShowRootGuide {
-                    Section {
-                        ProjectFileGuideHintStrip(
-                            title: "全局文件检索指引",
-                            subtitle: "点 ? 查看快速步骤",
-                            isExpanded: false,
-                            onToggleExpand: {
-                                hasSeenRootGuide = true
-                                showRootGuideDetail = true
-                            },
-                            onDismiss: {
-                                hasSeenRootGuide = true
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    shouldShowRootGuide = false
-                                }
-                            }
-                        )
-                    }
-                }
-
                 if !normalizedQuery.isEmpty {
                     Section("文件搜索结果") {
                         if isSearchingFiles || isBuildingFileIndex || normalizedQuery != normalizedDebouncedQuery {
@@ -527,17 +450,6 @@ struct ProjectFileBrowserView: View {
             }
             .navigationTitle("全局文件检索")
             .searchable(text: $searchText, prompt: "搜索全部项目或文件")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        hasSeenRootGuide = true
-                        showRootGuideDetail = true
-                    } label: {
-                        Image(systemName: "questionmark.circle")
-                    }
-                    .accessibilityLabel("查看使用提示")
-                }
-            }
         } content: {
             List {
                 if let selectedProject {

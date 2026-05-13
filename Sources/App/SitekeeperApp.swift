@@ -11,6 +11,7 @@ struct SitekeeperApp: App {
         if UITestLaunchConfig.shouldResetLocalState {
             UITestLaunchConfig.resetLocalState()
         }
+        CADRendererBootstrap.configure()
         _store = State(initialValue: DataStore())
     }
 

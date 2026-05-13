@@ -15,6 +15,7 @@ targets:
     dependencies:
       - target: sitekeeperWidgetExtension
         embed: true
+      - target: LibreDWGBridge
     settings:
       base:
         SWIFT_VERSION: "5.0"
@@ -29,6 +30,7 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜
         INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
         INFOPLIST_KEY_NSCameraUsageDescription: 用于扫描项目发票、收据、施工资料和随手记拍照。
+        INFOPLIST_KEY_NSContactsUsageDescription: 用于从系统通讯录导入项目联系人，并支持电话短信联络。
         INFOPLIST_KEY_NSLocationWhenInUseUsageDescription: 用于在水印照片中带入拍摄位置。
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: 用于从相册选择项目照片、票据、施工资料和随手记素材。
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 用于将水印现场照片保存到系统相册。
@@ -42,6 +44,8 @@ targets:
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        OTHER_LDFLAGS:
+          - -liconv
 
   sitekeeperWidgetExtension:
     type: app-extension
@@ -63,6 +67,31 @@ targets:
         INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜Widget
         ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: widgetBackground
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.chengjinfang.sitekeeper
+
+  LibreDWGBridge:
+    type: library.static
+    platform: iOS
+    sources:
+      - path: Packages/LibreDWGBridge/Sources/LibreDWGBridge
+      - path: Packages/LibreDWGBridge/Sources/LibreDWGCBridge
+      - path: Packages/LibreDWGBridge/Vendor/LibreDWG/src
+        excludes:
+          - "*.h"
+    settings:
+      base:
+        SWIFT_VERSION: "5.0"
+        PRODUCT_NAME: LibreDWGBridge
+        PRODUCT_MODULE_NAME: LibreDWGBridge
+        DEFINES_MODULE: YES
+        SKIP_INSTALL: YES
+        SWIFT_OBJC_BRIDGING_HEADER: Packages/LibreDWGBridge/Sources/LibreDWGBridge/LibreDWGBridge-Bridging-Header.h
+        HEADER_SEARCH_PATHS:
+          - $(SRCROOT)/Packages/LibreDWGBridge/Sources/LibreDWGCBridge/include
+          - $(SRCROOT)/Packages/LibreDWGBridge/Vendor/LibreDWG/include
+          - $(SRCROOT)/Packages/LibreDWGBridge/Vendor/LibreDWG/src
+        GCC_PREPROCESSOR_DEFINITIONS:
+          - DISABLE_DXF=1
+          - DISABLE_JSON=1
 
   sitekeeperTests:
     type: bundle.unit-test

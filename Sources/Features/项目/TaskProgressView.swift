@@ -123,6 +123,7 @@ struct TaskProgressView: View {
                     Image(systemName: "plus")
                         .visibleIconStyle()
                 }
+                .buttonStyle(.appIcon())
                 .accessibilityLabel("新建进度任务")
             }
         }

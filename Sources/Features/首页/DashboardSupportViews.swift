@@ -16,7 +16,6 @@ enum DashboardDestination {
     case warehouse(project: Project)
     case dataManagement(initialTab: String? = nil)
     case projectContacts(focusedContactId: UUID? = nil)
-    case supplierDatabase(focusedSupplierId: UUID? = nil)
     case materialPriceDatabase(focusedEntryId: UUID? = nil)
     case constructionMethodLibrary(focusedMethodId: UUID? = nil)
     case materialPriceSpikeDetails
@@ -61,8 +60,6 @@ func dashboardDestinationView(_ destination: DashboardDestination) -> some View 
         DataManagementView(initialTab: initialTab)
     case .projectContacts(let focusedContactId):
         ProjectContactDatabaseView(focusedContactId: focusedContactId)
-    case .supplierDatabase(let focusedSupplierId):
-        SupplierDatabaseView(focusedSupplierId: focusedSupplierId)
     case .materialPriceDatabase(let focusedEntryId):
         MaterialPriceDatabaseView(focusedEntryId: focusedEntryId)
     case .constructionMethodLibrary(let focusedMethodId):

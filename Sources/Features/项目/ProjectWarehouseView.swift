@@ -40,8 +40,9 @@ struct ProjectWarehouseOverviewView: View {
             Button {
                 showAdd = true
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: "plus").visibleIconStyle()
             }
+            .buttonStyle(.appIcon())
             .accessibilityLabel("新增出入库记录")
             .accessibilityHint("打开出入库表单")
         }

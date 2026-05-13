@@ -86,7 +86,7 @@ final class ProjectStore {
     }
     private(set) var projectContacts: [ProjectContact] = [] {
         didSet {
-            projectContactsByProjectID = Self.groupedByProjectID(projectContacts) { $0.projectId }
+            projectContactsByProjectID = Self.groupedContactsByLinkedProjectID(projectContacts)
         }
     }
     private(set) var projectFinancialRecords: [ProjectFinancialRecord] = [] {
@@ -131,6 +131,16 @@ final class ProjectStore {
     private(set) var projectActivityIndexByID: [UUID: ProjectActivitySummary] = [:]
     private(set) var todayLogProjectIDs: Set<UUID> = []
     private var todayLogCacheDateKey = ""
+
+    private static func groupedContactsByLinkedProjectID(_ contacts: [ProjectContact]) -> [UUID: [ProjectContact]] {
+        var grouped: [UUID: [ProjectContact]] = [:]
+        for contact in contacts {
+            for projectID in contact.allProjectIDs {
+                grouped[projectID, default: []].append(contact)
+            }
+        }
+        return grouped
+    }
 
     init() {
         rebuildProjectActivityIndex()

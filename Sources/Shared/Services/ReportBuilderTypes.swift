@@ -46,6 +46,10 @@ extension UTType {
     static var zipArchive: UTType {
         UTType.zip
     }
+
+    static var vCard: UTType {
+        UTType(filenameExtension: "vcf", conformingTo: .data) ?? .data
+    }
 }
 
 struct QuotationDocumentMeta {

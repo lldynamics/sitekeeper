@@ -70,7 +70,7 @@ private enum DataManagementTab: String, CaseIterable {
     }
 
     static func from(route: String?) -> Self {
-        guard let route else { return .export }
+        guard let route else { return .backup }
         switch route {
         case "导出", "导出数据":
             return .export
@@ -83,7 +83,7 @@ private enum DataManagementTab: String, CaseIterable {
         case "存储清理", "存储", "空间清理":
             return .healthAndCleanup
         default:
-            return DataManagementTab(rawValue: route) ?? .export
+            return DataManagementTab(rawValue: route) ?? .backup
         }
     }
 }

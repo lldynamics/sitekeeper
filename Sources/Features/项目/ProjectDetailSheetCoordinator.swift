@@ -6,6 +6,7 @@ struct ProjectDetailEditingCoordinatorDependencies<AttachmentSheet: View> {
     let projects: [Project]
     let constructionMethods: [ConstructionMethod]
     let relatedLogs: [DailyLog]
+    let relatedDrawings: [ProjectDrawing]
     let relatedFinancialRecords: [ProjectFinancialRecord]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let attachmentSheetBuilder: (ProjectFinancialRecord) -> AttachmentSheet
@@ -128,6 +129,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
     let projects: [Project]
     let constructionMethods: [ConstructionMethod]
     let relatedLogs: [DailyLog]
+    let relatedDrawings: [ProjectDrawing]
     let relatedFinancialRecords: [ProjectFinancialRecord]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let attachmentSheetBuilder: (ProjectFinancialRecord) -> AttachmentSheet
@@ -196,7 +198,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
                 }
             }
             .sheet(item: $editingDrawing) { drawing in
-                ProjectDrawingEditSheet(drawing: drawing) { updated in
+                ProjectDrawingEditSheet(drawing: drawing, relatedDrawings: relatedDrawings) { updated in
                     onSaveDrawing(updated)
                 } onDelete: { target in
                     onDeleteDrawing(target)
@@ -331,6 +333,7 @@ extension View {
                 projects: dependencies.projects,
                 constructionMethods: dependencies.constructionMethods,
                 relatedLogs: dependencies.relatedLogs,
+                relatedDrawings: dependencies.relatedDrawings,
                 relatedFinancialRecords: dependencies.relatedFinancialRecords,
                 linkedDocuments: dependencies.linkedDocuments,
                 attachmentSheetBuilder: dependencies.attachmentSheetBuilder,

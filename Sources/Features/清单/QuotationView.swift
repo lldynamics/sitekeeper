@@ -17,6 +17,22 @@ struct QuotationView: View {
         case discountRate
     }
 
+    private enum QuotationExportFormat: String, CaseIterable, Identifiable {
+        case pdf
+        case excel
+
+        var id: String { rawValue }
+
+        var displayName: String {
+            switch self {
+            case .pdf:
+                return "PDF"
+            case .excel:
+                return "Excel 表格"
+            }
+        }
+    }
+
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.companyName) private var companyName = ""
@@ -57,6 +73,7 @@ struct QuotationView: View {
     @State private var quoteCustomerName = ""
     @State private var quoteProjectAddress = ""
     @State private var quoteSignerName = "项目负责人"
+    @State private var quoteExportFormat: QuotationExportFormat = .pdf
     @State private var operationMessage: String?
     @FocusState private var quoteFormFocusedField: QuoteFormField?
     @FocusState private var generateQuoteFocusedField: GenerateQuoteField?
@@ -127,11 +144,6 @@ struct QuotationView: View {
                         LabeledContent(summary.name, value: ReportBuilder.money(summary.total))
                     }
                 }
-                if let projectFilter, store.projects.contains(where: { $0.id == projectFilter }) {
-                    Button("将当前筛选报价合计写入项目合同金额") {
-                        applyGrandTotalToProjectContract()
-                    }
-                }
             }
 
             ForEach(filtered) { item in
@@ -178,7 +190,7 @@ struct QuotationView: View {
         .searchable(text: $searchText, prompt: "搜索报价名称")
         .navigationTitle("预结算信息")
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
                         showGenerateSheet = true
@@ -188,7 +200,7 @@ struct QuotationView: View {
                     Button {
                         openQuotationExportSheet()
                     } label: {
-                        Label("导出当前报价 PDF", systemImage: "doc.richtext")
+                        Label("导出当前报价", systemImage: "doc.richtext")
                     }
                     Divider()
                     ForEach(store.materialItems) { m in
@@ -208,6 +220,14 @@ struct QuotationView: View {
                 .buttonStyle(.appIcon())
                 Button { openAdd() } label: { Image(systemName: "plus").visibleIconStyle() }
                     .accessibilityLabel("新建报价")
+            }
+            if let projectFilter, store.projects.contains(where: { $0.id == projectFilter }) {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("写入合同") {
+                        applyGrandTotalToProjectContract()
+                    }
+                    .accessibilityLabel("将当前筛选报价合计写入项目合同金额")
+                }
             }
         }
         .sheet(isPresented: $showForm) {
@@ -504,13 +524,43 @@ struct QuotationView: View {
     }
 
     private func exportQuotationPDF() {
+        let meta = quotationDocumentMeta()
+        let data = ReportBuilder.makeQuotationPDF(title: "报价单", items: filtered, projects: store.projects, meta: meta)
+        exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "报价单.pdf")
+        AppHaptics.impact(.light)
+        showExporter = true
+    }
+
+    private func exportQuotationExcel() {
+        let meta = quotationDocumentMeta()
+        let data = ReportBuilder.makeQuotationExcelHTML(
+            title: "报价单",
+            items: filtered,
+            projects: store.projects,
+            meta: meta
+        )
+        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: "报价单表格.xls")
+        AppHaptics.impact(.light)
+        showExporter = true
+    }
+
+    private func performQuotationExport() {
+        switch quoteExportFormat {
+        case .pdf:
+            exportQuotationPDF()
+        case .excel:
+            exportQuotationExcel()
+        }
+    }
+
+    private func quotationDocumentMeta() -> QuotationDocumentMeta {
         let validUntil = Formatters.date.string(
             from: Calendar.current.date(byAdding: .day, value: max(1, quoteValidityDays), to: Date()) ?? Date()
         )
         let company = companyName.trimmingCharacters(in: .whitespacesAndNewlines)
         let phone = companyPhone.trimmingCharacters(in: .whitespacesAndNewlines)
         let address = companyAddress.trimmingCharacters(in: .whitespacesAndNewlines)
-        let meta = QuotationDocumentMeta(
+        return QuotationDocumentMeta(
             companyName: company.isEmpty ? "未填写" : company,
             companyPhone: phone.isEmpty ? "未填写" : phone,
             companyAddress: address.isEmpty ? "未填写" : address,
@@ -519,10 +569,6 @@ struct QuotationView: View {
             validUntil: validUntil,
             signerName: quoteSignerName.isEmpty ? "项目负责人" : quoteSignerName
         )
-        let data = ReportBuilder.makeQuotationPDF(title: "报价单", items: filtered, projects: store.projects, meta: meta)
-        exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "报价单.pdf")
-        AppHaptics.impact(.light)
-        showExporter = true
     }
 
     private var quotationExportForm: some View {
@@ -547,14 +593,22 @@ struct QuotationView: View {
                             .foregroundStyle(.appWarning)
                     }
                 }
+                Section("导出格式") {
+                    Picker("格式", selection: $quoteExportFormat) {
+                        ForEach(QuotationExportFormat.allCases) { format in
+                            Text(format.displayName).tag(format)
+                        }
+                    }
+                    .pickerStyle(.segmented)
+                }
                 Section {
-                    Button("生成 PDF") {
+                    Button("导出\(quoteExportFormat.displayName)") {
                         showQuoteExportSheet = false
-                        exportQuotationPDF()
+                        performQuotationExport()
                     }
                     .frame(maxWidth: .infinity)
                     .fontWeight(.semibold)
-                    .disabled(filtered.isEmpty || !isCompanyProfileComplete)
+                    .disabled(filtered.isEmpty || (quoteExportFormat == .pdf && !isCompanyProfileComplete))
                 }
             }
             .navigationTitle("报价单模板")

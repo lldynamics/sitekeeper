@@ -9,6 +9,7 @@ struct ProfileTabView: View {
     @AppStorage(UserPreferenceKeys.autoSave) private var autoSaveEnabled = true
     @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
+    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.dropboxBlue.rawValue
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @State private var languageSwitchFeedback = ""
@@ -101,6 +102,13 @@ struct ProfileTabView: View {
                 Toggle("公制单位", isOn: $useMetric)
                 Toggle("自动保存记录", isOn: $autoSaveEnabled)
 
+                Picker("配色", selection: $appTheme) {
+                    ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                        Text(theme.displayName).tag(theme.rawValue)
+                    }
+                }
+                .pickerStyle(.menu)
+
                 Picker("主题", selection: $appearanceMode) {
                     ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
                         Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
@@ -124,7 +132,7 @@ struct ProfileTabView: View {
 
             Section("数据安全") {
                 backupStatusCard
-                NavigationLink { DataManagementView(initialTab: "导出") } label: {
+                NavigationLink { DataManagementView(initialTab: "备份") } label: {
                     HStack(spacing: AppSpacing.tight) {
                         Image(systemName: "externaldrive")
                             .foregroundStyle(Color.appPrimaryAction)

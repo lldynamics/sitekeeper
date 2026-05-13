@@ -532,24 +532,56 @@ struct DashboardView: View {
                         spacing: AppSpacing.tight * 0.75
                     ) {
                         ForEach(activities, id: \.id) { activity in
-                            TimelineActivityRow(
-                                activity: activity,
-                                projectName: projectName(activity.projectId)
-                            )
+                            dashboardTimelineRow(activity)
                         }
                     }
                 } else {
                     VStack(spacing: AppSpacing.tight * 0.75) {
                         ForEach(activities, id: \.id) { activity in
-                            TimelineActivityRow(
-                                activity: activity,
-                                projectName: projectName(activity.projectId)
-                            )
+                            dashboardTimelineRow(activity)
                         }
                     }
                 }
             }
         }
+    }
+
+    private func dashboardTimelineRow(_ activity: TimelineActivity) -> some View {
+        NavigationLink {
+            dashboardDestinationView(dashboardTimelineDestination(for: activity))
+        } label: {
+            TimelineActivityRow(
+                activity: activity,
+                projectName: projectName(activity.projectId),
+                showsChevron: true
+            )
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(TapGesture().onEnded {
+            if let projectId = activity.projectId {
+                selectedProjectIdRaw = projectId.uuidString
+            }
+        })
+    }
+
+    private func dashboardTimelineDestination(for activity: TimelineActivity) -> DashboardDestination {
+        guard let projectId = activity.projectId else {
+            return .projectList()
+        }
+        switch activity.type {
+        case .log:
+            return .dailyLog(initialProjectId: projectId, focusedLogId: activityRecordID(activity, prefix: "log"))
+        case .todo:
+            return .siteTodo(initialProjectId: projectId, focusedTodoId: activityRecordID(activity, prefix: "todo"))
+        default:
+            return .projectDetail(projectId: projectId, initialMode: activity.type.projectDetailMode)
+        }
+    }
+
+    private func activityRecordID(_ activity: TimelineActivity, prefix: String) -> UUID? {
+        let marker = "\(prefix)-"
+        guard activity.id.hasPrefix(marker) else { return nil }
+        return UUID(uuidString: String(activity.id.dropFirst(marker.count)))
     }
 
     private var overduePanel: some View {

@@ -8,6 +8,29 @@ struct ProjectTimelineItem: Identifiable {
     let subtitle: String
     let systemImage: String
     let tint: Color
+
+    /// 点击时间线条目时应进入的项目详情模块。
+    let targetMode: ProjectDetailMode
+
+    init(
+        id: String,
+        date: String,
+        type: String,
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        tint: Color,
+        targetMode: ProjectDetailMode = .timeline
+    ) {
+        self.id = id
+        self.date = date
+        self.type = type
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.tint = tint
+        self.targetMode = targetMode
+    }
 }
 
 enum ProjectTimelineBuilder {
@@ -40,7 +63,8 @@ enum ProjectTimelineBuilder {
                     methodSummary
                 ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "book.pages.fill",
-                tint: .appSuccess
+                tint: .appSuccess,
+                targetMode: .records
             )
         }
 
@@ -52,7 +76,8 @@ enum ProjectTimelineBuilder {
                 title: $0.title,
                 subtitle: "\(Int($0.clampedCompletion * 100))% · \($0.startDate)-\($0.dueDate)",
                 systemImage: "checklist.checked",
-                tint: .appPrimaryAction
+                tint: .appPrimaryAction,
+                targetMode: .records
             )
         }
 
@@ -70,7 +95,8 @@ enum ProjectTimelineBuilder {
                     methodSummary
                 ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: $0.isDone ? "checkmark.circle.fill" : "checklist",
-                tint: $0.isDone ? .appSuccess : .appPrimaryAction
+                tint: $0.isDone ? .appSuccess : .appPrimaryAction,
+                targetMode: .records
             )
         }
 
@@ -82,7 +108,8 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: [$0.specification, "\($0.quantity)\($0.unit)", $0.purchaseStatus.displayName].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "shippingbox.fill",
-                tint: .appPrimaryAction
+                tint: .appPrimaryAction,
+                targetMode: .finance
             )
         }
 
@@ -94,7 +121,8 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: [$0.version, $0.fileType.uppercased(), $0.isCurrentVersion ? String(localized: "当前版本") : String(localized: "历史版本")].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "doc.richtext",
-                tint: .appDoc
+                tint: .appDoc,
+                targetMode: .assets
             )
         }
 
@@ -106,7 +134,8 @@ enum ProjectTimelineBuilder {
                 title: $0.name,
                 subtitle: "\($0.status.displayName) · \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0)))",
                 systemImage: "doc.text.fill",
-                tint: .appPrimaryAction
+                tint: .appPrimaryAction,
+                targetMode: .finance
             )
         }
 
@@ -118,7 +147,8 @@ enum ProjectTimelineBuilder {
                 title: $0.workType.isEmpty ? String(localized: "人工记录") : $0.workType,
                 subtitle: "\($0.workers) \(String(localized: "人")) · \($0.hours) \(String(localized: "小时")) · \(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))",
                 systemImage: "person.2.fill",
-                tint: .appSuccess
+                tint: .appSuccess,
+                targetMode: .finance
             )
         }
 
@@ -130,7 +160,8 @@ enum ProjectTimelineBuilder {
                 title: "\($0.normalizedDirection.displayName) \(ReportBuilder.money($0.amountValue.doubleValue))",
                 subtitle: [$0.normalizedCategory.displayName, $0.normalizedStatus.displayName, $0.counterparty].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "receipt.fill",
-                tint: $0.normalizedDirection == .income ? .appSuccess : .appRisk
+                tint: $0.normalizedDirection == .income ? .appSuccess : .appRisk,
+                targetMode: .finance
             )
         }
 
@@ -146,7 +177,8 @@ enum ProjectTimelineBuilder {
                     methodSummary
                 ].filter { !$0.isEmpty }.joined(separator: " · "),
                 systemImage: "doc.viewfinder.fill",
-                tint: .appDoc
+                tint: .appDoc,
+                targetMode: .assets
             )
         }
 
@@ -158,7 +190,8 @@ enum ProjectTimelineBuilder {
                 title: "\($0.normalizedMovementType.displayName) \($0.materialName)",
                 subtitle: "\($0.quantity)\($0.unit) · \($0.counterparty)",
                 systemImage: "shippingbox.and.arrow.backward.fill",
-                tint: .appPrimaryAction
+                tint: .appPrimaryAction,
+                targetMode: .finance
             )
         }
 
@@ -170,7 +203,8 @@ enum ProjectTimelineBuilder {
                 title: $0.title.isEmpty ? String(localized: "随手记") : $0.title,
                 subtitle: $0.content,
                 systemImage: "square.and.pencil",
-                tint: .appPrimaryAction
+                tint: .appPrimaryAction,
+                targetMode: .records
             )
         }
 
@@ -190,42 +224,82 @@ enum ProjectTimelineBuilder {
 
 struct ProjectTimelineView: View {
     let items: [ProjectTimelineItem]
+    var onSelect: ((ProjectTimelineItem) -> Void)?
 
     var body: some View {
         ForEach(items) { item in
-            HStack(alignment: .top, spacing: 12) {
-                Image(systemName: item.systemImage)
-                    .foregroundStyle(item.tint)
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 8) {
-                        Text(item.type)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(item.tint)
-                        Text(item.date.isEmpty ? String(localized: "未填写日期") : item.date)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                    Text(item.title)
-                        .font(.callout.weight(.medium))
-                        .lineLimit(2)
-                    if !item.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(item.subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(3)
-                    }
+            if let onSelect {
+                Button {
+                    onSelect(item)
+                } label: {
+                    row(item, showsChevron: true)
                 }
-                .padding(.vertical, 4)
+                .buttonStyle(.plain)
+                .accessibilityHint(String(localized: "打开\(item.targetMode.displayName)"))
+            } else {
+                row(item, showsChevron: false)
             }
         }
+    }
+
+    private func row(_ item: ProjectTimelineItem, showsChevron: Bool) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: item.systemImage)
+                .foregroundStyle(item.tint)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(item.type)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(item.tint)
+                    Text(item.date.isEmpty ? String(localized: "未填写日期") : item.date)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                Text(item.title)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(2)
+                if !item.subtitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    Text(item.subtitle)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+            }
+            .padding(.vertical, 4)
+            Spacer(minLength: 8)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 8)
+            }
+        }
+        .contentShape(Rectangle())
     }
 }
 
 struct ProjectTimelineSectionView: View {
     let items: [ProjectTimelineItem]
+    let showsFilters: Bool
+    let previewLimit: Int?
+    var onSelect: ((ProjectTimelineItem) -> Void)?
     @State private var typeFilter = ProjectTimelineTypeFilter.all
     @State private var rangeFilter: ProjectTimelineRangeFilter = .all
+    @State private var showsAllItems = false
+
+    init(
+        items: [ProjectTimelineItem],
+        showsFilters: Bool = true,
+        previewLimit: Int? = nil,
+        onSelect: ((ProjectTimelineItem) -> Void)? = nil
+    ) {
+        self.items = items
+        self.showsFilters = showsFilters
+        self.previewLimit = previewLimit
+        self.onSelect = onSelect
+    }
 
     private var typeOptions: [String] {
         [ProjectTimelineTypeFilter.all] + Array(Set(items.map(\.type))).sorted()
@@ -238,21 +312,35 @@ struct ProjectTimelineSectionView: View {
         }
     }
 
+    private var visibleItems: [ProjectTimelineItem] {
+        guard let previewLimit, previewLimit > 0, !showsAllItems else {
+            return filteredItems
+        }
+        return Array(filteredItems.prefix(previewLimit))
+    }
+
+    private var canToggleExpand: Bool {
+        guard let previewLimit, previewLimit > 0 else { return false }
+        return filteredItems.count > previewLimit
+    }
+
     var body: some View {
         Group {
-            Section("时间线筛选") {
-                Picker("类型", selection: $typeFilter) {
-                    ForEach(typeOptions, id: \.self) { type in
-                        Text(type).tag(type)
+            if showsFilters {
+                Section("时间线筛选") {
+                    Picker("类型", selection: $typeFilter) {
+                        ForEach(typeOptions, id: \.self) { type in
+                            Text(type).tag(type)
+                        }
                     }
-                }
 
-                Picker("时间", selection: $rangeFilter) {
-                    ForEach(ProjectTimelineRangeFilter.allCases, id: \.self) { range in
-                        Text(range.displayName).tag(range)
+                    Picker("时间", selection: $rangeFilter) {
+                        ForEach(ProjectTimelineRangeFilter.allCases, id: \.self) { range in
+                            Text(range.displayName).tag(range)
+                        }
                     }
+                    .pickerStyle(.segmented)
                 }
-                .pickerStyle(.segmented)
             }
 
             Section("项目时间线 (\(filteredItems.count))") {
@@ -269,9 +357,28 @@ struct ProjectTimelineSectionView: View {
                         description: Text("调整类型或时间筛选后再查看。")
                     )
                 } else {
-                    ProjectTimelineView(items: filteredItems)
+                    ProjectTimelineView(items: visibleItems, onSelect: onSelect)
+                    if canToggleExpand {
+                        Button {
+                            showsAllItems.toggle()
+                        } label: {
+                            Label(
+                                showsAllItems ? "收起时间线" : "查看全部时间线",
+                                systemImage: showsAllItems ? "chevron.up.circle" : "chevron.down.circle"
+                            )
+                            .font(.caption.weight(.semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Color.appPrimaryAction)
+                    }
                 }
             }
+        }
+        .onChange(of: typeFilter) { _, _ in
+            showsAllItems = false
+        }
+        .onChange(of: rangeFilter) { _, _ in
+            showsAllItems = false
         }
     }
 }

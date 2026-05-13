@@ -361,13 +361,6 @@ extension DashboardView {
                 destination: .dailyLog(autoOpenComposer: true)
             )
         )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: String(localized: "打开日志列表"),
-                systemImage: "list.bullet",
-                destination: .dailyLog()
-            )
-        )
         return actions
     }
 
@@ -387,13 +380,6 @@ extension DashboardView {
                 title: String(localized: "直接新建待办"),
                 systemImage: "plus.circle",
                 destination: .siteTodo(autoOpenComposer: true)
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: String(localized: "打开待办列表"),
-                systemImage: "list.bullet",
-                destination: .siteTodo()
             )
         )
         return actions
@@ -417,13 +403,6 @@ extension DashboardView {
                 destination: .watermarkCamera(initialProjectId: currentProject?.id)
             )
         )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: String(localized: "打开施工日志"),
-                systemImage: "book.pages.fill",
-                destination: .dailyLog()
-            )
-        )
         return actions
     }
 
@@ -440,26 +419,20 @@ extension DashboardView {
         } else if activeProjects.count > 1 {
             actions.append(
                 TodayPrimaryQuickAction(
-                    title: String(localized: "先选择项目再记账"),
-                    systemImage: "list.bullet",
+                    title: String(localized: "选择工程记账"),
+                    systemImage: "building.2.fill",
                     destination: .bookkeepingProjectPicker(projects: activeProjects)
                 )
             )
+        } else {
+            actions.append(
+                TodayPrimaryQuickAction(
+                    title: String(localized: "新建项目"),
+                    systemImage: "plus.circle",
+                    destination: .projectList()
+                )
+            )
         }
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: String(localized: "选择工程记账"),
-                systemImage: "building.2.fill",
-                destination: .bookkeepingProjectPicker(projects: activeProjects)
-            )
-        )
-        actions.append(
-            TodayPrimaryQuickAction(
-                title: String(localized: "打开项目列表"),
-                systemImage: "list.bullet",
-                destination: .projectList()
-            )
-        )
         return actions
     }
 
@@ -647,12 +620,12 @@ extension DashboardView {
             return .projectDetail(projectId: suggestion.entityId)
         case .contact:
             return .projectContacts(focusedContactId: suggestion.entityId)
-        case .supplier:
-            return .supplierDatabase(focusedSupplierId: suggestion.entityId)
         case .material:
             return .materialPriceDatabase(focusedEntryId: suggestion.entityId)
         case .method:
             return .constructionMethodLibrary(focusedMethodId: suggestion.entityId)
+        default:
+            return .projectList()
         }
     }
 
