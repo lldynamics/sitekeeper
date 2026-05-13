@@ -2,7 +2,7 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-extension ProjectDetailView {
+extension ProjectDetailContainer {
     func scanTarget(for record: ProjectFinancialRecord) -> ProjectScanTarget {
         ProjectScanTarget(
             title: "\(record.category.displayName)-\(record.date)",
@@ -57,7 +57,7 @@ extension ProjectDetailView {
 
             if let replacement = resolved.replacement {
                 DrawingStorage.delete(fileName: replacement.fileName)
-                store.projectDrawings.removeAll { $0.id == replacement.id }
+                store.removeProjectDrawings(ids: Set([replacement.id]))
                 currentDrawings.removeAll { $0.id == replacement.id }
             }
 
@@ -72,7 +72,7 @@ extension ProjectDetailView {
                 }
             }
 
-            store.projectDrawings.append(versioned)
+            store.appendProjectDrawing(versioned)
             currentDrawings.append(versioned)
             relinkDrawingFamily(forName: versioned.name, drawings: &currentDrawings)
             importedCount += 1
@@ -93,17 +93,20 @@ extension ProjectDetailView {
                     }
                     for entry in drawingEntries {
                         do {
-                            let drawing = try DrawingStorage.saveImportedDataOrThrow(
+                            var drawing = try DrawingStorage.saveImportedDataOrThrow(
                                 data: entry.data,
                                 sourceFileName: entry.path,
                                 projectId: projectId
                             )
+                            drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
                             importDrawing(drawing)
                         } catch {
+                            StorageIssueLog.record("CAD ZIP 图纸导入失败：\(entry.path)，\(error.localizedDescription)")
                             failedNames.append("\(entry.path)（\(error.localizedDescription)）")
                         }
                     }
                 } catch {
+                    StorageIssueLog.record("CAD ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                     failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
                 }
                 continue
@@ -113,6 +116,7 @@ extension ProjectDetailView {
                 let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
                 importDrawing(drawing)
             } catch {
+                StorageIssueLog.record("CAD 图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                 failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
             }
         }
@@ -173,20 +177,26 @@ extension ProjectDetailView {
         switch ProjectDetailAssetActions.previewDrawingURL(for: previewTarget) {
         case .success(let url):
             assetState.cadPreviewRequest = ProjectCADPreviewRequest(
+                projectId: previewTarget.projectId,
                 drawingID: previewTarget.id,
                 fileURL: url,
                 displayName: previewTarget.name.isEmpty ? previewTarget.fileName : previewTarget.name,
                 fileType: previewTarget.fileType,
                 textEncoding: previewTarget.textEncoding,
+                textBigFont: previewTarget.textBigFont,
                 overlaySnapshotData: previewTarget.cadOverlaySnapshotData,
                 onOverlaySnapshotChange: { drawingID, snapshotData in
                     updateDrawingOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
                 },
                 onTextEncodingChange: { drawingID, encoding in
                     updateDrawingTextEncoding(drawingID: drawingID, encoding: encoding)
+                },
+                onTextBigFontChange: { drawingID, profile in
+                    updateDrawingTextBigFont(drawingID: drawingID, profile: profile)
                 }
             )
         case .failure(let message):
+            StorageIssueLog.record("CAD 图纸打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
             presentImportError(message)
         }
     }
@@ -200,6 +210,12 @@ extension ProjectDetailView {
     func updateDrawingTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
         guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
         store.projectDrawings[index].textEncoding = encoding
+        store.scheduleSave()
+    }
+
+    func updateDrawingTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
+        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
+        store.projectDrawings[index].textBigFont = profile
         store.scheduleSave()
     }
 

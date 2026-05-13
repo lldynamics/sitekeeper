@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 
 enum LibreDWGNativeParser {
-    static func parse(fileURL: URL, preferredCodePage: Int32?) throws -> DXFPreviewModel {
+    static func parse(fileURL: URL, preferredCodePage: Int32?, preferredBigFont: Int32?) throws -> DXFPreviewModel {
         var result = SKCADParseResult()
         let overrideCodePage = preferredCodePage ?? 0
         let success = fileURL.path.withCString { path in
@@ -29,15 +29,12 @@ enum LibreDWGNativeParser {
         var polylines: [DXFPreviewModel.Polyline] = []
         var circles: [DXFPreviewModel.Circle] = []
         var texts: [DXFPreviewModel.TextEntity] = []
+        var textStyleDiagnostics: Set<String> = []
         var arcCount = 0
 
         for primitive in buffer {
             let style = strokeStyle(from: primitive)
-            let layerName: String = {
-                guard let raw = primitive.layerName else { return "0" }
-                let trimmed = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? "0" : trimmed
-            }()
+            let layerName = decodedCString(primitive.layerName) ?? "0"
             switch primitive.kind {
             case SKCADPrimitiveLine:
                 segments.append(.init(
@@ -65,20 +62,45 @@ enum LibreDWGNativeParser {
                     layer: layerName
                 ))
             case SKCADPrimitiveText:
+                let styleName = decodedCString(primitive.textStyleName)
+                let fontFile = decodedCString(primitive.fontFile)
+                let bigFontFile = decodedCString(primitive.bigFontFile)
+                let rawValue = primitive.text.map { String(cString: $0) }
+                let rawTextBytesHex = decodedCString(primitive.rawTextBytesHex)
+                let chosenCodepage = primitive.chosenCodepage > 0 ? Int(primitive.chosenCodepage) : nil
                 let value: String
                 if let text = primitive.text {
-                    value = normalizeCADText(String(cString: text))
+                    value = normalizeCADText(
+                        String(cString: text),
+                        preferredBigFont: preferredBigFont,
+                        styleBigFontFile: bigFontFile
+                    )
                 } else {
                     value = ""
                 }
                 if !value.isEmpty {
+                    if let styleName {
+                        textStyleDiagnostics.insert("样式 \(styleName)")
+                    }
+                    if let fontFile {
+                        textStyleDiagnostics.insert("字体 \(fontFile)")
+                    }
+                    if let bigFontFile {
+                        textStyleDiagnostics.insert("大字体 \(bigFontFile)")
+                    }
                     texts.append(.init(
                         point: CGPoint(x: primitive.start.x, y: primitive.start.y),
                         value: value,
+                        rawValue: rawValue,
+                        rawTextBytesHex: rawTextBytesHex,
+                        chosenCodepage: chosenCodepage,
                         height: primitive.textHeight > 0 ? primitive.textHeight : 2,
                         rotation: primitive.textRotation,
                         style: style,
-                        layer: layerName
+                        layer: layerName,
+                        styleName: styleName,
+                        fontFile: fontFile,
+                        bigFontFile: bigFontFile
                     ))
                 }
             default:
@@ -101,6 +123,13 @@ enum LibreDWGNativeParser {
             polylineEntityCount: 0,
             sourceObjectCount: Int(result.totalObjectCount),
             unsupportedEntityCount: Int(result.unsupportedEntityCount),
+            unsupportedEntitySummary: unsupportedSummary(from: &result),
+            textDecodingHint: decodingHint(
+                preferredCodePage: preferredCodePage,
+                preferredBigFont: preferredBigFont,
+                result: result,
+                textStyleDiagnostics: textStyleDiagnostics
+            ),
             bounds: bounds
         )
     }
@@ -111,15 +140,120 @@ enum LibreDWGNativeParser {
         return .init(rgb: rgb, width: width)
     }
 
-    private static func normalizeCADText(_ raw: String) -> String {
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-        return trimmed
-            .replacingOccurrences(of: "\\P", with: "\n")
-            .replacingOccurrences(of: "\\p", with: "\n")
-            .replacingOccurrences(of: "\\~", with: " ")
-            .replacingOccurrences(of: "{", with: "")
-            .replacingOccurrences(of: "}", with: "")
+    private static func normalizeCADText(
+        _ raw: String,
+        preferredBigFont: Int32?,
+        styleBigFontFile: String?
+    ) -> String {
+        let selectedProfile = preferredBigFont
+            .flatMap(CADTextBigFontProfile.init(rawValue:)) ?? .auto
+        let profile = selectedProfile == .auto
+            ? CADTextBigFontProfile.inferred(from: styleBigFontFile)
+            : selectedProfile
+        return CADTextNormalizer.normalize(raw, bigFontProfile: profile)
+    }
+
+    private static func decodedCString(_ raw: UnsafeMutablePointer<CChar>?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = String(cString: raw).trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func decodingHint(
+        preferredCodePage: Int32?,
+        preferredBigFont: Int32?,
+        result: SKCADParseResult,
+        textStyleDiagnostics: Set<String>
+    ) -> String? {
+        let codePageText = preferredCodePage.map(codePageName(for:)) ?? "自动正文编码"
+        let bigFontText = preferredBigFont
+            .flatMap(CADTextBigFontProfile.init(rawValue:))
+            .map(bigFontName(for:)) ?? "自动 SHX"
+
+        var parts = ["文字 \(codePageText) / \(bigFontText)"]
+        let headerCodePage = Int(result.headerCodepage)
+        let effectiveCodePage = Int(result.effectiveCodepage)
+        if headerCodePage > 0 || effectiveCodePage > 0 {
+            parts.append("DWG \(nativeCodePageName(for: headerCodePage)) -> \(nativeCodePageName(for: effectiveCodePage))")
+        }
+
+        let textCount = Int(result.textPrimitiveCount)
+        let suspiciousCount = Int(result.suspiciousTextCount)
+        if textCount > 0 {
+            if suspiciousCount > 0 {
+                parts.append("疑似乱码 \(suspiciousCount)/\(textCount)")
+            } else {
+                parts.append("文字 \(textCount) 条")
+            }
+        }
+        if !textStyleDiagnostics.isEmpty {
+            parts.append(textStyleDiagnostics.sorted().prefix(3).joined(separator: " / "))
+        }
+        if result.unsupportedEntityCount > 0 {
+            parts.append("未渲染对象 \(Int(result.unsupportedEntityCount))")
+        }
+        return parts.joined(separator: "，")
+    }
+
+    private static func codePageName(for codePage: Int32) -> String {
+        switch codePage {
+        case 936:
+            return "GBK 936"
+        case 54936:
+            return "GB18030 54936"
+        case 950:
+            return "Big5 950"
+        case 932:
+            return "Shift-JIS 932"
+        case 949:
+            return "Korean 949"
+        case 65001:
+            return "UTF-8"
+        default:
+            return "代码页 \(Int(codePage))"
+        }
+    }
+
+    private static func nativeCodePageName(for codePage: Int) -> String {
+        switch codePage {
+        case 0:
+            return "UTF-8"
+        case 24:
+            return "Big5"
+        case 31:
+            return "GB2312"
+        case 38:
+            return "ANSI 932"
+        case 39:
+            return "ANSI 936"
+        case 40:
+            return "ANSI 949"
+        case 41:
+            return "ANSI 950"
+        case 43:
+            return "UTF-16"
+        case 0xFF:
+            return "未定义"
+        default:
+            return "CP\(codePage)"
+        }
+    }
+
+    private static func bigFontName(for profile: CADTextBigFontProfile) -> String {
+        switch profile {
+        case .auto:
+            return "自动 SHX"
+        case .gbcbig:
+            return "GBCBIG"
+        case .hztxt:
+            return "HZTXT"
+        case .hzfs:
+            return "HZFS"
+        case .big5:
+            return "Big5 字体"
+        case .disabled:
+            return "关闭 SHX 映射"
+        }
     }
 
     private static func sampleArcPoints(
@@ -197,6 +331,16 @@ enum LibreDWGNativeParser {
                 return ""
             }
             return String(cString: baseAddress)
+        }
+    }
+
+    private static func unsupportedSummary(from result: inout SKCADParseResult) -> String? {
+        withUnsafeBytes(of: &result.unsupportedEntitySummary) { rawBuffer in
+            guard let baseAddress = rawBuffer.bindMemory(to: CChar.self).baseAddress else {
+                return nil
+            }
+            let text = String(cString: baseAddress).trimmingCharacters(in: .whitespacesAndNewlines)
+            return text.isEmpty ? nil : text
         }
     }
 }

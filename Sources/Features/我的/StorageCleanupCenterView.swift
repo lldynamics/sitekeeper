@@ -586,7 +586,6 @@ struct StorageCleanupCenterView: View {
         snapshot.progressTasks = snapshot.progressTasks.filter { $0.projectId == projectId }
         snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter { $0.projectId == projectId }
         snapshot.siteTodos = snapshot.siteTodos.filter { $0.projectId == projectId }
-        snapshot.legacyPaymentRecords = []
         snapshot.projectDrawings = snapshot.projectDrawings.filter { $0.projectId == projectId }
         snapshot.projectContacts = snapshot.projectContacts.filter { $0.projectId == projectId }
         snapshot.projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId == projectId }

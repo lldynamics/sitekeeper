@@ -6,8 +6,8 @@ struct ProjectFinancialMetricsTests {
     @Test func initializerNormalizesDirectionAndCategory() {
         let record = ProjectFinancialRecord(
             projectId: UUID(),
-            direction: ProjectFinancialDirection.income.rawValue,
-            category: ProjectFinancialCategory.material.rawValue
+            direction: .income,
+            category: .material
         )
 
         #expect(record.normalizedDirection == .income)
@@ -20,29 +20,29 @@ struct ProjectFinancialMetricsTests {
         let records = [
             ProjectFinancialRecord(
                 projectId: projectId,
-                direction: ProjectFinancialDirection.income.rawValue,
-                category: ProjectFinancialCategory.collection.rawValue,
+                direction: .income,
+                category: .collection,
                 amount: "100",
                 status: .active
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
-                direction: ProjectFinancialDirection.income.rawValue,
-                category: ProjectFinancialCategory.collection.rawValue,
+                direction: .income,
+                category: .collection,
                 amount: "200",
                 status: .draft
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
-                direction: ProjectFinancialDirection.expense.rawValue,
-                category: ProjectFinancialCategory.material.rawValue,
+                direction: .expense,
+                category: .material,
                 amount: "300",
                 status: .archived
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
-                direction: ProjectFinancialDirection.expense.rawValue,
-                category: ProjectFinancialCategory.material.rawValue,
+                direction: .expense,
+                category: .material,
                 amount: "50",
                 status: .active
             )
@@ -59,15 +59,15 @@ struct ProjectFinancialMetricsTests {
             ProjectFinancialRecord(
                 projectId: projectId,
                 date: "2026-05-08 10:30",
-                direction: ProjectFinancialDirection.income.rawValue,
-                category: ProjectFinancialCategory.collection.rawValue,
+                direction: .income,
+                category: .collection,
                 amount: "¥+1200.5元"
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 date: "2026-05-09",
-                direction: ProjectFinancialDirection.expense.rawValue,
-                category: ProjectFinancialCategory.material.rawValue,
+                direction: .expense,
+                category: .material,
                 amount: "-300,25"
             )
         ]
@@ -82,8 +82,8 @@ struct ProjectFinancialMetricsTests {
         let record = ProjectFinancialRecord(
             projectId: projectId,
             date: "2026-05-09 10:30",
-            direction: ProjectFinancialDirection.income.rawValue,
-            category: ProjectFinancialCategory.collection.rawValue,
+            direction: .income,
+            category: .collection,
             amount: "100",
             counterparty: "客户",
             invoiceNumber: "R-1",
@@ -116,7 +116,7 @@ struct ProjectFinancialMetricsTests {
         options.includeWarehouseMovements = false
         options.includeQuickNotes = false
         options.includeLightingCircuits = false
-        options.includePaymentRecords = false
+        options.includeProjectFinance = true
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
         let text = try #require(String(data: csv, encoding: .utf8))
@@ -182,8 +182,8 @@ struct ProjectFinancialMetricsTests {
         let finance = ProjectFinancialRecord(
             projectId: projectId,
             date: "2026-05-09 10:30",
-            direction: ProjectFinancialDirection.expense.rawValue,
-            category: ProjectFinancialCategory.material.rawValue,
+            direction: .expense,
+            category: .material,
             amount: "100"
         )
         let material = MaterialItem(

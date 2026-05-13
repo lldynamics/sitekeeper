@@ -80,12 +80,11 @@ struct UnitConverterView: View {
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "单位换算",
-                        result: resultModel,
-                        copyText: resultText
+                        result: resultModel
                     )
                 }
             }

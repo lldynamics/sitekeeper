@@ -44,12 +44,11 @@ struct TileCalcView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "地砖排料结果",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }

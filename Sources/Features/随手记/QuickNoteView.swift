@@ -264,10 +264,14 @@ struct QuickNoteView: View {
         didRestoreDraft = true
         draftContent = storedDraftContent
         draftProjectId = UUID(uuidString: storedDraftProjectId)
-        if let data = storedDraftAttachments.data(using: .utf8),
-           let decoded = try? JSONDecoder().decode([QuickNoteAttachment].self, from: data) {
-            draftAttachments = decoded.filter { QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
-            draftAttachmentFileNames = Set(draftAttachments.map(\.fileName))
+        if let data = storedDraftAttachments.data(using: .utf8) {
+            do {
+                let decoded = try JSONDecoder().decode([QuickNoteAttachment].self, from: data)
+                draftAttachments = decoded.filter { QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
+                draftAttachmentFileNames = Set(draftAttachments.map(\.fileName))
+            } catch {
+                StorageIssueLog.record("随手记草稿附件解析失败：\(error.localizedDescription)")
+            }
         }
         hasRecoveredDraft = !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftAttachments.isEmpty
         saveDraftState()
@@ -277,9 +281,15 @@ struct QuickNoteView: View {
         guard didRestoreDraft else { return }
         storedDraftContent = draftContent
         storedDraftProjectId = draftProjectId?.uuidString ?? ""
-        if let data = try? JSONEncoder().encode(draftAttachments),
-           let text = String(data: data, encoding: .utf8) {
-            storedDraftAttachments = text
+        do {
+            let data = try JSONEncoder().encode(draftAttachments)
+            if let text = String(data: data, encoding: .utf8) {
+                storedDraftAttachments = text
+            } else {
+                StorageIssueLog.record("随手记草稿附件编码后 UTF8 转换失败")
+            }
+        } catch {
+            StorageIssueLog.record("随手记草稿附件编码失败：\(error.localizedDescription)")
         }
     }
 

@@ -90,7 +90,7 @@ struct SiteTodoView: View {
                 initialBeforePhotoData: initialBeforePhotoData,
                 initialAfterPhotoData: initialAfterPhotoData
             ) { todo in
-                store.siteTodos.insert(todo, at: 0)
+                store.insertSiteTodoAtTop(todo)
                 store.scheduleSave()
                 showAdd = false
             }
@@ -219,13 +219,13 @@ struct SiteTodoView: View {
         let ids = offsets.compactMap { filteredTodos.indices.contains($0) ? filteredTodos[$0].id : nil }
         let targets = store.siteTodos.filter { ids.contains($0.id) }
         targets.forEach(deleteTodoFiles(_:))
-        store.siteTodos.removeAll { ids.contains($0.id) }
+        store.removeSiteTodos(ids: Set(ids))
         store.scheduleSave()
     }
 
     private func deleteTodo(_ todo: SiteTodo) {
         deleteTodoFiles(todo)
-        store.siteTodos.removeAll { $0.id == todo.id }
+        store.removeSiteTodos(ids: Set([todo.id]))
         editingTodo = nil
         store.scheduleSave()
     }
@@ -581,8 +581,15 @@ private struct SiteTodoEditSheet: View {
     private enum TodoPhotoKind { case before, after }
 
     private func importTodoPhoto(_ item: PhotosPickerItem?, kind: TodoPhotoKind) async {
-        guard let item,
-              let data = try? await item.loadTransferable(type: Data.self) else { return }
+        guard let item else { return }
+        let data: Data
+        do {
+            guard let loaded = try await item.loadTransferable(type: Data.self) else { return }
+            data = loaded
+        } catch {
+            StorageIssueLog.record("待办整改照片导入失败：\(error.localizedDescription)")
+            return
+        }
         guard !Task.isCancelled else { return }
         let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) ?? data
         guard !Task.isCancelled else { return }

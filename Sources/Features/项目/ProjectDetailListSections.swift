@@ -556,7 +556,7 @@ struct ProjectDrawingSectionView: View {
                         Text(status.text)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
-                        Text("文字编码：\(drawing.textEncoding.displayName)")
+                        Text("文字：\(drawing.textEncoding.displayName) / \(drawing.textBigFont.displayName)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

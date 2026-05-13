@@ -30,13 +30,13 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                 HStack(alignment: .top) {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(project.name).font(.title3.weight(.bold))
-                        Text(project.location.isEmpty ? "未填写地址" : project.location)
+                        Text(project.location.isEmpty ? String(localized: "未填写地址") : project.location)
                             .font(.subheadline)
                             .foregroundStyle(.secondary)
                     }
                     Spacer()
                     if showsStatus {
-                        Picker("状态", selection: $status) {
+                        Picker(String(localized: "状态"), selection: $status) {
                             ForEach(ProjectStatus.allCases, id: \.self) { item in
                                 Text(item.displayName).tag(item)
                             }
@@ -59,14 +59,14 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                 Button {
                     onEditProject()
                 } label: {
-                    Label("编辑项目资料", systemImage: "square.and.pencil")
+                    Label(String(localized: "编辑项目资料"), systemImage: "square.and.pencil")
                         .font(.caption.weight(.semibold))
                 }
                 if canExportDeliveryPackage {
                     Button {
                         onExportDeliveryPackage()
                     } label: {
-                        Label("一键导出交付包", systemImage: "archivebox.fill")
+                        Label(String(localized: "一键导出交付包"), systemImage: "archivebox.fill")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.borderedProminent)
@@ -86,29 +86,29 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
             ]
             LazyVGrid(columns: columns, spacing: AppSpacing.normal) {
                 metricCard(
-                    title: "进度",
+                    title: String(localized: "进度"),
                     value: progressValue,
                     color: .appWarning,
                     systemImage: "gauge.with.dots.needle.50percent",
                     action: onOpenRecords
                 )
                 metricCard(
-                    title: "报价",
+                    title: String(localized: "报价"),
                     value: quoteValue,
                     color: .appDoc,
                     systemImage: "doc.text.fill",
                     action: onOpenFinanceFromQuote
                 )
                 metricCard(
-                    title: "待办",
+                    title: String(localized: "待办"),
                     value: todoValue,
                     color: .appWarning,
                     systemImage: "checklist",
                     action: onOpenTodoFilter
                 )
                 metricCard(
-                    title: "未收款",
-                    value: unpaidAmount > 0 ? ReportBuilder.money(unpaidAmount) : "已收清",
+                    title: String(localized: "未收款"),
+                    value: unpaidAmount > 0 ? ReportBuilder.money(unpaidAmount) : String(localized: "已收清"),
                     color: unpaidAmount > 0 ? .appPrimaryAction : .appSuccess,
                     systemImage: "yensign.circle.fill",
                     action: onOpenFinanceFromUnpaid
@@ -116,9 +116,9 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
             }
         } else {
             HStack {
-                metric("进度", progressValue, .appWarning, action: onOpenRecords)
-                metric("报价", quoteValue, .appDoc, action: onOpenFinanceFromQuote)
-                metric("待办", todoValue, .appWarning, action: onOpenTodoFilter)
+                metric(String(localized: "进度"), progressValue, .appWarning, action: onOpenRecords)
+                metric(String(localized: "报价"), quoteValue, .appDoc, action: onOpenFinanceFromQuote)
+                metric(String(localized: "待办"), todoValue, .appWarning, action: onOpenTodoFilter)
             }
         }
     }
@@ -176,9 +176,9 @@ struct ProjectDetailQuickActionSection: View {
         Section {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.tight) {
-                    actionChip("写日志", systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
-                    actionChip("记账", systemImage: "receipt.fill", color: .appFinance, action: onAddFinance)
-                    actionChip("导资料", systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
+                    actionChip(String(localized: "写日志"), systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
+                    actionChip(String(localized: "记账"), systemImage: "receipt.fill", color: .appFinance, action: onAddFinance)
+                    actionChip(String(localized: "导资料"), systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
                     moreActionsMenu
                 }
                 .padding(.vertical, 2)
@@ -202,19 +202,19 @@ struct ProjectDetailQuickActionSection: View {
     private var moreActionsMenu: some View {
         Menu {
             Button(action: onAddContact) {
-                Label("联系人", systemImage: "person.crop.circle.badge.plus")
+                Label(String(localized: "联系人"), systemImage: "person.crop.circle.badge.plus")
             }
             Button(action: onAddMaterial) {
-                Label("材料", systemImage: "shippingbox.fill")
+                Label(String(localized: "材料"), systemImage: "shippingbox.fill")
             }
             Button(action: onAddQuote) {
-                Label("报价", systemImage: "doc.text.fill")
+                Label(String(localized: "报价"), systemImage: "doc.text.fill")
             }
             Button(action: onAddLabor) {
-                Label("人工", systemImage: "person.2.fill")
+                Label(String(localized: "人工"), systemImage: "person.2.fill")
             }
         } label: {
-            Label("更多", systemImage: "ellipsis.circle.fill")
+            Label(String(localized: "更多"), systemImage: "ellipsis.circle.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.appPrimaryAction)
                 .padding(.horizontal, AppSpacing.normal)

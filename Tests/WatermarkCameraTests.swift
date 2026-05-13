@@ -13,7 +13,13 @@ struct WatermarkCameraTests {
         components.minute = 8
         let capturedAt = try #require(components.date)
 
-        let context = CameraWatermarkContext(projectName: "测试工程", template: "施工日志", tag: "现场", photographer: "金工", locationText: "31.23000, 121.47000")
+        let context = CameraWatermarkContext(
+            projectName: "测试工程",
+            template: .constructionLog,
+            tag: "现场",
+            photographer: "金工",
+            locationText: "31.23000, 121.47000"
+        )
         let lines = context.lines(capturedAt: capturedAt)
 
         #expect(lines.contains("时间: \(Formatters.dateTime.string(from: capturedAt))"))

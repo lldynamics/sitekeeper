@@ -31,6 +31,11 @@ typedef struct SKCADPrimitive {
     double textHeight;
     double textRotation;
     char *text;
+    char *rawTextBytesHex;
+    char *textStyleName;
+    char *fontFile;
+    char *bigFontFile;
+    int chosenCodepage;
 } SKCADPrimitive;
 
 typedef struct SKCADParseResult {
@@ -38,6 +43,13 @@ typedef struct SKCADParseResult {
     int primitiveCount;
     int totalObjectCount;
     int unsupportedEntityCount;
+    int requestedCodepage;
+    int headerCodepage;
+    int effectiveCodepage;
+    int textPrimitiveCount;
+    int suspiciousTextCount;
+    int mojibakeTextCount;
+    char unsupportedEntitySummary[256];
     char errorMessage[512];
 } SKCADParseResult;
 

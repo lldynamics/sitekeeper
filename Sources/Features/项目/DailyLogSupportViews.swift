@@ -9,9 +9,9 @@ enum DailyLogMode: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .list: "列表"
-        case .calendar: "日历"
-        case .gallery: "照片墙"
+        case .list: String(localized: "列表")
+        case .calendar: String(localized: "日历")
+        case .gallery: String(localized: "照片墙")
         }
     }
 }
@@ -122,7 +122,7 @@ struct PhotoDetailSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("照片预览") {
+                Section(String(localized: "照片预览")) {
                     if let previewImage {
                         Image(uiImage: previewImage)
                             .resizable()
@@ -130,39 +130,39 @@ struct PhotoDetailSheet: View {
                             .frame(maxHeight: 360)
                             .frame(maxWidth: .infinity)
                     } else if !didAttemptLoadImage {
-                        ProgressView("加载中…")
+                        ProgressView(String(localized: "加载中…"))
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text("图片已丢失或不可读取")
+                        Text(String(localized: "图片已丢失或不可读取"))
                             .foregroundStyle(.secondary)
                     }
                 }
-                Section("备注") {
-                    Picker("照片标签", selection: $tag) {
+                Section(String(localized: "备注")) {
+                    Picker(String(localized: "照片标签"), selection: $tag) {
                         ForEach(PhotoTag.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("现场备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "现场备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
                 Section {
-                    Button("保存备注") {
+                    Button(String(localized: "保存备注")) {
                         onSave(note, tag)
                         dismiss()
                     }
                     .frame(maxWidth: .infinity)
-                    Button("删除照片", role: .destructive) {
+                    Button(String(localized: "删除照片"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .navigationTitle("照片详情")
+            .navigationTitle(String(localized: "照片详情"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "关闭")) { dismiss() }
                 }
             }
             .onAppear {
@@ -172,14 +172,14 @@ struct PhotoDetailSheet: View {
             .task(id: selectedPhoto?.fileName) {
                 await loadPreviewImage()
             }
-            .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这张照片？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete()
                     dismiss()
                 }
-                Button("取消", role: .cancel) {}
+                Button(String(localized: "取消"), role: .cancel) {}
             } message: {
-                Text("该操作仅删除当前照片，不会删除整条日志。")
+                Text(String(localized: "该操作仅删除当前照片，不会删除整条日志。"))
             }
         }
     }
@@ -208,9 +208,9 @@ struct PhotoDetailSheet: View {
 func autoWeatherNow() -> String {
     let hour = Calendar.current.component(.hour, from: Date())
     switch hour {
-    case 6..<12: return "晴"
-    case 12..<18: return "多云"
-    case 18..<21: return "阴"
-    default: return "晴"
+    case 6..<12: return String(localized: "晴")
+    case 12..<18: return String(localized: "多云")
+    case 18..<21: return String(localized: "阴")
+    default: return String(localized: "晴")
     }
 }

@@ -4,12 +4,14 @@ import SwiftUI
 public struct LibreDWGBridgePreview: View {
     public let fileURL: URL
     public let preferredCodePage: Int32?
+    public let preferredBigFont: Int32?
 
     @State private var state: PreviewState = .loading
 
-    public init(fileURL: URL, preferredCodePage: Int32? = nil) {
+    public init(fileURL: URL, preferredCodePage: Int32? = nil, preferredBigFont: Int32? = nil) {
         self.fileURL = fileURL
         self.preferredCodePage = preferredCodePage
+        self.preferredBigFont = preferredBigFont
     }
 
     public var body: some View {
@@ -22,7 +24,7 @@ public struct LibreDWGBridgePreview: View {
     }
 
     private var taskIdentity: String {
-        "\(fileURL.path)#\(preferredCodePage.map(String.init) ?? "auto")"
+        "\(fileURL.path)#\(preferredCodePage.map(String.init) ?? "auto")#\(preferredBigFont.map(String.init) ?? "auto")"
     }
 
     @ViewBuilder
@@ -32,7 +34,7 @@ public struct LibreDWGBridgePreview: View {
             ProgressView("正在加载图纸…")
                 .controlSize(.large)
         case .dxf(let model, let sourceHint):
-            DXFCanvasPreview(model: model, sourceHint: sourceHint)
+            DXFCanvasPreview(model: model, sourceHint: sourceHint, fileURL: fileURL)
         case .pdf(let url, let sourceHint):
             PDFSidecarPreview(fileURL: url, sourceHint: sourceHint)
         case .dwgMetadata(let info):
@@ -52,7 +54,11 @@ public struct LibreDWGBridgePreview: View {
             switch ext {
             case "dxf":
                 let model = try await Task.detached(priority: .userInitiated) {
-                    try DXFPreviewParser.parse(fileURL: fileURL)
+                    try DXFPreviewParser.parse(
+                        fileURL: fileURL,
+                        preferredCodePage: preferredCodePage,
+                        preferredBigFont: preferredBigFont
+                    )
                 }.value
                 state = .dxf(model, nil)
             case "dwg":
@@ -60,14 +66,16 @@ public struct LibreDWGBridgePreview: View {
                     let model = try await Task.detached(priority: .userInitiated) {
                         try LibreDWGNativeParser.parse(
                             fileURL: fileURL,
-                            preferredCodePage: preferredCodePage
+                            preferredCodePage: preferredCodePage,
+                            preferredBigFont: preferredBigFont
                         )
                     }.value
                     state = .dxf(model, "LibreDWG 已解析 DWG：\(fileURL.lastPathComponent)")
                     return
                 } catch {
                     let codePageHint = preferredCodePage.map { "（编码 \(Int($0))）" } ?? ""
-                    let nativeParseHint = "LibreDWG C 解析未生成可显示几何\(codePageHint)：\(error.localizedDescription)"
+                    let bigFontHint = preferredBigFont.map { " / 字体 \(Int($0))" } ?? ""
+                    let nativeParseHint = "LibreDWG C 解析未生成可显示几何\(codePageHint)\(bigFontHint)：\(error.localizedDescription)"
                     let sidecar = await Task.detached(priority: .utility) {
                         DWGSidecarResolver.resolve(for: fileURL)
                     }.value
@@ -75,7 +83,11 @@ public struct LibreDWGBridgePreview: View {
                     if let dxfURL = sidecar.dxfURL {
                         do {
                             let model = try await Task.detached(priority: .userInitiated) {
-                                try DXFPreviewParser.parse(fileURL: dxfURL)
+                                try DXFPreviewParser.parse(
+                                    fileURL: dxfURL,
+                                    preferredCodePage: preferredCodePage,
+                                    preferredBigFont: preferredBigFont
+                                )
                             }.value
                             state = .dxf(model, "\(nativeParseHint)，已改用同名 DXF：\(dxfURL.lastPathComponent)")
                             return
@@ -121,13 +133,16 @@ public struct LibreDWGBridgePreview: View {
 private struct DXFCanvasPreview: View {
     let model: DXFPreviewModel
     let sourceHint: String?
+    let fileURL: URL
     private let maxZoomScale: CGFloat = 240
     @State private var zoomScale: CGFloat = 1
     @State private var panOffset: CGSize = .zero
     @State private var canvasSize: CGSize = .zero
     @State private var visibleLayers: Set<String> = []
     @State private var showLayerSheet = false
+    @State private var showSearchResults = false
     @State private var searchText = ""
+    @State private var layerSearchText = ""
     @State private var selectedSearchTextID: UUID?
     @State private var probeCanvasPoint: CGPoint?
     @State private var showCoordinateLegend = true
@@ -171,10 +186,23 @@ private struct DXFCanvasPreview: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var normalizedLayerSearchText: String {
+        layerSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var filteredLayerStats: [LayerStat] {
+        guard !normalizedLayerSearchText.isEmpty else { return layerStats }
+        let query = normalizedLayerSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        return layerStats.filter { layer in
+            layer.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(query)
+        }
+    }
+
     private var matchedTexts: [DXFPreviewModel.TextEntity] {
         guard !normalizedSearchText.isEmpty else { return [] }
         let query = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         return model.texts.filter { text in
+            guard visibleLayers.isEmpty || visibleLayers.contains(text.layer) else { return false }
             let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             return value.contains(query)
         }
@@ -216,9 +244,12 @@ private struct DXFCanvasPreview: View {
                             showControlsTemporarily()
                         }
                     )
-                    .onTapGesture(count: 2) {
-                        fitToAll()
-                    }
+                    .simultaneousGesture(
+                        SpatialTapGesture(count: 2).onEnded { value in
+                            probeCanvasPoint = value.location
+                            doubleTapZoom(at: value.location)
+                        }
+                    )
 
                 if controlsCollapsed {
                     compactControlsButton
@@ -256,11 +287,24 @@ private struct DXFCanvasPreview: View {
             .sheet(isPresented: $showLayerSheet) {
                 layerSheet
             }
+            .sheet(isPresented: $showSearchResults) {
+                searchResultsSheet
+            }
             .onAppear {
                 if visibleLayers.isEmpty {
                     visibleLayers = Set(layerStats.map(\.name))
                 }
+                postCanvasTransform(transform)
                 scheduleControlsAutoHide()
+            }
+            .onChange(of: canvasSize) { _, _ in
+                postCanvasTransform(transform)
+            }
+            .onChange(of: zoomScale) { _, _ in
+                postCanvasTransform(transform)
+            }
+            .onChange(of: panOffset) { _, _ in
+                postCanvasTransform(transform)
             }
             .onChange(of: searchText) { _, _ in
                 syncSearchSelection()
@@ -299,7 +343,9 @@ private struct DXFCanvasPreview: View {
     }
 
     private var drawingCanvas: some View {
-        Canvas { context, size in
+        TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+            let searchPulse = searchHighlightPulse(at: timeline.date)
+            Canvas { context, size in
             let activeTransform = CADCanvasTransform(
                 bounds: model.bounds,
                 size: size,
@@ -320,7 +366,24 @@ private struct DXFCanvasPreview: View {
                 for point in polyline.points.dropFirst() {
                     path.addLine(to: activeTransform.point(point))
                 }
-                context.stroke(path, with: .color(color(from: polyline.style.rgb, layer: polyline.layer)), lineWidth: max(polyline.style.width, 0.45))
+                switch polyline.renderKind {
+                case .hatch:
+                    context.fill(path, with: .color(Color.orange.opacity(0.08)))
+                    context.stroke(
+                        path,
+                        with: .color(color(from: polyline.style.rgb, layer: polyline.layer).opacity(0.82)),
+                        style: StrokeStyle(lineWidth: max(polyline.style.width, 0.55), dash: [4, 3])
+                    )
+                case .dimension:
+                    context.stroke(
+                        path,
+                        with: .color(Color.cyan.opacity(0.95)),
+                        style: StrokeStyle(lineWidth: max(polyline.style.width, 0.75), dash: [7, 3])
+                    )
+                    drawDimensionTicks(for: polyline, in: &context, transform: activeTransform)
+                case .regular:
+                    context.stroke(path, with: .color(color(from: polyline.style.rgb, layer: polyline.layer)), lineWidth: max(polyline.style.width, 0.45))
+                }
             }
 
             for circle in visibleCircles {
@@ -337,14 +400,23 @@ private struct DXFCanvasPreview: View {
                 let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
                 let isMatch = !foldedQuery.isEmpty && value.contains(foldedQuery)
                 let isSelected = selectedID == text.id
-                let renderColor: Color = isSelected ? .red : (isMatch ? .orange : color(from: text.style.rgb, layer: text.layer))
-                let fontSize = min(max(activeTransform.radius(text.height), 7), isSelected ? 30 : 26)
+                let renderColor = textColor(for: text, isMatch: isMatch, isSelected: isSelected, pulse: searchPulse)
+                let fontSize = textFontSize(for: text, transform: activeTransform, isSelected: isSelected)
                 var textContext = context
                 textContext.translateBy(x: point.x, y: point.y)
                 textContext.rotate(by: .radians(-text.rotation))
+                if isSelected || text.renderKind == .dimension || text.renderKind == .hatch {
+                    drawTextBackdrop(
+                        for: text,
+                        fontSize: fontSize,
+                        isSelected: isSelected,
+                        pulse: searchPulse,
+                        in: &textContext
+                    )
+                }
                 textContext.draw(
                     Text(text.value)
-                        .font(.system(size: fontSize))
+                        .font(.system(size: fontSize, weight: textWeight(for: text), design: .default))
                         .foregroundStyle(renderColor),
                     at: .zero,
                     anchor: .leading
@@ -362,6 +434,7 @@ private struct DXFCanvasPreview: View {
                 marker.move(to: CGPoint(x: probeCanvasPoint.x, y: probeCanvasPoint.y - 8))
                 marker.addLine(to: CGPoint(x: probeCanvasPoint.x, y: probeCanvasPoint.y + 8))
                 context.stroke(marker, with: .color(.orange), lineWidth: 1.4)
+            }
             }
         }
         .overlay {
@@ -386,6 +459,12 @@ private struct DXFCanvasPreview: View {
                 Label(String(format: "缩放 %.1fx", effectiveScale), systemImage: "magnifyingglass")
                 if model.sourceObjectCount > 0 {
                     Label("对象 \(model.sourceObjectCount)", systemImage: "cube.transparent")
+                }
+                if let textDecodingHint = model.textDecodingHint, !textDecodingHint.isEmpty {
+                    Label(textDecodingHint, systemImage: "character.book.closed")
+                }
+                if let unsupportedEntitySummary = model.unsupportedEntitySummary, !unsupportedEntitySummary.isEmpty {
+                    Label("未渲染 \(unsupportedEntitySummary)", systemImage: "exclamationmark.triangle")
                 }
             }
             .font(.caption2)
@@ -461,6 +540,22 @@ private struct DXFCanvasPreview: View {
                     .disableAutocorrection(true)
 
                 if !matchedTexts.isEmpty {
+                    Button {
+                        showControlsTemporarily(scheduleAutoHide: false)
+                        showSearchResults = true
+                    } label: {
+                        Label("结果", systemImage: "list.bullet.rectangle")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        centerOnSelectedText()
+                        showControlsTemporarily(scheduleAutoHide: false)
+                    } label: {
+                        Label("定位", systemImage: "scope")
+                    }
+                    .buttonStyle(.borderedProminent)
+
                     Button { moveSearchSelection(step: -1) } label: {
                         Image(systemName: "chevron.up")
                     }
@@ -503,6 +598,11 @@ private struct DXFCanvasPreview: View {
     private var layerSheet: some View {
         NavigationStack {
             List {
+                Section {
+                    TextField("搜索图层名称", text: $layerSearchText)
+                        .textInputAutocapitalization(.never)
+                        .disableAutocorrection(true)
+                }
                 Section("图层开关") {
                     Button("显示全部") {
                         visibleLayers = Set(layerStats.map(\.name))
@@ -511,7 +611,15 @@ private struct DXFCanvasPreview: View {
                         visibleLayers.removeAll()
                     }
 
-                    ForEach(layerStats) { layer in
+                    if filteredLayerStats.isEmpty {
+                        ContentUnavailableView(
+                            "没有匹配图层",
+                            systemImage: "square.3.layers.3d.down.right.slash",
+                            description: Text("换个关键词继续搜索")
+                        )
+                    }
+
+                    ForEach(filteredLayerStats) { layer in
                         Toggle(isOn: Binding(
                             get: { visibleLayers.contains(layer.name) },
                             set: { newValue in
@@ -539,6 +647,77 @@ private struct DXFCanvasPreview: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("完成") {
                         showLayerSheet = false
+                    }
+                }
+            }
+        }
+    }
+
+    private var searchResultsSheet: some View {
+        NavigationStack {
+            List {
+                if matchedTexts.isEmpty {
+                    ContentUnavailableView(
+                        "没有匹配文字",
+                        systemImage: "text.magnifyingglass",
+                        description: Text("输入图纸文字后再查看结果")
+                    )
+                } else {
+                    Section("文字搜索结果") {
+                        ForEach(matchedTexts) { text in
+                            Button {
+                                selectSearchResult(text)
+                            } label: {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(text.value)
+                                        .font(.body.weight(.medium))
+                                        .foregroundStyle(.primary)
+                                        .lineLimit(2)
+                                    if let rawValue = text.rawValue, rawValue != text.value {
+                                        Text("原始文本：\(rawValue)")
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
+                                    HStack(spacing: 8) {
+                                        Text(text.layer)
+                                        Text("X:\(formatCoordinate(text.point.x)) Y:\(formatCoordinate(text.point.y))")
+                                    }
+                                    .font(.caption.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("解码：\(text.chosenCodepage.map(codePageDisplayName) ?? "自动/未知")")
+                                        if let styleName = text.styleName {
+                                            Text("样式：\(styleName)")
+                                        }
+                                        if let fontFile = text.fontFile {
+                                            Text("字体：\(fontFile)")
+                                        }
+                                        if let bigFontFile = text.bigFontFile {
+                                            Text("大字体：\(bigFontFile)")
+                                        }
+                                        if let rawTextBytesHex = text.rawTextBytesHex {
+                                            Text("原始字节：\(rawTextBytesHex)")
+                                                .textSelection(.enabled)
+                                        }
+                                    }
+                                    .font(.system(.caption2, design: .monospaced))
+                                    .foregroundStyle(.secondary)
+                                }
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+            }
+            .navigationTitle("搜索结果")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("完成") {
+                        showSearchResults = false
                     }
                 }
             }
@@ -576,6 +755,21 @@ private struct DXFCanvasPreview: View {
         }
         .frame(width: 120, height: 120)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .simultaneousGesture(
+            SpatialTapGesture().onEnded { value in
+                centerFromMinimapTap(value.location)
+            }
+        )
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                .onChanged { value in
+                    centerFromMinimapTap(value.location, animated: false)
+                }
+                .onEnded { value in
+                    centerFromMinimapTap(value.location, animated: true)
+                }
+        )
         .padding(12)
     }
 
@@ -607,21 +801,19 @@ private struct DXFCanvasPreview: View {
         centerOnSelectedText()
     }
 
+    private func selectSearchResult(_ text: DXFPreviewModel.TextEntity) {
+        selectedSearchTextID = text.id
+        showSearchResults = false
+        showControlsTemporarily(scheduleAutoHide: false)
+        centerOnSelectedText()
+    }
+
     private func centerOnSelectedText() {
         guard let selectedID = selectedSearchTextID,
               let target = matchedTexts.first(where: { $0.id == selectedID }),
               canvasSize != .zero else { return }
-        let transform = CADCanvasTransform(
-            bounds: model.bounds,
-            size: canvasSize,
-            zoomScale: zoomScale,
-            panOffset: panOffset
-        )
-        let currentPoint = transform.point(target.point)
-        let centerPoint = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
         withAnimation(.easeInOut(duration: 0.2)) {
-            panOffset.width += centerPoint.x - currentPoint.x
-            panOffset.height += centerPoint.y - currentPoint.y
+            panOffset = panOffsetToCenter(sourcePoint: target.point, zoom: zoomScale)
         }
     }
 
@@ -635,13 +827,95 @@ private struct DXFCanvasPreview: View {
 
     private func zoom(by factor: CGFloat) {
         guard factor.isFinite, factor > 0 else { return }
-        withAnimation(.easeInOut(duration: 0.16)) {
-            zoomScale = clampScale(zoomScale * factor)
-            if zoomScale <= 1.001 {
-                panOffset = .zero
-            }
+        let center = canvasSize == .zero
+            ? nil
+            : CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+        applyZoom(clampScale(zoomScale * factor), anchor: center)
+        showControlsTemporarily()
+    }
+
+    private func doubleTapZoom(at location: CGPoint) {
+        if effectiveScale >= 7.5 {
+            fitToAll()
+        } else {
+            applyZoom(clampScale(zoomScale * 1.8), anchor: location)
+            showControlsTemporarily()
+        }
+    }
+
+    private func centerFromMinimapTap(_ location: CGPoint, animated: Bool = true) {
+        guard canvasSize != .zero else { return }
+        let sourcePoint = minimapSourcePoint(for: location)
+        let update = {
+            panOffset = panOffsetToCenter(sourcePoint: sourcePoint, zoom: zoomScale)
+        }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.18), update)
+        } else {
+            update()
         }
         showControlsTemporarily()
+    }
+
+    private func minimapSourcePoint(for location: CGPoint) -> CGPoint {
+        let frame = CGRect(x: 6, y: 6, width: 108, height: 108)
+        let clampedX = min(max(location.x, frame.minX), frame.maxX)
+        let clampedY = min(max(location.y, frame.minY), frame.maxY)
+        let xRatio = (clampedX - frame.minX) / max(frame.width, 1)
+        let yRatio = 1 - (clampedY - frame.minY) / max(frame.height, 1)
+        return CGPoint(
+            x: model.bounds.minX + model.bounds.width * xRatio,
+            y: model.bounds.minY + model.bounds.height * yRatio
+        )
+    }
+
+    private func applyZoom(_ newZoom: CGFloat, anchor: CGPoint?) {
+        let clampedZoom = clampScale(newZoom)
+        let nextOffset: CGSize
+        if clampedZoom <= 1.001 || canvasSize == .zero {
+            nextOffset = .zero
+        } else if let anchor, anchor.x.isFinite, anchor.y.isFinite {
+            let currentTransform = CADCanvasTransform(
+                bounds: model.bounds,
+                size: canvasSize,
+                zoomScale: zoomScale,
+                panOffset: panOffset
+            )
+            let sourceAnchor = currentTransform.sourcePoint(anchor)
+            let baseTransform = CADCanvasTransform(
+                bounds: model.bounds,
+                size: canvasSize,
+                zoomScale: clampedZoom,
+                panOffset: .zero
+            )
+            let renderedPoint = baseTransform.point(sourceAnchor)
+            nextOffset = CGSize(
+                width: anchor.x - renderedPoint.x,
+                height: anchor.y - renderedPoint.y
+            )
+        } else {
+            nextOffset = panOffset
+        }
+
+        withAnimation(.easeInOut(duration: 0.16)) {
+            zoomScale = clampedZoom
+            panOffset = nextOffset
+        }
+    }
+
+    private func panOffsetToCenter(sourcePoint: CGPoint, zoom: CGFloat) -> CGSize {
+        guard canvasSize != .zero else { return .zero }
+        let baseTransform = CADCanvasTransform(
+            bounds: model.bounds,
+            size: canvasSize,
+            zoomScale: zoom,
+            panOffset: .zero
+        )
+        let renderedPoint = baseTransform.point(sourcePoint)
+        return CGSize(
+            width: canvasSize.width / 2 - renderedPoint.x,
+            height: canvasSize.height / 2 - renderedPoint.y
+        )
     }
 
     private func showControlsTemporarily(scheduleAutoHide: Bool = true) {
@@ -707,6 +981,153 @@ private struct DXFCanvasPreview: View {
         context.stroke(yAxis, with: .color(.blue.opacity(0.75)), lineWidth: 1)
     }
 
+    private func searchHighlightPulse(at date: Date) -> CGFloat {
+        guard selectedSearchTextID != nil, !normalizedSearchText.isEmpty else { return 0 }
+        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.95) / 0.95
+        return 0.5 + 0.5 * CGFloat(sin(phase * .pi * 2))
+    }
+
+    private func textFontSize(
+        for text: DXFPreviewModel.TextEntity,
+        transform: CADCanvasTransform,
+        isSelected: Bool
+    ) -> CGFloat {
+        let base = activeTextHeight(text, transform: transform)
+        switch text.renderKind {
+        case .dimension:
+            return min(max(base * 1.08, 9), isSelected ? 34 : 28)
+        case .hatch:
+            return min(max(base * 0.92, 8), isSelected ? 30 : 22)
+        case .leader, .attribute:
+            return min(max(base, 8), isSelected ? 32 : 25)
+        case .regular:
+            return min(max(base, 7), isSelected ? 30 : 26)
+        }
+    }
+
+    private func activeTextHeight(_ text: DXFPreviewModel.TextEntity, transform: CADCanvasTransform) -> CGFloat {
+        transform.radius(max(text.height, 1))
+    }
+
+    private func textWeight(for text: DXFPreviewModel.TextEntity) -> Font.Weight {
+        switch text.renderKind {
+        case .dimension:
+            return .semibold
+        case .hatch:
+            return .medium
+        case .leader, .attribute:
+            return .regular
+        case .regular:
+            return .regular
+        }
+    }
+
+    private func textColor(
+        for text: DXFPreviewModel.TextEntity,
+        isMatch: Bool,
+        isSelected: Bool,
+        pulse: CGFloat
+    ) -> Color {
+        if isSelected {
+            return Color.red.opacity(0.78 + 0.22 * Double(pulse))
+        }
+        if isMatch {
+            return .orange
+        }
+        switch text.renderKind {
+        case .dimension:
+            return .cyan
+        case .hatch:
+            return .orange
+        case .leader:
+            return .purple
+        case .attribute:
+            return .teal
+        case .regular:
+            return color(from: text.style.rgb, layer: text.layer)
+        }
+    }
+
+    private func drawTextBackdrop(
+        for text: DXFPreviewModel.TextEntity,
+        fontSize: CGFloat,
+        isSelected: Bool,
+        pulse: CGFloat,
+        in context: inout GraphicsContext
+    ) {
+        let textWidth = max(CGFloat(text.value.count) * fontSize * 0.58, fontSize * 1.5)
+        let textHeight = fontSize * 1.35
+        let paddingX = max(fontSize * 0.36, 4)
+        let paddingY = max(fontSize * 0.18, 2)
+        let rect = CGRect(
+            x: -paddingX,
+            y: -textHeight / 2 - paddingY,
+            width: textWidth + paddingX * 2,
+            height: textHeight + paddingY * 2
+        )
+        let path = Path(roundedRect: rect, cornerRadius: min(8, textHeight / 2))
+
+        if isSelected {
+            let halo = rect.insetBy(dx: -5 - pulse * 5, dy: -4 - pulse * 4)
+            context.fill(
+                Path(roundedRect: halo, cornerRadius: min(12, halo.height / 2)),
+                with: .color(Color.red.opacity(0.12 + 0.24 * Double(pulse)))
+            )
+            context.stroke(
+                Path(roundedRect: halo, cornerRadius: min(12, halo.height / 2)),
+                with: .color(Color.red.opacity(0.55 + 0.35 * Double(pulse))),
+                lineWidth: 1.1 + pulse * 1.2
+            )
+        }
+
+        switch text.renderKind {
+        case .dimension:
+            context.fill(path, with: .color(Color.cyan.opacity(0.12)))
+            context.stroke(path, with: .color(Color.cyan.opacity(0.72)), lineWidth: 0.8)
+        case .hatch:
+            context.fill(path, with: .color(Color.orange.opacity(0.12)))
+            context.stroke(path, with: .color(Color.orange.opacity(0.58)), lineWidth: 0.7)
+        case .regular, .leader, .attribute:
+            if isSelected {
+                context.fill(path, with: .color(Color(uiColor: .systemBackground).opacity(0.82)))
+            }
+        }
+    }
+
+    private func drawDimensionTicks(
+        for polyline: DXFPreviewModel.Polyline,
+        in context: inout GraphicsContext,
+        transform: CADCanvasTransform
+    ) {
+        guard polyline.points.count >= 2 else { return }
+        let start = transform.point(polyline.points[0])
+        let end = transform.point(polyline.points[polyline.points.count - 1])
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = max(sqrt(dx * dx + dy * dy), 0.0001)
+        let ux = dx / length
+        let uy = dy / length
+        let px = -uy
+        let py = ux
+        let tickLength = min(max(length * 0.035, 7), 14)
+
+        func addTick(at point: CGPoint, direction: CGFloat) {
+            var path = Path()
+            path.move(to: CGPoint(
+                x: point.x - px * tickLength * 0.5 - ux * tickLength * direction * 0.35,
+                y: point.y - py * tickLength * 0.5 - uy * tickLength * direction * 0.35
+            ))
+            path.addLine(to: CGPoint(
+                x: point.x + px * tickLength * 0.5 + ux * tickLength * direction * 0.35,
+                y: point.y + py * tickLength * 0.5 + uy * tickLength * direction * 0.35
+            ))
+            context.stroke(path, with: .color(Color.cyan.opacity(0.95)), lineWidth: 1.2)
+        }
+
+        addTick(at: start, direction: 1)
+        addTick(at: end, direction: -1)
+    }
+
     private var canvasGesture: some Gesture {
         SimultaneousGesture(
             MagnificationGesture()
@@ -742,6 +1163,20 @@ private struct DXFCanvasPreview: View {
         min(max(value, 1), maxZoomScale)
     }
 
+    private func postCanvasTransform(_ transform: CADCanvasTransform) {
+        NotificationCenter.default.post(
+            name: .libreDWGCanvasTransformDidChange,
+            object: nil,
+            userInfo: [
+                "filePath": fileURL.path,
+                "bounds": NSValue(cgRect: transform.bounds),
+                "size": NSValue(cgSize: transform.size),
+                "zoomScale": transform.zoomScale,
+                "panOffset": NSValue(cgSize: transform.panOffset),
+            ]
+        )
+    }
+
     private func color(from rgb: UInt32, layer: String) -> Color {
         if rgb == 0 {
             return layerFallbackColor(layer)
@@ -763,12 +1198,44 @@ private struct DXFCanvasPreview: View {
     private func formatCoordinate(_ value: CGFloat) -> String {
         String(format: "%.2f", Double(value))
     }
+
+    private func codePageDisplayName(_ codePage: Int) -> String {
+        switch codePage {
+        case 936:
+            return "GBK 936"
+        case 54936:
+            return "GB18030 54936"
+        case 950:
+            return "Big5 950"
+        case 932:
+            return "Shift-JIS 932"
+        case 949:
+            return "Korean 949"
+        case 65001:
+            return "UTF-8"
+        default:
+            return "CP\(codePage)"
+        }
+    }
 }
 
 private enum DXFPreviewParser {
-    static func parse(fileURL: URL) throws -> DXFPreviewModel {
+    private struct DecodedTextPayload {
+        let text: String
+        let resolvedCodePage: Int32?
+        let usedPreferredCodePage: Bool
+    }
+
+    static func parse(
+        fileURL: URL,
+        preferredCodePage: Int32? = nil,
+        preferredBigFont: Int32? = nil
+    ) throws -> DXFPreviewModel {
         let raw = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
-        let text = decodeText(raw)
+        let decodedPayload = decodeText(raw, preferredCodePage: preferredCodePage)
+        let text = decodedPayload.text
+        let bigFontProfile = preferredBigFont
+            .flatMap(CADTextBigFontProfile.init(rawValue:)) ?? .auto
         let pairs = dxfPairs(from: text)
 
         var segments: [DXFPreviewModel.Segment] = []
@@ -900,22 +1367,27 @@ private enum DXFPreviewParser {
                    let y2 = fields.firstDouble(24) {
                     polylines.append(.init(
                         points: [CGPoint(x: x1, y: y1), CGPoint(x: x2, y: y2)],
-                        style: .default,
-                        layer: layer
+                        style: DXFPreviewModel.StrokeStyle(rgb: 0x008EA8, width: 0.9),
+                        layer: layer,
+                        renderKind: .dimension
                     ))
                 }
                 if let x = fields.firstDouble(11),
                    let y = fields.firstDouble(21),
                    let rawValue = fields.firstString(1) {
-                    let normalized = normalizeDXFText(rawValue)
+                    let normalized = normalizeDXFText(rawValue, bigFontProfile: bigFontProfile)
                     if !normalized.isEmpty {
                         texts.append(.init(
                             point: CGPoint(x: x, y: y),
                             value: normalized,
+                            rawValue: rawValue,
+                            rawTextBytesHex: nil,
+                            chosenCodepage: decodedPayload.resolvedCodePage.map(Int.init),
                             height: fields.firstDouble(40) ?? 2,
                             rotation: ((fields.firstDouble(53) ?? 0) * .pi / 180),
-                            style: .default,
-                            layer: layer
+                            style: DXFPreviewModel.StrokeStyle(rgb: 0x008EA8, width: 0.9),
+                            layer: layer,
+                            renderKind: .dimension
                         ))
                     }
                 }
@@ -930,15 +1402,19 @@ private enum DXFPreviewParser {
                 if let x = fields.firstDouble(11),
                    let y = fields.firstDouble(21),
                    let rawValue = fields.firstString(304) ?? fields.firstString(1) {
-                    let normalized = normalizeDXFText(rawValue)
+                    let normalized = normalizeDXFText(rawValue, bigFontProfile: bigFontProfile)
                     if !normalized.isEmpty {
                         texts.append(.init(
                             point: CGPoint(x: x, y: y),
                             value: normalized,
+                            rawValue: rawValue,
+                            rawTextBytesHex: nil,
+                            chosenCodepage: decodedPayload.resolvedCodePage.map(Int.init),
                             height: fields.firstDouble(40) ?? 2,
                             rotation: ((fields.firstDouble(50) ?? 0) * .pi / 180),
-                            style: .default,
-                            layer: layer
+                            style: DXFPreviewModel.StrokeStyle(rgb: 0x7A3DB8, width: 0.8),
+                            layer: layer,
+                            renderKind: .leader
                         ))
                     }
                 }
@@ -952,7 +1428,31 @@ private enum DXFPreviewParser {
                        (abs(first.x - last.x) > 0.0001 || abs(first.y - last.y) > 0.0001) {
                         points.append(first)
                     }
-                    polylines.append(.init(points: points, style: .default, layer: layer))
+                    polylines.append(.init(
+                        points: points,
+                        style: DXFPreviewModel.StrokeStyle(rgb: 0xCC7A00, width: 0.7),
+                        layer: layer,
+                        renderKind: .hatch
+                    ))
+                    if let labelPoint = centroid(of: points),
+                       let rawPattern = fields.firstString(2) {
+                        let pattern = normalizeDXFText(rawPattern, bigFontProfile: bigFontProfile)
+                        let label = hatchLabel(for: pattern, solidFlag: fields.firstInt(70))
+                        if !label.isEmpty {
+                            texts.append(.init(
+                                point: labelPoint,
+                                value: label,
+                                rawValue: rawPattern,
+                                rawTextBytesHex: nil,
+                                chosenCodepage: decodedPayload.resolvedCodePage.map(Int.init),
+                                height: max(fields.firstDouble(41) ?? 2, 1.4),
+                                rotation: 0,
+                                style: DXFPreviewModel.StrokeStyle(rgb: 0xCC7A00, width: 0.7),
+                                layer: layer,
+                                renderKind: .hatch
+                            ))
+                        }
+                    }
                 }
             case "IMAGE", "WIPEOUT":
                 if let x = fields.firstDouble(10),
@@ -974,15 +1474,19 @@ private enum DXFPreviewParser {
                 if let x = fields.firstDouble(10),
                    let y = fields.firstDouble(20),
                    let rawValue = fields.firstString(1) {
-                    let normalized = normalizeDXFText(rawValue)
+                    let normalized = normalizeDXFText(rawValue, bigFontProfile: bigFontProfile)
                     if !normalized.isEmpty {
                         texts.append(.init(
                             point: CGPoint(x: x, y: y),
                             value: normalized,
+                            rawValue: rawValue,
+                            rawTextBytesHex: nil,
+                            chosenCodepage: decodedPayload.resolvedCodePage.map(Int.init),
                             height: fields.firstDouble(40) ?? 2,
                             rotation: ((fields.firstDouble(50) ?? 0) * .pi / 180),
                             style: .default,
-                            layer: layer
+                            layer: layer,
+                            renderKind: type == "ATTRIB" ? .attribute : .regular
                         ))
                     }
                 }
@@ -992,11 +1496,14 @@ private enum DXFPreviewParser {
                     let chunks = fields.allStrings(3)
                     let tail = fields.firstString(1).map { [$0] } ?? []
                     let merged = (chunks + tail).joined()
-                    let normalized = normalizeDXFText(merged)
+                    let normalized = normalizeDXFText(merged, bigFontProfile: bigFontProfile)
                     if !normalized.isEmpty {
                         texts.append(.init(
                             point: CGPoint(x: x, y: y),
                             value: normalized,
+                            rawValue: merged,
+                            rawTextBytesHex: nil,
+                            chosenCodepage: decodedPayload.resolvedCodePage.map(Int.init),
                             height: fields.firstDouble(40) ?? 2,
                             rotation: ((fields.firstDouble(50) ?? 0) * .pi / 180),
                             style: .default,
@@ -1039,18 +1546,176 @@ private enum DXFPreviewParser {
             texts: texts,
             arcCount: arcCount,
             polylineEntityCount: polylineEntityCount,
+            textDecodingHint: decodingHint(
+                preferredCodePage: preferredCodePage,
+                resolvedCodePage: decodedPayload.resolvedCodePage,
+                preferredBigFont: preferredBigFont,
+                usedPreferredCodePage: decodedPayload.usedPreferredCodePage
+            ),
             bounds: bounds
         )
     }
 
-    private static func decodeText(_ data: Data) -> String {
-        if let utf8 = String(data: data, encoding: .utf8) {
-            return utf8
+    private static func decodeText(_ data: Data, preferredCodePage: Int32?) -> DecodedTextPayload {
+        let candidates: [(Int32?, String.Encoding)] = {
+            var values: [(Int32?, String.Encoding)] = []
+            if let preferredCodePage, let encoding = stringEncoding(for: preferredCodePage) {
+                values.append((preferredCodePage, encoding))
+            }
+            values.append(contentsOf: [
+                (65001, .utf8),
+                (936, stringEncoding(for: 936)),
+                (54936, stringEncoding(for: 54936)),
+                (950, stringEncoding(for: 950)),
+                (932, .shiftJIS),
+                (949, stringEncoding(for: 949)),
+                (20127, .ascii),
+            ].compactMap { codePage, encoding in
+                encoding.map { (codePage, $0) }
+            })
+            return values
+        }()
+
+        var seen: Set<UInt> = []
+        var best: (text: String, score: Int, codePage: Int32?)?
+        for (codePage, encoding) in candidates where seen.insert(encoding.rawValue).inserted {
+            guard let decoded = String(data: data, encoding: encoding) else { continue }
+            let score = decodedQualityScore(decoded)
+            if let preferredCodePage, codePage == preferredCodePage {
+                return DecodedTextPayload(
+                    text: decoded,
+                    resolvedCodePage: preferredCodePage,
+                    usedPreferredCodePage: true
+                )
+            }
+            if best == nil || score > best!.score {
+                best = (decoded, score, codePage)
+            }
         }
-        if let ascii = String(data: data, encoding: .ascii) {
-            return ascii
+        if let best {
+            return DecodedTextPayload(
+                text: best.text,
+                resolvedCodePage: best.codePage,
+                usedPreferredCodePage: false
+            )
         }
-        return String(decoding: data, as: UTF8.self)
+        return DecodedTextPayload(
+            text: String(decoding: data, as: UTF8.self),
+            resolvedCodePage: 65001,
+            usedPreferredCodePage: false
+        )
+    }
+
+    private static func stringEncoding(for codePage: Int32) -> String.Encoding? {
+        let cfEncoding = CFStringConvertWindowsCodepageToEncoding(UInt32(codePage))
+        guard cfEncoding != kCFStringEncodingInvalidId else { return nil }
+        let nsEncoding = CFStringConvertEncodingToNSStringEncoding(cfEncoding)
+        guard nsEncoding != UInt(kCFStringEncodingInvalidId) else { return nil }
+        return String.Encoding(rawValue: nsEncoding)
+    }
+
+    private static func decodedQualityScore(_ text: String) -> Int {
+        var score = 0
+        for scalar in text.unicodeScalars {
+            let value = scalar.value
+            if (0x3400...0x4DBF).contains(value) ||
+                (0x4E00...0x9FFF).contains(value) ||
+                (0xF900...0xFAFF).contains(value) ||
+                (0x3000...0x303F).contains(value) ||
+                (0xFF00...0xFFEF).contains(value) {
+                score += 12
+            } else if value == 0xFFFD {
+                score -= 40
+            } else if (0x00A0...0x00FF).contains(value) {
+                score -= 6
+            } else if value == 0x3F {
+                score -= 4
+            } else if value < 0x20 && scalar != "\n" && scalar != "\r" && scalar != "\t" {
+                score -= 12
+            } else if value < 0x7F {
+                score += 1
+            }
+        }
+        score += cadVocabularyScore(text)
+        return score
+    }
+
+    private static func cadVocabularyScore(_ text: String) -> Int {
+        let commonTerms = [
+            "平面", "立面", "剖面", "详图", "节点", "标高", "轴线", "尺寸",
+            "配电", "回路", "照明", "插座", "桥架", "线管", "接地", "负荷", "施工",
+            "建筑", "结构", "电气", "给排水", "消防", "弱电", "系统图", "配线",
+            "平面圖", "立面圖", "剖面圖", "詳圖", "節點", "標高", "軸線", "尺寸",
+            "配電", "迴路", "照明", "插座", "橋架", "線管", "接地", "負荷", "施工",
+            "建築", "結構", "電氣", "給排水", "消防", "弱電", "系統圖", "配線",
+        ]
+        let suspiciousGlyphs = ["Ê", "Ð", "Ä", "Ã", "Â", "Ó", "Æ", "Ë", "·", "µ", "Ç"]
+        var score = 0
+        for term in commonTerms where text.contains(term) {
+            score += 18
+        }
+        for glyph in suspiciousGlyphs where text.contains(glyph) {
+            score -= 18
+        }
+        return score
+    }
+
+    private static func decodingHint(
+        preferredCodePage: Int32?,
+        resolvedCodePage: Int32?,
+        preferredBigFont: Int32?,
+        usedPreferredCodePage: Bool
+    ) -> String? {
+        let bodyText: String
+        if usedPreferredCodePage, let preferredCodePage {
+            bodyText = "正文 \(codePageName(for: preferredCodePage))"
+        } else if let resolvedCodePage {
+            bodyText = "正文自动命中 \(codePageName(for: resolvedCodePage))"
+        } else {
+            bodyText = "正文自动编码"
+        }
+        let shxText = preferredBigFont
+            .flatMap(CADTextBigFontProfile.init(rawValue:))
+            .map(bigFontName(for:)) ?? "自动 SHX"
+        return "\(bodyText) / \(shxText)"
+    }
+
+    private static func codePageName(for codePage: Int32) -> String {
+        switch codePage {
+        case 936:
+            return "GBK 936"
+        case 950:
+            return "Big5 950"
+        case 54936:
+            return "GB18030 54936"
+        case 932:
+            return "Shift-JIS 932"
+        case 949:
+            return "Korean 949"
+        case 65001:
+            return "UTF-8"
+        case 20127:
+            return "ASCII"
+        default:
+            return "代码页 \(Int(codePage))"
+        }
+    }
+
+    private static func bigFontName(for profile: CADTextBigFontProfile) -> String {
+        switch profile {
+        case .auto:
+            return "自动 SHX"
+        case .gbcbig:
+            return "GBCBIG"
+        case .hztxt:
+            return "HZTXT"
+        case .hzfs:
+            return "HZFS"
+        case .big5:
+            return "Big5 字体"
+        case .disabled:
+            return "关闭 SHX 映射"
+        }
     }
 
     private static func dxfPairs(from text: String) -> [(code: Int, value: String)] {
@@ -1140,14 +1805,38 @@ private enum DXFPreviewParser {
         }
     }
 
-    private static func normalizeDXFText(_ raw: String) -> String {
-        let collapsed = raw
-            .replacingOccurrences(of: "\\P", with: "\n")
-            .replacingOccurrences(of: "\\p", with: "\n")
-            .replacingOccurrences(of: "\\~", with: " ")
-            .replacingOccurrences(of: "{", with: "")
-            .replacingOccurrences(of: "}", with: "")
-        return collapsed.trimmingCharacters(in: .whitespacesAndNewlines)
+    private static func centroid(of points: [CGPoint]) -> CGPoint? {
+        guard !points.isEmpty else { return nil }
+        let uniquePoints: [CGPoint]
+        if points.count > 1, points.first == points.last {
+            uniquePoints = Array(points.dropLast())
+        } else {
+            uniquePoints = points
+        }
+        guard !uniquePoints.isEmpty else { return nil }
+
+        let sum = uniquePoints.reduce(CGPoint.zero) { partial, point in
+            CGPoint(x: partial.x + point.x, y: partial.y + point.y)
+        }
+        return CGPoint(
+            x: sum.x / CGFloat(uniquePoints.count),
+            y: sum.y / CGFloat(uniquePoints.count)
+        )
+    }
+
+    private static func hatchLabel(for pattern: String, solidFlag: Int?) -> String {
+        let normalized = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty {
+            return ""
+        }
+        if normalized.caseInsensitiveCompare("SOLID") == .orderedSame || solidFlag == 1 {
+            return "实填充"
+        }
+        return normalized
+    }
+
+    private static func normalizeDXFText(_ raw: String, bigFontProfile: CADTextBigFontProfile) -> String {
+        CADTextNormalizer.normalize(raw, bigFontProfile: bigFontProfile)
     }
 }
 

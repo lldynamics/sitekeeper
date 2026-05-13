@@ -88,8 +88,8 @@ struct ProjectWarehouseOverviewView: View {
         var value = movement
         let result = ProjectWarehouseAttachmentImporter.importAttachments(attachments, movement: value, store: store)
         value.linkedDocumentIds = result.documents.map(\.id)
-        store.projectDocuments.append(contentsOf: result.documents)
-        store.projectWarehouseMovements.insert(value, at: 0)
+        store.appendProjectDocuments(result.documents)
+        store.insertProjectWarehouseMovementAtTop(value)
         store.scheduleSave()
         showAttachmentFailures(result.failures)
     }
@@ -270,10 +270,10 @@ struct ProjectWarehouseView: View {
                 for document in store.projectDocuments where removableDocumentIds.contains(document.id) {
                     ProjectDocumentStorage.delete(fileName: document.fileName)
                 }
-                store.projectDocuments.removeAll { removableDocumentIds.contains($0.id) }
+                store.removeProjectDocuments(ids: removableDocumentIds)
             }
         }
-        store.projectWarehouseMovements.removeAll { ids.contains($0.id) }
+        store.removeProjectWarehouseMovements(ids: ids)
         pendingDeleteMovementIds.removeAll()
         store.scheduleSave()
     }
@@ -287,8 +287,8 @@ struct ProjectWarehouseView: View {
         var value = movement
         let result = ProjectWarehouseAttachmentImporter.importAttachments(attachments, movement: value, store: store)
         value.linkedDocumentIds = result.documents.map(\.id)
-        store.projectDocuments.append(contentsOf: result.documents)
-        store.projectWarehouseMovements.insert(value, at: 0)
+        store.appendProjectDocuments(result.documents)
+        store.insertProjectWarehouseMovementAtTop(value)
         autoAddToMaterialLibrary(movement: value)
         store.scheduleSave()
         showAttachmentFailures(result.failures)
@@ -312,7 +312,7 @@ struct ProjectWarehouseView: View {
             specification: spec,
             unit: unit
         )
-        store.materialPriceEntries.append(entry)
+        store.appendMaterialPriceEntry(entry)
     }
 
     private func showAttachmentFailures(_ failures: [String]) {

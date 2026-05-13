@@ -117,7 +117,6 @@ struct DataStoreTests {
         #expect(!testStore.progressTasks.contains { $0.projectId == pid })
         #expect(!testStore.lightingCircuitPlans.contains { $0.projectId == pid })
         #expect(!testStore.siteTodos.contains { $0.projectId == pid })
-        #expect(!testStore.paymentRecords.contains { $0.projectId == pid })
         #expect(!testStore.projectDrawings.contains { $0.projectId == pid })
         #expect(!testStore.projectContacts.contains { $0.projectId == pid })
         #expect(!testStore.projectFinancialRecords.contains { $0.projectId == pid })
@@ -155,6 +154,48 @@ struct DataStoreTests {
         #expect(!testStore.materialSheetDrafts.contains { $0.projectId == first.id })
         #expect(testStore.materialSheetDrafts.contains { $0.projectId == second.id })
         #expect(testStore.materialSheetDrafts.contains { $0.projectId == nil })
+    }
+
+    @Test func deleteProjectPrunesSharedContactLinksForOtherProjects() async throws {
+        testStore.clearAllBusinessData(deleteStoredFiles: false)
+
+        let projectA = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let projectB = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let projectC = Project(name: "C", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        testStore.projects = [projectA, projectB, projectC]
+
+        let sharedContact = ProjectContact(
+            projectId: projectB.id,
+            relatedProjectIds: [projectA.id, projectC.id],
+            name: "共享联系人"
+        )
+        let deletedPrimaryContact = ProjectContact(
+            projectId: projectA.id,
+            relatedProjectIds: [projectB.id],
+            name: "被删主联系人"
+        )
+        testStore.projectContacts = [sharedContact, deletedPrimaryContact]
+
+        testStore.deleteProject(projectA.id)
+
+        let remainingShared = try #require(testStore.projectContacts.first { $0.id == sharedContact.id })
+        #expect(remainingShared.projectId == projectB.id)
+        #expect(!remainingShared.relatedProjectIds.contains(projectA.id))
+        #expect(remainingShared.relatedProjectIds.contains(projectC.id))
+        #expect(!testStore.projectContacts.contains { $0.id == deletedPrimaryContact.id })
+    }
+
+    @Test func relatedDataCountIncludesMaterialSheetDrafts() {
+        testStore.clearAllBusinessData(deleteStoredFiles: false)
+        let project = Project(name: "草稿项目", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        testStore.projects = [project]
+        testStore.materialSheetDrafts = [
+            MaterialSheetDraft(title: "D1", projectId: project.id),
+            MaterialSheetDraft(title: "D2", projectId: project.id),
+            MaterialSheetDraft(title: "No Project", projectId: nil)
+        ]
+
+        #expect(testStore.relatedDataCount(for: project.id) == 2)
     }
 
     // MARK: - flushSave

@@ -9,6 +9,7 @@
 
 #include "dwg.h"
 #include "bits.h"
+#include "codepages.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
@@ -28,6 +29,7 @@ typedef struct SKParseContext {
   Dwg_Data *dwg;
   int capacity;
   BITCODE_RS textCodepageOverride;
+  bool hasTextCodepageOverride;
   struct {
     int type;
     int count;
@@ -50,6 +52,79 @@ static void sk_set_error(SKCADParseResult *result, const char *fmt, ...) {
   va_start(args, fmt);
   vsnprintf(result->errorMessage, sizeof(result->errorMessage), fmt, args);
   va_end(args);
+}
+
+static BITCODE_RS sk_dwg_codepage_from_external(int codepage) {
+  switch (codepage) {
+  case 0:
+    return 0;
+  case 932:
+    return CP_ANSI_932;
+  case 936:
+  case 54936:
+    return CP_ANSI_936;
+  case 949:
+    return CP_ANSI_949;
+  case 950:
+    return CP_ANSI_950;
+  case 65001:
+    return CP_UTF8;
+  case 1250:
+    return CP_ANSI_1250;
+  case 1251:
+    return CP_ANSI_1251;
+  case 1252:
+    return CP_ANSI_1252;
+  case 1253:
+    return CP_ANSI_1253;
+  case 1254:
+    return CP_ANSI_1254;
+  case 1255:
+    return CP_ANSI_1255;
+  case 1256:
+    return CP_ANSI_1256;
+  case 1257:
+    return CP_ANSI_1257;
+  case 1258:
+    return CP_ANSI_1258;
+  default:
+    return (BITCODE_RS)codepage;
+  }
+}
+
+static int sk_external_codepage_from_dwg(BITCODE_RS codepage) {
+  switch (codepage) {
+  case CP_UTF8:
+    return 65001;
+  case CP_ANSI_932:
+    return 932;
+  case CP_ANSI_936:
+    return 936;
+  case CP_ANSI_949:
+    return 949;
+  case CP_ANSI_950:
+    return 950;
+  case CP_ANSI_1250:
+    return 1250;
+  case CP_ANSI_1251:
+    return 1251;
+  case CP_ANSI_1252:
+    return 1252;
+  case CP_ANSI_1253:
+    return 1253;
+  case CP_ANSI_1254:
+    return 1254;
+  case CP_ANSI_1255:
+    return 1255;
+  case CP_ANSI_1256:
+    return 1256;
+  case CP_ANSI_1257:
+    return 1257;
+  case CP_ANSI_1258:
+    return 1258;
+  default:
+    return (int)codepage;
+  }
 }
 
 static SKAffineTransform2D sk_identity_transform(void) {
@@ -140,6 +215,66 @@ static char *sk_strdup_safe(const char *text) {
   return copy;
 }
 
+static char *sk_hex_copy(const char *text) {
+  if (!text || !text[0]) {
+    return NULL;
+  }
+  static const char digits[] = "0123456789ABCDEF";
+  const unsigned char *bytes = (const unsigned char *)text;
+  const size_t len = strlen(text);
+  const size_t maxBytes = len > 96 ? 96 : len;
+  const size_t suffix = len > maxBytes ? 3 : 0;
+  char *out = (char *)malloc(maxBytes * 3 + suffix + 1);
+  if (!out) {
+    return NULL;
+  }
+  size_t cursor = 0;
+  for (size_t index = 0; index < maxBytes; index++) {
+    if (index > 0) {
+      out[cursor++] = ' ';
+    }
+    out[cursor++] = digits[(bytes[index] >> 4) & 0x0F];
+    out[cursor++] = digits[bytes[index] & 0x0F];
+  }
+  if (suffix) {
+    out[cursor++] = '.';
+    out[cursor++] = '.';
+    out[cursor++] = '.';
+  }
+  out[cursor] = '\0';
+  return out;
+}
+
+static void sk_free_primitive_members(SKCADPrimitive *primitive) {
+  if (!primitive) {
+    return;
+  }
+  if (primitive->text) {
+    free(primitive->text);
+    primitive->text = NULL;
+  }
+  if (primitive->rawTextBytesHex) {
+    free(primitive->rawTextBytesHex);
+    primitive->rawTextBytesHex = NULL;
+  }
+  if (primitive->layerName) {
+    free(primitive->layerName);
+    primitive->layerName = NULL;
+  }
+  if (primitive->textStyleName) {
+    free(primitive->textStyleName);
+    primitive->textStyleName = NULL;
+  }
+  if (primitive->fontFile) {
+    free(primitive->fontFile);
+    primitive->fontFile = NULL;
+  }
+  if (primitive->bigFontFile) {
+    free(primitive->bigFontFile);
+    primitive->bigFontFile = NULL;
+  }
+}
+
 static bool sk_is_valid_utf8(const char *text) {
   if (!text) {
     return false;
@@ -215,32 +350,240 @@ static char *sk_copy_converted_utf8(const char *source, BITCODE_RS codepage) {
   return copy;
 }
 
-static char *sk_utf8_copy(const char *text, BITCODE_RS codepage) {
+static int sk_read_utf8_codepoint(const unsigned char **cursor) {
+  const unsigned char *bytes = *cursor;
+  if (!bytes || !*bytes) {
+    return -1;
+  }
+  if (bytes[0] <= 0x7F) {
+    *cursor = bytes + 1;
+    return bytes[0];
+  }
+  if ((bytes[0] & 0xE0) == 0xC0 &&
+      (bytes[1] & 0xC0) == 0x80 &&
+      bytes[0] != 0xC0 && bytes[0] != 0xC1) {
+    *cursor = bytes + 2;
+    return ((bytes[0] & 0x1F) << 6) | (bytes[1] & 0x3F);
+  }
+  if ((bytes[0] & 0xF0) == 0xE0 &&
+      (bytes[1] & 0xC0) == 0x80 &&
+      (bytes[2] & 0xC0) == 0x80 &&
+      !(bytes[0] == 0xE0 && bytes[1] < 0xA0)) {
+    *cursor = bytes + 3;
+    return ((bytes[0] & 0x0F) << 12) |
+           ((bytes[1] & 0x3F) << 6) |
+           (bytes[2] & 0x3F);
+  }
+  if ((bytes[0] & 0xF8) == 0xF0 &&
+      (bytes[1] & 0xC0) == 0x80 &&
+      (bytes[2] & 0xC0) == 0x80 &&
+      (bytes[3] & 0xC0) == 0x80 &&
+      bytes[0] <= 0xF4 &&
+      !(bytes[0] == 0xF0 && bytes[1] < 0x90) &&
+      !(bytes[0] == 0xF4 && bytes[1] > 0x8F)) {
+    *cursor = bytes + 4;
+    return ((bytes[0] & 0x07) << 18) |
+           ((bytes[1] & 0x3F) << 12) |
+           ((bytes[2] & 0x3F) << 6) |
+           (bytes[3] & 0x3F);
+  }
+  *cursor = bytes + 1;
+  return -1;
+}
+
+static bool sk_codepoint_is_cjk(int codepoint) {
+  return (codepoint >= 0x3400 && codepoint <= 0x4DBF) ||
+         (codepoint >= 0x4E00 && codepoint <= 0x9FFF) ||
+         (codepoint >= 0xF900 && codepoint <= 0xFAFF) ||
+         (codepoint >= 0x3000 && codepoint <= 0x303F) ||
+         (codepoint >= 0xFF00 && codepoint <= 0xFFEF);
+}
+
+static bool sk_contains_utf8(const char *text, const char *needle) {
+  return text && needle && strstr(text, needle) != NULL;
+}
+
+static int sk_cad_vocabulary_score(const char *text) {
+  if (!text || !text[0]) {
+    return 0;
+  }
+  const char *commonTerms[] = {
+    "平面", "立面", "剖面", "详图", "节点", "标高", "轴线", "尺寸",
+    "配电", "回路", "照明", "插座", "桥架", "线管", "接地", "负荷", "施工",
+    "建筑", "结构", "电气", "给排水", "消防", "弱电", "系统图", "配线",
+    "平面圖", "立面圖", "剖面圖", "詳圖", "節點", "標高", "軸線", "尺寸",
+    "配電", "迴路", "照明", "插座", "橋架", "線管", "接地", "負荷", "施工",
+    "建築", "結構", "電氣", "給排水", "消防", "弱電", "系統圖", "配線"
+  };
+  int score = 0;
+  for (size_t index = 0; index < sizeof(commonTerms) / sizeof(commonTerms[0]); index++) {
+    if (sk_contains_utf8(text, commonTerms[index])) {
+      score += 18;
+    }
+  }
+
+  const char *suspiciousGlyphs[] = { "Ê", "Ð", "Ä", "Ã", "Â", "Ó", "Æ", "Ë", "·", "µ", "Ç" };
+  for (size_t index = 0; index < sizeof(suspiciousGlyphs) / sizeof(suspiciousGlyphs[0]); index++) {
+    if (sk_contains_utf8(text, suspiciousGlyphs[index])) {
+      score -= 18;
+    }
+  }
+  return score;
+}
+
+static int sk_text_quality_score(const char *text) {
+  if (!text || !text[0] || !sk_is_valid_utf8(text)) {
+    return -100000;
+  }
+  int score = 0;
+  const unsigned char *cursor = (const unsigned char *)text;
+  while (*cursor) {
+    const int codepoint = sk_read_utf8_codepoint(&cursor);
+    if (codepoint < 0) {
+      score -= 30;
+      continue;
+    }
+    if (sk_codepoint_is_cjk(codepoint)) {
+      score += 12;
+    } else if (codepoint == 0xFFFD) {
+      score -= 40;
+    } else if (codepoint >= 0x00A0 && codepoint <= 0x00FF) {
+      // CAD Chinese mojibake often appears as Latin-1 supplement glyphs like ÊÐ.
+      score -= 6;
+    } else if (codepoint == '?') {
+      score -= 4;
+    } else if (codepoint < 0x20 && codepoint != '\n' && codepoint != '\r' && codepoint != '\t') {
+      score -= 12;
+    } else if (codepoint < 0x7F) {
+      score += 1;
+    }
+  }
+  score += sk_cad_vocabulary_score(text);
+  return score;
+}
+
+static bool sk_text_looks_latin1_mojibake(const char *text) {
+  if (!text || !sk_is_valid_utf8(text)) {
+    return false;
+  }
+  int highLatinCount = 0;
+  int cjkCount = 0;
+  const unsigned char *cursor = (const unsigned char *)text;
+  while (*cursor) {
+    const int codepoint = sk_read_utf8_codepoint(&cursor);
+    if (sk_codepoint_is_cjk(codepoint)) {
+      cjkCount += 1;
+    } else if (codepoint >= 0x00A0 && codepoint <= 0x00FF) {
+      highLatinCount += 1;
+    }
+  }
+  return cjkCount == 0 && highLatinCount > 0;
+}
+
+static char *sk_latin1_bytes_from_utf8(const char *text) {
+  if (!text || !sk_text_looks_latin1_mojibake(text)) {
+    return NULL;
+  }
+  const size_t maxLen = strlen(text);
+  char *bytes = (char *)malloc(maxLen + 1);
+  if (!bytes) {
+    return NULL;
+  }
+  size_t out = 0;
+  const unsigned char *cursor = (const unsigned char *)text;
+  while (*cursor) {
+    const int codepoint = sk_read_utf8_codepoint(&cursor);
+    if (codepoint < 0 || codepoint > 0xFF || codepoint == 0) {
+      free(bytes);
+      return NULL;
+    }
+    bytes[out++] = (char)(unsigned char)codepoint;
+  }
+  bytes[out] = '\0';
+  return bytes;
+}
+
+static void sk_choose_candidate(char **best, int *bestScore, int *bestCodepage,
+                                char *candidate, BITCODE_RS candidateCodepage) {
+  if (!candidate || !candidate[0]) {
+    if (candidate) {
+      free(candidate);
+    }
+    return;
+  }
+  const int score = sk_text_quality_score(candidate);
+  if (!*best || score > *bestScore) {
+    if (*best) {
+      free(*best);
+    }
+    *best = candidate;
+    *bestScore = score;
+    if (bestCodepage) {
+      *bestCodepage = sk_external_codepage_from_dwg(candidateCodepage);
+    }
+  } else {
+    free(candidate);
+  }
+}
+
+static char *sk_utf8_copy_with_codepage(const char *text, BITCODE_RS codepage,
+                                        int *chosenCodepage) {
   if (!text || !text[0]) {
     return NULL;
   }
-  if (sk_is_valid_utf8(text)) {
-    return sk_strdup_safe(text);
+
+  char *best = NULL;
+  int bestScore = -1000000;
+  int bestCodepage = 0;
+  const bool isValidUTF8 = sk_is_valid_utf8(text);
+
+  if (isValidUTF8) {
+    sk_choose_candidate(&best, &bestScore, &bestCodepage, sk_strdup_safe(text), CP_UTF8);
   }
 
   // DWG codepage sometimes comes as 0 in the header for legacy drawings.
-  // Try header codepage first, then common East-Asia fallbacks.
-  const BITCODE_RS fallbackCodepages[] = { 936, 950, 932, 65001 };
-  if (codepage > 0) {
-    char *copy = sk_copy_converted_utf8(text, codepage);
-    if (copy) {
-      return copy;
+  // Try header/manual codepage, then common East-Asia fallbacks.
+  const BITCODE_RS fallbackCodepages[] = {
+      CP_ANSI_936, CP_ANSI_950, CP_ANSI_932, CP_ANSI_949, CP_UTF8
+  };
+  if (!isValidUTF8 && codepage > 0) {
+    sk_choose_candidate(&best, &bestScore, &bestCodepage,
+                        sk_copy_converted_utf8(text, codepage), codepage);
+  }
+  if (isValidUTF8 && codepage > 0 && codepage != CP_UTF8 && sk_text_looks_latin1_mojibake(text)) {
+    char *latin1Bytes = sk_latin1_bytes_from_utf8(text);
+    if (latin1Bytes) {
+      sk_choose_candidate(&best, &bestScore, &bestCodepage,
+                          sk_copy_converted_utf8(latin1Bytes, codepage), codepage);
+      free(latin1Bytes);
     }
   }
+
   for (size_t index = 0; index < sizeof(fallbackCodepages) / sizeof(fallbackCodepages[0]); index++) {
     const BITCODE_RS fallback = fallbackCodepages[index];
     if (fallback == codepage) {
       continue;
     }
-    char *copy = sk_copy_converted_utf8(text, fallback);
-    if (copy) {
-      return copy;
+    if (isValidUTF8) {
+      if (!sk_text_looks_latin1_mojibake(text)) {
+        continue;
+      }
+      char *latin1Bytes = sk_latin1_bytes_from_utf8(text);
+      if (latin1Bytes) {
+        sk_choose_candidate(&best, &bestScore, &bestCodepage,
+                            sk_copy_converted_utf8(latin1Bytes, fallback), fallback);
+        free(latin1Bytes);
+      }
+    } else {
+      sk_choose_candidate(&best, &bestScore, &bestCodepage,
+                          sk_copy_converted_utf8(text, fallback), fallback);
     }
+  }
+  if (best) {
+    if (chosenCodepage) {
+      *chosenCodepage = bestCodepage;
+    }
+    return best;
   }
 
   // Final fallback to keep UI stable even when source bytes are unknown.
@@ -255,7 +598,46 @@ static char *sk_utf8_copy(const char *text, BITCODE_RS codepage) {
     }
     bytes += 1;
   }
+  if (chosenCodepage) {
+    *chosenCodepage = 0;
+  }
   return lossy;
+}
+
+static char *sk_utf8_copy(const char *text, BITCODE_RS codepage) {
+  return sk_utf8_copy_with_codepage(text, codepage, NULL);
+}
+
+static BITCODE_RS sk_context_codepage(const SKParseContext *ctx) {
+  if (!ctx) {
+    return 0;
+  }
+  return ctx->hasTextCodepageOverride
+             ? ctx->textCodepageOverride
+             : (ctx->dwg ? ctx->dwg->header.codepage : 0);
+}
+
+static char *sk_context_utf8_copy(const SKParseContext *ctx, const char *text) {
+  return sk_utf8_copy(text, sk_context_codepage(ctx));
+}
+
+static char *sk_context_utf8_copy_with_codepage(const SKParseContext *ctx,
+                                                const char *text,
+                                                int *chosenCodepage) {
+  return sk_utf8_copy_with_codepage(text, sk_context_codepage(ctx), chosenCodepage);
+}
+
+static bool sk_text_looks_suspicious(const char *text) {
+  if (!text || !text[0] || !sk_is_valid_utf8(text)) {
+    return true;
+  }
+  if (sk_text_looks_latin1_mojibake(text)) {
+    return true;
+  }
+  if (strstr(text, "\xEF\xBF\xBD") != NULL) {
+    return true;
+  }
+  return sk_text_quality_score(text) < -4;
 }
 
 static unsigned int sk_rgb_from_color(const Dwg_Color *color) {
@@ -350,6 +732,18 @@ static const char *sk_layer_name_from_entity(const Dwg_Object_Entity *entity) {
   return layer->name;
 }
 
+static const Dwg_Object_STYLE *sk_text_style_from_ref(const SKParseContext *ctx,
+                                                      BITCODE_H styleRef) {
+  if (!ctx || !ctx->dwg || !styleRef) {
+    return NULL;
+  }
+  const Dwg_Object *object = styleRef->obj ? styleRef->obj : dwg_ref_object(ctx->dwg, styleRef);
+  if (!object || object->fixedtype != DWG_TYPE_STYLE || !object->tio.object) {
+    return NULL;
+  }
+  return object->tio.object->tio.STYLE;
+}
+
 static const char *sk_entity_type_name(int type) {
   switch (type) {
   case DWG_TYPE_SPLINE:
@@ -374,6 +768,12 @@ static const char *sk_entity_type_name(int type) {
     return "IMAGE";
   case DWG_TYPE_WIPEOUT:
     return "WIPEOUT";
+  case DWG_TYPE_PROXY_ENTITY:
+    return "PROXY_ENTITY/AEC";
+  case DWG_TYPE_PROXY_OBJECT:
+    return "PROXY_OBJECT/AEC";
+  case DWG_TYPE_DYNAMICBLOCKPROXYNODE:
+    return "DYNAMICBLOCKPROXYNODE";
   case DWG_TYPE_POLYLINE_MESH:
     return "POLYLINE_MESH";
   case DWG_TYPE_POLYLINE_PFACE:
@@ -404,6 +804,22 @@ static void sk_track_unsupported(SKParseContext *ctx, int type) {
   }
 }
 
+static void sk_write_unsupported_summary(const SKParseContext *ctx) {
+  if (!ctx || !ctx->result) {
+    return;
+  }
+  ctx->result->unsupportedEntitySummary[0] = '\0';
+  for (int index = 0; index < ctx->unsupportedTypeCount && index < 8; index++) {
+    const char *name = sk_entity_type_name(ctx->unsupportedTypes[index].type);
+    char line[64];
+    snprintf(line, sizeof(line), "%s:%d%s", name, ctx->unsupportedTypes[index].count,
+             index + 1 < ctx->unsupportedTypeCount && index < 7 ? ", " : "");
+    strncat(ctx->result->unsupportedEntitySummary, line,
+            sizeof(ctx->result->unsupportedEntitySummary) -
+                strlen(ctx->result->unsupportedEntitySummary) - 1);
+  }
+}
+
 static bool sk_append_line(SKParseContext *ctx, SKAffineTransform2D transform,
                            double x1, double y1, double x2, double y2,
                            SKStrokeStyle style, const char *layerName) {
@@ -416,7 +832,7 @@ static bool sk_append_line(SKParseContext *ctx, SKAffineTransform2D transform,
   primitive->kind = SKCADPrimitiveLine;
   primitive->start = sk_apply_point(transform, x1, y1);
   primitive->end = sk_apply_point(transform, x2, y2);
-  primitive->layerName = sk_strdup_safe(layerName ? layerName : "0");
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
   primitive->strokeRGB = style.rgb;
   primitive->strokeWidth = style.width;
   return true;
@@ -440,7 +856,7 @@ static bool sk_append_arc(SKParseContext *ctx, SKAffineTransform2D transform,
   primitive->radius = radius * sk_effective_scale(transform);
   primitive->startAngle = startAngle + sk_effective_rotation(transform);
   primitive->endAngle = endAngle + sk_effective_rotation(transform);
-  primitive->layerName = sk_strdup_safe(layerName ? layerName : "0");
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
   primitive->strokeRGB = style.rgb;
   primitive->strokeWidth = style.width;
   return true;
@@ -461,7 +877,7 @@ static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
   primitive->kind = SKCADPrimitiveCircle;
   primitive->center = sk_apply_point(transform, cx, cy);
   primitive->radius = radius * sk_effective_scale(transform);
-  primitive->layerName = sk_strdup_safe(layerName ? layerName : "0");
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
   primitive->strokeRGB = style.rgb;
   primitive->strokeWidth = style.width;
   return true;
@@ -470,7 +886,8 @@ static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
 static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
                            double x, double y, double height, double rotation,
                            const char *text, SKStrokeStyle style,
-                           const char *layerName) {
+                           const char *layerName,
+                           const Dwg_Object_STYLE *textStyle) {
   if (!text || !text[0]) {
     return true;
   }
@@ -486,18 +903,26 @@ static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
       (height > 0.0 && isfinite(height)) ? height * sk_effective_scale(transform)
                                          : 2.0;
   primitive->textRotation = rotation + sk_effective_rotation(transform);
-  primitive->layerName = sk_strdup_safe(layerName ? layerName : "0");
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
   primitive->strokeRGB = style.rgb;
   primitive->strokeWidth = style.width;
-  BITCODE_RS codepage = 0;
-  if (ctx) {
-    codepage = ctx->textCodepageOverride > 0
-                   ? ctx->textCodepageOverride
-                   : (ctx->dwg ? ctx->dwg->header.codepage : 0);
+  primitive->rawTextBytesHex = sk_hex_copy(text);
+  primitive->text = sk_context_utf8_copy_with_codepage(ctx, text, &primitive->chosenCodepage);
+  if (textStyle) {
+    primitive->textStyleName = sk_context_utf8_copy(ctx, textStyle->name);
+    primitive->fontFile = sk_context_utf8_copy(ctx, textStyle->font_file);
+    primitive->bigFontFile = sk_context_utf8_copy(ctx, textStyle->bigfont_file);
   }
-  primitive->text = sk_utf8_copy(text, codepage);
   if (!primitive->text) {
     primitive->text = NULL;
+  } else if (ctx->result) {
+    ctx->result->textPrimitiveCount += 1;
+    if (sk_text_looks_latin1_mojibake(primitive->text)) {
+      ctx->result->mojibakeTextCount += 1;
+    }
+    if (sk_text_looks_suspicious(primitive->text)) {
+      ctx->result->suspiciousTextCount += 1;
+    }
   }
   return true;
 }
@@ -672,11 +1097,12 @@ static bool sk_append_line_if_valid(SKParseContext *ctx, SKAffineTransform2D tra
 static bool sk_append_attrib_like_text(SKParseContext *ctx, SKAffineTransform2D transform,
                                        double x, double y, double height, double rotation,
                                        const char *textValue, SKStrokeStyle style,
-                                       const char *layerName) {
+                                       const char *layerName,
+                                       const Dwg_Object_STYLE *textStyle) {
   if (!textValue || !textValue[0]) {
     return true;
   }
-  return sk_append_text(ctx, transform, x, y, height, rotation, textValue, style, layerName);
+  return sk_append_text(ctx, transform, x, y, height, rotation, textValue, style, layerName, textStyle);
 }
 
 static bool sk_append_dimension_text(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -692,7 +1118,7 @@ static bool sk_append_dimension_text(SKParseContext *ctx, SKAffineTransform2D tr
     snprintf(autoText, sizeof(autoText), "%.3f", measurement);
     displayText = autoText;
   }
-  return sk_append_text(ctx, transform, textX, textY, 2.2, textRotation, displayText, style, layerName);
+  return sk_append_text(ctx, transform, textX, textY, 2.2, textRotation, displayText, style, layerName, NULL);
 }
 
 static bool sk_append_solid_outline(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -985,7 +1411,7 @@ static bool sk_append_multileader_entity(SKParseContext *ctx, const Dwg_Entity_M
     const Dwg_MLEADER_Content_MText *txt = &leader->ctx.content.txt;
     if (!sk_append_text(ctx, transform, txt->location.x, txt->location.y,
                         leader->ctx.text_height > 0.0 ? leader->ctx.text_height : 2.2,
-                        txt->rotation, txt->default_text, style, layerName)) {
+                        txt->rotation, txt->default_text, style, layerName, NULL)) {
       return false;
     }
   }
@@ -1239,7 +1665,7 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
     }
     return sk_append_text(ctx, transform, text->ins_pt.x, text->ins_pt.y,
                           text->height, text->rotation, text->text_value, style,
-                          layerName);
+                          layerName, sk_text_style_from_ref(ctx, text->style));
   }
 
   case DWG_TYPE_MTEXT: {
@@ -1250,7 +1676,7 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
     const double rotation = atan2(text->x_axis_dir.y, text->x_axis_dir.x);
     return sk_append_text(ctx, transform, text->ins_pt.x, text->ins_pt.y,
                           text->text_height, rotation, text->text, style,
-                          layerName);
+                          layerName, sk_text_style_from_ref(ctx, text->style));
   }
 
   case DWG_TYPE_ATTRIB: {
@@ -1267,7 +1693,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         attrib->rotation,
         attrib->text_value,
         style,
-        layerName);
+        layerName,
+        sk_text_style_from_ref(ctx, attrib->style));
   }
 
   case DWG_TYPE_ATTDEF: {
@@ -1284,7 +1711,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         attdef->rotation,
         attdef->default_value,
         style,
-        layerName);
+        layerName,
+        sk_text_style_from_ref(ctx, attdef->style));
   }
 
   case DWG_TYPE_LWPOLYLINE: {
@@ -1576,24 +2004,24 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
   ctx.result = result;
   ctx.dwg = &dwg;
   ctx.capacity = 0;
-  ctx.textCodepageOverride = codepage_override > 0 ? (BITCODE_RS)codepage_override : 0;
+  ctx.hasTextCodepageOverride = codepage_override > 0;
+  ctx.textCodepageOverride = codepage_override > 0
+                                 ? sk_dwg_codepage_from_external(codepage_override)
+                                 : 0;
   result->totalObjectCount = (int)dwg.num_objects;
+  result->requestedCodepage = codepage_override;
+  result->headerCodepage = (int)dwg.header.codepage;
+  result->effectiveCodepage = (int)sk_context_codepage(&ctx);
 
   const bool parsed = sk_parse_root_entities(&ctx);
+  sk_write_unsupported_summary(&ctx);
   if (!parsed) {
     if (!result->errorMessage[0]) {
       sk_set_error(result, "DWG 解析中断。");
     }
     if (result->primitives) {
       for (int index = 0; index < result->primitiveCount; index++) {
-        if (result->primitives[index].text) {
-          free(result->primitives[index].text);
-          result->primitives[index].text = NULL;
-        }
-        if (result->primitives[index].layerName) {
-          free(result->primitives[index].layerName);
-          result->primitives[index].layerName = NULL;
-        }
+        sk_free_primitive_members(&result->primitives[index]);
       }
       free(result->primitives);
       result->primitives = NULL;
@@ -1648,14 +2076,7 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
     }
     if (result->primitives) {
       for (int index = 0; index < result->primitiveCount; index++) {
-        if (result->primitives[index].text) {
-          free(result->primitives[index].text);
-          result->primitives[index].text = NULL;
-        }
-        if (result->primitives[index].layerName) {
-          free(result->primitives[index].layerName);
-          result->primitives[index].layerName = NULL;
-        }
+        sk_free_primitive_members(&result->primitives[index]);
       }
       free(result->primitives);
       result->primitives = NULL;
@@ -1678,14 +2099,7 @@ void sk_libredwg_free_parse_result(SKCADParseResult *result) {
 
   if (result->primitives) {
     for (int index = 0; index < result->primitiveCount; index++) {
-      if (result->primitives[index].text) {
-        free(result->primitives[index].text);
-        result->primitives[index].text = NULL;
-      }
-      if (result->primitives[index].layerName) {
-        free(result->primitives[index].layerName);
-        result->primitives[index].layerName = NULL;
-      }
+      sk_free_primitive_members(&result->primitives[index]);
     }
     free(result->primitives);
   }

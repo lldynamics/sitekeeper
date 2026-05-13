@@ -2167,7 +2167,7 @@ typedef struct _dwg_entity_TEXT
 typedef struct _dwg_AcDbMTextObjectEmbedded
 {
   /* common fields */
-  BITCODE_BB entmode;      	/*<! DXF 70 */
+  BITCODE_BB entmode;      	/*!< DXF 70 */
   BITCODE_BL num_reactors;
   BITCODE_B has_ds_data;
   BITCODE_CMC color;
@@ -2190,7 +2190,7 @@ typedef struct _dwg_AcDbMTextObjectEmbedded
   BITCODE_BD rect_height;	/*!< DXF 40 */
   BITCODE_BD rect_width;	/*!< DXF 41 */
   BITCODE_BD text_height;       /*!< DXF 40 */
-  BITCODE_BS attachment;        /*<! DXF 71 */
+  BITCODE_BS attachment;        /*!< DXF 71 */
   BITCODE_BS flow_dir;          /*!< DXF 72 */
   BITCODE_BD extents_width;	/*!< DXF 42 */
   BITCODE_BD extents_height;	/*!< DXF 43 */
@@ -2254,7 +2254,7 @@ typedef struct _dwg_entity_ATTRIB
   BITCODE_H style;
   BITCODE_RC mtext_type;    /* R2018+ */
   Dwg_AcDbMTextObjectEmbedded mtext;
-  BITCODE_B is_really_locked;      	/*<! DXF 70 */
+  BITCODE_B is_really_locked;      	/*!< DXF 70 */
   BITCODE_BS annotative_data_size;/* R2018+ */
   BITCODE_RC* annotative_data;    /* R2018+ */
   BITCODE_BS annotative_flag;     /* R2018+ */
@@ -2297,7 +2297,7 @@ typedef struct _dwg_entity_ATTDEF
   BITCODE_H style;
   BITCODE_RC mtext_type;          /* R2018+ */
   Dwg_AcDbMTextObjectEmbedded mtext;
-  BITCODE_B is_really_locked;      	/*<! DXF 70 */
+  BITCODE_B is_really_locked;      	/*!< DXF 70 */
   BITCODE_BS annotative_data_size;/* R2018+ */
   BITCODE_RC* annotative_data;    /* R2018+ */
   BITCODE_BS annotative_flag;    /* R2018+ */
@@ -2399,7 +2399,7 @@ typedef struct _dwg_entity_VERTEX_2D
 {
   struct _dwg_object_entity *parent;
 
-  BITCODE_RC flag;  /*<! DXF 70 (see LOG_FLAG_VERTEX)
+  BITCODE_RC flag;  /*!< DXF 70 (see LOG_FLAG_VERTEX)
                       1:  EXTRA_VERTEX
                       2:  CURVE_FIT
                       8:  SPLINE_FIT
@@ -2420,7 +2420,7 @@ typedef struct _dwg_entity_VERTEX_3D
 {
   struct _dwg_object_entity *parent;
 
-  BITCODE_RC flag;  /*<! DXF 70 (see LOG_FLAG_VERTEX)
+  BITCODE_RC flag;  /*!< DXF 70 (see LOG_FLAG_VERTEX)
                       8:  SPLINE_FIT
                       16: SPLINE_FRAME_CONTROL_POINT
                       32: 3D
@@ -3175,20 +3175,20 @@ typedef struct _dwg_entity_LEADER
   struct _dwg_object_entity *parent;
 
   BITCODE_B unknown_bit_1;  /* always seems to be zero */
-  BITCODE_BS path_type;     /*< DXF(72) 0: line, 1: spline (oda bug) */
-  BITCODE_BS annot_type;    /*< DXF(73) 0: text, 1: tol, 2: insert, 3 (def): none */
-  BITCODE_BL num_points;    /*< DXF(76) */
-  BITCODE_3DPOINT* points;  /*< DXF(10) */
+  BITCODE_BS path_type;     /*!< DXF(72) 0: line, 1: spline (oda bug) */
+  BITCODE_BS annot_type;    /*!< DXF(73) 0: text, 1: tol, 2: insert, 3 (def): none */
+  BITCODE_BL num_points;    /*!< DXF(76) */
+  BITCODE_3DPOINT* points;  /*!< DXF(10) */
   BITCODE_3DPOINT origin;
   BITCODE_BE extrusion;
-  BITCODE_3DPOINT x_direction;  /*< DXF(211) */
-  BITCODE_3DPOINT inspt_offset; /*< DXF(212) */
+  BITCODE_3DPOINT x_direction;  /*!< DXF(211) */
+  BITCODE_3DPOINT inspt_offset; /*!< DXF(212) */
   BITCODE_3DPOINT endptproj; /* DXF(213) R_13c3-R_2007 */
   BITCODE_BD dimgap;         /* R_13-R_14 only */
-  BITCODE_BD box_height;     /*< DXF(40) */
-  BITCODE_BD box_width;      /*< DXF(41) */
+  BITCODE_BD box_height;     /*!< DXF(40) */
+  BITCODE_BD box_width;      /*!< DXF(41) */
   BITCODE_B hookline_dir;    /* if hook line is on x direction */
-  BITCODE_B hookline_on;     /*< DXF(75) computed from arrowhead_type & 8 */
+  BITCODE_B hookline_on;     /*!< DXF(75) computed from arrowhead_type & 8 */
   BITCODE_B arrowhead_on;
   BITCODE_BS arrowhead_type;
   BITCODE_BD dimasz;
@@ -3336,7 +3336,7 @@ typedef struct _dwg_object_LAYER_CONTROL
  */
 typedef struct _dwg_object_LAYER
 {
-  /*<! flag0 DWG r2000+
+  /*!< flag0 DWG r2000+
      1:  frozen
      2:  off
      4:  frozen_in_new
@@ -3373,7 +3373,7 @@ typedef struct _dwg_object_STYLE_CONTROL
  */
 typedef struct _dwg_object_STYLE
 {
-  /*<! flag DXF 70:
+  /*!< flag DXF 70:
      1:  is_vertical
      2:  is_upsidedown
      4:  is_shape
@@ -5786,7 +5786,7 @@ typedef struct _dwg_entity_GEOPOSITIONMARKER
   BITCODE_3BD ins_pt;          /* DXF only, = position */
   BITCODE_2RD alignment_pt;    /* DXF only */
   Dwg_AcDbMTextObjectEmbedded mtext;
-  BITCODE_B is_really_locked;      	/*<! DXF 70 */
+  BITCODE_B is_really_locked;      	/*!< DXF 70 */
   BITCODE_BS annotative_data_size;/* R2018+ */
   BITCODE_RC* annotative_data;    /* R2018+ */
   BITCODE_BS annotative_flag;    /* R2018+ */
@@ -6169,27 +6169,27 @@ typedef struct _dwg_DATALINK_customdata
 typedef struct _dwg_object_DATALINK
 {
   struct _dwg_object_object *parent;
-  BITCODE_BS class_version; /*<! DXF 70 1 */
-  BITCODE_T data_adapter;/*<! DXF 1  */
-  BITCODE_T description;/*<! DXF 300  */
-  BITCODE_T tooltip;	/*<! DXF 301  */
-  BITCODE_T connection_string;	/*<! DXF 302  */
-  BITCODE_BL option;	/*<! DXF 90  2 */
-  BITCODE_BL update_option;/*<! DXF 91  1179649 */
-  BITCODE_BL bl92;	/*<! DXF 92  1 */
-  BITCODE_BS year;	/*<! DXF 170  */
-  BITCODE_BS month;	/*<! DXF 171  */
-  BITCODE_BS day;	/*<! DXF 172  */
-  BITCODE_BS hour;	/*<! DXF 173  */
-  BITCODE_BS minute;	/*<! DXF 174  */
-  BITCODE_BS seconds;	/*<! DXF 175  */
-  BITCODE_BS msec;	/*<! DXF 176  */
-  BITCODE_BS path_option; /*<! DXF 177  1 */
-  BITCODE_BL bl93;	  /*<! DXF 93   0 */
-  BITCODE_T update_status;/*<! DXF 304  */
+  BITCODE_BS class_version; /*!< DXF 70 1 */
+  BITCODE_T data_adapter;/*!< DXF 1  */
+  BITCODE_T description;/*!< DXF 300  */
+  BITCODE_T tooltip;	/*!< DXF 301  */
+  BITCODE_T connection_string;	/*!< DXF 302  */
+  BITCODE_BL option;	/*!< DXF 90  2 */
+  BITCODE_BL update_option;/*!< DXF 91  1179649 */
+  BITCODE_BL bl92;	/*!< DXF 92  1 */
+  BITCODE_BS year;	/*!< DXF 170  */
+  BITCODE_BS month;	/*!< DXF 171  */
+  BITCODE_BS day;	/*!< DXF 172  */
+  BITCODE_BS hour;	/*!< DXF 173  */
+  BITCODE_BS minute;	/*!< DXF 174  */
+  BITCODE_BS seconds;	/*!< DXF 175  */
+  BITCODE_BS msec;	/*!< DXF 176  */
+  BITCODE_BS path_option; /*!< DXF 177  1 */
+  BITCODE_BL bl93;	  /*!< DXF 93   0 */
+  BITCODE_T update_status;/*!< DXF 304  */
   BITCODE_BL num_customdata; // 94
   Dwg_DATALINK_customdata *customdata; // 330 + 304
-  BITCODE_H hardowner;	/*<! DXF 360  */
+  BITCODE_H hardowner;	/*!< DXF 360  */
 } Dwg_Object_DATALINK;
 
 /**
@@ -6312,20 +6312,20 @@ typedef struct _dwg_ASSOCACTION_Deps
 typedef struct _dwg_object_ASSOCDEPENDENCY
 {
   struct _dwg_object_object *parent;
-  BITCODE_BS class_version;			/*<! DXF 90 */
-  BITCODE_BL status;				/*<! DXF 90 */
-  BITCODE_B is_read_dep;			/*<! DXF 290 */
-  BITCODE_B is_write_dep;			/*<! DXF 290 */
-  BITCODE_B is_attached_to_object;		/*<! DXF 290 */
-  BITCODE_B is_delegating_to_owning_action;	/*<! DXF 290 */
-  BITCODE_BLd order;				/*<! DXF 90 */
-  BITCODE_H dep_on;				/*<! DXF 330 */
-  BITCODE_B has_name;				/*<! DXF 290 */
-  BITCODE_T name;				/*<! DXF 1 */
-  BITCODE_BLd depbodyid;			/*<! DXF 90 */
-  BITCODE_H  readdep; 				/*<! DXF 330 */
-  BITCODE_H  dep_body;  			/*<! DXF 360 */
-  BITCODE_H  node; 				/*<! DXF 330 */
+  BITCODE_BS class_version;			/*!< DXF 90 */
+  BITCODE_BL status;				/*!< DXF 90 */
+  BITCODE_B is_read_dep;			/*!< DXF 290 */
+  BITCODE_B is_write_dep;			/*!< DXF 290 */
+  BITCODE_B is_attached_to_object;		/*!< DXF 290 */
+  BITCODE_B is_delegating_to_owning_action;	/*!< DXF 290 */
+  BITCODE_BLd order;				/*!< DXF 90 */
+  BITCODE_H dep_on;				/*!< DXF 330 */
+  BITCODE_B has_name;				/*!< DXF 290 */
+  BITCODE_T name;				/*!< DXF 1 */
+  BITCODE_BLd depbodyid;			/*!< DXF 90 */
+  BITCODE_H  readdep; 				/*!< DXF 330 */
+  BITCODE_H  dep_body;  			/*!< DXF 360 */
+  BITCODE_H  node; 				/*!< DXF 330 */
 } Dwg_Object_ASSOCDEPENDENCY;
 
 #define ASSOCPERSSUBENTID_fields                \
@@ -6362,8 +6362,8 @@ typedef struct _dwg_object_ASSOCGEOMDEPENDENCY
   struct _dwg_object_object *parent;
   Dwg_Object_ASSOCDEPENDENCY assocdep;
   // AcDbAssocGeomDependency
-  BITCODE_BS class_version;	/*<! DXF 90 0 */
-  BITCODE_B enabled;		/*<! DXF 290 1 */
+  BITCODE_BS class_version;	/*!< DXF 90 0 */
+  BITCODE_B enabled;		/*!< DXF 290 1 */
   ASSOCPERSSUBENTID_fields;
 } Dwg_Object_ASSOCGEOMDEPENDENCY;
 
@@ -7728,7 +7728,7 @@ typedef struct _dwg_object_CONTEXTDATAMANAGER
 } Dwg_Object_CONTEXTDATAMANAGER;
 
 #define TEXTOBJECTCONTEXTDATA_fields \
-  BITCODE_BS horizontal_mode;	/*<! DXF 70, default 0 */ \
+  BITCODE_BS horizontal_mode;	/*!< DXF 70, default 0 */ \
   BITCODE_BD rotation;		/*!< DXF 50, default 0.0 or 90.0 */ \
   BITCODE_2RD ins_pt; 		/*!< DXF 10-20 */ \
   BITCODE_2RD alignment_pt 	/*!< DXF 11-21 */
@@ -7749,7 +7749,7 @@ typedef struct _dwg_object_MTEXTOBJECTCONTEXTDATA
 {
   ANNOTSCALEOBJECTCONTEXTDATA_fields;
   // AcDbMTextObjectContextData_fields:
-  BITCODE_BL attachment;      	/*<! DXF 70 */
+  BITCODE_BL attachment;      	/*!< DXF 70 */
   BITCODE_3BD ins_pt; 		/*!< DXF 10 */
   BITCODE_3BD x_axis_dir; 	/*!< DXF 11 */
   BITCODE_BD rect_height;	/*!< DXF 40 */
@@ -7771,7 +7771,7 @@ typedef struct _dwg_OCD_Dimension
 {
   BITCODE_B b293;		/*!< DXF 293 */
   BITCODE_2RD def_pt;  		/*!< DXF 10-30 */
-  BITCODE_B is_def_textloc;	/*<! DXF 294 if def_pt is default */
+  BITCODE_B is_def_textloc;	/*!< DXF 294 if def_pt is default */
   BITCODE_BD text_rotation;	/*!< DXF 140 */
   BITCODE_H block;		/*!< DXF 2 */
   BITCODE_B dimtofl;		/*!< DXF 298 */
@@ -7878,7 +7878,7 @@ typedef struct _dwg_object_MLEADEROBJECTCONTEXTDATA
 typedef struct _dwg_object_LEADEROBJECTCONTEXTDATA
 {
   ANNOTSCALEOBJECTCONTEXTDATA_fields;
-  BITCODE_BL num_points;	/*< DXF 70 */
+  BITCODE_BL num_points;	/*!< DXF 70 */
   BITCODE_3DPOINT* points;	/*!< DXF 10 */
   BITCODE_B b290;		/*!< DXF 290 */
   BITCODE_3DPOINT x_direction;	/*!< DXF 11 */
@@ -11022,9 +11022,9 @@ typedef struct _dwg_AcDs_SchemaIndex
 // 24.2.2.6.1.1
 typedef struct _dwg_AcDs_Schema_Prop
 {
-  BITCODE_RL flags;  /*<! DXF 91 */
-  BITCODE_RL namidx; /*<! DXF 2 */
-  BITCODE_RL type;   /*<! DXF 280, 0-15 */
+  BITCODE_RL flags;  /*!< DXF 91 */
+  BITCODE_RL namidx; /*!< DXF 2 */
+  BITCODE_RL type;   /*!< DXF 280, 0-15 */
   BITCODE_RL type_size;
   BITCODE_RL unknown_1;
   BITCODE_RL unknown_2;

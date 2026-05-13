@@ -19,7 +19,11 @@ struct QuickNoteVideoTransfer: Transferable {
             }
             let result = try await QuickNoteAttachmentStorage.importVideoOrThrow(from: source)
             if let duration = result.durationSeconds, duration > maxDurationSeconds {
-                try? QuickNoteAttachmentStorage.deleteOrThrow(fileName: result.fileName)
+                do {
+                    try QuickNoteAttachmentStorage.deleteOrThrow(fileName: result.fileName)
+                } catch {
+                    StorageIssueLog.record("超长视频回滚删除失败：\(result.fileName)，\(error.localizedDescription)")
+                }
                 throw QuickNoteVideoTransferError.tooLong(duration)
             }
             return QuickNoteVideoTransfer(

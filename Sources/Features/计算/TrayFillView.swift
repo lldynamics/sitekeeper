@@ -43,12 +43,11 @@ struct TrayFillView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "桥架填充率",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }
@@ -147,20 +146,29 @@ struct TrayFillView: View {
 
     private func restoreCableDraftIfNeeded() {
         guard !cablesDraft.isEmpty,
-              let data = cablesDraft.data(using: .utf8),
-              let decoded = try? JSONDecoder().decode([CableEntry].self, from: data),
-              !decoded.isEmpty else {
+              let data = cablesDraft.data(using: .utf8) else {
             return
         }
-        cables = decoded
+        do {
+            let decoded = try JSONDecoder().decode([CableEntry].self, from: data)
+            guard !decoded.isEmpty else { return }
+            cables = decoded
+        } catch {
+            StorageIssueLog.record("桥架填充草稿解析失败：\(error.localizedDescription)")
+        }
     }
 
     private func persistCableDraft() {
-        guard let data = try? JSONEncoder().encode(cables),
-              let encoded = String(data: data, encoding: .utf8) else {
-            return
+        do {
+            let data = try JSONEncoder().encode(cables)
+            guard let encoded = String(data: data, encoding: .utf8) else {
+                StorageIssueLog.record("桥架填充草稿编码后 UTF8 转换失败")
+                return
+            }
+            cablesDraft = encoded
+        } catch {
+            StorageIssueLog.record("桥架填充草稿编码失败：\(error.localizedDescription)")
         }
-        cablesDraft = encoded
     }
 }
 

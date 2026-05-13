@@ -136,7 +136,7 @@ struct SimpleZipArchiveReader {
             let compressedSize = Int(try data.uint32LE(at: offset + 18))
             let nameLength = Int(try data.uint16LE(at: offset + 26))
             let extraLength = Int(try data.uint16LE(at: offset + 28))
-            guard method == 0 else { throw ZipReadError.unsupportedCompression }
+            guard method == 0 || method == 8 else { throw ZipReadError.unsupportedCompression }
             guard flags & 0x0008 == 0 else { throw ZipReadError.unsupportedDataDescriptor }
 
             let nameStart = offset + 30
@@ -148,7 +148,14 @@ struct SimpleZipArchiveReader {
                 throw ZipReadError.invalidFileName
             }
             if !path.hasSuffix("/") {
-                entries.append(Entry(path: path, data: data.slice(from: fileStart, count: compressedSize)))
+                let uncompressedSize = Int(try data.uint32LE(at: offset + 22))
+                let compressedData = data.slice(from: fileStart, count: compressedSize)
+                let entryData = try decodedEntryData(
+                    compressedData,
+                    method: method,
+                    expectedSize: uncompressedSize
+                )
+                entries.append(Entry(path: path, data: entryData))
             }
             offset = fileEnd
         }
@@ -201,7 +208,7 @@ struct SimpleZipArchiveReader {
             let nameLength = Int(try header.uint16LE(at: 22))
             let extraLength = Int(try header.uint16LE(at: 24))
 
-            guard method == 0 else { throw ZipReadError.unsupportedCompression }
+            guard method == 0 || method == 8 else { throw ZipReadError.unsupportedCompression }
             guard flags & 0x0008 == 0 else { throw ZipReadError.unsupportedDataDescriptor }
 
             let nameData = try readExactly(from: handle, count: nameLength)
@@ -217,13 +224,18 @@ struct SimpleZipArchiveReader {
                 uncompressedSize32: uncompressedSize32,
                 extra: extra
             )
-            guard compressedSize <= UInt64(Int.max) else { throw ZipReadError.invalidArchive }
+            let uncompressedSize = uncompressedSize32 == UInt32.max ? 0 : UInt64(uncompressedSize32)
+            guard compressedSize <= UInt64(Int.max),
+                  uncompressedSize <= UInt64(Int.max) else {
+                throw ZipReadError.invalidArchive
+            }
 
             let dataOffset = offset + UInt64(30 + nameLength + extraLength)
             let nextOffset = dataOffset + compressedSize
 
             if !path.hasSuffix("/") {
-                let dataSize = Int(compressedSize)
+                let dataSize = Int(uncompressedSize)
+                let compressedDataSize = Int(compressedSize)
                 let entry = ScanEntry(path: path, dataSize: dataSize)
                 try onEntry(
                     entry,
@@ -240,18 +252,46 @@ struct SimpleZipArchiveReader {
                             }
                         }
                         try readHandle.seek(toOffset: dataOffset)
-                        let data = try readExactly(from: readHandle, count: dataSize)
-                        guard data.count == dataSize else { throw ZipReadError.invalidArchive }
-                        return data
+                        let data = try readExactly(from: readHandle, count: compressedDataSize)
+                        guard data.count == compressedDataSize else { throw ZipReadError.invalidArchive }
+                        return try decodedEntryData(
+                            data,
+                            method: method,
+                            expectedSize: dataSize
+                        )
                     },
                     { destinationURL in
-                        try writeEntry(
-                            from: fileURL,
-                            dataOffset: dataOffset,
-                            dataSize: compressedSize,
-                            to: destinationURL,
-                            shouldCancel: shouldCancel
-                        )
+                        if method == 0 {
+                            try writeEntry(
+                                from: fileURL,
+                                dataOffset: dataOffset,
+                                dataSize: compressedSize,
+                                to: destinationURL,
+                                shouldCancel: shouldCancel
+                            )
+                        } else {
+                            let readHandle = try FileHandle(forReadingFrom: fileURL)
+                            defer {
+                                do {
+                                    try readHandle.close()
+                                } catch {
+                                    StorageIssueLog.record("ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                                }
+                            }
+                            try readHandle.seek(toOffset: dataOffset)
+                            let compressedData = try readExactly(from: readHandle, count: compressedDataSize)
+                            guard compressedData.count == compressedDataSize else { throw ZipReadError.invalidArchive }
+                            let decoded = try decodedEntryData(
+                                compressedData,
+                                method: method,
+                                expectedSize: dataSize
+                            )
+                            try FileManager.default.createDirectory(
+                                at: destinationURL.deletingLastPathComponent(),
+                                withIntermediateDirectories: true
+                            )
+                            try decoded.write(to: destinationURL, options: .atomic)
+                        }
                     }
                 )
                 entryCount += 1
@@ -262,6 +302,28 @@ struct SimpleZipArchiveReader {
         }
 
         guard entryCount > 0 else { throw ZipReadError.invalidArchive }
+    }
+
+    private static func decodedEntryData(_ data: Data, method: UInt16, expectedSize: Int) throws -> Data {
+        switch method {
+        case 0:
+            guard expectedSize == 0 || data.count == expectedSize else {
+                throw ZipReadError.invalidArchive
+            }
+            return data
+        case 8:
+            do {
+                let decoded = try (data as NSData).decompressed(using: .zlib) as Data
+                guard expectedSize == 0 || decoded.count == expectedSize else {
+                    throw ZipReadError.invalidArchive
+                }
+                return decoded
+            } catch {
+                throw ZipReadError.unsupportedCompression
+            }
+        default:
+            throw ZipReadError.unsupportedCompression
+        }
     }
 
     private static func readExactly(from handle: FileHandle, count: Int) throws -> Data {

@@ -139,4 +139,38 @@ struct BackupSnapshot: Codable {
         documentFiles = try container.decodeIfPresent([ProjectDocumentBackupFile].self, forKey: .documentFiles) ?? []
         quickNoteAttachmentFiles = try container.decodeIfPresent([QuickNoteAttachmentBackupFile].self, forKey: .quickNoteAttachmentFiles) ?? []
     }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(materialItems, forKey: .materialItems)
+        try container.encode(quoteItems, forKey: .quoteItems)
+        try container.encode(laborRecords, forKey: .laborRecords)
+        try container.encode(projects, forKey: .projects)
+        try container.encode(dailyLogs, forKey: .dailyLogs)
+        try container.encode(historyRecords, forKey: .historyRecords)
+        try container.encode(progressTasks, forKey: .progressTasks)
+        try container.encode(lightingCircuitPlans, forKey: .lightingCircuitPlans)
+        try container.encode(siteTodos, forKey: .siteTodos)
+        try container.encode(projectDrawings, forKey: .projectDrawings)
+        try container.encode(projectContacts, forKey: .projectContacts)
+        try container.encode(projectFinancialRecords, forKey: .projectFinancialRecords)
+        try container.encode(projectDocuments, forKey: .projectDocuments)
+        try container.encode(quickNotes, forKey: .quickNotes)
+        try container.encode(projectWarehouseMovements, forKey: .projectWarehouseMovements)
+        try container.encode(templates, forKey: .templates)
+        try container.encode(materialPriceEntries, forKey: .materialPriceEntries)
+        try container.encode(materialSheetDrafts, forKey: .materialSheetDrafts)
+        try container.encode(supplierProfiles, forKey: .supplierProfiles)
+        try container.encode(constructionMethods, forKey: .constructionMethods)
+        try container.encode(favoriteMaterialKeys, forKey: .favoriteMaterialKeys)
+        try container.encode(recentMaterialKeys, forKey: .recentMaterialKeys)
+        try container.encode(userMaterials, forKey: .userMaterials)
+        try container.encode(deletedUserMaterials, forKey: .deletedUserMaterials)
+        try container.encode(hiddenPresetKeys, forKey: .hiddenPresetKeys)
+        try container.encode(photoFiles, forKey: .photoFiles)
+        try container.encode(drawingFiles, forKey: .drawingFiles)
+        try container.encode(documentFiles, forKey: .documentFiles)
+        try container.encode(quickNoteAttachmentFiles, forKey: .quickNoteAttachmentFiles)
+        // legacyPaymentRecords is decode-only for old backups and must not appear in new exports.
+    }
 }

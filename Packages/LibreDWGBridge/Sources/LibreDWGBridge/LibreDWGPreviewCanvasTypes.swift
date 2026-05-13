@@ -1,6 +1,10 @@
 import CoreGraphics
 import Foundation
 
+extension Notification.Name {
+    static let libreDWGCanvasTransformDidChange = Notification.Name("LibreDWGBridgeCanvasTransformDidChange")
+}
+
 struct DXFPreviewModel {
     struct StrokeStyle {
         let rgb: UInt32
@@ -17,9 +21,16 @@ struct DXFPreviewModel {
     }
 
     struct Polyline {
+        enum RenderKind {
+            case regular
+            case dimension
+            case hatch
+        }
+
         let points: [CGPoint]
         let style: StrokeStyle
         let layer: String
+        var renderKind: RenderKind = .regular
     }
 
     struct Circle {
@@ -30,13 +41,28 @@ struct DXFPreviewModel {
     }
 
     struct TextEntity: Identifiable {
+        enum RenderKind {
+            case regular
+            case dimension
+            case hatch
+            case leader
+            case attribute
+        }
+
         let id = UUID()
         let point: CGPoint
         let value: String
+        let rawValue: String?
+        let rawTextBytesHex: String?
+        let chosenCodepage: Int?
         let height: CGFloat
         let rotation: CGFloat
         let style: StrokeStyle
         let layer: String
+        var styleName: String? = nil
+        var fontFile: String? = nil
+        var bigFontFile: String? = nil
+        var renderKind: RenderKind = .regular
     }
 
     var segments: [Segment]
@@ -47,6 +73,8 @@ struct DXFPreviewModel {
     var polylineEntityCount: Int
     var sourceObjectCount: Int = 0
     var unsupportedEntityCount: Int = 0
+    var unsupportedEntitySummary: String? = nil
+    var textDecodingHint: String? = nil
     var bounds: CGRect
 }
 
@@ -56,7 +84,9 @@ struct CADCanvasTransform {
     let zoomScale: CGFloat
     let panOffset: CGSize
 
-    private var contentInset: CGFloat { 16 }
+    private var contentInset: CGFloat {
+        min(max(min(size.width, size.height) * 0.018, 6), 14)
+    }
 
     private var baseScale: CGFloat {
         let availableWidth = max(size.width - contentInset * 2, 1)

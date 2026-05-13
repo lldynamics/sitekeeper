@@ -20,7 +20,7 @@ struct SmallWidgetView: View {
                     HStack {
                         Image(systemName: "checklist")
                             .font(.caption2)
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.appWarning)
                         Text(String(localized: "widget_label_todo"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -58,7 +58,7 @@ struct SmallWidgetView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(.orange)
+                .foregroundStyle(Color.appWarning)
             }
 
             if !riskLinkItems.isEmpty {
@@ -106,7 +106,7 @@ struct MediumWidgetView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     HStack {
                         Image(systemName: "checklist")
-                            .foregroundStyle(.orange)
+                            .foregroundStyle(Color.appWarning)
                         Text(String(localized: "widget_label_today_todos"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -149,7 +149,7 @@ struct MediumWidgetView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 ProgressView(value: project.progress)
-                                    .tint(status.isCompleted ? .green : .orange)
+                                    .tint(status.isCompleted ? Color.appSuccess : Color.appWarning)
                             }
                         }
                         .buttonStyle(.plain)
@@ -203,7 +203,7 @@ struct LargeWidgetView: View {
                         icon: "checklist",
                         value: "\(data.pendingTodos)",
                         label: String(localized: "widget_label_todo"),
-                        color: .orange
+                        color: Color.appWarning
                     )
                 }
                 .buttonStyle(.plain)
@@ -222,7 +222,7 @@ struct LargeWidgetView: View {
                             icon: "exclamationmark.triangle.fill",
                             value: "\(data.lowStockCount)",
                             label: String(localized: "widget_label_low_stock"),
-                            color: .red
+                            color: Color.appRisk
                         )
                     }
                     .buttonStyle(.plain)
@@ -279,14 +279,14 @@ struct LargeWidgetView: View {
                                     .padding(.vertical, 2)
                                     .background(
                                         Capsule()
-                                            .fill(isCompleted ? Color.green.opacity(0.15) : Color.orange.opacity(0.15))
+                                            .fill(isCompleted ? Color.appSuccess.opacity(0.15) : Color.appWarning.opacity(0.15))
                                     )
-                                    .foregroundStyle(isCompleted ? .green : .orange)
+                                    .foregroundStyle(isCompleted ? Color.appSuccess : Color.appWarning)
                             }
 
                             HStack(spacing: 12) {
                                 ProgressView(value: project.progress)
-                                    .tint(isCompleted ? .green : .orange)
+                                    .tint(isCompleted ? Color.appSuccess : Color.appWarning)
                                 Text("\(Int(project.progress * 100))%")
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
@@ -382,7 +382,7 @@ private func widgetRiskLinkItems(for data: WidgetExportData) -> [WidgetRiskLinkI
                 id: "missing-receipt",
                 title: String(localized: "widget_label_missing_receipt"),
                 count: data.missingReceiptCount,
-                tint: .orange,
+                tint: Color.appWarning,
                 destination: WidgetDeepLinkURL.missingReceipt
             )
         )
@@ -393,7 +393,7 @@ private func widgetRiskLinkItems(for data: WidgetExportData) -> [WidgetRiskLinkI
                 id: "price-spike",
                 title: String(localized: "widget_label_price_spike"),
                 count: data.priceSpikeCount,
-                tint: .red,
+                tint: Color.appRisk,
                 destination: WidgetDeepLinkURL.priceSpike
             )
         )
@@ -433,4 +433,10 @@ private struct SummaryBlock: View {
             }
         }
     }
+}
+
+private extension Color {
+    static var appWarning: Color { Color(red: 1.0, green: 0.58, blue: 0.0) }
+    static var appSuccess: Color { Color(red: 0.20, green: 0.74, blue: 0.35) }
+    static var appRisk: Color { Color(red: 0.90, green: 0.26, blue: 0.21) }
 }

@@ -34,45 +34,45 @@ struct ProjectDeliveryGuideView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("交付检查") {
+                Section(String(localized: "交付检查")) {
                     guideRow(
-                        title: "缺日志检查",
-                        detail: data.logCount > 0 ? "已记录 \(data.logCount) 条" : "未记录施工日志",
+                        title: String(localized: "缺日志检查"),
+                        detail: data.logCount > 0 ? String(localized: "已记录 \(data.logCount) 条") : String(localized: "未记录施工日志"),
                         status: data.logCount > 0 ? .ok : .warning
                     ) {
                         onOpenMode(.records)
                     }
                     guideRow(
-                        title: "缺票检查",
-                        detail: data.missingReceiptCount == 0 ? "全部已关联" : "还有 \(data.missingReceiptCount) 条待关联",
+                        title: String(localized: "缺票检查"),
+                        detail: data.missingReceiptCount == 0 ? String(localized: "全部已关联") : String(localized: "还有 \(data.missingReceiptCount) 条待关联"),
                         status: data.missingReceiptCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.finance)
                     }
                     guideRow(
-                        title: "图纸当前版检查",
+                        title: String(localized: "图纸当前版检查"),
                         detail: drawingCurrentVersionDetail,
                         status: drawingCurrentVersionStatus
                     ) {
                         onOpenMode(.assets)
                     }
                     guideRow(
-                        title: "联系人缺失检查",
-                        detail: data.contactCount > 0 ? "已维护 \(data.contactCount) 位" : "还没有联系人",
+                        title: String(localized: "联系人缺失检查"),
+                        detail: data.contactCount > 0 ? String(localized: "已维护 \(data.contactCount) 位") : String(localized: "还没有联系人"),
                         status: data.contactCount > 0 ? .ok : .warning
                     ) {
                         onOpenMode(.assets)
                     }
                     guideRow(
-                        title: "未结清检查",
-                        detail: data.unsettledFinancialCount == 0 ? "没有未结清账目" : "还有 \(data.unsettledFinancialCount) 笔未结清",
+                        title: String(localized: "未结清检查"),
+                        detail: data.unsettledFinancialCount == 0 ? String(localized: "没有未结清账目") : String(localized: "还有 \(data.unsettledFinancialCount) 笔未结清"),
                         status: data.unsettledFinancialCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.finance)
                     }
                     guideRow(
-                        title: "原件完整性",
-                        detail: data.hasBlockingMissingOriginals ? "检测到 \(data.missingOriginalEntries.count) 个缺失原件" : "未发现缺失原件",
+                        title: String(localized: "原件完整性"),
+                        detail: data.hasBlockingMissingOriginals ? String(localized: "检测到 \(data.missingOriginalEntries.count) 个缺失原件") : String(localized: "未发现缺失原件"),
                         status: data.hasBlockingMissingOriginals ? .error : .ok
                     ) {
                         onOpenMode(.assets)
@@ -81,14 +81,14 @@ struct ProjectDeliveryGuideView: View {
 
                 if data.hasDeliveryChecklistWarning {
                     Section {
-                        Text("建议先补齐日志、票据、图纸当前版、联系人和未结清账目，再执行最终交付。")
+                        Text(String(localized: "建议先补齐日志、票据、图纸当前版、联系人和未结清账目，再执行最终交付。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
 
                 if data.hasBlockingMissingOriginals {
-                    Section("缺失原件（导出前需处理）") {
+                    Section(String(localized: "缺失原件（导出前需处理）")) {
                         ForEach(Array(data.missingOriginalEntries.prefix(20)), id: \.self) { item in
                             HStack(alignment: .top, spacing: AppSpacing.tight) {
                                 Image(systemName: "exclamationmark.triangle.fill")
@@ -100,23 +100,23 @@ struct ProjectDeliveryGuideView: View {
                             }
                         }
                         if data.missingOriginalEntries.count > 20 {
-                            Text("还有 \(data.missingOriginalEntries.count - 20) 项未显示")
+                            Text(String(localized: "还有 \(data.missingOriginalEntries.count - 20) 项未显示"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
 
-                Section("交付包预估") {
-                    LabeledContent("工程名称") {
+                Section(String(localized: "交付包预估")) {
+                    LabeledContent(String(localized: "工程名称")) {
                         Text(data.projectName)
                             .lineLimit(1)
                     }
-                    LabeledContent("预计原始附件体积") {
+                    LabeledContent(String(localized: "预计原始附件体积")) {
                         Text(ProjectDetailImportExportActions.formattedBytes(data.estimatedPackageBytes))
                             .foregroundStyle(.secondary)
                     }
-                    Text("将导出包含日志、图纸、票据、联系人、财务摘要与原件的 ZIP 交付包。")
+                    Text(String(localized: "将导出包含日志、图纸、票据、联系人、财务摘要与原件的 ZIP 交付包。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -125,18 +125,18 @@ struct ProjectDeliveryGuideView: View {
                     Button {
                         onStartExport()
                     } label: {
-                        Label("一键导出交付包 ZIP", systemImage: "archivebox.fill")
+                        Label(String(localized: "一键导出交付包 ZIP"), systemImage: "archivebox.fill")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(data.hasBlockingMissingOriginals)
                 } footer: {
                     if data.hasBlockingMissingOriginals {
-                        Text("检测到缺失原件，需先补齐后才能导出。")
+                        Text(String(localized: "检测到缺失原件，需先补齐后才能导出。"))
                     }
                 }
             }
-            .navigationTitle("完工交付向导")
+            .navigationTitle(String(localized: "完工交付向导"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }
@@ -156,7 +156,7 @@ struct ProjectDeliveryGuideView: View {
             }
             Spacer()
             if status != .ok {
-                Button("去处理") {
+                Button(String(localized: "去处理")) {
                     fixAction()
                 }
                 .font(.caption.weight(.semibold))
@@ -166,12 +166,12 @@ struct ProjectDeliveryGuideView: View {
 
     private var drawingCurrentVersionDetail: String {
         if data.drawingCount == 0 {
-            return "还没有图纸"
+            return String(localized: "还没有图纸")
         }
         if data.drawingWithoutCurrentCount > 0 {
-            return "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版"
+            return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版")
         }
-        return "已上传 \(data.drawingCount) 份，均有当前版"
+        return String(localized: "已上传 \(data.drawingCount) 份，均有当前版")
     }
 
     private var drawingCurrentVersionStatus: GuideStatus {

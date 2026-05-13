@@ -277,7 +277,7 @@ enum DrawingStorage {
             return ext
         }
 
-        if let contentType = try? sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType {
+        if let contentType = contentTypeFromResourceValues(for: sourceURL) {
             if contentType.conforms(to: .pdf) {
                 return "pdf"
             }
@@ -293,6 +293,15 @@ enum DrawingStorage {
         if lowerName.hasSuffix(".dxf") { return "dxf" }
         if lowerName.hasSuffix(".pdf") { return "pdf" }
         return nil
+    }
+
+    private static func contentTypeFromResourceValues(for sourceURL: URL) -> UTType? {
+        do {
+            return try sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
+        } catch {
+            StorageIssueLog.record("图纸文件类型读取失败：\(sourceURL.lastPathComponent)，\(error.localizedDescription)")
+            return nil
+        }
     }
 
     private static func makeDrawing(

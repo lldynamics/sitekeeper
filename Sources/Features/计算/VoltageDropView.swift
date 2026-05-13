@@ -102,12 +102,11 @@ struct VoltageDropView: View {
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty, let resultModel {
+            if let resultModel {
                 Section("计算结果") {
                     CalculatorResultCard(
                         title: "压降评估",
-                        result: resultModel,
-                        copyText: resultText
+                        result: resultModel
                     )
                 }
             }

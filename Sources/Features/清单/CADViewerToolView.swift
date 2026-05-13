@@ -14,6 +14,17 @@ struct CADViewerToolView: View {
     @State private var showImportStrategyDialog = false
     @AppStorage(UserPreferenceKeys.cadViewerRecentDrawingIDs) private var recentDrawingIDsRaw = ""
 
+    private struct DrawingProjectGroup: Identifiable {
+        let id: UUID
+        let title: String
+        let drawings: [ProjectDrawing]
+    }
+
+    private struct DrawingFolderGroup: Identifiable {
+        let id: String
+        let drawings: [ProjectDrawing]
+    }
+
     private static let drawingImportTypes: [UTType] = {
         var types: [UTType] = [.pdf, .zip]
         if let dwg = UTType(filenameExtension: "dwg") {
@@ -56,6 +67,40 @@ struct CADViewerToolView: View {
         recentDrawingIDs.compactMap { id in
             sortedDrawings.first(where: { $0.id == id })
         }
+    }
+
+    private var recentProjectGroups: [DrawingProjectGroup] {
+        var groups: [DrawingProjectGroup] = []
+        for drawing in recentDrawings {
+            if let index = groups.firstIndex(where: { $0.id == drawing.projectId }) {
+                var updated = groups[index]
+                updated = DrawingProjectGroup(
+                    id: updated.id,
+                    title: updated.title,
+                    drawings: updated.drawings + [drawing]
+                )
+                groups[index] = updated
+            } else {
+                groups.append(
+                    DrawingProjectGroup(
+                        id: drawing.projectId,
+                        title: projectName(for: drawing.projectId),
+                        drawings: [drawing]
+                    )
+                )
+            }
+        }
+        return groups
+    }
+
+    private var zipFolderGroups: [DrawingFolderGroup] {
+        let grouped = Dictionary(grouping: filteredDrawings) { drawing in
+            ProjectDetailDrawingHelper.zipFolderPath(for: drawing) ?? ""
+        }
+        return grouped
+            .filter { !$0.key.isEmpty }
+            .map { DrawingFolderGroup(id: $0.key, drawings: $0.value.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) }
+            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
     }
 
     private var selectedEngine: CADPreviewEngine {
@@ -138,8 +183,29 @@ struct CADViewerToolView: View {
                         description: Text("打开 CAD 图纸后会自动记录在这里。")
                     )
                 } else {
-                    ForEach(recentDrawings) { drawing in
-                        drawingRow(drawing, showsProject: true)
+                    ForEach(recentProjectGroups) { group in
+                        DisclosureGroup {
+                            ForEach(group.drawings) { drawing in
+                                drawingRow(drawing, showsProject: false)
+                            }
+                        } label: {
+                            Label("\(group.title) · \(group.drawings.count) 张", systemImage: "folder")
+                        }
+                    }
+                }
+            }
+
+            if !zipFolderGroups.isEmpty {
+                Section("图纸包目录") {
+                    ForEach(zipFolderGroups) { group in
+                        DisclosureGroup {
+                            ForEach(group.drawings) { drawing in
+                                drawingRow(drawing, showsProject: selectedProjectID == nil)
+                            }
+                        } label: {
+                            Label("\(group.id) · \(group.drawings.count) 张", systemImage: "folder.badge.gearshape")
+                                .lineLimit(1)
+                        }
                     }
                 }
             }
@@ -268,23 +334,29 @@ struct CADViewerToolView: View {
         case .success(let url):
             recordRecentDrawing(drawing.id)
             previewRequest = ProjectCADPreviewRequest(
+                projectId: previewTarget.projectId,
                 drawingID: previewTarget.id,
                 fileURL: url,
                 displayName: previewTarget.name.isEmpty ? previewTarget.fileName : previewTarget.name,
                 fileType: previewTarget.fileType,
                 textEncoding: previewTarget.textEncoding,
+                textBigFont: previewTarget.textBigFont,
                 overlaySnapshotData: previewTarget.cadOverlaySnapshotData,
                 onOverlaySnapshotChange: { drawingID, snapshotData in
                     updateOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
                 },
                 onTextEncodingChange: { drawingID, encoding in
                     updateTextEncoding(drawingID: drawingID, encoding: encoding)
+                },
+                onTextBigFontChange: { drawingID, profile in
+                    updateTextBigFont(drawingID: drawingID, profile: profile)
                 }
             )
             if previewTarget.id != drawing.id {
                 operationMessage = "已使用同名 \(previewTarget.fileType.uppercased()) 预览图纸。"
             }
         case .failure(let message):
+            StorageIssueLog.record("CAD 图纸打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
             operationMessage = message
         }
     }
@@ -400,17 +472,20 @@ struct CADViewerToolView: View {
                     }
                     for entry in drawingEntries {
                         do {
-                            let drawing = try DrawingStorage.saveImportedDataOrThrow(
+                            var drawing = try DrawingStorage.saveImportedDataOrThrow(
                                 data: entry.data,
                                 sourceFileName: entry.path,
                                 projectId: projectId
                             )
+                            drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
                             importDrawing(drawing)
                         } catch {
+                            StorageIssueLog.record("CAD ZIP 图纸导入失败：\(entry.path)，\(error.localizedDescription)")
                             failedNames.append("\(entry.path)（\(error.localizedDescription)）")
                         }
                     }
                 } catch {
+                    StorageIssueLog.record("CAD ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                     failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
                 }
                 continue
@@ -420,6 +495,7 @@ struct CADViewerToolView: View {
                 let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
                 importDrawing(drawing)
             } catch {
+                StorageIssueLog.record("CAD 图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                 failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
             }
         }
@@ -481,6 +557,12 @@ struct CADViewerToolView: View {
         store.scheduleSave()
     }
 
+    private func updateTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
+        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
+        store.projectDrawings[index].textBigFont = profile
+        store.scheduleSave()
+    }
+
     private func recordRecentDrawing(_ drawingID: UUID) {
         var ids = recentDrawingIDs
         ids.removeAll { $0 == drawingID }
@@ -497,6 +579,9 @@ struct CADViewerToolView: View {
         parts.append(drawing.fileType.uppercased())
         if !drawing.importedAt.isEmpty {
             parts.append("导入 \(drawing.importedAt)")
+        }
+        if let folder = ProjectDetailDrawingHelper.zipFolderPath(for: drawing) {
+            parts.append("ZIP \(folder)")
         }
         return parts.joined(separator: " · ")
     }

@@ -33,12 +33,11 @@ struct RebarCalcView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "钢筋重量估算",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }

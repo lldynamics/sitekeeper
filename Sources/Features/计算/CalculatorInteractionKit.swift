@@ -158,6 +158,31 @@ struct CalculationResult {
             items: [item("提示", message, status: .fail)]
         )
     }
+
+    func plainText(title: String) -> String {
+        var lines: [String] = []
+        let cleanTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleanTitle.isEmpty {
+            lines.append("【\(cleanTitle)】")
+        }
+        if !headline.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append(headline)
+        }
+        if let formula, !formula.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append("公式: \(formula)")
+        }
+
+        for section in sections {
+            if !section.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                lines.append("")
+                lines.append(section.title)
+            }
+            for item in section.items {
+                lines.append("\(item.label): \(item.value)")
+            }
+        }
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 }
 
 struct CalculatorResultCard: View {
@@ -178,11 +203,11 @@ struct CalculatorResultCard: View {
     init(
         title: String,
         result: CalculationResult,
-        copyText: String
+        copyText: String? = nil
     ) {
         self.title = title
         self.result = result
-        self.copyText = copyText
+        self.copyText = copyText ?? result.plainText(title: title)
     }
 
     var body: some View {

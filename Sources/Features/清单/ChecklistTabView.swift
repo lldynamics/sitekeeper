@@ -24,8 +24,6 @@ struct ChecklistTabView: View {
             return "material-center"
         case "global-calc":
             return "calculators"
-        case "business-board":
-            return "bookkeeping"
         default:
             return id
         }
@@ -80,7 +78,7 @@ struct ChecklistTabView: View {
         if !practicalUnselectedTools.isEmpty {
             sections.append(
                 ToolboxSection(
-                    title: "实用工具",
+                    title: String(localized: "实用工具"),
                     items: practicalUnselectedTools.map(toolboxItem(from:))
                 )
             )
@@ -105,13 +103,13 @@ struct ChecklistTabView: View {
                     VStack(alignment: .leading, spacing: 18) {
                         VStack(alignment: .leading, spacing: 10) {
                             HStack {
-                                Text("快捷工具")
+                                Text(String(localized: "快捷工具"))
                                     .font(.headline)
                                 Spacer()
                                 Button {
                                     showQuickToolEditor = true
                                 } label: {
-                                    Label("自定义", systemImage: "slider.horizontal.3")
+                                    Label(String(localized: "自定义"), systemImage: "slider.horizontal.3")
                                         .font(.subheadline.weight(.medium))
                                 }
                             }
@@ -134,7 +132,7 @@ struct ChecklistTabView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(Color.appSuccess)
-                                Text("已添加全部工具，长按拖拽可排序")
+                                Text(String(localized: "已添加全部工具，长按拖拽可排序"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -178,12 +176,12 @@ struct ChecklistTabView: View {
                         }
                     } header: {
                         HStack {
-                            Text("快捷工具")
+                            Text(String(localized: "快捷工具"))
                             Spacer()
                             Button {
                                 showQuickToolEditor = true
                             } label: {
-                                Label("自定义", systemImage: "slider.horizontal.3")
+                                Label(String(localized: "自定义"), systemImage: "slider.horizontal.3")
                                     .font(.caption)
                             }
                         }
@@ -193,7 +191,7 @@ struct ChecklistTabView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(Color.appSuccess)
-                                Text("已添加全部工具，长按拖拽可排序")
+                                Text(String(localized: "已添加全部工具，长按拖拽可排序"))
                                     .font(.subheadline)
                                     .foregroundStyle(.secondary)
                             }
@@ -215,7 +213,7 @@ struct ChecklistTabView: View {
                 }
             }
         }
-        .navigationTitle("工程工具箱")
+        .navigationTitle(String(localized: "工程工具箱"))
         .navigationDestination(item: $mobileSelectedItem) { item in
             destinationView(for: item.destination)
         }
@@ -268,22 +266,6 @@ struct ChecklistTabView: View {
             DataManagementView(initialTab: "备份")
         case .template:
             TemplateView()
-        }
-    }
-}
-
-struct BookkeepingQuickEntryView: View {
-    @Environment(DataStore.self) private var store
-
-    private var activeProjects: [Project] {
-        store.projects.filter { $0.status == .active || $0.status == .paused }
-    }
-
-    var body: some View {
-        if activeProjects.count == 1, let project = activeProjects.first {
-            ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
-        } else {
-            BookkeepingProjectPickerView(projects: activeProjects)
         }
     }
 }

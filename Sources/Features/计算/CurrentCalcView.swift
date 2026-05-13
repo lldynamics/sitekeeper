@@ -64,12 +64,11 @@ struct CurrentCalcView: View {
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty, let resultModel {
+            if let resultModel {
                 Section("计算结果") {
                     CalculatorResultCard(
                         title: "电流计算结果",
-                        result: resultModel,
-                        copyText: resultText
+                        result: resultModel
                     )
                 }
             }
