@@ -10,6 +10,7 @@
 		0030F1D155B81AE8CF23A5C4 /* ToolboxCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD40D1821A736A7A616FEC2 /* ToolboxCatalog.swift */; };
 		0064829ED92D11E01EEC3C68 /* CP932.h in CopyFiles */ = {isa = PBXBuildFile; fileRef = 4C1CA8C2B795E81EA62250A3 /* CP932.h */; };
 		00FA9E90092F1F99A163F255 /* BackupImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9862922699CFE73B88A937 /* BackupImportCoordinator.swift */; };
+		014A45D605284AF7E203EF9F /* LibreDWGPreviewCanvasTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61A3C7BC7170DC3FEBE9DF9A /* LibreDWGPreviewCanvasTypes.swift */; };
 		019E0CBF4FFBAFA2A5E5FEF7 /* ProjectDetailDocumentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6CD5BCA1F1814F6825506C /* ProjectDetailDocumentsSection.swift */; };
 		021C67C19338BF8D610C3C1A /* CalculatorTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA9C71AA55008F5E9FE24F0 /* CalculatorTabView.swift */; };
 		022D6FC618CA7459F6FEC1C0 /* ISO-8859-8.TXT in Resources */ = {isa = PBXBuildFile; fileRef = DA92DD3A685E33A0DA4B3970 /* ISO-8859-8.TXT */; };
@@ -348,6 +349,7 @@
 		EC3A4C9758853300130CA951 /* WINDOWS-950.TXT in Resources */ = {isa = PBXBuildFile; fileRef = A4735531AE035ACE6246EE29 /* WINDOWS-950.TXT */; };
 		EC3E4972486D45F7A7E43EA5 /* ReportBuilder+HTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = 807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */; };
 		ED9522570D587CFA3CD029DC /* SearchableDatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936128794CE6921B6814E27E /* SearchableDatabaseView.swift */; };
+		EDE250CD4AA397AAC0A4456C /* LibreDWGNativeParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3BC64053B822A1A02819E1C /* LibreDWGNativeParser.swift */; };
 		EE0E82DDE3B91E90AD9469B4 /* MaterialSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A7FB5700AE73DBF3DCAFD98 /* MaterialSheetView.swift */; };
 		EE8075288AA892E74D701F13 /* CADViewerToolView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7836734CF94D567B60152C50 /* CADViewerToolView.swift */; };
 		EFE22937A94B3F3D62089FC8 /* 2ndheader.spec in Resources */ = {isa = PBXBuildFile; fileRef = 1C502AB5A8E931A61DBF9D56 /* 2ndheader.spec */; };
@@ -614,6 +616,7 @@
 		5E3EE0F41C369597A7EF38A7 /* ProjectDetailSubpageSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSubpageSupport.swift; sourceTree = "<group>"; };
 		5E6CD5BCA1F1814F6825506C /* ProjectDetailDocumentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailDocumentsSection.swift; sourceTree = "<group>"; };
 		5ECB4235867FFE034E36B0B7 /* sitekeeperUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = sitekeeperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		61A3C7BC7170DC3FEBE9DF9A /* LibreDWGPreviewCanvasTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibreDWGPreviewCanvasTypes.swift; sourceTree = "<group>"; };
 		61F674B8E45B003886E09CC2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		627BAAA964BB197322272B24 /* objects.in */ = {isa = PBXFileReference; path = objects.in; sourceTree = "<group>"; };
 		64262451AD1861AE0EC70E8C /* dynapi.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = dynapi.c; sourceTree = "<group>"; };
@@ -738,6 +741,7 @@
 		B1E7309A73434892E581769C /* ProjectDetailContainer+ImportActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+ImportActions.swift"; sourceTree = "<group>"; };
 		B1EEC3D1804D42D50155185B /* WINDOWS-874.TXT */ = {isa = PBXFileReference; path = "WINDOWS-874.TXT"; sourceTree = "<group>"; };
 		B3928B4B987F1D88C346E951 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
+		B3BC64053B822A1A02819E1C /* LibreDWGNativeParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibreDWGNativeParser.swift; sourceTree = "<group>"; };
 		B86A9B63C4254659371B1BA4 /* CP1257.TXT */ = {isa = PBXFileReference; path = CP1257.TXT; sourceTree = "<group>"; };
 		B9086140435980BCE520DB87 /* dwg.spec */ = {isa = PBXFileReference; path = dwg.spec; sourceTree = "<group>"; };
 		BA79110E1F5A0CB6C7E3C4C7 /* EngineeringRecommendationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineeringRecommendationTests.swift; sourceTree = "<group>"; };
@@ -1227,6 +1231,8 @@
 			children = (
 				AF98A0D42C324C2BFE08DC62 /* LibreDWGBridge-Bridging-Header.h */,
 				8FCB6ACF883B4BCFBEC17520 /* LibreDWGBridgePreview.swift */,
+				B3BC64053B822A1A02819E1C /* LibreDWGNativeParser.swift */,
+				61A3C7BC7170DC3FEBE9DF9A /* LibreDWGPreviewCanvasTypes.swift */,
 				2998D954168E30FD0E9881EF /* LibreDWGPreviewSupport.swift */,
 			);
 			name = LibreDWGBridge;
@@ -1906,6 +1912,8 @@
 			files = (
 				751F4B27E8C823BB77B05724 /* LibreDWGBridgePreview.swift in Sources */,
 				DDCF6118CC9D473CF608DF46 /* LibreDWGCBridge.c in Sources */,
+				EDE250CD4AA397AAC0A4456C /* LibreDWGNativeParser.swift in Sources */,
+				014A45D605284AF7E203EF9F /* LibreDWGPreviewCanvasTypes.swift in Sources */,
 				B7FA30E124FD7837797FC023 /* LibreDWGPreviewSupport.swift in Sources */,
 				34EDC4BBDD6145504478AB48 /* bits.c in Sources */,
 				7A977B91FEBC58A3806AF440 /* classes.c in Sources */,
