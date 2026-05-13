@@ -339,6 +339,97 @@ extension DashboardView {
         dashboardRiskTotal > 0
     }
 
+    var dashboardRiskPins: [DashboardRiskPin] {
+        let pins: [DashboardRiskPin] = [
+            DashboardRiskPin(
+                id: "overdue",
+                title: String(localized: "延期"),
+                value: "\(overdueCount)",
+                color: overdueCount > 0 ? .appRisk : .appSuccess,
+                hasRisk: overdueCount > 0,
+                priority: 1000,
+                destination: .projectList(initialOverviewFilter: .overdue)
+            ),
+            DashboardRiskPin(
+                id: "todayTodos",
+                title: String(localized: "今日待办"),
+                value: "\(todayTodos.count)",
+                color: !todayTodos.isEmpty ? .appWarning : .appSuccess,
+                hasRisk: !todayTodos.isEmpty,
+                priority: 900,
+                destination: .projectList(initialOverviewFilter: .todo)
+            ),
+            DashboardRiskPin(
+                id: "backupOverdue",
+                title: String(localized: "备份超期"),
+                value: backupReminderValue,
+                color: isDisplayedBackupReminderOverdue ? .appRisk : .appSuccess,
+                hasRisk: isDisplayedBackupReminderOverdue,
+                priority: 850,
+                destination: .dataManagement(initialTab: "备份"),
+                quickActions: backupReminderRiskActions
+            ),
+            DashboardRiskPin(
+                id: "priceSpike",
+                title: String(localized: "价格异动"),
+                value: "\(displayedPriceSpikeCount)",
+                color: displayedPriceSpikeCount > 0 ? .appFinance : .appSuccess,
+                hasRisk: displayedPriceSpikeCount > 0,
+                priority: 820,
+                destination: .materialPriceSpikeDetails,
+                quickActions: priceSpikeRiskActions
+            ),
+            DashboardRiskPin(
+                id: "negativeStock",
+                title: String(localized: "负库存"),
+                value: "\(displayedNegativeStockCount)",
+                color: displayedNegativeStockCount > 0 ? .appRisk : .appSuccess,
+                hasRisk: displayedNegativeStockCount > 0,
+                priority: 780,
+                destination: warehouseOverviewDestination,
+                quickActions: negativeStockRiskActions
+            ),
+            DashboardRiskPin(
+                id: "missingReceipt",
+                title: String(localized: "缺票"),
+                value: "\(displayedMissingReceiptCount)",
+                color: displayedMissingReceiptCount > 0 ? .appFinance : .appSuccess,
+                hasRisk: displayedMissingReceiptCount > 0,
+                priority: 740,
+                destination: .projectList(initialOverviewFilter: .missingReceipt),
+                quickActions: missingReceiptRiskActions
+            ),
+            DashboardRiskPin(
+                id: "financialDue",
+                title: String(localized: "应收付"),
+                value: "\(unsettledFinancialCount)",
+                color: unsettledFinancialCount > 0 ? .appWarning : .appSuccess,
+                hasRisk: unsettledFinancialCount > 0,
+                priority: 700,
+                destination: .projectList(initialOverviewFilter: .financialDue)
+            ),
+            DashboardRiskPin(
+                id: "missingTodayLog",
+                title: String(localized: "未写日志"),
+                value: "\(projectsWithoutTodayLogCount)",
+                color: projectsWithoutTodayLogCount > 0 ? .appDoc : .appSuccess,
+                hasRisk: projectsWithoutTodayLogCount > 0,
+                priority: 620,
+                destination: .projectList(initialOverviewFilter: .missingTodayLog)
+            ),
+        ]
+
+        return pins.sorted {
+            if $0.hasRisk != $1.hasRisk { return $0.hasRisk && !$1.hasRisk }
+            if $0.priority != $1.priority { return $0.priority > $1.priority }
+            return $0.title.localizedStandardCompare($1.title) == .orderedAscending
+        }
+    }
+
+    var visibleDashboardRiskPins: [DashboardRiskPin] {
+        dashboardRiskPins.filter(\.hasRisk)
+    }
+
     var usesWideDashboardLayout: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
@@ -979,7 +1070,7 @@ extension DashboardView {
             note: "\(note)\n\(marker)",
             projectId: projectId
         )
-        store.siteTodos.insert(todo, at: 0)
+        store.insertSiteTodoAtTop(todo)
         store.scheduleSave()
         AppHaptics.success()
         showDashboardActionFeedback(String(localized: "已生成处理待办"))

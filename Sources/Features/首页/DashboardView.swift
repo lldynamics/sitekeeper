@@ -390,42 +390,16 @@ struct DashboardView: View {
             if hasDashboardRisk {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.tight) {
-                        DashboardRiskPill(title: String(localized: "延期"), value: "\(overdueCount)", color: overdueCount > 0 ? .appRisk : .appSuccess, hasRisk: overdueCount > 0, destination: .projectList(initialOverviewFilter: .overdue))
-                        DashboardRiskPill(title: String(localized: "今日待办"), value: "\(todayTodos.count)", color: !todayTodos.isEmpty ? .appWarning : .appSuccess, hasRisk: !todayTodos.isEmpty, destination: .projectList(initialOverviewFilter: .todo))
-                        DashboardRiskPill(title: String(localized: "应收付"), value: "\(unsettledFinancialCount)", color: unsettledFinancialCount > 0 ? .appWarning : .appSuccess, hasRisk: unsettledFinancialCount > 0, destination: .projectList(initialOverviewFilter: .financialDue))
-                        DashboardRiskPill(title: String(localized: "未写日志"), value: "\(projectsWithoutTodayLogCount)", color: projectsWithoutTodayLogCount > 0 ? .appDoc : .appSuccess, hasRisk: projectsWithoutTodayLogCount > 0, destination: .projectList(initialOverviewFilter: .missingTodayLog))
-                        DashboardRiskPill(
-                            title: String(localized: "缺票"),
-                            value: "\(displayedMissingReceiptCount)",
-                            color: displayedMissingReceiptCount > 0 ? .appFinance : .appSuccess,
-                            hasRisk: displayedMissingReceiptCount > 0,
-                            destination: .projectList(initialOverviewFilter: .missingReceipt),
-                            quickActions: missingReceiptRiskActions
-                        )
-                        DashboardRiskPill(
-                            title: String(localized: "价格异动"),
-                            value: "\(displayedPriceSpikeCount)",
-                            color: displayedPriceSpikeCount > 0 ? .appFinance : .appSuccess,
-                            hasRisk: displayedPriceSpikeCount > 0,
-                            destination: .materialPriceSpikeDetails,
-                            quickActions: priceSpikeRiskActions
-                        )
-                        DashboardRiskPill(
-                            title: String(localized: "负库存"),
-                            value: "\(displayedNegativeStockCount)",
-                            color: displayedNegativeStockCount > 0 ? .appRisk : .appSuccess,
-                            hasRisk: displayedNegativeStockCount > 0,
-                            destination: warehouseOverviewDestination,
-                            quickActions: negativeStockRiskActions
-                        )
-                        DashboardRiskPill(
-                            title: String(localized: "备份超期"),
-                            value: backupReminderValue,
-                            color: isDisplayedBackupReminderOverdue ? .appRisk : .appSuccess,
-                            hasRisk: isDisplayedBackupReminderOverdue,
-                            destination: .dataManagement(initialTab: "备份"),
-                            quickActions: backupReminderRiskActions
-                        )
+                        ForEach(visibleDashboardRiskPins) { pin in
+                            DashboardRiskPill(
+                                title: pin.title,
+                                value: pin.value,
+                                color: pin.color,
+                                hasRisk: pin.hasRisk,
+                                destination: pin.destination,
+                                quickActions: pin.quickActions
+                            )
+                        }
                     }
                     .padding(.vertical, AppSpacing.tight * 0.25)
                 }

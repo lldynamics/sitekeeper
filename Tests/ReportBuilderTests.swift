@@ -136,9 +136,23 @@ struct ReportBuilderTests {
             ProjectContact(projectId: p1.id, name: "张三", role: .owner, phone: "13800138000"),
             ProjectContact(projectId: p2.id, name: "李四", role: .team, phone: "13900139000")
         ]
-        store.paymentRecords = [
-            PaymentRecord(projectId: p1.id, date: "", amount: "1000", method: .bankTransfer),
-            PaymentRecord(projectId: p2.id, date: "", amount: "2000", method: .cash)
+        store.projectFinancialRecords = [
+            ProjectFinancialRecord(
+                projectId: p1.id,
+                date: "",
+                direction: .income,
+                category: .collection,
+                amount: "1000",
+                counterparty: "客户A"
+            ),
+            ProjectFinancialRecord(
+                projectId: p2.id,
+                date: "",
+                direction: .income,
+                category: .collection,
+                amount: "2000",
+                counterparty: "客户B"
+            )
         ]
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
@@ -224,7 +238,7 @@ struct ReportBuilderTests {
         options.includeWarehouseMovements = true
         options.includeQuickNotes = true
         options.includeLightingCircuits = true
-        options.includePaymentRecords = true
+        options.includeProjectFinance = true
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
         let csvText = String(data: csv, encoding: .utf8) ?? ""
@@ -233,7 +247,7 @@ struct ReportBuilderTests {
         #expect(csvText.contains("[仓库流水]"))
         #expect(csvText.contains("[随手记]"))
         #expect(csvText.contains("[照明回路]"))
-        #expect(csvText.contains("[付款记录]"))
+        #expect(csvText.contains("[项目财务流水]"))
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
         let htmlText = String(data: html, encoding: .utf8) ?? ""
@@ -242,7 +256,7 @@ struct ReportBuilderTests {
         #expect(htmlText.contains("仓库流水"))
         #expect(htmlText.contains("随手记"))
         #expect(htmlText.contains("照明回路"))
-        #expect(htmlText.contains("付款记录"))
+        #expect(htmlText.contains("项目财务流水"))
 
         let pdf = ReportBuilder.makePDF(snapshot: snapshot, options: options)
         let extractedPDFText = pdfText(pdf)
@@ -251,6 +265,6 @@ struct ReportBuilderTests {
         #expect(extractedPDFText.contains("仓库流水"))
         #expect(extractedPDFText.contains("随手记"))
         #expect(extractedPDFText.contains("照明回路"))
-        #expect(extractedPDFText.contains("付款记录"))
+        #expect(extractedPDFText.contains("项目财务流水"))
     }
 }

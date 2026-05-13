@@ -33,12 +33,11 @@ struct ConduitFillView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "线管穿线率",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }

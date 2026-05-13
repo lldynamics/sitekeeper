@@ -12,286 +12,130 @@ final class DataStore {
     @ObservationIgnored let materialLibraryStore = MaterialLibraryStore()
     @ObservationIgnored let userPreferenceStore = UserPreferenceStore()
 
+    private func proxiedRead<Value>(
+        _ keyPath: KeyPath<DataStore, Value>,
+        _ value: @autoclosure () -> Value
+    ) -> Value {
+        access(keyPath: keyPath)
+        return value()
+    }
+
+    private func proxiedWrite<Value>(
+        _ keyPath: WritableKeyPath<DataStore, Value>,
+        _ mutation: () -> Void
+    ) {
+        withMutation(keyPath: keyPath, mutation)
+    }
+
     // 清单
     var materialItems: [MaterialItem] {
-        get {
-            access(keyPath: \.materialItems)
-            return financeStore.materialItems
-        }
-        set {
-            withMutation(keyPath: \.materialItems) {
-                financeStore.setMaterialItems(newValue)
-            }
-        }
+        get { proxiedRead(\.materialItems, financeStore.materialItems) }
+        set { proxiedWrite(\.materialItems) { financeStore.setMaterialItems(newValue) } }
     }
     var quoteItems: [QuoteItem] {
-        get {
-            access(keyPath: \.quoteItems)
-            return financeStore.quoteItems
-        }
-        set {
-            withMutation(keyPath: \.quoteItems) {
-                financeStore.setQuoteItems(newValue)
-            }
-        }
+        get { proxiedRead(\.quoteItems, financeStore.quoteItems) }
+        set { proxiedWrite(\.quoteItems) { financeStore.setQuoteItems(newValue) } }
     }
     var laborRecords: [LaborRecord] {
-        get {
-            access(keyPath: \.laborRecords)
-            return financeStore.laborRecords
-        }
-        set {
-            withMutation(keyPath: \.laborRecords) {
-                financeStore.setLaborRecords(newValue)
-            }
-        }
+        get { proxiedRead(\.laborRecords, financeStore.laborRecords) }
+        set { proxiedWrite(\.laborRecords) { financeStore.setLaborRecords(newValue) } }
     }
     // 项目
     var projects: [Project] {
-        get {
-            access(keyPath: \.projects)
-            return projectStore.projects
-        }
-        set {
-            withMutation(keyPath: \.projects) {
-                projectStore.setProjects(newValue)
-            }
-        }
+        get { proxiedRead(\.projects, projectStore.projects) }
+        set { proxiedWrite(\.projects) { projectStore.setProjects(newValue) } }
     }
     var dailyLogs: [DailyLog] {
-        get {
-            access(keyPath: \.dailyLogs)
-            return projectStore.dailyLogs
-        }
-        set {
-            withMutation(keyPath: \.dailyLogs) {
-                projectStore.setDailyLogs(newValue)
-            }
-        }
+        get { proxiedRead(\.dailyLogs, projectStore.dailyLogs) }
+        set { proxiedWrite(\.dailyLogs) { projectStore.setDailyLogs(newValue) } }
     }
     var historyRecords: [HistoryRecord] {
-        get {
-            access(keyPath: \.historyRecords)
-            return projectStore.historyRecords
-        }
+        get { proxiedRead(\.historyRecords, projectStore.historyRecords) }
         set {
-            withMutation(keyPath: \.historyRecords) {
+            proxiedWrite(\.historyRecords) {
                 projectStore.setHistoryRecords(applyingHistoryRetention(to: newValue))
             }
         }
     }
     var progressTasks: [ProgressTask] {
-        get {
-            access(keyPath: \.progressTasks)
-            return projectStore.progressTasks
-        }
-        set {
-            withMutation(keyPath: \.progressTasks) {
-                projectStore.setProgressTasks(newValue)
-            }
-        }
+        get { proxiedRead(\.progressTasks, projectStore.progressTasks) }
+        set { proxiedWrite(\.progressTasks) { projectStore.setProgressTasks(newValue) } }
     }
     var lightingCircuitPlans: [LightingCircuitPlan] {
-        get {
-            access(keyPath: \.lightingCircuitPlans)
-            return projectStore.lightingCircuitPlans
-        }
-        set {
-            withMutation(keyPath: \.lightingCircuitPlans) {
-                projectStore.setLightingCircuitPlans(newValue)
-            }
-        }
+        get { proxiedRead(\.lightingCircuitPlans, projectStore.lightingCircuitPlans) }
+        set { proxiedWrite(\.lightingCircuitPlans) { projectStore.setLightingCircuitPlans(newValue) } }
     }
     var siteTodos: [SiteTodo] {
-        get {
-            access(keyPath: \.siteTodos)
-            return projectStore.siteTodos
-        }
-        set {
-            withMutation(keyPath: \.siteTodos) {
-                projectStore.setSiteTodos(newValue)
-            }
-        }
+        get { proxiedRead(\.siteTodos, projectStore.siteTodos) }
+        set { proxiedWrite(\.siteTodos) { projectStore.setSiteTodos(newValue) } }
     }
     var projectDrawings: [ProjectDrawing] {
-        get {
-            access(keyPath: \.projectDrawings)
-            return projectStore.projectDrawings
-        }
-        set {
-            withMutation(keyPath: \.projectDrawings) {
-                projectStore.setProjectDrawings(newValue)
-            }
-        }
+        get { proxiedRead(\.projectDrawings, projectStore.projectDrawings) }
+        set { proxiedWrite(\.projectDrawings) { projectStore.setProjectDrawings(newValue) } }
     }
     var projectContacts: [ProjectContact] {
-        get {
-            access(keyPath: \.projectContacts)
-            return projectStore.projectContacts
-        }
-        set {
-            withMutation(keyPath: \.projectContacts) {
-                projectStore.setProjectContacts(newValue)
-            }
-        }
+        get { proxiedRead(\.projectContacts, projectStore.projectContacts) }
+        set { proxiedWrite(\.projectContacts) { projectStore.setProjectContacts(newValue) } }
     }
     var projectFinancialRecords: [ProjectFinancialRecord] {
-        get {
-            access(keyPath: \.projectFinancialRecords)
-            return projectStore.projectFinancialRecords
-        }
-        set {
-            withMutation(keyPath: \.projectFinancialRecords) {
-                projectStore.setProjectFinancialRecords(newValue)
-            }
-        }
+        get { proxiedRead(\.projectFinancialRecords, projectStore.projectFinancialRecords) }
+        set { proxiedWrite(\.projectFinancialRecords) { projectStore.setProjectFinancialRecords(newValue) } }
     }
     var projectDocuments: [ProjectDocument] {
-        get {
-            access(keyPath: \.projectDocuments)
-            return projectStore.projectDocuments
-        }
-        set {
-            withMutation(keyPath: \.projectDocuments) {
-                projectStore.setProjectDocuments(newValue)
-            }
-        }
+        get { proxiedRead(\.projectDocuments, projectStore.projectDocuments) }
+        set { proxiedWrite(\.projectDocuments) { projectStore.setProjectDocuments(newValue) } }
     }
     var quickNotes: [QuickNote] {
-        get {
-            access(keyPath: \.quickNotes)
-            return projectStore.quickNotes
-        }
-        set {
-            withMutation(keyPath: \.quickNotes) {
-                projectStore.setQuickNotes(newValue)
-            }
-        }
+        get { proxiedRead(\.quickNotes, projectStore.quickNotes) }
+        set { proxiedWrite(\.quickNotes) { projectStore.setQuickNotes(newValue) } }
     }
     var projectWarehouseMovements: [ProjectWarehouseMovement] {
-        get {
-            access(keyPath: \.projectWarehouseMovements)
-            return projectStore.projectWarehouseMovements
-        }
-        set {
-            withMutation(keyPath: \.projectWarehouseMovements) {
-                projectStore.setProjectWarehouseMovements(newValue)
-            }
-        }
+        get { proxiedRead(\.projectWarehouseMovements, projectStore.projectWarehouseMovements) }
+        set { proxiedWrite(\.projectWarehouseMovements) { projectStore.setProjectWarehouseMovements(newValue) } }
     }
 
     // 模板 / 材料库
     var templates: [ProjectTemplate] {
-        get {
-            access(keyPath: \.templates)
-            return materialLibraryStore.templates
-        }
-        set {
-            withMutation(keyPath: \.templates) {
-                materialLibraryStore.setTemplates(newValue)
-            }
-        }
+        get { proxiedRead(\.templates, materialLibraryStore.templates) }
+        set { proxiedWrite(\.templates) { materialLibraryStore.setTemplates(newValue) } }
     }
     var materialPriceEntries: [MaterialPriceEntry] {
-        get {
-            access(keyPath: \.materialPriceEntries)
-            return materialLibraryStore.materialPriceEntries
-        }
-        set {
-            withMutation(keyPath: \.materialPriceEntries) {
-                materialLibraryStore.setMaterialPriceEntries(newValue)
-            }
-        }
+        get { proxiedRead(\.materialPriceEntries, materialLibraryStore.materialPriceEntries) }
+        set { proxiedWrite(\.materialPriceEntries) { materialLibraryStore.setMaterialPriceEntries(newValue) } }
     }
     var materialSheetDrafts: [MaterialSheetDraft] {
-        get {
-            access(keyPath: \.materialSheetDrafts)
-            return materialLibraryStore.materialSheetDrafts
-        }
-        set {
-            withMutation(keyPath: \.materialSheetDrafts) {
-                materialLibraryStore.setMaterialSheetDrafts(newValue)
-            }
-        }
+        get { proxiedRead(\.materialSheetDrafts, materialLibraryStore.materialSheetDrafts) }
+        set { proxiedWrite(\.materialSheetDrafts) { materialLibraryStore.setMaterialSheetDrafts(newValue) } }
     }
     var supplierProfiles: [SupplierProfile] {
-        get {
-            access(keyPath: \.supplierProfiles)
-            return materialLibraryStore.supplierProfiles
-        }
-        set {
-            withMutation(keyPath: \.supplierProfiles) {
-                materialLibraryStore.setSupplierProfiles(newValue)
-            }
-        }
+        get { proxiedRead(\.supplierProfiles, materialLibraryStore.supplierProfiles) }
+        set { proxiedWrite(\.supplierProfiles) { materialLibraryStore.setSupplierProfiles(newValue) } }
     }
     var constructionMethods: [ConstructionMethod] {
-        get {
-            access(keyPath: \.constructionMethods)
-            return materialLibraryStore.constructionMethods
-        }
-        set {
-            withMutation(keyPath: \.constructionMethods) {
-                materialLibraryStore.setConstructionMethods(newValue)
-            }
-        }
+        get { proxiedRead(\.constructionMethods, materialLibraryStore.constructionMethods) }
+        set { proxiedWrite(\.constructionMethods) { materialLibraryStore.setConstructionMethods(newValue) } }
     }
     var userMaterials: [UserMaterial] {
-        get {
-            access(keyPath: \.userMaterials)
-            return materialLibraryStore.userMaterials
-        }
-        set {
-            withMutation(keyPath: \.userMaterials) {
-                materialLibraryStore.setUserMaterials(newValue)
-            }
-        }
+        get { proxiedRead(\.userMaterials, materialLibraryStore.userMaterials) }
+        set { proxiedWrite(\.userMaterials) { materialLibraryStore.setUserMaterials(newValue) } }
     }
     var deletedUserMaterials: [UserMaterial] {
-        get {
-            access(keyPath: \.deletedUserMaterials)
-            return materialLibraryStore.deletedUserMaterials
-        }
-        set {
-            withMutation(keyPath: \.deletedUserMaterials) {
-                materialLibraryStore.setDeletedUserMaterials(newValue)
-            }
-        }
+        get { proxiedRead(\.deletedUserMaterials, materialLibraryStore.deletedUserMaterials) }
+        set { proxiedWrite(\.deletedUserMaterials) { materialLibraryStore.setDeletedUserMaterials(newValue) } }
     }
 
     // 用户偏好
     var favoriteMaterialKeys: [String] {
-        get {
-            access(keyPath: \.favoriteMaterialKeys)
-            return userPreferenceStore.favoriteMaterialKeys
-        }
-        set {
-            withMutation(keyPath: \.favoriteMaterialKeys) {
-                userPreferenceStore.setFavoriteMaterialKeys(newValue)
-            }
-        }
+        get { proxiedRead(\.favoriteMaterialKeys, userPreferenceStore.favoriteMaterialKeys) }
+        set { proxiedWrite(\.favoriteMaterialKeys) { userPreferenceStore.setFavoriteMaterialKeys(newValue) } }
     }
     var recentMaterialKeys: [String] {
-        get {
-            access(keyPath: \.recentMaterialKeys)
-            return userPreferenceStore.recentMaterialKeys
-        }
-        set {
-            withMutation(keyPath: \.recentMaterialKeys) {
-                userPreferenceStore.setRecentMaterialKeys(newValue)
-            }
-        }
+        get { proxiedRead(\.recentMaterialKeys, userPreferenceStore.recentMaterialKeys) }
+        set { proxiedWrite(\.recentMaterialKeys) { userPreferenceStore.setRecentMaterialKeys(newValue) } }
     }
     var hiddenPresetKeys: Set<String> {
-        get {
-            access(keyPath: \.hiddenPresetKeys)
-            return userPreferenceStore.hiddenPresetKeys
-        }
-        set {
-            withMutation(keyPath: \.hiddenPresetKeys) {
-                userPreferenceStore.setHiddenPresetKeys(newValue)
-            }
-        }
+        get { proxiedRead(\.hiddenPresetKeys, userPreferenceStore.hiddenPresetKeys) }
+        set { proxiedWrite(\.hiddenPresetKeys) { userPreferenceStore.setHiddenPresetKeys(newValue) } }
     }
     var persistenceErrorMessage: String?
 
@@ -781,6 +625,210 @@ final class DataStore {
 
     var historyRetentionPerToolLimit: Int {
         historyRecordMaxCountPerTool
+    }
+
+    // MARK: - Explicit write APIs
+
+    private func appendElement<Element>(
+        _ element: Element,
+        to keyPath: ReferenceWritableKeyPath<DataStore, [Element]>
+    ) {
+        var values = self[keyPath: keyPath]
+        values.append(element)
+        self[keyPath: keyPath] = values
+    }
+
+    private func appendElements<Element>(
+        _ elements: [Element],
+        to keyPath: ReferenceWritableKeyPath<DataStore, [Element]>
+    ) {
+        guard !elements.isEmpty else { return }
+        var values = self[keyPath: keyPath]
+        values.append(contentsOf: elements)
+        self[keyPath: keyPath] = values
+    }
+
+    private func insertElement<Element>(
+        _ element: Element,
+        at index: Int,
+        to keyPath: ReferenceWritableKeyPath<DataStore, [Element]>
+    ) {
+        var values = self[keyPath: keyPath]
+        let boundedIndex = min(max(index, 0), values.count)
+        values.insert(element, at: boundedIndex)
+        self[keyPath: keyPath] = values
+    }
+
+    private func removeElements<Element>(
+        from keyPath: ReferenceWritableKeyPath<DataStore, [Element]>,
+        where shouldRemove: (Element) -> Bool
+    ) {
+        var values = self[keyPath: keyPath]
+        values.removeAll(where: shouldRemove)
+        self[keyPath: keyPath] = values
+    }
+
+    private func removeElements<Element, ID: Hashable>(
+        from keyPath: ReferenceWritableKeyPath<DataStore, [Element]>,
+        ids: Set<ID>,
+        id: (Element) -> ID
+    ) {
+        guard !ids.isEmpty else { return }
+        var values = self[keyPath: keyPath]
+        values.removeAll { ids.contains(id($0)) }
+        self[keyPath: keyPath] = values
+    }
+
+    func appendMaterialItem(_ item: MaterialItem) {
+        appendElement(item, to: \.materialItems)
+    }
+
+    func removeMaterialItems(ids: Set<UUID>) {
+        removeElements(from: \.materialItems, ids: ids, id: \.id)
+    }
+
+    func appendQuoteItem(_ item: QuoteItem) {
+        appendElement(item, to: \.quoteItems)
+    }
+
+    func removeQuoteItems(ids: Set<UUID>) {
+        removeElements(from: \.quoteItems, ids: ids, id: \.id)
+    }
+
+    func appendLaborRecord(_ record: LaborRecord) {
+        appendElement(record, to: \.laborRecords)
+    }
+
+    func removeLaborRecords(ids: Set<UUID>) {
+        removeElements(from: \.laborRecords, ids: ids, id: \.id)
+    }
+
+    func appendDailyLog(_ log: DailyLog) {
+        appendElement(log, to: \.dailyLogs)
+    }
+
+    func insertDailyLogAtTop(_ log: DailyLog) {
+        insertElement(log, at: 0, to: \.dailyLogs)
+    }
+
+    func removeDailyLogs(ids: Set<UUID>) {
+        removeElements(from: \.dailyLogs, ids: ids, id: \.id)
+    }
+
+    func appendProgressTask(_ task: ProgressTask) {
+        appendElement(task, to: \.progressTasks)
+    }
+
+    func removeProgressTasks(ids: Set<UUID>) {
+        removeElements(from: \.progressTasks, ids: ids, id: \.id)
+    }
+
+    func appendSiteTodo(_ todo: SiteTodo) {
+        appendElement(todo, to: \.siteTodos)
+    }
+
+    func insertSiteTodoAtTop(_ todo: SiteTodo) {
+        insertElement(todo, at: 0, to: \.siteTodos)
+    }
+
+    func removeSiteTodos(ids: Set<UUID>) {
+        removeElements(from: \.siteTodos, ids: ids, id: \.id)
+    }
+
+    func appendProjectDrawing(_ drawing: ProjectDrawing) {
+        appendElement(drawing, to: \.projectDrawings)
+    }
+
+    func appendProjectDrawings(_ drawings: [ProjectDrawing]) {
+        appendElements(drawings, to: \.projectDrawings)
+    }
+
+    func removeProjectDrawings(ids: Set<UUID>) {
+        removeElements(from: \.projectDrawings, ids: ids, id: \.id)
+    }
+
+    func removeProjectDrawings(where shouldRemove: (ProjectDrawing) -> Bool) {
+        removeElements(from: \.projectDrawings, where: shouldRemove)
+    }
+
+    func appendProjectContact(_ contact: ProjectContact) {
+        appendElement(contact, to: \.projectContacts)
+    }
+
+    func insertProjectContactAtTop(_ contact: ProjectContact) {
+        insertElement(contact, at: 0, to: \.projectContacts)
+    }
+
+    func removeProjectContact(id: UUID) {
+        removeElements(from: \.projectContacts, ids: Set([id]), id: \.id)
+    }
+
+    func removeProjectContacts(ids: Set<UUID>) {
+        removeElements(from: \.projectContacts, ids: ids, id: \.id)
+    }
+
+    func appendProjectFinancialRecord(_ record: ProjectFinancialRecord) {
+        appendElement(record, to: \.projectFinancialRecords)
+    }
+
+    func appendProjectFinancialRecords(_ records: [ProjectFinancialRecord]) {
+        appendElements(records, to: \.projectFinancialRecords)
+    }
+
+    func removeProjectFinancialRecords(ids: Set<UUID>) {
+        removeElements(from: \.projectFinancialRecords, ids: ids, id: \.id)
+    }
+
+    func appendProjectDocument(_ document: ProjectDocument) {
+        appendElement(document, to: \.projectDocuments)
+    }
+
+    func appendProjectDocuments(_ documents: [ProjectDocument]) {
+        appendElements(documents, to: \.projectDocuments)
+    }
+
+    func removeProjectDocuments(ids: Set<UUID>) {
+        removeElements(from: \.projectDocuments, ids: ids, id: \.id)
+    }
+
+    func appendProjectWarehouseMovement(_ movement: ProjectWarehouseMovement) {
+        appendElement(movement, to: \.projectWarehouseMovements)
+    }
+
+    func insertProjectWarehouseMovementAtTop(_ movement: ProjectWarehouseMovement) {
+        insertElement(movement, at: 0, to: \.projectWarehouseMovements)
+    }
+
+    func removeProjectWarehouseMovements(ids: Set<UUID>) {
+        removeElements(from: \.projectWarehouseMovements, ids: ids, id: \.id)
+    }
+
+    func appendMaterialPriceEntry(_ entry: MaterialPriceEntry) {
+        appendElement(entry, to: \.materialPriceEntries)
+    }
+
+    func appendMaterialPriceEntries(_ entries: [MaterialPriceEntry]) {
+        appendElements(entries, to: \.materialPriceEntries)
+    }
+
+    func insertMaterialPriceEntryAtTop(_ entry: MaterialPriceEntry) {
+        insertElement(entry, at: 0, to: \.materialPriceEntries)
+    }
+
+    func removeMaterialPriceEntries(ids: Set<UUID>) {
+        removeElements(from: \.materialPriceEntries, ids: ids, id: \.id)
+    }
+
+    func appendTemplate(_ template: ProjectTemplate) {
+        appendElement(template, to: \.templates)
+    }
+
+    func insertTemplateAtTop(_ template: ProjectTemplate) {
+        insertElement(template, at: 0, to: \.templates)
+    }
+
+    func removeTemplates(ids: Set<UUID>) {
+        removeElements(from: \.templates, ids: ids, id: \.id)
     }
 
     func importSampleData(replacingExisting: Bool) {

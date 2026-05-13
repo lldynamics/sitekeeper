@@ -351,7 +351,7 @@ struct TaskProgressView: View {
 
     private func addTask() {
         guard let projectId = newProjectId else { return }
-        store.progressTasks.append(ProgressTask(
+        store.appendProgressTask(ProgressTask(
             projectId: projectId,
             title: newTitle,
             startDate: Formatters.date.string(from: newStartDate),
@@ -371,7 +371,7 @@ struct TaskProgressView: View {
 
     private func delete(tasks: [ProgressTask], offsets: IndexSet) {
         let ids = offsets.compactMap { tasks.indices.contains($0) ? tasks[$0].id : nil }
-        store.progressTasks.removeAll { ids.contains($0.id) }
+        store.removeProgressTasks(ids: Set(ids))
         store.scheduleSave()
         operationMessage = "已删除 \(ids.count) 条任务"
     }

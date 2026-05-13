@@ -89,12 +89,11 @@ struct LightingCalcView: View {
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty, let resultModel {
+            if let resultModel {
                 Section("估算结果") {
                     CalculatorResultCard(
                         title: "照明估算结果",
-                        result: resultModel,
-                        copyText: resultText
+                        result: resultModel
                     )
                 }
             }

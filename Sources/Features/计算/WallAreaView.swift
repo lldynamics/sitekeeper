@@ -39,12 +39,11 @@ struct WallAreaView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("结果") {
                     CalculatorResultCard(
                         title: "墙面面积结果",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }

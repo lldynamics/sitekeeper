@@ -18,7 +18,7 @@ struct ProjectListFiltersSection: View {
                 Image(systemName: "magnifyingglass")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
-                TextField("搜索项目名称或地点", text: $searchText)
+                TextField(String(localized: "搜索项目名称或地点"), text: $searchText)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                 if !searchText.isEmpty {
@@ -49,7 +49,7 @@ struct ProjectListFiltersSection: View {
             if overviewFilter != nil {
                 HStack(spacing: AppSpacing.tight) {
                     if let overviewFilter {
-                        Label("概况筛选：\(overviewFilter.displayName)", systemImage: "scope")
+                        Label(String(localized: "概况筛选：\(overviewFilter.displayName)"), systemImage: "scope")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -57,27 +57,27 @@ struct ProjectListFiltersSection: View {
                     Button {
                         overviewFilter = nil
                     } label: {
-                        Label("清除概况筛选", systemImage: "xmark.circle")
+                        Label(String(localized: "清除概况筛选"), systemImage: "xmark.circle")
                             .font(.caption.weight(.semibold))
                     }
                 }
             }
         } header: {
-            Text("搜索与筛选")
+            Text(String(localized: "搜索与筛选"))
         }
     }
 
     private var splitToolbar: some View {
         HStack(spacing: AppSpacing.tight) {
             Menu {
-                Button("全部状态") { statusFilter = nil }
+                Button(String(localized: "全部状态")) { statusFilter = nil }
                 ForEach(allowedStatuses, id: \.rawValue) { status in
                     Button(status.displayName) {
                         statusFilter = status
                     }
                 }
             } label: {
-                Label(statusFilter?.displayName ?? "全部状态", systemImage: "line.3.horizontal.decrease.circle")
+                Label(statusFilter?.displayName ?? String(localized: "全部状态"), systemImage: "line.3.horizontal.decrease.circle")
                     .font(.caption.weight(.semibold))
                     .padding(.horizontal, AppSpacing.normal)
                     .padding(.vertical, 6)
@@ -102,7 +102,7 @@ struct ProjectListFiltersSection: View {
 
             if hasAnyFilterApplied {
                 Button(action: onClearAll) {
-                    Label("清除", systemImage: "xmark.circle")
+                    Label(String(localized: "清除"), systemImage: "xmark.circle")
                         .font(.caption.weight(.semibold))
                 }
             }
@@ -113,7 +113,7 @@ struct ProjectListFiltersSection: View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: AppSpacing.tight) {
-                    FilterChip(title: "全部", isSelected: statusFilter == nil) {
+                    FilterChip(title: String(localized: "全部"), isSelected: statusFilter == nil) {
                         statusFilter = nil
                     }
                     ForEach(allowedStatuses, id: \.rawValue) { status in
@@ -126,7 +126,7 @@ struct ProjectListFiltersSection: View {
             }
 
             HStack(spacing: AppSpacing.tight) {
-                Picker("排序", selection: $sortOption) {
+                Picker(String(localized: "排序"), selection: $sortOption) {
                     ForEach(ProjectSortOption.allCases, id: \.self) { option in
                         Text(option.displayName).tag(option)
                     }
@@ -136,7 +136,7 @@ struct ProjectListFiltersSection: View {
                 Spacer(minLength: 0)
 
                 if hasAnyFilterApplied {
-                    Button("清除筛选", action: onClearAll)
+                    Button(String(localized: "清除筛选"), action: onClearAll)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.appPrimaryAction)
                 }

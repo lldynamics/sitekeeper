@@ -3,6 +3,53 @@ import PhotosUI
 import UIKit
 import ImageIO
 
+private struct DailyLogComposerState {
+    var date: Date = Date()
+    var weather: String = autoWeatherNow()
+    var content: String = ""
+    var workers: String = ""
+    var safety: String = ""
+    var materials: String = ""
+    var tomorrowPlan: String = ""
+    var qualityIssue: String = ""
+    var rectification: String = ""
+    var confirmer: String = ""
+    var linkedMethodIDs: Set<UUID> = []
+    var selectedPhotos: [PhotosPickerItem] = []
+    var photoDrafts: [PhotoDraft] = []
+    var showLogCamera = false
+    var cameraPhotoTag: PhotoTag = .general
+    var projectId: UUID?
+
+    init(
+        initialProjectId: UUID? = nil,
+        initialDate: Date = Date(),
+        initialContent: String = "",
+        initialPhotoDrafts: [PhotoDraft] = []
+    ) {
+        date = initialDate
+        content = initialContent
+        photoDrafts = initialPhotoDrafts
+        projectId = initialProjectId
+    }
+}
+
+private struct DailyLogEditorState {
+    var logId: UUID?
+    var date = Date()
+    var weather = "晴"
+    var content = ""
+    var workers = ""
+    var safety = ""
+    var materials = ""
+    var tomorrowPlan = ""
+    var qualityIssue = ""
+    var rectification = ""
+    var confirmer = ""
+    var linkedMethodIDs: Set<UUID> = []
+    var projectId: UUID?
+}
+
 struct DailyLogView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -16,22 +63,7 @@ struct DailyLogView: View {
     @State private var showAdd = false
     @State private var didAutoOpenComposer = false
     @State private var didOpenFocusedLog = false
-    @State private var newDate = Date()
-    @State private var newWeather = autoWeatherNow()
-    @State private var newContent = ""
-    @State private var newWorkers = ""
-    @State private var newSafety = ""
-    @State private var newMaterials = ""
-    @State private var newTomorrowPlan = ""
-    @State private var newQualityIssue = ""
-    @State private var newRectification = ""
-    @State private var newConfirmer = ""
-    @State private var newLinkedMethodIDs: Set<UUID> = []
-    @State private var selectedPhotos: [PhotosPickerItem] = []
-    @State private var photoDrafts: [PhotoDraft] = []
-    @State private var showLogCamera = false
-    @State private var cameraPhotoTag: PhotoTag = .general
-    @State private var newProjectId: UUID?
+    @State private var composer = DailyLogComposerState()
     @State private var showDateFilter = false
     @State private var isDateFilterActive = false
     @State private var filterStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
@@ -47,19 +79,7 @@ struct DailyLogView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var showEdit = false
-    @State private var editingLogId: UUID?
-    @State private var editDate = Date()
-    @State private var editWeather = "晴"
-    @State private var editContent = ""
-    @State private var editWorkers = ""
-    @State private var editSafety = ""
-    @State private var editMaterials = ""
-    @State private var editTomorrowPlan = ""
-    @State private var editQualityIssue = ""
-    @State private var editRectification = ""
-    @State private var editConfirmer = ""
-    @State private var editLinkedMethodIDs: Set<UUID> = []
-    @State private var editProjectId: UUID?
+    @State private var editor = DailyLogEditorState()
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var photoWallExportTask: Task<Void, Never>?
@@ -76,10 +96,14 @@ struct DailyLogView: View {
         self.focusedLogId = focusedLogId
         self.initialPhotoDrafts = initialPhotoDrafts
         self.initialContent = initialContent
-        _newDate = State(initialValue: initialPhotoDrafts.first?.capturedAt ?? Date())
-        _newContent = State(initialValue: initialContent)
-        _photoDrafts = State(initialValue: initialPhotoDrafts.map(\.photoDraft))
-        _newProjectId = State(initialValue: initialProjectId)
+        _composer = State(
+            initialValue: DailyLogComposerState(
+                initialProjectId: initialProjectId,
+                initialDate: initialPhotoDrafts.first?.capturedAt ?? Date(),
+                initialContent: initialContent,
+                initialPhotoDrafts: initialPhotoDrafts.map(\.photoDraft)
+            )
+        )
         _filterProjectId = State(initialValue: initialProjectId)
     }
 
@@ -249,7 +273,7 @@ struct DailyLogView: View {
             openFocusedLogIfNeeded()
             guard autoOpenComposer, !didAutoOpenComposer else { return }
             didAutoOpenComposer = true
-            newProjectId = initialProjectId
+            composer.projectId = initialProjectId
             showAdd = true
         }
         .onDisappear {
@@ -749,12 +773,12 @@ struct DailyLogView: View {
         NavigationStack {
             Form {
                 Section("基础信息") {
-                    DatePicker("日期", selection: $newDate, displayedComponents: .date)
-                    Picker("天气", selection: $newWeather) {
+                    DatePicker("日期", selection: $composer.date, displayedComponents: .date)
+                    Picker("天气", selection: $composer.weather) {
                         ForEach(weatherOptions, id: \.self) { Text($0).tag($0) }
                     }
-                    TextField("人数", text: $newWorkers)
-                    Picker("选择工程", selection: $newProjectId) {
+                    TextField("人数", text: $composer.workers)
+                    Picker("选择工程", selection: $composer.projectId) {
                         Text("无归属").tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
@@ -762,7 +786,7 @@ struct DailyLogView: View {
                 Section("施工内容") {
                     Menu("套用内容模板") {
                         ForEach(contentTemplates, id: \.self) { tpl in
-                            Button(tpl) { newContent = tpl }
+                            Button(tpl) { composer.content = tpl }
                         }
                     }
                     if !store.templates.filter({ $0.category == .dailyLog }).isEmpty {
@@ -772,45 +796,45 @@ struct DailyLogView: View {
                             }
                         }
                     }
-                    TextField("内容", text: $newContent, axis: .vertical)
+                    TextField("内容", text: $composer.content, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 Section("安全与材料") {
                     Menu("套用安全模板") {
                         ForEach(safetyTemplates, id: \.self) { tpl in
-                            Button(tpl) { newSafety = tpl }
+                            Button(tpl) { composer.safety = tpl }
                         }
                     }
-                    TextField("安全事项", text: $newSafety, axis: .vertical)
+                    TextField("安全事项", text: $composer.safety, axis: .vertical)
                         .lineLimit(2...4)
                     Menu("套用材料模板") {
                         ForEach(materialTemplates, id: \.self) { tpl in
-                            Button(tpl) { newMaterials = tpl }
+                            Button(tpl) { composer.materials = tpl }
                         }
                     }
-                    TextField("材料进场", text: $newMaterials, axis: .vertical)
+                    TextField("材料进场", text: $composer.materials, axis: .vertical)
                         .lineLimit(2...4)
                 }
                 Section("计划与质量") {
                     Button {
-                        newTomorrowPlan = generateTomorrowPlanFromTodos(for: newProjectId)
+                        composer.tomorrowPlan = generateTomorrowPlanFromTodos(for: composer.projectId)
                     } label: {
                         Label("从今日待办生成明日计划", systemImage: "wand.and.stars")
                     }
-                    TextField("明日计划", text: $newTomorrowPlan, axis: .vertical)
+                    TextField("明日计划", text: $composer.tomorrowPlan, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("质量问题", text: $newQualityIssue, axis: .vertical)
+                    TextField("质量问题", text: $composer.qualityIssue, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("整改记录", text: $newRectification, axis: .vertical)
+                    TextField("整改记录", text: $composer.rectification, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("现场确认人", text: $newConfirmer)
+                    TextField("现场确认人", text: $composer.confirmer)
                 }
-                constructionMethodLinkSection(selection: $newLinkedMethodIDs)
+                constructionMethodLinkSection(selection: $composer.linkedMethodIDs)
                 DailyLogWatermarkPhotoSection(
-                    cameraPhotoTag: $cameraPhotoTag,
-                    selectedPhotos: $selectedPhotos,
-                    photoDrafts: $photoDrafts,
-                    onOpenCamera: { showLogCamera = true }
+                    cameraPhotoTag: $composer.cameraPhotoTag,
+                    selectedPhotos: $composer.selectedPhotos,
+                    photoDrafts: $composer.photoDrafts,
+                    onOpenCamera: { composer.showLogCamera = true }
                 )
             }
             .navigationTitle("写日志")
@@ -831,24 +855,28 @@ struct DailyLogView: View {
                 }
             }
         }
-        .onChange(of: selectedPhotos) { _, newItems in
-            let remainingSlots = max(6 - photoDrafts.count, 0)
+        .onChange(of: composer.selectedPhotos) { _, newItems in
+            let remainingSlots = max(6 - composer.photoDrafts.count, 0)
             Task {
                 guard !newItems.isEmpty else { return }
                 var drafts: [PhotoDraft] = []
                 for item in newItems.prefix(remainingSlots) {
-                    if let data = try? await item.loadTransferable(type: Data.self),
-                       let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) {
-                        drafts.append(PhotoDraft(data: normalizedData))
+                    do {
+                        guard let data = try await item.loadTransferable(type: Data.self) else { continue }
+                        if let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) {
+                            drafts.append(PhotoDraft(data: normalizedData))
+                        }
+                    } catch {
+                        StorageIssueLog.record("施工日志图片导入失败：\(error.localizedDescription)")
                     }
                 }
                 await MainActor.run {
-                    photoDrafts.append(contentsOf: drafts)
-                    selectedPhotos = []
+                    composer.photoDrafts.append(contentsOf: drafts)
+                    composer.selectedPhotos = []
                 }
             }
         }
-        .sheet(isPresented: $showLogCamera) {
+        .sheet(isPresented: $composer.showLogCamera) {
             ImagePickerView(
                 sourceType: .camera,
                 onPickedWithTimestamp: { image, capturedAt in
@@ -865,41 +893,41 @@ struct DailyLogView: View {
         NavigationStack {
             Form {
                 Section("基础信息") {
-                    DatePicker("日期", selection: $editDate, displayedComponents: .date)
-                    Picker("天气", selection: $editWeather) {
+                    DatePicker("日期", selection: $editor.date, displayedComponents: .date)
+                    Picker("天气", selection: $editor.weather) {
                         ForEach(weatherOptions, id: \.self) { Text($0).tag($0) }
                     }
-                    TextField("人数", text: $editWorkers)
-                    Picker("选择工程", selection: $editProjectId) {
+                    TextField("人数", text: $editor.workers)
+                    Picker("选择工程", selection: $editor.projectId) {
                         Text("无归属").tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
                 }
                 Section("施工内容") {
-                    TextField("内容", text: $editContent, axis: .vertical)
+                    TextField("内容", text: $editor.content, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 Section("安全与材料") {
-                    TextField("安全事项", text: $editSafety, axis: .vertical)
+                    TextField("安全事项", text: $editor.safety, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("材料进场", text: $editMaterials, axis: .vertical)
+                    TextField("材料进场", text: $editor.materials, axis: .vertical)
                         .lineLimit(2...4)
                 }
                 Section("计划与质量") {
                     Button {
-                        editTomorrowPlan = generateTomorrowPlanFromTodos(for: editProjectId)
+                        editor.tomorrowPlan = generateTomorrowPlanFromTodos(for: editor.projectId)
                     } label: {
                         Label("从今日待办生成明日计划", systemImage: "wand.and.stars")
                     }
-                    TextField("明日计划", text: $editTomorrowPlan, axis: .vertical)
+                    TextField("明日计划", text: $editor.tomorrowPlan, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("质量问题", text: $editQualityIssue, axis: .vertical)
+                    TextField("质量问题", text: $editor.qualityIssue, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("整改记录", text: $editRectification, axis: .vertical)
+                    TextField("整改记录", text: $editor.rectification, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("现场确认人", text: $editConfirmer)
+                    TextField("现场确认人", text: $editor.confirmer)
                 }
-                constructionMethodLinkSection(selection: $editLinkedMethodIDs)
+                constructionMethodLinkSection(selection: $editor.linkedMethodIDs)
             }
             .navigationTitle("编辑日志")
             .navigationBarTitleDisplayMode(.inline)
@@ -912,7 +940,7 @@ struct DailyLogView: View {
                         saveEditedLog()
                         showEdit = false
                     }
-                    .disabled(editContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .disabled(editor.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
         }
@@ -923,32 +951,32 @@ struct DailyLogView: View {
         let logId = UUID()
         let fileNames: [String]
         do {
-            fileNames = try PhotoStorage.saveManyOrThrow(originals: photoDrafts.map(\.data), logId: logId)
+            fileNames = try PhotoStorage.saveManyOrThrow(originals: composer.photoDrafts.map(\.data), logId: logId)
         } catch {
             alertMessage = "现场照片保存失败：\(error.localizedDescription)"
             showAlert = true
             return
         }
-        let photos = zip(fileNames, photoDrafts).map { fileName, draft in
+        let photos = zip(fileNames, composer.photoDrafts).map { fileName, draft in
             LogPhoto(fileName: fileName, note: draft.note, tag: draft.tag)
         }
-        store.dailyLogs.insert(DailyLog(
+        store.insertDailyLogAtTop(DailyLog(
             id: logId,
-            date: Formatters.date.string(from: newDate),
-            weather: newWeather,
-            content: newContent,
-            workers: newWorkers,
+            date: Formatters.date.string(from: composer.date),
+            weather: composer.weather,
+            content: composer.content,
+            workers: composer.workers,
             photoFileName: fileNames.first,
             photos: photos,
-            safety: newSafety,
-            materials: newMaterials,
-            tomorrowPlan: newTomorrowPlan,
-            qualityIssue: newQualityIssue,
-            rectification: newRectification,
-            confirmer: newConfirmer,
-            linkedConstructionMethodIDs: sortedLinkedMethodIDs(newLinkedMethodIDs),
-            projectId: newProjectId
-        ), at: 0)
+            safety: composer.safety,
+            materials: composer.materials,
+            tomorrowPlan: composer.tomorrowPlan,
+            qualityIssue: composer.qualityIssue,
+            rectification: composer.rectification,
+            confirmer: composer.confirmer,
+            linkedConstructionMethodIDs: sortedLinkedMethodIDs(composer.linkedMethodIDs),
+            projectId: composer.projectId
+        ))
         store.scheduleSave()
         clearDraft()
     }
@@ -964,7 +992,7 @@ struct DailyLogView: View {
                 PhotoStorage.delete(fileNames: log.allPhotoFileNames)
             }
         }
-        store.dailyLogs.removeAll { ids.contains($0.id) }
+        store.removeDailyLogs(ids: Set(ids))
         store.scheduleSave()
     }
 
@@ -1023,36 +1051,37 @@ struct DailyLogView: View {
     }
 
     private func clearDraft() {
-        selectedPhotos = []
-        photoDrafts = []
-        cameraPhotoTag = .general
-        newProjectId = initialProjectId
-        newContent = ""
-        newWorkers = ""
-        newSafety = ""
-        newMaterials = ""
-        newTomorrowPlan = ""
-        newQualityIssue = ""
-        newRectification = ""
-        newConfirmer = ""
-        newLinkedMethodIDs.removeAll()
-        newWeather = autoWeatherNow()
+        composer.selectedPhotos = []
+        composer.photoDrafts = []
+        composer.showLogCamera = false
+        composer.cameraPhotoTag = .general
+        composer.projectId = initialProjectId
+        composer.content = ""
+        composer.workers = ""
+        composer.safety = ""
+        composer.materials = ""
+        composer.tomorrowPlan = ""
+        composer.qualityIssue = ""
+        composer.rectification = ""
+        composer.confirmer = ""
+        composer.linkedMethodIDs.removeAll()
+        composer.weather = autoWeatherNow()
     }
 
     private func startEdit(_ log: DailyLog) {
-        editingLogId = log.id
-        editDate = Formatters.date.date(from: log.date) ?? Date()
-        editWeather = log.weather
-        editContent = log.content
-        editWorkers = log.workers
-        editSafety = log.safety
-        editMaterials = log.materials
-        editTomorrowPlan = log.tomorrowPlan
-        editQualityIssue = log.qualityIssue
-        editRectification = log.rectification
-        editConfirmer = log.confirmer
-        editLinkedMethodIDs = Set(log.linkedConstructionMethodIDs)
-        editProjectId = log.projectId
+        editor.logId = log.id
+        editor.date = Formatters.date.date(from: log.date) ?? Date()
+        editor.weather = log.weather
+        editor.content = log.content
+        editor.workers = log.workers
+        editor.safety = log.safety
+        editor.materials = log.materials
+        editor.tomorrowPlan = log.tomorrowPlan
+        editor.qualityIssue = log.qualityIssue
+        editor.rectification = log.rectification
+        editor.confirmer = log.confirmer
+        editor.linkedMethodIDs = Set(log.linkedConstructionMethodIDs)
+        editor.projectId = log.projectId
         showEdit = true
     }
 
@@ -1069,40 +1098,40 @@ struct DailyLogView: View {
     }
 
     private func saveEditedLog() {
-        guard let id = editingLogId,
+        guard let id = editor.logId,
               let index = store.dailyLogs.firstIndex(where: { $0.id == id }) else { return }
         var log = store.dailyLogs[index]
-        log.date = Formatters.date.string(from: editDate)
-        log.weather = editWeather
-        log.content = editContent
-        log.workers = editWorkers
-        log.safety = editSafety
-        log.materials = editMaterials
-        log.tomorrowPlan = editTomorrowPlan
-        log.qualityIssue = editQualityIssue
-        log.rectification = editRectification
-        log.confirmer = editConfirmer
-        log.linkedConstructionMethodIDs = sortedLinkedMethodIDs(editLinkedMethodIDs)
-        log.projectId = editProjectId
+        log.date = Formatters.date.string(from: editor.date)
+        log.weather = editor.weather
+        log.content = editor.content
+        log.workers = editor.workers
+        log.safety = editor.safety
+        log.materials = editor.materials
+        log.tomorrowPlan = editor.tomorrowPlan
+        log.qualityIssue = editor.qualityIssue
+        log.rectification = editor.rectification
+        log.confirmer = editor.confirmer
+        log.linkedConstructionMethodIDs = sortedLinkedMethodIDs(editor.linkedMethodIDs)
+        log.projectId = editor.projectId
         store.dailyLogs[index] = log
         store.scheduleSave()
     }
 
     private func copyLogToToday(_ log: DailyLog) {
-        newDate = Date()
-        newWeather = log.weather
-        newContent = log.content
-        newWorkers = log.workers
-        newSafety = log.safety
-        newMaterials = log.materials
-        newTomorrowPlan = log.tomorrowPlan
-        newQualityIssue = log.qualityIssue
-        newRectification = log.rectification
-        newConfirmer = log.confirmer
-        newLinkedMethodIDs = Set(log.linkedConstructionMethodIDs)
-        newProjectId = log.projectId
-        selectedPhotos = []
-        photoDrafts = []
+        composer.date = Date()
+        composer.weather = log.weather
+        composer.content = log.content
+        composer.workers = log.workers
+        composer.safety = log.safety
+        composer.materials = log.materials
+        composer.tomorrowPlan = log.tomorrowPlan
+        composer.qualityIssue = log.qualityIssue
+        composer.rectification = log.rectification
+        composer.confirmer = log.confirmer
+        composer.linkedMethodIDs = Set(log.linkedConstructionMethodIDs)
+        composer.projectId = log.projectId
+        composer.selectedPhotos = []
+        composer.photoDrafts = []
         showAdd = true
     }
 
@@ -1180,14 +1209,20 @@ struct DailyLogView: View {
     }
 
     private func applyDailyLogTemplate(_ template: ProjectTemplate) {
-        newContent = template.content
+        composer.content = template.content
     }
 
     private func appendCameraPhoto(_ image: UIImage, capturedAt: Date) {
-        guard photoDrafts.count < 6,
+        guard composer.photoDrafts.count < 6,
               let data = image.jpegData(compressionQuality: 0.82),
               let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) else { return }
-          photoDrafts.append(PhotoDraft(data: normalizedData, note: logWatermarkPhotoNote(capturedAt: capturedAt), tag: cameraPhotoTag))
+        composer.photoDrafts.append(
+            PhotoDraft(
+                data: normalizedData,
+                note: logWatermarkPhotoNote(capturedAt: capturedAt),
+                tag: composer.cameraPhotoTag
+            )
+        )
     }
 
     private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
@@ -1212,13 +1247,13 @@ struct DailyLogView: View {
         [
             "来源: 拍照",
             "拍摄时间: \(Formatters.dateTime.string(from: capturedAt))",
-            "标签: \(cameraPhotoTag.rawValue)"
+            "标签: \(composer.cameraPhotoTag.rawValue)"
         ].compactMap { $0 }.joined(separator: "\n")
     }
 
     private var canSaveLog: Bool {
-        let contentReady = !newContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let workersReady = newWorkers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || InputValidator.nonNegativeNumber(newWorkers)
+        let contentReady = !composer.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let workersReady = composer.workers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || InputValidator.nonNegativeNumber(composer.workers)
         return contentReady && workersReady
     }
 }

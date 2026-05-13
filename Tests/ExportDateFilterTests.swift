@@ -60,27 +60,56 @@ struct ExportDateFilterTests {
         #expect(Formatters.dateTime.date(from: hist.date) != nil)
 
         // SiteTodo - dueDate
-        let todo = SiteTodo(title: "test", dueDate: "2025-04-05", priority: TodoPriority.medium.rawValue, issueType: TodoIssueType.quality.rawValue, projectId: nil)
+        let todo = SiteTodo(title: "test", dueDate: "2025-04-05", priority: .medium, issueType: .quality, projectId: nil)
         #expect(Formatters.date.date(from: todo.dueDate) != nil)
 
         // ProjectFinancialRecord - date
-        let finRecord = ProjectFinancialRecord(projectId: UUID(), date: "2025-04-06", direction: ProjectFinancialDirection.income.rawValue, category: ProjectFinancialCategory.material.rawValue, amount: "100", counterparty: "test", invoiceNumber: "", linkedDocumentIds: [], note: "")
+        let finRecord = ProjectFinancialRecord(
+            projectId: UUID(),
+            date: "2025-04-06",
+            direction: .income,
+            category: .material,
+            amount: "100",
+            counterparty: "test",
+            invoiceNumber: "",
+            linkedDocumentIds: [],
+            note: ""
+        )
         #expect(Formatters.date.date(from: finRecord.date) != nil)
 
         // ProjectDocument - createdAt
-        let doc = ProjectDocument(id: UUID(), projectId: UUID(), title: "test", category: "合同", fileName: "test.pdf", fileType: "pdf", pageCount: 1, amount: "100", linkedFinancialRecordId: nil, createdAt: "2025-04-07 12:00", note: "")
+        let doc = ProjectDocument(
+            id: UUID(),
+            projectId: UUID(),
+            title: "test",
+            category: .contract,
+            fileName: "test.pdf",
+            fileType: "pdf",
+            pageCount: 1,
+            amount: "100",
+            linkedFinancialRecordId: nil,
+            createdAt: "2025-04-07 12:00",
+            note: ""
+        )
         #expect(Formatters.dateTime.date(from: doc.createdAt) != nil)
 
         // QuoteItem - customerConfirmedDate
         let quote = QuoteItem(name: "test", unitPrice: "100", quantity: "1", unit: "个", notes: "", taxRate: "0", discountRate: "1", versionName: "", customerConfirmedDate: "2025-04-08", contractAmount: "100", projectId: nil)
         #expect(Formatters.date.date(from: quote.customerConfirmedDate) != nil)
 
-        // PaymentRecord - date
-        let payment = PaymentRecord(projectId: UUID(), date: "2025-04-09", amount: "100", method: .bankTransfer, note: "", isInvoiced: false)
-        #expect(Formatters.date.date(from: payment.date) != nil)
-
         // ProjectDrawing - importedAt
-        let drawing = ProjectDrawing(projectId: UUID(), name: "test", fileName: "test.pdf", fileType: "PDF", version: "1", relatedLogDate: "", issueStatus: "已签发", issueNote: "", importedAt: "2025-04-10 08:00", note: "")
+        let drawing = ProjectDrawing(
+            projectId: UUID(),
+            name: "test",
+            fileName: "test.pdf",
+            fileType: "PDF",
+            version: "1",
+            relatedLogDate: "",
+            issueStatus: .closed,
+            issueNote: "",
+            importedAt: "2025-04-10 08:00",
+            note: ""
+        )
         #expect(Formatters.dateTime.date(from: drawing.importedAt) != nil)
 
         // ProjectWarehouseMovement - date
@@ -102,8 +131,8 @@ struct ExportDateFilterTests {
         let p2 = UUID()
 
         let records: [ProjectFinancialRecord] = [
-            ProjectFinancialRecord(projectId: p1, date: "2025-04-01", direction: ProjectFinancialDirection.income.rawValue, category: ProjectFinancialCategory.material.rawValue, amount: "100", counterparty: "A", invoiceNumber: "", linkedDocumentIds: [], note: ""),
-            ProjectFinancialRecord(projectId: p2, date: "2025-05-15", direction: ProjectFinancialDirection.expense.rawValue, category: ProjectFinancialCategory.labor.rawValue, amount: "200", counterparty: "B", invoiceNumber: "", linkedDocumentIds: [], note: ""),
+            ProjectFinancialRecord(projectId: p1, date: "2025-04-01", direction: .income, category: .material, amount: "100", counterparty: "A", invoiceNumber: "", linkedDocumentIds: [], note: ""),
+            ProjectFinancialRecord(projectId: p2, date: "2025-05-15", direction: .expense, category: .labor, amount: "200", counterparty: "B", invoiceNumber: "", linkedDocumentIds: [], note: ""),
         ]
 
         let start = Formatters.date.date(from: "2025-04-01")!
@@ -120,5 +149,31 @@ struct ExportDateFilterTests {
 
         #expect(filteredByDate.count == 1)
         #expect(filteredByDate[0].counterparty == "A")
+    }
+
+    @Test func legacyPaymentRecordsAreDecodeOnly() throws {
+        let projectId = UUID()
+        let data = """
+        {
+          "paymentRecords": [
+            {
+              "projectId": "\(projectId.uuidString)",
+              "date": "2025-04-09",
+              "amount": "100",
+              "method": "bankTransfer",
+              "note": "",
+              "isInvoiced": false
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+
+        let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
+        #expect(snapshot.legacyPaymentRecords.count == 1)
+        #expect(Formatters.date.date(from: snapshot.legacyPaymentRecords[0].date) != nil)
+
+        let encoded = try JSONEncoder().encode(snapshot)
+        let encodedText = String(data: encoded, encoding: .utf8) ?? ""
+        #expect(!encodedText.contains("paymentRecords"))
     }
 }

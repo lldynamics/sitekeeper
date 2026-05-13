@@ -154,6 +154,7 @@ struct ProjectDrawingEditSheet: View {
     @State private var issueStatus: DrawingIssueStatus
     @State private var issueNote: String
     @State private var textEncoding: CADDrawingTextEncoding
+    @State private var textBigFont: CADDrawingTextBigFont
     @State private var note: String
     @State private var showDeleteConfirm = false
 
@@ -177,6 +178,7 @@ struct ProjectDrawingEditSheet: View {
         _issueStatus = State(initialValue: drawing.issueStatus)
         _issueNote = State(initialValue: drawing.issueNote)
         _textEncoding = State(initialValue: drawing.textEncoding)
+        _textBigFont = State(initialValue: drawing.textBigFont)
         _note = State(initialValue: drawing.note)
     }
 
@@ -263,13 +265,18 @@ struct ProjectDrawingEditSheet: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Section("文字编码") {
+                    Section("文字编码与字体") {
                         Picker("编码", selection: $textEncoding) {
                             ForEach(CADDrawingTextEncoding.allCases, id: \.self) { encoding in
                                 Text(encoding.displayName).tag(encoding)
                             }
                         }
-                        Text("遇到中文乱码可切换编码后重试预览。设置会保存到这张图纸。")
+                        Picker("SHX/大字体", selection: $textBigFont) {
+                            ForEach(CADDrawingTextBigFont.allCases, id: \.self) { profile in
+                                Text(profile.displayName).tag(profile)
+                            }
+                        }
+                        Text("遇到中文乱码可切换编码或 SHX/大字体映射后重试预览。设置会保存到这张图纸。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -305,6 +312,7 @@ struct ProjectDrawingEditSheet: View {
                         updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.textEncoding = textEncoding
+                        updated.textBigFont = textBigFont
                         updated.note = note
                         onSave(updated)
                         dismiss()
@@ -887,7 +895,7 @@ struct QuickAddSheet: View {
         switch sheet {
         case .material:
             guard !name.isEmpty else { return false }
-            store.materialItems.append(
+            store.appendMaterialItem(
                 MaterialItem(
                     name: name,
                     quantity: qty,
@@ -905,7 +913,7 @@ struct QuickAddSheet: View {
             return true
         case .quote:
             guard !name.isEmpty else { return false }
-            store.quoteItems.append(
+            store.appendQuoteItem(
                 QuoteItem(
                     name: name,
                     unitPrice: price,
@@ -924,7 +932,7 @@ struct QuickAddSheet: View {
             store.scheduleSave()
             return true
         case .log:
-            store.dailyLogs.insert(DailyLog(
+            store.insertDailyLogAtTop(DailyLog(
                 date: Formatters.date.string(from: logDate),
                 weather: weather,
                 content: content,
@@ -938,7 +946,7 @@ struct QuickAddSheet: View {
                 confirmer: confirmer,
                 linkedConstructionMethodIDs: sortedLinkedMethodIDs(),
                 projectId: projectId
-            ), at: 0)
+            ))
             store.scheduleSave()
             return true
         case .labor:
@@ -952,7 +960,7 @@ struct QuickAddSheet: View {
                 let unitRate = line.unitRate.trimmingCharacters(in: .whitespacesAndNewlines)
                 let workType = line.workType.trimmingCharacters(in: .whitespacesAndNewlines)
                 let note = line.note.trimmingCharacters(in: .whitespacesAndNewlines)
-                store.laborRecords.append(
+                store.appendLaborRecord(
                     LaborRecord(
                         date: date,
                         workers: workers,

@@ -42,7 +42,7 @@ enum ProjectDetailFinanceDocumentActions {
     @MainActor
     static func deleteDocument(_ document: ProjectDocument, store: DataStore) {
         ProjectDocumentStorage.delete(fileName: document.fileName)
-        store.projectDocuments.removeAll { $0.id == document.id }
+        store.removeProjectDocuments(ids: Set([document.id]))
         for index in store.projectFinancialRecords.indices {
             store.projectFinancialRecords[index].linkedDocumentIds.removeAll { $0 == document.id }
         }
@@ -83,7 +83,7 @@ enum ProjectDetailFinanceDocumentActions {
                 for document in store.projectDocuments where targetDocumentIds.contains(document.id) {
                     ProjectDocumentStorage.delete(fileName: document.fileName)
                 }
-                store.projectDocuments.removeAll { targetDocumentIds.contains($0.id) }
+                store.removeProjectDocuments(ids: targetDocumentIds)
                 for index in store.projectFinancialRecords.indices {
                     store.projectFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
                 }
@@ -98,7 +98,7 @@ enum ProjectDetailFinanceDocumentActions {
             }
         }
 
-        store.projectFinancialRecords.removeAll { ids.contains($0.id) }
+        store.removeProjectFinancialRecords(ids: ids)
         store.scheduleSave()
     }
 
@@ -348,7 +348,7 @@ enum ProjectDetailFinanceDocumentActions {
             createdAt: createdAt,
             note: target.note
         )
-        store.projectDocuments.append(document)
+        store.appendProjectDocument(document)
         if let recordId = target.linkedFinancialRecordId,
            let index = store.projectFinancialRecords.firstIndex(where: { $0.id == recordId }) {
             if !store.projectFinancialRecords[index].linkedDocumentIds.contains(document.id) {

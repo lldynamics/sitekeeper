@@ -188,12 +188,11 @@ struct LightingCircuitPlannerView: View {
                     .fontWeight(.semibold)
             }
 
-            if !resultText.isEmpty, let resultModel {
+            if let resultModel {
                 Section("计算结果") {
                     CalculatorResultCard(
                         title: "照明回路评估",
-                        result: resultModel,
-                        copyText: resultText
+                        result: resultModel
                     )
                 }
             }
@@ -558,10 +557,15 @@ struct LightingCircuitPlannerView: View {
         mainBreakerLimitA = savedMainBreakerLimitA
         imbalanceLimitPercent = savedImbalanceLimitPercent
         isCopper = savedIsCopper
-        if let data = savedRowsJSON.data(using: .utf8),
-           let decodedRows = try? JSONDecoder().decode([LightingCircuitLoad].self, from: data),
-           !decodedRows.isEmpty {
-            rows = decodedRows
+        if let data = savedRowsJSON.data(using: .utf8) {
+            do {
+                let decodedRows = try JSONDecoder().decode([LightingCircuitLoad].self, from: data)
+                if !decodedRows.isEmpty {
+                    rows = decodedRows
+                }
+            } catch {
+                StorageIssueLog.record("照明回路规划草稿解析失败：\(error.localizedDescription)")
+            }
         }
 
         isRestoringPersistedInputs = false
@@ -579,9 +583,15 @@ struct LightingCircuitPlannerView: View {
         savedMainBreakerLimitA = mainBreakerLimitA
         savedImbalanceLimitPercent = imbalanceLimitPercent
         savedIsCopper = isCopper
-        if let data = try? JSONEncoder().encode(rows),
-           let encodedRows = String(data: data, encoding: .utf8) {
-            savedRowsJSON = encodedRows
+        do {
+            let data = try JSONEncoder().encode(rows)
+            if let encodedRows = String(data: data, encoding: .utf8) {
+                savedRowsJSON = encodedRows
+            } else {
+                StorageIssueLog.record("照明回路规划草稿编码后 UTF8 转换失败")
+            }
+        } catch {
+            StorageIssueLog.record("照明回路规划草稿编码失败：\(error.localizedDescription)")
         }
     }
 

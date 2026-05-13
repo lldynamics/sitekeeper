@@ -1,0 +1,87 @@
+import SwiftUI
+
+extension ProjectDetailContainer {
+    func updateProjectPhoto(context: ProjectPhotoContext, note: String, tag: PhotoTag) {
+        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
+        var log = projectStore.dailyLogs[logIndex]
+        if let photoIndex = log.photos.firstIndex(where: { $0.id == context.photoId }) {
+            log.photos[photoIndex].note = note
+            log.photos[photoIndex].tag = tag
+        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
+            log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
+        }
+        store.dailyLogs[logIndex] = log
+        store.scheduleSave()
+    }
+
+    func deleteProjectPhoto(context: ProjectPhotoContext) {
+        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
+        var log = projectStore.dailyLogs[logIndex]
+        if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
+            let fileName = log.photos[index].fileName
+            PhotoStorage.delete(fileName: fileName)
+            log.photos.remove(at: index)
+            if log.photoFileName == fileName {
+                log.photoFileName = log.photos.first?.fileName
+            }
+        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
+            PhotoStorage.delete(fileName: legacy)
+            log.photoFileName = nil
+        }
+        store.dailyLogs[logIndex] = log
+        store.scheduleSave()
+    }
+
+    func deleteDocument(_ document: ProjectDocument) {
+        ProjectDetailAssetActions.deleteDocument(document, store: store)
+    }
+
+    func saveDocumentEdit(_ document: ProjectDocument) {
+        ProjectDetailAssetActions.saveDocumentEdit(document, store: store)
+    }
+
+    func saveDrawing(_ updated: ProjectDrawing) {
+        ProjectDetailAssetActions.saveDrawing(updated, store: store)
+    }
+
+    func saveContact(_ updated: ProjectContact) {
+        if let index = projectStore.projectContacts.firstIndex(where: { $0.id == updated.id }) {
+            store.projectContacts[index] = updated
+            store.scheduleSave()
+        }
+    }
+
+    func deleteContact(_ target: ProjectContact) {
+        removeContactAssociation(contactID: target.id, from: projectId)
+        store.scheduleSave()
+    }
+
+    func removeContactAssociation(contactID: UUID, from currentProjectID: UUID) {
+        guard let index = projectStore.projectContacts.firstIndex(where: { $0.id == contactID }) else { return }
+        var contact = store.projectContacts[index]
+        if contact.projectId == currentProjectID {
+            if let promotedProjectID = contact.relatedProjectIds.first(where: { $0 != currentProjectID }) {
+                contact.projectId = promotedProjectID
+                contact.relatedProjectIds.removeAll { $0 == currentProjectID || $0 == promotedProjectID }
+                store.projectContacts[index] = contact
+            } else {
+                store.removeProjectContact(id: contactID)
+            }
+        } else {
+            contact.relatedProjectIds.removeAll { $0 == currentProjectID }
+            store.projectContacts[index] = contact
+        }
+    }
+
+    func setDrawingAsCurrentVersion(_ drawing: ProjectDrawing) {
+        ProjectDetailAssetActions.setDrawingAsCurrentVersion(drawing, store: store)
+    }
+
+    func deleteDrawing(_ drawing: ProjectDrawing) {
+        ProjectDetailAssetActions.deleteDrawing(drawing, store: store)
+    }
+
+    func timelineDrawings(name: String, drawings: [ProjectDrawing]) -> [ProjectDrawing] {
+        ProjectDetailAssetActions.timelineDrawings(name: name, relatedDrawings: drawings)
+    }
+}

@@ -6,7 +6,7 @@ struct ProjectPackageExportOverlayView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.normal) {
-            Text("正在导出项目交付包")
+            Text(String(localized: "正在导出项目交付包"))
                 .font(.headline)
             Text(progress.currentItem)
                 .font(.caption)
@@ -18,7 +18,7 @@ struct ProjectPackageExportOverlayView: View {
                 .foregroundStyle(.secondary)
             HStack {
                 Spacer()
-                Button("取消导出", role: .destructive) {
+                Button(String(localized: "取消导出"), role: .destructive) {
                     AppHaptics.warning()
                     onCancel()
                 }
@@ -29,6 +29,6 @@ struct ProjectPackageExportOverlayView: View {
         .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
         .accessibilityElement(children: .combine)
-        .accessibilityHint("显示导出进度并可取消当前导出")
+        .accessibilityHint(String(localized: "显示导出进度并可取消当前导出"))
     }
 }

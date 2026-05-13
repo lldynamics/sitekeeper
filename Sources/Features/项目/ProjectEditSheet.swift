@@ -33,47 +33,47 @@ struct ProjectEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("工程") {
-                    TextField("工程名称", text: $name)
+                Section(String(localized: "工程")) {
+                    TextField(String(localized: "工程名称"), text: $name)
                         .focused($isInputFocused)
-                    TextField("项目地址", text: $location, axis: .vertical)
+                    TextField(String(localized: "项目地址"), text: $location, axis: .vertical)
                         .lineLimit(2...4)
                         .focused($isInputFocused)
-                    TextField("负责人", text: $managerName)
+                    TextField(String(localized: "负责人"), text: $managerName)
                         .focused($isInputFocused)
                 }
-                Section("客户") {
-                    TextField("客户姓名/单位", text: $customerName)
+                Section(String(localized: "客户")) {
+                    TextField(String(localized: "客户姓名/单位"), text: $customerName)
                         .focused($isInputFocused)
-                    TextField("客户电话", text: $customerPhone)
+                    TextField(String(localized: "客户电话"), text: $customerPhone)
                         .keyboardType(.phonePad)
                         .focused($isInputFocused)
                 }
-                Section("工期") {
-                    TextField("开工日期(yyyy-MM-dd)", text: $startDate)
+                Section(String(localized: "工期")) {
+                    TextField(String(localized: "开工日期(yyyy-MM-dd)"), text: $startDate)
                         .focused($isInputFocused)
-                    TextField("预计完工(yyyy-MM-dd)", text: $expectedEndDate)
+                    TextField(String(localized: "预计完工(yyyy-MM-dd)"), text: $expectedEndDate)
                         .focused($isInputFocused)
                 }
-                Section("合同") {
-                    TextField("合同金额（元）", text: $contractAmount)
+                Section(String(localized: "合同")) {
+                    TextField(String(localized: "合同金额（元）"), text: $contractAmount)
                         .keyboardType(.decimalPad)
                         .focused($isInputFocused)
-                    Picker("收款状态", selection: $paymentStatus) {
+                    Picker(String(localized: "收款状态"), selection: $paymentStatus) {
                         ForEach(PaymentStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
                         }
                     }
                 }
             }
-            .navigationTitle("编辑资料")
+            .navigationTitle(String(localized: "编辑资料"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         isInputFocused = false
                         guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
                         var updated = project

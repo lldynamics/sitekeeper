@@ -984,7 +984,11 @@ struct MaterialSheetView: View {
 
     private func cleanupExportFileIfNeeded() {
         guard let exportFileURL else { return }
-        try? FileManager.default.removeItem(at: exportFileURL)
+        do {
+            try FileManager.default.removeItem(at: exportFileURL)
+        } catch {
+            StorageIssueLog.record("材料单导出临时文件清理失败：\(exportFileURL.lastPathComponent)，\(error.localizedDescription)")
+        }
         self.exportFileURL = nil
         showExportChoice = false
     }

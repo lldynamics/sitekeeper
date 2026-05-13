@@ -20,6 +20,8 @@ enum ProjectDrawingImportStrategy: String, CaseIterable, Identifiable {
 }
 
 enum ProjectDetailDrawingHelper {
+    private static let zipEntryNotePrefix = "ZIP路径: "
+
     static func drawingIcon(_ fileType: String) -> String {
         switch fileType.lowercased() {
         case "pdf":
@@ -117,6 +119,27 @@ enum ProjectDetailDrawingHelper {
     static func drawingDisplayName(from sourceURL: URL) -> String {
         let baseName = sourceURL.deletingPathExtension().lastPathComponent.trimmingCharacters(in: .whitespacesAndNewlines)
         return baseName.isEmpty ? sourceURL.lastPathComponent : baseName
+    }
+
+    static func packageNote(for entryPath: String) -> String {
+        let normalized = entryPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+        return "\(zipEntryNotePrefix)\(normalized)"
+    }
+
+    static func zipEntryPath(for drawing: ProjectDrawing) -> String? {
+        let note = drawing.note.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard note.hasPrefix(zipEntryNotePrefix) else { return nil }
+        let path = String(note.dropFirst(zipEntryNotePrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.isEmpty ? nil : path
+    }
+
+    static func zipFolderPath(for drawing: ProjectDrawing) -> String? {
+        guard let path = zipEntryPath(for: drawing) else { return nil }
+        let folder = (path as NSString).deletingLastPathComponent
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return folder.isEmpty || folder == "." ? "根目录" : folder
     }
 
     static func replaceCandidate(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {

@@ -34,12 +34,11 @@ struct BreakerSelectView: View {
                 .frame(maxWidth: .infinity)
                 .fontWeight(.semibold)
             }
-            if !result.isEmpty, let resultModel {
+            if let resultModel {
                 Section("推荐") {
                     CalculatorResultCard(
                         title: "断路器推荐",
-                        result: resultModel,
-                        copyText: result
+                        result: resultModel
                     )
                 }
             }

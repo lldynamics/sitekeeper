@@ -8,6 +8,17 @@ struct DashboardRiskQuickAction: Identifiable {
     let action: () -> Void
 }
 
+struct DashboardRiskPin: Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let color: Color
+    let hasRisk: Bool
+    let priority: Int
+    let destination: DashboardDestination
+    var quickActions: [DashboardRiskQuickAction] = []
+}
+
 struct DashboardRiskPill: View {
     let title: String
     let value: String

@@ -62,7 +62,11 @@ private enum UITestLaunchConfig {
             for fileName in localStoreFiles {
                 let fileURL = documentsDirectory.appendingPathComponent(fileName)
                 if FileManager.default.fileExists(atPath: fileURL.path) {
-                    try? FileManager.default.removeItem(at: fileURL)
+                    do {
+                        try FileManager.default.removeItem(at: fileURL)
+                    } catch {
+                        StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                    }
                 }
             }
         }
