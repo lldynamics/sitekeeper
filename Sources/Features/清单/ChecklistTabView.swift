@@ -5,12 +5,10 @@ import SwiftUI
 struct ChecklistTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let embedsNavigationStack: Bool
-    @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage("checklistQuickToolOrder") private var quickToolOrderRaw = ""
     @AppStorage("checklistQuickToolCustomized") private var quickToolCustomized = false
     @State private var showQuickToolEditor = false
     @State private var mobileSelectedItem: ToolboxItem?
-    @State private var showSortHint = false
 
     init(embedsNavigationStack: Bool = true) {
         self.embedsNavigationStack = embedsNavigationStack
@@ -87,27 +85,6 @@ struct ChecklistTabView: View {
                 )
             )
         }
-        var otherItems: [ToolboxItem] = [
-            ToolboxItem(icon: "person.2.badge.gearshape.fill", title: "供应商库", desc: "联系人、电话、供货范围和备注", color: .appDoc, destination: .supplierDatabase)
-        ]
-        if showTemplates {
-            otherItems.insert(
-                ToolboxItem(
-                    icon: "doc.text",
-                    title: "模板管理",
-                    desc: "常用日志、待办和项目模板（应用前先预览确认）",
-                    color: .appQuotation,
-                    destination: .template
-                ),
-                at: 1
-            )
-        }
-        sections.append(
-                ToolboxSection(
-                    title: "其他",
-                    items: otherItems
-                )
-            )
         return sections
     }
 
@@ -137,15 +114,6 @@ struct ChecklistTabView: View {
                                     Label("自定义", systemImage: "slider.horizontal.3")
                                         .font(.subheadline.weight(.medium))
                                 }
-                            }
-                            if showSortHint {
-                                Text("长按拖拽可排序，点击自定义可增删")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .padding(.horizontal, 10)
-                                    .padding(.vertical, 6)
-                                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.appPrimarySurfaceSubtle))
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
                             }
                             LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: 12)], spacing: 12) {
                                 ForEach(orderedVisibleTools) { tool in
@@ -220,14 +188,6 @@ struct ChecklistTabView: View {
                             }
                         }
                     }
-                    if showSortHint {
-                        Section {
-                            Text("长按拖拽可排序，点击自定义可增删")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .listRowBackground(Color.appPrimarySurfaceSubtle)
-                        }
-                    }
                     if practicalUnselectedTools.isEmpty {
                         Section {
                             HStack(spacing: 6) {
@@ -258,14 +218,6 @@ struct ChecklistTabView: View {
         .navigationTitle("工程工具箱")
         .navigationDestination(item: $mobileSelectedItem) { item in
             destinationView(for: item.destination)
-        }
-        .onAppear {
-            if !quickToolCustomized {
-                showSortHint = true
-            }
-        }
-        .task(id: quickToolCustomized) {
-            await dismissSortHintIfNeeded()
         }
         .sheet(isPresented: $showQuickToolEditor) {
             QuickToolEditorView(
@@ -302,8 +254,6 @@ struct ChecklistTabView: View {
             ProjectFileBrowserView()
         case .calculators:
             QuickToolCategoryListView()
-        case .bookkeeping:
-            BookkeepingQuickEntryView()
         case .quotation:
             QuotationView()
         case .labor:
@@ -312,24 +262,12 @@ struct ChecklistTabView: View {
             ProjectContactDatabaseView()
         case .methods:
             ConstructionMethodLibraryView()
+        case .cadViewer:
+            CADViewerToolView()
         case .export:
-            DataManagementView(initialTab: "导出")
+            DataManagementView(initialTab: "备份")
         case .template:
             TemplateView()
-        case .supplierDatabase:
-            SupplierDatabaseView()
-        }
-    }
-
-    @MainActor
-    private func dismissSortHintIfNeeded() async {
-        guard !quickToolCustomized else {
-            showSortHint = false
-            return
-        }
-        guard await DebouncedTask.wait(for: .seconds(4)) else { return }
-        withAnimation(.easeOut(duration: 0.3)) {
-            showSortHint = false
         }
     }
 }
@@ -342,7 +280,11 @@ struct BookkeepingQuickEntryView: View {
     }
 
     var body: some View {
-        BookkeepingProjectPickerView(projects: activeProjects)
+        if activeProjects.count == 1, let project = activeProjects.first {
+            ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
+        } else {
+            BookkeepingProjectPickerView(projects: activeProjects)
+        }
     }
 }
 

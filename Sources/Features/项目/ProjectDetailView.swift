@@ -43,12 +43,16 @@ struct ProjectDetailView: View {
     }
 
     private static let drawingImportTypes: [UTType] = {
-        var types: [UTType] = [.pdf]
+        var types: [UTType] = [.pdf, .zip]
         if let dwg = UTType(filenameExtension: "dwg") {
             types.append(dwg)
         }
         if let dxf = UTType(filenameExtension: "dxf") {
             types.append(dxf)
+        }
+        // Fallback for file providers that cannot surface DWG/DXF UTTypes reliably.
+        if !types.contains(.item) {
+            types.append(.item)
         }
         return types
     }()
@@ -67,6 +71,18 @@ struct ProjectDetailView: View {
 
     private var usesSingleCanvasLayoutOnPad: Bool {
         UIDevice.current.userInterfaceIdiom == .pad
+    }
+
+    private var drawingImportConflictDialogMessage: String {
+        let names = assetState.drawingImportConflictNames
+        guard !names.isEmpty else {
+            return String(localized: "检测到同名图纸，请选择导入策略。")
+        }
+        let preview = names.prefix(3).joined(separator: "、")
+        if names.count > 3 {
+            return String(localized: "检测到同名图纸：\(preview) 等 \(names.count) 项，请选择导入策略。")
+        }
+        return String(localized: "检测到同名图纸：\(preview)，请选择导入策略。")
     }
 
     private var editingMaterialBinding: Binding<MaterialItem?> {
@@ -196,8 +212,9 @@ struct ProjectDetailView: View {
                         Label("导出项目交付包 ZIP", systemImage: "archivebox.fill")
                     }
                 } label: {
-                    Image(systemName: "ellipsis.circle")
+                    Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
+                .buttonStyle(.appIcon())
                 .accessibilityLabel("导出与交付")
             }
         }
@@ -261,6 +278,7 @@ struct ProjectDetailView: View {
                 projects: projectStore.projects,
                 constructionMethods: store.constructionMethods,
                 relatedLogs: snapshot.relatedLogs,
+                relatedDrawings: snapshot.relatedDrawings,
                 relatedFinancialRecords: snapshot.relatedFinancialRecords,
                 linkedDocuments: linkedDocuments(for:),
                 attachmentSheetBuilder: { record in
@@ -327,6 +345,9 @@ struct ProjectDetailView: View {
             showImportError: $assetState.showImportError,
             importErrorMessage: $assetState.importErrorMessage
         )
+        .fullScreenCover(item: $assetState.cadPreviewRequest) { request in
+            ProjectCADPreviewView(request: request)
+        }
         .onAppear {
             handleOnAppear(snapshot: snapshot)
             if usesSingleCanvasLayoutOnPad {
@@ -360,6 +381,18 @@ struct ProjectDetailView: View {
             }
         } message: {
             Text(String(format: String(localized: "将删除 %d 条账目。可选择保留票据为项目资料。"), financeState.pendingDeleteFinancialRecordIDs.count))
+        }
+        .confirmationDialog("同名图纸导入策略", isPresented: $assetState.showDrawingImportStrategyDialog, titleVisibility: .visible) {
+            ForEach(ProjectDrawingImportStrategy.allCases) { strategy in
+                Button(strategy.displayName) {
+                    applyPendingDrawingImportStrategy(strategy)
+                }
+            }
+            Button("取消", role: .cancel) {
+                clearPendingDrawingImportStrategy()
+            }
+        } message: {
+            Text(drawingImportConflictDialogMessage)
         }
         .overlay {
             if exportState.isExportingProjectPackage {
@@ -542,6 +575,9 @@ struct ProjectDetailView: View {
             onOpenMode: { openMode($0, prefersInlineSections: prefersInlineSections) },
             onOpenFinanceFilter: openFinanceModeFromMetric(filter:),
             onOpenTodoFilter: openTodoFilterFromMetric,
+            onOpenTimelineItem: { item in
+                openMode(item.targetMode, prefersInlineSections: prefersInlineSections)
+            },
             onScanDocument: { routeState.presentation = .documentScanSetup },
             onCaptureDocumentPhoto: {
                 assetState.imagePickerSource = .camera
@@ -558,7 +594,7 @@ struct ProjectDetailView: View {
             onDeleteDrawing: deleteDrawing(_:),
             onEditContact: { assetState.editingContact = $0 },
             onDeleteContacts: { ids in
-                store.projectContacts.removeAll { ids.contains($0.id) }
+                ids.forEach { removeContactAssociation(contactID: $0, from: projectId) }
                 store.scheduleSave()
             },
             onEditFinancialRecord: { financeState.editingFinancialRecord = $0 },
@@ -984,8 +1020,25 @@ struct ProjectDetailView: View {
     }
 
     private func deleteContact(_ target: ProjectContact) {
-        store.projectContacts.removeAll { $0.id == target.id }
+        removeContactAssociation(contactID: target.id, from: projectId)
         store.scheduleSave()
+    }
+
+    private func removeContactAssociation(contactID: UUID, from currentProjectID: UUID) {
+        guard let index = projectStore.projectContacts.firstIndex(where: { $0.id == contactID }) else { return }
+        var contact = store.projectContacts[index]
+        if contact.projectId == currentProjectID {
+            if let promotedProjectID = contact.relatedProjectIds.first(where: { $0 != currentProjectID }) {
+                contact.projectId = promotedProjectID
+                contact.relatedProjectIds.removeAll { $0 == currentProjectID || $0 == promotedProjectID }
+                store.projectContacts[index] = contact
+            } else {
+                store.projectContacts.remove(at: index)
+            }
+        } else {
+            contact.relatedProjectIds.removeAll { $0 == currentProjectID }
+            store.projectContacts[index] = contact
+        }
     }
 
     private func setDrawingAsCurrentVersion(_ drawing: ProjectDrawing) {

@@ -51,7 +51,7 @@ struct QuickNoteTimelineView: View {
         if notes.isEmpty {
             Section {
                 VStack(spacing: 10) {
-                    ContentUnavailableView("暂无记录", systemImage: "square.and.pencil", description: Text("写一句、拍一张、录一段，都可以先放这里，之后可转为日志、待办或项目资料。"))
+                    ContentUnavailableView("暂无记录", systemImage: "square.and.pencil", description: Text("随手记，现场第一手信息。"))
                     Button(action: onCreate) {
                         HStack(spacing: 6) {
                             Image(systemName: "square.and.pencil")
@@ -100,6 +100,7 @@ private struct QuickNoteTimelineRow: View {
     let projectName: String
     let onConvert: () -> Void
     let onPreview: (QuickNoteAttachment) -> Void
+    @State private var showConvertConfirm = false
 
     private var hasProject: Bool { !projectName.isEmpty }
 
@@ -138,7 +139,9 @@ private struct QuickNoteTimelineRow: View {
                             .font(.caption2)
                     }
                     Spacer(minLength: 8)
-                    Button(action: onConvert) {
+                    Button {
+                        showConvertConfirm = true
+                    } label: {
                         Label("转为", systemImage: "arrow.triangle.branch")
                             .labelStyle(.titleAndIcon)
                     }
@@ -146,7 +149,15 @@ private struct QuickNoteTimelineRow: View {
                     .buttonStyle(.bordered)
                     .controlSize(.small)
                     .accessibilityLabel("转换记录")
-                    .accessibilityHint("双击转换为日志、待办或项目资料")
+                    .accessibilityHint("双击选择转换类型")
+                    .confirmationDialog("转换为？", isPresented: $showConvertConfirm, titleVisibility: .visible) {
+                        Button("转为施工日志") { onConvert() }
+                        Button("转为待办") { onConvert() }
+                        Button("转为项目资料") { onConvert() }
+                        Button("取消", role: .cancel) {}
+                    } message: {
+                        Text("可将这条随手记的内容转到指定功能页面继续编辑。")
+                    }
                 }
                 .foregroundStyle(.secondary)
             }

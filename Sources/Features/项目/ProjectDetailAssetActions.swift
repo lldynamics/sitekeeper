@@ -110,6 +110,11 @@ enum ProjectDetailAssetActions {
     static func deleteDrawing(_ drawing: ProjectDrawing, store: DataStore) {
         DrawingStorage.delete(fileName: drawing.fileName)
         store.projectDrawings.removeAll { $0.id == drawing.id }
+        for index in store.projectDrawings.indices {
+            if store.projectDrawings[index].linkedPreviewDrawingID == drawing.id {
+                store.projectDrawings[index].linkedPreviewDrawingID = nil
+            }
+        }
         store.scheduleSave()
     }
 

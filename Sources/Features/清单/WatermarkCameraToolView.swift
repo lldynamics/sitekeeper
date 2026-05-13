@@ -7,6 +7,7 @@ import AVFoundation
 
 struct WatermarkCameraToolView: View {
     @Environment(DataStore.self) private var store
+    @Environment(\.openURL) private var openURL
     let initialProjectId: UUID?
     let autoOpenCameraOnAppear: Bool
     @State private var selectedProjectId: UUID?
@@ -16,21 +17,22 @@ struct WatermarkCameraToolView: View {
     @AppStorage("watermarkCameraLocationText") private var locationText = ""
     @AppStorage("watermarkCameraTemplateRaw") private var templateRaw = CameraWatermarkTemplate.constructionLog.rawValue
     @AppStorage("watermarkCameraTag") private var tag = "现场记录"
-    @AppStorage("watermarkCameraAutoSaveToAlbum") private var autoSaveToAlbum = false
+    @AppStorage("watermarkCameraAutoSaveToAlbum") private var autoSaveToAlbum = true
     @AppStorage("watermarkCameraAutoOpenLogDraft") private var autoOpenLogDraft = false
     @AppStorage("watermarkCameraExportQualityRaw") private var exportQualityRaw = WatermarkExportQuality.standard.rawValue
     @AppStorage("watermarkCameraShowGrid") private var showGrid = true
     @AppStorage("watermarkCameraFlashEnabled") private var flashEnabled = false
     @AppStorage("watermarkCameraBurstCount") private var burstCount = 1
     @State private var showCamera = false
-    @State private var capturedPhoto: WatermarkCapturedPhoto?
+    @State private var capturedPhotos: [WatermarkCapturedPhoto] = []
+    @State private var selectedCapturedPhotoID: UUID?
     @State private var exportData = Data()
     @State private var showExporter = false
     @State private var alertTitle = "无法继续"
     @State private var alertMessage = ""
+    @State private var alertSettingsURL: URL?
     @State private var showAlert = false
     @State private var savingToAlbum = false
-    @State private var showWatermarkSettings = false
     @State private var didAutoOpenCamera = false
     @State private var showLogDraft = false
     @State private var toast: WatermarkToast?
@@ -45,13 +47,6 @@ struct WatermarkCameraToolView: View {
     private var template: CameraWatermarkTemplate {
         get { StringEnumFallback.value(templateRaw, default: CameraWatermarkTemplate.constructionLog) }
         set { templateRaw = newValue.rawValue }
-    }
-
-    private var templateBinding: Binding<CameraWatermarkTemplate> {
-        Binding(
-            get: { template },
-            set: { templateRaw = $0.rawValue }
-        )
     }
 
     private var exportQuality: WatermarkExportQuality {
@@ -70,163 +65,35 @@ struct WatermarkCameraToolView: View {
         min(5, max(1, burstCount))
     }
 
+    private var capturedPhoto: WatermarkCapturedPhoto? {
+        if let selectedCapturedPhotoID,
+           let selected = capturedPhotos.first(where: { $0.id == selectedCapturedPhotoID }) {
+            return selected
+        }
+        return capturedPhotos.first
+    }
+
+    private var hasMultipleCapturedPhotos: Bool {
+        capturedPhotos.count > 1
+    }
+
+    private var selectedCapturedPhotoNumber: Int {
+        guard let id = capturedPhoto?.id,
+              let index = capturedPhotos.firstIndex(where: { $0.id == id }) else {
+            return 1
+        }
+        return index + 1
+    }
+
     var body: some View {
         Form {
-            Section {
-                ProjectContextStrip(
-                    title: "当前工程",
-                    projects: store.projects,
-                    selectedProjectId: $selectedProjectId,
-                    emptyText: "不关联项目"
-                )
-            }
-
-            Section("拍摄") {
-                Button {
-                    openCamera()
-                } label: {
-                    Label("拍摄水印照片", systemImage: "camera.fill")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, alignment: .center)
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                Text(effectiveProjectName.map { "当前水印工程：\($0)" } ?? "当前未指定工程，可在水印设置中选择或手填。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-
-            Section {
-                DisclosureGroup(isExpanded: $showWatermarkSettings) {
-                    Picker("关联工程", selection: $selectedProjectId) {
-                        Text("不关联项目").tag(nil as UUID?)
-                        ForEach(store.projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
-                    }
-                    TextField("工程名称（未选项目时填写）", text: $projectName)
-                    Picker("水印模板", selection: templateBinding) {
-                        ForEach(CameraWatermarkTemplate.allCases, id: \.self) { item in
-                            Text(item.displayName).tag(item)
-                        }
-                    }
-                    TextField("标签", text: $tag)
-                    TextField("拍摄人", text: $photographer)
-                    HStack {
-                        TextField("定位/位置", text: $locationText)
-                        Button {
-                            locationManager.requestLocation()
-                        } label: {
-                            Image(systemName: "location.fill").visibleIconStyle()
-                        }
-                        .buttonStyle(.appIcon())
-                    }
-                    Picker("导出画质", selection: exportQualityBinding) {
-                        ForEach(WatermarkExportQuality.allCases, id: \.self) { quality in
-                            Text(quality.displayName).tag(quality)
-                        }
-                    }
-                    Toggle("拍完自动保存到相册", isOn: $autoSaveToAlbum)
-                    Toggle("拍完自动进入施工日志草稿", isOn: $autoOpenLogDraft)
-                    Toggle("相机显示网格线", isOn: $showGrid)
-                    Toggle("默认开启闪光灯", isOn: $flashEnabled)
-                    Stepper("连拍张数：\(boundedBurstCount)", value: $burstCount, in: 1...5)
-                    if !locationManager.statusText.isEmpty {
-                        Text(locationManager.statusText)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                } label: {
-                    Label("水印设置", systemImage: "slider.horizontal.3")
-                }
-            }
-
-            if capturedPhoto != nil {
-                Section("照片去向") {
-                    Button {
-                        saveCurrentImageToAlbum()
-                    } label: {
-                        Label(savingToAlbum ? "正在保存到相册" : "保存到相册", systemImage: "photo.on.rectangle.angled")
-                    }
-                    .disabled(savingToAlbum)
-
-                    Button {
-                        saveCurrentImageAsProjectDocument()
-                    } label: {
-                        Label("附到项目资料", systemImage: "folder.badge.plus")
-                    }
-                    .disabled(selectedProjectId == nil)
-
-                    if let logSeedPhoto {
-                        NavigationLink {
-                            DailyLogView(
-                                initialProjectId: selectedProjectId,
-                                autoOpenComposer: true,
-                                initialPhotoDrafts: [logSeedPhoto],
-                                initialContent: logDraftContent
-                            )
-                        } label: {
-                            Label("进入施工日志草稿", systemImage: "book.pages.fill")
-                        }
-                    }
-
-                    if let todoSeedData {
-                        NavigationLink {
-                            SiteTodoView(
-                                initialProjectId: selectedProjectId,
-                                autoOpenComposer: true,
-                                initialBeforePhotoData: todoSeedData
-                            )
-                        } label: {
-                            Label("转为整改前待办", systemImage: "checklist")
-                        }
-                        .disabled(selectedProjectId == nil)
-
-                        NavigationLink {
-                            SiteTodoView(
-                                initialProjectId: selectedProjectId,
-                                autoOpenComposer: true,
-                                initialAfterPhotoData: todoSeedData
-                            )
-                        } label: {
-                            Label("转为整改后待办", systemImage: "checkmark.seal.fill")
-                        }
-                        .disabled(selectedProjectId == nil)
-                    }
-
-                    Button {
-                        exportCurrentImage()
-                    } label: {
-                        Label("导出 JPEG（\(exportQuality.displayName)）", systemImage: "square.and.arrow.up")
-                    }
-
-                    Button("清空当前照片", role: .destructive) {
-                        capturedPhoto = nil
-                    }
-                }
-            }
-
-            Section("预览") {
-                if let capturedPhoto {
-                    Image(uiImage: capturedPhoto.image)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity, maxHeight: 360)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("拍摄时间：\(Formatters.dateTime.string(from: capturedPhoto.capturedAt))")
-                            .fontWeight(.semibold)
-                        Text(effectiveProjectName == nil ? "工程：未指定项目" : "工程：\(effectiveProjectName ?? "")")
-                        Text("模板：\(template.displayName)")
-                        Text("标签：\(tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未填写" : tag)")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                } else {
-                    ContentUnavailableView("还没有照片", systemImage: "camera.aperture", description: Text("拍摄后可直接导出带水印的 JPEG。"))
-                }
-            }
+            projectSection
+            templateSection
+            captureSection
+            watermarkInfoSection
+            cameraSettingsSection
+            autoSaveSection
+            recentCaptureSection
         }
         .navigationTitle("水印相机")
         .navigationBarTitleDisplayMode(.inline)
@@ -236,8 +103,8 @@ struct WatermarkCameraToolView: View {
                 showGrid: showGrid,
                 flashEnabled: flashEnabled,
                 burstCount: boundedBurstCount
-            ) { image, capturedAt in
-                handleCapturedImage(image, capturedAt: capturedAt)
+            ) { images, capturedAt in
+                handleCapturedImages(images, capturedAt: capturedAt)
             }
         }
         .fileExporter(
@@ -245,8 +112,20 @@ struct WatermarkCameraToolView: View {
             document: ExportDocument(data: exportData),
             contentType: .jpeg,
             defaultFilename: exportFileName
-        ) { _ in }
+        ) { result in
+            switch result {
+            case .success:
+                presentInfo("照片已导出。")
+            case .failure(let error):
+                presentError("照片导出失败：\(error.localizedDescription)")
+            }
+        }
         .alert(alertTitle, isPresented: $showAlert) {
+            if let alertSettingsURL {
+                Button("前往设置") {
+                    openURL(alertSettingsURL)
+                }
+            }
             Button("知道了", role: .cancel) {}
         } message: {
             Text(alertMessage)
@@ -263,32 +142,11 @@ struct WatermarkCameraToolView: View {
                 ContentUnavailableView("暂无日志草稿", systemImage: "book.pages", description: Text("请先拍摄一张水印照片。"))
             }
         }
-        .safeAreaInset(edge: .bottom) {
-            if capturedPhoto != nil {
-                WatermarkQuickActionsBar(
-                    canAttachToProject: selectedProjectId != nil,
-                    onRetake: openCamera,
-                    onSaveAlbum: saveCurrentImageToAlbum,
-                    onAttachProject: saveCurrentImageAsProjectDocument,
-                    onOpenLogDraft: {
-                        if logSeedPhoto != nil {
-                            showLogDraft = true
-                        }
-                    },
-                    onExport: exportCurrentImage
-                )
-            }
-        }
         .overlay(alignment: .top) {
             if let toast {
                 WatermarkToastView(toast: toast)
                     .padding(.top, 10)
                     .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .onChange(of: locationManager.locationText) { _, newValue in
-            if !newValue.isEmpty {
-                locationText = newValue
             }
         }
         .onChange(of: selectedProjectId) { _, newValue in
@@ -298,6 +156,11 @@ struct WatermarkCameraToolView: View {
         }
         .onChange(of: burstCount) { _, newValue in
             burstCount = min(5, max(1, newValue))
+        }
+        .onReceive(locationManager.$locationText) { newValue in
+            let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            locationText = trimmed
         }
         .animation(.easeInOut(duration: 0.2), value: toast?.id)
         .onAppear {
@@ -313,10 +176,260 @@ struct WatermarkCameraToolView: View {
         }
     }
 
+    private var projectSection: some View {
+        Section {
+            ProjectContextStrip(
+                title: "当前工程",
+                projects: store.projects,
+                selectedProjectId: $selectedProjectId,
+                emptyText: "不关联项目"
+            )
+        }
+    }
+
+    private var templateSection: some View {
+        Section {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(CameraWatermarkTemplate.allCases, id: \.rawValue) { tmpl in
+                        let isSelected = templateRaw == tmpl.rawValue
+                        Button {
+                            templateRaw = tmpl.rawValue
+                        } label: {
+                            WatermarkTemplateChip(
+                                title: tmpl.displayName,
+                                systemImage: tmpl.icon,
+                                isSelected: isSelected
+                            )
+                        }
+                    }
+                }
+            }
+        } header: {
+            Label("水印模板", systemImage: "rectangle.and.pencil.and.ellipsis")
+        }
+    }
+
+    private var captureSection: some View {
+        Section {
+            Button {
+                openCamera()
+            } label: {
+                Label("拍摄水印照片", systemImage: "camera.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .buttonStyle(.borderedProminent)
+        }
+    }
+
+    private var watermarkInfoSection: some View {
+        Section {
+            TextField("标签", text: $tag)
+            TextField("拍摄人", text: $photographer)
+            HStack {
+                TextField("定位/位置", text: $locationText)
+                Button {
+                    locationManager.requestLocation()
+                } label: {
+                    Image(systemName: "location.fill").visibleIconStyle()
+                }
+                .buttonStyle(.appIcon())
+            }
+            if !locationStatusText.isEmpty {
+                Text(locationStatusText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        } header: {
+            Label("水印信息", systemImage: "info.circle")
+        }
+    }
+
+    private var cameraSettingsSection: some View {
+        Section {
+            DisclosureGroup {
+                Picker("导出画质", selection: exportQualityBinding) {
+                    ForEach(WatermarkExportQuality.allCases, id: \.self) { quality in
+                        Text(quality.displayName).tag(quality)
+                    }
+                }
+                Toggle("相机网格线", isOn: $showGrid)
+                Toggle("默认闪光灯", isOn: $flashEnabled)
+                Stepper("连拍张数：\(boundedBurstCount)", value: $burstCount, in: 1...5)
+            } label: {
+                Label("相机设置", systemImage: "camera.fill")
+            }
+        }
+    }
+
+    private var autoSaveSection: some View {
+        Section {
+            Toggle("拍完自动保存到相册", isOn: $autoSaveToAlbum)
+            Toggle("拍完自动进入施工日志草稿", isOn: $autoOpenLogDraft)
+        }
+    }
+
+    @ViewBuilder
+    private var recentCaptureSection: some View {
+        if let capturedPhoto {
+            Section("最近拍摄") {
+                Image(uiImage: capturedPhoto.image)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: .infinity, maxHeight: 280)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+
+                if hasMultipleCapturedPhotos {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Array(capturedPhotos.enumerated()), id: \.element.id) { index, photo in
+                                Button {
+                                    selectedCapturedPhotoID = photo.id
+                                } label: {
+                                    ZStack(alignment: .topTrailing) {
+                                        Image(uiImage: photo.image)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: 72, height: 54)
+                                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                                            .overlay {
+                                                RoundedRectangle(cornerRadius: 8)
+                                                    .stroke(
+                                                        photo.id == capturedPhoto.id ? Color.appPrimaryAction : Color.appStrokeSecondary,
+                                                        lineWidth: photo.id == capturedPhoto.id ? 2 : 1
+                                                    )
+                                            }
+                                        Text("\(index + 1)")
+                                            .font(.caption2.weight(.bold))
+                                            .foregroundStyle(.white)
+                                            .padding(.horizontal, 5)
+                                            .padding(.vertical, 2)
+                                            .background(Color.black.opacity(0.55), in: Capsule())
+                                            .padding(4)
+                                    }
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                        .padding(.vertical, 2)
+                    }
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(capturedPhotoMetaText(capturedAt: capturedPhoto.capturedAt))
+                    Text(projectAssociationText)
+                    if hasMultipleCapturedPhotos {
+                        Text("连拍共 \(capturedPhotos.count) 张，当前处理第 \(selectedCapturedPhotoNumber) 张")
+                    }
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+
+                recentCaptureActions
+            }
+        } else {
+            Section("最近拍摄") {
+                ContentUnavailableView("还没有照片", systemImage: "camera.aperture", description: Text("拍摄后可直接导出带水印的 JPEG。"))
+            }
+        }
+    }
+
+    private var recentCaptureActions: some View {
+        HStack(spacing: 12) {
+            Button {
+                saveCurrentImageToAlbum()
+            } label: {
+                Label("保存相册", systemImage: "photo.on.rectangle.angled")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(savingToAlbum)
+
+            if hasMultipleCapturedPhotos {
+                Button {
+                    saveAllImagesToAlbum()
+                } label: {
+                    Label("保存全部", systemImage: "photo.stack")
+                        .font(.caption.weight(.semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(savingToAlbum)
+            }
+
+            Button {
+                saveCurrentImageAsProjectDocument()
+            } label: {
+                Label("附项目资料", systemImage: "folder.badge.plus")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .disabled(selectedProjectId == nil)
+
+            Button {
+                exportCurrentImage()
+            } label: {
+                Label("导出", systemImage: "square.and.arrow.up")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Menu {
+                if let logSeedPhoto {
+                    NavigationLink {
+                        DailyLogView(
+                            initialProjectId: selectedProjectId,
+                            autoOpenComposer: true,
+                            initialPhotoDrafts: [logSeedPhoto],
+                            initialContent: logDraftContent
+                        )
+                    } label: {
+                        Label("进入施工日志", systemImage: "book.pages.fill")
+                    }
+                }
+                if let todoSeedData {
+                    NavigationLink {
+                        SiteTodoView(
+                            initialProjectId: selectedProjectId,
+                            autoOpenComposer: true,
+                            initialBeforePhotoData: todoSeedData
+                        )
+                    } label: {
+                        Label("转为整改前待办", systemImage: "checklist")
+                    }
+                    NavigationLink {
+                        SiteTodoView(
+                            initialProjectId: selectedProjectId,
+                            autoOpenComposer: true,
+                            initialAfterPhotoData: todoSeedData
+                        )
+                    } label: {
+                        Label("转为整改后待办", systemImage: "checkmark.seal.fill")
+                    }
+                }
+                Divider()
+                Button(role: .destructive) {
+                    clearCapturedPhotos()
+                } label: {
+                    Label("清空照片", systemImage: "trash")
+                }
+            } label: {
+                Label("更多", systemImage: "ellipsis.circle")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
     private var currentContext: CameraWatermarkContext {
         CameraWatermarkContext(
             projectName: effectiveProjectName,
-            template: template.rawValue,
+            template: template,
             tag: tag,
             photographer: photographer,
             locationText: locationText
@@ -330,6 +443,28 @@ struct WatermarkCameraToolView: View {
         }
         let trimmed = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private var locationStatusText: String {
+        locationManager.statusText
+    }
+
+    private var appSettingsURL: URL? {
+        URL(string: UIApplication.openSettingsURLString)
+    }
+
+    private var projectAssociationText: String {
+        guard let name = effectiveProjectName else { return "未关联项目" }
+        return "工程：\(name)"
+    }
+
+    private func capturedPhotoMetaText(capturedAt: Date) -> String {
+        let time = Formatters.dateTime.string(from: capturedAt)
+        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedTag.isEmpty {
+            return "\(time) · \(template.displayName)"
+        }
+        return "\(time) · \(template.displayName) · \(trimmedTag)"
     }
 
     private var exportFileName: String {
@@ -361,12 +496,27 @@ struct WatermarkCameraToolView: View {
         return "水印照片记录：\(trimmedTag)"
     }
 
-    private func handleCapturedImage(_ image: UIImage, capturedAt: Date) {
-        let output = image.applyingCameraWatermark(context: currentContext, capturedAt: capturedAt)
-        capturedPhoto = WatermarkCapturedPhoto(image: output, capturedAt: capturedAt)
-        presentToast("已拍摄 \(boundedBurstCount > 1 ? "连拍" : "照片")，可继续处理。", style: .success)
+    private func handleCapturedImages(_ images: [UIImage], capturedAt: Date) {
+        let outputs = images.map {
+            WatermarkCapturedPhoto(
+                image: $0.applyingCameraWatermark(context: currentContext, capturedAt: capturedAt),
+                capturedAt: capturedAt
+            )
+        }
+        guard !outputs.isEmpty else {
+            presentError("未获取到照片，请重试。")
+            return
+        }
+        capturedPhotos = outputs
+        selectedCapturedPhotoID = outputs.first?.id
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        presentToast("已拍摄 \(outputs.count) 张，可继续处理。", style: .success)
         if autoSaveToAlbum {
-            saveCurrentImageToAlbum()
+            if outputs.count > 1 {
+                saveAllImagesToAlbum()
+            } else {
+                saveCurrentImageToAlbum()
+            }
         }
         if autoOpenLogDraft, selectedProjectId != nil, logSeedPhoto != nil {
             showLogDraft = true
@@ -381,7 +531,10 @@ struct WatermarkCameraToolView: View {
         Task { @MainActor in
             let isGranted = await requestCameraAccessIfNeeded()
             guard isGranted else {
-                presentBlockingError("未获得相机权限，无法拍摄。")
+                presentBlockingError(
+                    "未获得相机权限，无法拍摄。",
+                    settingsURL: appSettingsURL
+                )
                 return
             }
             showCamera = true
@@ -422,36 +575,61 @@ struct WatermarkCameraToolView: View {
             return
         }
 
+        performWithPhotoLibraryAccess {
+            writeImagesToAlbum([image])
+        }
+    }
+
+    private func saveAllImagesToAlbum() {
+        let images = capturedPhotos.map(\.image)
+        guard !images.isEmpty else {
+            presentError("请先拍摄水印照片。")
+            return
+        }
+        performWithPhotoLibraryAccess {
+            writeImagesToAlbum(images)
+        }
+    }
+
+    private func performWithPhotoLibraryAccess(_ action: @escaping () -> Void) {
         let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
         switch status {
         case .authorized, .limited:
-            writeImageToAlbum(image)
+            action()
         case .notDetermined:
             PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
                 Task { @MainActor in
                     if newStatus == .authorized || newStatus == .limited {
-                        writeImageToAlbum(image)
+                        action()
                     } else {
-                        presentError("没有相册写入权限，无法保存。")
+                        presentBlockingError(
+                            "没有相册写入权限，无法保存。",
+                            settingsURL: appSettingsURL
+                        )
                     }
                 }
             }
         case .denied, .restricted:
-            presentError("没有相册写入权限，请到系统设置中开启。")
+            presentBlockingError(
+                "没有相册写入权限，请到系统设置中开启。",
+                settingsURL: appSettingsURL
+            )
         @unknown default:
             presentError("无法确认相册权限。")
         }
     }
 
-    private func writeImageToAlbum(_ image: UIImage) {
+    private func writeImagesToAlbum(_ images: [UIImage]) {
         savingToAlbum = true
         PHPhotoLibrary.shared().performChanges {
-            PHAssetChangeRequest.creationRequestForAsset(from: image)
+            for image in images {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
         } completionHandler: { success, error in
             Task { @MainActor in
                 savingToAlbum = false
                 if success {
-                    presentInfo("已保存到相册。")
+                    presentInfo(images.count > 1 ? "已保存 \(images.count) 张到相册。" : "已保存到相册。")
                 } else {
                     presentError("保存到相册失败：\(error?.localizedDescription ?? "未知错误")")
                 }
@@ -495,6 +673,11 @@ struct WatermarkCameraToolView: View {
         }
     }
 
+    private func clearCapturedPhotos() {
+        capturedPhotos.removeAll()
+        selectedCapturedPhotoID = nil
+    }
+
     private func presentInfo(_ message: String) {
         presentToast(message, style: .success)
     }
@@ -503,9 +686,10 @@ struct WatermarkCameraToolView: View {
         presentToast(message, style: .error)
     }
 
-    private func presentBlockingError(_ message: String) {
+    private func presentBlockingError(_ message: String, settingsURL: URL? = nil) {
         alertTitle = "无法继续"
         alertMessage = message
+        alertSettingsURL = settingsURL
         showAlert = true
     }
 
@@ -524,7 +708,24 @@ struct WatermarkCameraToolView: View {
     }
 }
 
-private struct WatermarkCapturedPhoto {
+private struct WatermarkTemplateChip: View {
+    let title: String
+    let systemImage: String
+    let isSelected: Bool
+
+    var body: some View {
+        Label(title, systemImage: systemImage)
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(isSelected ? Color.appPrimaryAction : Color(uiColor: .secondarySystemBackground))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .clipShape(Capsule())
+    }
+}
+
+private struct WatermarkCapturedPhoto: Identifiable {
+    let id = UUID()
     let image: UIImage
     let capturedAt: Date
 }
@@ -602,53 +803,12 @@ private struct WatermarkToastView: View {
     }
 }
 
-private struct WatermarkQuickActionsBar: View {
-    let canAttachToProject: Bool
-    let onRetake: () -> Void
-    let onSaveAlbum: () -> Void
-    let onAttachProject: () -> Void
-    let onOpenLogDraft: () -> Void
-    let onExport: () -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                quickButton("再拍一张", icon: "camera.fill", action: onRetake)
-                quickButton("保存相册", icon: "photo.on.rectangle.angled", action: onSaveAlbum)
-                quickButton("附到项目", icon: "folder.badge.plus", disabled: !canAttachToProject, action: onAttachProject)
-                quickButton("写日志", icon: "book.pages.fill", action: onOpenLogDraft)
-                quickButton("导出", icon: "square.and.arrow.up", action: onExport)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-        }
-        .background(.ultraThinMaterial)
-    }
-
-    private func quickButton(
-        _ title: String,
-        icon: String,
-        disabled: Bool = false,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Label(title, systemImage: icon)
-                .font(.subheadline.weight(.medium))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 8)
-        }
-        .buttonStyle(.borderedProminent)
-        .tint(.appWarning)
-        .disabled(disabled)
-    }
-}
-
 private struct WatermarkCameraCaptureView: View {
     let watermarkContext: CameraWatermarkContext
     let showGrid: Bool
     let flashEnabled: Bool
     let burstCount: Int
-    let onCapture: (UIImage, Date) -> Void
+    let onCapture: ([UIImage], Date) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = WatermarkCameraSession()
@@ -755,8 +915,8 @@ private struct WatermarkCameraCaptureView: View {
                     showError = true
                     return
                 }
-                if let image = images.last {
-                    onCapture(image, capturedAt)
+                if !images.isEmpty {
+                    onCapture(images, capturedAt)
                     dismiss()
                 } else {
                     captureError = "未获取到照片，请重试。"

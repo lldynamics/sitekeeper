@@ -8,15 +8,22 @@ struct AppQuickLookPreviewController: UIViewControllerRepresentable {
         Coordinator(url: url)
     }
 
-    func makeUIViewController(context: Context) -> QLPreviewController {
-        let controller = QLPreviewController()
-        controller.dataSource = context.coordinator
-        return controller
+    func makeUIViewController(context: Context) -> UINavigationController {
+        let previewController = QLPreviewController()
+        previewController.dataSource = context.coordinator
+        let navigationController = UINavigationController(rootViewController: previewController)
+        navigationController.setNavigationBarHidden(true, animated: false)
+        return navigationController
     }
 
-    func updateUIViewController(_ controller: QLPreviewController, context: Context) {
+    func updateUIViewController(_ controller: UINavigationController, context: Context) {
         context.coordinator.url = url
-        controller.reloadData()
+        guard let previewController = controller.viewControllers.first as? QLPreviewController else {
+            return
+        }
+        previewController.dataSource = context.coordinator
+        previewController.currentPreviewItemIndex = 0
+        previewController.reloadData()
     }
 
     final class Coordinator: NSObject, QLPreviewControllerDataSource {

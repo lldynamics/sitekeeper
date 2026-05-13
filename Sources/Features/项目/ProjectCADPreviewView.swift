@@ -6,8 +6,159 @@ struct ProjectCADPreviewRequest: Identifiable {
     let fileURL: URL
     let displayName: String
     let fileType: String
+    let textEncoding: CADDrawingTextEncoding
     let overlaySnapshotData: String
     let onOverlaySnapshotChange: (UUID, String) -> Void
+    let onTextEncodingChange: (UUID, CADDrawingTextEncoding) -> Void
+
+    var preferredTextCodePage: Int32? {
+        textEncoding.codePageOverride
+    }
+}
+
+private struct CADExternalPreviewFallbackView: View {
+    let fileURL: URL
+    let displayName: String
+    let fileType: String
+
+    private var fileSizeText: String {
+        do {
+            let values = try fileURL.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
+            let bytes = values.fileSize ?? values.totalFileAllocatedSize ?? 0
+            return QuickNoteAttachmentStorage.formattedFileSize(bytes)
+        } catch {
+            return String(localized: "未知大小")
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "compass.drawing")
+                .font(.system(size: 52, weight: .semibold))
+                .foregroundStyle(Color.appDoc)
+
+            VStack(spacing: 6) {
+                Text("需要外部 CAD 查看器")
+                    .font(.title3.weight(.semibold))
+                Text("iOS 系统预览无法可靠渲染 \(fileType.uppercased()) 原始图纸，直接打开会显示为数据。请用已安装的 CAD 应用打开，或导出为 PDF 后在本页预览和批注。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(spacing: 6) {
+                Text(displayName)
+                    .font(.callout.weight(.semibold))
+                    .lineLimit(2)
+                    .multilineTextAlignment(.center)
+                Text("\(fileType.uppercased()) · \(fileSizeText)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            ShareLink(item: fileURL) {
+                Label("用其他 CAD App 打开", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.appDoc)
+            .controlSize(.large)
+
+            Text("建议在电脑或 CAD App 中转成 PDF，再导入项目图纸；PDF 可在应用内直接查看、批注、测量和导出交付包。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(24)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+}
+
+private struct CADLibreDWGUnavailableView: View {
+    let fileURL: URL
+    let displayName: String
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "wrench.and.screwdriver.fill")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(Color.appWarning)
+
+            VStack(spacing: 6) {
+                Text("LibreDWG 引擎未集成")
+                    .font(.title3.weight(.semibold))
+                Text("已选择 LibreDWG 预览，但当前构建未包含 LibreDWGBridge。请先把桥接库接入工程，再重编译。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(displayName)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+
+            ShareLink(item: fileURL) {
+                Label("先用其他 CAD App 打开", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.appDoc)
+            .controlSize(.large)
+        }
+        .padding(24)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
+}
+
+private struct CADLibreDWGUnboundView: View {
+    let fileURL: URL
+    let displayName: String
+
+    var body: some View {
+        VStack(spacing: 18) {
+            Image(systemName: "link.badge.plus")
+                .font(.system(size: 48, weight: .semibold))
+                .foregroundStyle(Color.appWarning)
+
+            VStack(spacing: 6) {
+                Text("LibreDWG 渲染器未注册")
+                    .font(.title3.weight(.semibold))
+                Text("检测到 LibreDWG 环境，但应用内还没有绑定渲染入口。请在启动时调用 CADRendererProvider.registerLibreDWGRenderer。")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Text(displayName)
+                .font(.callout.weight(.medium))
+                .lineLimit(2)
+                .multilineTextAlignment(.center)
+
+            ShareLink(item: fileURL) {
+                Label("先用其他 CAD App 打开", systemImage: "square.and.arrow.up")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(Color.appDoc)
+            .controlSize(.large)
+        }
+        .padding(24)
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(uiColor: .systemGroupedBackground))
+    }
 }
 
 private struct CADPoint: Codable, Equatable {
@@ -141,13 +292,103 @@ struct ProjectCADPreviewView: View {
     @State private var showQuantitySheet = false
     @State private var showResetConfirm = false
     @State private var showScaleSheet = false
+    @State private var showTextEncodingDialog = false
     @State private var scaleDraft = ""
     @State private var pendingNotePoint: CGPoint?
     @State private var noteDraft = ""
     @State private var showNoteSheet = false
     @State private var lastPersistedSnapshotData = ""
+    @State private var isImmersivePreview = false
+    @State private var selectedTextEncoding: CADDrawingTextEncoding
 
-    private var engineTitle: String { CADPreviewEngine.systemQuickLook.title }
+    init(request: ProjectCADPreviewRequest) {
+        self.request = request
+        _selectedTextEncoding = State(initialValue: request.textEncoding)
+    }
+
+    private var preferredEngine: CADPreviewEngine {
+        CADPreviewEngineStore.selected
+    }
+
+    private var resolvedEngine: CADPreviewEngine {
+        CADPreviewCapability.resolvedEngine(preferredEngine)
+    }
+
+    private var isCADFile: Bool {
+        CADPreviewCapability.isCADFile(extension: request.fileType)
+    }
+
+    private var shouldUseExternalCADPreviewFallback: Bool {
+        isCADFile && (resolvedEngine == .systemQuickLook || shouldShowLibreDWGUnbound)
+    }
+
+    private var shouldShowLibreDWGUnavailable: Bool {
+        isCADFile && preferredEngine == .libreDWG && !CADPreviewCapability.isLibreDWGRendererAvailable()
+    }
+
+    private var shouldShowLibreDWGUnbound: Bool {
+        isCADFile &&
+        resolvedEngine == .libreDWG &&
+        !shouldShowLibreDWGUnavailable &&
+        !CADRendererProvider.isLibreDWGRendererBound
+    }
+
+    private var shouldUseLibreDWGRenderer: Bool {
+        isCADFile &&
+        resolvedEngine == .libreDWG &&
+        CADRendererProvider.isLibreDWGRendererBound
+    }
+
+    private var allowsOverlayEditing: Bool {
+        !shouldUseExternalCADPreviewFallback &&
+        !shouldShowLibreDWGUnavailable &&
+        !shouldShowLibreDWGUnbound
+    }
+
+    private var engineStatusText: String {
+        if !isCADFile {
+            return String(localized: "文档预览")
+        }
+        if preferredEngine == .libreDWG && !CADPreviewCapability.isLibreDWGRendererAvailable() {
+            return String(localized: "LibreDWG 未接入")
+        }
+        if shouldShowLibreDWGUnbound {
+            return String(localized: "LibreDWG 未绑定（已回退）")
+        }
+        switch resolvedEngine {
+        case .libreDWG:
+            return isCADFile ? String(localized: "CAD 代理预览") : String(localized: "文档预览")
+        case .systemQuickLook:
+            return String(localized: "系统预览")
+        }
+    }
+
+    private var engineStatusIcon: String {
+        if shouldShowLibreDWGUnavailable || shouldShowLibreDWGUnbound {
+            return "exclamationmark.triangle.fill"
+        }
+        return resolvedEngine == .libreDWG ? "checkmark.seal.fill" : "viewfinder"
+    }
+
+    private var engineStatusTint: Color {
+        if shouldShowLibreDWGUnavailable || shouldShowLibreDWGUnbound {
+            return Color.appWarning
+        }
+        return resolvedEngine == .libreDWG ? Color.appSuccess : Color.appDoc
+    }
+
+    private var engineStatusHint: String? {
+        if shouldShowLibreDWGUnavailable {
+            return String(localized: "当前构建未包含 LibreDWGBridge，已显示接入提示。")
+        }
+        if shouldShowLibreDWGUnbound {
+            return String(localized: "LibreDWG 已可用，但渲染入口未注册，已自动回退到系统预览。")
+        }
+        if shouldUseExternalCADPreviewFallback {
+            return String(localized: "系统预览无法可靠渲染 DWG/DXF，建议使用同名 PDF。")
+        }
+        return nil
+    }
 
     private var unitHint: String {
         "1pt = \(Formatters.number(snapshot.metersPerPoint, minFraction: 0, maxFraction: 4))m"
@@ -166,49 +407,94 @@ struct ProjectCADPreviewView: View {
         NavigationStack {
             GeometryReader { geo in
                 ZStack(alignment: .topLeading) {
-                    AppQuickLookPreviewController(url: request.fileURL)
+                    if shouldShowLibreDWGUnavailable {
+                        CADLibreDWGUnavailableView(
+                            fileURL: request.fileURL,
+                            displayName: request.displayName
+                        )
+                    } else if shouldUseLibreDWGRenderer,
+                              let renderer = CADRendererProvider.libreDWGRenderer(
+                                for: request.fileURL,
+                                preferredTextCodePage: selectedTextEncoding.codePageOverride
+                              ) {
+                        renderer
+                    } else if shouldUseExternalCADPreviewFallback {
+                        CADExternalPreviewFallbackView(
+                            fileURL: request.fileURL,
+                            displayName: request.displayName,
+                            fileType: request.fileType
+                        )
+                    } else {
+                        AppQuickLookPreviewController(url: request.fileURL)
+                    }
 
-                    overlayLayer(size: geo.size)
-                        .allowsHitTesting(tool != .browse)
+                    if allowsOverlayEditing {
+                        overlayLayer(size: geo.size)
+                            .allowsHitTesting(tool != .browse)
+                    }
                 }
                 .background(Color.black.opacity(0.02))
             }
             .navigationTitle(request.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .top) {
-                VStack(spacing: 8) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "viewfinder")
-                            .foregroundStyle(Color.appDoc)
-                        Text("\(String(localized: "预览模式"))：\(engineTitle)")
-                            .font(.footnote)
-                            .foregroundStyle(.secondary)
-                        Spacer(minLength: 0)
-                        Text(unitHint)
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.secondary)
-                    }
-                    ScrollView(.horizontal, showsIndicators: false) {
+                if !isImmersivePreview {
+                    VStack(spacing: 8) {
                         HStack(spacing: 8) {
-                            ForEach(CADOverlayTool.allCases, id: \.self) { candidate in
-                                Button {
-                                    tool = candidate
-                                } label: {
-                                    Label(candidate.title, systemImage: candidate.icon)
-                                        .font(.caption.weight(.semibold))
+                            Image(systemName: engineStatusIcon)
+                                .foregroundStyle(engineStatusTint)
+                            Text("\(String(localized: "预览模式"))：\(engineStatusText)")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: 0)
+                            if allowsOverlayEditing {
+                                Text(unitHint)
+                                    .font(.caption2.monospacedDigit())
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        if let engineStatusHint {
+                            Text(engineStatusHint)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        if shouldUseLibreDWGRenderer {
+                            HStack(spacing: 6) {
+                                Image(systemName: "character.textbox")
+                                    .foregroundStyle(.secondary)
+                                Text("\(String(localized: "文字编码"))：\(selectedTextEncoding.displayName)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                Spacer(minLength: 0)
+                            }
+                        }
+                        if allowsOverlayEditing {
+                            ScrollView(.horizontal, showsIndicators: false) {
+                                HStack(spacing: 8) {
+                                    ForEach(CADOverlayTool.allCases, id: \.self) { candidate in
+                                        Button {
+                                            tool = candidate
+                                        } label: {
+                                            Label(candidate.title, systemImage: candidate.icon)
+                                                .font(.caption.weight(.semibold))
+                                        }
+                                        .buttonStyle(.bordered)
+                                        .tint(tool == candidate ? .appPrimaryAction : .secondary)
+                                    }
                                 }
-                                .buttonStyle(.bordered)
-                                .tint(tool == candidate ? .appPrimaryAction : .secondary)
                             }
                         }
                     }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(.thinMaterial)
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(.thinMaterial)
             }
             .safeAreaInset(edge: .bottom) {
-                bottomControlBar
+                if allowsOverlayEditing && !isImmersivePreview {
+                    bottomControlBar
+                }
             }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -217,29 +503,49 @@ struct ProjectCADPreviewView: View {
                     }
                 }
                 ToolbarItemGroup(placement: .topBarTrailing) {
-                    Button {
-                        showScaleSheet = true
-                        scaleDraft = Formatters.number(snapshot.metersPerPoint, minFraction: 0, maxFraction: 6)
-                    } label: {
-                        Image(systemName: "slider.horizontal.3").visibleIconStyle()
+                    if allowsOverlayEditing {
+                        Button {
+                            showScaleSheet = true
+                            scaleDraft = Formatters.number(snapshot.metersPerPoint, minFraction: 0, maxFraction: 6)
+                        } label: {
+                            Image(systemName: "slider.horizontal.3").visibleIconStyle()
+                        }
+                        .accessibilityLabel(String(localized: "比例设置"))
+                        if shouldUseLibreDWGRenderer {
+                            Button {
+                                showTextEncodingDialog = true
+                            } label: {
+                                Image(systemName: "character.textbox").visibleIconStyle()
+                            }
+                            .accessibilityLabel(String(localized: "文字编码"))
+                        }
+                        Button {
+                            showQuantitySheet = true
+                        } label: {
+                            Image(systemName: "sum").visibleIconStyle()
+                        }
+                        .accessibilityLabel(String(localized: "半自动算量"))
                     }
-                    .accessibilityLabel(String(localized: "比例设置"))
                     Button {
-                        showQuantitySheet = true
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isImmersivePreview.toggle()
+                        }
                     } label: {
-                        Image(systemName: "sum").visibleIconStyle()
+                        Image(systemName: isImmersivePreview ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right").visibleIconStyle()
                     }
-                    .accessibilityLabel(String(localized: "半自动算量"))
+                    .accessibilityLabel(isImmersivePreview ? String(localized: "退出全屏") : String(localized: "全屏图纸"))
                     ShareLink(item: request.fileURL) {
                         Image(systemName: "square.and.arrow.up").visibleIconStyle()
                     }
                     .accessibilityLabel(String(localized: "分享图纸"))
-                    Button(role: .destructive) {
-                        showResetConfirm = true
-                    } label: {
-                        Image(systemName: "trash").visibleIconStyle().foregroundStyle(.appRisk)
+                    if allowsOverlayEditing {
+                        Button(role: .destructive) {
+                            showResetConfirm = true
+                        } label: {
+                            Image(systemName: "trash").visibleIconStyle().foregroundStyle(.appRisk)
+                        }
+                        .accessibilityLabel(String(localized: "清空覆盖层"))
                     }
-                    .accessibilityLabel(String(localized: "清空覆盖层"))
                 }
             }
             .onAppear {
@@ -248,6 +554,10 @@ struct ProjectCADPreviewView: View {
                     snapshot.metersPerPoint = 0.02
                 }
                 lastPersistedSnapshotData = encodedSnapshotData(snapshot)
+                selectedTextEncoding = request.textEncoding
+                if shouldUseLibreDWGRenderer {
+                    isImmersivePreview = true
+                }
             }
             .task(id: snapshot) {
                 await debouncePersistSnapshot(snapshot)
@@ -263,6 +573,16 @@ struct ProjectCADPreviewView: View {
                 Button(String(localized: "取消"), role: .cancel) {}
             } message: {
                 Text(String(localized: "将删除本图纸的批注、红线、测量和算量数据。"))
+            }
+            .confirmationDialog(String(localized: "文字编码"), isPresented: $showTextEncodingDialog, titleVisibility: .visible) {
+                ForEach(CADDrawingTextEncoding.allCases, id: \.self) { encoding in
+                    Button(encoding.displayName) {
+                        applyTextEncoding(encoding)
+                    }
+                }
+                Button(String(localized: "取消"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "当图纸文字出现乱码时，可切换编码后立即重载当前预览。"))
             }
             .sheet(isPresented: $showScaleSheet) {
                 scaleEditor
@@ -637,8 +957,9 @@ struct ProjectCADPreviewView: View {
                             )
                         )
                     } label: {
-                        Image(systemName: "plus")
+                        Image(systemName: "plus").visibleIconStyle()
                     }
+                    .buttonStyle(.appIcon())
                 }
                 KeyboardDismissToolbar {
                     AppKeyboard.dismiss()
@@ -739,6 +1060,12 @@ struct ProjectCADPreviewView: View {
         guard encoded != lastPersistedSnapshotData else { return }
         lastPersistedSnapshotData = encoded
         request.onOverlaySnapshotChange(request.drawingID, encoded)
+    }
+
+    private func applyTextEncoding(_ encoding: CADDrawingTextEncoding) {
+        guard selectedTextEncoding != encoding else { return }
+        selectedTextEncoding = encoding
+        request.onTextEncodingChange(request.drawingID, encoding)
     }
 
     private func strokeColor(_ kind: CADStroke.StrokeKind) -> Color {

@@ -32,6 +32,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     let onOpenTodos: () -> Void
     let onAddLog: () -> Void
     let onEditProgress: (ProgressTask) -> Void
+    let onOpenTimelineItem: (ProjectTimelineItem) -> Void
     let logRow: (DailyLog) -> LogRowContent
 
     var body: some View {
@@ -131,7 +132,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                         description: Text("写日志、导入资料、记账或更新进度后会显示在这里。")
                     )
                 } else {
-                    ProjectTimelineView(items: recentItems)
+                    ProjectTimelineView(items: recentItems, onSelect: onOpenTimelineItem)
                 }
             }
 

@@ -178,11 +178,23 @@ enum TimelineActivityType {
     case document
     case warehouse
     case note
+
+    var projectDetailMode: ProjectDetailMode {
+        switch self {
+        case .log, .todo, .progress, .note:
+            return .records
+        case .drawing, .document:
+            return .assets
+        case .financial, .material, .quote, .labor, .warehouse:
+            return .finance
+        }
+    }
 }
 
 struct TimelineActivityRow: View {
     let activity: TimelineActivity
     let projectName: String?
+    var showsChevron = false
 
     private var icon: String {
         switch activity.type {
@@ -243,6 +255,11 @@ struct TimelineActivityRow: View {
             Text(activity.date)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+            if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+            }
         }
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight * 0.75)

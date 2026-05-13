@@ -688,6 +688,49 @@ struct ProjectTemplate: Identifiable, Codable {
     var content: String
 }
 
+enum CADDrawingTextEncoding: String, CaseIterable, Codable {
+    case auto
+    case gbk936
+    case big5950
+    case shiftJIS932
+    case korean949
+    case utf8
+
+    var displayName: String {
+        switch self {
+        case .auto:
+            return "自动（推荐）"
+        case .gbk936:
+            return "简中 GBK（CP936）"
+        case .big5950:
+            return "繁中 Big5（CP950）"
+        case .shiftJIS932:
+            return "日文 Shift-JIS（CP932）"
+        case .korean949:
+            return "韩文 CP949"
+        case .utf8:
+            return "UTF-8（65001）"
+        }
+    }
+
+    var codePageOverride: Int32? {
+        switch self {
+        case .auto:
+            return nil
+        case .gbk936:
+            return 936
+        case .big5950:
+            return 950
+        case .shiftJIS932:
+            return 932
+        case .korean949:
+            return 949
+        case .utf8:
+            return 65001
+        }
+    }
+}
+
 struct ProjectDrawing: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
@@ -696,9 +739,11 @@ struct ProjectDrawing: Identifiable, Codable {
     var fileType: String
     var version: String
     var isCurrentVersion: Bool
+    var linkedPreviewDrawingID: UUID?
     var relatedLogDate: String
     var issueStatus: DrawingIssueStatus
     var issueNote: String
+    var textEncoding: CADDrawingTextEncoding
     var importedAt: String
     var note: String
     var cadOverlaySnapshotData: String
@@ -711,9 +756,11 @@ struct ProjectDrawing: Identifiable, Codable {
         fileType: String,
         version: String = "V1",
         isCurrentVersion: Bool = true,
+        linkedPreviewDrawingID: UUID? = nil,
         relatedLogDate: String = "",
         issueStatus: DrawingIssueStatus = .none,
         issueNote: String = "",
+        textEncoding: CADDrawingTextEncoding = .auto,
         importedAt: String = Formatters.now(),
         note: String = "",
         cadOverlaySnapshotData: String = ""
@@ -725,16 +772,18 @@ struct ProjectDrawing: Identifiable, Codable {
         self.fileType = fileType
         self.version = version
         self.isCurrentVersion = isCurrentVersion
+        self.linkedPreviewDrawingID = linkedPreviewDrawingID
         self.relatedLogDate = relatedLogDate
         self.issueStatus = issueStatus
         self.issueNote = issueNote
+        self.textEncoding = textEncoding
         self.importedAt = importedAt
         self.note = note
         self.cadOverlaySnapshotData = cadOverlaySnapshotData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, fileName, fileType, version, isCurrentVersion, relatedLogDate, issueStatus, issueNote, importedAt, note, cadOverlaySnapshotData
+        case id, projectId, name, fileName, fileType, version, isCurrentVersion, linkedPreviewDrawingID, relatedLogDate, issueStatus, issueNote, textEncoding, importedAt, note, cadOverlaySnapshotData
     }
 
     init(from decoder: Decoder) throws {
@@ -746,6 +795,7 @@ struct ProjectDrawing: Identifiable, Codable {
         fileType = try container.decodeIfPresent(String.self, forKey: .fileType) ?? ""
         version = try container.decodeIfPresent(String.self, forKey: .version) ?? "V1"
         isCurrentVersion = try container.decodeIfPresent(Bool.self, forKey: .isCurrentVersion) ?? true
+        linkedPreviewDrawingID = try container.decodeIfPresent(UUID.self, forKey: .linkedPreviewDrawingID)
         relatedLogDate = try container.decodeIfPresent(String.self, forKey: .relatedLogDate) ?? ""
         issueStatus = try container.decodeStringEnum(
             DrawingIssueStatus.self,
@@ -753,6 +803,11 @@ struct ProjectDrawing: Identifiable, Codable {
             default: .none
         )
         issueNote = try container.decodeIfPresent(String.self, forKey: .issueNote) ?? ""
+        textEncoding = try container.decodeStringEnum(
+            CADDrawingTextEncoding.self,
+            forKey: .textEncoding,
+            default: .auto
+        )
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         cadOverlaySnapshotData = try container.decodeIfPresent(String.self, forKey: .cadOverlaySnapshotData) ?? ""
@@ -764,6 +819,7 @@ struct ProjectDrawing: Identifiable, Codable {
 struct ProjectContact: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
+    var relatedProjectIds: [UUID]
     var name: String
     var role: ProjectContactRole
     var company: String
@@ -773,6 +829,7 @@ struct ProjectContact: Identifiable, Codable {
     init(
         id: UUID = UUID(),
         projectId: UUID,
+        relatedProjectIds: [UUID] = [],
         name: String,
         role: ProjectContactRole = .owner,
         company: String = "",
@@ -781,6 +838,7 @@ struct ProjectContact: Identifiable, Codable {
     ) {
         self.id = id
         self.projectId = projectId
+        self.relatedProjectIds = Self.normalizedRelatedProjectIDs(relatedProjectIds, excluding: projectId)
         self.name = name
         self.role = role
         self.company = company
@@ -789,13 +847,15 @@ struct ProjectContact: Identifiable, Codable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, role, company, phone, note
+        case id, projectId, relatedProjectIds, name, role, company, phone, note
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
+        relatedProjectIds = try container.decodeIfPresent([UUID].self, forKey: .relatedProjectIds) ?? []
+        relatedProjectIds = Self.normalizedRelatedProjectIDs(relatedProjectIds, excluding: projectId)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
         role = try container.decodeStringEnum(
             ProjectContactRole.self,
@@ -813,6 +873,25 @@ struct ProjectContact: Identifiable, Codable {
 
     var roleDisplayName: String {
         normalizedRole.displayName
+    }
+
+    var allProjectIDs: [UUID] {
+        [projectId] + relatedProjectIds.filter { $0 != projectId }
+    }
+
+    func isLinked(to projectID: UUID) -> Bool {
+        projectId == projectID || relatedProjectIds.contains(projectID)
+    }
+
+    private static func normalizedRelatedProjectIDs(_ projectIDs: [UUID], excluding primaryProjectID: UUID) -> [UUID] {
+        var seen = Set<UUID>()
+        var results: [UUID] = []
+        for id in projectIDs where id != primaryProjectID {
+            if seen.insert(id).inserted {
+                results.append(id)
+            }
+        }
+        return results
     }
 }
 

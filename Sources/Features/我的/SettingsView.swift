@@ -2,37 +2,60 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage(UserPreferenceKeys.hasSeenBackupGuide) private var hasSeenBackupGuide = false
-    @AppStorage(UserPreferenceKeys.hasSeenProjectFileRootGuide) private var hasSeenProjectFileRootGuide = false
-    @AppStorage(UserPreferenceKeys.hasSeenProjectFileCategoryGuide) private var hasSeenProjectFileCategoryGuide = false
-    @AppStorage(UserPreferenceKeys.hasCompletedBackupExportTask) private var hasCompletedBackupExportTask = false
     @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
-    @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) private var materialLibraryPromptAfterAdd = true
-    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.dropboxBlue.rawValue
+    @AppStorage(UserPreferenceKeys.cadPreviewEngine) private var cadPreviewEngineRaw = CADPreviewEngine.libreDWG.rawValue
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataConfirm = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
     @State private var clearLocalDataPhase = ""
-    @State private var guideResetFeedback = ""
 
     private var allowsSampleDataImport: Bool {
         AppFeatureFlags.allowsSampleDataImport
     }
 
+    private var selectedCADEngine: CADPreviewEngine {
+        get {
+            StringEnumFallback.value(cadPreviewEngineRaw, default: .libreDWG)
+        }
+        nonmutating set {
+            cadPreviewEngineRaw = newValue.rawValue
+        }
+    }
+
+    private var isLibreDWGAvailable: Bool {
+        CADPreviewCapability.isLibreDWGRendererAvailable()
+    }
+
     var body: some View {
         Form {
-            Section("显示与主题") {
-                Picker("配色", selection: $appTheme) {
-                    ForEach(AppTheme.allCases, id: \.rawValue) { theme in
-                        Text(theme.displayName).tag(theme.rawValue)
+            Section("显示") {
+                Text("公制单位、自动保存、主题、配色和语言已放到“我的”首页快捷设置。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("CAD 预览") {
+                Picker("图纸预览引擎", selection: $cadPreviewEngineRaw) {
+                    ForEach(CADPreviewEngine.allCases, id: \.rawValue) { engine in
+                        Text(engine.title).tag(engine.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
-                Text("公制单位、自动保存、主题和语言已放到“我的”首页快捷设置。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if isLibreDWGAvailable {
+                    Text("LibreDWGBridge 已接入，可在应用内尝试直接预览 DWG/DXF。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("当前构建未接入 LibreDWGBridge。选择 LibreDWG 时会显示接入提示；系统引擎仍建议使用同名 PDF 预览。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    if selectedCADEngine == .libreDWG {
+                        Button("切回系统 CAD 预览") {
+                            selectedCADEngine = .systemQuickLook
+                        }
+                    }
+                }
             }
             if allowsSampleDataImport {
                 Section("示例数据") {
@@ -49,10 +72,6 @@ struct SettingsView: View {
                     LabeledContent("备份健康提醒阈值", value: "\(backupHealthReminderDays) 天")
                 }
                 Text("超过该天数未成功备份时，工作台会显示“备份超期”提醒。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Toggle("材料添加后提示前往材料单", isOn: $materialLibraryPromptAfterAdd)
-                Text("关闭后，材料库添加成功将只显示顶部提示，不再弹窗询问是否跳转。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button("清空本机全部数据（不可恢复）", role: .destructive) {
@@ -77,21 +96,6 @@ struct SettingsView: View {
                 Text("默认关闭。开启后会在工具箱显示“模板管理”。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-            Section("使用提示") {
-                Button {
-                    resetGuideState()
-                } label: {
-                    Label("重新显示使用提示", systemImage: "arrow.counterclockwise")
-                }
-                Text("会重新显示备份页和项目文件页的新手提示。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if !guideResetFeedback.isEmpty {
-                    Text(guideResetFeedback)
-                        .font(.caption)
-                        .foregroundStyle(.appSuccess)
-                }
             }
             Section("关于") {
                 HStack { Text("版本"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0").foregroundStyle(.secondary) }
@@ -140,16 +144,13 @@ struct SettingsView: View {
         }
         .onAppear {
             backupHealthReminderDays = min(max(backupHealthReminderDays, 1), 30)
+            let normalized = StringEnumFallback.value(cadPreviewEngineRaw, default: CADPreviewEngine.libreDWG)
+            if normalized.rawValue != cadPreviewEngineRaw {
+                cadPreviewEngineRaw = normalized.rawValue
+            }
         }
     }
 
-    private func resetGuideState() {
-        hasSeenBackupGuide = false
-        hasSeenProjectFileRootGuide = false
-        hasSeenProjectFileCategoryGuide = false
-        hasCompletedBackupExportTask = false
-        guideResetFeedback = "已重置。下次进入相关页面会再次显示使用提示。"
-    }
 }
 
 private struct FavoriteCalcEditor: View {

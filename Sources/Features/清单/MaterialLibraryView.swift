@@ -14,6 +14,7 @@ struct MaterialLibraryView: View {
     private enum AppendMaterialField: Hashable {
         case quantity
         case unitPrice
+        case note
     }
 
     @Environment(DataStore.self) private var store
@@ -28,6 +29,7 @@ struct MaterialLibraryView: View {
     @State private var selectedDefaultMaterialSheetDraftID: UUID?
     @State private var pendingAddProjectId: UUID?
     @State private var pendingAddUnitPrice = ""
+    @State private var pendingAddNote = ""
     @State private var pendingAddTargetMode: MaterialSheetTargetMode = .existing
     @State private var pendingAddDraftId: UUID?
     @State private var pendingAddDraftTitle = ""
@@ -50,7 +52,6 @@ struct MaterialLibraryView: View {
     @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) private var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
     @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) private var lastAppendDraftIDRaw = ""
     @AppStorage(UserPreferenceKeys.materialLibraryLastProjectID) private var lastAppendProjectIDRaw = ""
-    @AppStorage(UserPreferenceKeys.materialLibraryKeepAppending) private var keepAppendingAfterAdd = false
 
     private var visiblePresetMaterials: [CommonMaterial] {
         MaterialLibrary.all.filter { !isPresetHidden($0) }
@@ -372,18 +373,37 @@ struct MaterialLibraryView: View {
                         TextField("单价（可选）", text: $pendingAddUnitPrice)
                             .keyboardType(.decimalPad)
                             .focused($appendMaterialFocusedField, equals: .unitPrice)
-                        Toggle("添加后继续", isOn: $keepAppendingAfterAdd)
+                        TextField("备注（可选）", text: $pendingAddNote, axis: .vertical)
+                            .lineLimit(2...4)
+                            .focused($appendMaterialFocusedField, equals: .note)
                     }
-                    Section("默认目标材料单") {
-                        if let draft = defaultTargetMaterialSheetDraft {
-                            Text(materialSheetDraftPickerTitle(draft))
-                            Text("可在材料库顶部切换默认目标。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                    Section("保存到材料单") {
+                        Picker("目标", selection: $pendingAddTargetMode) {
+                            Text("已有材料单").tag(MaterialSheetTargetMode.existing)
+                            Text("新建材料单").tag(MaterialSheetTargetMode.create)
+                        }
+                        .pickerStyle(.segmented)
+
+                        if pendingAddTargetMode == .existing {
+                            if activeMaterialSheetDrafts.isEmpty {
+                                Text("暂无可用材料单，请切换到“新建材料单”")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                Picker("材料单", selection: $pendingAddDraftId) {
+                                    ForEach(activeMaterialSheetDrafts) { draft in
+                                        Text(materialSheetDraftPickerTitle(draft)).tag(draft.id as UUID?)
+                                    }
+                                }
+                            }
                         } else {
-                            Text("暂无可用材料单，添加时会自动创建新的材料单。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            TextField("材料单名称", text: $pendingAddDraftTitle)
+                            Picker("归属项目", selection: $pendingAddProjectId) {
+                                Text("无归属").tag(nil as UUID?)
+                                ForEach(store.projects) { project in
+                                    Text(project.name).tag(project.id as UUID?)
+                                }
+                            }
                         }
                     }
                 }
@@ -397,26 +417,28 @@ struct MaterialLibraryView: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("添加") {
-                            let closesSheetAfterAppend = !keepAppendingAfterAdd
-                            let appended = confirmAppendMaterialToDefaultSheet(
-                                context,
+                            let appended = appendMaterialsToSheet(
+                                [context],
+                                quantityText: pendingAddQuantity,
                                 showPostAddPrompt: false,
-                                deferToastUntilSheetDismissal: closesSheetAfterAppend
-                            )
-                            guard appended else { return }
-                            if keepAppendingAfterAdd {
-                                pendingAddQuantity = "1"
-                                appendMaterialFocusedField = .quantity
-                            } else {
-                                pendingAddContext = nil
+                                deferToastUntilSheetDismissal: true
+                            ) { _ in
+                                pendingAddUnitPrice
                             }
+                            guard appended else { return }
+                            pendingAddContext = nil
                         }
+                        .disabled(!canAppendMaterialToSheet)
                     }
                     KeyboardNavigationToolbar(
                         focusedField: $appendMaterialFocusedField,
-                        fields: [.quantity, .unitPrice]
+                        fields: [.quantity, .unitPrice, .note]
                     )
                 }
+            }
+            .onChange(of: pendingAddTargetMode) { _, mode in
+                guard mode == .existing else { return }
+                pendingAddDraftId = pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
             }
             .operationToast(message: $operationMessage)
         }
@@ -781,6 +803,7 @@ struct MaterialLibraryView: View {
             return
         }
         pendingBatchAddQuantity = "1"
+        pendingAddNote = ""
         pendingAddProjectId = nil
         applyRememberedAppendTarget()
         pendingAddDraftTitle = defaultMaterialSheetDraftTitle(projectId: pendingAddProjectId)
@@ -932,26 +955,10 @@ struct MaterialLibraryView: View {
         pendingAddContext = context
         pendingAddQuantity = "1"
         pendingAddUnitPrice = context.defaultUnitPrice
-        ensureDefaultMaterialSheetSelection()
-    }
-
-    @discardableResult
-    private func confirmAppendMaterialToDefaultSheet(
-        _ context: PendingMaterialAppendContext,
-        showPostAddPrompt: Bool = false,
-        deferToastUntilSheetDismissal: Bool = false
-    ) -> Bool {
-        let draftID = resolveDefaultMaterialSheetDraftIDForAppend()
-        pendingAddTargetMode = .existing
-        pendingAddDraftId = draftID
-        return appendMaterialsToSheet(
-            [context],
-            quantityText: pendingAddQuantity,
-            showPostAddPrompt: showPostAddPrompt,
-            deferToastUntilSheetDismissal: deferToastUntilSheetDismissal
-        ) { _ in
-            pendingAddUnitPrice
-        }
+        pendingAddNote = ""
+        pendingAddProjectId = nil
+        applyRememberedAppendTarget()
+        pendingAddDraftTitle = defaultMaterialSheetDraftTitle(projectId: pendingAddProjectId)
     }
 
     @discardableResult
@@ -982,6 +989,7 @@ struct MaterialLibraryView: View {
         guard !contexts.isEmpty else { return false }
         let trimmedQuantity = quantityText.trimmingCharacters(in: .whitespacesAndNewlines)
         let validQuantity = QuantityValue(text: trimmedQuantity).isPositive ? trimmedQuantity : "1"
+        let note = contexts.count == 1 ? pendingAddNote.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         let draftItems = contexts.map { context in
             MaterialSheetDraftItem(
                 name: context.name,
@@ -989,7 +997,8 @@ struct MaterialLibraryView: View {
                 unit: context.unit,
                 quantity: validQuantity,
                 unitPrice: unitPriceResolver(context).trimmingCharacters(in: .whitespacesAndNewlines),
-                supplier: context.defaultSupplier
+                supplier: context.defaultSupplier,
+                note: note
             )
         }
         let now = Formatters.now()
@@ -1144,19 +1153,6 @@ struct MaterialLibraryView: View {
         lastAppendProjectIDRaw = ""
         operationMessage = "已创建默认材料单「\(newDraft.title)」"
         return newDraft.id
-    }
-
-    private func resolveDefaultMaterialSheetDraftIDForAppend() -> UUID {
-        ensureDefaultMaterialSheetSelection()
-        if let selectedDefaultMaterialSheetDraftID,
-           activeMaterialSheetDrafts.contains(where: { $0.id == selectedDefaultMaterialSheetDraftID }) {
-            return selectedDefaultMaterialSheetDraftID
-        }
-        if let firstDraftID = activeMaterialSheetDrafts.first?.id {
-            selectedDefaultMaterialSheetDraftID = firstDraftID
-            return firstDraftID
-        }
-        return createAndSelectDefaultMaterialSheetDraft()
     }
 
     private func normalizedRememberedProjectID(_ projectID: UUID?) -> UUID? {

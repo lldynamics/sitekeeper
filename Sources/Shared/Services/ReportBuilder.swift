@@ -202,6 +202,82 @@ enum ReportBuilder {
         }
     }
 
+    static func makeQuotationExcelHTML(
+        title: String,
+        items: [QuoteItem],
+        projects: [Project],
+        meta: QuotationDocumentMeta
+    ) -> Data {
+        let subtotal = items.reduce(MoneyValue.zero) { $0 + quoteLineTotalValue($1) }
+        let tax = items.reduce(MoneyValue.zero) { $0 + quoteTaxValue($1) }
+        let discount = items.reduce(MoneyValue.zero) { $0 + quoteDiscountValue($1) }
+        let total = subtotal + tax - discount
+        let projectName = resolvedProjectName(items: items, projects: projects)
+
+        var html = """
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="UTF-8">
+        <style>
+        body{font-family:-apple-system,Helvetica,Arial,sans-serif;padding:20px;color:#1f2937;}
+        h2{margin:0 0 8px;}
+        .meta{color:#4b5563;font-size:12px;line-height:1.7;margin:2px 0;}
+        table{border-collapse:collapse;width:100%;margin-top:12px;}
+        th,td{border:1px solid #d1d5db;padding:6px 8px;font-size:12px;vertical-align:top;}
+        th{background:#f3f4f6;font-weight:600;}
+        td.num{text-align:right;white-space:nowrap;}
+        .summary{margin-top:12px;font-size:13px;}
+        .summary strong{font-size:15px;}
+        </style>
+        </head>
+        <body>
+        """
+
+        html += "<h2>\(escapeHTML(title))</h2>"
+        html += "<p class=\"meta\">\(escapeHTML(meta.companyName)) · \(escapeHTML(meta.companyPhone)) · \(escapeHTML(meta.companyAddress))</p>"
+        html += "<p class=\"meta\">客户名称: \(escapeHTML(meta.customerName))</p>"
+        html += "<p class=\"meta\">项目名称: \(escapeHTML(projectName))</p>"
+        html += "<p class=\"meta\">项目地址: \(escapeHTML(meta.projectAddress))</p>"
+        html += "<p class=\"meta\">报价日期: \(escapeHTML(Formatters.date.string(from: Date())))，有效期至: \(escapeHTML(meta.validUntil))</p>"
+
+        html += """
+        <table>
+        <tr>
+            <th>项目</th><th>单位</th><th>数量</th><th>单价</th><th>税率</th><th>折扣</th><th>金额</th><th>版本</th><th>状态</th><th>备注</th>
+        </tr>
+        """
+
+        if items.isEmpty {
+            html += "<tr><td colspan=\"10\">暂无明细</td></tr>"
+        } else {
+            for item in items {
+                html += "<tr>"
+                html += "<td>\(escapeHTML(item.name))</td>"
+                html += "<td>\(escapeHTML(item.unit))</td>"
+                html += "<td class=\"num\">\(escapeHTML(item.quantity))</td>"
+                html += "<td class=\"num\">\(escapeHTML(money(item.unitPriceValue.doubleValue)))</td>"
+                html += "<td class=\"num\">\(escapeHTML(item.taxRate))%</td>"
+                html += "<td class=\"num\">\(escapeHTML(item.discountRate))%</td>"
+                html += "<td class=\"num\">\(escapeHTML(money(quoteGrandTotal(item))))</td>"
+                html += "<td>\(escapeHTML(item.versionName))</td>"
+                html += "<td>\(escapeHTML(item.status.displayName))</td>"
+                html += "<td>\(escapeHTML(item.notes))</td>"
+                html += "</tr>"
+            }
+        }
+
+        html += "</table>"
+        html += "<p class=\"summary\">小计: \(escapeHTML(money(subtotal.doubleValue)))</p>"
+        html += "<p class=\"summary\">税额: \(escapeHTML(money(tax.doubleValue)))，折扣: -\(escapeHTML(money(discount.doubleValue)))</p>"
+        html += "<p class=\"summary\"><strong>合计: \(escapeHTML(money(total.doubleValue)))</strong></p>"
+        html += "<p class=\"meta\">签字确认: \(escapeHTML(meta.signerName))</p>"
+        html += "<p class=\"meta\">导出时间: \(escapeHTML(Formatters.now()))</p>"
+        html += "</body></html>"
+
+        return Data(html.utf8)
+    }
+
     static func makePhotoWallPDF(title: String, items: [ReportPhotoItem]) -> Data {
         renderPhotoWallPDF(title: title, items: items, thumbnailsByFileName: [:])
     }

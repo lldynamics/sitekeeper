@@ -211,14 +211,16 @@ struct ProjectListView: View {
             NavigationLink {
                 ProjectFileBrowserView()
             } label: {
-                Image(systemName: "folder")
+                Image(systemName: "folder").visibleIconStyle()
             }
+            .buttonStyle(.appIcon())
             .accessibilityLabel("全局文件检索")
             Button {
                 showAdd = true
             } label: {
-                Image(systemName: "plus")
+                Image(systemName: "plus").visibleIconStyle()
             }
+            .buttonStyle(.appIcon())
             .accessibilityLabel("新建项目")
         }
     }
@@ -321,11 +323,33 @@ struct ProjectListView: View {
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 NavigationLink {
-                    ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
+                    ProjectDetailView(projectId: project.id, initialMode: .finance)
                 } label: {
-                    Label("记账", systemImage: "receipt.fill")
+                    Label("财务", systemImage: "wallet.pass.fill")
                 }
                 .tint(Color.appFinance)
+
+                NavigationLink {
+                    SiteTodoView(initialProjectId: project.id)
+                } label: {
+                    Label("待办", systemImage: "checkmark.circle.fill")
+                }
+                .tint(Color.appSuccess)
+
+                NavigationLink {
+                    ProjectDetailView(projectId: project.id, initialMode: .assets)
+                } label: {
+                    Label("图纸", systemImage: "square.on.square.squareshape.controlhandles")
+                }
+                .tint(Color.appPrimaryAction)
+            }
+            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                NavigationLink {
+                    ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
+                } label: {
+                    Label("加资料", systemImage: "doc.badge.plus")
+                }
+                .tint(Color.appDoc)
 
                 NavigationLink {
                     DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
@@ -335,13 +359,12 @@ struct ProjectListView: View {
                 .tint(Color.appSuccess)
 
                 NavigationLink {
-                    ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
+                    ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
                 } label: {
-                    Label("加资料", systemImage: "doc.badge.plus")
+                    Label("记账", systemImage: "receipt.fill")
                 }
-                .tint(Color.appDoc)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                .tint(Color.appFinance)
+
                 if let url = customerPhoneURL(for: project) {
                     Button {
                         openURL(url)

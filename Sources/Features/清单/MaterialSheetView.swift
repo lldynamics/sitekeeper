@@ -81,10 +81,6 @@ struct MaterialSheetView: View {
     @State private var renameDraftTitleInput = ""
     @State private var draftProjectIdInput: UUID?
     @State private var searchText = ""
-    @State private var manualName = ""; @State private var manualSpec = ""; @State private var manualUnit = ""
-    @State private var manualQty = "1"; @State private var manualPrice = ""; @State private var manualLabor = ""
-    @State private var manualSupplier = ""; @State private var manualNote = ""; @State private var manualLocation = ""
-    @State private var showManualAdd = false
     @State private var showClearConfirm = false
     @State private var pendingDeleteSheetItemIDs: Set<UUID> = []
     @State private var showDeleteItemConfirm = false
@@ -97,6 +93,7 @@ struct MaterialSheetView: View {
     @State private var itemExpanded: Set<UUID> = []
     @State private var exportProjectName = ""
     @State private var exportPreparer = ""
+    @FocusState private var isMaterialSearchFocused: Bool
 
     init(initialDraftID: UUID? = nil) {
         _selectedDraftID = State(initialValue: initialDraftID)
@@ -167,7 +164,6 @@ struct MaterialSheetView: View {
         List {
             draftSelectorSection
             materialSearchSection
-            manualInputSection
 
             // Sheet items
             Section {
@@ -177,7 +173,7 @@ struct MaterialSheetView: View {
                         VStack(spacing: 8) {
                             Image(systemName: "doc.text").font(.system(size: 36)).foregroundStyle(.secondary)
                             Text("材料单为空").foregroundStyle(.secondary)
-                            Text("在上方搜索材料库或手动添加").font(.caption).foregroundStyle(.tertiary)
+                            Text("在上方搜索材料库添加").font(.caption).foregroundStyle(.tertiary)
                         }.padding(.vertical, 20)
                         Spacer()
                     }
@@ -276,7 +272,6 @@ struct MaterialSheetView: View {
         }
         .sheet(isPresented: $showCreateDraftSheet) { createDraftSheet }
         .sheet(isPresented: $showRenameDraftSheet) { renameDraftSheet }
-        .sheet(isPresented: $showManualAdd) { manualAddSheet }
         .alert("清空材料单？", isPresented: $showClearConfirm) {
             Button("取消", role: .cancel) {}
             Button("清空", role: .destructive) { sheetItems.removeAll() }
@@ -360,6 +355,11 @@ struct MaterialSheetView: View {
                 } label: {
                     Label("新建材料单", systemImage: "plus.circle.fill")
                 }
+                Button {
+                    focusMaterialSearch()
+                } label: {
+                    Label("添加材料", systemImage: "magnifyingglass")
+                }
             } else {
                 Picker("当前材料单", selection: $selectedDraftID) {
                     ForEach(activeMaterialSheetDrafts) { draft in
@@ -397,6 +397,11 @@ struct MaterialSheetView: View {
                 } label: {
                     Label("新建材料单", systemImage: "plus")
                 }
+                Button {
+                    focusMaterialSearch()
+                } label: {
+                    Label("添加材料", systemImage: "magnifyingglass")
+                }
             }
         }
     }
@@ -406,33 +411,20 @@ struct MaterialSheetView: View {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索材料库或输入新材料名称", text: $searchText)
+                TextField("搜索材料库", text: $searchText)
                     .submitLabel(.search)
+                    .focused($isMaterialSearchFocused)
             }
             if !searchText.isEmpty {
                 if !hasSearchResults {
-                    Button {
-                        manualName = searchText; manualSpec = ""; manualUnit = ""; manualQty = "1"
-                        manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
-                        showManualAdd = true
-                    } label: {
-                        Label("手动添加「\(searchText)」", systemImage: "plus.circle.fill")
-                    }
+                    ContentUnavailableView(
+                        "材料库没有匹配项",
+                        systemImage: "shippingbox",
+                        description: Text("请先到材料库新增自定义材料，再加入材料单。")
+                    )
                 }
                 ForEach(priceSuggestions) { librarySearchRow(entry: $0) }
                 ForEach(librarySuggestions) { presetSearchRow(material: $0) }
-            }
-        }
-    }
-
-    private var manualInputSection: some View {
-        Section {
-            Button {
-                manualName = ""; manualSpec = ""; manualUnit = ""; manualQty = "1"
-                manualPrice = ""; manualLabor = ""; manualSupplier = ""; manualNote = ""
-                showManualAdd = true
-            } label: {
-                Label("手动输入材料", systemImage: "square.and.pencil")
             }
         }
     }
@@ -842,62 +834,12 @@ struct MaterialSheetView: View {
         }
     }
 
-    // MARK: - Manual Add
-
-    private var manualAddSheet: some View {
-        NavigationStack {
-            Form {
-                Section("基本信息") {
-                    TextField("材料名称", text: $manualName)
-                    TextField("规格/型号", text: $manualSpec)
-                    TextField("单位", text: $manualUnit)
-                    TextField("数量", text: $manualQty).keyboardType(.decimalPad)
-                }
-                Section("费用（选填）") {
-                    TextField("估价 ¥", text: $manualPrice).keyboardType(.decimalPad)
-                    TextField("人工费 ¥", text: $manualLabor).keyboardType(.decimalPad)
-                }
-                Section("其他（选填）") {
-                    TextField("供应商", text: $manualSupplier)
-                    TextField("使用部位", text: $manualLocation)
-                    TextField("备注", text: $manualNote)
-                }
-            }
-            .navigationTitle("手动添加").navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { showManualAdd = false } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
-                        guard !manualName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
-                        addToSheet(
-                            name: manualName.trimmingCharacters(in: .whitespacesAndNewlines),
-                            spec: manualSpec.trimmingCharacters(in: .whitespacesAndNewlines),
-                            unit: manualUnit.trimmingCharacters(in: .whitespacesAndNewlines),
-                            price: manualPrice.trimmingCharacters(in: .whitespacesAndNewlines)
-                        )
-                        if !sheetItems.isEmpty {
-                            let q = manualQty.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let l = manualLabor.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let s = manualSupplier.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let loc = manualLocation.trimmingCharacters(in: .whitespacesAndNewlines)
-                            let n = manualNote.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !q.isEmpty { sheetItems[sheetItems.count - 1].quantity = q }
-                            if !l.isEmpty { sheetItems[sheetItems.count - 1].laborCost = l }
-                            if !s.isEmpty { sheetItems[sheetItems.count - 1].supplier = s }
-                            if !loc.isEmpty { sheetItems[sheetItems.count - 1].usageLocation = loc }
-                            if !n.isEmpty { sheetItems[sheetItems.count - 1].note = n }
-                        }
-                        showManualAdd = false
-                    }.disabled(manualName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-                KeyboardDismissToolbar {
-                    AppKeyboard.dismiss()
-                }
-            }
-        }.presentationDetents([.medium, .large])
-    }
-
     // MARK: - Helpers
+
+    private func focusMaterialSearch() {
+        searchText = ""
+        isMaterialSearchFocused = true
+    }
 
     private func lineTotalValue(for item: MaterialSheetItem) -> MoneyValue {
         QuantityValue(text: item.quantity) * MoneyValue(text: item.unitPrice)

@@ -444,6 +444,10 @@ struct ProjectDrawingSectionView: View {
         filteredDrawings.filter { !$0.isCurrentVersion }
     }
 
+    private var missingCADPreviewCount: Int {
+        ProjectDetailDrawingHelper.cadDrawingsWithoutRenderablePreview(in: relatedDrawings).count
+    }
+
     var body: some View {
         Section("图纸操作") {
             Button(action: onImportDrawing) {
@@ -458,6 +462,14 @@ struct ProjectDrawingSectionView: View {
                 }
             }
             .pickerStyle(.segmented)
+            if missingCADPreviewCount > 0 {
+                Label(
+                    "\(missingCADPreviewCount) 份 DWG 需绑定 PDF / DXF 预览代理。",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(Color.appWarning)
+            }
             if relatedDrawings.isEmpty {
                 ContentUnavailableView(
                     "暂无图纸",
@@ -539,6 +551,15 @@ struct ProjectDrawingSectionView: View {
                     Text("\(drawing.fileType.uppercased()) · \(drawing.importedAt)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
+                    if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
+                        let status = previewStatus(for: drawing)
+                        Text(status.text)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        Text("文字编码：\(drawing.textEncoding.displayName)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                     if !drawing.relatedLogDate.isEmpty {
                         Text("关联日志: \(drawing.relatedLogDate)")
                             .font(.caption2)
@@ -597,5 +618,16 @@ struct ProjectDrawingSectionView: View {
             }
             .tint(Color.appDoc)
         }
+    }
+
+    private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
+        let fileType = drawing.fileType.lowercased()
+        if let proxy = ProjectDetailDrawingHelper.matchingRenderablePreview(for: drawing, in: relatedDrawings) {
+            return ("预览: 已绑定 \(proxy.fileType.uppercased())", true)
+        }
+        if fileType == "dxf" {
+            return ("预览: 应用内可直览", true)
+        }
+        return ("预览: 需绑定 PDF / DXF", false)
     }
 }

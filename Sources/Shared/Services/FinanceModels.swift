@@ -259,6 +259,9 @@ struct LaborRecord: Identifiable, Codable {
     @NonNegativeNumberText var workers: String
     @NonNegativeNumberText var hours: String
     @NonNegativeNumberText var unitRate: String
+
+    /// UI 展示用，等价于 hours（工天）
+    var days: String { hours }
     var workType: String
     var teamName: String
     var isSettled: Bool

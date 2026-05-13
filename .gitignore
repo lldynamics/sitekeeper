@@ -16,7 +16,11 @@ xcuserdata/
 *.xcuserstate
 
 # Swift Package Manager
-Packages/
+Packages/*
+!Packages/LibreDWGBridge/
+!Packages/LibreDWGBridge/**
+Packages/LibreDWGBridge/.build/
+Packages/LibreDWGBridge/.swiftpm/
 Package.resolved
 
 # Local Python environments

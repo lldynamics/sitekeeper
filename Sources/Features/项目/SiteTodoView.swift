@@ -76,7 +76,8 @@ struct SiteTodoView: View {
         .searchable(text: $searchText, prompt: "搜索事项、负责人、备注")
         .toolbar {
             if !usesSidebarLayout {
-                Button { showAdd = true } label: { Image(systemName: "plus") }
+                Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
+                    .buttonStyle(.appIcon())
                     .accessibilityLabel("新建待办")
             }
         }

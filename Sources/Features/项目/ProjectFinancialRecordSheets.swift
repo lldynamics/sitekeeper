@@ -108,11 +108,6 @@ struct ProjectFinancialRecordAddSheet: View {
                         .focused($isInputFocused)
                     TextField("发票号/收据号", text: $invoiceNumber)
                         .focused($isInputFocused)
-                    Picker("状态", selection: $status) {
-                        ForEach(ProjectFinancialStatus.allCases, id: \.self) { item in
-                            Text(item.displayName).tag(item)
-                        }
-                    }
                     TextField("备注", text: $note, axis: .vertical)
                         .lineLimit(2...4)
                         .focused($isInputFocused)
@@ -401,11 +396,6 @@ struct ProjectFinancialRecordEditSheet: View {
                         .focused($isInputFocused)
                     TextField("发票号/收据号", text: $invoiceNumber)
                         .focused($isInputFocused)
-                    Picker("状态", selection: $status) {
-                        ForEach(ProjectFinancialStatus.allCases, id: \.self) { item in
-                            Text(item.displayName).tag(item)
-                        }
-                    }
                     TextField("备注", text: $note, axis: .vertical)
                         .lineLimit(2...4)
                         .focused($isInputFocused)

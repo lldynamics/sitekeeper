@@ -470,13 +470,8 @@ struct ProjectBookkeepingView: View {
         if !match.isEmpty {
             HStack(spacing: AppSpacing.tight) {
                 if let supplier = match.supplier {
-                    NavigationLink {
-                        SupplierDatabaseView(focusedSupplierId: supplier.id)
-                    } label: {
-                        Label(supplier.name, systemImage: "building.2.fill")
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.appWarning)
+                    Label(supplier.name, systemImage: "building.2.fill")
+                        .foregroundStyle(Color.appWarning)
                 }
                 if let contact = match.contact {
                     NavigationLink {
@@ -701,16 +696,12 @@ private struct BookCounterpartyDetailView: View {
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(suppliers.prefix(3)) { supplier in
-                        NavigationLink {
-                            SupplierDatabaseView(focusedSupplierId: supplier.id)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(supplier.name)
-                                    .font(.callout.weight(.medium))
-                                Text([supplier.contact, supplier.phone].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(supplier.name)
+                                .font(.callout.weight(.medium))
+                            Text([supplier.contact, supplier.phone].filter { !$0.isEmpty }.joined(separator: " · "))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
                         }
                     }
                     ForEach(contacts.prefix(5)) { contact in
