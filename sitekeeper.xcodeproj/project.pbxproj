@@ -273,6 +273,7 @@
 		B4D2A3F82C422A755D653995 /* WallAreaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E402EBA7AFC783AC384C2F89 /* WallAreaView.swift */; };
 		B62C5D921D6FA27B58C4350B /* revhistory.spec in Resources */ = {isa = PBXBuildFile; fileRef = 25518B64A7E6CD73DCDEB61A /* revhistory.spec */; };
 		B6B5F87595A1CD02B44DD660 /* DashboardPanelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */; };
+		B7FA30E124FD7837797FC023 /* LibreDWGPreviewSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2998D954168E30FD0E9881EF /* LibreDWGPreviewSupport.swift */; };
 		B8601B552AC7F7C5A1BB95E1 /* MaterialIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E31FACD3D227A747F6EDB27 /* MaterialIdentity.swift */; };
 		B862B8FBC752EAA9431F027D /* BackupImportExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096A4D2087D014735E5675FC /* BackupImportExportTests.swift */; };
 		B889E2AFA15ED5F327E7E941 /* ProjectDetailSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A7CBDAE3D5EADBCFFF2F1BD /* ProjectDetailSnapshot.swift */; };
@@ -528,6 +529,7 @@
 		256D1629C5EC1A3DAB1C1869 /* ProjectDetailRiskAndLogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailRiskAndLogViews.swift; sourceTree = "<group>"; };
 		284983BEF686D3F5101A6534 /* classes.inc */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.pascal; path = classes.inc; sourceTree = "<group>"; };
 		297634101F9FB00324C59D76 /* ExportFileURLPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFileURLPreparer.swift; sourceTree = "<group>"; };
+		2998D954168E30FD0E9881EF /* LibreDWGPreviewSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibreDWGPreviewSupport.swift; sourceTree = "<group>"; };
 		2A46B076A002F80BBC8B9B4B /* WINDOWS-1258.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WINDOWS-1258.h"; sourceTree = "<group>"; };
 		2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanelViews.swift; sourceTree = "<group>"; };
 		2AC9AD41B24860D65E6B2C7E /* WINDOWS-1250.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "WINDOWS-1250.h"; sourceTree = "<group>"; };
@@ -1225,6 +1227,7 @@
 			children = (
 				AF98A0D42C324C2BFE08DC62 /* LibreDWGBridge-Bridging-Header.h */,
 				8FCB6ACF883B4BCFBEC17520 /* LibreDWGBridgePreview.swift */,
+				2998D954168E30FD0E9881EF /* LibreDWGPreviewSupport.swift */,
 			);
 			name = LibreDWGBridge;
 			path = Packages/LibreDWGBridge/Sources/LibreDWGBridge;
@@ -1903,6 +1906,7 @@
 			files = (
 				751F4B27E8C823BB77B05724 /* LibreDWGBridgePreview.swift in Sources */,
 				DDCF6118CC9D473CF608DF46 /* LibreDWGCBridge.c in Sources */,
+				B7FA30E124FD7837797FC023 /* LibreDWGPreviewSupport.swift in Sources */,
 				34EDC4BBDD6145504478AB48 /* bits.c in Sources */,
 				7A977B91FEBC58A3806AF440 /* classes.c in Sources */,
 				7750EDF3CB8C908D1A04DC15 /* codepages.c in Sources */,
@@ -2014,7 +2018,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"], \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\"]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";
@@ -2081,7 +2085,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"], \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\"]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";
