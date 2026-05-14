@@ -37,7 +37,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
 
     var body: some View {
         Group {
-            Section("经营概览") {
+            Section("概览") {
                 ProjectBusinessCardsView(
                     summary: businessSummary,
                     onOpenCore: onOpenFinance,
@@ -92,16 +92,16 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                 Button {
                     onOpenRecords()
                 } label: {
-                    Label("查看现场、资料与财务明细", systemImage: "checklist.checked")
+                    Label("查看明细", systemImage: "checklist.checked")
                 }
             }
 
-            Section("最近日志") {
+            Section("日志") {
                 if recentLogs.isEmpty {
-                    ContentUnavailableView(
-                        "还没有施工日志",
+                    ProjectInlineEmptyState(
+                        "还没有日志",
                         systemImage: "book.pages",
-                        description: Text("点击顶部“日志”记录今天的现场情况。")
+                        detail: "点击顶部“日志”记录今天的现场情况。"
                     )
                 } else {
                     ForEach(recentLogs.sorted { $0.date > $1.date }.prefix(3)) { log in
@@ -110,38 +110,40 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                 }
             }
 
-            Section("项目看板（±30 天）") {
+            Section("进度") {
                 ProjectProgressGanttView(tasks: progressTasks, onEditTask: onEditProgress)
             }
 
-            Section("下一步建议") {
-                ProjectNextStepSuggestionsView(
-                    suggestions: nextStepSuggestions,
-                    onAddLog: onAddLog,
-                    onOpenRecords: onOpenRecords,
-                    onOpenFinance: onOpenFinance,
-                    onOpenAssets: onOpenAssets
-                )
+            if !nextStepSuggestions.isEmpty {
+                Section("优先处理") {
+                    ProjectNextStepSuggestionsView(
+                        suggestions: nextStepSuggestions,
+                        onAddLog: onAddLog,
+                        onOpenRecords: onOpenRecords,
+                        onOpenFinance: onOpenFinance,
+                        onOpenAssets: onOpenAssets
+                    )
+                }
             }
 
-            Section("最近操作") {
+            Section("动态") {
                 if recentItems.isEmpty {
-                    ContentUnavailableView(
-                        "暂无最近操作",
+                    ProjectInlineEmptyState(
+                        "还没有动态",
                         systemImage: "clock.badge.questionmark",
-                        description: Text("写日志、导入资料、记账或更新进度后会显示在这里。")
+                        detail: "日志、资料、记账和进度会汇总到这里。"
                     )
                 } else {
                     ProjectTimelineView(items: recentItems, onSelect: onOpenTimelineItem)
                 }
             }
 
-            Section("现场待办") {
+            Section("待办") {
                 if todos.isEmpty {
-                    ContentUnavailableView(
+                    ProjectInlineEmptyState(
                         "没有未完成待办",
                         systemImage: "checklist.checked",
-                        description: Text("新增现场待办后，会在这里显示最近需要处理的事项。")
+                        detail: "新增待办后会显示最近需要处理的事项。"
                     )
                 } else {
                     ForEach(todos.prefix(4)) { todo in
@@ -445,10 +447,10 @@ private struct ProjectProgressGanttView: View {
 
     var body: some View {
         if bars.isEmpty {
-            ContentUnavailableView(
-                "暂无可展示的进度任务",
+            ProjectInlineEmptyState(
+                "没有可展示的进度",
                 systemImage: "chart.bar.xaxis",
-                description: Text("请先补充任务开始和截止日期。")
+                detail: "补充任务开始和截止日期后显示。"
             )
         } else {
             GeometryReader { proxy in

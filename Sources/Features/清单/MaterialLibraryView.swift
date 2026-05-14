@@ -466,18 +466,34 @@ struct MaterialLibraryView: View {
     private var defaultMaterialSheetTargetBar: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             if let draft = defaultTargetMaterialSheetDraft {
-                HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
-                    Label("默认材料单", systemImage: "tray.full.fill")
+                HStack(alignment: .center, spacing: AppSpacing.tight) {
+                    Label("默认目标材料单", systemImage: "pin.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.appPrimaryAction)
                     Spacer()
-                    Picker("默认材料单", selection: $appendState.selectedDefaultMaterialSheetDraftID) {
+                    Menu {
                         ForEach(activeMaterialSheetDrafts) { item in
-                            Text(materialSheetDraftPickerTitle(item)).tag(item.id as UUID?)
+                            Button {
+                                appendState.selectedDefaultMaterialSheetDraftID = item.id
+                            } label: {
+                                Label(
+                                    materialSheetDraftPickerTitle(item),
+                                    systemImage: item.id == draft.id ? "checkmark.circle.fill" : "tray"
+                                )
+                            }
                         }
+                        Divider()
+                        Button {
+                            createAndSelectDefaultMaterialSheetDraft()
+                        } label: {
+                            Label("新建材料单", systemImage: "plus.circle.fill")
+                        }
+                    } label: {
+                        Label("切换", systemImage: "arrow.triangle.2.circlepath")
+                            .font(.caption.weight(.semibold))
                     }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
 
                 HStack(alignment: .top, spacing: AppSpacing.tight) {
@@ -492,6 +508,15 @@ struct MaterialLibraryView: View {
                     }
                     Spacer(minLength: AppSpacing.tight)
                     Button {
+                        createAndSelectDefaultMaterialSheetDraft()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(Color.appPrimaryAction)
+                    .accessibilityLabel("新建默认材料单")
+                    Button {
                         appendState.recentlyAddedDraftID = draft.id
                         appendState.navigateToMaterialSheet = true
                     } label: {
@@ -502,6 +527,10 @@ struct MaterialLibraryView: View {
                     .foregroundStyle(Color.appPrimaryAction)
                     .accessibilityLabel("打开当前材料单")
                 }
+
+                Label("点材料后的 + 默认加入这里；需要换单时先在这里切换。", systemImage: "bolt.fill")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: AppSpacing.tight) {
                     Label("暂无默认材料单", systemImage: "tray")
@@ -513,9 +542,8 @@ struct MaterialLibraryView: View {
                     } label: {
                         Label("创建", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appProminent())
                     .controlSize(.small)
-                    .tint(Color.appPrimaryAction)
                 }
             }
         }
@@ -735,8 +763,7 @@ struct MaterialLibraryView: View {
                 Label("批量加入材料单", systemImage: "square.and.arrow.down.on.square")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.appPrimaryAction)
+            .buttonStyle(.appProminent())
             .disabled(selectedBatchMaterialContexts.isEmpty)
         }
         .padding(.horizontal)
@@ -754,7 +781,7 @@ struct MaterialLibraryView: View {
         batchState.pendingBatchAddQuantity = "1"
         appendState.pendingAddNote = ""
         appendState.pendingAddProjectId = nil
-        applyRememberedAppendTarget()
+        applyDefaultAppendTarget()
         appendState.pendingAddDraftTitle = defaultMaterialSheetDraftTitle(projectId: appendState.pendingAddProjectId)
         batchState.pendingBatchAddContext = PendingBatchMaterialAppendContext(materials: contexts)
     }
@@ -870,7 +897,7 @@ struct MaterialLibraryView: View {
         appendState.pendingAddUnitPrice = context.defaultUnitPrice
         appendState.pendingAddNote = ""
         appendState.pendingAddProjectId = nil
-        applyRememberedAppendTarget()
+        applyDefaultAppendTarget()
         appendState.pendingAddDraftTitle = defaultMaterialSheetDraftTitle(projectId: appendState.pendingAddProjectId)
     }
 
@@ -1032,6 +1059,16 @@ struct MaterialLibraryView: View {
             appendState.pendingAddDraftId = activeMaterialSheetDrafts.first?.id
             appendState.pendingAddProjectId = normalizedRememberedProjectID(rememberedProjectID)
         }
+    }
+
+    private func applyDefaultAppendTarget() {
+        if let draft = defaultTargetMaterialSheetDraft {
+            appendState.pendingAddTargetMode = .existing
+            appendState.pendingAddDraftId = draft.id
+            appendState.pendingAddProjectId = nil
+            return
+        }
+        applyRememberedAppendTarget()
     }
 
     private func ensureDefaultMaterialSheetSelection() {
@@ -1390,33 +1427,64 @@ private struct MaterialLibraryAppendToSheetForm: View {
                 LabeledContent("单位", value: context.unit)
             }
             Section("添加参数") {
-                TextField("数量", text: $quantity)
-                    .keyboardType(.decimalPad)
-                    .focused(focusedField, equals: .quantity)
-                TextField("单价（可选）", text: $unitPrice)
-                    .keyboardType(.decimalPad)
-                    .focused(focusedField, equals: .unitPrice)
+                HStack {
+                    TextField("数量", text: $quantity)
+                        .keyboardType(.decimalPad)
+                        .focused(focusedField, equals: .quantity)
+                    Text(context.unit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    TextField("单价（可选）", text: $unitPrice)
+                        .keyboardType(.decimalPad)
+                        .focused(focusedField, equals: .unitPrice)
+                    Text("元/\(context.unit)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
                 TextField("备注（可选）", text: $note, axis: .vertical)
                     .lineLimit(2...4)
                     .focused(focusedField, equals: .note)
             }
             Section("保存到材料单") {
-                Picker("目标", selection: $targetMode) {
-                    Text("已有材料单").tag(MaterialSheetTargetMode.existing)
-                    Text("新建材料单").tag(MaterialSheetTargetMode.create)
-                }
-                .pickerStyle(.segmented)
-
                 if targetMode == .existing {
                     if activeMaterialSheetDrafts.isEmpty {
-                        Text("暂无可用材料单，请切换到“新建材料单”")
+                        Text("暂无可用材料单，请新建一个材料单。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Button {
+                            targetMode = .create
+                            projectId = nil
+                        } label: {
+                            Label("新建材料单", systemImage: "plus.circle.fill")
+                        }
                     } else {
-                        Picker("材料单", selection: $draftId) {
+                        LabeledContent("当前目标") {
+                            Text(selectedDraftTitle)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        Menu {
                             ForEach(activeMaterialSheetDrafts) { draft in
-                                Text(draftPickerTitle(draft)).tag(draft.id as UUID?)
+                                Button {
+                                    targetMode = .existing
+                                    draftId = draft.id
+                                } label: {
+                                    Label(
+                                        draftPickerTitle(draft),
+                                        systemImage: draft.id == draftId ? "checkmark.circle.fill" : "tray"
+                                    )
+                                }
                             }
+                            Divider()
+                            Button {
+                                targetMode = .create
+                                projectId = nil
+                            } label: {
+                                Label("新建材料单", systemImage: "plus.circle.fill")
+                            }
+                        } label: {
+                            Label("切换目标", systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                 } else {
@@ -1427,9 +1495,25 @@ private struct MaterialLibraryAppendToSheetForm: View {
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
+                    if !activeMaterialSheetDrafts.isEmpty {
+                        Button {
+                            targetMode = .existing
+                            draftId = draftId ?? activeMaterialSheetDrafts.first?.id
+                        } label: {
+                            Label("改用已有材料单", systemImage: "tray.full.fill")
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var selectedDraftTitle: String {
+        guard let draftId,
+              let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
+            return "未选择材料单"
+        }
+        return draftPickerTitle(draft)
     }
 }
 
@@ -1458,27 +1542,53 @@ private struct MaterialLibraryBatchAppendForm: View {
             }
 
             Section("添加参数") {
-                TextField("数量", text: $quantity)
-                    .keyboardType(.decimalPad)
+                HStack {
+                    TextField("数量", text: $quantity)
+                        .keyboardType(.decimalPad)
+                    Text("每项")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
 
             Section("保存到材料单") {
-                Picker("目标", selection: $targetMode) {
-                    Text("已有材料单").tag(MaterialSheetTargetMode.existing)
-                    Text("新建材料单").tag(MaterialSheetTargetMode.create)
-                }
-                .pickerStyle(.segmented)
-
                 if targetMode == .existing {
                     if activeMaterialSheetDrafts.isEmpty {
-                        Text("暂无可用材料单，请切换到“新建材料单”")
+                        Text("暂无可用材料单，请新建一个材料单。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        Button {
+                            targetMode = .create
+                            projectId = nil
+                        } label: {
+                            Label("新建材料单", systemImage: "plus.circle.fill")
+                        }
                     } else {
-                        Picker("材料单", selection: $draftId) {
+                        LabeledContent("当前目标") {
+                            Text(selectedDraftTitle)
+                                .multilineTextAlignment(.trailing)
+                        }
+                        Menu {
                             ForEach(activeMaterialSheetDrafts) { draft in
-                                Text(draftPickerTitle(draft)).tag(draft.id as UUID?)
+                                Button {
+                                    targetMode = .existing
+                                    draftId = draft.id
+                                } label: {
+                                    Label(
+                                        draftPickerTitle(draft),
+                                        systemImage: draft.id == draftId ? "checkmark.circle.fill" : "tray"
+                                    )
+                                }
                             }
+                            Divider()
+                            Button {
+                                targetMode = .create
+                                projectId = nil
+                            } label: {
+                                Label("新建材料单", systemImage: "plus.circle.fill")
+                            }
+                        } label: {
+                            Label("切换目标", systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                 } else {
@@ -1489,9 +1599,25 @@ private struct MaterialLibraryBatchAppendForm: View {
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
+                    if !activeMaterialSheetDrafts.isEmpty {
+                        Button {
+                            targetMode = .existing
+                            draftId = draftId ?? activeMaterialSheetDrafts.first?.id
+                        } label: {
+                            Label("改用已有材料单", systemImage: "tray.full.fill")
+                        }
+                    }
                 }
             }
         }
+    }
+
+    private var selectedDraftTitle: String {
+        guard let draftId,
+              let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
+            return "未选择材料单"
+        }
+        return draftPickerTitle(draft)
     }
 }
 

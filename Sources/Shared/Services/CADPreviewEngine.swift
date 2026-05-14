@@ -1,13 +1,10 @@
 import Foundation
 
 enum CADPreviewEngine: String, CaseIterable {
-    case systemQuickLook
     case libreDWG
 
     var title: String {
         switch self {
-        case .systemQuickLook:
-            return String(localized: "系统 CAD 预览")
         case .libreDWG:
             return String(localized: "LibreDWG 预览")
         }
@@ -16,12 +13,10 @@ enum CADPreviewEngine: String, CaseIterable {
 
 enum CADPreviewEngineStore {
     static var selected: CADPreviewEngine {
-        let raw = UserDefaults.standard.string(forKey: UserPreferenceKeys.cadPreviewEngine) ?? ""
-        return StringEnumFallback.value(raw, default: .libreDWG)
+        .libreDWG
     }
 
-    static func setSelected(_ engine: CADPreviewEngine) {
-        UserDefaults.standard.set(engine.rawValue, forKey: UserPreferenceKeys.cadPreviewEngine)
+    static func setSelected(_: CADPreviewEngine) {
     }
 }
 
@@ -43,12 +38,7 @@ enum CADPreviewCapability {
         isLibreDWGRendererAvailable()
     }
 
-    static func resolvedEngine(_ preferred: CADPreviewEngine) -> CADPreviewEngine {
-        switch preferred {
-        case .systemQuickLook:
-            return .systemQuickLook
-        case .libreDWG:
-            return isLibreDWGRendererAvailable() ? .libreDWG : .systemQuickLook
-        }
+    static func resolvedEngine(_: CADPreviewEngine) -> CADPreviewEngine {
+        .libreDWG
     }
 }

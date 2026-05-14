@@ -45,7 +45,7 @@ struct ConstructionMethodTutorialEditorSections: View {
                             Label("插入模块", systemImage: "plus.rectangle.on.folder")
                                 .font(.caption.weight(.semibold))
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.appProminent())
                     }
                 }
             }

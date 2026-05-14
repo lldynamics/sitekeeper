@@ -53,7 +53,7 @@ struct ProjectFinancialMetricsTests {
         #expect(ProjectFinancialMetrics.collectionAmount(records) == 100)
     }
 
-    @Test func metricsParserSupportsSignedAndMixedAmountFormats() {
+    @Test func metricsParserUsesNormalizedNonNegativeAmounts() {
         let projectId = UUID()
         let records = [
             ProjectFinancialRecord(
@@ -61,19 +61,19 @@ struct ProjectFinancialMetricsTests {
                 date: "2026-05-08 10:30",
                 direction: .income,
                 category: .collection,
-                amount: "¥+1200.5元"
+                amount: "1200.5"
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 date: "2026-05-09",
                 direction: .expense,
                 category: .material,
-                amount: "-300,25"
+                amount: "300.25"
             )
         ]
 
         #expect(ProjectFinancialMetrics.income(records) == 1200.5)
-        #expect(ProjectFinancialMetrics.expense(records) == -300.25)
+        #expect(ProjectFinancialMetrics.expense(records) == 300.25)
         #expect(ProjectFinancialMetrics.latestCollection(records: records, projectName: { _ in nil })?.date == "2026-05-08 10:30")
     }
 

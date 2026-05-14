@@ -3,13 +3,14 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.autoSave) private var autoSaveEnabled = true
     @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
-    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.dropboxBlue.rawValue
+    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.jiangnanSpring.rawValue
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @State private var languageSwitchFeedback = ""
@@ -19,6 +20,7 @@ struct ProfileTabView: View {
     @State private var lastStorageSampleAt: Date?
     @State private var hasLoadedStorageUsage = false
     @State private var showUserNameEditor = false
+    @State private var showSampleImportConfirm = false
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
@@ -144,6 +146,24 @@ struct ProfileTabView: View {
                         }
                     }
                 }
+                if AppFeatureFlags.allowsSampleDataImport {
+                    Button(role: .destructive) {
+                        showSampleImportConfirm = true
+                    } label: {
+                        HStack(spacing: AppSpacing.tight) {
+                            Image(systemName: "sparkles")
+                                .foregroundStyle(Color.appWarning)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("导入示例数据")
+                                Text("覆盖当前本地数据，用演示项目体验完整流程")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    .accessibilityLabel("导入示例数据")
+                    .accessibilityHint("会先确认，确认后覆盖当前本地数据")
+                }
             }
 
             Section("系统") {
@@ -195,6 +215,19 @@ struct ProfileTabView: View {
         }
         .sheet(isPresented: $showUserNameEditor) {
             userNameEditorSheet
+        }
+        .alert("导入示例数据？", isPresented: $showSampleImportConfirm) {
+            Button("取消", role: .cancel) {}
+            Button("覆盖并导入", role: .destructive) {
+                store.importSampleData(replacingExisting: true)
+                AppHaptics.success()
+            }
+        } message: {
+            if store.hasAnyBusinessData {
+                Text("将清空当前本地数据并写入示例项目、日志、报价、材料和仓库记录。此操作不可撤销。")
+            } else {
+                Text("将写入示例项目、日志、报价、材料和仓库记录，便于演示功能。")
+            }
         }
     }
 

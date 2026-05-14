@@ -8,12 +8,16 @@ enum ProjectDetailMode: String, CaseIterable {
     case finance
     case timeline
 
+    static var allCases: [ProjectDetailMode] {
+        [.overview, .records, .assets, .finance, .timeline]
+    }
+
     var displayName: String {
         switch self {
         case .overview: "概览"
         case .records: "现场"
         case .assets: "资料"
-        case .finance: "财务"
+        case .finance: "成本"
         case .timeline: "时间线"
         }
     }
@@ -149,7 +153,6 @@ struct ProjectDrawingEditSheet: View {
     @State private var name: String
     @State private var version: String
     @State private var isCurrentVersion: Bool
-    @State private var linkedPreviewDrawingID: UUID?
     @State private var relatedLogDate: String
     @State private var issueStatus: DrawingIssueStatus
     @State private var issueNote: String
@@ -173,7 +176,6 @@ struct ProjectDrawingEditSheet: View {
         _name = State(initialValue: drawing.name)
         _version = State(initialValue: drawing.version)
         _isCurrentVersion = State(initialValue: drawing.isCurrentVersion)
-        _linkedPreviewDrawingID = State(initialValue: drawing.linkedPreviewDrawingID)
         _relatedLogDate = State(initialValue: drawing.relatedLogDate)
         _issueStatus = State(initialValue: drawing.issueStatus)
         _issueNote = State(initialValue: drawing.issueNote)
@@ -184,45 +186,6 @@ struct ProjectDrawingEditSheet: View {
 
     private var isCADSource: Bool {
         ProjectDetailDrawingHelper.isCADSource(drawing.fileType)
-    }
-
-    private var previewProxyCandidates: [ProjectDrawing] {
-        relatedDrawings
-            .filter { candidate in
-                candidate.projectId == drawing.projectId &&
-                candidate.id != drawing.id &&
-                ["pdf", "dxf"].contains(candidate.fileType.lowercased())
-            }
-            .sorted { lhs, rhs in
-                let leftSameName = ProjectDetailDrawingHelper.normalizedDrawingNameKey(lhs.name) ==
-                    ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawing.name)
-                let rightSameName = ProjectDetailDrawingHelper.normalizedDrawingNameKey(rhs.name) ==
-                    ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawing.name)
-                if leftSameName != rightSameName {
-                    return leftSameName && !rightSameName
-                }
-                let leftSameVersion = ProjectDetailDrawingHelper.normalizedVersion(lhs.version) ==
-                    ProjectDetailDrawingHelper.normalizedVersion(drawing.version)
-                let rightSameVersion = ProjectDetailDrawingHelper.normalizedVersion(rhs.version) ==
-                    ProjectDetailDrawingHelper.normalizedVersion(drawing.version)
-                if leftSameVersion != rightSameVersion {
-                    return leftSameVersion && !rightSameVersion
-                }
-                if lhs.fileType.lowercased() != rhs.fileType.lowercased() {
-                    return lhs.fileType.lowercased() == "pdf"
-                }
-                let left = Formatters.parseDateOrDateTime(lhs.importedAt) ?? .distantPast
-                let right = Formatters.parseDateOrDateTime(rhs.importedAt) ?? .distantPast
-                return left > right
-            }
-    }
-
-    private var selectedPreviewProxyText: String {
-        guard let linkedPreviewDrawingID,
-              let drawing = previewProxyCandidates.first(where: { $0.id == linkedPreviewDrawingID }) else {
-            return String(localized: "未绑定")
-        }
-        return "\(drawing.name) · \(drawing.fileType.uppercased()) · \(drawing.version)"
     }
 
     var body: some View {
@@ -246,24 +209,10 @@ struct ProjectDrawingEditSheet: View {
                         .lineLimit(2...5)
                 }
                 if isCADSource {
-                    Section("预览代理") {
-                        Picker("绑定文件", selection: $linkedPreviewDrawingID) {
-                            Text("自动匹配 / 不绑定").tag(nil as UUID?)
-                            ForEach(previewProxyCandidates) { candidate in
-                                Text("\(candidate.name) · \(candidate.fileType.uppercased()) · \(candidate.version)")
-                                    .tag(candidate.id as UUID?)
-                            }
-                        }
-                        LabeledContent("当前", value: selectedPreviewProxyText)
-                        if previewProxyCandidates.isEmpty {
-                            Text("当前项目没有可绑定的 PDF 或 DXF。请先导入同图 PDF/DXF，再回到这里绑定。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        } else {
-                            Text("DWG 原件保留用于归档；应用内查看会优先打开这里绑定的 PDF/DXF。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
+                    Section("独立文件预览") {
+                        Text("DWG、PDF、DXF 都按独立文件管理和打开，不用同名 PDF/DXF 作为预览代理。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
                     Section("文字编码与字体") {
                         Picker("编码", selection: $textEncoding) {
@@ -307,7 +256,7 @@ struct ProjectDrawingEditSheet: View {
                         updated.name = trimmed.isEmpty ? drawing.name : trimmed
                         updated.version = version
                         updated.isCurrentVersion = isCurrentVersion
-                        updated.linkedPreviewDrawingID = linkedPreviewDrawingID
+                        updated.linkedPreviewDrawingID = nil
                         updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)

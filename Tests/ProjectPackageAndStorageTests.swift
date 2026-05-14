@@ -22,7 +22,7 @@ struct ProjectPackageAndStorageTests {
         let projectId = UUID()
         let documents = [ProjectDocument(projectId: projectId, title: "发票", fileName: "missing-doc.pdf")]
         let drawings = [ProjectDrawing(projectId: projectId, name: "图纸A", fileName: "missing-drawing.pdf", fileType: "pdf")]
-        let logs = [DailyLog(date: "2026-05-03", weather: "晴", content: "巡检", workers: "2", photos: [LogPhoto(fileName: "missing-photo.jpg", tag: "现场")], projectId: projectId)]
+        let logs = [DailyLog(date: "2026-05-03", weather: "晴", content: "巡检", workers: "2", photos: [LogPhoto(fileName: "missing-photo.jpg", tag: .general)], projectId: projectId)]
         let quickNotes = [QuickNote(title: "补充资料", attachments: [QuickNoteAttachment(kind: .file, fileName: "missing-attachment.bin")])]
 
         let issues = ProjectDetailImportExportActions.missingProjectPackageFiles(

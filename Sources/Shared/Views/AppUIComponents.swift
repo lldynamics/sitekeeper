@@ -104,6 +104,41 @@ extension ButtonStyle where Self == AppIconButtonStyle {
     }
 }
 
+struct AppProminentButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    let tint: Color
+
+    init(tint: Color = .appPrimaryAction) {
+        self.tint = tint
+    }
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.body.weight(.semibold))
+            .labelStyle(.titleAndIcon)
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(isEnabled ? Color.white : Color.secondary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .frame(minHeight: 38)
+            .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isEnabled ? tint : Color(uiColor: .tertiarySystemFill))
+            )
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+extension ButtonStyle where Self == AppProminentButtonStyle {
+    static func appProminent(tint: Color = .appPrimaryAction) -> AppProminentButtonStyle {
+        AppProminentButtonStyle(tint: tint)
+    }
+}
+
 struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
     let focusedField: FocusState<Field?>.Binding
     let fields: [Field]

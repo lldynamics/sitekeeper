@@ -1,34 +1,60 @@
 import SwiftUI
 
+struct ProjectInlineEmptyState: View {
+    let title: String
+    let systemImage: String
+    let detail: String?
+
+    init(_ title: String, systemImage: String, detail: String? = nil) {
+        self.title = title
+        self.systemImage = systemImage
+        self.detail = detail
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: AppSpacing.tight) {
+            Image(systemName: systemImage)
+                .font(.callout.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.callout.weight(.medium))
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+}
+
 struct ProjectLogSectionView<LogRow: View>: View {
     let logs: [DailyLog]
     let onAddLog: () -> Void
     let logRow: (DailyLog) -> LogRow
 
     var body: some View {
-        Group {
-            Section("日志操作") {
+        Section("日志 (\(logs.count))") {
+            if logs.isEmpty {
+                ProjectInlineEmptyState(
+                    "还没有日志",
+                    systemImage: "book.pages",
+                    detail: "记录今天的人员、材料和现场照片。"
+                )
                 Button(action: onAddLog) {
-                    Label("写施工日志", systemImage: "square.and.pencil")
+                    Label("写日志", systemImage: "square.and.pencil")
                 }
-            }
-
-            Section("施工日志 (\(logs.count))") {
-                if logs.isEmpty {
-                    ContentUnavailableView(
-                        "暂无施工日志",
-                        systemImage: "book.pages",
-                        description: Text("记录今日施工内容、人员、材料和现场照片。")
-                    )
-                    Button(action: onAddLog) {
-                        Label("写施工日志", systemImage: "square.and.pencil")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
-                } else {
-                    ForEach(logs.sorted { $0.date > $1.date }) { log in
-                        logRow(log)
-                    }
+                .buttonStyle(.appProminent())
+            } else {
+                Button(action: onAddLog) {
+                    Label("写日志", systemImage: "square.and.pencil")
+                }
+                ForEach(logs.sorted { $0.date > $1.date }) { log in
+                    logRow(log)
                 }
             }
         }
@@ -42,54 +68,48 @@ struct ProjectMaterialSectionView: View {
     let onEdit: (MaterialItem) -> Void
 
     var body: some View {
-        Group {
-            Section("材料操作") {
+        Section("材料 (\(items.count))") {
+            if items.isEmpty {
+                ProjectInlineEmptyState(
+                    "还没有材料",
+                    systemImage: "shippingbox",
+                    detail: "记录规格、供应商和进场状态。"
+                )
                 Button(action: onAdd) {
-                    Label("添加材料", systemImage: "shippingbox.fill")
+                    Label("加材料", systemImage: "shippingbox.fill")
                 }
-            }
-
-            Section("材料清单 (\(items.count))") {
-                if items.isEmpty {
-                    ContentUnavailableView(
-                        "暂无材料",
-                        systemImage: "shippingbox",
-                        description: Text("记录材料名称、规格、品牌、供应商和采购状态。")
-                    )
-                    Button(action: onAdd) {
-                        Label("添加材料", systemImage: "shippingbox.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
-                } else {
-                    ForEach(items) { item in
-                        Button {
-                            onEdit(item)
-                        } label: {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(item.name).font(.callout.weight(.medium))
-                                    Text("\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(item.unitPriceValue.doubleValue))")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    FlowTagLine(tags: materialTags(for: item))
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 5) {
-                                    Text(ReportBuilder.money(ReportBuilder.materialLineTotal(item)))
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(Color.appFinance)
-                                    Text(item.purchaseStatus.displayName)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(materialStatusColor(item.purchaseStatus))
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 3)
-                                        .background(materialStatusColor(item.purchaseStatus).opacity(0.12), in: Capsule())
-                                }
+                .buttonStyle(.appProminent())
+            } else {
+                Button(action: onAdd) {
+                    Label("加材料", systemImage: "shippingbox.fill")
+                }
+                ForEach(items) { item in
+                    Button {
+                        onEdit(item)
+                    } label: {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.name).font(.callout.weight(.medium))
+                                Text("\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(item.unitPriceValue.doubleValue))")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                FlowTagLine(tags: materialTags(for: item))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 5) {
+                                Text(ReportBuilder.money(ReportBuilder.materialLineTotal(item)))
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(Color.appFinance)
+                                Text(item.purchaseStatus.displayName)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(materialStatusColor(item.purchaseStatus))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(materialStatusColor(item.purchaseStatus).opacity(0.12), in: Capsule())
                             }
                         }
-                        .buttonStyle(.plain)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -116,54 +136,48 @@ struct ProjectQuoteSectionView: View {
     let onEdit: (QuoteItem) -> Void
 
     var body: some View {
-        Group {
-            Section("报价操作") {
+        Section("报价 (\(items.count))") {
+            if items.isEmpty {
+                ProjectInlineEmptyState(
+                    "还没有报价",
+                    systemImage: "doc.text",
+                    detail: "记录版本、状态和确认金额。"
+                )
                 Button(action: onAdd) {
-                    Label("添加报价", systemImage: "doc.text.fill")
+                    Label("加报价", systemImage: "doc.text.fill")
                 }
-            }
-
-            Section("报价明细 (\(items.count))") {
-                if items.isEmpty {
-                    ContentUnavailableView(
-                        "暂无报价",
-                        systemImage: "doc.text",
-                        description: Text("记录报价版本、状态、确认日期和转合同金额。")
-                    )
-                    Button(action: onAdd) {
-                        Label("添加报价", systemImage: "doc.text.fill")
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
-                } else {
-                    ForEach(items) { item in
-                        Button {
-                            onEdit(item)
-                        } label: {
-                            HStack(alignment: .top) {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    Text(item.name).font(.callout.weight(.medium))
-                                    Text("¥\(item.unitPrice) × \(item.quantity) \(item.unit)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.secondary)
-                                    FlowTagLine(tags: quoteTags(for: item))
-                                }
-                                Spacer()
-                                VStack(alignment: .trailing, spacing: 5) {
-                                    Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(item)))
-                                        .font(.caption.weight(.medium))
-                                        .foregroundStyle(Color.appFinance)
-                                    Text(item.status.displayName)
-                                        .font(.caption2.weight(.semibold))
-                                        .foregroundStyle(quoteStatusColor(item.status))
-                                        .padding(.horizontal, 7)
-                                        .padding(.vertical, 3)
-                                        .background(quoteStatusColor(item.status).opacity(0.12), in: Capsule())
-                                }
+                .buttonStyle(.appProminent())
+            } else {
+                Button(action: onAdd) {
+                    Label("加报价", systemImage: "doc.text.fill")
+                }
+                ForEach(items) { item in
+                    Button {
+                        onEdit(item)
+                    } label: {
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.name).font(.callout.weight(.medium))
+                                Text("¥\(item.unitPrice) × \(item.quantity) \(item.unit)")
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                FlowTagLine(tags: quoteTags(for: item))
+                            }
+                            Spacer()
+                            VStack(alignment: .trailing, spacing: 5) {
+                                Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(item)))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(Color.appFinance)
+                                Text(item.status.displayName)
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(quoteStatusColor(item.status))
+                                    .padding(.horizontal, 7)
+                                    .padding(.vertical, 3)
+                                    .background(quoteStatusColor(item.status).opacity(0.12), in: Capsule())
                             }
                         }
-                        .buttonStyle(.plain)
                     }
+                    .buttonStyle(.plain)
                 }
             }
         }
@@ -210,65 +224,58 @@ struct ProjectLaborSectionView: View {
     }
 
     var body: some View {
-        Group {
-            Section("人工操作") {
+        Section("人工 (\(items.count))") {
+            if items.isEmpty {
+                ProjectInlineEmptyState(
+                    "还没有人工",
+                    systemImage: "person.2",
+                    detail: "记录班组、工时、单价和结算状态。"
+                )
                 Button(action: onAdd) {
                     Label("记人工", systemImage: "person.2.fill")
                 }
-            }
-
-            Section("人工记录 (\(items.count))") {
-                if items.isEmpty {
-                    ContentUnavailableView(
-                        "暂无人工记录",
-                        systemImage: "person.2",
-                        description: Text("记录工种、班组、人数、工时、单价和结算状态。")
-                    )
-                    Button(action: onAdd) {
-                        Label("记人工", systemImage: "person.2.fill")
+                .buttonStyle(.appProminent())
+            } else {
+                Button(action: onAdd) {
+                    Label("记人工", systemImage: "person.2.fill")
+                }
+                Picker("结算", selection: $settlementFilter) {
+                    ForEach(LaborSettlementFilter.allCases, id: \.self) { filter in
+                        Text(filter.displayName).tag(filter)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                }
+                .pickerStyle(.segmented)
+                if teamOptions.count > 1 {
+                    Picker("班组", selection: $teamFilter) {
+                        ForEach(teamOptions, id: \.self) { team in
+                            Text(team).tag(team)
+                        }
+                    }
+                }
+                if filteredItems.isEmpty {
+                    ProjectInlineEmptyState("没有匹配人工", systemImage: "line.3.horizontal.decrease.circle")
                 } else {
-                    Picker("结算", selection: $settlementFilter) {
-                        ForEach(LaborSettlementFilter.allCases, id: \.self) { filter in
-                            Text(filter.displayName).tag(filter)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    if teamOptions.count > 1 {
-                        Picker("班组", selection: $teamFilter) {
-                            ForEach(teamOptions, id: \.self) { team in
-                                Text(team).tag(team)
-                            }
-                        }
-                    }
-                    if filteredItems.isEmpty {
-                        Text("当前筛选下暂无人工记录。")
-                            .foregroundStyle(.secondary)
-                    } else {
-                        ForEach(filteredItems) { item in
-                            Button {
-                                onEdit(item)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 5) {
-                                    HStack {
-                                        Text(item.date).font(.callout.weight(.medium))
-                                        Spacer()
-                                        Text("\(item.workers) 人 · \(item.hours)h")
-                                            .font(.caption.weight(.semibold))
-                                    }
-                                    FlowTagLine(tags: laborTags(for: item))
-                                    if !item.note.isEmpty {
-                                        Text(item.note)
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
+                    ForEach(filteredItems) { item in
+                        Button {
+                            onEdit(item)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 5) {
+                                HStack {
+                                    Text(item.date).font(.callout.weight(.medium))
+                                    Spacer()
+                                    Text("\(item.workers) 人 · \(item.hours)h")
+                                        .font(.caption.weight(.semibold))
+                                }
+                                FlowTagLine(tags: laborTags(for: item))
+                                if !item.note.isEmpty {
+                                    Text(item.note)
+                                        .font(.caption2)
+                                        .foregroundStyle(.secondary)
                                 }
                             }
-                            .buttonStyle(.plain)
-                            .padding(.vertical, 2)
                         }
+                        .buttonStyle(.plain)
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -293,12 +300,12 @@ struct ProjectProgressSectionView: View {
     let onEdit: (ProgressTask) -> Void
 
     var body: some View {
-        Section("进度任务 (\(tasks.count))") {
+        Section("进度 (\(tasks.count))") {
             if tasks.isEmpty {
-                ContentUnavailableView(
-                    "暂无进度任务",
+                ProjectInlineEmptyState(
+                    "还没有进度任务",
                     systemImage: "calendar.badge.plus",
-                    description: Text("添加任务后可按节点跟踪完成率和延期风险。")
+                    detail: "添加节点后可看完成率和延期风险。"
                 )
             } else {
                 ForEach(tasks) { task in
@@ -335,10 +342,10 @@ struct ProjectPhotoSectionView: View {
                 log.photoAttachments.map { ProjectPhotoItem(logId: log.id, date: log.date, photo: $0) }
             }
             if photoItems.isEmpty {
-                ContentUnavailableView(
-                    "暂无现场照片",
+                ProjectInlineEmptyState(
+                    "还没有现场照片",
                     systemImage: "photo.on.rectangle.angled",
-                    description: Text("日志或待办上传照片后，会自动汇总在这里。")
+                    detail: "日志或待办里的照片会汇总到这里。"
                 )
             } else {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 160), spacing: AppSpacing.tight)], spacing: AppSpacing.normal) {
@@ -444,17 +451,7 @@ struct ProjectDrawingSectionView: View {
         filteredDrawings.filter { !$0.isCurrentVersion }
     }
 
-    private var missingCADPreviewCount: Int {
-        ProjectDetailDrawingHelper.cadDrawingsWithoutRenderablePreview(in: relatedDrawings).count
-    }
-
     var body: some View {
-        Section("图纸操作") {
-            Button(action: onImportDrawing) {
-                Label("导入图纸", systemImage: "doc.viewfinder.fill")
-            }
-        }
-
         Section("图纸 (\(relatedDrawings.count))") {
             Picker("筛选", selection: $drawingFilter) {
                 ForEach(DrawingListFilter.allCases, id: \.self) { filter in
@@ -462,29 +459,25 @@ struct ProjectDrawingSectionView: View {
                 }
             }
             .pickerStyle(.segmented)
-            if missingCADPreviewCount > 0 {
-                Label(
-                    "\(missingCADPreviewCount) 份 DWG 需绑定 PDF / DXF 预览代理。",
-                    systemImage: "exclamationmark.triangle.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(Color.appWarning)
-            }
             if relatedDrawings.isEmpty {
-                ContentUnavailableView(
-                    "暂无图纸",
+                ProjectInlineEmptyState(
+                    "还没有图纸",
                     systemImage: "doc.viewfinder",
-                    description: Text("导入 PDF、DWG 或 DXF 后，可在这里预览和管理。")
+                    detail: "支持 PDF、DWG、DXF 导入和预览。"
                 )
                 Button(action: onImportDrawing) {
-                    Label("导入图纸", systemImage: "doc.viewfinder.fill")
+                    Label("导图纸", systemImage: "doc.viewfinder.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimaryAction)
+                .buttonStyle(.appProminent())
             } else if filteredDrawings.isEmpty {
-                Text("当前筛选下暂无图纸。")
-                    .foregroundStyle(.secondary)
+                Button(action: onImportDrawing) {
+                    Label("导图纸", systemImage: "doc.viewfinder.fill")
+                }
+                ProjectInlineEmptyState("没有匹配图纸", systemImage: "line.3.horizontal.decrease.circle")
             } else {
+                Button(action: onImportDrawing) {
+                    Label("导图纸", systemImage: "doc.viewfinder.fill")
+                }
                 if drawingFilter == .all {
                     if !currentVersionDrawings.isEmpty {
                         ForEach(currentVersionDrawings) { drawing in
@@ -622,12 +615,15 @@ struct ProjectDrawingSectionView: View {
 
     private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
-        if let proxy = ProjectDetailDrawingHelper.matchingRenderablePreview(for: drawing, in: relatedDrawings) {
-            return ("预览: 已绑定 \(proxy.fileType.uppercased())", true)
-        }
         if fileType == "dxf" {
             return ("预览: 应用内可直览", true)
         }
-        return ("预览: 需绑定 PDF / DXF", false)
+        if fileType == "pdf" {
+            return ("预览: 应用内可直览", true)
+        }
+        if fileType == "dwg" {
+            return ("预览: DWG 原件独立打开", true)
+        }
+        return ("预览: 文件独立打开", true)
     }
 }

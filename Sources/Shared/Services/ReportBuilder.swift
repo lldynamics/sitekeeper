@@ -744,11 +744,12 @@ enum ReportBuilder {
             "导出时间: \(Formatters.now())",
             "内容:",
             "1. 00-交付包/\(pdfName)",
-            "2. 01-票据原件/ (票据/资料原始文件)",
-            "3. 02-图纸原件/ (图纸原始文件，含 PDF/DWG/DXF)",
-            "4. 03-现场照片原件/ (日志和整改照片文件)",
-            "5. 04-随手记/ (清单和原始附件)",
-            "6. 05-联系人/ (联系人清单)"
+            "2. 00-交付包/交付前检查清单.txt",
+            "3. 01-票据原件/ (票据/资料原始文件)",
+            "4. 02-图纸原件/ (图纸原始文件，含 PDF/DWG/DXF)",
+            "5. 03-现场照片原件/ (日志和整改照片文件)",
+            "6. 04-随手记/ (清单和原始附件)",
+            "7. 05-联系人/ (联系人清单)"
         ].joined(separator: "\n")
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -758,6 +759,23 @@ enum ReportBuilder {
             stagedRawBytes: &stagedRawBytes
         )
         reportProgress("写入说明文件")
+
+        let checklist = projectDeliveryChecklistText(
+            project: project,
+            logs: logs,
+            drawings: drawings,
+            contacts: contacts,
+            financialRecords: financialRecords,
+            documents: documents
+        )
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(checklist.utf8),
+            path: "\(folder)/00-交付包/交付前检查清单.txt",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress("写入交付检查清单")
 
         for document in documents {
             try failIfCancelled()
@@ -879,6 +897,167 @@ enum ReportBuilder {
         return finishedURL
     }
 
+    private static func projectDeliveryChecklistText(
+        project: Project,
+        logs: [DailyLog],
+        drawings: [ProjectDrawing],
+        contacts: [ProjectContact],
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument]
+    ) -> String {
+        let logExpectation = projectDeliveryLogExpectation(project: project, logs: logs)
+        let drawingsWithoutCurrent = projectDrawingGroupsWithoutCurrentVersion(drawings)
+        let missingReceipts = financialRecords.filter { record in
+            guard record.requiresAttachment else { return false }
+            let linkedByRecord = !record.linkedDocumentIds.isEmpty
+            let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
+            return !(linkedByRecord || linkedByDocument)
+        }
+        let unsettledRecords = financialRecords.filter { record in
+            record.normalizedStatus == .active
+                && !record.dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+        let unsettledAmount = unsettledRecords
+            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
+            .doubleValue
+        let warningCount = [
+            logExpectation.missingDates.isEmpty ? nil : "缺日志",
+            drawings.isEmpty || !drawingsWithoutCurrent.isEmpty ? "图纸当前版异常" : nil,
+            contacts.isEmpty ? "联系人缺失" : nil,
+            missingReceipts.isEmpty ? nil : "缺票",
+            unsettledRecords.isEmpty ? nil : "未结清"
+        ].compactMap { $0 }.count
+
+        var lines: [String] = [
+            "交付前检查清单",
+            "项目: \(project.name)",
+            "生成时间: \(Formatters.now())",
+            "检查结论: \(warningCount == 0 ? "通过" : "待处理 \(warningCount) 项")",
+            "",
+            "1. 施工日志",
+            "   - 已记录: \(logs.count) 条"
+        ]
+
+        if logExpectation.expectedCount > 0 {
+            lines.append("   - 应覆盖施工日: \(logExpectation.expectedCount) 天")
+            if logExpectation.missingDates.isEmpty {
+                lines.append("   - 结果: 已覆盖")
+            } else {
+                lines.append("   - 结果: 缺 \(logExpectation.missingDates.count) 天")
+                lines.append("   - 缺失日期: \(logExpectation.missingDates.prefix(20).joined(separator: "、"))")
+            }
+        } else if logs.isEmpty {
+            lines.append("   - 结果: 未设置开工日期，且未记录施工日志")
+        } else {
+            lines.append("   - 结果: 未设置完整工期，按现有日志交付")
+        }
+
+        lines += [
+            "",
+            "2. 图纸当前版",
+            "   - 图纸数量: \(drawings.count) 份"
+        ]
+        if drawings.isEmpty {
+            lines.append("   - 结果: 未上传图纸")
+        } else if drawingsWithoutCurrent.isEmpty {
+            lines.append("   - 结果: 所有图纸组均有当前版")
+        } else {
+            lines.append("   - 结果: \(drawingsWithoutCurrent.count) 组图纸未标记当前版")
+            lines.append("   - 图纸组: \(drawingsWithoutCurrent.prefix(20).joined(separator: "、"))")
+        }
+
+        lines += [
+            "",
+            "3. 缺票检查",
+            "   - 需票据账目: \(financialRecords.filter(\.requiresAttachment).count) 笔",
+            missingReceipts.isEmpty ? "   - 结果: 全部已关联票据/资料" : "   - 结果: 还有 \(missingReceipts.count) 笔缺票"
+        ]
+
+        lines += [
+            "",
+            "4. 联系人",
+            "   - 联系人数量: \(contacts.count) 位",
+            contacts.isEmpty ? "   - 结果: 缺少项目联系人" : "   - 结果: 已维护联系人"
+        ]
+
+        lines += [
+            "",
+            "5. 未结清账目",
+            "   - 未结清笔数: \(unsettledRecords.count) 笔",
+            "   - 未结清金额: \(money(unsettledAmount))",
+            unsettledRecords.isEmpty ? "   - 结果: 无未结清账目" : "   - 结果: 仍有未结清账目，建议交付前确认"
+        ]
+
+        lines += [
+            "",
+            "说明: 该清单由交付包导出时自动生成，供完工交付前核对使用。"
+        ]
+        return lines.joined(separator: "\n")
+    }
+
+    private static func projectDeliveryLogExpectation(project: Project, logs: [DailyLog]) -> (expectedCount: Int, missingDates: [String]) {
+        guard let start = Formatters.date.date(from: project.startDate) else {
+            return (0, [])
+        }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let configuredEnd = Formatters.date.date(from: project.expectedEndDate) ?? today
+        let effectiveEnd = min(calendar.startOfDay(for: configuredEnd), today)
+        var cursor = calendar.startOfDay(for: start)
+        guard cursor <= effectiveEnd else {
+            return (0, [])
+        }
+
+        let loggedDates = Set(logs.compactMap { normalizedReportDateKey($0.date) })
+        var expectedDates: [String] = []
+        while cursor <= effectiveEnd {
+            expectedDates.append(Formatters.date.string(from: cursor))
+            guard expectedDates.count < 370 else { break }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+        return (expectedDates.count, expectedDates.filter { !loggedDates.contains($0) })
+    }
+
+    private static func normalizedReportDateKey(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let date = Formatters.parseDateOrDateTime(trimmed) {
+            return Formatters.date.string(from: date)
+        }
+        return trimmed
+    }
+
+    private static func projectDrawingGroupsWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> [String] {
+        guard !drawings.isEmpty else { return [] }
+        let grouped = Dictionary(grouping: drawings) { drawing in
+            let key = normalizedProjectDrawingFamilyKey(drawing.name)
+            return key.isEmpty ? drawing.fileName : key
+        }
+        return grouped.values.compactMap { group in
+            guard !group.contains(where: \.isCurrentVersion) else { return nil }
+            let sorted = group.sorted { lhs, rhs in
+                if lhs.importedAt == rhs.importedAt {
+                    return lhs.fileName < rhs.fileName
+                }
+                return lhs.importedAt > rhs.importedAt
+            }
+            guard let drawing = sorted.first else { return nil }
+            let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            return name.isEmpty ? drawing.fileName : name
+        }
+        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private static func normalizedProjectDrawingFamilyKey(_ raw: String) -> String {
+        raw
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .lowercased()
+            .replacingOccurrences(of: "[\\s_\\-]+", with: "", options: .regularExpression)
+    }
+
     private static func addGeneratedFileToProjectPackageZip(
         zip: inout StreamingZipArchiveWriter,
         data: Data,
@@ -983,7 +1162,7 @@ enum ReportBuilder {
         quickNotes: [QuickNote],
         contacts: [ProjectContact]
     ) -> Int {
-        var total = 2 // PDF + README
+        var total = 3 // PDF + README + delivery checklist
         total += documents.count
         total += drawings.count
         total += logs.reduce(0) { $0 + $1.photoAttachments.count }

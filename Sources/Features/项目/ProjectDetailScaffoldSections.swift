@@ -69,8 +69,7 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                         Label(String(localized: "一键导出交付包"), systemImage: "archivebox.fill")
                             .font(.caption.weight(.semibold))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                    .buttonStyle(.appProminent())
                 }
             }
             .padding(.vertical, 4)
@@ -119,6 +118,12 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
                 metric(String(localized: "进度"), progressValue, .appWarning, action: onOpenRecords)
                 metric(String(localized: "报价"), quoteValue, .appDoc, action: onOpenFinanceFromQuote)
                 metric(String(localized: "待办"), todoValue, .appWarning, action: onOpenTodoFilter)
+                metric(
+                    String(localized: "未收款"),
+                    unpaidAmount > 0 ? ReportBuilder.money(unpaidAmount) : String(localized: "已收清"),
+                    unpaidAmount > 0 ? .appPrimaryAction : .appSuccess,
+                    action: onOpenFinanceFromUnpaid
+                )
             }
         }
     }
@@ -166,6 +171,7 @@ struct ProjectDetailHeaderSection<RiskStrip: View>: View {
 struct ProjectDetailQuickActionSection: View {
     let onAddLog: () -> Void
     let onAddFinance: () -> Void
+    let onAddDocument: () -> Void
     let onAddContact: () -> Void
     let onImportDrawing: () -> Void
     let onAddMaterial: () -> Void
@@ -178,7 +184,7 @@ struct ProjectDetailQuickActionSection: View {
                 HStack(spacing: AppSpacing.tight) {
                     actionChip(String(localized: "写日志"), systemImage: "book.pages.fill", color: .appSuccess, action: onAddLog)
                     actionChip(String(localized: "记账"), systemImage: "receipt.fill", color: .appFinance, action: onAddFinance)
-                    actionChip(String(localized: "导资料"), systemImage: "doc.viewfinder.fill", color: .appDoc, action: onImportDrawing)
+                    actionChip(String(localized: "加资料"), systemImage: "doc.viewfinder.fill", color: .appDoc, action: onAddDocument)
                     moreActionsMenu
                 }
                 .padding(.vertical, 2)
@@ -201,6 +207,9 @@ struct ProjectDetailQuickActionSection: View {
 
     private var moreActionsMenu: some View {
         Menu {
+            Button(action: onImportDrawing) {
+                Label(String(localized: "导入图纸"), systemImage: "square.on.square.squareshape.controlhandles")
+            }
             Button(action: onAddContact) {
                 Label(String(localized: "联系人"), systemImage: "person.crop.circle.badge.plus")
             }

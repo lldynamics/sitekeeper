@@ -808,8 +808,7 @@ struct ProjectFinancialAttachmentSheet: View {
                                 Button("关联") {
                                     onAttach(suggestion.document)
                                 }
-                                .buttonStyle(.borderedProminent)
-                                .tint(Color.appPrimaryAction)
+                                .buttonStyle(.appProminent())
                                 .font(.caption2.weight(.semibold))
                             }
                             .padding(.vertical, 2)

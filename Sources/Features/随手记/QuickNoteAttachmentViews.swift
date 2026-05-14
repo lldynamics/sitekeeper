@@ -207,7 +207,7 @@ struct QuickNoteAttachmentPreview: View {
                         Label("打开或分享附件", systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appProminent())
                 }
                 .padding()
                 .background(Color(.systemGroupedBackground))
@@ -246,7 +246,7 @@ struct QuickNoteAudioPlayer: View {
                 Label(isPlaying ? "暂停播放" : "播放语音", systemImage: isPlaying ? "pause.fill" : "play.fill")
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.appProminent())
         }
         .onAppear(perform: preparePlayer)
         .onDisappear(perform: stopPlayback)

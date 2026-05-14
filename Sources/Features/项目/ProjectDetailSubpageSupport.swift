@@ -13,8 +13,7 @@ struct ProjectDetailPrimaryActionList<Content: View>: View {
                 Button(action: action) {
                     Label(title, systemImage: systemImage)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(tint)
+                .buttonStyle(.appProminent(tint: tint))
             }
 
             content()

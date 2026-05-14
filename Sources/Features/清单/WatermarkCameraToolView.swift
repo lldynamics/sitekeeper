@@ -219,7 +219,7 @@ struct WatermarkCameraToolView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.appProminent())
         }
     }
 

@@ -8,6 +8,7 @@ struct StorageCleanupCenterView: View {
     @State private var projectBackupEstimateByID: [UUID: Int] = [:]
     @State private var isRefreshingProjectBackupEstimates = false
     @State private var pendingCleanupProject: ProjectStorageUsage?
+    @State private var pendingCleanupCategory: ProjectStorageCleanupCategory = .all
     @State private var showCleanupProjectAlert = false
     @State private var cleanupStatusMessage = ""
 
@@ -116,8 +117,9 @@ struct StorageCleanupCenterView: View {
                 } else {
                     ForEach(projectUsages) { usage in
                         NavigationLink {
-                            ProjectStorageCleanupDetailView(usage: usage) {
+                            ProjectStorageCleanupDetailView(usage: usage) { category in
                                 pendingCleanupProject = usage
+                                pendingCleanupCategory = category
                                 showCleanupProjectAlert = true
                             }
                         } label: {
@@ -161,14 +163,14 @@ struct StorageCleanupCenterView: View {
             isPresented: $showCleanupProjectAlert,
             presenting: pendingCleanupProject
         ) { usage in
-            Button("清理", role: .destructive) {
-                cleanupProjectFiles(usage)
+            Button(pendingCleanupCategory.confirmationButtonTitle, role: .destructive) {
+                cleanupProjectFiles(usage, category: pendingCleanupCategory)
             }
             Button("取消", role: .cancel) {
                 pendingCleanupProject = nil
             }
         } message: { usage in
-            Text("将清理 \(usage.projectName) 的照片、视频、图纸和资料原文件，保留文本记录并自动断开失效附件关联。")
+            Text(pendingCleanupCategory.confirmationMessage(projectName: usage.projectName))
         }
     }
 
@@ -462,12 +464,36 @@ struct StorageCleanupCenterView: View {
         }
     }
 
-    private func cleanupProjectFiles(_ usage: ProjectStorageUsage) {
+    private func cleanupProjectFiles(_ usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) {
         let projectId = usage.projectId
+        let deletedCount: Int
 
+        switch category {
+        case .photos:
+            deletedCount = cleanupProjectPhotos(projectId)
+        case .videos:
+            deletedCount = cleanupProjectVideos(projectId)
+        case .cad:
+            deletedCount = cleanupProjectCAD(projectId)
+        case .tickets:
+            deletedCount = cleanupProjectTickets(projectId)
+        case .all:
+            deletedCount =
+                cleanupProjectPhotos(projectId)
+                + cleanupProjectVideos(projectId)
+                + cleanupProjectCAD(projectId)
+                + cleanupProjectTickets(projectId)
+        }
+
+        cleanupStatusMessage = "已清理 \(usage.projectName) 的\(category.resultTitle)：\(deletedCount) 个文件。"
+        store.scheduleSave()
+        pendingCleanupProject = nil
+    }
+
+    @discardableResult
+    private func cleanupProjectPhotos(_ projectId: UUID) -> Int {
         let logIndexes = store.dailyLogs.indices.filter { store.dailyLogs[$0].projectId == projectId }
         let todoIndexes = store.siteTodos.indices.filter { store.siteTodos[$0].projectId == projectId }
-        let noteIndexes = store.quickNotes.indices.filter { store.quickNotes[$0].projectId == projectId }
 
         var selectedPhotoNames = Set<String>()
         for index in logIndexes {
@@ -486,42 +512,38 @@ struct StorageCleanupCenterView: View {
             store.siteTodos[index].rectificationAfterPhotoFileName = nil
         }
 
-        var selectedAttachmentNames = Set<String>()
-        for index in noteIndexes {
-            selectedAttachmentNames.formUnion(store.quickNotes[index].attachments.map(\.fileName))
-            store.quickNotes[index].attachments = []
-        }
-
-        let drawingFileNames = Set(
-            store.projectDrawings
-                .filter { $0.projectId == projectId }
-                .map(\.fileName)
-        )
-        store.projectDrawings.removeAll { $0.projectId == projectId }
-
-        let removedDocumentIDs = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId }
-                .map(\.id)
-        )
-        let documentFileNames = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId }
-                .map(\.fileName)
-        )
-        store.projectDocuments.removeAll { $0.projectId == projectId }
-
-        if !removedDocumentIDs.isEmpty {
-            for index in store.projectFinancialRecords.indices {
-                store.projectFinancialRecords[index].linkedDocumentIds.removeAll { removedDocumentIDs.contains($0) }
-            }
-            for index in store.projectWarehouseMovements.indices {
-                store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { removedDocumentIDs.contains($0) }
-            }
-        }
-
         let remainingPhotoNames = PhotoStorage.referencedFileNames(logs: store.dailyLogs, todos: store.siteTodos)
         let deletablePhotoNames = selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
+        PhotoStorage.delete(fileNames: Array(deletablePhotoNames))
+        return deletablePhotoNames.count
+    }
+
+    @discardableResult
+    private func cleanupProjectVideos(_ projectId: UUID) -> Int {
+        let noteIndexes = store.quickNotes.indices.filter { store.quickNotes[$0].projectId == projectId }
+        var selectedAttachmentNames = Set<String>()
+        for index in noteIndexes {
+            let videos = store.quickNotes[index].attachments.filter { $0.attachmentKind == .video }
+            selectedAttachmentNames.formUnion(videos.map(\.fileName))
+            store.quickNotes[index].attachments.removeAll { $0.attachmentKind == .video }
+        }
+
+        let videoDocumentIDs = Set(
+            store.projectDocuments
+                .filter { $0.projectId == projectId }
+                .filter { document in
+                    let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    return videoFileExtensions.contains(ext) && !isTicketCategory(document.category)
+                }
+                .map(\.id)
+        )
+        let videoDocumentFileNames = Set(
+            store.projectDocuments
+                .filter { videoDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+        store.projectDocuments.removeAll { videoDocumentIDs.contains($0.id) }
+        unlinkDocuments(ids: videoDocumentIDs)
 
         let extraMethodAttachments = store.constructionMethods.flatMap(\.attachments)
             + store.constructionMethods.flatMap(\.tutorialAttachments)
@@ -530,27 +552,64 @@ struct StorageCleanupCenterView: View {
             extraAttachments: extraMethodAttachments
         )
         let deletableAttachmentNames = selectedAttachmentNames.filter { !remainingAttachmentNames.contains($0) }
-
-        let remainingDrawingNames = Set(store.projectDrawings.map(\.fileName))
-        let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNames.contains($0) }
+        QuickNoteAttachmentStorage.delete(fileNames: Array(deletableAttachmentNames))
 
         let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
-        let deletableDocumentNames = documentFileNames.filter { !remainingDocumentNames.contains($0) }
-
-        PhotoStorage.delete(fileNames: Array(deletablePhotoNames))
-        QuickNoteAttachmentStorage.delete(fileNames: Array(deletableAttachmentNames))
-        DrawingStorage.delete(fileNames: Array(deletableDrawingNames))
+        let deletableDocumentNames = videoDocumentFileNames.filter { !remainingDocumentNames.contains($0) }
         ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
 
-        let totalDeletedCount =
-            deletablePhotoNames.count
-            + deletableAttachmentNames.count
-            + deletableDrawingNames.count
-            + deletableDocumentNames.count
-        cleanupStatusMessage = "已清理 \(usage.projectName) 的 \(totalDeletedCount) 个文件。"
+        return deletableAttachmentNames.count + deletableDocumentNames.count
+    }
 
-        store.scheduleSave()
-        pendingCleanupProject = nil
+    @discardableResult
+    private func cleanupProjectCAD(_ projectId: UUID) -> Int {
+        let drawingFileNames = Set(
+            store.projectDrawings
+                .filter { $0.projectId == projectId }
+                .filter { drawing in
+                    let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    return cadFileExtensions.contains(ext)
+                }
+                .map(\.fileName)
+        )
+        store.projectDrawings.removeAll { drawing in
+            drawing.projectId == projectId
+                && cadFileExtensions.contains(drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
+        }
+        let remainingDrawingNames = Set(store.projectDrawings.map(\.fileName))
+        let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNames.contains($0) }
+        DrawingStorage.delete(fileNames: Array(deletableDrawingNames))
+        return deletableDrawingNames.count
+    }
+
+    @discardableResult
+    private func cleanupProjectTickets(_ projectId: UUID) -> Int {
+        let removedDocumentIDs = Set(
+            store.projectDocuments
+                .filter { $0.projectId == projectId && isTicketCategory($0.category) }
+                .map(\.id)
+        )
+        let documentFileNames = Set(
+            store.projectDocuments
+                .filter { removedDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+        store.projectDocuments.removeAll { removedDocumentIDs.contains($0.id) }
+        unlinkDocuments(ids: removedDocumentIDs)
+        let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
+        let deletableDocumentNames = documentFileNames.filter { !remainingDocumentNames.contains($0) }
+        ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
+        return deletableDocumentNames.count
+    }
+
+    private func unlinkDocuments(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        for index in store.projectFinancialRecords.indices {
+            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
+        for index in store.projectWarehouseMovements.indices {
+            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
     }
 
     @MainActor
@@ -760,9 +819,103 @@ private struct ProjectStorageUsage: Identifiable {
     }
 }
 
+private enum ProjectStorageCleanupCategory: String, Identifiable {
+    case photos
+    case videos
+    case cad
+    case tickets
+    case all
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .photos:
+            return "照片"
+        case .videos:
+            return "视频"
+        case .cad:
+            return "CAD 图纸"
+        case .tickets:
+            return "票据资料"
+        case .all:
+            return "全部可清理文件"
+        }
+    }
+
+    var resultTitle: String {
+        switch self {
+        case .photos:
+            return "照片"
+        case .videos:
+            return "视频"
+        case .cad:
+            return "CAD 图纸"
+        case .tickets:
+            return "票据资料"
+        case .all:
+            return "项目文件"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .photos:
+            return "photo.fill"
+        case .videos:
+            return "video.fill"
+        case .cad:
+            return "compass.drawing"
+        case .tickets:
+            return "doc.text.fill"
+        case .all:
+            return "trash"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .photos:
+            return .appWarning
+        case .videos:
+            return .appPhoto
+        case .cad:
+            return .appDoc
+        case .tickets:
+            return .appRisk
+        case .all:
+            return .red
+        }
+    }
+
+    var confirmationButtonTitle: String {
+        switch self {
+        case .all:
+            return "清理全部"
+        default:
+            return "清理\(displayName)"
+        }
+    }
+
+    func confirmationMessage(projectName: String) -> String {
+        switch self {
+        case .photos:
+            return "将清理 \(projectName) 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"
+        case .videos:
+            return "将清理 \(projectName) 随手记视频和资料中的视频原文件，并断开视频关联。"
+        case .cad:
+            return "将清理 \(projectName) 的 CAD 图纸原文件和图纸索引。"
+        case .tickets:
+            return "将清理 \(projectName) 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"
+        case .all:
+            return "将清理 \(projectName) 的照片、视频、CAD 图纸和票据资料原文件，保留其他文本记录。"
+        }
+    }
+}
+
 private struct ProjectStorageCleanupDetailView: View {
     let usage: ProjectStorageUsage
-    let onCleanup: () -> Void
+    let onCleanup: (ProjectStorageCleanupCategory) -> Void
 
     var body: some View {
         List {
@@ -784,16 +937,48 @@ private struct ProjectStorageCleanupDetailView: View {
             }
 
             Section {
-                Button(role: .destructive, action: onCleanup) {
-                    Label("清理该项目文件（保留记录）", systemImage: "trash")
+                cleanupButton(.photos, bytes: usage.photoBytes)
+                cleanupButton(.videos, bytes: usage.videoBytes)
+                cleanupButton(.cad, bytes: usage.cadBytes)
+                cleanupButton(.tickets, bytes: usage.ticketBytes)
+            } header: {
+                Text("按类型清理")
+            } footer: {
+                Text("分项清理只处理对应文件类型，项目文本、金额、日志正文不会删除。")
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    onCleanup(.all)
+                } label: {
+                    Label("清理该项目全部可清理文件", systemImage: "trash")
                 }
                 .disabled(usage.totalBytes == 0)
             } footer: {
-                Text("会清理该项目照片、视频、图纸和票据原文件，保留文本记录并断开失效附件关联。")
+                Text("备份是全局快照，不会按单个项目直接删除；如需释放备份空间，请回到“数据管理 → 备份”处理。")
             }
         }
         .navigationTitle(usage.projectName)
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func cleanupButton(_ category: ProjectStorageCleanupCategory, bytes: Int) -> some View {
+        Button(role: .destructive) {
+            onCleanup(category)
+        } label: {
+            HStack(spacing: AppSpacing.tight) {
+                Image(systemName: category.icon)
+                    .foregroundStyle(category.tint)
+                    .frame(width: 18, height: 18)
+                Text("清理\(category.displayName)")
+                Spacer()
+                Text(QuickNoteAttachmentStorage.formattedFileSize(bytes))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(bytes == 0)
     }
 
     @ViewBuilder

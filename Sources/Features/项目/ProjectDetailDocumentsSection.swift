@@ -45,33 +45,35 @@ struct ProjectDocumentsView: View {
 
     var body: some View {
         Group {
-            Section("资料筛选") {
-                Button {
-                    showFilterSheet = true
-                } label: {
-                    HStack {
-                        Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
-                        Spacer()
-                        Text(filterSummary)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+            if !documents.isEmpty || hasActiveFilters {
+                Section {
+                    Button {
+                        showFilterSheet = true
+                    } label: {
+                        HStack {
+                            Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                            Spacer()
+                            Text(filterSummary)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
-                }
-                if hasActiveFilters {
-                    Button("清除筛选") {
-                        resetFilters()
+                    if hasActiveFilters {
+                        Button("清除筛选") {
+                            resetFilters()
+                        }
+                        .font(.caption.weight(.semibold))
                     }
-                    .font(.caption.weight(.semibold))
                 }
             }
 
-            Section("票据与项目资料 (\(filteredDocuments.count))") {
+            Section("资料 (\(filteredDocuments.count))") {
                 if filteredDocuments.isEmpty {
-                    ContentUnavailableView(
-                        "暂无扫描件",
+                    ProjectInlineEmptyState(
+                        documents.isEmpty ? "还没有资料" : "没有匹配资料",
                         systemImage: "doc.viewfinder",
-                        description: Text("扫描票据或导入资料后可与财务流水关联。")
+                        detail: documents.isEmpty ? "扫描票据或导入资料后可关联账目。" : "调整筛选条件后再看。"
                     )
                 } else {
                     if !suggestedMatches.isEmpty {
@@ -96,8 +98,7 @@ struct ProjectDocumentsView: View {
                                     Button("关联") {
                                         onLink(match.document.id, match.record.id)
                                     }
-                                    .buttonStyle(.borderedProminent)
-                                    .tint(Color.appPrimaryAction)
+                                    .buttonStyle(.appProminent())
                                     .font(.caption2.weight(.semibold))
                                 }
                             }
