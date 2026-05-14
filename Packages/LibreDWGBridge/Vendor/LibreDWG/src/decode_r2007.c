@@ -637,6 +637,15 @@ read_system_page (Bit_Chain *out, Bit_Chain *dat, int64_t size_comp,
       LOG_ERROR ("Invalid r2007 system page: page_size: %" PRId64, page_size);
       return false;
     }
+  if (size_comp > UINT_MAX || size_uncomp > UINT_MAX || page_size > UINT_MAX
+      || block_count > INT_MAX)
+    {
+      LOG_ERROR ("Invalid r2007 system page width: size_comp: %" PRId64
+                 ", size_uncomp: %" PRId64 ", page_size: %" PRId64
+                 ", block_count: %" PRId64,
+                 size_comp, size_uncomp, page_size, block_count);
+      return false;
+    }
   LOG_HANDLE ("read_system_page: size_comp: %" PRId64 ", size_uncomp: %" PRId64
               ", repeat_count: %" PRId64 "\n",
               size_comp, size_uncomp, repeat_count);
@@ -657,9 +666,9 @@ read_system_page (Bit_Chain *out, Bit_Chain *dat, int64_t size_comp,
   data_end = &out->chain[size_uncomp + page_size];
 
   rsdata = &out->chain[size_uncomp];
-  bit_read_fixed (dat, rsdata, page_size);
+  bit_read_fixed (dat, rsdata, (size_t)page_size);
   pedata_size = block_count * 239;
-  pedata = decode_rs (rsdata, block_count, 239, page_size);
+  pedata = decode_rs (rsdata, (int)block_count, 239, (unsigned)page_size);
   if (!pedata)
     {
       bit_chain_free (out);
@@ -667,8 +676,9 @@ read_system_page (Bit_Chain *out, Bit_Chain *dat, int64_t size_comp,
     }
 
   if (size_comp < size_uncomp)
-    error = decompress_r2007 (out->chain, size_uncomp, pedata,
-                              MIN (pedata_size, size_comp), data_end);
+    error = decompress_r2007 (out->chain, (unsigned)size_uncomp, pedata,
+                              (unsigned)MIN (pedata_size, size_comp),
+                              data_end);
   else
     {
       if (out->byte + size_uncomp <= out->size)
@@ -703,19 +713,34 @@ read_data_page (Bit_Chain *restrict dat, BITCODE_RC *restrict decomp,
   BITCODE_RC *pedata; // Pre RS encoded data
   long pedata_size;
 
+  if (page_size < 0 || page_size > UINT_MAX || size_comp < 0
+      || size_comp > UINT_MAX || size_uncomp < 0 || size_uncomp > UINT_MAX)
+    {
+      LOG_ERROR ("Invalid r2007 data page width: page_size: %" PRId64
+                 ", size_comp: %" PRId64 ", size_uncomp: %" PRId64,
+                 page_size, size_comp, size_uncomp);
+      return DWG_ERR_VALUEOUTOFBOUNDS;
+    }
+
   // Round to a multiple of 8
   pesize = ((size_comp + 7) & ~7);
   block_count = (pesize + 0xFB - 1) / 0xFB;
   pedata_size = block_count * 0xFB;
+  if (block_count > INT_MAX || pedata_size > UINT_MAX)
+    {
+      LOG_ERROR ("Invalid r2007 data page block count: %" PRId64,
+                 block_count);
+      return DWG_ERR_VALUEOUTOFBOUNDS;
+    }
 
-  rsdata = (BITCODE_RC *)calloc (1, page_size);
+  rsdata = (BITCODE_RC *)calloc (1, (size_t)page_size);
   if (rsdata == NULL)
     {
       LOG_ERROR ("Out of memory");
       return DWG_ERR_OUTOFMEM;
     }
-  bit_read_fixed (dat, rsdata, page_size);
-  pedata = decode_rs (rsdata, block_count, 0xFB, page_size);
+  bit_read_fixed (dat, rsdata, (size_t)page_size);
+  pedata = decode_rs (rsdata, (int)block_count, 0xFB, (unsigned)page_size);
   if (!pedata)
     {
       free (rsdata);
@@ -723,8 +748,9 @@ read_data_page (Bit_Chain *restrict dat, BITCODE_RC *restrict decomp,
     }
 
   if (size_comp < size_uncomp)
-    error = decompress_r2007 (decomp, size_uncomp, pedata,
-                              MIN (pedata_size, size_comp), decomp_end);
+    error = decompress_r2007 (decomp, (unsigned)size_uncomp, pedata,
+                              (unsigned)MIN (pedata_size, size_comp),
+                              decomp_end);
   else
     {
       if (decomp + size_uncomp <= decomp_end)

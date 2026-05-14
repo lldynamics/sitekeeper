@@ -48,6 +48,14 @@
 #include "encode.h"
 #include "hash.h"
 
+#ifndef LIBREDWG_UNUSED
+#  if defined(__GNUC__) || defined(__clang__)
+#    define LIBREDWG_UNUSED __attribute__((unused))
+#  else
+#    define LIBREDWG_UNUSED
+#  endif
+#endif
+
 #undef NEED_VPORT_FOR_MODEL_LAYOUT
 
 
@@ -1356,7 +1364,7 @@ dwg_get_OBJECT (obj_assocarrayrectangularparameters, ASSOCARRAYRECTANGULARPARAME
  * and returns a malloced NULL-terminated array.
  */
 // clang-format: off
-//< \fn Dwg_Entity_TEXT* dwg_getall_TEXT (Dwg_Object_Ref *hdr)
+// \fn Dwg_Entity_TEXT* dwg_getall_TEXT (Dwg_Object_Ref *hdr)
 DWG_GETALL_ENTITY (_3DFACE)
 DWG_GETALL_ENTITY (_3DLINE)
 DWG_GETALL_ENTITY (_3DSOLID)
@@ -22478,7 +22486,6 @@ dwg_object_polyline_2d_get_numpoints (const dwg_object *restrict obj,
       BITCODE_BL num_points = 0;
       Dwg_Data *dwg = obj->parent;
       Dwg_Entity_POLYLINE_2D *_obj = obj->tio.entity->tio.POLYLINE_2D;
-      Dwg_Entity_VERTEX_2D *vertex;
       *error = 0;
 
       if (dwg->header.version >= R_2004)
@@ -22948,9 +22955,11 @@ dwg_ent_lwpline_get_widths (const dwg_ent_lwpline *restrict lwpline,
 
 /** Returns the block control object from the block header
   \code
-    Usage: dwg_obj_block_control *blk = dwg_block_header_get_block_control(hdr,
-  &error); \endcode \param[in] block_header \param[out] error  set to 0 for ok,
-  >0 if not found.
+    Usage: dwg_obj_block_control *blk =
+      dwg_block_header_get_block_control(hdr, &error);
+  \endcode
+  \param[in] block_header block header object
+  \param[out] error set to 0 for ok, >0 if not found.
 */
 dwg_obj_block_control *
 dwg_block_header_get_block_control (const dwg_obj_block_header *block_header,
@@ -22975,7 +22984,7 @@ dwg_block_header_get_block_control (const dwg_obj_block_header *block_header,
 }
 
 /** Extracts and returns all block headers as references
-  \param[in]  ctrl
+  \param[in]  ctrl block control object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 dwg_object_ref **
@@ -23012,7 +23021,7 @@ dwg_obj_block_control_get_block_headers (
 }
 
 /** Returns number of blocks
-  \param[in]  ctrl
+  \param[in]  ctrl block control object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 EXPORT BITCODE_BL
@@ -23033,7 +23042,7 @@ dwg_obj_block_control_get_num_entries (
 }
 
 /** Returns reference to model space block
-  \param[in]  ctrl
+  \param[in]  ctrl block control object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 dwg_object_ref *
@@ -23054,7 +23063,7 @@ dwg_obj_block_control_get_model_space (
 }
 
 /** Returns reference to paper space block
-  \param[in]  ctrl
+  \param[in]  ctrl block control object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 dwg_object_ref *
@@ -23081,7 +23090,7 @@ dwg_obj_block_control_get_paper_space (
 /** Get name of the block header (utf-8 encoded)
   \code Usage: char* block_name = dwg_obj_block_header_get_name(hdr, &error);
   \endcode
-  \param[in]  hdr
+  \param[in]  hdr block header object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 char *
@@ -23099,7 +23108,7 @@ dwg_obj_block_header_get_name (const dwg_obj_block_header *restrict hdr,
     Usually the model space block.
   \code Usage: dwg_obj_block_header = dwg_get_block_header(dwg, &error);
   \endcode
-  \param[in]  dwg
+  \param[in]  dwg drawing object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 dwg_obj_block_header *
@@ -23156,7 +23165,7 @@ dwg_get_block_header (dwg_data *restrict dwg, int *restrict error)
 /** Get name of the layer (utf-8 encoded)
   \code Usage: char* layer_name = dwg_obj_layer_get_name(layer, &error);
   \endcode
-  \param[in]  layer
+  \param[in]  layer layer object
   \param[out] error  set to 0 for ok, >0 if not found.
 */
 char *
@@ -23182,7 +23191,7 @@ dwg_obj_layer_get_name (const dwg_obj_layer *restrict layer,
     free'd/deleted.
   \code Usage: error = dwg_obj_layer_set_name(layer, name);
   \endcode
-  \param[in]  layer
+  \param[in]  layer layer object
   \param[in]  name   (utf-8 encoded)
   \param[out] error  set to 0 for ok, >0 if not found.
 */
@@ -23260,9 +23269,13 @@ dwg_object_tablectrl_get_entries (const dwg_object *restrict obj,
 }
 
 /** Get the nth table entry from the generic table control object.
-  \code Usage: dwg_object_ref *ref = dwg_object_tablectrl_get_entry(obj, 0,
-&error); \endcode \param[in]  obj    a TABLE_CONTROL dwg_object* \param[in] idx
-BITCODE_BS \param[out] error  set to 0 for ok, >0 if not found.
+  \code
+    Usage: dwg_object_ref *ref =
+      dwg_object_tablectrl_get_entry(obj, 0, &error);
+  \endcode
+  \param[in] obj a TABLE_CONTROL dwg_object*
+  \param[in] idx entry index
+  \param[out] error set to 0 for ok, >0 if not found.
 */
 EXPORT dwg_object_ref *
 dwg_object_tablectrl_get_entry (const dwg_object *restrict obj,
@@ -23317,10 +23330,12 @@ dwg_object_tablectrl_get_ownerhandle (const dwg_object *restrict obj,
 }
 
 /** Get the xdicobjhandle from the generic table control object.
-  \code Usage: dwg_object_ref *ref =
-dwg_object_tablectrl_get_xdicobjhandle(obj, &error); \endcode \param[in]  obj
-a TABLE_CONTROL dwg_object* \param[out] error  set to 0 for ok, >0 if not
-found.
+  \code
+    Usage: dwg_object_ref *ref =
+      dwg_object_tablectrl_get_xdicobjhandle(obj, &error);
+  \endcode
+  \param[in] obj a TABLE_CONTROL dwg_object*
+  \param[out] error set to 0 for ok, >0 if not found.
 */
 EXPORT dwg_object_ref *
 dwg_object_tablectrl_get_xdicobjhandle (const dwg_object *restrict obj,
@@ -23915,8 +23930,8 @@ dwg_ent_generic_parent (const void *restrict ent, int *restrict error)
 /** Returns dwg_obj_ent* from dwg object
   \code Usage : dwg_obj_ent* ent = dwg_object_to_entity(obj, &error);
   \endcode
-  \param obj   dwg_object*
-  \param error
+  \param[in] obj dwg_object*
+  \param[out] error set to 0 for ok, >0 if not found.
 */
 dwg_obj_ent *
 dwg_object_to_entity (dwg_object *restrict obj, int *restrict error)
@@ -23959,7 +23974,7 @@ dwg_get_num_classes (const dwg_data *dwg)
   \code Usage: dwg_object* obj = dwg_get_object(dwg, 0);
   \endcode
   \param[in]  dwg   dwg_data*
-  \param[in]  idx
+  \param[in]  idx class index
 */
 dwg_class *
 dwg_get_class (const dwg_data *dwg, unsigned int idx)
@@ -23975,7 +23990,7 @@ dwg_get_class (const dwg_data *dwg, unsigned int idx)
   \code Usage: dwg_object* obj = dwg_get_object(dwg, 0);
   \endcode
   \param[in]  dwg   dwg_data*
-  \param[in]  idx
+  \param[in]  idx object index
 */
 dwg_object *
 dwg_get_object (dwg_data *dwg, const BITCODE_BL idx)
@@ -23990,8 +24005,8 @@ dwg_get_object (dwg_data *dwg, const BITCODE_BL idx)
 /** Returns object from absolute reference or NULL
   \code Usage: dwg_object* obj = dwg_absref_get_object(dwg, absref);
   \endcode
-  \param[in]  dwg
-  \param[in]  absref
+  \param[in]  dwg drawing object
+  \param[in]  absref absolute object reference
 */
 dwg_object *
 dwg_absref_get_object (const dwg_data *dwg, const BITCODE_BL absref)
@@ -24416,7 +24431,13 @@ dwg_ref_get_object (const dwg_object_ref *restrict ref, int *restrict error)
 EXPORT BITCODE_BL
 dwg_ref_get_absref (const dwg_object_ref *restrict ref, int *restrict error)
 {
-  return ref->absolute_ref;
+  if (ref->absolute_ref > UINT32_MAX)
+    {
+      *error = 1;
+      return 0;
+    }
+  *error = 0;
+  return (BITCODE_BL)ref->absolute_ref;
 }
 
 /* This was previously in encode and out_dxf, but since out_dxf needs it for
@@ -24879,11 +24900,11 @@ dwg_add_Document (Dwg_Data *restrict dwg, const int imperial)
   Dwg_Object_LAYER *layer;
   Dwg_Object_LTYPE *ltype;
   Dwg_Object_LTYPE_CONTROL *ltype_ctrl;
-  Dwg_Object_DICTIONARY *nod, *dict, *layoutdict;
+  Dwg_Object_DICTIONARY *nod, *dict LIBREDWG_UNUSED, *layoutdict;
   Dwg_Object_MLINESTYLE *mlstyle;
   Dwg_Object_LAYOUT *layout;
   Dwg_Object_VPORT *vport_active;
-  Dwg_Entity_VIEWPORT *pviewport;
+  Dwg_Entity_VIEWPORT *pviewport LIBREDWG_UNUSED;
   dwg_point_3d pt0 = { 0.0, 1.0, 0.0 };
   Dwg_Object *obj, *ctrl, *mspaceobj;
   const char *canonical_media_name;
@@ -25513,7 +25534,7 @@ dwg_add_class (Dwg_Data *restrict dwg, const char *const restrict dxfname,
 
 /* globals: dxfname, blkhdr=owner */
 #define API_ADD_ENTITY(token)                                                 \
-  int error;                                                                  \
+  int error LIBREDWG_UNUSED;                                                  \
   Dwg_Object *obj;                                                            \
   Dwg_Entity_##token *_obj;                                                   \
   Dwg_Object *blkobj = dwg_obj_generic_to_object (blkhdr, &error);            \
@@ -25539,7 +25560,7 @@ dwg_add_class (Dwg_Data *restrict dwg, const char *const restrict dxfname,
 
 /* split into 2 to add controls before */
 #define API_ADD_PREP(token)                                                   \
-  int error;                                                                  \
+  int error LIBREDWG_UNUSED;                                                  \
   Dwg_Object *obj;                                                            \
   Dwg_Entity_##token *_obj;                                                   \
   Dwg_Object *blkobj = dwg_obj_generic_to_object (blkhdr, &error);            \
@@ -25594,7 +25615,7 @@ dwg_add_class (Dwg_Data *restrict dwg, const char *const restrict dxfname,
 
 /* globals: dwg */
 #define API_ADD_OBJECT(token)                                                 \
-  int error;                                                                  \
+  int error LIBREDWG_UNUSED;                                                  \
   Dwg_Object *obj;                                                            \
   Dwg_Object_##token *_obj;                                                   \
   NEW_OBJECT (dwg, obj);                                                      \
@@ -25654,7 +25675,7 @@ dwg_insert_entity (Dwg_Object_BLOCK_HEADER *restrict _owner,
 {
   int error;
   Dwg_Data *dwg = obj->parent;
-  const Dwg_Version_Type version = dwg->header.version;
+  const Dwg_Version_Type version LIBREDWG_UNUSED = dwg->header.version;
   Dwg_Object *owner = dwg_obj_generic_to_object (_owner, &error);
   const Dwg_Object_Ref *mspace = dwg_model_space_ref (dwg);
   const Dwg_Object_Ref *pspace = dwg_paper_space_ref (dwg);
@@ -25871,7 +25892,7 @@ dwg_add_Attribute (Dwg_Entity_INSERT *restrict insert, const double height,
 {
   Dwg_Object *hdr, *attobj, *insobj;
   Dwg_Object_BLOCK_HEADER *restrict blkhdr;
-  Dwg_Entity_ENDBLK *endblk;
+  Dwg_Entity_ENDBLK *endblk LIBREDWG_UNUSED;
   Dwg_Entity_ATTDEF *attdef;
   Dwg_Entity_ATTRIB *attrib;
   int err;
@@ -27773,7 +27794,7 @@ dwg_add_MLINE (Dwg_Object_BLOCK_HEADER *restrict blkhdr,
       // dwg_point_3d pt, ext;
       BITCODE_3BD dir;
       unsigned next = i + 1;
-      unsigned prev = i ? i - 1 : num_verts - 1;
+      unsigned prev LIBREDWG_UNUSED = i ? i - 1 : num_verts - 1;
       if (next == num_verts)
         next = 0;
       _obj->verts[i].parent = _obj;
@@ -27944,9 +27965,7 @@ dwg_add_BLOCK_CONTROL (Dwg_Data *restrict dwg, const unsigned ms,
 EXPORT Dwg_Object_BLOCK_HEADER *
 dwg_add_BLOCK_HEADER (Dwg_Data *restrict dwg, const char *restrict name)
 {
-  API_ADD_TABLE (BLOCK_HEADER, BLOCK_CONTROL);
-  dwg->block_control = *_ctrl;
-  return _record;
+  API_ADD_TABLE (BLOCK_HEADER, BLOCK_CONTROL, { dwg->block_control = *_ctrl; });
 }
 
 EXPORT Dwg_Object_LAYER *
@@ -28114,7 +28133,8 @@ dwg_add_GROUP (Dwg_Data *restrict dwg,
   Dwg_Object_DICTIONARY *dict = NULL;
   Dwg_Object *dictobj;
   Dwg_Object_Ref *groupdict;
-  Dwg_Object *nod = dwg_get_first_object (dwg, DWG_TYPE_DICTIONARY);
+  Dwg_Object *nod LIBREDWG_UNUSED =
+      dwg_get_first_object (dwg, DWG_TYPE_DICTIONARY);
   if (name && !dwg_is_valid_name_u8 (dwg, name))
     LOG_WARN ("Invalid name \"%s\"\n", name);
   // return NULL;
@@ -28733,7 +28753,7 @@ dwg_add_XRECORD_binary (Dwg_Object_XRECORD *restrict _obj, const short dxf,
   int error;
   Dwg_Resbuf *rbuf;
   Dwg_Object *obj = dwg_obj_generic_to_object (_obj, &error);
-  Dwg_Data *dwg = obj ? obj->parent : NULL;
+  Dwg_Data *dwg LIBREDWG_UNUSED = obj ? obj->parent : NULL;
   if (obj->fixedtype != DWG_TYPE_XRECORD)
     {
       LOG_ERROR ("Not a XRECORD, but %s", dwg_type_name (obj->fixedtype));
@@ -28769,7 +28789,7 @@ dwg_add_XRECORD_string (Dwg_Object_XRECORD *restrict _obj, const short dxf,
   int error;
   Dwg_Resbuf *rbuf;
   Dwg_Object *obj = dwg_obj_generic_to_object (_obj, &error);
-  Dwg_Data *dwg = obj ? obj->parent : NULL;
+  Dwg_Data *dwg LIBREDWG_UNUSED = obj ? obj->parent : NULL;
   if (obj->fixedtype != DWG_TYPE_XRECORD)
     {
       LOG_ERROR ("Not a XRECORD, but %s", dwg_type_name (obj->fixedtype));
@@ -28797,7 +28817,7 @@ dwg_add_XRECORD_handle (Dwg_Object_XRECORD *restrict _obj, const short dxf,
   int error;
   Dwg_Resbuf *rbuf;
   Dwg_Object *obj = dwg_obj_generic_to_object (_obj, &error);
-  Dwg_Data *dwg = obj ? obj->parent : NULL;
+  Dwg_Data *dwg LIBREDWG_UNUSED = obj ? obj->parent : NULL;
   if (obj->fixedtype != DWG_TYPE_XRECORD)
     {
       LOG_ERROR ("Not a XRECORD, but %s", dwg_type_name (obj->fixedtype));
@@ -28862,7 +28882,7 @@ EXPORT Dwg_Object_LAYOUT *
 dwg_add_LAYOUT (Dwg_Object *restrict vp, const char *restrict name,
                 const char *restrict canonical_media_name)
 {
-  int err;
+  int err LIBREDWG_UNUSED;
   Dwg_Data *dwg = vp->parent;
 #ifdef NEED_VPORT_FOR_MODEL_LAYOUT
   if (vp->fixedtype != DWG_TYPE_VPORT && vp->fixedtype != DWG_TYPE_VIEWPORT
@@ -28881,7 +28901,7 @@ dwg_add_LAYOUT (Dwg_Object *restrict vp, const char *restrict name,
     Dwg_Object_DICTIONARY *dict = NULL;
     Dwg_Object *dictobj;
     Dwg_Object_Ref *dictref;
-    Dwg_Object *nod;
+    Dwg_Object *nod LIBREDWG_UNUSED;
     unsigned long ownerhandle = 0UL;
 
     API_ADD_OBJECT (LAYOUT);
@@ -29747,7 +29767,7 @@ dwg_add_CONE (Dwg_Object_BLOCK_HEADER *restrict blkhdr,
     double h2 = height / 2.0;
     double majr2 = major_radius / 2.0;
     double minr2 = minor_radius / 2.0;
-    double x2 = x_radius / 2.0;
+        double x2 LIBREDWG_UNUSED = x_radius / 2.0;
     double dbl_pi = 2.0 * M_PI; // i.e. 360
     char acis_data[1600];
     char date[48];
@@ -30744,7 +30764,7 @@ dwg_add_PDFUNDERLAY (Dwg_Object_BLOCK_HEADER *restrict blkhdr,
                      const dwg_point_3d *restrict ins_pt,
                      const double scale_factor, const double rotation_angle)
 {
-  Dwg_Object *und, *dict = NULL, *def = NULL;
+  Dwg_Object *und LIBREDWG_UNUSED, *dict = NULL, *def = NULL;
   Dwg_Object_DICTIONARY *_dict;
   Dwg_Data *_dwg;
   char name[80], *base, *ext;
@@ -30754,8 +30774,8 @@ dwg_add_PDFUNDERLAY (Dwg_Object_BLOCK_HEADER *restrict blkhdr,
     Dwg_Object *hdr = dwg_obj_generic_to_object (blkhdr, &err);
     Dwg_Data *dwg = _dwg = hdr ? hdr->parent : NULL;
     char base_1[80];
-    Dwg_Object *defs;
-    Dwg_Object_DICTIONARY *_defs;
+    Dwg_Object *defs LIBREDWG_UNUSED;
+    Dwg_Object_DICTIONARY *_defs LIBREDWG_UNUSED;
     BITCODE_H defsref;
 
     if (!dwg || err)

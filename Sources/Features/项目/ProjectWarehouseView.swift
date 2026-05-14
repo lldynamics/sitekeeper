@@ -198,8 +198,7 @@ struct ProjectWarehouseView: View {
                 } label: {
                     Label("材料出入库", systemImage: "shippingbox.and.arrow.backward.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimaryAction)
+                .buttonStyle(.appProminent())
             } else {
                 ForEach(stockLines) { line in
                     HStack {

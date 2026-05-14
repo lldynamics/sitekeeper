@@ -20,6 +20,14 @@
 #  include "codepages.h"
 #  include "decode.h"
 
+#  ifndef LIBREDWG_UNUSED
+#    if defined(__GNUC__) || defined(__clang__)
+#      define LIBREDWG_UNUSED __attribute__((unused))
+#    else
+#      define LIBREDWG_UNUSED
+#    endif
+#  endif
+
 #  define DECODER if (0)
 #  define ENCODER if (0)
 #  define PRINT if (0)
@@ -897,8 +905,9 @@
       Dwg_Object_##parenttype *restrict _obj, Bit_Chain * dat,                \
       Bit_Chain * hdl_dat, Bit_Chain * str_dat, Dwg_Object *restrict obj)     \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
-    Dwg_Data *dwg = obj->parent;                                              \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     int error = 0;                                                            \
     subtype##_fields;                                                         \
     return error;                                                             \
@@ -909,8 +918,9 @@
       Dwg_Entity_##parenttype *restrict _obj, Bit_Chain * dat,                \
       Bit_Chain * hdl_dat, Bit_Chain * str_dat, Dwg_Object *restrict obj)     \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
-    Dwg_Data *dwg = obj->parent;                                              \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     int error = 0;                                                            \
     subtype##_fields;                                                         \
     return error;                                                             \

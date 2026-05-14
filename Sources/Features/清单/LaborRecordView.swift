@@ -102,8 +102,7 @@ struct LaborRecordView: View {
                     } label: {
                         Label("添加人工记录", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                    .buttonStyle(.appProminent())
                 }
             } else {
                 Section("人工记录 (\(filtered.count))") {

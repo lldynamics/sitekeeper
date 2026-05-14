@@ -5,13 +5,28 @@ public struct LibreDWGBridgePreview: View {
     public let fileURL: URL
     public let preferredCodePage: Int32?
     public let preferredBigFont: Int32?
+    public let onCanvasTransformChange: (LibreDWGCanvasTransformSnapshot) -> Void
+    public let onSnapPointsChange: ([LibreDWGSnapPointPayload]) -> Void
+    public let onTextAutoDetectionChange: (LibreDWGTextAutoDetectionSnapshot) -> Void
 
     @State private var state: PreviewState = .loading
+    @State private var loadTask: Task<Void, Never>?
+    @State private var loadTimeoutTask: Task<Void, Never>?
 
-    public init(fileURL: URL, preferredCodePage: Int32? = nil, preferredBigFont: Int32? = nil) {
+    public init(
+        fileURL: URL,
+        preferredCodePage: Int32? = nil,
+        preferredBigFont: Int32? = nil,
+        onCanvasTransformChange: @escaping (LibreDWGCanvasTransformSnapshot) -> Void = { _ in },
+        onSnapPointsChange: @escaping ([LibreDWGSnapPointPayload]) -> Void = { _ in },
+        onTextAutoDetectionChange: @escaping (LibreDWGTextAutoDetectionSnapshot) -> Void = { _ in }
+    ) {
         self.fileURL = fileURL
         self.preferredCodePage = preferredCodePage
         self.preferredBigFont = preferredBigFont
+        self.onCanvasTransformChange = onCanvasTransformChange
+        self.onSnapPointsChange = onSnapPointsChange
+        self.onTextAutoDetectionChange = onTextAutoDetectionChange
     }
 
     public var body: some View {
@@ -19,7 +34,10 @@ public struct LibreDWGBridgePreview: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(uiColor: .systemBackground))
             .task(id: taskIdentity) {
-                await loadPreview()
+                startLoadingPreview()
+            }
+            .onDisappear {
+                cancelLoadingPreview()
             }
     }
 
@@ -34,7 +52,13 @@ public struct LibreDWGBridgePreview: View {
             ProgressView("正在加载图纸…")
                 .controlSize(.large)
         case .dxf(let model, let sourceHint):
-            DXFCanvasPreview(model: model, sourceHint: sourceHint, fileURL: fileURL)
+            DXFCanvasPreview(
+                model: model,
+                sourceHint: sourceHint,
+                fileURL: fileURL,
+                onCanvasTransformChange: onCanvasTransformChange,
+                onSnapPointsChange: onSnapPointsChange
+            )
         case .pdf(let url, let sourceHint):
             PDFSidecarPreview(fileURL: url, sourceHint: sourceHint)
         case .dwgMetadata(let info):
@@ -48,1178 +72,97 @@ public struct LibreDWGBridgePreview: View {
         }
     }
 
-    private func loadPreview() async {
-        let ext = fileURL.pathExtension.lowercased()
-        do {
-            switch ext {
-            case "dxf":
-                let model = try await Task.detached(priority: .userInitiated) {
-                    try DXFPreviewParser.parse(
-                        fileURL: fileURL,
-                        preferredCodePage: preferredCodePage,
-                        preferredBigFont: preferredBigFont
-                    )
-                }.value
-                state = .dxf(model, nil)
-            case "dwg":
-                do {
-                    let model = try await Task.detached(priority: .userInitiated) {
-                        try LibreDWGNativeParser.parse(
-                            fileURL: fileURL,
-                            preferredCodePage: preferredCodePage,
-                            preferredBigFont: preferredBigFont
-                        )
-                    }.value
-                    state = .dxf(model, "LibreDWG 已解析 DWG：\(fileURL.lastPathComponent)")
-                    return
-                } catch {
-                    let codePageHint = preferredCodePage.map { "（编码 \(Int($0))）" } ?? ""
-                    let bigFontHint = preferredBigFont.map { " / 字体 \(Int($0))" } ?? ""
-                    let nativeParseHint = "LibreDWG C 解析未生成可显示几何\(codePageHint)\(bigFontHint)：\(error.localizedDescription)"
-                    let sidecar = await Task.detached(priority: .utility) {
-                        DWGSidecarResolver.resolve(for: fileURL)
-                    }.value
-
-                    if let dxfURL = sidecar.dxfURL {
-                        do {
-                            let model = try await Task.detached(priority: .userInitiated) {
-                                try DXFPreviewParser.parse(
-                                    fileURL: dxfURL,
-                                    preferredCodePage: preferredCodePage,
-                                    preferredBigFont: preferredBigFont
-                                )
-                            }.value
-                            state = .dxf(model, "\(nativeParseHint)，已改用同名 DXF：\(dxfURL.lastPathComponent)")
-                            return
-                        } catch {
-                            if let pdfURL = sidecar.pdfURL {
-                                state = .pdf(pdfURL, "DWG/DXF 解析失败，已改用同名 PDF：\(pdfURL.lastPathComponent)")
-                                return
-                            }
-                            let info = try await Task.detached(priority: .utility) {
-                                try DWGMetadata.from(
-                                    fileURL: fileURL,
-                                    hints: [
-                                        nativeParseHint,
-                                        "检测到同名 DXF：\(dxfURL.lastPathComponent)，但解析失败：\(error.localizedDescription)",
-                                    ] + sidecar.hints
-                                )
-                            }.value
-                            state = .dwgMetadata(info)
-                            return
-                        }
-                    }
-
-                    if let pdfURL = sidecar.pdfURL {
-                        state = .pdf(pdfURL, "\(nativeParseHint)，已改用同名 PDF：\(pdfURL.lastPathComponent)")
-                        return
-                    }
-
-                    let info = try await Task.detached(priority: .utility) {
-                        try DWGMetadata.from(fileURL: fileURL, hints: [nativeParseHint] + sidecar.hints)
-                    }.value
-                    state = .dwgMetadata(info)
-                    return
-                }
-            default:
-                state = .failed("不支持的图纸格式：\(ext.uppercased())")
-            }
-        } catch {
-            state = .failed(error.localizedDescription)
-        }
-    }
-}
-
-private struct DXFCanvasPreview: View {
-    let model: DXFPreviewModel
-    let sourceHint: String?
-    let fileURL: URL
-    private let maxZoomScale: CGFloat = 240
-    @State private var zoomScale: CGFloat = 1
-    @State private var panOffset: CGSize = .zero
-    @State private var canvasSize: CGSize = .zero
-    @State private var visibleLayers: Set<String> = []
-    @State private var showLayerSheet = false
-    @State private var showSearchResults = false
-    @State private var searchText = ""
-    @State private var layerSearchText = ""
-    @State private var selectedSearchTextID: UUID?
-    @State private var probeCanvasPoint: CGPoint?
-    @State private var showCoordinateLegend = true
-    @State private var controlsCollapsed = false
-    @State private var controlsAutoHideToken = UUID()
-    @GestureState private var pinchScale: CGFloat = 1
-    @GestureState private var dragOffset: CGSize = .zero
-
-    private struct LayerStat: Identifiable {
-        let name: String
-        let count: Int
-        var id: String { name }
-    }
-
-    private var effectiveScale: CGFloat {
-        clampScale(zoomScale * pinchScale)
-    }
-
-    private var effectiveOffset: CGSize {
-        CGSize(
-            width: panOffset.width + dragOffset.width,
-            height: panOffset.height + dragOffset.height
-        )
-    }
-
-    private var layerStats: [LayerStat] {
-        var counter: [String: Int] = [:]
-        for item in model.segments { counter[item.layer, default: 0] += 1 }
-        for item in model.polylines { counter[item.layer, default: 0] += 1 }
-        for item in model.circles { counter[item.layer, default: 0] += 1 }
-        for item in model.texts { counter[item.layer, default: 0] += 1 }
-        return counter
-            .map { LayerStat(name: $0.key, count: $0.value) }
-            .sorted {
-                if $0.count == $1.count { return $0.name < $1.name }
-                return $0.count > $1.count
-            }
-    }
-
-    private var normalizedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var normalizedLayerSearchText: String {
-        layerSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var filteredLayerStats: [LayerStat] {
-        guard !normalizedLayerSearchText.isEmpty else { return layerStats }
-        let query = normalizedLayerSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        return layerStats.filter { layer in
-            layer.name.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(query)
-        }
-    }
-
-    private var matchedTexts: [DXFPreviewModel.TextEntity] {
-        guard !normalizedSearchText.isEmpty else { return [] }
-        let query = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        return model.texts.filter { text in
-            guard visibleLayers.isEmpty || visibleLayers.contains(text.layer) else { return false }
-            let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            return value.contains(query)
-        }
-    }
-
-    private var visibleSegments: [DXFPreviewModel.Segment] {
-        model.segments.filter { visibleLayers.contains($0.layer) }
-    }
-
-    private var visiblePolylines: [DXFPreviewModel.Polyline] {
-        model.polylines.filter { visibleLayers.contains($0.layer) }
-    }
-
-    private var visibleCircles: [DXFPreviewModel.Circle] {
-        model.circles.filter { visibleLayers.contains($0.layer) }
-    }
-
-    private var visibleTexts: [DXFPreviewModel.TextEntity] {
-        model.texts.filter { visibleLayers.contains($0.layer) }
-    }
-
-    var body: some View {
-        GeometryReader { proxy in
-            let transform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: canvasSize == .zero ? proxy.size : canvasSize,
-                zoomScale: effectiveScale,
-                panOffset: effectiveOffset
-            )
-            ZStack(alignment: .bottomTrailing) {
-                drawingCanvas
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(uiColor: .secondarySystemBackground))
-                    .contentShape(Rectangle())
-                    .gesture(canvasGesture)
-                    .simultaneousGesture(
-                        SpatialTapGesture().onEnded { value in
-                            probeCanvasPoint = value.location
-                            showControlsTemporarily()
-                        }
-                    )
-                    .simultaneousGesture(
-                        SpatialTapGesture(count: 2).onEnded { value in
-                            probeCanvasPoint = value.location
-                            doubleTapZoom(at: value.location)
-                        }
-                    )
-
-                if controlsCollapsed {
-                    compactControlsButton
-                        .padding(.top, 10)
-                        .padding(.trailing, 10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                } else {
-                    VStack(spacing: 8) {
-                        if let sourceHint, !sourceHint.isEmpty {
-                            Label(sourceHint, systemImage: "arrow.triangle.swap")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                        }
-                        toolbarStrip(transform: transform)
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.top, 8)
-                    .frame(maxHeight: .infinity, alignment: .top)
-                }
-
-                if !controlsCollapsed {
-                    footerStrip
-                        .padding(.leading, 10)
-                        .padding(.bottom, 10)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                        .allowsHitTesting(false)
-
-                    minimap(transform: transform)
-                }
-            }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .sheet(isPresented: $showLayerSheet) {
-                layerSheet
-            }
-            .sheet(isPresented: $showSearchResults) {
-                searchResultsSheet
-            }
-            .onAppear {
-                if visibleLayers.isEmpty {
-                    visibleLayers = Set(layerStats.map(\.name))
-                }
-                postCanvasTransform(transform)
-                scheduleControlsAutoHide()
-            }
-            .onChange(of: canvasSize) { _, _ in
-                postCanvasTransform(transform)
-            }
-            .onChange(of: zoomScale) { _, _ in
-                postCanvasTransform(transform)
-            }
-            .onChange(of: panOffset) { _, _ in
-                postCanvasTransform(transform)
-            }
-            .onChange(of: searchText) { _, _ in
-                syncSearchSelection()
-                showControlsTemporarily(scheduleAutoHide: normalizedSearchText.isEmpty)
-            }
-            .onChange(of: visibleLayers) { _, _ in
-                syncSearchSelection()
-                showControlsTemporarily()
-            }
-            .onChange(of: showLayerSheet) { _, isPresented in
-                if !isPresented {
-                    scheduleControlsAutoHide()
-                }
-            }
-            .task(id: controlsAutoHideToken) {
-                await autoHideControlsIfNeeded(for: controlsAutoHideToken)
-            }
-        }
-    }
-
-    private var compactControlsButton: some View {
-        Button {
-            showControlsTemporarily()
-        } label: {
-            Image(systemName: "slider.horizontal.3")
-                .font(.headline)
-                .frame(width: 42, height: 42)
-                .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-        .background(.regularMaterial, in: Circle())
-        .overlay(Circle().stroke(Color(uiColor: .separator).opacity(0.35), lineWidth: 0.8))
-        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 3)
-        .accessibilityLabel("显示看图工具")
-    }
-
-    private var drawingCanvas: some View {
-        TimelineView(.animation(minimumInterval: 0.25)) { timeline in
-            let searchPulse = searchHighlightPulse(at: timeline.date)
-            Canvas { context, size in
-            let activeTransform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: size,
-                zoomScale: effectiveScale,
-                panOffset: effectiveOffset
-            )
-
-            for segment in visibleSegments {
-                var path = Path()
-                path.move(to: activeTransform.point(segment.from))
-                path.addLine(to: activeTransform.point(segment.to))
-                context.stroke(path, with: .color(color(from: segment.style.rgb, layer: segment.layer)), lineWidth: max(segment.style.width, 0.45))
-            }
-
-            for polyline in visiblePolylines where polyline.points.count > 1 {
-                var path = Path()
-                path.move(to: activeTransform.point(polyline.points[0]))
-                for point in polyline.points.dropFirst() {
-                    path.addLine(to: activeTransform.point(point))
-                }
-                switch polyline.renderKind {
-                case .hatch:
-                    context.fill(path, with: .color(Color.orange.opacity(0.08)))
-                    context.stroke(
-                        path,
-                        with: .color(color(from: polyline.style.rgb, layer: polyline.layer).opacity(0.82)),
-                        style: StrokeStyle(lineWidth: max(polyline.style.width, 0.55), dash: [4, 3])
-                    )
-                case .dimension:
-                    context.stroke(
-                        path,
-                        with: .color(Color.cyan.opacity(0.95)),
-                        style: StrokeStyle(lineWidth: max(polyline.style.width, 0.75), dash: [7, 3])
-                    )
-                    drawDimensionTicks(for: polyline, in: &context, transform: activeTransform)
-                case .regular:
-                    context.stroke(path, with: .color(color(from: polyline.style.rgb, layer: polyline.layer)), lineWidth: max(polyline.style.width, 0.45))
-                }
-            }
-
-            for circle in visibleCircles {
-                let center = activeTransform.point(circle.center)
-                let radius = activeTransform.radius(circle.radius)
-                let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-                context.stroke(Path(ellipseIn: rect), with: .color(color(from: circle.style.rgb, layer: circle.layer)), lineWidth: max(circle.style.width, 0.45))
-            }
-
-            let selectedID = selectedSearchTextID
-            let foldedQuery = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            for text in visibleTexts {
-                let point = activeTransform.point(text.point)
-                let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-                let isMatch = !foldedQuery.isEmpty && value.contains(foldedQuery)
-                let isSelected = selectedID == text.id
-                let renderColor = textColor(for: text, isMatch: isMatch, isSelected: isSelected, pulse: searchPulse)
-                let fontSize = textFontSize(for: text, transform: activeTransform, isSelected: isSelected)
-                var textContext = context
-                textContext.translateBy(x: point.x, y: point.y)
-                textContext.rotate(by: .radians(-text.rotation))
-                if isSelected || text.renderKind == .dimension || text.renderKind == .hatch {
-                    drawTextBackdrop(
-                        for: text,
-                        fontSize: fontSize,
-                        isSelected: isSelected,
-                        pulse: searchPulse,
-                        in: &textContext
-                    )
-                }
-                textContext.draw(
-                    Text(text.value)
-                        .font(.system(size: fontSize, weight: textWeight(for: text), design: .default))
-                        .foregroundStyle(renderColor),
-                    at: .zero,
-                    anchor: .leading
-                )
-            }
-
-            if showCoordinateLegend {
-                drawAxes(in: &context, transform: activeTransform)
-            }
-
-            if let probeCanvasPoint {
-                var marker = Path()
-                marker.move(to: CGPoint(x: probeCanvasPoint.x - 8, y: probeCanvasPoint.y))
-                marker.addLine(to: CGPoint(x: probeCanvasPoint.x + 8, y: probeCanvasPoint.y))
-                marker.move(to: CGPoint(x: probeCanvasPoint.x, y: probeCanvasPoint.y - 8))
-                marker.addLine(to: CGPoint(x: probeCanvasPoint.x, y: probeCanvasPoint.y + 8))
-                context.stroke(marker, with: .color(.orange), lineWidth: 1.4)
-            }
-            }
-        }
-        .overlay {
-            GeometryReader { canvasProxy in
-                Color.clear
-                    .onAppear { canvasSize = canvasProxy.size }
-                    .onChange(of: canvasProxy.size) { _, newSize in
-                        canvasSize = newSize
-                    }
-            }
-        }
-    }
-
-    private var footerStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                Label("\(visibleSegments.count) 条直线", systemImage: "line.diagonal")
-                Label("\(visiblePolylines.count) 条多段线", systemImage: "scribble.variable")
-                Label("\(model.arcCount) 条圆弧", systemImage: "rotate.left")
-                Label("\(visibleCircles.count) 个圆", systemImage: "circle")
-                Label("\(visibleTexts.count) 段文字", systemImage: "textformat")
-                Label(String(format: "缩放 %.1fx", effectiveScale), systemImage: "magnifyingglass")
-                if model.sourceObjectCount > 0 {
-                    Label("对象 \(model.sourceObjectCount)", systemImage: "cube.transparent")
-                }
-                if let textDecodingHint = model.textDecodingHint, !textDecodingHint.isEmpty {
-                    Label(textDecodingHint, systemImage: "character.book.closed")
-                }
-                if let unsupportedEntitySummary = model.unsupportedEntitySummary, !unsupportedEntitySummary.isEmpty {
-                    Label("未渲染 \(unsupportedEntitySummary)", systemImage: "exclamationmark.triangle")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: Capsule())
-    }
-
-    private func toolbarStrip(transform: CADCanvasTransform) -> some View {
-        VStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Button {
-                        fitToAll()
-                    } label: {
-                        Label("适应全图", systemImage: "arrow.up.left.and.arrow.down.right")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button {
-                        showControlsTemporarily(scheduleAutoHide: false)
-                        showLayerSheet = true
-                    } label: {
-                        Label("图层开关", systemImage: "square.3.layers.3d")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        showCoordinateLegend.toggle()
-                        showControlsTemporarily()
-                    } label: {
-                        Label(showCoordinateLegend ? "隐藏坐标" : "显示坐标", systemImage: "scope")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        zoom(by: 1 / 1.35)
-                    } label: {
-                        Image(systemName: "minus.magnifyingglass")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        zoom(by: 1.35)
-                    } label: {
-                        Image(systemName: "plus.magnifyingglass")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Text(String(format: "缩放 %.1fx", effectiveScale))
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 4)
-
-                    Button {
-                        collapseControls()
-                    } label: {
-                        Image(systemName: "chevron.up")
-                    }
-                    .buttonStyle(.bordered)
-                    .accessibilityLabel("收起看图工具")
-                }
-            }
-
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField("搜索图纸文字", text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .disableAutocorrection(true)
-
-                if !matchedTexts.isEmpty {
-                    Button {
-                        showControlsTemporarily(scheduleAutoHide: false)
-                        showSearchResults = true
-                    } label: {
-                        Label("结果", systemImage: "list.bullet.rectangle")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button {
-                        centerOnSelectedText()
-                        showControlsTemporarily(scheduleAutoHide: false)
-                    } label: {
-                        Label("定位", systemImage: "scope")
-                    }
-                    .buttonStyle(.borderedProminent)
-
-                    Button { moveSearchSelection(step: -1) } label: {
-                        Image(systemName: "chevron.up")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button { moveSearchSelection(step: 1) } label: {
-                        Image(systemName: "chevron.down")
-                    }
-                    .buttonStyle(.bordered)
-
-                    Text(searchProgressText)
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(Color(uiColor: .tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-            HStack(spacing: 8) {
-                if let sourcePoint = probeSourcePoint(transform: transform) {
-                    Text("点位 X:\(formatCoordinate(sourcePoint.x)) Y:\(formatCoordinate(sourcePoint.y))")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("双击适应全图；单击查看坐标")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer(minLength: 0)
-                Text("图层 \(visibleLayers.count)/\(max(layerStats.count, 1))")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(10)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var layerSheet: some View {
-        NavigationStack {
-            List {
-                Section {
-                    TextField("搜索图层名称", text: $layerSearchText)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                }
-                Section("图层开关") {
-                    Button("显示全部") {
-                        visibleLayers = Set(layerStats.map(\.name))
-                    }
-                    Button("全部隐藏", role: .destructive) {
-                        visibleLayers.removeAll()
-                    }
-
-                    if filteredLayerStats.isEmpty {
-                        ContentUnavailableView(
-                            "没有匹配图层",
-                            systemImage: "square.3.layers.3d.down.right.slash",
-                            description: Text("换个关键词继续搜索")
-                        )
-                    }
-
-                    ForEach(filteredLayerStats) { layer in
-                        Toggle(isOn: Binding(
-                            get: { visibleLayers.contains(layer.name) },
-                            set: { newValue in
-                                if newValue {
-                                    visibleLayers.insert(layer.name)
-                                } else {
-                                    visibleLayers.remove(layer.name)
-                                }
-                            }
-                        )) {
-                            HStack {
-                                Text(layer.name)
-                                Spacer(minLength: 0)
-                                Text("\(layer.count)")
-                                    .font(.caption2.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-            }
-            .navigationTitle("图层")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        showLayerSheet = false
-                    }
-                }
-            }
-        }
-    }
-
-    private var searchResultsSheet: some View {
-        NavigationStack {
-            List {
-                if matchedTexts.isEmpty {
-                    ContentUnavailableView(
-                        "没有匹配文字",
-                        systemImage: "text.magnifyingglass",
-                        description: Text("输入图纸文字后再查看结果")
-                    )
-                } else {
-                    Section("文字搜索结果") {
-                        ForEach(matchedTexts) { text in
-                            Button {
-                                selectSearchResult(text)
-                            } label: {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(text.value)
-                                        .font(.body.weight(.medium))
-                                        .foregroundStyle(.primary)
-                                        .lineLimit(2)
-                                    if let rawValue = text.rawValue, rawValue != text.value {
-                                        Text("原始文本：\(rawValue)")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                            .lineLimit(2)
-                                    }
-                                    HStack(spacing: 8) {
-                                        Text(text.layer)
-                                        Text("X:\(formatCoordinate(text.point.x)) Y:\(formatCoordinate(text.point.y))")
-                                    }
-                                    .font(.caption.monospacedDigit())
-                                    .foregroundStyle(.secondary)
-                                    VStack(alignment: .leading, spacing: 2) {
-                                        Text("解码：\(text.chosenCodepage.map(codePageDisplayName) ?? "自动/未知")")
-                                        if let styleName = text.styleName {
-                                            Text("样式：\(styleName)")
-                                        }
-                                        if let fontFile = text.fontFile {
-                                            Text("字体：\(fontFile)")
-                                        }
-                                        if let bigFontFile = text.bigFontFile {
-                                            Text("大字体：\(bigFontFile)")
-                                        }
-                                        if let rawTextBytesHex = text.rawTextBytesHex {
-                                            Text("原始字节：\(rawTextBytesHex)")
-                                                .textSelection(.enabled)
-                                        }
-                                    }
-                                    .font(.system(.caption2, design: .monospaced))
-                                    .foregroundStyle(.secondary)
-                                }
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("搜索结果")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        showSearchResults = false
-                    }
-                }
-            }
-        }
-    }
-
-    private func minimap(transform: CADCanvasTransform) -> some View {
-        let viewport = transform.viewportRectInSource().intersection(model.bounds)
-        return Canvas { context, size in
-            let inset: CGFloat = 6
-            let frame = CGRect(x: inset, y: inset, width: size.width - inset * 2, height: size.height - inset * 2)
-            context.stroke(Path(roundedRect: frame, cornerRadius: 6), with: .color(.secondary), lineWidth: 0.8)
-
-            func mapPoint(_ point: CGPoint) -> CGPoint {
-                let xRatio = (point.x - model.bounds.minX) / max(model.bounds.width, 1)
-                let yRatio = (point.y - model.bounds.minY) / max(model.bounds.height, 1)
-                return CGPoint(
-                    x: frame.minX + xRatio * frame.width,
-                    y: frame.maxY - yRatio * frame.height
-                )
-            }
-
-            if viewport.width > 0, viewport.height > 0 {
-                let minPoint = mapPoint(CGPoint(x: viewport.minX, y: viewport.minY))
-                let maxPoint = mapPoint(CGPoint(x: viewport.maxX, y: viewport.maxY))
-                let rect = CGRect(
-                    x: min(minPoint.x, maxPoint.x),
-                    y: min(minPoint.y, maxPoint.y),
-                    width: abs(maxPoint.x - minPoint.x),
-                    height: abs(maxPoint.y - minPoint.y)
-                )
-                context.fill(Path(rect), with: .color(.orange.opacity(0.18)))
-                context.stroke(Path(rect), with: .color(.orange), lineWidth: 1.2)
-            }
-        }
-        .frame(width: 120, height: 120)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .simultaneousGesture(
-            SpatialTapGesture().onEnded { value in
-                centerFromMinimapTap(value.location)
-            }
-        )
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { value in
-                    centerFromMinimapTap(value.location, animated: false)
-                }
-                .onEnded { value in
-                    centerFromMinimapTap(value.location, animated: true)
-                }
-        )
-        .padding(12)
-    }
-
-    private var searchProgressText: String {
-        guard !matchedTexts.isEmpty else { return "0/0" }
-        let ids = matchedTexts.map(\.id)
-        guard let selectedSearchTextID,
-              let index = ids.firstIndex(of: selectedSearchTextID) else {
-            return "1/\(ids.count)"
-        }
-        return "\(index + 1)/\(ids.count)"
-    }
-
-    private func moveSearchSelection(step: Int) {
-        guard !matchedTexts.isEmpty else {
-            selectedSearchTextID = nil
-            return
-        }
-        let ids = matchedTexts.map(\.id)
-        let nextID: UUID
-        if let selectedSearchTextID,
-           let index = ids.firstIndex(of: selectedSearchTextID) {
-            let nextIndex = (index + step + ids.count) % ids.count
-            nextID = ids[nextIndex]
-        } else {
-            nextID = ids[0]
-        }
-        selectedSearchTextID = nextID
-        centerOnSelectedText()
-    }
-
-    private func selectSearchResult(_ text: DXFPreviewModel.TextEntity) {
-        selectedSearchTextID = text.id
-        showSearchResults = false
-        showControlsTemporarily(scheduleAutoHide: false)
-        centerOnSelectedText()
-    }
-
-    private func centerOnSelectedText() {
-        guard let selectedID = selectedSearchTextID,
-              let target = matchedTexts.first(where: { $0.id == selectedID }),
-              canvasSize != .zero else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            panOffset = panOffsetToCenter(sourcePoint: target.point, zoom: zoomScale)
-        }
-    }
-
-    private func fitToAll() {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            zoomScale = 1
-            panOffset = .zero
-        }
-        showControlsTemporarily()
-    }
-
-    private func zoom(by factor: CGFloat) {
-        guard factor.isFinite, factor > 0 else { return }
-        let center = canvasSize == .zero
-            ? nil
-            : CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
-        applyZoom(clampScale(zoomScale * factor), anchor: center)
-        showControlsTemporarily()
-    }
-
-    private func doubleTapZoom(at location: CGPoint) {
-        if effectiveScale >= 7.5 {
-            fitToAll()
-        } else {
-            applyZoom(clampScale(zoomScale * 1.8), anchor: location)
-            showControlsTemporarily()
-        }
-    }
-
-    private func centerFromMinimapTap(_ location: CGPoint, animated: Bool = true) {
-        guard canvasSize != .zero else { return }
-        let sourcePoint = minimapSourcePoint(for: location)
-        let update = {
-            panOffset = panOffsetToCenter(sourcePoint: sourcePoint, zoom: zoomScale)
-        }
-        if animated {
-            withAnimation(.easeInOut(duration: 0.18), update)
-        } else {
-            update()
-        }
-        showControlsTemporarily()
-    }
-
-    private func minimapSourcePoint(for location: CGPoint) -> CGPoint {
-        let frame = CGRect(x: 6, y: 6, width: 108, height: 108)
-        let clampedX = min(max(location.x, frame.minX), frame.maxX)
-        let clampedY = min(max(location.y, frame.minY), frame.maxY)
-        let xRatio = (clampedX - frame.minX) / max(frame.width, 1)
-        let yRatio = 1 - (clampedY - frame.minY) / max(frame.height, 1)
-        return CGPoint(
-            x: model.bounds.minX + model.bounds.width * xRatio,
-            y: model.bounds.minY + model.bounds.height * yRatio
-        )
-    }
-
-    private func applyZoom(_ newZoom: CGFloat, anchor: CGPoint?) {
-        let clampedZoom = clampScale(newZoom)
-        let nextOffset: CGSize
-        if clampedZoom <= 1.001 || canvasSize == .zero {
-            nextOffset = .zero
-        } else if let anchor, anchor.x.isFinite, anchor.y.isFinite {
-            let currentTransform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: canvasSize,
-                zoomScale: zoomScale,
-                panOffset: panOffset
-            )
-            let sourceAnchor = currentTransform.sourcePoint(anchor)
-            let baseTransform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: canvasSize,
-                zoomScale: clampedZoom,
-                panOffset: .zero
-            )
-            let renderedPoint = baseTransform.point(sourceAnchor)
-            nextOffset = CGSize(
-                width: anchor.x - renderedPoint.x,
-                height: anchor.y - renderedPoint.y
-            )
-        } else {
-            nextOffset = panOffset
-        }
-
-        withAnimation(.easeInOut(duration: 0.16)) {
-            zoomScale = clampedZoom
-            panOffset = nextOffset
-        }
-    }
-
-    private func panOffsetToCenter(sourcePoint: CGPoint, zoom: CGFloat) -> CGSize {
-        guard canvasSize != .zero else { return .zero }
-        let baseTransform = CADCanvasTransform(
-            bounds: model.bounds,
-            size: canvasSize,
-            zoomScale: zoom,
-            panOffset: .zero
-        )
-        let renderedPoint = baseTransform.point(sourcePoint)
-        return CGSize(
-            width: canvasSize.width / 2 - renderedPoint.x,
-            height: canvasSize.height / 2 - renderedPoint.y
-        )
-    }
-
-    private func showControlsTemporarily(scheduleAutoHide: Bool = true) {
-        withAnimation(.easeInOut(duration: 0.18)) {
-            controlsCollapsed = false
-        }
-        if scheduleAutoHide {
-            scheduleControlsAutoHide()
-        }
-    }
-
-    private func collapseControls() {
-        withAnimation(.easeInOut(duration: 0.18)) {
-            controlsCollapsed = true
-        }
-        controlsAutoHideToken = UUID()
-    }
-
-    private func scheduleControlsAutoHide() {
-        controlsAutoHideToken = UUID()
+    private var timeoutMessage: String {
+        "DWG 解析超过 20 秒，已停止等待本次预览。建议导出 CAD 诊断日志，检查 DWG 版本、对象数量、未支持实体和文字编码。"
     }
 
     @MainActor
-    private func autoHideControlsIfNeeded(for token: UUID) async {
-        guard !controlsCollapsed, normalizedSearchText.isEmpty, !showLayerSheet else { return }
-        try? await Task.sleep(for: .seconds(4))
-        guard token == controlsAutoHideToken,
-              !controlsCollapsed,
-              normalizedSearchText.isEmpty,
-              !showLayerSheet else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            controlsCollapsed = true
-        }
-    }
+    private func startLoadingPreview() {
+        cancelLoadingPreview()
+        state = .loading
+        let identity = taskIdentity
+        let currentFileURL = fileURL
+        let currentPreferredCodePage = preferredCodePage
+        let currentPreferredBigFont = preferredBigFont
 
-    private func syncSearchSelection() {
-        guard !matchedTexts.isEmpty else {
-            selectedSearchTextID = nil
-            return
-        }
-        if let selectedSearchTextID,
-           matchedTexts.contains(where: { $0.id == selectedSearchTextID }) {
-            return
-        }
-        selectedSearchTextID = matchedTexts.first?.id
-    }
-
-    private func probeSourcePoint(transform: CADCanvasTransform) -> CGPoint? {
-        guard let probeCanvasPoint else { return nil }
-        return transform.sourcePoint(probeCanvasPoint)
-    }
-
-    private func drawAxes(in context: inout GraphicsContext, transform: CADCanvasTransform) {
-        guard model.bounds.contains(CGPoint.zero) else { return }
-        var xAxis = Path()
-        xAxis.move(to: transform.point(CGPoint(x: model.bounds.minX, y: 0)))
-        xAxis.addLine(to: transform.point(CGPoint(x: model.bounds.maxX, y: 0)))
-        context.stroke(xAxis, with: .color(.green.opacity(0.75)), lineWidth: 1)
-
-        var yAxis = Path()
-        yAxis.move(to: transform.point(CGPoint(x: 0, y: model.bounds.minY)))
-        yAxis.addLine(to: transform.point(CGPoint(x: 0, y: model.bounds.maxY)))
-        context.stroke(yAxis, with: .color(.blue.opacity(0.75)), lineWidth: 1)
-    }
-
-    private func searchHighlightPulse(at date: Date) -> CGFloat {
-        guard selectedSearchTextID != nil, !normalizedSearchText.isEmpty else { return 0 }
-        let phase = date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 0.95) / 0.95
-        return 0.5 + 0.5 * CGFloat(sin(phase * .pi * 2))
-    }
-
-    private func textFontSize(
-        for text: DXFPreviewModel.TextEntity,
-        transform: CADCanvasTransform,
-        isSelected: Bool
-    ) -> CGFloat {
-        let base = activeTextHeight(text, transform: transform)
-        switch text.renderKind {
-        case .dimension:
-            return min(max(base * 1.08, 9), isSelected ? 34 : 28)
-        case .hatch:
-            return min(max(base * 0.92, 8), isSelected ? 30 : 22)
-        case .leader, .attribute:
-            return min(max(base, 8), isSelected ? 32 : 25)
-        case .regular:
-            return min(max(base, 7), isSelected ? 30 : 26)
-        }
-    }
-
-    private func activeTextHeight(_ text: DXFPreviewModel.TextEntity, transform: CADCanvasTransform) -> CGFloat {
-        transform.radius(max(text.height, 1))
-    }
-
-    private func textWeight(for text: DXFPreviewModel.TextEntity) -> Font.Weight {
-        switch text.renderKind {
-        case .dimension:
-            return .semibold
-        case .hatch:
-            return .medium
-        case .leader, .attribute:
-            return .regular
-        case .regular:
-            return .regular
-        }
-    }
-
-    private func textColor(
-        for text: DXFPreviewModel.TextEntity,
-        isMatch: Bool,
-        isSelected: Bool,
-        pulse: CGFloat
-    ) -> Color {
-        if isSelected {
-            return Color.red.opacity(0.78 + 0.22 * Double(pulse))
-        }
-        if isMatch {
-            return .orange
-        }
-        switch text.renderKind {
-        case .dimension:
-            return .cyan
-        case .hatch:
-            return .orange
-        case .leader:
-            return .purple
-        case .attribute:
-            return .teal
-        case .regular:
-            return color(from: text.style.rgb, layer: text.layer)
-        }
-    }
-
-    private func drawTextBackdrop(
-        for text: DXFPreviewModel.TextEntity,
-        fontSize: CGFloat,
-        isSelected: Bool,
-        pulse: CGFloat,
-        in context: inout GraphicsContext
-    ) {
-        let textWidth = max(CGFloat(text.value.count) * fontSize * 0.58, fontSize * 1.5)
-        let textHeight = fontSize * 1.35
-        let paddingX = max(fontSize * 0.36, 4)
-        let paddingY = max(fontSize * 0.18, 2)
-        let rect = CGRect(
-            x: -paddingX,
-            y: -textHeight / 2 - paddingY,
-            width: textWidth + paddingX * 2,
-            height: textHeight + paddingY * 2
-        )
-        let path = Path(roundedRect: rect, cornerRadius: min(8, textHeight / 2))
-
-        if isSelected {
-            let halo = rect.insetBy(dx: -5 - pulse * 5, dy: -4 - pulse * 4)
-            context.fill(
-                Path(roundedRect: halo, cornerRadius: min(12, halo.height / 2)),
-                with: .color(Color.red.opacity(0.12 + 0.24 * Double(pulse)))
+        let task = Task.detached(priority: .userInitiated) {
+            let loadedState = await LibreDWGPreviewEngine.load(
+                fileURL: currentFileURL,
+                preferredCodePage: currentPreferredCodePage,
+                preferredBigFont: currentPreferredBigFont
             )
-            context.stroke(
-                Path(roundedRect: halo, cornerRadius: min(12, halo.height / 2)),
-                with: .color(Color.red.opacity(0.55 + 0.35 * Double(pulse))),
-                lineWidth: 1.1 + pulse * 1.2
-            )
+            await MainActor.run {
+                guard identity == taskIdentity, !Task.isCancelled else { return }
+                loadTimeoutTask?.cancel()
+                loadTimeoutTask = nil
+                loadTask = nil
+                state = loadedState
+                postTextAutoDetectionIfAvailable(for: loadedState, fileURL: currentFileURL)
+            }
         }
 
-        switch text.renderKind {
-        case .dimension:
-            context.fill(path, with: .color(Color.cyan.opacity(0.12)))
-            context.stroke(path, with: .color(Color.cyan.opacity(0.72)), lineWidth: 0.8)
-        case .hatch:
-            context.fill(path, with: .color(Color.orange.opacity(0.12)))
-            context.stroke(path, with: .color(Color.orange.opacity(0.58)), lineWidth: 0.7)
-        case .regular, .leader, .attribute:
-            if isSelected {
-                context.fill(path, with: .color(Color(uiColor: .systemBackground).opacity(0.82)))
+        loadTask = task
+        let timeoutReason = timeoutMessage
+        loadTimeoutTask = Task.detached(priority: .utility) {
+            try? await Task.sleep(for: .seconds(20))
+            guard !Task.isCancelled else { return }
+            task.cancel()
+            let timeoutState = Self.timeoutFallbackState(
+                fileURL: currentFileURL,
+                message: timeoutReason
+            )
+            await MainActor.run {
+                guard identity == taskIdentity else { return }
+                state = timeoutState
+                loadTask = nil
+                loadTimeoutTask = nil
             }
         }
     }
 
-    private func drawDimensionTicks(
-        for polyline: DXFPreviewModel.Polyline,
-        in context: inout GraphicsContext,
-        transform: CADCanvasTransform
-    ) {
-        guard polyline.points.count >= 2 else { return }
-        let start = transform.point(polyline.points[0])
-        let end = transform.point(polyline.points[polyline.points.count - 1])
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let length = max(sqrt(dx * dx + dy * dy), 0.0001)
-        let ux = dx / length
-        let uy = dy / length
-        let px = -uy
-        let py = ux
-        let tickLength = min(max(length * 0.035, 7), 14)
-
-        func addTick(at point: CGPoint, direction: CGFloat) {
-            var path = Path()
-            path.move(to: CGPoint(
-                x: point.x - px * tickLength * 0.5 - ux * tickLength * direction * 0.35,
-                y: point.y - py * tickLength * 0.5 - uy * tickLength * direction * 0.35
-            ))
-            path.addLine(to: CGPoint(
-                x: point.x + px * tickLength * 0.5 + ux * tickLength * direction * 0.35,
-                y: point.y + py * tickLength * 0.5 + uy * tickLength * direction * 0.35
-            ))
-            context.stroke(path, with: .color(Color.cyan.opacity(0.95)), lineWidth: 1.2)
-        }
-
-        addTick(at: start, direction: 1)
-        addTick(at: end, direction: -1)
+    @MainActor
+    private func cancelLoadingPreview() {
+        loadTask?.cancel()
+        loadTask = nil
+        loadTimeoutTask?.cancel()
+        loadTimeoutTask = nil
     }
 
-    private var canvasGesture: some Gesture {
-        SimultaneousGesture(
-            MagnificationGesture()
-                .updating($pinchScale) { value, state, _ in
-                    state = value
-                }
-                .onEnded { value in
-                    zoomScale = clampScale(zoomScale * value)
-                    if zoomScale <= 1.001 {
-                        panOffset = .zero
-                    }
-                },
-            DragGesture(minimumDistance: 2, coordinateSpace: .local)
-                .updating($dragOffset) { value, state, _ in
-                    guard effectiveScale > 1 else {
-                        state = .zero
-                        return
-                    }
-                    state = value.translation
-                }
-                .onEnded { value in
-                    guard zoomScale > 1 else {
-                        panOffset = .zero
-                        return
-                    }
-                    panOffset.width += value.translation.width
-                    panOffset.height += value.translation.height
-                }
+    nonisolated private static func timeoutFallbackState(
+        fileURL: URL,
+        message: String
+    ) -> PreviewState {
+        guard fileURL.pathExtension.lowercased() == "dwg",
+              let info = try? DWGMetadata.from(fileURL: fileURL, hints: [message]) else {
+            return .failed(message)
+        }
+        return .dwgMetadata(info)
+    }
+
+    @MainActor
+    private func postTextAutoDetectionIfAvailable(for loadedState: PreviewState, fileURL: URL) {
+        guard case .dxf(let model, _) = loadedState,
+              fileURL.pathExtension.lowercased() == "dwg",
+              !model.texts.isEmpty else { return }
+        let result = LibreDWGTextAutoDetector.detect(model: model)
+        onTextAutoDetectionChange(
+            LibreDWGTextAutoDetectionSnapshot(
+                codePage: result.codePage,
+                bigFont: result.bigFont,
+                styleName: result.styleName,
+                fontFile: result.fontFile,
+                bigFontFile: result.bigFontFile,
+                autoDetectScore: result.score,
+                styleSummary: result.styleSummary,
+                rawTextBytesHexSample: result.rawTextBytesHexSample,
+                detectionSummary: result.detectionSummary,
+                summary: result.summary
+            )
         )
-    }
-
-    private func clampScale(_ value: CGFloat) -> CGFloat {
-        min(max(value, 1), maxZoomScale)
-    }
-
-    private func postCanvasTransform(_ transform: CADCanvasTransform) {
-        NotificationCenter.default.post(
-            name: .libreDWGCanvasTransformDidChange,
-            object: nil,
-            userInfo: [
-                "filePath": fileURL.path,
-                "bounds": NSValue(cgRect: transform.bounds),
-                "size": NSValue(cgSize: transform.size),
-                "zoomScale": transform.zoomScale,
-                "panOffset": NSValue(cgSize: transform.panOffset),
-            ]
-        )
-    }
-
-    private func color(from rgb: UInt32, layer: String) -> Color {
-        if rgb == 0 {
-            return layerFallbackColor(layer)
-        }
-        let red = Double((rgb >> 16) & 0xFF) / 255
-        let green = Double((rgb >> 8) & 0xFF) / 255
-        let blue = Double(rgb & 0xFF) / 255
-        return Color(red: red, green: green, blue: blue)
-    }
-
-    private func layerFallbackColor(_ layer: String) -> Color {
-        let palette: [Color] = [
-            .blue, .green, .orange, .purple, .pink, .teal, .indigo, .mint, .cyan, .brown,
-        ]
-        let hash = abs(layer.lowercased().hashValue)
-        return palette[hash % palette.count]
-    }
-
-    private func formatCoordinate(_ value: CGFloat) -> String {
-        String(format: "%.2f", Double(value))
-    }
-
-    private func codePageDisplayName(_ codePage: Int) -> String {
-        switch codePage {
-        case 936:
-            return "GBK 936"
-        case 54936:
-            return "GB18030 54936"
-        case 950:
-            return "Big5 950"
-        case 932:
-            return "Shift-JIS 932"
-        case 949:
-            return "Korean 949"
-        case 65001:
-            return "UTF-8"
-        default:
-            return "CP\(codePage)"
-        }
     }
 }
 
-private enum DXFPreviewParser {
+enum DXFPreviewParser {
     private struct DecodedTextPayload {
         let text: String
         let resolvedCodePage: Int32?
@@ -1474,6 +417,7 @@ private enum DXFPreviewParser {
                 if let x = fields.firstDouble(10),
                    let y = fields.firstDouble(20),
                    let rawValue = fields.firstString(1) {
+                    let styleName = fields.firstString(7)
                     let normalized = normalizeDXFText(rawValue, bigFontProfile: bigFontProfile)
                     if !normalized.isEmpty {
                         texts.append(.init(
@@ -1486,13 +430,16 @@ private enum DXFPreviewParser {
                             rotation: ((fields.firstDouble(50) ?? 0) * .pi / 180),
                             style: .default,
                             layer: layer,
-                            renderKind: type == "ATTRIB" ? .attribute : .regular
+                            styleName: styleName,
+                            renderKind: type == "ATTRIB" ? .attribute : .regular,
+                            kind: type == "ATTRIB" ? .text : .text
                         ))
                     }
                 }
             case "MTEXT":
                 if let x = fields.firstDouble(10),
                    let y = fields.firstDouble(20) {
+                    let styleName = fields.firstString(7)
                     let chunks = fields.allStrings(3)
                     let tail = fields.firstString(1).map { [$0] } ?? []
                     let merged = (chunks + tail).joined()
@@ -1507,7 +454,9 @@ private enum DXFPreviewParser {
                             height: fields.firstDouble(40) ?? 2,
                             rotation: ((fields.firstDouble(50) ?? 0) * .pi / 180),
                             style: .default,
-                            layer: layer
+                            layer: layer,
+                            styleName: styleName,
+                            kind: .mtext
                         ))
                     }
                 }

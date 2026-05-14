@@ -762,19 +762,19 @@ bit_write_BLL (Bit_Chain *dat, BITCODE_BLL value)
   switch (len)
     {
     case 1:
-      bit_write_RC (dat, value);
+      bit_write_RC (dat, (BITCODE_RC)value);
       break;
     case 2:
-      bit_write_RS (dat, value);
+      bit_write_RS (dat, (BITCODE_RS)value);
       break;
     case 4:
-      bit_write_RL (dat, value);
+      bit_write_RL (dat, (BITCODE_RL)value);
       break;
     default:
       for (i = 0; i < (int)len; i++)
         {
           // least significant byte first
-          bit_write_RC (dat, value & 0xFF);
+          bit_write_RC (dat, (BITCODE_RC)(value & 0xFF));
           value >>= 8;
         }
     }
@@ -1477,11 +1477,11 @@ void
 bit_H_to_dat (Bit_Chain *restrict dat, Dwg_Handle *restrict handle)
 {
   if (handle->size == 1)
-    bit_write_RC (dat, handle->value);
+    bit_write_RC (dat, (BITCODE_RC)handle->value);
   else if (handle->size == 2)
-    bit_write_RS_BE (dat, handle->value);
+    bit_write_RS_BE (dat, (BITCODE_RS)handle->value);
   else if (handle->size == 4)
-    bit_write_RL_BE (dat, handle->value);
+    bit_write_RL_BE (dat, (BITCODE_RL)handle->value);
   else if (handle->size == 8)
     bit_write_RLL_BE (dat, handle->value);
   else if (handle->size < 8)
@@ -1495,7 +1495,7 @@ bit_H_to_dat (Bit_Chain *restrict dat, Dwg_Handle *restrict handle)
     {
       LOG_ERROR ("Invalid handle size %u with " FORMAT_HV, handle->size,
                  handle->value);
-      bit_write_RL_BE (dat, handle->value);
+      bit_write_RL_BE (dat, (BITCODE_RL)handle->value);
     }
   return;
 }
@@ -2460,7 +2460,7 @@ bit_read_T32 (Bit_Chain *restrict dat)
   if (IS_FROM_TU (dat))
     {
       BITCODE_TU wstr;
-      BITCODE_RL len = size / 2;
+      BITCODE_RL len = (BITCODE_RL)(size / 2);
       if (size + dat->byte >= dat->size || size > dat->size)
         {
           loglevel = dat->opts & DWG_OPTS_LOGLEVEL;
@@ -2518,7 +2518,7 @@ bit_read_TU32 (Bit_Chain *restrict dat)
   if (IS_FROM_TU (dat))
     {
       BITCODE_TU wstr;
-      BITCODE_RL rl1, len = size / 4;
+      BITCODE_RL rl1, len = (BITCODE_RL)(size / 4);
       size_t pos = bit_position (dat);
       if (size + dat->byte >= dat->size || size > dat->size)
         {
@@ -2538,7 +2538,7 @@ bit_read_TU32 (Bit_Chain *restrict dat)
       if (rl1 & 0x00ff0000) /* 00 xx 00 nn */
         {                   // only UCS-2
           bit_set_position (dat, pos);
-          len = size / 2;
+          len = (BITCODE_RL)(size / 2);
           loglevel = dat->opts & DWG_OPTS_LOGLEVEL;
           LOG_HANDLE ("TU32 is only UCS-2\n");
           for (i = 0; i < len; i++)

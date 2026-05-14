@@ -61,11 +61,11 @@ enum CADDrawingTextBigFont: String, CaseIterable, Codable {
         case .auto:
             return "自动 SHX/大字体"
         case .gbcbig:
-            return "简中 GBCBIG"
+            return "简中 GBCBIG（含 tssdeng/tssdchn）"
         case .hztxt:
-            return "简中 HZTXT"
+            return "简中 HZTXT（含 simplex/txt）"
         case .hzfs:
-            return "仿宋 HZFS"
+            return "仿宋 HZFS（含 simfang）"
         case .big5:
             return "繁中 Big5"
         case .disabled:
@@ -91,6 +91,40 @@ enum CADDrawingTextBigFont: String, CaseIterable, Codable {
     }
 }
 
+struct CADDrawingTextSchemeSnapshot: Codable, Equatable {
+    var codePage: Int32?
+    var bigFont: Int32?
+    var styleName: String?
+    var fontFile: String?
+    var bigFontFile: String?
+    var autoDetectScore: Int?
+    var styleSummary: String?
+    var rawTextBytesHexSample: String?
+    var detectionSummary: String?
+
+    init(
+        codePage: Int32? = nil,
+        bigFont: Int32? = nil,
+        styleName: String? = nil,
+        fontFile: String? = nil,
+        bigFontFile: String? = nil,
+        autoDetectScore: Int? = nil,
+        styleSummary: String? = nil,
+        rawTextBytesHexSample: String? = nil,
+        detectionSummary: String? = nil
+    ) {
+        self.codePage = codePage
+        self.bigFont = bigFont
+        self.styleName = styleName
+        self.fontFile = fontFile
+        self.bigFontFile = bigFontFile
+        self.autoDetectScore = autoDetectScore
+        self.styleSummary = styleSummary
+        self.rawTextBytesHexSample = rawTextBytesHexSample
+        self.detectionSummary = detectionSummary
+    }
+}
+
 struct ProjectDrawing: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
@@ -105,6 +139,7 @@ struct ProjectDrawing: Identifiable, Codable {
     var issueNote: String
     var textEncoding: CADDrawingTextEncoding
     var textBigFont: CADDrawingTextBigFont
+    var textSchemeSnapshot: CADDrawingTextSchemeSnapshot
     var importedAt: String
     var note: String
     var cadOverlaySnapshotData: String
@@ -123,6 +158,7 @@ struct ProjectDrawing: Identifiable, Codable {
         issueNote: String = "",
         textEncoding: CADDrawingTextEncoding = .auto,
         textBigFont: CADDrawingTextBigFont = .auto,
+        textSchemeSnapshot: CADDrawingTextSchemeSnapshot = .init(),
         importedAt: String = Formatters.now(),
         note: String = "",
         cadOverlaySnapshotData: String = ""
@@ -140,13 +176,14 @@ struct ProjectDrawing: Identifiable, Codable {
         self.issueNote = issueNote
         self.textEncoding = textEncoding
         self.textBigFont = textBigFont
+        self.textSchemeSnapshot = textSchemeSnapshot
         self.importedAt = importedAt
         self.note = note
         self.cadOverlaySnapshotData = cadOverlaySnapshotData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, fileName, fileType, version, isCurrentVersion, linkedPreviewDrawingID, relatedLogDate, issueStatus, issueNote, textEncoding, textBigFont, importedAt, note, cadOverlaySnapshotData
+        case id, projectId, name, fileName, fileType, version, isCurrentVersion, linkedPreviewDrawingID, relatedLogDate, issueStatus, issueNote, textEncoding, textBigFont, textSchemeSnapshot, importedAt, note, cadOverlaySnapshotData
     }
 
     init(from decoder: Decoder) throws {
@@ -176,6 +213,7 @@ struct ProjectDrawing: Identifiable, Codable {
             forKey: .textBigFont,
             default: .auto
         )
+        textSchemeSnapshot = try container.decodeIfPresent(CADDrawingTextSchemeSnapshot.self, forKey: .textSchemeSnapshot) ?? .init()
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         cadOverlaySnapshotData = try container.decodeIfPresent(String.self, forKey: .cadOverlaySnapshotData) ?? ""

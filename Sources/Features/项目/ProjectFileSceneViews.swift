@@ -170,8 +170,7 @@ struct ProjectFileListView: View {
                     } label: {
                         Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                    .buttonStyle(.appProminent())
                 }
             } else {
                 if missingItemCount > 0 {

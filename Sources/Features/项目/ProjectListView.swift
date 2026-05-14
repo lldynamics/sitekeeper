@@ -283,8 +283,7 @@ struct ProjectListView: View {
                 } label: {
                     Label("新建第一个项目", systemImage: "plus.circle.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimaryAction)
+                .buttonStyle(.appProminent())
             }
         }
     }

@@ -91,11 +91,15 @@ struct ReportBuilderTests {
         #expect(pdf.count > 100)
     }
 
-    // MARK: - Daily Report PDF
+    // MARK: - Daily Logs In Full PDF
 
-    @Test func makeDailyReportPDFProducesData() {
+    @Test func makeFullPDFWithDailyLogsProducesData() {
         let store = makeSampleStore()
-        let pdf = ReportBuilder.makeDailyReportPDF(project: store.projects.first, logs: store.dailyLogs)
+        let snapshot = store.makeSnapshot(includePhotoFiles: false)
+        var options = ExportContentOptions()
+        options.includeDailyLogs = true
+
+        let pdf = ReportBuilder.makePDF(snapshot: snapshot, options: options)
         #expect(!pdf.isEmpty)
     }
 

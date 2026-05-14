@@ -14,6 +14,7 @@ struct DWGMetadata {
     let fileName: String
     let fileSize: String
     let modifiedAt: String
+    let dwgVersion: String
     let headerHex: String
     let hints: [String]
 
@@ -29,69 +30,53 @@ struct DWGMetadata {
         dateFormatter.dateFormat = "yyyy-MM-dd HH:mm"
         let modified = values.contentModificationDate.map(dateFormatter.string(from:)) ?? "-"
 
-        let raw = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
-        let header = raw.prefix(32)
+        let header = try readPrefixBytes(fileURL: fileURL, count: 32)
+        let magic = String(data: header.prefix(6), encoding: .ascii) ?? ""
         let hex = header.map { String(format: "%02X", $0) }.joined(separator: " ")
 
         return DWGMetadata(
             fileName: fileURL.lastPathComponent,
             fileSize: sizeFormatter.string(fromByteCount: Int64(bytes)),
             modifiedAt: modified,
+            dwgVersion: dwgVersionDescription(for: magic),
             headerHex: hex,
             hints: hints
         )
     }
-}
 
-struct DWGSidecarFiles {
-    var dxfURL: URL?
-    var pdfURL: URL?
-
-    var hints: [String] {
-        var value: [String] = []
-        if let pdfURL {
-            value.append("检测到同名 PDF：\(pdfURL.lastPathComponent)")
-        }
-        return value
-    }
-}
-
-enum DWGSidecarResolver {
-    static func resolve(for dwgURL: URL) -> DWGSidecarFiles {
-        let baseName = dwgURL.deletingPathExtension().lastPathComponent
-        let normalized = normalize(baseName)
-        guard !normalized.isEmpty else { return DWGSidecarFiles() }
-
-        let folder = dwgURL.deletingLastPathComponent()
-        guard let urls = try? FileManager.default.contentsOfDirectory(
-            at: folder,
-            includingPropertiesForKeys: nil,
-            options: [.skipsHiddenFiles]
-        ) else {
-            return DWGSidecarFiles()
-        }
-
-        var result = DWGSidecarFiles()
-        for candidate in urls {
-            let ext = candidate.pathExtension.lowercased()
-            guard ext == "dxf" || ext == "pdf" else { continue }
-            let candidateNormalized = normalize(candidate.deletingPathExtension().lastPathComponent)
-            guard candidateNormalized == normalized else { continue }
-            if ext == "dxf", result.dxfURL == nil {
-                result.dxfURL = candidate
-            } else if ext == "pdf", result.pdfURL == nil {
-                result.pdfURL = candidate
-            }
-        }
-        return result
+    private static func readPrefixBytes(fileURL: URL, count: Int) throws -> Data {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        return try handle.read(upToCount: count) ?? Data()
     }
 
-    private static func normalize(_ raw: String) -> String {
-        raw
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .lowercased()
-            .replacingOccurrences(of: "[\\s_\\-]+", with: "", options: .regularExpression)
+    private static func dwgVersionDescription(for magic: String) -> String {
+        switch magic {
+        case "AC1009":
+            return "AutoCAD R12 (AC1009)"
+        case "AC1012":
+            return "AutoCAD R13 (AC1012)"
+        case "AC1014":
+            return "AutoCAD R14 (AC1014)"
+        case "AC1015":
+            return "AutoCAD 2000/2000i/2002 (AC1015)"
+        case "AC1018":
+            return "AutoCAD 2004/2005/2006 (AC1018)"
+        case "AC1021":
+            return "AutoCAD 2007/2008/2009 (AC1021)"
+        case "AC1024":
+            return "AutoCAD 2010/2011/2012 (AC1024)"
+        case "AC1027":
+            return "AutoCAD 2013-2017 (AC1027)"
+        case "AC1032":
+            return "AutoCAD 2018-2025 (AC1032)"
+        case "AC1036":
+            return "AutoCAD 2026+ (AC1036)"
+        case "":
+            return "无法读取 DWG 版本"
+        default:
+            return "\(magic)（未知 DWG 版本）"
+        }
     }
 }
 
@@ -105,7 +90,7 @@ struct DWGMetadataPreview: View {
                 Label("DWG 元数据视图", systemImage: "doc.text.magnifyingglass")
                     .font(.headline)
                     .foregroundStyle(.orange)
-                Text("已尝试使用 LibreDWG C 内核解析这份 DWG，但没有生成可显示的基础几何。DWG 原件已保留，可继续归档和外部打开。")
+                Text("当前显示这份 DWG 的文件信息。应用会按 DWG 原文件解析，不使用 PDF/DXF 代理预览。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -113,6 +98,7 @@ struct DWGMetadataPreview: View {
                     metadataRow("文件", info.fileName)
                     metadataRow("大小", info.fileSize)
                     metadataRow("修改时间", info.modifiedAt)
+                    metadataRow("DWG 版本", info.dwgVersion)
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -130,13 +116,14 @@ struct DWGMetadataPreview: View {
 
                 if !info.hints.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("可用替代预览")
+                        Text("打不开原因")
                             .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.red)
                         ForEach(info.hints, id: \.self) { hint in
-                            Label(hint, systemImage: "info.circle")
+                            Label(hint, systemImage: "exclamationmark.triangle.fill")
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.red)
+                                .textSelection(.enabled)
                         }
                     }
                 }

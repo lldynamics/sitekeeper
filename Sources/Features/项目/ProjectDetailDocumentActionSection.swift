@@ -9,7 +9,7 @@ struct ProjectDetailDocumentActionSection: View {
     let onCapturePhoto: () -> Void
 
     var body: some View {
-        Section("资料操作") {
+        Section {
             Menu {
                 Button {
                     onScanDocument()
@@ -32,7 +32,7 @@ struct ProjectDetailDocumentActionSection: View {
                     }
                 }
             } label: {
-                Label("添加资料", systemImage: "plus.circle.fill")
+                Label("加资料", systemImage: "plus.circle.fill")
             }
         }
     }

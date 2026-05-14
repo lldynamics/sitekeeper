@@ -11,7 +11,7 @@ enum CADTextBigFontProfile: Int32 {
     var codePageCandidates: [Int32] {
         switch self {
         case .auto:
-            return [936, 54936, 950, 65001]
+            return [936, 54936, 950, 932, 949, 65001]
         case .gbcbig, .hztxt, .hzfs:
             return [936, 54936, 65001]
         case .big5:
@@ -22,37 +22,159 @@ enum CADTextBigFontProfile: Int32 {
     }
 
     static func inferred(from fontFile: String?) -> CADTextBigFontProfile {
-        guard let fontFile else { return .auto }
-        let normalized = fontFile
+        inferred(styleName: nil, fontFile: fontFile, bigFontFile: nil)
+    }
+
+    static func inferred(styleName: String?, fontFile: String?, bigFontFile: String?) -> CADTextBigFontProfile {
+        CADSHXFontCatalog.match(
+            styleName: styleName,
+            fontFile: fontFile,
+            bigFontFile: bigFontFile
+        )?.profile ?? .auto
+    }
+}
+
+enum CADSHXFontCatalog {
+    struct Match {
+        let profile: CADTextBigFontProfile
+        let alias: String
+        let source: String
+        let confidence: Int
+
+        var summary: String {
+            "\(source): \(alias) -> \(profile.diagnosticName)"
+        }
+    }
+
+    static func match(styleName: String?, fontFile: String?, bigFontFile: String?) -> Match? {
+        let orderedSources: [(label: String, value: String?)] = [
+            ("bigfont", bigFontFile),
+            ("font", fontFile),
+            ("style", styleName),
+        ]
+
+        var best: Match?
+        for source in orderedSources {
+            for token in tokens(from: source.value) {
+                guard let candidate = match(token: token, source: source.label) else { continue }
+                if best == nil || candidate.confidence > best!.confidence {
+                    best = candidate
+                }
+            }
+        }
+        return best
+    }
+
+    static func diagnosticSummary(styleName: String?, fontFile: String?, bigFontFile: String?) -> String? {
+        match(styleName: styleName, fontFile: fontFile, bigFontFile: bigFontFile)?.summary
+    }
+
+    private static func match(token: String, source: String) -> Match? {
+        if let confidence = big5Aliases[token] {
+            return Match(profile: .big5, alias: token, source: source, confidence: confidence + sourceWeight(source))
+        }
+        if let confidence = hzfsAliases[token] {
+            return Match(profile: .hzfs, alias: token, source: source, confidence: confidence + sourceWeight(source))
+        }
+        if let confidence = hztxtAliases[token] {
+            return Match(profile: .hztxt, alias: token, source: source, confidence: confidence + sourceWeight(source))
+        }
+        if let confidence = gbcbigAliases[token] {
+            return Match(profile: .gbcbig, alias: token, source: source, confidence: confidence + sourceWeight(source))
+        }
+        return nil
+    }
+
+    private static func sourceWeight(_ source: String) -> Int {
+        switch source {
+        case "bigfont":
+            return 30
+        case "font":
+            return 20
+        case "style":
+            return 10
+        default:
+            return 0
+        }
+    }
+
+    private static func tokens(from value: String?) -> [String] {
+        let trimmed = (value ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+
+        let folded = trimmed
+            .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .lowercased()
-            .replacingOccurrences(of: ".shx", with: "")
-            .replacingOccurrences(of: ".ttf", with: "")
-            .replacingOccurrences(of: ".otf", with: "")
-        if normalized.contains("big5") || normalized.contains("chineset") {
-            return .big5
+        let stripped = folded
+            .replacingOccurrences(of: "\\.(shx|shp|ttf|ttc|otf|fon)$", with: "", options: .regularExpression)
+        let separators = CharacterSet(charactersIn: "/\\._- ()[]{}<>+")
+        let parts = stripped.components(separatedBy: separators).filter { !$0.isEmpty }
+        var result = [stripped]
+        result.append(contentsOf: parts)
+        result.append(contentsOf: parts.map { $0.replacingOccurrences(of: "@", with: "") })
+        return Array(Set(result))
+    }
+
+    private static func table(_ entries: [(String, Int)]) -> [String: Int] {
+        Dictionary(entries, uniquingKeysWith: max)
+    }
+
+    private static let gbcbigAliases = table([
+        ("gbcbig", 100), ("gbcbiggb", 98), ("gbcbig5", 96), ("gb", 64),
+        ("gbenor", 92), ("gbeitc", 90), ("gbhz", 88), ("gbfs", 86),
+        ("gbfang", 84), ("gbfangsong", 84), ("gbst", 78), ("gblong", 78),
+        ("hzd", 88), ("hzdx", 82), ("hzdxt", 82), ("hzdw", 76),
+        ("hzxy", 76), ("hzzd", 74), ("hzt", 70), ("hz", 60),
+        ("tssdeng", 98), ("tssdchn", 98), ("tssd", 96), ("tss", 84),
+        ("tssdeng2", 90), ("tssdeng3", 90), ("tssdchn2", 90),
+        ("tch", 72), ("thchn", 72), ("china", 70), ("chinese", 70),
+        ("simsun", 62), ("simhei", 62), ("msyh", 58), ("yahei", 58),
+    ])
+
+    private static let hztxtAliases = table([
+        ("hztxt", 100), ("hztxt1", 96), ("hztxt2", 96), ("hztxt3", 92),
+        ("hztxt", 96), ("hztext", 92), ("hzdx", 84), ("hzdxt", 84),
+        ("hzxk", 82), ("hzdd", 78), ("hzzd", 78), ("hzt", 70),
+        ("txt", 72), ("txt1", 70), ("txt2", 70), ("simplex", 70),
+        ("simplex8", 68), ("romans", 66), ("romanc", 64), ("romand", 64),
+        ("iso", 58), ("isocp", 58), ("isocp2", 58), ("gdt", 56),
+        ("standard", 42),
+    ])
+
+    private static let hzfsAliases = table([
+        ("hzfs", 100), ("hzfs1", 96), ("hzfs2", 96), ("hzfangsong", 96),
+        ("fs", 82), ("fsdb", 90), ("fsdb_e", 90), ("gbhzfs", 92),
+        ("simfang", 96), ("fangsong", 94), ("fang", 72), ("fsgb", 88),
+        ("fzfs", 86), ("fzfangsong", 86), ("仿宋", 100), ("仿宋gb2312", 96),
+        ("fangsong_gb2312", 96), ("stfangsong", 84), ("adobe fangsong std", 78),
+    ])
+
+    private static let big5Aliases = table([
+        ("big5", 100), ("bigfont", 82), ("chineset", 96), ("chinese_t", 96),
+        ("cht", 92), ("tw", 74), ("taiwan", 74), ("mingliu", 88),
+        ("pmingliu", 88), ("kaiu", 86), ("msung", 82), ("msungstd", 82),
+        ("bkai", 82), ("hk", 74), ("hkscs", 80), ("extfont", 70),
+        ("extfont2", 70), ("繁体", 90), ("繁體", 90), ("細明體", 88),
+        ("新細明體", 88), ("標楷體", 86),
+    ])
+}
+
+private extension CADTextBigFontProfile {
+    var diagnosticName: String {
+        switch self {
+        case .auto:
+            return "AUTO"
+        case .gbcbig:
+            return "GBCBIG"
+        case .hztxt:
+            return "HZTXT"
+        case .hzfs:
+            return "HZFS"
+        case .big5:
+            return "BIG5"
+        case .disabled:
+            return "DISABLED"
         }
-        if normalized.contains("hzfs") ||
-            normalized.contains("simfang") ||
-            normalized.contains("fangsong") ||
-            normalized.contains("fs") {
-            return .hzfs
-        }
-        if normalized.contains("hztxt") || normalized.contains("txt") {
-            return .hztxt
-        }
-        if normalized.contains("gbcbig") ||
-            normalized.contains("tssdeng") ||
-            normalized.contains("tssdchn") ||
-            normalized.contains("gb") ||
-            normalized.contains("tssd") ||
-            normalized.contains("hzd") ||
-            normalized.contains("simhei") ||
-            normalized.contains("simsun") ||
-            normalized.contains("china") ||
-            normalized.contains("chinese") {
-            return .gbcbig
-        }
-        return .auto
     }
 }
 
@@ -87,6 +209,77 @@ enum CADTextNormalizer {
 
     static func diagnosticScore(_ text: String) -> Int {
         decodedQualityScore(text)
+    }
+
+    static func looksSuspicious(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if looksLikeMojibake(trimmed) {
+            return true
+        }
+        if trimmed.unicodeScalars.contains(where: { $0.value == 0xFFFD || (0xE000...0xF8FF).contains($0.value) }) {
+            return true
+        }
+        return decodedQualityScore(trimmed) < -4
+    }
+
+    static func looksLikeMojibake(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        if mojibakeSuspicionScore(trimmed) >= 2 {
+            return true
+        }
+        let hasHighLatin = trimmed.unicodeScalars.contains { (0x00A0...0x00FF).contains($0.value) }
+        let hasReadableChinese = trimmed.unicodeScalars.contains { scalar in
+            (0x3400...0x4DBF).contains(scalar.value) ||
+                (0x4E00...0x9FFF).contains(scalar.value) ||
+                (0xF900...0xFAFF).contains(scalar.value)
+        }
+        return hasHighLatin && !hasReadableChinese
+    }
+
+    static func bestEffortNormalizedText(
+        decodedText: String,
+        rawTextBytesHex: String?,
+        preferredCodePage: Int32?,
+        bigFontProfile: CADTextBigFontProfile
+    ) -> (text: String, codePage: Int32?) {
+        let normalizedDecoded = normalize(decodedText, bigFontProfile: bigFontProfile)
+        var best = (
+            text: normalizedDecoded,
+            score: decodedQualityScore(normalizedDecoded),
+            codePage: preferredCodePage
+        )
+
+        guard let bytes = bytes(fromHexDump: rawTextBytesHex), !bytes.isEmpty else {
+            return (best.text, best.codePage)
+        }
+
+        var codePages: [Int32] = []
+        if let preferredCodePage {
+            codePages.append(preferredCodePage)
+        }
+        codePages.append(contentsOf: bigFontProfile.codePageCandidates)
+        codePages.append(contentsOf: [936, 54936, 950, 65001, 932, 949])
+
+        var seen: Set<UInt> = []
+        let data = Data(bytes)
+        for codePage in codePages {
+            guard let encoding = stringEncoding(for: codePage),
+                  seen.insert(encoding.rawValue).inserted,
+                  let decoded = String(data: data, encoding: encoding) else {
+                continue
+            }
+
+            let normalized = normalize(decoded, bigFontProfile: bigFontProfile)
+            guard !normalized.isEmpty else { continue }
+            let score = decodedQualityScore(normalized)
+            if score > best.score + 4 || shouldPreferRawByteDecode(current: best.text, candidate: normalized) {
+                best = (normalized, score, codePage)
+            }
+        }
+
+        return (best.text, best.codePage)
     }
 
     private static func bestTextCandidate(from candidates: [String]) -> String {
@@ -291,6 +484,39 @@ enum CADTextNormalizer {
         }
 
         return best?.text
+    }
+
+    private static func bytes(fromHexDump raw: String?) -> [UInt8]? {
+        let tokens = (raw ?? "")
+            .split { character in
+                character == " " || character == "\n" || character == "\t" || character == "\r"
+            }
+        guard !tokens.isEmpty else { return nil }
+
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(tokens.count)
+        for token in tokens {
+            guard token != "...", token.count == 2, let value = UInt8(token, radix: 16) else {
+                continue
+            }
+            bytes.append(value)
+        }
+        return bytes.isEmpty ? nil : bytes
+    }
+
+    private static func shouldPreferRawByteDecode(current: String, candidate: String) -> Bool {
+        guard current != candidate,
+              candidate.unicodeScalars.contains(where: { isCJKOrPrivateUse($0.value) }),
+              !candidate.unicodeScalars.contains(where: { $0.value == 0xFFFD }) else {
+            return false
+        }
+        let currentScore = decodedQualityScore(current)
+        let candidateScore = decodedQualityScore(candidate)
+        if candidateScore > currentScore {
+            return true
+        }
+        let currentHasMojibake = current.unicodeScalars.contains { (0x00A0...0x00FF).contains($0.value) || $0.value == 0xFFFD }
+        return currentHasMojibake && candidateScore >= currentScore - 4
     }
 
     private static func stringEncoding(for codePage: Int32) -> String.Encoding? {

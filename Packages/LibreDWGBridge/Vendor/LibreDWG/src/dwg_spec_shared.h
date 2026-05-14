@@ -20,6 +20,14 @@
 #ifndef DWG_SPEC_SHARED_H
 #define DWG_SPEC_SHARED_H
 
+#ifndef LIBREDWG_UNUSED
+#  if defined(__GNUC__) || defined(__clang__)
+#    define LIBREDWG_UNUSED __attribute__((unused))
+#  else
+#    define LIBREDWG_UNUSED
+#  endif
+#endif
+
 /**
  * DIMENSION_common declaration
  */
@@ -172,9 +180,7 @@ static int
 decode_3dsolid (Bit_Chain *dat, Bit_Chain *hdl_dat, Dwg_Object *restrict obj,
                 Dwg_Entity_3DSOLID *restrict _obj)
 {
-  Dwg_Data *dwg = obj->parent;
   BITCODE_BL j;
-  BITCODE_BL vcount;
   BITCODE_BL i = 0;
   BITCODE_BL total_size = 0;
   BITCODE_BL num_blocks = 0;
@@ -441,7 +447,7 @@ static int
 free_3dsolid (Dwg_Object *restrict obj, Dwg_Entity_3DSOLID *restrict _obj)
 {
   int error = 0;
-  Bit_Chain *dat = &pdat;
+  Bit_Chain *dat LIBREDWG_UNUSED = &pdat;
 
   if (!FIELD_VALUE (acis_empty))
     {

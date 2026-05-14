@@ -2254,7 +2254,7 @@ typedef struct _dwg_entity_ATTRIB
   BITCODE_H style;
   BITCODE_RC mtext_type;    /* R2018+ */
   Dwg_AcDbMTextObjectEmbedded mtext;
-  BITCODE_B is_really_locked;      	/*!< DXF 70 */
+  BITCODE_B is_really_locked;       /* DXF 70 */
   BITCODE_BS annotative_data_size;/* R2018+ */
   BITCODE_RC* annotative_data;    /* R2018+ */
   BITCODE_BS annotative_flag;     /* R2018+ */

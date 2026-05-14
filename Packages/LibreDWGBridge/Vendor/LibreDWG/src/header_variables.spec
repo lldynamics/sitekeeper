@@ -261,13 +261,25 @@
       char _buf[60] = "";
       _obj->TDCREATE.days  = _obj->TDUCREATE.days;
       // adjust for timezone offset
-      _obj->TDCREATE.ms    = _obj->TDUCREATE.ms + off;
+      long create_ms = (long)_obj->TDUCREATE.ms + off;
+      if (create_ms < 0 || create_ms > 0xffffffffL) {
+        LOG_WARN ("TDCREATE.ms timezone-adjusted value out of range: %ld",
+                  create_ms);
+        create_ms = create_ms < 0 ? 0 : 0xffffffffL;
+      }
+      _obj->TDCREATE.ms    = (BITCODE_BL)create_ms;
       _obj->TDCREATE.value = _obj->TDCREATE.days + (_obj->TDCREATE.ms * 1e-8);
       strftime (_buf, 60, STRFTIME_DATE, cvt_TIMEBLL (&tm, _obj->TDCREATE));
       LOG_TRACE ("=> TDCREATE: [" FORMAT_BL ", " FORMAT_BL "] %s [TIMEBLL 40]\n",
                    _obj->TDCREATE.days, _obj->TDCREATE.ms, _buf);
       _obj->TDUPDATE.days  = _obj->TDUUPDATE.days;
-      _obj->TDUPDATE.ms    = _obj->TDUUPDATE.ms + off;
+      long update_ms = (long)_obj->TDUUPDATE.ms + off;
+      if (update_ms < 0 || update_ms > 0xffffffffL) {
+        LOG_WARN ("TDUPDATE.ms timezone-adjusted value out of range: %ld",
+                  update_ms);
+        update_ms = update_ms < 0 ? 0 : 0xffffffffL;
+      }
+      _obj->TDUPDATE.ms    = (BITCODE_BL)update_ms;
       _obj->TDUPDATE.value = _obj->TDUPDATE.days + (_obj->TDUPDATE.ms * 1e-8);
       strftime (_buf, 60, STRFTIME_DATE, cvt_TIMEBLL (&tm, _obj->TDUPDATE));
       LOG_TRACE ("=> TDUPDATE: [" FORMAT_BL ", " FORMAT_BL "] %s [TIMEBLL 40]\n",

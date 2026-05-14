@@ -4,7 +4,6 @@ struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
-    @AppStorage(UserPreferenceKeys.cadPreviewEngine) private var cadPreviewEngineRaw = CADPreviewEngine.libreDWG.rawValue
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataConfirm = false
     @State private var showClearLocalDataSheet = false
@@ -15,47 +14,12 @@ struct SettingsView: View {
         AppFeatureFlags.allowsSampleDataImport
     }
 
-    private var selectedCADEngine: CADPreviewEngine {
-        get {
-            StringEnumFallback.value(cadPreviewEngineRaw, default: .libreDWG)
-        }
-        nonmutating set {
-            cadPreviewEngineRaw = newValue.rawValue
-        }
-    }
-
-    private var isLibreDWGAvailable: Bool {
-        CADPreviewCapability.isLibreDWGRendererAvailable()
-    }
-
     var body: some View {
         Form {
             Section("显示") {
                 Text("公制单位、自动保存、主题、配色和语言已放到“我的”首页快捷设置。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-            }
-            Section("CAD 预览") {
-                Picker("图纸预览引擎", selection: $cadPreviewEngineRaw) {
-                    ForEach(CADPreviewEngine.allCases, id: \.rawValue) { engine in
-                        Text(engine.title).tag(engine.rawValue)
-                    }
-                }
-                .pickerStyle(.menu)
-                if isLibreDWGAvailable {
-                    Text("LibreDWGBridge 已接入，可在应用内尝试直接预览 DWG/DXF。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text("当前构建未接入 LibreDWGBridge。选择 LibreDWG 时会显示接入提示；系统引擎仍建议使用同名 PDF 预览。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    if selectedCADEngine == .libreDWG {
-                        Button("切回系统 CAD 预览") {
-                            selectedCADEngine = .systemQuickLook
-                        }
-                    }
-                }
             }
             if allowsSampleDataImport {
                 Section("示例数据") {
@@ -144,10 +108,6 @@ struct SettingsView: View {
         }
         .onAppear {
             backupHealthReminderDays = min(max(backupHealthReminderDays, 1), 30)
-            let normalized = StringEnumFallback.value(cadPreviewEngineRaw, default: CADPreviewEngine.libreDWG)
-            if normalized.rawValue != cadPreviewEngineRaw {
-                cadPreviewEngineRaw = normalized.rawValue
-            }
         }
     }
 

@@ -7,9 +7,19 @@ extern "C" {
 
 typedef enum SKCADPrimitiveKind {
     SKCADPrimitiveLine = 0,
-    SKCADPrimitiveArc = 1,
-    SKCADPrimitiveCircle = 2,
-    SKCADPrimitiveText = 3
+    SKCADPrimitivePolyline = 1,
+    SKCADPrimitiveArc = 2,
+    SKCADPrimitiveCircle = 3,
+    SKCADPrimitiveEllipse = 4,
+    SKCADPrimitiveText = 5,
+    SKCADPrimitiveMText = 6,
+    SKCADPrimitiveDimension = 7,
+    SKCADPrimitiveHatch = 8,
+    SKCADPrimitiveLeader = 9,
+    SKCADPrimitiveImage = 10,
+    SKCADPrimitiveWipeout = 11,
+    SKCADPrimitiveBlockRef = 12,
+    SKCADPrimitiveUnknownProxy = 13
 } SKCADPrimitiveKind;
 
 typedef struct SKCADPoint {
@@ -22,6 +32,8 @@ typedef struct SKCADPrimitive {
     SKCADPoint start;
     SKCADPoint end;
     SKCADPoint center;
+    SKCADPoint *points;
+    int pointCount;
     char *layerName;
     unsigned int strokeRGB;
     double strokeWidth;
@@ -44,11 +56,24 @@ typedef struct SKCADParseResult {
     int totalObjectCount;
     int unsupportedEntityCount;
     int requestedCodepage;
+    int readStatus;
+    int dwgVersion;
+    int dwgFromVersion;
+    int dwgHeaderDwgVersion;
+    int dwgHeaderMaintVersion;
     int headerCodepage;
     int effectiveCodepage;
+    int primitiveLimit;
+    int objectLimit;
+    unsigned long long primitiveMemoryBudget;
+    unsigned long long estimatedPrimitiveMemory;
     int textPrimitiveCount;
     int suspiciousTextCount;
     int mojibakeTextCount;
+    char dwgVersionCode[16];
+    char dwgVersionType[32];
+    char dwgVersionDescription[96];
+    char styleTableSummary[512];
     char unsupportedEntitySummary[256];
     char errorMessage[512];
 } SKCADParseResult;

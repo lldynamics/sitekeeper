@@ -88,8 +88,7 @@ struct BackupQuickStartCard: View {
             Button(action: onExport) {
                 Label("立即导出首份备份 ZIP", systemImage: "square.and.arrow.up")
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.appWarning)
+            .buttonStyle(.appProminent(tint: .appWarning))
 
             Text("导入备份可在下方“本地备份”中选择 ZIP；旧版备份会自动兼容。")
                 .font(.caption2)

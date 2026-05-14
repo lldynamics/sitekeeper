@@ -87,8 +87,7 @@ struct MaterialListView: View {
                     } label: {
                         Label("添加材料", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                    .buttonStyle(.appProminent())
                 }
             } else {
                 ForEach(filtered) { item in

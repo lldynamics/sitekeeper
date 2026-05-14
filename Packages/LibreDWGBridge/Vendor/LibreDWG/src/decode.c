@@ -47,6 +47,14 @@
 #include "free.h"
 #include "dynapi.h"
 
+#ifndef LIBREDWG_UNUSED
+#  if defined(__GNUC__) || defined(__clang__)
+#    define LIBREDWG_UNUSED __attribute__((unused))
+#  else
+#    define LIBREDWG_UNUSED
+#  endif
+#endif
+
 /* the current version per spec block */
 static int cur_ver = 0;
 static BITCODE_BL rcount1 = 0, rcount2 = 0;
@@ -263,9 +271,9 @@ xor_section_CRC (BITCODE_RL num_sections, BITCODE_RS crc)
 static int
 template_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_Template *_obj = &dwg->Template;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   int error = 0;
 
   // clang-format off
@@ -282,7 +290,7 @@ template_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 decode_R13_R2000 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   unsigned int section_size = 0;
   BITCODE_RS crc, crc2;
   size_t size, startpos, endpos, lastmap, pvz = 0;
@@ -296,9 +304,9 @@ decode_R13_R2000 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 
   {
     Dwg_Header *_obj = &dwg->header;
-    Bit_Chain *hdl_dat = dat;
+    Bit_Chain *hdl_dat LIBREDWG_UNUSED = dat;
     int i;
-    BITCODE_BL vcount;
+    BITCODE_BL vcount LIBREDWG_UNUSED;
     assert (dat->byte == 0xb); // after version magic
 
     // clang-format off
@@ -369,7 +377,7 @@ decode_R13_R2000 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
   if (dwg->header.sections == 6 && dwg->header.version >= R_13c3)
     {
       Dwg_AuxHeader *_obj = &dwg->auxheader;
-      Bit_Chain *hdl_dat = dat;
+      Bit_Chain *hdl_dat LIBREDWG_UNUSED = dat;
       size_t end_address = dwg->header.section[SECTION_AUXHEADER_R2000].address
                            + dwg->header.section[SECTION_AUXHEADER_R2000].size;
 
@@ -387,7 +395,7 @@ decode_R13_R2000 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
       else
         {
           size_t old_size = dat->size;
-          BITCODE_BL vcount;
+          BITCODE_BL vcount LIBREDWG_UNUSED;
           dat->size = end_address;
           // clang-format off
           #include "auxheader.spec"
@@ -1570,8 +1578,20 @@ read_R2004_section_map (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
           dwg->header.section[i].number = section_map_id;
           dwg->header.section[i].address = section_map_address;
           if (i > 0)
-            dwg->header.section[i].size
-                = section_map_address - dwg->header.section[i - 1].address;
+            {
+              const BITCODE_RLL previous_address
+                  = dwg->header.section[i - 1].address;
+              const BITCODE_RLL section_size
+                  = section_map_address - previous_address;
+              if (section_map_address < previous_address
+                  || section_size > UINT32_MAX)
+                {
+                  LOG_ERROR ("Invalid repaired section size: " FORMAT_RLL,
+                             section_size);
+                  return DWG_ERR_VALUEOUTOFBOUNDS;
+                }
+              dwg->header.section[i].size = (BITCODE_RL)section_size;
+            }
         }
       info = find_section (dwg, dwg->fhdr.r2004_header.section_info_id);
       if (!info)
@@ -1693,7 +1713,7 @@ read_R2004_section_info (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,
   dec.byte = 0;
   LOG_TRACE ("\n#### Read 2004 section_infohdr ####\n");
   {
-    Dwg_Object *obj = NULL;
+    Dwg_Object *obj LIBREDWG_UNUSED = NULL;
     Dwg_Section_InfoHdr *_obj = &dwg->header.section_infohdr;
     dat = &dec;
     FIELD_RL (num_desc, 0);
@@ -1748,7 +1768,7 @@ read_R2004_section_info (Bit_Chain *restrict dat, Dwg_Data *restrict dwg,
           return DWG_ERR_INVALIDDWG;
         }
       {
-        Dwg_Object *obj = NULL;
+        Dwg_Object *obj LIBREDWG_UNUSED = NULL;
         Dwg_Section_Info *_obj = &dwg->header.section_info[i];
         info = _obj;
         LOG_TRACE ("\nsection_info[%d] fields:\n", i);
@@ -2087,7 +2107,15 @@ read_2004_compressed_section (Bit_Chain *dat, Dwg_Data *restrict dwg,
           j--; // index for writing info->max_decomp_size chunks
           continue;
         }
-      address = info->sections[i]->address;
+      if (info->sections[i]->address > UINT32_MAX)
+        {
+          LOG_ERROR ("Invalid encrypted section address: " FORMAT_RLL,
+                     info->sections[i]->address);
+          free (dec.chain);
+          sec_dat->chain = NULL;
+          return DWG_ERR_VALUEOUTOFBOUNDS;
+        }
+      address = (uint32_t)info->sections[i]->address;
       memcpy (es.long_data, &dat->chain[address], 32);
       dat->byte = address + 32;
       // bit_read_fixed (dat, es.char_data, 32);
@@ -2610,7 +2638,7 @@ read_2004_section_handles (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 summaryinfo_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_SummaryInfo *_obj = &dwg->summaryinfo;
   Dwg_Object *obj = NULL;
   int error = 0;
@@ -2668,11 +2696,11 @@ read_2004_section_summary (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 auxheader_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_AuxHeader *_obj = &dwg->auxheader;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   int error = 0;
-  BITCODE_BL vcount;
+  BITCODE_BL vcount LIBREDWG_UNUSED;
   if (!dat->chain || !dat->size)
     return 1;
 
@@ -2687,7 +2715,7 @@ auxheader_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 secondheader_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_SecondHeader *_obj = &dwg->secondheader;
   // for error logging only:
 #ifndef __cplusplus
@@ -2723,7 +2751,7 @@ objfreespace_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
   // Bit_Chain *str_dat = dat;
   Dwg_ObjFreeSpace *_obj = &dwg->objfreespace;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   int error = 0;
   // BITCODE_BL vcount;
   if (!dat->chain || !dat->size)
@@ -2780,9 +2808,9 @@ read_2004_section_auxheader (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 appinfo_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_AppInfo *_obj = &dwg->appinfo;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   int error = 0;
   if (!dat->chain || !dat->size)
     return 1;
@@ -2915,7 +2943,7 @@ read_2004_section_filedeplist (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 security_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_Security *_obj = &dwg->security;
   Dwg_Object *obj = NULL;
   int error = 0;
@@ -2971,7 +2999,7 @@ read_2004_section_security (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 signature_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   struct Dwg_Signature *_obj = &dwg->signature;
   Dwg_Object *obj = NULL;
   int error = 0;
@@ -3122,7 +3150,7 @@ read_2004_section_appinfohistory (Bit_Chain *restrict dat,
 static int
 revhistory_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_RevHistory *_obj = &dwg->revhistory;
   Dwg_Object *obj = NULL;
   int error = 0;
@@ -3272,10 +3300,10 @@ read_2004_section_template (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 static int
 acds_private (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 {
-  Bit_Chain *str_dat = dat;
+  Bit_Chain *str_dat LIBREDWG_UNUSED = dat;
   Dwg_AcDs *_obj = &dwg->acds;
-  Dwg_Object *obj = NULL;
-  BITCODE_BL rcount3 = 0, rcount4, vcount;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
+  BITCODE_BL rcount3 = 0, rcount4 LIBREDWG_UNUSED, vcount LIBREDWG_UNUSED;
   int error = 0;
 
   // clang-format off
@@ -3411,9 +3439,9 @@ static int
 decode_R2004_header (Bit_Chain *restrict file_dat, Dwg_Data *restrict dwg)
 {
   int error = 0;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   Dwg_R2004_Header *_obj = &dwg->fhdr.r2004_header;
-  Bit_Chain *hdl_dat = file_dat;
+  Bit_Chain *hdl_dat LIBREDWG_UNUSED = file_dat;
 
   {
     const size_t size = sizeof (Dwg_R2004_Header);
@@ -3567,10 +3595,10 @@ decode_R2004 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
 
   {
     Dwg_Header *_obj = &dwg->header;
-    Dwg_Object *obj = NULL;
-    Bit_Chain *hdl_dat = dat;
+    Dwg_Object *obj LIBREDWG_UNUSED = NULL;
+    Bit_Chain *hdl_dat LIBREDWG_UNUSED = dat;
     int i;
-    BITCODE_BL vcount;
+    BITCODE_BL vcount LIBREDWG_UNUSED;
     assert (dat->byte == 0xb); // after version magic
 
     // clang-format off
@@ -3603,7 +3631,7 @@ decode_R2004 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
   section = find_section (dwg, dwg->fhdr.r2004_header.section_info_id);
   if (section)
     {
-      Dwg_Object *obj = NULL;
+      Dwg_Object *obj LIBREDWG_UNUSED = NULL;
       Dwg_Section *_obj = section;
       LOG_TRACE ("\n=== Data Section (Section Info %d) @%lx ===\n",
                  dwg->fhdr.r2004_header.section_info_id,
@@ -3681,9 +3709,9 @@ decode_R2007 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
   hdl_dat = *dat;
   {
     Dwg_Header *_obj = &dwg->header;
-    Dwg_Object *obj = NULL;
+    Dwg_Object *obj LIBREDWG_UNUSED = NULL;
     int i;
-    BITCODE_BL vcount;
+    BITCODE_BL vcount LIBREDWG_UNUSED;
     assert (dat->byte == 0xb); // after version magic
 
     // clang-format off
@@ -3817,9 +3845,16 @@ dwg_decode_eed_data (Bit_Chain *restrict dat, Dwg_Eed_Data *restrict data,
 #else
         if (DWG_LOGLEVEL >= DWG_LOGLEVEL_TRACE)
           {
-            char *u8 = bit_TU_to_utf8_len (data->u.eed_0_r2007.string, lens);
-            LOG_TRACE ("wstring: len=%d [RS] \"%s\" [TU]", (int)lens, u8);
-            free (u8);
+            if (lens <= INT_MAX)
+              {
+                char *u8 = bit_TU_to_utf8_len (
+                    data->u.eed_0_r2007.string, (int)lens);
+                LOG_TRACE ("wstring: len=%d [RS] \"%s\" [TU]", (int)lens,
+                           u8);
+                free (u8);
+              }
+            else
+              LOG_WARN ("wstring trace length out of range: %" PRIuSIZE, lens);
           }
 #endif
       }
@@ -5404,8 +5439,18 @@ dwg_decode_add_object (Dwg_Data *restrict dwg, Bit_Chain *dat,
     /* This is not counted in the object size */
     obj->handlestream_size = bit_read_UMC (dat);
     LOG_INFO (", Hdlsize: " FORMAT_UMC " [UMC] ", obj->handlestream_size);
-    obj->bitsize = obj->size * 8 - obj->handlestream_size;
-    // TODO boundscheck
+    {
+      const uint64_t object_bits = (uint64_t)obj->size * 8U;
+      if (obj->handlestream_size > object_bits
+          || object_bits - obj->handlestream_size > UINT32_MAX)
+        {
+          LOG_ERROR ("Invalid object bitstream size: %" PRIu64 " - "
+                     FORMAT_UMC,
+                     object_bits, obj->handlestream_size);
+          return DWG_ERR_VALUEOUTOFBOUNDS;
+        }
+      obj->bitsize = (BITCODE_RL)(object_bits - obj->handlestream_size);
+    }
   }
 
   objpos = bit_position (dat); // absolute
@@ -5859,7 +5904,9 @@ dwg_decode_unknown_bits (Bit_Chain *restrict dat, Dwg_Object *restrict obj)
     return DWG_ERR_VALUEOUTOFBOUNDS;
 
   obj->num_unknown_bits = (BITCODE_RL)num_bits;
-  num_bytes = num_bits / 8;
+  if (num_bits > (long)INT_MAX * 8L)
+    return DWG_ERR_VALUEOUTOFBOUNDS;
+  num_bytes = (int)(num_bits / 8);
   if (num_bits % 8)
     num_bytes++;
 
@@ -5898,7 +5945,9 @@ dwg_decode_unknown_rest (Bit_Chain *restrict dat, Dwg_Object *restrict obj)
     return DWG_ERR_VALUEOUTOFBOUNDS;
 
   obj->num_unknown_rest = (BITCODE_RL)num_bits;
-  num_bytes = num_bits / 8;
+  if (num_bits > (long)INT_MAX * 8L)
+    return DWG_ERR_VALUEOUTOFBOUNDS;
+  num_bytes = (int)(num_bits / 8);
   if (num_bits % 8)
     num_bytes++;
 

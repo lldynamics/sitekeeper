@@ -29,6 +29,14 @@
 #  define DWG_DECODE_FUNC static
 #endif
 
+#ifndef LIBREDWG_UNUSED
+#  if defined(__GNUC__) || defined(__clang__)
+#    define LIBREDWG_UNUSED __attribute__((unused))
+#  else
+#    define LIBREDWG_UNUSED
+#  endif
+#endif
+
 #include "config.h"
 #if defined HAVE_CTYPE_H || defined _MSC_VER
 #  include <ctype.h>
@@ -1716,7 +1724,7 @@
   EXPORT int dwg_setup_##token (Dwg_Object *obj)                              \
   {                                                                           \
     Dwg_Object_Entity *_ent;                                                  \
-    Dwg_Entity_##token *_obj;                                                 \
+    Dwg_Entity_##token *_obj LIBREDWG_UNUSED;                                 \
     if (strEQc (#token, "DIMENSION_ANG2LN")                                   \
         && obj->parent->header.version < R_13b1)                              \
       LOG_INFO ("Add entity DIMENSION [%d] ", obj->index);                    \
@@ -1802,11 +1810,12 @@
       Bit_Chain *dat, Bit_Chain *hdl_dat, Bit_Chain *str_dat,                 \
       Dwg_Object *restrict obj)                                               \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
     int error = 0;                                                            \
-    Dwg_Entity_##token *ent, *_obj;                                           \
-    Dwg_Object_Entity *_ent;                                                  \
-    Dwg_Data *dwg = obj->parent;                                              \
+    Dwg_Entity_##token *ent LIBREDWG_UNUSED, *_obj LIBREDWG_UNUSED;           \
+    Dwg_Object_Entity *_ent LIBREDWG_UNUSED;                                  \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     LOG_INFO ("Decode entity " #token "\n");                                  \
     _ent = obj->tio.entity;                                                   \
     ent = obj->tio.entity->tio.token;                                         \
@@ -1844,7 +1853,7 @@
 #define DWG_OBJECT(token)                                                     \
   EXPORT int dwg_setup_##token (Dwg_Object *obj)                              \
   {                                                                           \
-    Dwg_Object_##token *_obj;                                                 \
+    Dwg_Object_##token *_obj LIBREDWG_UNUSED;                                 \
     LOG_INFO ("Add object " #token " [%d] ", obj->index);                     \
     obj->supertype = DWG_SUPERTYPE_OBJECT;                                    \
     obj->tio.object                                                           \
@@ -1918,10 +1927,11 @@
       Bit_Chain *dat, Bit_Chain *hdl_dat, Bit_Chain *str_dat,                 \
       Dwg_Object *restrict obj)                                               \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
     int error = 0;                                                            \
-    Dwg_Object_##token *_obj = NULL;                                          \
-    Dwg_Data *dwg = obj->parent;                                              \
+    Dwg_Object_##token *_obj LIBREDWG_UNUSED = NULL;                          \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     LOG_INFO ("Decode object " #token "\n");                                  \
     if (strNE (#token, "TABLECONTENT") || obj->fixedtype != DWG_TYPE_TABLE)   \
       {                                                                       \
@@ -1938,7 +1948,7 @@
 #define DWG_TABLE(token)                                                      \
   EXPORT int dwg_setup_##token (Dwg_Object *obj)                              \
   {                                                                           \
-    Dwg_Object_##token *_obj;                                                 \
+    Dwg_Object_##token *_obj LIBREDWG_UNUSED;                                 \
     LOG_INFO ("Add table record " #token " [%d] ", obj->index);               \
     obj->supertype = DWG_SUPERTYPE_OBJECT;                                    \
     obj->tio.object                                                           \
@@ -2003,10 +2013,11 @@
       Bit_Chain *dat, Bit_Chain *hdl_dat, Bit_Chain *str_dat,                 \
       Dwg_Object *restrict obj)                                               \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
     int error = 0;                                                            \
-    Dwg_Object_##token *_obj = NULL;                                          \
-    Dwg_Data *dwg = obj->parent;                                              \
+    Dwg_Object_##token *_obj LIBREDWG_UNUSED = NULL;                          \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     LOG_INFO ("Decode table record " #token "\n");                            \
     _obj = obj->tio.object->tio.token;                                        \
     error = dwg_decode_object (dat, hdl_dat, str_dat, obj->tio.object);       \

@@ -34,7 +34,6 @@ struct ProjectDetailModeSectionsView: View {
     let relatedTodos: [SiteTodo]
     let filteredDrawings: [ProjectDrawing]
     let financeJumpFilter: ProjectFinanceJumpFilter
-    let prefersInlineSections: Bool
     let showsAllSections: Bool
     @Binding var drawingFilter: DrawingListFilter
     @Binding var selectedPhotoItem: PhotosPickerItem?
@@ -75,14 +74,14 @@ struct ProjectDetailModeSectionsView: View {
         if showsAllSections {
             inlineFocusedSections
         } else {
-            ProjectDetailModeContent(mode: mode) {
+            CompactProjectDetailModeContent(mode: mode) {
                 overviewSections
             } records: {
-                recordHubSections
+                recordModeSections
             } assets: {
-                assetHubSections
+                assetModeSections
             } finance: {
-                financeHubSections
+                financeModeSections
             } timeline: {
                 ProjectTimelineSectionView(items: timelineItems, onSelect: onOpenTimelineItem)
             }
@@ -92,144 +91,37 @@ struct ProjectDetailModeSectionsView: View {
     private var inlineFocusedSections: some View {
         Group {
             anchorMarker(.overview)
-            if mode == .overview {
-                overviewSections
-            } else {
-                collapsedModeSection(
-                    mode: .overview,
-                    title: "概览",
-                    subtitle: overviewCollapsedSummary,
-                    systemImage: "rectangle.grid.2x2.fill",
-                    tint: .appPrimaryAction
-                )
-            }
+            overviewSections
+
             anchorMarker(.records)
-            if mode == .records {
-                logSections
-                progressSections
-                photoSections
-            } else {
-                collapsedModeSection(
-                    mode: .records,
-                    title: "现场",
-                    subtitle: recordsCollapsedSummary,
-                    systemImage: "checklist.checked",
-                    tint: .appWarning
-                )
-            }
+            logSections
+            progressSections
+            photoSections
+
             anchorMarker(.assets)
-            if mode == .assets {
-                drawingSections
-                projectDocumentSections
-                contactSections
-            } else {
-                collapsedModeSection(
-                    mode: .assets,
-                    title: "资料",
-                    subtitle: assetsCollapsedSummary,
-                    systemImage: "folder.fill",
-                    tint: .appDoc
-                )
-            }
+            drawingSections
+            projectDocumentSections
+            contactSections
+
             anchorMarker(.finance)
-            if mode == .finance {
-                projectBookkeepingSection
-                quoteSections
-                materialSections
-                laborSections
-                Section("项目仓库") {
-                    NavigationLink {
-                        ProjectWarehouseView(project: project)
-                    } label: {
-                        Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
-                    }
+            projectBookkeepingSection
+            quoteSections
+            materialSections
+            laborSections
+            Section("项目仓库") {
+                NavigationLink {
+                    ProjectWarehouseView(project: project)
+                } label: {
+                    Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
                 }
-            } else {
-                collapsedModeSection(
-                    mode: .finance,
-                    title: "财务",
-                    subtitle: financeCollapsedSummary,
-                    systemImage: "yensign.circle.fill",
-                    tint: .appFinance
-                )
             }
+
             anchorMarker(.timeline)
-            if mode == .timeline {
-                ProjectTimelineSectionView(
-                    items: timelineItems,
-                    showsFilters: false,
-                    previewLimit: 5,
-                    onSelect: onOpenTimelineItem
-                )
-            } else {
-                collapsedModeSection(
-                    mode: .timeline,
-                    title: "时间线",
-                    subtitle: timelineCollapsedSummary,
-                    systemImage: "timeline.selection",
-                    tint: .appPrimaryAction
-                )
-            }
-        }
-    }
-
-    private var overviewCollapsedSummary: String {
-        let openTodoCount = relatedTodos.filter { !$0.isDone }.count
-        let unpaidText = unpaidAmount > 0 ? ReportBuilder.money(unpaidAmount) : "已收清"
-        return "待办 \(openTodoCount) 项 · 未收款 \(unpaidText)"
-    }
-
-    private var recordsCollapsedSummary: String {
-        let openTodoCount = relatedTodos.filter { !$0.isDone }.count
-        return "\(relatedLogs.count) 条日志 · \(relatedProgress.count) 项进度 · \(openTodoCount) 项待办"
-    }
-
-    private var assetsCollapsedSummary: String {
-        "\(relatedDrawings.count) 份图纸 · \(relatedDocuments.count) 份资料 · \(relatedContacts.count) 位联系人"
-    }
-
-    private var financeCollapsedSummary: String {
-        "\(relatedFinancialRecords.count) 笔流水 · \(relatedMaterials.count) 项材料 · \(relatedQuotes.count) 项报价 · \(relatedLabor.count) 条人工"
-    }
-
-    private var timelineCollapsedSummary: String {
-        guard !timelineItems.isEmpty else { return "暂无操作记录" }
-        let visibleCount = min(5, timelineItems.count)
-        return "最近 \(visibleCount) 条 · 共 \(timelineItems.count) 条操作"
-    }
-
-    private func collapsedModeSection(
-        mode targetMode: ProjectDetailMode,
-        title: String,
-        subtitle: String,
-        systemImage: String,
-        tint: Color
-    ) -> some View {
-        Section {
-            Button {
-                onOpenMode(targetMode)
-            } label: {
-                HStack(spacing: AppSpacing.normal) {
-                    Image(systemName: systemImage)
-                        .font(.headline)
-                        .foregroundStyle(tint)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer()
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                }
-                .padding(.vertical, 2)
-            }
-            .buttonStyle(.plain)
+            ProjectTimelineSectionView(
+                items: timelineItems,
+                showsFilters: false,
+                onSelect: onOpenTimelineItem
+            )
         }
     }
 
@@ -308,97 +200,34 @@ struct ProjectDetailModeSectionsView: View {
         )
     }
 
-    private var recordHubSections: some View {
+    private var recordModeSections: some View {
         Group {
-            if prefersInlineSections {
-                logSections
-                progressSections
-                photoSections
-            } else {
-                ProjectRecordHubSectionView(
-                    logsCount: relatedLogs.count,
-                    progressCount: relatedProgress.count,
-                    photoCount: relatedLogs.flatMap(\.photoAttachments).count,
-                    logsDestination: { List { logSections } },
-                    progressDestination: { List { progressSections } },
-                    photoDestination: { List { photoSections } }
-                )
-            }
+            logSections
+            progressSections
+            photoSections
         }
     }
 
-    private var financeHubSections: some View {
+    private var financeModeSections: some View {
         Group {
-            if prefersInlineSections {
-                projectBookkeepingSection
-                quoteSections
-                materialSections
-                laborSections
-                Section("项目仓库") {
-                    NavigationLink {
-                        ProjectWarehouseView(project: project)
-                    } label: {
-                        Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
-                    }
+            projectBookkeepingSection
+            quoteSections
+            materialSections
+            laborSections
+            Section("项目仓库") {
+                NavigationLink {
+                    ProjectWarehouseView(project: project)
+                } label: {
+                    Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
                 }
-            } else if financeJumpFilter == .none {
-                ProjectFinanceHubSectionView(
-                    financialCount: relatedFinancialRecords.count,
-                    quoteCount: relatedQuotes.count,
-                    materialCount: relatedMaterials.count,
-                    laborCount: relatedLabor.count,
-                    warehouseCount: relatedWarehouseMovements.count,
-                    bookDestination: { projectBookkeepingDestination },
-                    quoteDestination: { List { quoteSections } },
-                    materialDestination: { List { materialSections } },
-                    laborDestination: { List { laborSections } },
-                    warehouseDestination: { ProjectWarehouseView(project: project) }
-                )
-            } else {
-                projectBookkeepingDestination
             }
         }
     }
 
-    private var assetHubSections: some View {
+    private var assetModeSections: some View {
         Group {
             drawingSections
             projectDocumentSections
-            contactSections
-        }
-    }
-
-    private var projectBookkeepingDestination: some View {
-        ProjectDetailPrimaryActionList(
-            title: "新增账目",
-            systemImage: "plus.circle.fill",
-            tint: .appPrimaryAction,
-            action: onAddFinancialRecord
-        ) {
-            projectBookkeepingSection
-        }
-    }
-
-    private var projectDocumentDestination: some View {
-        ProjectDetailPrimaryActionList(
-            title: "扫描并添加资料",
-            systemImage: "viewfinder",
-            tint: .appDoc,
-            action: {
-                onScanDocument()
-            }
-        ) {
-            projectDocumentSections
-        }
-    }
-
-    private var projectContactDestination: some View {
-        ProjectDetailPrimaryActionList(
-            title: "添加联系人",
-            systemImage: "person.crop.circle.badge.plus",
-            tint: .appPrimaryAction,
-            action: onAddContact
-        ) {
             contactSections
         }
     }

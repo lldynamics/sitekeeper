@@ -18,31 +18,21 @@ struct ChecklistTabView: View {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
 
-    private func normalizedQuickToolID(_ id: String) -> String {
-        switch id {
-        case "warehouse", "material-sheet", "material-library":
-            return "material-center"
-        case "global-calc":
-            return "calculators"
-        default:
-            return id
-        }
-    }
-
     private var practicalTools: [QuickToolEntry] {
         ToolboxCatalog.practicalTools
     }
 
-    private var quickSelectedToolIDs: [String] {
-        let rawIDs = quickToolOrderRaw
+    private var storedQuickToolIDs: [String] {
+        quickToolOrderRaw
             .split(separator: ",")
             .map(String.init)
             .filter { !$0.isEmpty }
-            .map(normalizedQuickToolID(_:))
+    }
 
+    private var quickSelectedToolIDs: [String] {
         var deduplicatedIDs: [String] = []
         var seen = Set<String>()
-        for id in rawIDs where seen.insert(id).inserted {
+        for id in storedQuickToolIDs where seen.insert(id).inserted {
             deduplicatedIDs.append(id)
         }
 
@@ -227,6 +217,25 @@ struct ChecklistTabView: View {
                     quickToolOrderRaw = newIDs.joined(separator: ",")
                 }
             )
+        }
+        .onAppear(perform: sanitizeStoredQuickToolOrder)
+    }
+
+    private func sanitizeStoredQuickToolOrder() {
+        guard !quickToolOrderRaw.isEmpty else { return }
+
+        var seen = Set<String>()
+        let validIDs = storedQuickToolIDs.filter { id in
+            guard practicalTools.contains(where: { $0.id == id }) else { return false }
+            return seen.insert(id).inserted
+        }
+
+        let sanitizedRaw = validIDs.joined(separator: ",")
+        guard sanitizedRaw != quickToolOrderRaw else { return }
+
+        quickToolOrderRaw = sanitizedRaw
+        if validIDs.isEmpty {
+            quickToolCustomized = false
         }
     }
 

@@ -129,8 +129,7 @@ struct SiteTodoView: View {
                 } label: {
                     Label("新建待办", systemImage: "plus.circle.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimaryAction)
+                .buttonStyle(.appProminent())
             }
         }
         .navigationTitle("筛选")

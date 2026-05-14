@@ -84,14 +84,25 @@ struct ProjectDetailContent: View {
             get: { mode },
             set: { onSelectMode($0) }
         )
-        return Section {
-            Picker("内容", selection: modeBinding) {
-                ForEach(ProjectDetailMode.allCases, id: \.self) { item in
-                    Text(item.displayName).tag(item)
+        return Group {
+            if prefersInlineSections {
+                focusPicker(selection: modeBinding)
+            } else {
+                Section {
+                    focusPicker(selection: modeBinding)
                 }
             }
-            .pickerStyle(.segmented)
         }
+    }
+
+    private func focusPicker(selection: Binding<ProjectDetailMode>) -> some View {
+        Picker("内容", selection: selection) {
+            ForEach(ProjectDetailMode.allCases, id: \.self) { item in
+                Text(item.displayName).tag(item)
+            }
+        }
+        .pickerStyle(.segmented)
+        .accessibilityLabel(String(localized: "项目详情焦点"))
     }
 
     private func projectHeader(showsStatus: Bool) -> some View {
@@ -135,6 +146,7 @@ struct ProjectDetailContent: View {
         ProjectDetailQuickActionSection(
             onAddLog: onAddLog,
             onAddFinance: onAddFinancialRecord,
+            onAddDocument: onScanDocument,
             onAddContact: onAddContact,
             onImportDrawing: onImportDrawing,
             onAddMaterial: onAddMaterial,
@@ -193,7 +205,6 @@ struct ProjectDetailContent: View {
             relatedTodos: snapshot.relatedTodos,
             filteredDrawings: snapshot.filteredDrawings(for: drawingFilter),
             financeJumpFilter: financeJumpFilter,
-            prefersInlineSections: prefersInlineSections,
             showsAllSections: showsAllSections,
             drawingFilter: $drawingFilter,
             selectedPhotoItem: $selectedPhotoItem,

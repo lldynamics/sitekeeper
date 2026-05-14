@@ -10,23 +10,35 @@ struct ProjectDetailContentView<JumpBar: View, Header: View, QuickActions: View,
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        ScrollViewReader { proxy in
-            List {
-                jumpBar()
-                header()
+        VStack(spacing: 0) {
+            if isWide {
                 modePicker()
-                quickActions()
-                content()
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.regularMaterial)
+                Divider()
             }
-            .onChange(of: scrollRequest?.id) { _, _ in
-                guard let request = scrollRequest else { return }
-                withAnimation(.easeInOut(duration: 0.28)) {
-                    proxy.scrollTo(request.anchor.scrollID, anchor: .top)
+
+            ScrollViewReader { proxy in
+                List {
+                    jumpBar()
+                    header()
+                    if !isWide {
+                        modePicker()
+                    }
+                    quickActions()
+                    content()
+                }
+                .onChange(of: scrollRequest?.id) { _, _ in
+                    guard let request = scrollRequest else { return }
+                    withAnimation(.easeInOut(duration: 0.28)) {
+                        proxy.scrollTo(request.anchor.scrollID, anchor: .top)
+                    }
                 }
             }
+            .listStyle(.insetGrouped)
+            .scrollContentBackground(.visible)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.visible)
         .frame(maxWidth: isWide ? 980 : .infinity, maxHeight: .infinity, alignment: .topLeading)
         .frame(maxWidth: .infinity, alignment: isWide ? .topLeading : .center)
     }

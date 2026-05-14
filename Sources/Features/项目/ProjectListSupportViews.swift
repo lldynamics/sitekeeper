@@ -55,6 +55,23 @@ struct ProjectRowContent: View {
         return isSelected ? .appPrimaryAction : .clear
     }
 
+    private var detailParts: [String] {
+        var parts: [String] = []
+        if unpaidAmount > 0 {
+            parts.append("未收 \(ReportBuilder.money(unpaidAmount))")
+        }
+        if !project.expectedEndDate.isEmpty {
+            parts.append("完工 \(project.expectedEndDate)")
+        }
+        if !project.managerName.isEmpty {
+            parts.append("负责人 \(project.managerName)")
+        }
+        if parts.isEmpty, !project.location.isEmpty {
+            parts.append(project.location)
+        }
+        return parts
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: AppSpacing.normal) {
             RoundedRectangle(cornerRadius: 2)
@@ -70,45 +87,29 @@ struct ProjectRowContent: View {
                     ProjectStatusBadge(status: project.status)
                 }
 
-                HStack(spacing: AppSpacing.tight) {
-                    if !project.location.isEmpty {
-                        Image(systemName: "mappin").font(.caption2)
-                        Text(project.location)
+                if !detailParts.isEmpty {
+                    HStack(spacing: AppSpacing.tight) {
+                        ForEach(Array(detailParts.enumerated()), id: \.offset) { index, part in
+                            if index > 0 {
+                                Text("·")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            Text(part)
+                                .foregroundStyle(index == 0 && unpaidAmount > 0 ? Color.appPrimaryAction : .secondary)
+                        }
+                        Spacer(minLength: 0)
                     }
-                    if !project.customerName.isEmpty {
-                        Text("·")
-                        Text(project.customerName)
-                    }
-                    if !project.expectedEndDate.isEmpty {
-                        Text("·")
-                        Text("完工 \(project.expectedEndDate)")
-                    }
+                    .font(.caption)
+                    .lineLimit(1)
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-                HStack(spacing: AppSpacing.tight) {
-                    if !project.contractAmount.isEmpty {
-                        Text("合同 \(ReportBuilder.money(project.contractAmountValue.doubleValue))")
-                            .font(.caption2.weight(.medium))
-                    }
-                    if unpaidAmount > 0 {
-                        Text("未收 \(ReportBuilder.money(unpaidAmount))")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(Color.appPrimaryAction)
-                    }
-                    Spacer(minLength: 0)
-                }
-                .foregroundStyle(.secondary)
 
                 if !badges.isEmpty {
                     HStack(spacing: 6) {
-                        ForEach(Array(badges.prefix(3)), id: \.title) { badge in
+                        ForEach(Array(badges.prefix(2)), id: \.title) { badge in
                             ProjectRiskBadgeView(badge: badge)
                         }
-                        if badges.count > 3 {
-                            Text("+\(badges.count - 3)")
+                        if badges.count > 2 {
+                            Text("+\(badges.count - 2)")
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }

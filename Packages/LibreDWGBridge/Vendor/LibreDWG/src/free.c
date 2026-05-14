@@ -36,6 +36,14 @@
 #include "hash.h"
 #include "free.h"
 
+#ifndef LIBREDWG_UNUSED
+#  if defined(__GNUC__) || defined(__clang__)
+#    define LIBREDWG_UNUSED __attribute__((unused))
+#  else
+#    define LIBREDWG_UNUSED
+#  endif
+#endif
+
 #ifdef USE_TRACING
 static int env_var_checked_p;
 #endif
@@ -334,10 +342,11 @@ static BITCODE_BL rcount1, rcount2;
                                          Bit_Chain *str_dat,                  \
                                          Dwg_Object *restrict obj)            \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
-    Dwg_Entity_##token *ent, *_obj;                                           \
-    Dwg_Object_Entity *_ent;                                                  \
-    Dwg_Data *dwg = obj->parent;                                              \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
+    Dwg_Entity_##token *ent LIBREDWG_UNUSED, *_obj LIBREDWG_UNUSED;           \
+    Dwg_Object_Entity *_ent LIBREDWG_UNUSED;                                  \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     int error = 0;                                                            \
     _ent = obj->tio.entity;                                                   \
     if (!_ent)                                                                \
@@ -377,9 +386,10 @@ static BITCODE_BL rcount1, rcount2;
                                          Bit_Chain *str_dat,                  \
                                          Dwg_Object *restrict obj)            \
   {                                                                           \
-    BITCODE_BL vcount, rcount3, rcount4;                                      \
-    Dwg_Object_##token *_obj;                                                 \
-    Dwg_Data *dwg = obj->parent;                                              \
+    BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,               \
+        rcount4 LIBREDWG_UNUSED;                                              \
+    Dwg_Object_##token *_obj LIBREDWG_UNUSED;                                 \
+    Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;                              \
     int error = 0;                                                            \
     if (!obj->tio.object)                                                     \
       return 0;                                                               \
@@ -396,13 +406,13 @@ static void
 dwg_free_common_entity_data (Dwg_Object *obj)
 {
 
-  Dwg_Data *dwg = obj->parent;
+  Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;
   Bit_Chain *dat = &pdat;
-  Bit_Chain *hdl_dat = &pdat;
+  Bit_Chain *hdl_dat LIBREDWG_UNUSED = &pdat;
   Dwg_Object_Entity *_obj;
   Dwg_Object_Entity *_ent;
-  BITCODE_BL vcount;
-  int error = 0;
+  BITCODE_BL vcount LIBREDWG_UNUSED;
+  int error LIBREDWG_UNUSED = 0;
 
   _ent = obj->tio.entity;
   if (!_ent)
@@ -425,12 +435,12 @@ static void
 dwg_free_common_object_data (Dwg_Object *obj)
 {
 
-  Dwg_Data *dwg = obj->parent;
+  Dwg_Data *dwg LIBREDWG_UNUSED = obj->parent;
   Bit_Chain *dat = &pdat;
-  Bit_Chain *hdl_dat = &pdat;
+  Bit_Chain *hdl_dat LIBREDWG_UNUSED = &pdat;
   Dwg_Object_Object *_obj = obj->tio.object;
-  BITCODE_BL vcount;
-  int error = 0;
+  BITCODE_BL vcount LIBREDWG_UNUSED;
+  int error LIBREDWG_UNUSED = 0;
 
   // clang-format off
   #include "common_object_handle_data.spec"
@@ -572,7 +582,7 @@ dwg_free_variable_type (Dwg_Data *restrict dwg, Dwg_Object *restrict obj)
 int
 dwg_free_variable_type_private (Dwg_Object *restrict obj)
 {
-  Dwg_Data *restrict dwg = obj->parent;
+  Dwg_Data *restrict dwg LIBREDWG_UNUSED = obj->parent;
   Bit_Chain *dat = &pdat;
 
 #undef DWG_ENTITY
@@ -660,8 +670,8 @@ free_TABLESTYLE_r2010 (Bit_Chain *restrict dat, Dwg_Object *restrict obj)
 static void
 free_preR13_object (Dwg_Object *obj)
 {
-  int error = 0;
-  long unsigned int j;
+  int error LIBREDWG_UNUSED = 0;
+  long unsigned int j LIBREDWG_UNUSED;
   Dwg_Data *dwg;
   Bit_Chain *dat = &pdat;
 
@@ -969,8 +979,8 @@ free_preR13_object (Dwg_Object *obj)
 EXPORT void
 dwg_free_object (Dwg_Object *obj)
 {
-  int error = 0;
-  long unsigned int j;
+  int error LIBREDWG_UNUSED = 0;
+  long unsigned int j LIBREDWG_UNUSED;
   Dwg_Data *dwg;
   Bit_Chain *dat = &pdat;
 
@@ -1269,8 +1279,8 @@ dwg_free_object (Dwg_Object *obj)
 EXPORT void
 dwg_free_object_private (Dwg_Object *obj)
 {
-  int error = 0;
-  long unsigned int j;
+  int error LIBREDWG_UNUSED = 0;
+  long unsigned int j LIBREDWG_UNUSED;
   Dwg_Data *dwg;
   Bit_Chain *dat = &pdat;
 
@@ -1545,9 +1555,9 @@ static int
 dwg_free_preR13_header_vars (Dwg_Data *dwg)
 {
   Dwg_Header_Variables *_obj = &dwg->header_vars;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   Bit_Chain *dat = &pdat;
-  int error = 0;
+  int error LIBREDWG_UNUSED = 0;
 
   // fields added by dwg_add_Document:
   FIELD_TV (MENU, 0);
@@ -1564,7 +1574,7 @@ static int
 dwg_free_header_vars (Dwg_Data *dwg)
 {
   Dwg_Header_Variables *_obj = &dwg->header_vars;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   Bit_Chain *dat = &pdat;
 
   // clang-format off
@@ -1579,7 +1589,7 @@ static int
 dwg_free_summaryinfo (Dwg_Data *dwg)
 {
   Dwg_SummaryInfo *_obj = &dwg->summaryinfo;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   Bit_Chain *dat = &pdat;
 
   // clang-format off
@@ -1592,7 +1602,7 @@ static int
 dwg_free_appinfo (Dwg_Data *dwg)
 {
   Dwg_AppInfo *_obj = &dwg->appinfo;
-  Dwg_Object *obj = NULL;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
   Bit_Chain *dat = &pdat;
 
   // clang-format off
@@ -1605,9 +1615,9 @@ static int
 dwg_free_filedeplist (Dwg_Data *dwg)
 {
   Dwg_FileDepList *_obj = &dwg->filedeplist;
-  Dwg_Object *obj = NULL;
-  Bit_Chain *dat = &pdat;
-  BITCODE_RL vcount;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
+  Bit_Chain *dat LIBREDWG_UNUSED = &pdat;
+  BITCODE_RL vcount LIBREDWG_UNUSED;
 
   // clang-format off
   #include "filedeplist.spec"
@@ -1618,8 +1628,8 @@ static int
 dwg_free_security (Dwg_Data *dwg)
 {
   Dwg_Security *_obj = &dwg->security;
-  Dwg_Object *obj = NULL;
-  Bit_Chain *dat = &pdat;
+  Dwg_Object *obj LIBREDWG_UNUSED = NULL;
+  Bit_Chain *dat LIBREDWG_UNUSED = &pdat;
 
   // clang-format off
   #include "security.spec"

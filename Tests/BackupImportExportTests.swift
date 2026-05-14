@@ -11,7 +11,7 @@ struct BackupImportExportTests {
             materialItems: [MaterialItem(name: "电线", quantity: "3", unit: "卷", projectId: nil)],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(name: "测试项目", location: "测试地点", status: "进行中")],
+            projects: [Project(name: "测试项目", location: "测试地点", status: .active)],
             dailyLogs: [],
             historyRecords: [HistoryRecord(tool: "电流计算", input: "10kW", result: "45A", date: "2026-05-01 10:00")],
             lightingCircuitPlans: [

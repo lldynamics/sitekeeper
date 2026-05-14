@@ -13,68 +13,75 @@ struct ProjectDetailRiskStripView: View {
         return .appSuccess
     }
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(level)
-                Text(String(localized: "项目风险"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(level)
-                Spacer()
-            }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.tight) {
-                    ProjectDetailRiskChipView(
-                        text: String(localized: "延期 \(overdueCount)"),
-                        color: overdueCount > 0 ? .appRisk : .appSuccess,
-                        hasRisk: overdueCount > 0
-                    )
-                    ProjectDetailRiskChipView(
-                        text: String(localized: "未收 \(ReportBuilder.money(unpaidAmount))"),
-                        color: unpaidAmount > 0 ? .appPrimaryAction : .appSuccess,
-                        hasRisk: unpaidAmount > 0
-                    )
-                    ProjectDetailRiskChipView(
-                        text: String(localized: "待补报价 \(unpricedQuoteCount)"),
-                        color: unpricedQuoteCount > 0 ? .appPrimaryAction : .appSuccess,
-                        hasRisk: unpricedQuoteCount > 0
-                    )
-                    ProjectDetailRiskChipView(
-                        text: hasTodayLog ? String(localized: "今日日志已写") : String(localized: "今日日志未写"),
-                        color: hasTodayLog ? .appSuccess : .appRisk,
-                        hasRisk: !hasTodayLog
-                    )
-                }
-                .padding(.vertical, 2)
-            }
+    private var riskItems: [(text: String, color: Color)] {
+        var items: [(String, Color)] = []
+        if overdueCount > 0 {
+            items.append((String(localized: "延期 \(overdueCount)"), .appRisk))
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityHint(String(localized: "用于快速判断延期、回款、报价和日志填写风险"))
+        if unpaidAmount > 0 {
+            items.append((String(localized: "未收 \(ReportBuilder.money(unpaidAmount))"), .appPrimaryAction))
+        }
+        if unpricedQuoteCount > 0 {
+            items.append((String(localized: "待补报价 \(unpricedQuoteCount)"), .appPrimaryAction))
+        }
+        if !hasTodayLog {
+            items.append((String(localized: "今日日志未写"), .appRisk))
+        }
+        return items
+    }
+
+    var body: some View {
+        if riskItems.isEmpty {
+            EmptyView()
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundStyle(level)
+                    Text(String(localized: "项目风险"))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(level)
+                    Spacer()
+                }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: AppSpacing.tight) {
+                        ForEach(riskItems.indices, id: \.self) { index in
+                            let item = riskItems[index]
+                            ProjectDetailRiskChipView(
+                                text: item.text,
+                                color: item.color
+                            )
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(String(localized: "用于快速判断延期、回款、报价和日志填写风险"))
+        }
     }
 }
 
 private struct ProjectDetailRiskChipView: View {
     let text: String
     let color: Color
-    let hasRisk: Bool
 
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
-            .foregroundStyle(hasRisk ? .white : color)
+            .foregroundStyle(.white)
             .padding(.horizontal, AppSpacing.tight)
             .padding(.vertical, 5)
             .background(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(hasRisk ? color : color.opacity(0.14))
+                    .fill(color)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(hasRisk ? color : color.opacity(0.35), lineWidth: 0.5)
+                    .stroke(color, lineWidth: 0.5)
             )
             .accessibilityLabel(text)
-            .accessibilityValue(hasRisk ? String(localized: "需要关注") : String(localized: "正常"))
+            .accessibilityValue(String(localized: "需要关注"))
     }
 }
 

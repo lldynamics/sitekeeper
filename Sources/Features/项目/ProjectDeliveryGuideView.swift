@@ -3,26 +3,48 @@ import SwiftUI
 struct ProjectDeliveryGuideData {
     let projectName: String
     let logCount: Int
+    let expectedLogDateCount: Int
+    let missingLogDateCount: Int
+    let missingLogDateSamples: [String]
     let drawingCount: Int
-    let drawingWithoutCurrentCount: Int
+    let drawingGroupsWithoutCurrent: [String]
     let documentCount: Int
     let contactCount: Int
     let missingReceiptCount: Int
     let unsettledFinancialCount: Int
+    let unsettledFinancialAmount: Double
     let missingOriginalEntries: [String]
     let estimatedPackageBytes: Int
+
+    var drawingWithoutCurrentCount: Int {
+        drawingGroupsWithoutCurrent.count
+    }
 
     var hasBlockingMissingOriginals: Bool {
         !missingOriginalEntries.isEmpty
     }
 
     var hasDeliveryChecklistWarning: Bool {
-        logCount == 0
+        missingLogDateCount > 0
             || drawingCount == 0
             || drawingWithoutCurrentCount > 0
             || contactCount == 0
             || missingReceiptCount > 0
             || unsettledFinancialCount > 0
+    }
+
+    var deliveryWarningCount: Int {
+        [
+            missingLogDateCount > 0,
+            drawingCount == 0 || drawingWithoutCurrentCount > 0,
+            contactCount == 0,
+            missingReceiptCount > 0,
+            unsettledFinancialCount > 0
+        ].filter { $0 }.count
+    }
+
+    var isReadyForDelivery: Bool {
+        !hasDeliveryChecklistWarning && !hasBlockingMissingOriginals
     }
 }
 
@@ -34,11 +56,15 @@ struct ProjectDeliveryGuideView: View {
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    readinessCard
+                }
+
                 Section(String(localized: "交付检查")) {
                     guideRow(
                         title: String(localized: "缺日志检查"),
-                        detail: data.logCount > 0 ? String(localized: "已记录 \(data.logCount) 条") : String(localized: "未记录施工日志"),
-                        status: data.logCount > 0 ? .ok : .warning
+                        detail: logCoverageDetail,
+                        status: data.missingLogDateCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.records)
                     }
@@ -65,7 +91,7 @@ struct ProjectDeliveryGuideView: View {
                     }
                     guideRow(
                         title: String(localized: "未结清检查"),
-                        detail: data.unsettledFinancialCount == 0 ? String(localized: "没有未结清账目") : String(localized: "还有 \(data.unsettledFinancialCount) 笔未结清"),
+                        detail: unsettledFinancialDetail,
                         status: data.unsettledFinancialCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.finance)
@@ -81,7 +107,7 @@ struct ProjectDeliveryGuideView: View {
 
                 if data.hasDeliveryChecklistWarning {
                     Section {
-                        Text(String(localized: "建议先补齐日志、票据、图纸当前版、联系人和未结清账目，再执行最终交付。"))
+                        Text(String(localized: "仍可先预览交付包，但建议先补齐日志、票据、图纸当前版、联系人和未结清账目，再执行最终交付。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -125,10 +151,10 @@ struct ProjectDeliveryGuideView: View {
                     Button {
                         onStartExport()
                     } label: {
-                        Label(String(localized: "一键导出交付包 ZIP"), systemImage: "archivebox.fill")
+                        Label(exportButtonTitle, systemImage: "archivebox.fill")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(.appProminent())
                     .disabled(data.hasBlockingMissingOriginals)
                 } footer: {
                     if data.hasBlockingMissingOriginals {
@@ -139,6 +165,66 @@ struct ProjectDeliveryGuideView: View {
             .navigationTitle(String(localized: "完工交付向导"))
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var readinessCard: some View {
+        HStack(alignment: .top, spacing: AppSpacing.normal) {
+            Image(systemName: data.isReadyForDelivery ? "checkmark.seal.fill" : "checklist.unchecked")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(data.isReadyForDelivery ? Color.appSuccess : Color.appPrimaryAction)
+                .frame(width: 34)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(data.isReadyForDelivery ? String(localized: "交付准备完成") : String(localized: "完工前还有 \(data.deliveryWarningCount) 项需要处理"))
+                    .font(.headline)
+                Text(readinessDetail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+    }
+
+    private var readinessDetail: String {
+        if data.isReadyForDelivery {
+            return String(localized: "日志、票据、图纸当前版、联系人和未结清账目检查均已通过。")
+        }
+        if data.hasBlockingMissingOriginals {
+            return String(localized: "检测到缺失原件，需补齐后才能导出最终 ZIP。")
+        }
+        return String(localized: "下方每项都可以直接跳转处理，处理完成后再回来导出交付包。")
+    }
+
+    private var logCoverageDetail: String {
+        if data.missingLogDateCount == 0 {
+            if data.expectedLogDateCount > 0 {
+                return String(localized: "已覆盖 \(data.expectedLogDateCount) 个施工日，共 \(data.logCount) 条日志")
+            }
+            return data.logCount > 0 ? String(localized: "已记录 \(data.logCount) 条") : String(localized: "未设置工期，暂无缺日志日期")
+        }
+        if data.expectedLogDateCount == 0 {
+            return String(localized: "未记录施工日志")
+        }
+        let sample = data.missingLogDateSamples.joined(separator: "、")
+        if sample.isEmpty {
+            return String(localized: "缺 \(data.missingLogDateCount) 个施工日")
+        }
+        return String(localized: "缺 \(data.missingLogDateCount) 个施工日：\(sample)")
+    }
+
+    private var unsettledFinancialDetail: String {
+        guard data.unsettledFinancialCount > 0 else {
+            return String(localized: "没有未结清账目")
+        }
+        if data.unsettledFinancialAmount > 0 {
+            return String(localized: "还有 \(data.unsettledFinancialCount) 笔，合计 \(ReportBuilder.money(data.unsettledFinancialAmount))")
+        }
+        return String(localized: "还有 \(data.unsettledFinancialCount) 笔未结清")
+    }
+
+    private var exportButtonTitle: String {
+        data.hasDeliveryChecklistWarning
+            ? String(localized: "检查后导出交付包 ZIP")
+            : String(localized: "一键导出交付包 ZIP")
     }
 
     @ViewBuilder
@@ -169,7 +255,11 @@ struct ProjectDeliveryGuideView: View {
             return String(localized: "还没有图纸")
         }
         if data.drawingWithoutCurrentCount > 0 {
-            return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版")
+            let sample = data.drawingGroupsWithoutCurrent.prefix(3).joined(separator: "、")
+            if sample.isEmpty {
+                return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版")
+            }
+            return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版：\(sample)")
         }
         return String(localized: "已上传 \(data.drawingCount) 份，均有当前版")
     }

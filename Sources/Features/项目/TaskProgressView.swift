@@ -109,8 +109,7 @@ struct TaskProgressView: View {
                 } label: {
                     Label("新建进度任务", systemImage: "plus.circle.fill")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(Color.appPrimaryAction)
+                .buttonStyle(.appProminent())
             } else if mode == .timeline {
                 timelineContent
             } else {
@@ -157,8 +156,7 @@ struct TaskProgressView: View {
                     } label: {
                         Label("新建进度任务", systemImage: "plus.circle.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
+                    .buttonStyle(.appProminent())
                 }
             }
             .navigationTitle("进度筛选")

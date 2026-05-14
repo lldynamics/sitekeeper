@@ -1394,8 +1394,8 @@ DWG_ENTITY (POLYLINE_3D)
 
   SUBCLASS (AcDb3dPolyline);
   DXF {
-    BITCODE_3RD pt = { 0.0, 0.0, 0.0 };
-    BITCODE_RC flag = FIELD_VALUE (flag);
+    BITCODE_3RD pt LIBREDWG_UNUSED = { 0.0, 0.0, 0.0 };
+    BITCODE_RC flag LIBREDWG_UNUSED = FIELD_VALUE (flag);
     FIELD_B (has_vertex, 66);
     KEY (elevation); VALUE_3BD (pt, 10);
     KEY (flag); VALUE_RS ((BITCODE_RS)(flag | 8), 70);
@@ -2147,7 +2147,7 @@ DWG_ENTITY (POLYLINE_PFACE)
 
   SUBCLASS (AcDbPolyFaceMesh);
   DXF {
-    BITCODE_3RD pt = { 0.0, 0.0, 0.0 };
+    BITCODE_3RD pt LIBREDWG_UNUSED = { 0.0, 0.0, 0.0 };
     FIELD_B (has_vertex, 66);
     KEY (elevation); VALUE_3BD (pt, 10);
     KEY (flag); VALUE_RS ((BITCODE_RS)64, 70);
@@ -2195,8 +2195,8 @@ DWG_ENTITY (POLYLINE_MESH)
 
   SUBCLASS (AcDbPolygonMesh);
   DXF {
-    BITCODE_3RD pt = { 0.0, 0.0, 0.0 };
-    BITCODE_BS flag = FIELD_VALUE (flag) | 16U;
+    BITCODE_3RD pt LIBREDWG_UNUSED = { 0.0, 0.0, 0.0 };
+    BITCODE_BS flag LIBREDWG_UNUSED = FIELD_VALUE (flag) | 16U;
     FIELD_B (has_vertex, 66);
     KEY (elevation); VALUE_3BD (pt, 10);
     KEY (flag); VALUE_BS (flag, 70);
@@ -5023,9 +5023,10 @@ int DWG_FUNC_N (ACTION,_HATCH_gradientfill)(
                         const Dwg_Object *restrict obj,
                         Dwg_Entity_HATCH *restrict _obj)
 {
-  BITCODE_BL vcount, rcount3, rcount4;
+  BITCODE_BL vcount LIBREDWG_UNUSED, rcount3 LIBREDWG_UNUSED,
+      rcount4 LIBREDWG_UNUSED;
   int error = 0;
-  Dwg_Data* dwg = obj->parent;
+  Dwg_Data* dwg LIBREDWG_UNUSED = obj->parent;
 
   FIELD_BL (is_gradient_fill, 450);
   FIELD_BL (reserved, 451);
@@ -6063,7 +6064,12 @@ DWG_ENTITY (PROXY_ENTITY)
     // preview 92/310 is also proxy data
     FIELD_BL (proxy_data_size, 92)
   } else {
-    FIELD_VALUE (proxy_data_size) = _ent->preview_size;
+    if (_ent->preview_size > 0xffffffffULL) {
+      LOG_WARN ("proxy_data_size overflow: " FORMAT_BLL, _ent->preview_size);
+      FIELD_VALUE (proxy_data_size) = 0xffffffffU;
+    } else {
+      FIELD_VALUE (proxy_data_size) = (BITCODE_BL)_ent->preview_size;
+    }
   }
   FIELD_TF (proxy_data, _obj->proxy_data_size, 310);
 

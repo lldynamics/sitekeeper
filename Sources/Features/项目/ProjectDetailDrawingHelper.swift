@@ -68,38 +68,19 @@ enum ProjectDetailDrawingHelper {
     }
 
     static func matchingPDFPreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        guard isCADSource(drawing.fileType) else { return nil }
-        return matchingPreview(
-            for: drawing,
-            in: drawings,
-            acceptedExtensions: ["pdf"]
-        )
+        nil
     }
 
     static func matchingDXFPreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        guard drawing.fileType.lowercased() == "dwg" else { return nil }
-        return matchingPreview(
-            for: drawing,
-            in: drawings,
-            acceptedExtensions: ["dxf"]
-        )
+        nil
     }
 
     static func matchingRenderablePreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        if let pdf = matchingPDFPreview(for: drawing, in: drawings) {
-            return pdf
-        }
-        if let dxf = matchingDXFPreview(for: drawing, in: drawings) {
-            return dxf
-        }
-        return nil
+        nil
     }
 
     static func cadDrawingsWithoutRenderablePreview(in drawings: [ProjectDrawing]) -> [ProjectDrawing] {
-        drawings.filter { drawing in
-            drawing.fileType.lowercased() == "dwg" &&
-            matchingRenderablePreview(for: drawing, in: drawings) == nil
-        }
+        []
     }
 
     static func conflictedDrawingNames(for urls: [URL], in drawings: [ProjectDrawing]) -> [String] {

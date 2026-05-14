@@ -4,6 +4,7 @@
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -37,12 +38,32 @@ typedef struct SKParseContext {
   int unsupportedTypeCount;
 } SKParseContext;
 
+typedef struct SKPointBuffer {
+  SKCADPoint *points;
+  int count;
+  int capacity;
+} SKPointBuffer;
+
 typedef struct SKStrokeStyle {
   unsigned int rgb;
   double width;
 } SKStrokeStyle;
 
 #define SK_MAX_RECURSION_DEPTH 48
+#define SK_MAX_PRIMITIVE_COUNT 120000
+#define SK_MAX_DWG_OBJECT_COUNT 500000
+#define SK_MAX_PRIMITIVE_BUFFER_BYTES (64ULL * 1024ULL * 1024ULL)
+#define SK_MAX_RAW_TEXT_SAMPLE_BYTES 1024
+
+static void sk_fill_budget_metadata(SKCADParseResult *result) {
+  if (!result) {
+    return;
+  }
+  result->primitiveLimit = SK_MAX_PRIMITIVE_COUNT;
+  result->objectLimit = SK_MAX_DWG_OBJECT_COUNT;
+  result->primitiveMemoryBudget = SK_MAX_PRIMITIVE_BUFFER_BYTES;
+  result->estimatedPrimitiveMemory = 0;
+}
 
 static void sk_set_error(SKCADParseResult *result, const char *fmt, ...) {
   if (!result) {
@@ -52,6 +73,52 @@ static void sk_set_error(SKCADParseResult *result, const char *fmt, ...) {
   va_start(args, fmt);
   vsnprintf(result->errorMessage, sizeof(result->errorMessage), fmt, args);
   va_end(args);
+}
+
+static void sk_copy_fixed(char *destination, size_t capacity, const char *source) {
+  if (!destination || capacity == 0) {
+    return;
+  }
+  destination[0] = '\0';
+  if (!source || !source[0]) {
+    return;
+  }
+  snprintf(destination, capacity, "%s", source);
+}
+
+static void sk_fill_version_metadata(SKCADParseResult *result, const Dwg_Data *dwg,
+                                     int readStatus) {
+  if (!result || !dwg) {
+    return;
+  }
+  result->readStatus = readStatus;
+  result->dwgVersion = (int)dwg->header.version;
+  result->dwgFromVersion = (int)dwg->header.from_version;
+  result->dwgHeaderDwgVersion = (int)dwg->header.dwg_version;
+  result->dwgHeaderMaintVersion = (int)dwg->header.maint_version;
+
+  const Dwg_Versions *version = dwg_version_struct(dwg->header.version);
+  if (version) {
+    sk_copy_fixed(result->dwgVersionCode, sizeof(result->dwgVersionCode), version->hdr);
+    sk_copy_fixed(result->dwgVersionType, sizeof(result->dwgVersionType), version->type);
+    sk_copy_fixed(result->dwgVersionDescription, sizeof(result->dwgVersionDescription), version->desc);
+  }
+}
+
+static bool sk_read_status_blocks_geometry_parse(int readStatus) {
+  if (readStatus == DWG_NOERR) {
+    return false;
+  }
+  if ((readStatus & DWG_ERR_CLASSESNOTFOUND) != 0 ||
+      (readStatus & DWG_ERR_SECTIONNOTFOUND) != 0 ||
+      (readStatus & DWG_ERR_PAGENOTFOUND) != 0 ||
+      (readStatus & DWG_ERR_INTERNALERROR) != 0 ||
+      (readStatus & DWG_ERR_INVALIDDWG) != 0 ||
+      (readStatus & DWG_ERR_IOERROR) != 0 ||
+      (readStatus & DWG_ERR_OUTOFMEM) != 0) {
+    return true;
+  }
+  return false;
 }
 
 static BITCODE_RS sk_dwg_codepage_from_external(int codepage) {
@@ -175,21 +242,48 @@ static bool sk_ensure_capacity(SKParseContext *ctx, int extraCount) {
     return false;
   }
   const int required = ctx->result->primitiveCount + extraCount;
+  if (required > SK_MAX_PRIMITIVE_COUNT) {
+    sk_set_error(ctx->result, "DWG 实体数量超过预览上限，已停止解析以避免内存不足。");
+    return false;
+  }
   if (required <= ctx->capacity) {
     return true;
   }
 
   int nextCapacity = ctx->capacity > 0 ? ctx->capacity : 256;
   while (nextCapacity < required) {
-    if (nextCapacity > 1 << 28) {
+    if (nextCapacity > SK_MAX_PRIMITIVE_COUNT / 2) {
       sk_set_error(ctx->result, "DWG 实体数量过大，无法分配内存。");
       return false;
     }
     nextCapacity <<= 1;
   }
 
+  if ((size_t)nextCapacity > (size_t)(SK_MAX_PRIMITIVE_BUFFER_BYTES / sizeof(SKCADPrimitive))) {
+    sk_set_error(
+        ctx->result,
+        "DWG 预览 primitive 缓冲区超过内存预算（上限 %.1f MB），已停止解析。",
+        (double)SK_MAX_PRIMITIVE_BUFFER_BYTES / 1024.0 / 1024.0);
+    return false;
+  }
+  const size_t allocationBytes = (size_t)nextCapacity * sizeof(SKCADPrimitive);
+  const unsigned long long previousBufferBytes =
+      (unsigned long long)ctx->capacity * sizeof(SKCADPrimitive);
+  const unsigned long long previousPointBytes =
+      ctx->result->estimatedPrimitiveMemory > previousBufferBytes
+          ? ctx->result->estimatedPrimitiveMemory - previousBufferBytes
+          : 0;
+  if ((unsigned long long)allocationBytes + previousPointBytes >
+      SK_MAX_PRIMITIVE_BUFFER_BYTES) {
+    sk_set_error(
+        ctx->result,
+        "DWG 预览几何缓冲区超过内存预算（上限 %.1f MB），已停止解析。",
+        (double)SK_MAX_PRIMITIVE_BUFFER_BYTES / 1024.0 / 1024.0);
+    return false;
+  }
+
   SKCADPrimitive *next = (SKCADPrimitive *)realloc(
-      ctx->result->primitives, (size_t)nextCapacity * sizeof(SKCADPrimitive));
+      ctx->result->primitives, allocationBytes);
   if (!next) {
     sk_set_error(ctx->result, "DWG 预览内存分配失败。");
     return false;
@@ -199,6 +293,8 @@ static bool sk_ensure_capacity(SKParseContext *ctx, int extraCount) {
          (size_t)(nextCapacity - ctx->capacity) * sizeof(SKCADPrimitive));
   ctx->result->primitives = next;
   ctx->capacity = nextCapacity;
+  ctx->result->estimatedPrimitiveMemory =
+      (unsigned long long)allocationBytes + previousPointBytes;
   return true;
 }
 
@@ -222,7 +318,7 @@ static char *sk_hex_copy(const char *text) {
   static const char digits[] = "0123456789ABCDEF";
   const unsigned char *bytes = (const unsigned char *)text;
   const size_t len = strlen(text);
-  const size_t maxBytes = len > 96 ? 96 : len;
+  const size_t maxBytes = len > SK_MAX_RAW_TEXT_SAMPLE_BYTES ? SK_MAX_RAW_TEXT_SAMPLE_BYTES : len;
   const size_t suffix = len > maxBytes ? 3 : 0;
   char *out = (char *)malloc(maxBytes * 3 + suffix + 1);
   if (!out) {
@@ -273,6 +369,11 @@ static void sk_free_primitive_members(SKCADPrimitive *primitive) {
     free(primitive->bigFontFile);
     primitive->bigFontFile = NULL;
   }
+  if (primitive->points) {
+    free(primitive->points);
+    primitive->points = NULL;
+  }
+  primitive->pointCount = 0;
 }
 
 static bool sk_is_valid_utf8(const char *text) {
@@ -627,6 +728,74 @@ static char *sk_context_utf8_copy_with_codepage(const SKParseContext *ctx,
   return sk_utf8_copy_with_codepage(text, sk_context_codepage(ctx), chosenCodepage);
 }
 
+static void sk_append_summary_part(char *destination, size_t capacity,
+                                   const char *part) {
+  if (!destination || capacity == 0 || !part || !part[0]) {
+    return;
+  }
+  const size_t used = strlen(destination);
+  if (used + 1 >= capacity) {
+    return;
+  }
+  strncat(destination, part, capacity - used - 1);
+}
+
+static void sk_write_style_table_summary(SKCADParseResult *result,
+                                         const Dwg_Data *dwg) {
+  if (!result || !dwg || !dwg->object || dwg->num_objects == 0) {
+    return;
+  }
+
+  char summary[sizeof(result->styleTableSummary)];
+  summary[0] = '\0';
+  int totalStyles = 0;
+  int sampledStyles = 0;
+
+  for (BITCODE_BL index = 0; index < dwg->num_objects; index++) {
+    const Dwg_Object *object = &dwg->object[index];
+    if (!object || object->fixedtype != DWG_TYPE_STYLE || !object->tio.object) {
+      continue;
+    }
+    const Dwg_Object_STYLE *style = object->tio.object->tio.STYLE;
+    if (!style) {
+      continue;
+    }
+
+    totalStyles += 1;
+    if (sampledStyles >= 8) {
+      continue;
+    }
+
+    char *name = sk_utf8_copy(style->name, dwg->header.codepage);
+    char *font = sk_utf8_copy(style->font_file, dwg->header.codepage);
+    char *bigFont = sk_utf8_copy(style->bigfont_file, dwg->header.codepage);
+    char item[160];
+    snprintf(item, sizeof(item), "%s%s/%s/%s",
+             sampledStyles > 0 ? "；" : "",
+             name && name[0] ? name : "-",
+             font && font[0] ? font : "-",
+             bigFont && bigFont[0] ? bigFont : "-");
+    sk_append_summary_part(summary, sizeof(summary), item);
+    free(name);
+    free(font);
+    free(bigFont);
+    sampledStyles += 1;
+  }
+
+  if (totalStyles > sampledStyles) {
+    char suffix[64];
+    snprintf(suffix, sizeof(suffix), "；等 %d 个 STYLE", totalStyles);
+    sk_append_summary_part(summary, sizeof(summary), suffix);
+  } else if (totalStyles > 0) {
+    char suffix[64];
+    snprintf(suffix, sizeof(suffix), "；共 %d 个 STYLE", totalStyles);
+    sk_append_summary_part(summary, sizeof(summary), suffix);
+  }
+
+  sk_copy_fixed(result->styleTableSummary, sizeof(result->styleTableSummary),
+                summary);
+}
+
 static bool sk_text_looks_suspicious(const char *text) {
   if (!text || !text[0] || !sk_is_valid_utf8(text)) {
     return true;
@@ -820,16 +989,17 @@ static void sk_write_unsupported_summary(const SKParseContext *ctx) {
   }
 }
 
-static bool sk_append_line(SKParseContext *ctx, SKAffineTransform2D transform,
-                           double x1, double y1, double x2, double y2,
-                           SKStrokeStyle style, const char *layerName) {
+static bool sk_append_line_kind(SKParseContext *ctx, SKAffineTransform2D transform,
+                                double x1, double y1, double x2, double y2,
+                                SKStrokeStyle style, const char *layerName,
+                                SKCADPrimitiveKind kind) {
   if (!sk_ensure_capacity(ctx, 1)) {
     return false;
   }
   SKCADPrimitive *primitive =
       &ctx->result->primitives[ctx->result->primitiveCount++];
   memset(primitive, 0, sizeof(*primitive));
-  primitive->kind = SKCADPrimitiveLine;
+  primitive->kind = kind;
   primitive->start = sk_apply_point(transform, x1, y1);
   primitive->end = sk_apply_point(transform, x2, y2);
   primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
@@ -838,10 +1008,156 @@ static bool sk_append_line(SKParseContext *ctx, SKAffineTransform2D transform,
   return true;
 }
 
-static bool sk_append_arc(SKParseContext *ctx, SKAffineTransform2D transform,
-                          double cx, double cy, double radius, double startAngle,
-                          double endAngle, SKStrokeStyle style,
-                          const char *layerName) {
+static void sk_point_buffer_free(SKPointBuffer *buffer) {
+  if (!buffer) {
+    return;
+  }
+  free(buffer->points);
+  buffer->points = NULL;
+  buffer->count = 0;
+  buffer->capacity = 0;
+}
+
+static bool sk_point_buffer_append(SKPointBuffer *buffer, double x, double y) {
+  if (!buffer || !isfinite(x) || !isfinite(y)) {
+    return true;
+  }
+  if (buffer->count >= buffer->capacity) {
+    int nextCapacity = buffer->capacity > 0 ? buffer->capacity * 2 : 16;
+    if (nextCapacity < buffer->count + 1) {
+      nextCapacity = buffer->count + 1;
+    }
+    SKCADPoint *next =
+        (SKCADPoint *)realloc(buffer->points, (size_t)nextCapacity * sizeof(SKCADPoint));
+    if (!next) {
+      return false;
+    }
+    buffer->points = next;
+    buffer->capacity = nextCapacity;
+  }
+  buffer->points[buffer->count].x = x;
+  buffer->points[buffer->count].y = y;
+  buffer->count += 1;
+  return true;
+}
+
+static bool sk_point_buffer_close(SKPointBuffer *buffer) {
+  if (!buffer || buffer->count < 3) {
+    return true;
+  }
+  const SKCADPoint first = buffer->points[0];
+  const SKCADPoint last = buffer->points[buffer->count - 1];
+  if (fabs(first.x - last.x) <= 1e-9 && fabs(first.y - last.y) <= 1e-9) {
+    return true;
+  }
+  return sk_point_buffer_append(buffer, first.x, first.y);
+}
+
+static bool sk_point_buffer_append_bulge(SKPointBuffer *buffer,
+                                         double x1, double y1,
+                                         double x2, double y2,
+                                         double bulge) {
+  if (!isfinite(bulge) || fabs(bulge) <= 1e-9) {
+    return sk_point_buffer_append(buffer, x2, y2);
+  }
+  const double dx = x2 - x1;
+  const double dy = y2 - y1;
+  const double chord = hypot(dx, dy);
+  if (!isfinite(chord) || chord <= 1e-9) {
+    return true;
+  }
+
+  const double alpha = atan2(dy, dx);
+  const double offsetAngle = alpha + ((M_PI / 2.0) - (2.0 * atan(bulge)));
+  const double centerDistance = (chord * (1.0 + bulge * bulge)) / (4.0 * bulge);
+  const double cx = x1 + cos(offsetAngle) * centerDistance;
+  const double cy = y1 + sin(offsetAngle) * centerDistance;
+  const double radius = fabs((chord * (1.0 + bulge * bulge)) / (4.0 * bulge));
+  double startAngle = atan2(y1 - cy, x1 - cx);
+  double endAngle = atan2(y2 - cy, x2 - cx);
+  double span = endAngle - startAngle;
+  if (bulge > 0.0) {
+    while (span < 0.0) {
+      span += M_PI * 2.0;
+    }
+  } else {
+    while (span > 0.0) {
+      span -= M_PI * 2.0;
+    }
+  }
+
+  const int segments = (int)fmin(96.0, fmax(6.0, ceil(fabs(span) / (M_PI / 24.0))));
+  for (int index = 1; index <= segments; index++) {
+    const double t = (double)index / (double)segments;
+    const double angle = startAngle + span * t;
+    if (!sk_point_buffer_append(buffer, cx + cos(angle) * radius,
+                                cy + sin(angle) * radius)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static bool sk_append_source_polyline_kind(SKParseContext *ctx,
+                                           SKAffineTransform2D transform,
+                                           const SKCADPoint *sourcePoints,
+                                           int pointCount,
+                                           SKStrokeStyle style,
+                                           const char *layerName,
+                                           SKCADPrimitiveKind kind) {
+  if (!ctx || !ctx->result || !sourcePoints || pointCount < 2) {
+    return true;
+  }
+  if (!sk_ensure_capacity(ctx, 1)) {
+    return false;
+  }
+  const unsigned long long pointBytes =
+      (unsigned long long)pointCount * sizeof(SKCADPoint);
+  if (ctx->result->estimatedPrimitiveMemory + pointBytes > SK_MAX_PRIMITIVE_BUFFER_BYTES) {
+    sk_set_error(ctx->result,
+                 "DWG 多点几何超过预览内存预算（上限 %.1f MB），已停止解析。",
+                 (double)SK_MAX_PRIMITIVE_BUFFER_BYTES / 1024.0 / 1024.0);
+    return false;
+  }
+
+  SKCADPrimitive *primitive =
+      &ctx->result->primitives[ctx->result->primitiveCount++];
+  memset(primitive, 0, sizeof(*primitive));
+  primitive->points = (SKCADPoint *)calloc((size_t)pointCount, sizeof(SKCADPoint));
+  if (!primitive->points) {
+    ctx->result->primitiveCount -= 1;
+    sk_set_error(ctx->result, "DWG 多点几何内存分配失败。");
+    return false;
+  }
+
+  primitive->kind = kind;
+  primitive->pointCount = pointCount;
+  for (int index = 0; index < pointCount; index++) {
+    primitive->points[index] =
+        sk_apply_point(transform, sourcePoints[index].x, sourcePoints[index].y);
+  }
+  primitive->start = primitive->points[0];
+  primitive->end = primitive->points[pointCount - 1];
+  primitive->center = primitive->points[pointCount / 2];
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
+  primitive->strokeRGB = style.rgb;
+  primitive->strokeWidth = style.width;
+  ctx->result->estimatedPrimitiveMemory += pointBytes;
+  return true;
+}
+
+static bool sk_append_line(SKParseContext *ctx, SKAffineTransform2D transform,
+                           double x1, double y1, double x2, double y2,
+                           SKStrokeStyle style, const char *layerName) {
+  return sk_append_line_kind(ctx, transform, x1, y1, x2, y2, style, layerName,
+                             SKCADPrimitiveLine);
+}
+
+static bool sk_append_arc_kind(SKParseContext *ctx, SKAffineTransform2D transform,
+                               double cx, double cy, double radius,
+                               double startAngle, double endAngle,
+                               SKStrokeStyle style, const char *layerName,
+                               SKCADPrimitiveKind kind) {
   if (!isfinite(radius) || radius <= 0.0) {
     return true;
   }
@@ -851,7 +1167,7 @@ static bool sk_append_arc(SKParseContext *ctx, SKAffineTransform2D transform,
   SKCADPrimitive *primitive =
       &ctx->result->primitives[ctx->result->primitiveCount++];
   memset(primitive, 0, sizeof(*primitive));
-  primitive->kind = SKCADPrimitiveArc;
+  primitive->kind = kind;
   primitive->center = sk_apply_point(transform, cx, cy);
   primitive->radius = radius * sk_effective_scale(transform);
   primitive->startAngle = startAngle + sk_effective_rotation(transform);
@@ -862,9 +1178,18 @@ static bool sk_append_arc(SKParseContext *ctx, SKAffineTransform2D transform,
   return true;
 }
 
-static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
-                             double cx, double cy, double radius,
-                             SKStrokeStyle style, const char *layerName) {
+static bool sk_append_arc(SKParseContext *ctx, SKAffineTransform2D transform,
+                          double cx, double cy, double radius, double startAngle,
+                          double endAngle, SKStrokeStyle style,
+                          const char *layerName) {
+  return sk_append_arc_kind(ctx, transform, cx, cy, radius, startAngle, endAngle,
+                            style, layerName, SKCADPrimitiveArc);
+}
+
+static bool sk_append_circle_kind(SKParseContext *ctx, SKAffineTransform2D transform,
+                                  double cx, double cy, double radius,
+                                  SKStrokeStyle style, const char *layerName,
+                                  SKCADPrimitiveKind kind) {
   if (!isfinite(radius) || radius <= 0.0) {
     return true;
   }
@@ -874,7 +1199,7 @@ static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
   SKCADPrimitive *primitive =
       &ctx->result->primitives[ctx->result->primitiveCount++];
   memset(primitive, 0, sizeof(*primitive));
-  primitive->kind = SKCADPrimitiveCircle;
+  primitive->kind = kind;
   primitive->center = sk_apply_point(transform, cx, cy);
   primitive->radius = radius * sk_effective_scale(transform);
   primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
@@ -883,11 +1208,19 @@ static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
   return true;
 }
 
-static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
-                           double x, double y, double height, double rotation,
-                           const char *text, SKStrokeStyle style,
-                           const char *layerName,
-                           const Dwg_Object_STYLE *textStyle) {
+static bool sk_append_circle(SKParseContext *ctx, SKAffineTransform2D transform,
+                             double cx, double cy, double radius,
+                             SKStrokeStyle style, const char *layerName) {
+  return sk_append_circle_kind(ctx, transform, cx, cy, radius, style, layerName,
+                               SKCADPrimitiveCircle);
+}
+
+static bool sk_append_text_kind(SKParseContext *ctx, SKAffineTransform2D transform,
+                                double x, double y, double height,
+                                double rotation, const char *text,
+                                SKStrokeStyle style, const char *layerName,
+                                const Dwg_Object_STYLE *textStyle,
+                                SKCADPrimitiveKind kind) {
   if (!text || !text[0]) {
     return true;
   }
@@ -897,7 +1230,7 @@ static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
   SKCADPrimitive *primitive =
       &ctx->result->primitives[ctx->result->primitiveCount++];
   memset(primitive, 0, sizeof(*primitive));
-  primitive->kind = SKCADPrimitiveText;
+  primitive->kind = kind;
   primitive->start = sk_apply_point(transform, x, y);
   primitive->textHeight =
       (height > 0.0 && isfinite(height)) ? height * sk_effective_scale(transform)
@@ -927,29 +1260,61 @@ static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
   return true;
 }
 
+static bool sk_append_text(SKParseContext *ctx, SKAffineTransform2D transform,
+                           double x, double y, double height, double rotation,
+                           const char *text, SKStrokeStyle style,
+                           const char *layerName,
+                           const Dwg_Object_STYLE *textStyle) {
+  return sk_append_text_kind(ctx, transform, x, y, height, rotation, text, style,
+                             layerName, textStyle, SKCADPrimitiveText);
+}
+
 static bool sk_append_lwpolyline(SKParseContext *ctx,
                                  const Dwg_Entity_LWPOLYLINE *lwpolyline,
                                  SKAffineTransform2D transform,
                                  SKStrokeStyle style,
-                                 const char *layerName) {
+                                 const char *layerName,
+                                 SKCADPrimitiveKind kind) {
   if (!lwpolyline || lwpolyline->num_points < 2 || !lwpolyline->points) {
     return true;
+  }
+  SKPointBuffer buffer = {0};
+  const BITCODE_2RD first = lwpolyline->points[0];
+  if (!sk_point_buffer_append(&buffer, first.x, first.y)) {
+    sk_point_buffer_free(&buffer);
+    sk_set_error(ctx->result, "DWG LWPOLYLINE 点集内存分配失败。");
+    return false;
   }
   for (BITCODE_BL index = 1; index < lwpolyline->num_points; index++) {
     const BITCODE_2RD p0 = lwpolyline->points[index - 1];
     const BITCODE_2RD p1 = lwpolyline->points[index];
-    if (!sk_append_line(ctx, transform, p0.x, p0.y, p1.x, p1.y, style, layerName)) {
+    const double bulge =
+        (lwpolyline->bulges && index - 1 < lwpolyline->num_bulges)
+            ? lwpolyline->bulges[index - 1]
+            : 0.0;
+    if (!sk_point_buffer_append_bulge(&buffer, p0.x, p0.y, p1.x, p1.y, bulge)) {
+      sk_point_buffer_free(&buffer);
+      sk_set_error(ctx->result, "DWG LWPOLYLINE 点集内存分配失败。");
       return false;
     }
   }
-  if ((lwpolyline->flag & 512) == 512 && lwpolyline->num_points > 2) {
-    const BITCODE_2RD first = lwpolyline->points[0];
+  if ((lwpolyline->flag & 512) == 512) {
     const BITCODE_2RD last = lwpolyline->points[lwpolyline->num_points - 1];
-    if (!sk_append_line(ctx, transform, last.x, last.y, first.x, first.y, style, layerName)) {
+    const double closingBulge =
+        (lwpolyline->bulges && lwpolyline->num_points - 1 < lwpolyline->num_bulges)
+            ? lwpolyline->bulges[lwpolyline->num_points - 1]
+            : 0.0;
+    if (!sk_point_buffer_append_bulge(&buffer, last.x, last.y, first.x, first.y,
+                                      closingBulge)) {
+      sk_point_buffer_free(&buffer);
+      sk_set_error(ctx->result, "DWG LWPOLYLINE 闭合点集内存分配失败。");
       return false;
     }
   }
-  return true;
+  const bool appended = sk_append_source_polyline_kind(ctx, transform, buffer.points,
+                                                       buffer.count, style, layerName, kind);
+  sk_point_buffer_free(&buffer);
+  return appended;
 }
 
 static bool sk_append_polyline_from_subentities(SKParseContext *ctx,
@@ -957,16 +1322,13 @@ static bool sk_append_polyline_from_subentities(SKParseContext *ctx,
                                                 SKAffineTransform2D transform,
                                                 bool closed,
                                                 SKStrokeStyle style,
-                                                const char *layerName) {
+                                                const char *layerName,
+                                                SKCADPrimitiveKind kind) {
   if (!polylineObject) {
     return true;
   }
   Dwg_Object *subentity = get_first_owned_subentity(polylineObject);
-  bool hasPoint = false;
-  double firstX = 0.0;
-  double firstY = 0.0;
-  double lastX = 0.0;
-  double lastY = 0.0;
+  SKPointBuffer buffer = {0};
 
   while (subentity) {
     bool didAppendPoint = false;
@@ -1002,17 +1364,11 @@ static bool sk_append_polyline_from_subentities(SKParseContext *ctx,
     }
 
     if (didAppendPoint) {
-      if (hasPoint) {
-        if (!sk_append_line(ctx, transform, lastX, lastY, x, y, style, layerName)) {
-          return false;
-        }
-      } else {
-        firstX = x;
-        firstY = y;
+      if (!sk_point_buffer_append(&buffer, x, y)) {
+        sk_point_buffer_free(&buffer);
+        sk_set_error(ctx->result, "DWG POLYLINE 点集内存分配失败。");
+        return false;
       }
-      lastX = x;
-      lastY = y;
-      hasPoint = true;
     }
 
     Dwg_Object *next = get_next_owned_subentity(polylineObject, subentity);
@@ -1022,12 +1378,17 @@ static bool sk_append_polyline_from_subentities(SKParseContext *ctx,
     subentity = next;
   }
 
-  if (closed && hasPoint && (fabs(firstX - lastX) > 1e-9 || fabs(firstY - lastY) > 1e-9)) {
-    if (!sk_append_line(ctx, transform, lastX, lastY, firstX, firstY, style, layerName)) {
+  if (closed) {
+    if (!sk_point_buffer_close(&buffer)) {
+      sk_point_buffer_free(&buffer);
+      sk_set_error(ctx->result, "DWG POLYLINE 闭合点集内存分配失败。");
       return false;
     }
   }
-  return true;
+  const bool appended = sk_append_source_polyline_kind(ctx, transform, buffer.points,
+                                                       buffer.count, style, layerName, kind);
+  sk_point_buffer_free(&buffer);
+  return appended;
 }
 
 static bool sk_append_ellipse(SKParseContext *ctx, const Dwg_Entity_ELLIPSE *ellipse,
@@ -1071,7 +1432,8 @@ static bool sk_append_ellipse(SKParseContext *ctx, const Dwg_Entity_ELLIPSE *ell
     const double worldX = ellipse->center.x + localX * cos(majorAngle) - localY * sin(majorAngle);
     const double worldY = ellipse->center.y + localX * sin(majorAngle) + localY * cos(majorAngle);
     if (hasPrev) {
-      if (!sk_append_line(ctx, transform, prevX, prevY, worldX, worldY, style, layerName)) {
+      if (!sk_append_line_kind(ctx, transform, prevX, prevY, worldX, worldY,
+                               style, layerName, SKCADPrimitiveEllipse)) {
         return false;
       }
     }
@@ -1084,14 +1446,16 @@ static bool sk_append_ellipse(SKParseContext *ctx, const Dwg_Entity_ELLIPSE *ell
 
 static bool sk_append_line_if_valid(SKParseContext *ctx, SKAffineTransform2D transform,
                                     double x1, double y1, double x2, double y2,
-                                    SKStrokeStyle style, const char *layerName) {
+                                    SKStrokeStyle style, const char *layerName,
+                                    SKCADPrimitiveKind kind) {
   if (!isfinite(x1) || !isfinite(y1) || !isfinite(x2) || !isfinite(y2)) {
     return true;
   }
   if (fabs(x1 - x2) <= 1e-9 && fabs(y1 - y2) <= 1e-9) {
     return true;
   }
-  return sk_append_line(ctx, transform, x1, y1, x2, y2, style, layerName);
+  return sk_append_line_kind(ctx, transform, x1, y1, x2, y2, style, layerName,
+                             kind);
 }
 
 static bool sk_append_attrib_like_text(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -1102,7 +1466,8 @@ static bool sk_append_attrib_like_text(SKParseContext *ctx, SKAffineTransform2D 
   if (!textValue || !textValue[0]) {
     return true;
   }
-  return sk_append_text(ctx, transform, x, y, height, rotation, textValue, style, layerName, textStyle);
+  return sk_append_text_kind(ctx, transform, x, y, height, rotation, textValue,
+                             style, layerName, textStyle, SKCADPrimitiveText);
 }
 
 static bool sk_append_dimension_text(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -1118,26 +1483,24 @@ static bool sk_append_dimension_text(SKParseContext *ctx, SKAffineTransform2D tr
     snprintf(autoText, sizeof(autoText), "%.3f", measurement);
     displayText = autoText;
   }
-  return sk_append_text(ctx, transform, textX, textY, 2.2, textRotation, displayText, style, layerName, NULL);
+  return sk_append_text_kind(ctx, transform, textX, textY, 2.2, textRotation,
+                             displayText, style, layerName, NULL,
+                             SKCADPrimitiveDimension);
 }
 
 static bool sk_append_solid_outline(SKParseContext *ctx, SKAffineTransform2D transform,
                                     double x1, double y1, double x2, double y2,
                                     double x3, double y3, double x4, double y4,
                                     SKStrokeStyle style, const char *layerName) {
-  if (!sk_append_line_if_valid(ctx, transform, x1, y1, x2, y2, style, layerName)) {
-    return false;
-  }
-  if (!sk_append_line_if_valid(ctx, transform, x2, y2, x3, y3, style, layerName)) {
-    return false;
-  }
-  if (!sk_append_line_if_valid(ctx, transform, x3, y3, x4, y4, style, layerName)) {
-    return false;
-  }
-  if (!sk_append_line_if_valid(ctx, transform, x4, y4, x1, y1, style, layerName)) {
-    return false;
-  }
-  return true;
+  SKCADPoint points[5] = {
+      {x1, y1},
+      {x2, y2},
+      {x3, y3},
+      {x4, y4},
+      {x1, y1},
+  };
+  return sk_append_source_polyline_kind(ctx, transform, points, 5, style,
+                                        layerName, SKCADPrimitivePolyline);
 }
 
 static bool sk_append_dimension_linear_like(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -1147,15 +1510,18 @@ static bool sk_append_dimension_linear_like(SKParseContext *ctx, SKAffineTransfo
     return true;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline1_pt.x, dim->xline1_pt.y,
-                               dim->xline2_pt.x, dim->xline2_pt.y, style, layerName)) {
+                               dim->xline2_pt.x, dim->xline2_pt.y, style,
+                               layerName, SKCADPrimitiveDimension)) {
     return false;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline1_pt.x, dim->xline1_pt.y,
-                               dim->def_pt.x, dim->def_pt.y, style, layerName)) {
+                               dim->def_pt.x, dim->def_pt.y, style, layerName,
+                               SKCADPrimitiveDimension)) {
     return false;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline2_pt.x, dim->xline2_pt.y,
-                               dim->def_pt.x, dim->def_pt.y, style, layerName)) {
+                               dim->def_pt.x, dim->def_pt.y, style, layerName,
+                               SKCADPrimitiveDimension)) {
     return false;
   }
   return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1170,15 +1536,18 @@ static bool sk_append_dimension_aligned_like(SKParseContext *ctx, SKAffineTransf
     return true;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline1_pt.x, dim->xline1_pt.y,
-                               dim->xline2_pt.x, dim->xline2_pt.y, style, layerName)) {
+                               dim->xline2_pt.x, dim->xline2_pt.y, style,
+                               layerName, SKCADPrimitiveDimension)) {
     return false;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline1_pt.x, dim->xline1_pt.y,
-                               dim->def_pt.x, dim->def_pt.y, style, layerName)) {
+                               dim->def_pt.x, dim->def_pt.y, style, layerName,
+                               SKCADPrimitiveDimension)) {
     return false;
   }
   if (!sk_append_line_if_valid(ctx, transform, dim->xline2_pt.x, dim->xline2_pt.y,
-                               dim->def_pt.x, dim->def_pt.y, style, layerName)) {
+                               dim->def_pt.x, dim->def_pt.y, style, layerName,
+                               SKCADPrimitiveDimension)) {
     return false;
   }
   return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1198,7 +1567,8 @@ static bool sk_append_hatch_arc_segment(SKParseContext *ctx, SKAffineTransform2D
     startAngle = endAngle;
     endAngle = tmp;
   }
-  return sk_append_arc(ctx, transform, cx, cy, radius, startAngle, endAngle, style, layerName);
+  return sk_append_arc_kind(ctx, transform, cx, cy, radius, startAngle, endAngle,
+                            style, layerName, SKCADPrimitiveHatch);
 }
 
 static bool sk_append_hatch_ellipse_segment(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -1235,7 +1605,8 @@ static bool sk_append_hatch_ellipse_segment(SKParseContext *ctx, SKAffineTransfo
     const double worldX = cx + localX * cos(majorAngle) - localY * sin(majorAngle);
     const double worldY = cy + localX * sin(majorAngle) + localY * cos(majorAngle);
     if (hasPrev) {
-      if (!sk_append_line_if_valid(ctx, transform, prevX, prevY, worldX, worldY, style, layerName)) {
+      if (!sk_append_line_if_valid(ctx, transform, prevX, prevY, worldX, worldY,
+                                   style, layerName, SKCADPrimitiveHatch)) {
         return false;
       }
     }
@@ -1250,7 +1621,8 @@ static bool sk_append_bulge_arc(SKParseContext *ctx, SKAffineTransform2D transfo
                                 double x1, double y1, double x2, double y2, double bulge,
                                 SKStrokeStyle style, const char *layerName) {
   if (!isfinite(bulge) || fabs(bulge) <= 1e-9) {
-    return sk_append_line_if_valid(ctx, transform, x1, y1, x2, y2, style, layerName);
+    return sk_append_line_if_valid(ctx, transform, x1, y1, x2, y2, style,
+                                   layerName, SKCADPrimitiveHatch);
   }
   const double dx = x2 - x1;
   const double dy = y2 - y1;
@@ -1271,7 +1643,8 @@ static bool sk_append_bulge_arc(SKParseContext *ctx, SKAffineTransform2D transfo
     startAngle = endAngle;
     endAngle = tmp;
   }
-  return sk_append_arc(ctx, transform, cx, cy, radius, startAngle, endAngle, style, layerName);
+  return sk_append_arc_kind(ctx, transform, cx, cy, radius, startAngle, endAngle,
+                            style, layerName, SKCADPrimitiveHatch);
 }
 
 static bool sk_append_hatch_entity(SKParseContext *ctx, const Dwg_Entity_HATCH *hatch,
@@ -1289,6 +1662,30 @@ static bool sk_append_hatch_entity(SKParseContext *ctx, const Dwg_Entity_HATCH *
     if (isPolyline) {
       const BITCODE_BL count = path->num_segs_or_paths;
       if (!path->polyline_paths || count < 2) {
+        continue;
+      }
+      if (!path->bulges_present) {
+        SKPointBuffer buffer = {0};
+        for (BITCODE_BL index = 0; index < count; index++) {
+          const Dwg_HATCH_PolylinePath *point = &path->polyline_paths[index];
+          if (!sk_point_buffer_append(&buffer, point->point.x, point->point.y)) {
+            sk_point_buffer_free(&buffer);
+            sk_set_error(ctx->result, "DWG HATCH 点集内存分配失败。");
+            return false;
+          }
+        }
+        if (path->closed && !sk_point_buffer_close(&buffer)) {
+          sk_point_buffer_free(&buffer);
+          sk_set_error(ctx->result, "DWG HATCH 闭合点集内存分配失败。");
+          return false;
+        }
+        const bool appended = sk_append_source_polyline_kind(
+            ctx, transform, buffer.points, buffer.count, style, layerName,
+            SKCADPrimitiveHatch);
+        sk_point_buffer_free(&buffer);
+        if (!appended) {
+          return false;
+        }
         continue;
       }
       const BITCODE_BL segmentCount = path->closed ? count : count - 1;
@@ -1317,7 +1714,8 @@ static bool sk_append_hatch_entity(SKParseContext *ctx, const Dwg_Entity_HATCH *
       switch (seg->curve_type) {
       case 1:
         if (!sk_append_line_if_valid(ctx, transform, seg->first_endpoint.x, seg->first_endpoint.y,
-                                     seg->second_endpoint.x, seg->second_endpoint.y, style, layerName)) {
+                                     seg->second_endpoint.x, seg->second_endpoint.y,
+                                     style, layerName, SKCADPrimitiveHatch)) {
           return false;
         }
         break;
@@ -1342,7 +1740,9 @@ static bool sk_append_hatch_entity(SKParseContext *ctx, const Dwg_Entity_HATCH *
           for (BITCODE_BL fitIndex = 1; fitIndex < seg->num_fitpts; fitIndex++) {
             const BITCODE_2RD p0 = seg->fitpts[fitIndex - 1];
             const BITCODE_2RD p1 = seg->fitpts[fitIndex];
-            if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y, style, layerName)) {
+            if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y,
+                                         style, layerName,
+                                         SKCADPrimitiveHatch)) {
               return false;
             }
           }
@@ -1350,7 +1750,9 @@ static bool sk_append_hatch_entity(SKParseContext *ctx, const Dwg_Entity_HATCH *
           for (BITCODE_BL cpIndex = 1; cpIndex < seg->num_control_points; cpIndex++) {
             const BITCODE_2RD p0 = seg->control_points[cpIndex - 1].point;
             const BITCODE_2RD p1 = seg->control_points[cpIndex].point;
-            if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y, style, layerName)) {
+            if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y,
+                                         style, layerName,
+                                         SKCADPrimitiveHatch)) {
               return false;
             }
           }
@@ -1370,14 +1772,20 @@ static bool sk_append_leader_entity(SKParseContext *ctx, const Dwg_Entity_LEADER
   if (!leader || !leader->points || leader->num_points <= 1) {
     return true;
   }
-  for (BITCODE_BL index = 1; index < leader->num_points; index++) {
-    const BITCODE_3DPOINT p0 = leader->points[index - 1];
-    const BITCODE_3DPOINT p1 = leader->points[index];
-    if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y, style, layerName)) {
+  SKPointBuffer buffer = {0};
+  for (BITCODE_BL index = 0; index < leader->num_points; index++) {
+    const BITCODE_3DPOINT point = leader->points[index];
+    if (!sk_point_buffer_append(&buffer, point.x, point.y)) {
+      sk_point_buffer_free(&buffer);
+      sk_set_error(ctx->result, "DWG LEADER 点集内存分配失败。");
       return false;
     }
   }
-  return true;
+  const bool appended = sk_append_source_polyline_kind(ctx, transform, buffer.points,
+                                                       buffer.count, style, layerName,
+                                                       SKCADPrimitiveLeader);
+  sk_point_buffer_free(&buffer);
+  return appended;
 }
 
 static bool sk_append_multileader_entity(SKParseContext *ctx, const Dwg_Entity_MULTILEADER *leader,
@@ -1397,21 +1805,31 @@ static bool sk_append_multileader_entity(SKParseContext *ctx, const Dwg_Entity_M
         if (!line || !line->points || line->num_points <= 1) {
           continue;
         }
-        for (BITCODE_BL pointIndex = 1; pointIndex < line->num_points; pointIndex++) {
-          const BITCODE_3DPOINT p0 = line->points[pointIndex - 1];
-          const BITCODE_3DPOINT p1 = line->points[pointIndex];
-          if (!sk_append_line_if_valid(ctx, transform, p0.x, p0.y, p1.x, p1.y, style, layerName)) {
+        SKPointBuffer buffer = {0};
+        for (BITCODE_BL pointIndex = 0; pointIndex < line->num_points; pointIndex++) {
+          const BITCODE_3DPOINT point = line->points[pointIndex];
+          if (!sk_point_buffer_append(&buffer, point.x, point.y)) {
+            sk_point_buffer_free(&buffer);
+            sk_set_error(ctx->result, "DWG MLEADER 点集内存分配失败。");
             return false;
           }
+        }
+        const bool appended = sk_append_source_polyline_kind(
+            ctx, transform, buffer.points, buffer.count, style, layerName,
+            SKCADPrimitiveLeader);
+        sk_point_buffer_free(&buffer);
+        if (!appended) {
+            return false;
         }
       }
     }
   }
   if (leader->ctx.has_content_txt) {
     const Dwg_MLEADER_Content_MText *txt = &leader->ctx.content.txt;
-    if (!sk_append_text(ctx, transform, txt->location.x, txt->location.y,
-                        leader->ctx.text_height > 0.0 ? leader->ctx.text_height : 2.2,
-                        txt->rotation, txt->default_text, style, layerName, NULL)) {
+    if (!sk_append_text_kind(ctx, transform, txt->location.x, txt->location.y,
+                             leader->ctx.text_height > 0.0 ? leader->ctx.text_height : 2.2,
+                             txt->rotation, txt->default_text, style, layerName,
+                             NULL, SKCADPrimitiveLeader)) {
       return false;
     }
   }
@@ -1423,21 +1841,29 @@ static bool sk_append_image_like_entity(SKParseContext *ctx, const BITCODE_3BD p
                                         const BITCODE_2RD image_size,
                                         BITCODE_BL num_clip_verts, BITCODE_2RD *clip_verts,
                                         SKAffineTransform2D transform, SKStrokeStyle style,
-                                        const char *layerName) {
+                                        const char *layerName,
+                                        SKCADPrimitiveKind kind) {
   if (num_clip_verts > 1 && clip_verts) {
+    SKPointBuffer buffer = {0};
     for (BITCODE_BL index = 0; index < num_clip_verts; index++) {
-      const BITCODE_BL next = (index + 1) % num_clip_verts;
       const BITCODE_2RD p0c = clip_verts[index];
-      const BITCODE_2RD p1c = clip_verts[next];
       const double x0 = pt0.x + uvec.x * p0c.x + vvec.x * p0c.y;
       const double y0 = pt0.y + uvec.y * p0c.x + vvec.y * p0c.y;
-      const double x1 = pt0.x + uvec.x * p1c.x + vvec.x * p1c.y;
-      const double y1 = pt0.y + uvec.y * p1c.x + vvec.y * p1c.y;
-      if (!sk_append_line_if_valid(ctx, transform, x0, y0, x1, y1, style, layerName)) {
+      if (!sk_point_buffer_append(&buffer, x0, y0)) {
+        sk_point_buffer_free(&buffer);
+        sk_set_error(ctx->result, "DWG 图像边界点集内存分配失败。");
         return false;
       }
     }
-    return true;
+    if (!sk_point_buffer_close(&buffer)) {
+      sk_point_buffer_free(&buffer);
+      sk_set_error(ctx->result, "DWG 图像边界闭合点集内存分配失败。");
+      return false;
+    }
+    const bool appended = sk_append_source_polyline_kind(ctx, transform, buffer.points,
+                                                         buffer.count, style, layerName, kind);
+    sk_point_buffer_free(&buffer);
+    return appended;
   }
 
   const double width = image_size.x;
@@ -1450,7 +1876,33 @@ static bool sk_append_image_like_entity(SKParseContext *ctx, const BITCODE_3BD p
   const double dy = pt0.y + vvec.y * height;
   const double cx = bx + (dx - ax);
   const double cy = by + (dy - ay);
-  return sk_append_solid_outline(ctx, transform, ax, ay, bx, by, cx, cy, dx, dy, style, layerName);
+  SKCADPoint points[5] = {
+      {ax, ay},
+      {bx, by},
+      {cx, cy},
+      {dx, dy},
+      {ax, ay},
+  };
+  return sk_append_source_polyline_kind(ctx, transform, points, 5, style, layerName, kind);
+}
+
+static bool sk_append_marker(SKParseContext *ctx, SKAffineTransform2D transform,
+                             double x, double y, SKStrokeStyle style,
+                             const char *layerName, SKCADPrimitiveKind kind) {
+  if (!sk_ensure_capacity(ctx, 1)) {
+    return false;
+  }
+  SKCADPrimitive *primitive =
+      &ctx->result->primitives[ctx->result->primitiveCount++];
+  memset(primitive, 0, sizeof(*primitive));
+  primitive->kind = kind;
+  primitive->start = sk_apply_point(transform, x, y);
+  primitive->end = primitive->start;
+  primitive->center = primitive->start;
+  primitive->layerName = sk_context_utf8_copy(ctx, layerName ? layerName : "0");
+  primitive->strokeRGB = style.rgb;
+  primitive->strokeWidth = style.width;
+  return true;
 }
 
 static SKAffineTransform2D sk_insert_transform(double tx, double ty, double sx,
@@ -1674,9 +2126,10 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     const double rotation = atan2(text->x_axis_dir.y, text->x_axis_dir.x);
-    return sk_append_text(ctx, transform, text->ins_pt.x, text->ins_pt.y,
-                          text->text_height, rotation, text->text, style,
-                          layerName, sk_text_style_from_ref(ctx, text->style));
+    return sk_append_text_kind(ctx, transform, text->ins_pt.x, text->ins_pt.y,
+                               text->text_height, rotation, text->text, style,
+                               layerName, sk_text_style_from_ref(ctx, text->style),
+                               SKCADPrimitiveMText);
   }
 
   case DWG_TYPE_ATTRIB: {
@@ -1717,19 +2170,24 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
 
   case DWG_TYPE_LWPOLYLINE: {
     const Dwg_Entity_LWPOLYLINE *lwpolyline = object->tio.entity->tio.LWPOLYLINE;
-    return sk_append_lwpolyline(ctx, lwpolyline, transform, style, layerName);
+    return sk_append_lwpolyline(ctx, lwpolyline, transform, style, layerName,
+                                SKCADPrimitivePolyline);
   }
 
   case DWG_TYPE_POLYLINE_2D: {
     const Dwg_Entity_POLYLINE_2D *polyline = object->tio.entity->tio.POLYLINE_2D;
     const bool closed = polyline && ((polyline->flag & 1) == 1);
-    return sk_append_polyline_from_subentities(ctx, object, transform, closed, style, layerName);
+    return sk_append_polyline_from_subentities(ctx, object, transform, closed,
+                                               style, layerName,
+                                               SKCADPrimitivePolyline);
   }
 
   case DWG_TYPE_POLYLINE_3D: {
     const Dwg_Entity_POLYLINE_3D *polyline = object->tio.entity->tio.POLYLINE_3D;
     const bool closed = polyline && ((polyline->flag & 1) == 1);
-    return sk_append_polyline_from_subentities(ctx, object, transform, closed, style, layerName);
+    return sk_append_polyline_from_subentities(ctx, object, transform, closed,
+                                               style, layerName,
+                                               SKCADPrimitivePolyline);
   }
 
   case DWG_TYPE_ELLIPSE: {
@@ -1785,7 +2243,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->def_pt.x, dim->def_pt.y,
-                                 dim->first_arc_pt.x, dim->first_arc_pt.y, style, layerName)) {
+                                 dim->first_arc_pt.x, dim->first_arc_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1799,7 +2258,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->def_pt.x, dim->def_pt.y,
-                                 dim->first_arc_pt.x, dim->first_arc_pt.y, style, layerName)) {
+                                 dim->first_arc_pt.x, dim->first_arc_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1813,11 +2273,13 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->feature_location_pt.x, dim->feature_location_pt.y,
-                                 dim->leader_endpt.x, dim->leader_endpt.y, style, layerName)) {
+                                 dim->leader_endpt.x, dim->leader_endpt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->leader_endpt.x, dim->leader_endpt.y,
-                                 dim->def_pt.x, dim->def_pt.y, style, layerName)) {
+                                 dim->def_pt.x, dim->def_pt.y, style, layerName,
+                                 SKCADPrimitiveDimension)) {
       return false;
     }
     return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1831,11 +2293,13 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->center_pt.x, dim->center_pt.y,
-                                 dim->xline1_pt.x, dim->xline1_pt.y, style, layerName)) {
+                                 dim->xline1_pt.x, dim->xline1_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->center_pt.x, dim->center_pt.y,
-                                 dim->xline2_pt.x, dim->xline2_pt.y, style, layerName)) {
+                                 dim->xline2_pt.x, dim->xline2_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1849,11 +2313,13 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
       return true;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->xline1start_pt.x, dim->xline1start_pt.y,
-                                 dim->xline1end_pt.x, dim->xline1end_pt.y, style, layerName)) {
+                                 dim->xline1end_pt.x, dim->xline1end_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     if (!sk_append_line_if_valid(ctx, transform, dim->xline2start_pt.x, dim->xline2start_pt.y,
-                                 dim->xline2end_pt.x, dim->xline2end_pt.y, style, layerName)) {
+                                 dim->xline2end_pt.x, dim->xline2end_pt.y, style,
+                                 layerName, SKCADPrimitiveDimension)) {
       return false;
     }
     return sk_append_dimension_text(ctx, transform, dim->text_midpt.x, dim->text_midpt.y,
@@ -1891,7 +2357,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         image->clip_verts,
         transform,
         style,
-        layerName);
+        layerName,
+        SKCADPrimitiveImage);
   }
 
   case DWG_TYPE_WIPEOUT: {
@@ -1909,16 +2376,31 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         wipeout->clip_verts,
         transform,
         style,
-        layerName);
+        layerName,
+        SKCADPrimitiveWipeout);
   }
 
   case DWG_TYPE_INSERT: {
     const Dwg_Entity_INSERT *insertEntity = object->tio.entity->tio.INSERT;
+    if (insertEntity) {
+      if (!sk_append_marker(ctx, transform, insertEntity->ins_pt.x,
+                            insertEntity->ins_pt.y, style, layerName,
+                            SKCADPrimitiveBlockRef)) {
+        return false;
+      }
+    }
     return sk_parse_insert_entity(ctx, insertEntity, transform, stack, stackCount);
   }
 
   case DWG_TYPE_MINSERT: {
     const Dwg_Entity_MINSERT *insertEntity = object->tio.entity->tio.MINSERT;
+    if (insertEntity) {
+      if (!sk_append_marker(ctx, transform, insertEntity->ins_pt.x,
+                            insertEntity->ins_pt.y, style, layerName,
+                            SKCADPrimitiveBlockRef)) {
+        return false;
+      }
+    }
     return sk_parse_minsert_entity(ctx, insertEntity, transform, stack, stackCount);
   }
 
@@ -1933,6 +2415,14 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
     return true;
 
   default:
+    if (object->fixedtype == DWG_TYPE_PROXY_ENTITY ||
+        object->fixedtype == DWG_TYPE_PROXY_OBJECT ||
+        object->fixedtype == DWG_TYPE_DYNAMICBLOCKPROXYNODE) {
+      if (!sk_append_marker(ctx, transform, 0.0, 0.0, style, layerName,
+                            SKCADPrimitiveUnknownProxy)) {
+        return false;
+      }
+    }
     ctx->result->unsupportedEntityCount += 1;
     sk_track_unsupported(ctx, object->fixedtype);
     return true;
@@ -1960,11 +2450,14 @@ static bool sk_parse_root_entities(SKParseContext *ctx) {
     }
   }
 
-  if (parsedRoots > 0) {
+  if (parsedRoots > 0 && ctx->result->primitiveCount > 0) {
     return true;
   }
 
-  // Fallback: if model/paper block headers are unavailable, scan all entities.
+  // Fallback: older/damaged DWG files can expose model/paper block headers while
+  // losing the ownership chain to their child entities. In that case a root-only
+  // pass produces no geometry even though drawable entities exist in the object
+  // table, so do one conservative all-entity scan before reporting an empty file.
   for (BITCODE_BL index = 0; index < ctx->dwg->num_objects; index++) {
     const Dwg_Object *object = &ctx->dwg->object[index];
     if (!sk_parse_entity_object(ctx, object, identity, NULL, 0)) {
@@ -1984,6 +2477,7 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
     return 0;
   }
   memset(result, 0, sizeof(*result));
+  sk_fill_budget_metadata(result);
   if (!path || !path[0]) {
     sk_set_error(result, "DWG 文件路径为空。");
     return 0;
@@ -1993,8 +2487,24 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
   memset(&dwg, 0, sizeof(dwg));
 
   const int readStatus = dwg_read_file(path, &dwg);
-  if (readStatus != 0 && readStatus >= DWG_ERR_CRITICAL && dwg.num_objects == 0) {
-    sk_set_error(result, "LibreDWG 读取失败（错误码 %d）。", readStatus);
+  sk_fill_version_metadata(result, &dwg, readStatus);
+  if (sk_read_status_blocks_geometry_parse(readStatus)) {
+    sk_set_error(
+        result,
+        "LibreDWG 读取到严重 DWG 错误（错误码 %d），已停止原生解析以避免闪退。"
+        "可先用外部 CAD App 打开，或转换为 DXF/PDF 后预览。",
+        readStatus);
+    dwg_free(&dwg);
+    return 0;
+  }
+
+  if (dwg.num_objects > (BITCODE_BL)SK_MAX_DWG_OBJECT_COUNT) {
+    result->totalObjectCount = SK_MAX_DWG_OBJECT_COUNT + 1;
+    sk_set_error(
+        result,
+        "DWG 对象数量过大（%lu，预算上限 %d），已停止原生解析以避免内存不足。",
+        (unsigned long)dwg.num_objects,
+        SK_MAX_DWG_OBJECT_COUNT);
     dwg_free(&dwg);
     return 0;
   }
@@ -2015,6 +2525,7 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
 
   const bool parsed = sk_parse_root_entities(&ctx);
   sk_write_unsupported_summary(&ctx);
+  sk_write_style_table_summary(result, &dwg);
   if (!parsed) {
     if (!result->errorMessage[0]) {
       sk_set_error(result, "DWG 解析中断。");
@@ -2026,8 +2537,6 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
       free(result->primitives);
       result->primitives = NULL;
       result->primitiveCount = 0;
-      result->totalObjectCount = 0;
-      result->unsupportedEntityCount = 0;
     }
     dwg_free(&dwg);
     return 0;

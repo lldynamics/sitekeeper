@@ -628,7 +628,6 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
   BITCODE_RL blocks_start = 0, blocks_end = 0, blocks_size = 0;
   BITCODE_RL extras_start = 0, extras_end = 0, extras_size = 0;
   // BITCODE_RS rs2;
-  Dwg_Object *obj = NULL;
   int error = 0;
   // Bit_Chain dat_save = *dat;
 
@@ -642,6 +641,7 @@ decode_preR13 (Bit_Chain *restrict dat, Dwg_Data *restrict dwg)
     // clang-format off
     #include "header.spec"
     // clang-format on
+    (void)vcount;
   }
   LOG_TRACE ("@0x%zx\n", dat->byte); // 0x14
   SINCE (R_2_0b)

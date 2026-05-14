@@ -25,6 +25,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <limits.h>
 #include <math.h>
 #include "../programs/my_stat.h"
 // strings.h or string.h
@@ -2076,10 +2077,27 @@ EXPORT int
 dwg_add_handle (Dwg_Handle *restrict hdl, const BITCODE_RC code,
                 const BITCODE_RLL absref, const Dwg_Object *restrict obj)
 {
-  int offset = obj ? (absref - (int)obj->handle.value) : 0;
+  int offset = 0;
+  const bool same_handle = obj && absref == obj->handle.value;
+  if (obj && !same_handle)
+    {
+      const BITCODE_RLL objref = obj->handle.value;
+      if (absref > objref)
+        {
+          const BITCODE_RLL delta = absref - objref;
+          if (delta <= (BITCODE_RLL)INT_MAX)
+            offset = (int)delta;
+        }
+      else
+        {
+          const BITCODE_RLL delta = objref - absref;
+          if (delta <= (BITCODE_RLL)INT_MAX)
+            offset = -(int)delta;
+        }
+    }
   hdl->code = code;
   hdl->value = absref;
-  if (obj && (code == 0 || !offset) && absref) // only if same obj
+  if (obj && (code == 0 || same_handle) && absref) // only if same obj
     {
       Dwg_Data *dwg = obj->parent;
       uint64_t hashkey;

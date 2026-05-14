@@ -350,8 +350,7 @@ struct ProjectFileBrowserView: View {
                         } label: {
                             Label("去新建项目", systemImage: "plus.circle.fill")
                         }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color.appPrimaryAction)
+                        .buttonStyle(.appProminent())
                     }
                 } else {
                     Section("建议下一步") {
@@ -553,7 +552,7 @@ struct ProjectFileBrowserView: View {
                                 } label: {
                                     Label("预览文件", systemImage: "eye")
                                 }
-                                .buttonStyle(.borderedProminent)
+                                .buttonStyle(.appProminent())
                                 ShareLink(item: item.url) {
                                     Label("分享/打开", systemImage: "square.and.arrow.up")
                                 }

@@ -30,7 +30,6 @@ enum UserPreferenceKeys {
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
-    static let cadPreviewEngine = "cad.preview.engine"
     static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
     static let showTemplates = "feature.showTemplates"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
@@ -204,7 +203,7 @@ enum AppTheme: String, CaseIterable {
 
     static var current: AppTheme {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.appTheme) ?? ""
-        return StringEnumFallback.value(stored, default: .dropboxBlue)
+        return StringEnumFallback.value(stored, default: .jiangnanSpring)
     }
 
     func apply() {

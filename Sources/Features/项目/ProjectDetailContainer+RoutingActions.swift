@@ -36,7 +36,6 @@ extension ProjectDetailContainer {
     }
 
     func focusModeInSingleCanvas(_ mode: ProjectDetailMode) {
-        guard mode != .overview else { return }
         requestAnchorScroll(anchor(for: mode))
     }
 
@@ -86,15 +85,20 @@ extension ProjectDetailContainer {
     }
 
     func deliveryGuideData(snapshot: ProjectDetailSnapshot) -> ProjectDeliveryGuideData {
-        ProjectDeliveryGuideData(
+        let logExpectation = deliveryLogExpectation(project: snapshot.project, logs: snapshot.relatedLogs)
+        return ProjectDeliveryGuideData(
             projectName: snapshot.project.name,
             logCount: snapshot.relatedLogs.count,
+            expectedLogDateCount: logExpectation.expectedCount,
+            missingLogDateCount: logExpectation.missingCount,
+            missingLogDateSamples: logExpectation.samples,
             drawingCount: snapshot.relatedDrawings.count,
-            drawingWithoutCurrentCount: drawingWithoutCurrentCount(snapshot.relatedDrawings),
+            drawingGroupsWithoutCurrent: drawingGroupsWithoutCurrentVersion(snapshot.relatedDrawings),
             documentCount: snapshot.relatedDocuments.count,
             contactCount: snapshot.relatedContacts.count,
             missingReceiptCount: snapshot.missingReceiptCount,
             unsettledFinancialCount: snapshot.unsettledFinancialCount,
+            unsettledFinancialAmount: unsettledFinancialAmount(snapshot: snapshot),
             missingOriginalEntries: ProjectDetailImportExportActions.missingProjectPackageFiles(
                 documents: snapshot.relatedDocuments,
                 drawings: snapshot.relatedDrawings,
@@ -111,14 +115,79 @@ extension ProjectDetailContainer {
     }
 
     func drawingWithoutCurrentCount(_ drawings: [ProjectDrawing]) -> Int {
-        guard !drawings.isEmpty else { return 0 }
+        drawingGroupsWithoutCurrentVersion(drawings).count
+    }
+
+    func drawingGroupsWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> [String] {
+        guard !drawings.isEmpty else { return [] }
         let grouped = Dictionary(grouping: drawings) { drawing in
+            let nameKey = ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawing.name)
+            return nameKey.isEmpty ? drawing.fileName : nameKey
+        }
+        return grouped.values.compactMap { group in
+            guard !group.contains(where: \.isCurrentVersion) else { return nil }
+            let sorted = group.sorted { lhs, rhs in
+                if lhs.importedAt == rhs.importedAt {
+                    return lhs.fileName < rhs.fileName
+                }
+                return lhs.importedAt > rhs.importedAt
+            }
+            guard let drawing = sorted.first else { return nil }
             let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
             return name.isEmpty ? drawing.fileName : name
         }
-        return grouped.values.filter { group in
-            !group.contains(where: \.isCurrentVersion)
-        }.count
+        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    func deliveryLogExpectation(project: Project, logs: [DailyLog]) -> (expectedCount: Int, missingCount: Int, samples: [String]) {
+        guard let start = Formatters.date.date(from: project.startDate) else {
+            return logs.isEmpty ? (0, 1, []) : (0, 0, [])
+        }
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let configuredEnd = Formatters.date.date(from: project.expectedEndDate) ?? today
+        let effectiveEnd = min(calendar.startOfDay(for: configuredEnd), today)
+        let normalizedStart = calendar.startOfDay(for: start)
+        guard normalizedStart <= effectiveEnd else {
+            return logs.isEmpty ? (0, 1, []) : (0, 0, [])
+        }
+
+        let loggedDates = Set(logs.compactMap { normalizedLogDateKey($0.date) })
+        var expectedDates: [String] = []
+        var cursor = normalizedStart
+        while cursor <= effectiveEnd {
+            expectedDates.append(Formatters.date.string(from: cursor))
+            guard expectedDates.count < 370 else { break }
+            guard let next = calendar.date(byAdding: .day, value: 1, to: cursor) else { break }
+            cursor = next
+        }
+
+        let missingDates = expectedDates.filter { !loggedDates.contains($0) }
+        return (
+            expectedDates.count,
+            missingDates.count,
+            Array(missingDates.prefix(5))
+        )
+    }
+
+    func normalizedLogDateKey(_ raw: String) -> String? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if let date = Formatters.parseDateOrDateTime(trimmed) {
+            return Formatters.date.string(from: date)
+        }
+        return trimmed
+    }
+
+    func unsettledFinancialAmount(snapshot: ProjectDetailSnapshot) -> Double {
+        snapshot.relatedFinancialRecords
+            .filter { record in
+                record.normalizedStatus == .active
+                    && !record.dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
+            .doubleValue
     }
 
     func exportProjectPackage(_ project: Project, snapshot: ProjectDetailSnapshot) {

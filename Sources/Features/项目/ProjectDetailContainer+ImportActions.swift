@@ -81,20 +81,15 @@ extension ProjectDetailContainer {
         for url in urls {
             if url.pathExtension.lowercased() == "zip" {
                 do {
-                    let archiveData = try Data(contentsOf: url, options: [.mappedIfSafe])
-                    let entries = try SimpleZipArchiveReader.read(archiveData)
-                    let drawingEntries = entries.filter { entry in
+                    var hasDrawingEntries = false
+                    try SimpleZipArchiveReader.scan(fileURL: url) { entry, readData, _ in
                         let ext = (entry.path as NSString).pathExtension.lowercased()
-                        return ProjectDrawing.allowedFileExtensions.contains(ext)
-                    }
-                    if drawingEntries.isEmpty {
-                        failedNames.append("\(url.lastPathComponent)（ZIP 内没有可导入的图纸）")
-                        continue
-                    }
-                    for entry in drawingEntries {
+                        guard ProjectDrawing.allowedFileExtensions.contains(ext) else { return }
+                        hasDrawingEntries = true
                         do {
+                            let entryData = try readData()
                             var drawing = try DrawingStorage.saveImportedDataOrThrow(
-                                data: entry.data,
+                                data: entryData,
                                 sourceFileName: entry.path,
                                 projectId: projectId
                             )
@@ -104,6 +99,9 @@ extension ProjectDetailContainer {
                             StorageIssueLog.record("CAD ZIP 图纸导入失败：\(entry.path)，\(error.localizedDescription)")
                             failedNames.append("\(entry.path)（\(error.localizedDescription)）")
                         }
+                    }
+                    if !hasDrawingEntries {
+                        failedNames.append("\(url.lastPathComponent)（ZIP 内没有可导入的图纸）")
                     }
                 } catch {
                     StorageIssueLog.record("CAD ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
@@ -137,12 +135,10 @@ extension ProjectDetailContainer {
         for index in drawings.indices {
             guard drawings[index].projectId == projectId else { continue }
             guard ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawings[index].name) == nameKey else { continue }
-            guard ProjectDetailDrawingHelper.isCADSource(drawings[index].fileType) else { continue }
-            let linkedID = ProjectDetailDrawingHelper.matchingRenderablePreview(for: drawings[index], in: drawings)?.id
-            if drawings[index].linkedPreviewDrawingID != linkedID {
-                drawings[index].linkedPreviewDrawingID = linkedID
+            if drawings[index].linkedPreviewDrawingID != nil {
+                drawings[index].linkedPreviewDrawingID = nil
                 if let storeIndex = store.projectDrawings.firstIndex(where: { $0.id == drawings[index].id }) {
-                    store.projectDrawings[storeIndex].linkedPreviewDrawingID = linkedID
+                    store.projectDrawings[storeIndex].linkedPreviewDrawingID = nil
                 }
             }
         }
@@ -170,21 +166,18 @@ extension ProjectDetailContainer {
     }
 
     func previewDrawing(_ drawing: ProjectDrawing) {
-        let previewTarget = ProjectDetailDrawingHelper.matchingRenderablePreview(
-            for: drawing,
-            in: projectStore.projectDrawings
-        ) ?? drawing
-        switch ProjectDetailAssetActions.previewDrawingURL(for: previewTarget) {
+        switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
         case .success(let url):
             assetState.cadPreviewRequest = ProjectCADPreviewRequest(
-                projectId: previewTarget.projectId,
-                drawingID: previewTarget.id,
+                projectId: drawing.projectId,
+                drawingID: drawing.id,
                 fileURL: url,
-                displayName: previewTarget.name.isEmpty ? previewTarget.fileName : previewTarget.name,
-                fileType: previewTarget.fileType,
-                textEncoding: previewTarget.textEncoding,
-                textBigFont: previewTarget.textBigFont,
-                overlaySnapshotData: previewTarget.cadOverlaySnapshotData,
+                displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                fileType: drawing.fileType,
+                textEncoding: drawing.textEncoding,
+                textBigFont: drawing.textBigFont,
+                textSchemeSnapshot: drawing.textSchemeSnapshot,
+                overlaySnapshotData: drawing.cadOverlaySnapshotData,
                 onOverlaySnapshotChange: { drawingID, snapshotData in
                     updateDrawingOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
                 },
@@ -193,6 +186,9 @@ extension ProjectDetailContainer {
                 },
                 onTextBigFontChange: { drawingID, profile in
                     updateDrawingTextBigFont(drawingID: drawingID, profile: profile)
+                },
+                onTextSchemeSnapshotChange: { drawingID, snapshot in
+                    updateDrawingTextSchemeSnapshot(drawingID: drawingID, snapshot: snapshot)
                 }
             )
         case .failure(let message):
@@ -216,6 +212,12 @@ extension ProjectDetailContainer {
     func updateDrawingTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
         guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
         store.projectDrawings[index].textBigFont = profile
+        store.scheduleSave()
+    }
+
+    func updateDrawingTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
+        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
+        store.projectDrawings[index].textSchemeSnapshot = snapshot
         store.scheduleSave()
     }
 

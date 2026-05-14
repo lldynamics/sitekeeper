@@ -3108,8 +3108,8 @@ DWG_OBJECT_END
   REPEAT (num_deps, deps, Dwg_ASSOCACTION_Deps)                               \
   REPEAT_BLOCK                                                                \
   {                                                                           \
-    int dxf = _obj->deps[rcount1].is_owned ? 360 : 330;                       \
-    int code = _obj->deps[rcount1].is_owned ? 3 : 4;                          \
+    int dxf LIBREDWG_UNUSED = _obj->deps[rcount1].is_owned ? 360 : 330;       \
+    int code LIBREDWG_UNUSED = _obj->deps[rcount1].is_owned ? 3 : 4;          \
     SUB_FIELD_B (deps[rcount1], is_owned, 0);                                 \
     SUB_FIELD_HANDLE (deps[rcount1], dep, code, dxf);                         \
   }                                                                           \
@@ -3199,8 +3199,9 @@ DWG_OBJECT (ASSOCNETWORK)
   REPEAT (num_actions, actions, Dwg_ASSOCACTION_Deps)
   REPEAT_BLOCK
   {
-    int dxf = _obj->actions[rcount1].is_owned ? 360 : 330;
-    int code = _obj->actions[rcount1].is_owned ? DWG_HDL_HARDOWN : DWG_HDL_SOFTPTR;
+    int dxf LIBREDWG_UNUSED = _obj->actions[rcount1].is_owned ? 360 : 330;
+    int code LIBREDWG_UNUSED =
+        _obj->actions[rcount1].is_owned ? DWG_HDL_HARDOWN : DWG_HDL_SOFTPTR;
     SUB_FIELD_B (actions[rcount1], is_owned, 0);
     SUB_FIELD_HANDLE (actions[rcount1], dep, code, dxf);
   }
@@ -5442,8 +5443,8 @@ DWG_ENTITY_END
 DWG_ENTITY (JUMP)
   FIELD_RLx (jump_address_raw, 0);
   DECODER {
-    size_t len;
-    BITCODE_TF trailing;
+    size_t len LIBREDWG_UNUSED;
+    BITCODE_TF trailing LIBREDWG_UNUSED;
     _obj->jump_address = _obj->jump_address_raw;
     _obj->jump_entity_section = DWG_ENTITY_SECTION;
     if (_obj->jump_address_raw > 0xffffff)

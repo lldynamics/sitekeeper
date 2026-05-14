@@ -1,11 +1,185 @@
 import CoreGraphics
 import Foundation
 
+public struct LibreDWGCanvasTransformSnapshot: Equatable {
+    public let bounds: CGRect
+    public let size: CGSize
+    public let zoomScale: CGFloat
+    public let panOffset: CGSize
+
+    public init(bounds: CGRect, size: CGSize, zoomScale: CGFloat, panOffset: CGSize) {
+        self.bounds = bounds
+        self.size = size
+        self.zoomScale = zoomScale
+        self.panOffset = panOffset
+    }
+}
+
+public struct LibreDWGSnapPointPayload: Equatable {
+    public let point: CGPoint
+    public let snapKind: String
+    public let layer: String
+    public let primitiveKind: String
+    public let styleRGB: UInt32
+    public let styleWidth: CGFloat
+    public let styleName: String?
+
+    public init(
+        point: CGPoint,
+        snapKind: String,
+        layer: String,
+        primitiveKind: String,
+        styleRGB: UInt32,
+        styleWidth: CGFloat,
+        styleName: String?
+    ) {
+        self.point = point
+        self.snapKind = snapKind
+        self.layer = layer
+        self.primitiveKind = primitiveKind
+        self.styleRGB = styleRGB
+        self.styleWidth = styleWidth
+        self.styleName = styleName
+    }
+}
+
+public struct LibreDWGTextAutoDetectionSnapshot: Equatable {
+    public let codePage: Int32?
+    public let bigFont: Int32?
+    public let styleName: String?
+    public let fontFile: String?
+    public let bigFontFile: String?
+    public let autoDetectScore: Int
+    public let styleSummary: String?
+    public let rawTextBytesHexSample: String?
+    public let detectionSummary: String?
+    public let summary: String
+
+    public init(
+        codePage: Int32?,
+        bigFont: Int32?,
+        styleName: String?,
+        fontFile: String?,
+        bigFontFile: String?,
+        autoDetectScore: Int,
+        styleSummary: String?,
+        rawTextBytesHexSample: String?,
+        detectionSummary: String?,
+        summary: String
+    ) {
+        self.codePage = codePage
+        self.bigFont = bigFont
+        self.styleName = styleName
+        self.fontFile = fontFile
+        self.bigFontFile = bigFontFile
+        self.autoDetectScore = autoDetectScore
+        self.styleSummary = styleSummary
+        self.rawTextBytesHexSample = rawTextBytesHexSample
+        self.detectionSummary = detectionSummary
+        self.summary = summary
+    }
+}
+
 extension Notification.Name {
     static let libreDWGCanvasTransformDidChange = Notification.Name("LibreDWGBridgeCanvasTransformDidChange")
+    static let libreDWGSnapPointsDidChange = Notification.Name("LibreDWGBridgeSnapPointsDidChange")
+    static let libreDWGFocusSourcePoint = Notification.Name("LibreDWGBridgeFocusSourcePoint")
+    static let libreDWGTextAutoDetectionDidChange = Notification.Name("LibreDWGBridgeTextAutoDetectionDidChange")
+}
+
+struct DWGLightweightDiagnostic {
+    let dwgVersion: String
+    let totalObjectCount: Int
+    let drawableObjectCount: Int
+    let unsupportedObjectTypes: String
+    let textEncoding: String
+    let styleFonts: String
+    let bigFonts: String
+    let parseDurationMilliseconds: Int
+    let estimatedMemoryMB: Double
+    let failureReason: String?
+}
+
+enum DXFSnapPointKind: String, Codable {
+    case endpoint
+    case midpoint
+    case center
+}
+
+struct DXFSnapSourcePoint {
+    let point: CGPoint
+    let kind: DXFSnapPointKind
+    let layer: String
+    let primitiveKind: DXFPreviewModel.PrimitiveKind
+    let styleRGB: UInt32
+    let styleWidth: CGFloat
+    let styleName: String?
+
+    var metadataPayload: [String: Any] {
+        var payload: [String: Any] = [
+            "x": point.x,
+            "y": point.y,
+            "snapKind": kind.rawValue,
+            "layer": layer,
+            "primitiveKind": primitiveKind.rawValue,
+            "styleRGB": NSNumber(value: styleRGB),
+            "styleWidth": styleWidth,
+        ]
+        if let styleName, !styleName.isEmpty {
+            payload["styleName"] = styleName
+        }
+        return payload
+    }
+}
+
+struct DXFSnapPointSet {
+    let points: [DXFSnapSourcePoint]
+
+    var allPoints: [CGPoint] {
+        points.map(\.point)
+    }
+
+    var endpointPoints: [CGPoint] {
+        points
+            .filter { $0.kind == .endpoint }
+            .map(\.point)
+    }
+
+    var midpointPoints: [CGPoint] {
+        points
+            .filter { $0.kind == .midpoint }
+            .map(\.point)
+    }
+
+    var centerPoints: [CGPoint] {
+        points
+            .filter { $0.kind == .center }
+            .map(\.point)
+    }
+
+    var metadataPayloads: [[String: Any]] {
+        points.map(\.metadataPayload)
+    }
 }
 
 struct DXFPreviewModel {
+    enum PrimitiveKind: String {
+        case line
+        case polyline
+        case arc
+        case circle
+        case ellipse
+        case text
+        case mtext
+        case dimension
+        case hatch
+        case leader
+        case image
+        case wipeout
+        case blockRef
+        case unknownProxy
+    }
+
     struct StrokeStyle {
         let rgb: UInt32
         let width: CGFloat
@@ -18,6 +192,7 @@ struct DXFPreviewModel {
         let to: CGPoint
         let style: StrokeStyle
         let layer: String
+        var kind: PrimitiveKind = .line
     }
 
     struct Polyline {
@@ -25,12 +200,16 @@ struct DXFPreviewModel {
             case regular
             case dimension
             case hatch
+            case leader
+            case image
+            case wipeout
         }
 
         let points: [CGPoint]
         let style: StrokeStyle
         let layer: String
         var renderKind: RenderKind = .regular
+        var kind: PrimitiveKind = .polyline
     }
 
     struct Circle {
@@ -38,6 +217,7 @@ struct DXFPreviewModel {
         let radius: CGFloat
         let style: StrokeStyle
         let layer: String
+        var kind: PrimitiveKind = .circle
     }
 
     struct TextEntity: Identifiable {
@@ -63,6 +243,7 @@ struct DXFPreviewModel {
         var fontFile: String? = nil
         var bigFontFile: String? = nil
         var renderKind: RenderKind = .regular
+        var kind: PrimitiveKind = .text
     }
 
     var segments: [Segment]
@@ -75,6 +256,8 @@ struct DXFPreviewModel {
     var unsupportedEntityCount: Int = 0
     var unsupportedEntitySummary: String? = nil
     var textDecodingHint: String? = nil
+    var dwgDiagnostic: DWGLightweightDiagnostic? = nil
+    var styleTableSummary: String? = nil
     var bounds: CGRect
 }
 

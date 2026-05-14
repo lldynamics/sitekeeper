@@ -507,8 +507,7 @@ struct BackupView: View {
                     } label: {
                         Label("马上验证导入", systemImage: "arrow.down.doc.fill")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.appWarning)
+                    .buttonStyle(.appProminent(tint: .appWarning))
                 }
 
                 if lastImportSucceeded {

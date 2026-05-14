@@ -324,8 +324,7 @@ struct CalculatorResultCard: View {
                     .font(.caption.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(Color.appPrimaryAction)
+            .buttonStyle(.appProminent())
             .disabled(store.projects.isEmpty || copyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             .accessibilityLabel("保存到项目")
             .accessibilityHint("将计算结果写入项目资料、随手记或施工日志")
