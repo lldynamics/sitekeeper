@@ -17,10 +17,16 @@ public enum LibreDWGDiagnosticReportBuilder {
         lines.append("修改时间：\(modifiedTimeText(fileURL))")
         lines.append("DWG 文件头：\(dwgMagicText(fileURL))")
         lines.append("文件头 Hex：\(headerHex(fileURL))")
+        lines.append("源文件写入：否（看图只读 DWG 原文件；AC1036 兼容读取只修改临时副本）")
         lines.append("")
         lines.append("## 当前预览设置")
         lines.append("正文编码：\(codePageDisplayName(preferredCodePage))")
         lines.append("SHX/大字体：\(bigFontDisplayName(preferredBigFont))")
+        lines.append("")
+        lines.append("## DWG Lite 支持边界")
+        lines.append("能力：\(DWGLiteSupportPolicy.scopeText)")
+        lines.append("版本：\(DWGLiteSupportPolicy.supportedHeaders.sorted().joined(separator: ", "))")
+        lines.append("限制：\(DWGLiteSupportPolicy.unsupportedObjectHint)")
         lines.append("")
 
         let currentModelResult = Result {
@@ -50,6 +56,24 @@ public enum LibreDWGDiagnosticReportBuilder {
             }
             if let diagnostic = model.dwgDiagnostic {
                 lines.append("DWG 版本：\(diagnostic.dwgVersion)")
+                lines.append("图块：\(diagnostic.blockReferenceSummary)")
+                lines.append("外部参照：\(diagnostic.xrefSummary)")
+                if !diagnostic.xrefReferences.isEmpty {
+                    for xref in diagnostic.xrefReferences {
+                        var parts = [
+                            xref.title,
+                            xref.localStatus.displayText,
+                            xref.sourceSummary,
+                        ]
+                        if !xref.savedPath.isEmpty {
+                            parts.append("DWG 路径：\(xref.savedPath)")
+                        }
+                        if let resolvedLocalPath = xref.resolvedLocalPath {
+                            parts.append("本地路径：\(resolvedLocalPath)")
+                        }
+                        lines.append("- \(parts.joined(separator: " | "))")
+                    }
+                }
                 lines.append("解析耗时：\(diagnostic.parseDurationMilliseconds) ms")
                 lines.append(String(format: "内存估计：%.2f MB", diagnostic.estimatedMemoryMB))
             }
@@ -93,8 +117,10 @@ public enum LibreDWGDiagnosticReportBuilder {
         lines.append("## 现场建议")
         lines.append("1. 如果中文乱码，优先尝试 GBK/GB18030 + 自动 SHX。")
         lines.append("2. 字体别名已覆盖常见 gbcbig/tssdeng/tssdchn/gbenor/gbeitc、hztxt/simplex/txt/romans、hzfs/simfang/fangsong/fsdb、Big5/mingliu/kaiu。")
-        lines.append("3. 如果未支持对象里出现 PROXY_ENTITY/AEC 或大量 UNKNOWN，通常是天正/AEC 对象，建议让对方另存为普通 AutoCAD DWG 或导出 PDF/DXF。")
-        lines.append("4. 现场反馈问题时，请同时发送本日志和原 DWG 文件。")
+        lines.append("3. 如果未支持对象里出现 PROXY_ENTITY/AEC 或大量 UNKNOWN，通常是天正/AEC 对象。\(DWGLiteSupportPolicy.dwgRepairHint)")
+        lines.append("4. 如果文件头版本不在支持列表内，请先要求出图方另存为普通 AutoCAD DWG，再重新导入原 DWG。")
+        lines.append("5. 如果外部参照显示本地缺失，请把 XREF DWG 放到主图同目录或 xref/xrefs/参照/外部参照目录后重开。")
+        lines.append("6. 现场反馈问题时，请同时发送本日志、原 DWG 文件和缺失的 XREF 文件。")
         return lines.joined(separator: "\n")
     }
 
@@ -150,185 +176,6 @@ public enum LibreDWGDiagnosticReportBuilder {
         return lines
     }
 
-    private static func makeRenderProbeLines(fileURL: URL, codePage: Int32?, bigFont: Int32?, title: String) -> [String] {
-        var lines: [String] = []
-        lines.append("### \(title)")
-        do {
-            let model = try LibreDWGNativeParser.parse(
-                fileURL: fileURL,
-                preferredCodePage: codePage,
-                preferredBigFont: bigFont
-            )
-            let score = renderScore(model)
-            lines.append("状态：成功")
-            lines.append("评分：\(score)")
-            lines.append("文字段数：\(model.texts.count)")
-            if let hint = model.textDecodingHint, !hint.isEmpty {
-                lines.append("提示：\(hint)")
-            }
-            if !model.texts.isEmpty {
-                lines.append("文字样本：")
-                for text in model.texts.prefix(10) {
-                    var parts = ["文字：\(text.value)"]
-                    if let rawValue = text.rawValue, rawValue != text.value {
-                        parts.append("原始：\(rawValue)")
-                    }
-                    if let styleName = text.styleName {
-                        parts.append("样式：\(styleName)")
-                    }
-                    if let fontFile = text.fontFile {
-                        parts.append("字体：\(fontFile)")
-                    }
-                    if let bigFontFile = text.bigFontFile {
-                        parts.append("大字体：\(bigFontFile)")
-                    }
-                    if let chosenCodepage = text.chosenCodepage {
-                        parts.append("命中：\(codePageDisplayName(Int32(chosenCodepage)))")
-                    }
-                    if let rawHex = text.rawTextBytesHex, !rawHex.isEmpty {
-                        parts.append("raw：\(rawHex)")
-                    }
-                    lines.append("- \(parts.joined(separator: " | "))")
-                }
-            }
-        } catch {
-            lines.append("状态：失败")
-            lines.append("错误：\(error.localizedDescription)")
-        }
-        return lines
-    }
-
-    private static func renderScore(_ model: DXFPreviewModel) -> Int {
-        var score = model.texts.count * 3
-        for text in model.texts.prefix(500) {
-            score += CADTextNormalizer.diagnosticScore(text.value)
-            if let chosen = text.chosenCodepage,
-               chosen == 936 || chosen == 54936 || chosen == 950 || chosen == 65001 {
-                score += 2
-            }
-        }
-        score -= min(model.unsupportedEntityCount, 200)
-        return score
-    }
-
-    private static func makeProbeLines(fileURL: URL, codePage: Int32?, title: String) -> [String] {
-        var result = SKCADParseResult()
-        let overrideCodePage = codePage ?? 0
-        let success = fileURL.path.withCString { path in
-            sk_libredwg_parse_file_with_codepage(path, Int32(overrideCodePage), &result)
-        }
-        defer {
-            sk_libredwg_free_parse_result(&result)
-        }
-
-        var lines: [String] = []
-        lines.append("### \(title)")
-        lines.append("状态：\(success != 0 ? "成功" : "失败")")
-        lines.append("读取状态 / 错误码：\(result.readStatus)")
-        if let error = fixedString(&result.errorMessage), !error.isEmpty {
-            lines.append("错误信息：\(error)")
-        }
-        lines.append("DWG 版本：\(versionSummary(&result))")
-        lines.append("DWG header codepage：\(nativeCodePageDisplayName(Int(result.headerCodepage)))")
-        lines.append("实际正文编码：\(nativeCodePageDisplayName(Int(result.effectiveCodepage)))")
-        lines.append("对象总数：\(Int(result.totalObjectCount))")
-        lines.append("可绘制 primitive：\(Int(result.primitiveCount))")
-        lines.append("文字 primitive：\(Int(result.textPrimitiveCount))")
-        lines.append("疑似乱码文字：\(Int(result.suspiciousTextCount))")
-        lines.append("Mojibake 文字：\(Int(result.mojibakeTextCount))")
-        lines.append("未支持对象：\(Int(result.unsupportedEntityCount))")
-        if let unsupported = fixedString(&result.unsupportedEntitySummary), !unsupported.isEmpty {
-            lines.append("未支持对象明细：\(unsupported)")
-        }
-
-        let primitiveStats = primitiveDiagnostics(from: &result)
-        if !primitiveStats.entityCounts.isEmpty {
-            lines.append("实体统计：\(primitiveStats.entityCounts.map { "\($0.key)=\($0.value)" }.joined(separator: ", "))")
-        }
-        if !primitiveStats.layerCounts.isEmpty {
-            lines.append("图层 Top：\(topSummary(primitiveStats.layerCounts, limit: 10))")
-        }
-        if !primitiveStats.styleNames.isEmpty {
-            lines.append("文字样式：\(primitiveStats.styleNames.sorted().joined(separator: ", "))")
-        }
-        if !primitiveStats.fontFiles.isEmpty {
-            lines.append("字体文件：\(primitiveStats.fontFiles.sorted().joined(separator: ", "))")
-        }
-        if !primitiveStats.bigFontFiles.isEmpty {
-            lines.append("大字体文件：\(primitiveStats.bigFontFiles.sorted().joined(separator: ", "))")
-        }
-        if !primitiveStats.chosenCodepages.isEmpty {
-            lines.append("文字解码命中：\(topSummary(primitiveStats.chosenCodepages, limit: 8))")
-        }
-        if !primitiveStats.textSamples.isEmpty {
-            lines.append("文字样本：")
-            for sample in primitiveStats.textSamples {
-                lines.append("- \(sample)")
-            }
-        }
-        return lines
-    }
-
-    private struct PrimitiveStats {
-        var entityCounts: [String: Int] = [:]
-        var layerCounts: [String: Int] = [:]
-        var styleNames: Set<String> = []
-        var fontFiles: Set<String> = []
-        var bigFontFiles: Set<String> = []
-        var chosenCodepages: [String: Int] = [:]
-        var textSamples: [String] = []
-    }
-
-    private static func primitiveDiagnostics(from result: inout SKCADParseResult) -> PrimitiveStats {
-        var stats = PrimitiveStats()
-        guard let primitives = result.primitives, result.primitiveCount > 0 else { return stats }
-        let buffer = UnsafeBufferPointer(start: primitives, count: Int(result.primitiveCount))
-        for primitive in buffer {
-            stats.entityCounts[primitiveKindName(primitive.kind), default: 0] += 1
-            if let layer = string(primitive.layerName) {
-                stats.layerCounts[layer, default: 0] += 1
-            }
-            guard isTextPrimitive(primitive.kind) else { continue }
-            if let styleName = string(primitive.textStyleName) {
-                stats.styleNames.insert(styleName)
-            }
-            if let fontFile = string(primitive.fontFile) {
-                stats.fontFiles.insert(fontFile)
-            }
-            if let bigFontFile = string(primitive.bigFontFile) {
-                stats.bigFontFiles.insert(bigFontFile)
-            }
-            if primitive.chosenCodepage > 0 {
-                stats.chosenCodepages[codePageDisplayName(Int32(primitive.chosenCodepage)), default: 0] += 1
-            }
-            if stats.textSamples.count < 20 {
-                let text = string(primitive.text) ?? ""
-                let rawHex = string(primitive.rawTextBytesHex) ?? "-"
-                let style = string(primitive.textStyleName) ?? "-"
-                let font = string(primitive.fontFile) ?? "-"
-                let bigFont = string(primitive.bigFontFile) ?? "-"
-                stats.textSamples.append("文字：\(text) | 原始字节：\(rawHex) | 样式：\(style) | 字体：\(font) | 大字体：\(bigFont) | 编码：\(codePageDisplayName(Int32(primitive.chosenCodepage)))")
-            }
-        }
-        return stats
-    }
-
-    private static func probeCandidates(preferredCodePage: Int32?) -> [(codePage: Int32?, title: String)] {
-        var candidates: [(Int32?, String)] = []
-        func append(_ codePage: Int32?, _ title: String) {
-            if candidates.contains(where: { $0.0 == codePage }) { return }
-            candidates.append((codePage, title))
-        }
-        append(preferredCodePage, "当前设置：\(codePageDisplayName(preferredCodePage))")
-        append(nil, "自动正文编码")
-        append(936, "GBK / CP936")
-        append(54936, "GB18030 / CP54936")
-        append(950, "Big5 / CP950")
-        append(65001, "UTF-8 / CP65001")
-        append(932, "Shift-JIS / CP932")
-        return candidates
-    }
-
     private static func textRenderProbeCandidates(
         preferredCodePage: Int32?,
         preferredBigFont: Int32?
@@ -357,94 +204,6 @@ public enum LibreDWGDiagnosticReportBuilder {
         return candidates
     }
 
-    private static func primitiveKindName(_ kind: SKCADPrimitiveKind) -> String {
-        switch kind {
-        case SKCADPrimitiveLine:
-            return "LINE"
-        case SKCADPrimitivePolyline:
-            return "POLYLINE"
-        case SKCADPrimitiveArc:
-            return "ARC"
-        case SKCADPrimitiveCircle:
-            return "CIRCLE"
-        case SKCADPrimitiveEllipse:
-            return "ELLIPSE"
-        case SKCADPrimitiveText:
-            return "TEXT"
-        case SKCADPrimitiveMText:
-            return "MTEXT"
-        case SKCADPrimitiveDimension:
-            return "DIMENSION"
-        case SKCADPrimitiveHatch:
-            return "HATCH"
-        case SKCADPrimitiveLeader:
-            return "LEADER"
-        case SKCADPrimitiveImage:
-            return "IMAGE"
-        case SKCADPrimitiveWipeout:
-            return "WIPEOUT"
-        case SKCADPrimitiveBlockRef:
-            return "BLOCKREF"
-        case SKCADPrimitiveUnknownProxy:
-            return "UNKNOWN_PROXY"
-        default:
-            return "UNKNOWN"
-        }
-    }
-
-    private static func isTextPrimitive(_ kind: SKCADPrimitiveKind) -> Bool {
-        switch kind {
-        case SKCADPrimitiveText, SKCADPrimitiveMText, SKCADPrimitiveDimension, SKCADPrimitiveLeader:
-            return true
-        default:
-            return false
-        }
-    }
-
-    private static func versionSummary(_ result: inout SKCADParseResult) -> String {
-        let code = fixedString(&result.dwgVersionCode) ?? "-"
-        let type = fixedString(&result.dwgVersionType) ?? "-"
-        let desc = fixedString(&result.dwgVersionDescription) ?? "-"
-        return "\(code) / \(type) / \(desc) / headerVersion=\(Int(result.dwgHeaderDwgVersion)) maint=\(Int(result.dwgHeaderMaintVersion))"
-    }
-
-    private static func fixedString<T>(_ value: inout T) -> String? {
-        withUnsafeBytes(of: &value) { rawBuffer in
-            guard let baseAddress = rawBuffer.bindMemory(to: CChar.self).baseAddress else {
-                return nil
-            }
-            let text = lossyCString(baseAddress).trimmingCharacters(in: .whitespacesAndNewlines)
-            return text.isEmpty ? nil : text
-        }
-    }
-
-    private static func string(_ pointer: UnsafeMutablePointer<CChar>?) -> String? {
-        guard let pointer else { return nil }
-        let text = lossyCString(UnsafePointer(pointer)).trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
-    }
-
-    private static func lossyCString(_ pointer: UnsafePointer<CChar>) -> String {
-        let length = strlen(pointer)
-        guard length > 0 else { return "" }
-        let bytes = UnsafeRawPointer(pointer).assumingMemoryBound(to: UInt8.self)
-        let buffer = UnsafeBufferPointer(start: bytes, count: length)
-        return String(decoding: buffer, as: UTF8.self)
-    }
-
-    private static func topSummary(_ values: [String: Int], limit: Int) -> String {
-        values
-            .sorted {
-                if $0.value == $1.value {
-                    return $0.key.localizedStandardCompare($1.key) == .orderedAscending
-                }
-                return $0.value > $1.value
-            }
-            .prefix(limit)
-            .map { "\($0.key)=\($0.value)" }
-            .joined(separator: ", ")
-    }
-
     private static func codePageDisplayName(_ codePage: Int32?) -> String {
         guard let codePage, codePage > 0 else { return "自动/未知" }
         switch codePage {
@@ -462,31 +221,6 @@ public enum LibreDWGDiagnosticReportBuilder {
             return "UTF-8 CP65001"
         default:
             return "CP\(Int(codePage))"
-        }
-    }
-
-    private static func nativeCodePageDisplayName(_ codePage: Int) -> String {
-        switch codePage {
-        case 0:
-            return "UTF-8/未声明"
-        case 24:
-            return "Big5"
-        case 31:
-            return "GB2312"
-        case 38:
-            return "ANSI 932"
-        case 39:
-            return "ANSI 936"
-        case 40:
-            return "ANSI 949"
-        case 41:
-            return "ANSI 950"
-        case 43:
-            return "UTF-16"
-        case 255:
-            return "未定义"
-        default:
-            return "DWG_CP\(codePage)"
         }
     }
 

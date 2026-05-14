@@ -51,18 +51,20 @@ enum SHXGlyphPathLibrary {
     }
 
     static func glyph(for character: Character) -> SHXVectorGlyph? {
+        guard !isCJKCharacter(character) else { return nil }
         if let glyph = knownGlyphs[character] {
             return glyph
         }
+        return nil
+    }
+
+    private static func isCJKCharacter(_ character: Character) -> Bool {
         guard let scalar = character.unicodeScalars.first,
               character.unicodeScalars.count == 1 else {
-            return nil
+            return false
         }
         let value = scalar.value
-        if (0x3400...0x9FFF).contains(value) || (0xF900...0xFAFF).contains(value) {
-            return pseudoCJKGlyph(for: Int(value))
-        }
-        return nil
+        return (0x3400...0x9FFF).contains(value) || (0xF900...0xFAFF).contains(value)
     }
 
     private static let knownGlyphs: [Character: SHXVectorGlyph] = {

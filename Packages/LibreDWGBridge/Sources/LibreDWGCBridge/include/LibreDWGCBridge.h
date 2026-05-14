@@ -50,9 +50,20 @@ typedef struct SKCADPrimitive {
     int chosenCodepage;
 } SKCADPrimitive;
 
+typedef struct SKCADXrefReference {
+    char *name;
+    char *savedPath;
+    int isOverlay;
+    int isLoaded;
+    int isResolvedInDWG;
+    int referenceCount;
+} SKCADXrefReference;
+
 typedef struct SKCADParseResult {
     SKCADPrimitive *primitives;
     int primitiveCount;
+    SKCADXrefReference *xrefs;
+    int xrefReferenceCount;
     int totalObjectCount;
     int unsupportedEntityCount;
     int requestedCodepage;
@@ -70,16 +81,33 @@ typedef struct SKCADParseResult {
     int textPrimitiveCount;
     int suspiciousTextCount;
     int mojibakeTextCount;
+    int blockInsertCount;
+    int blockMInsertCount;
+    int blockExpandedCount;
+    int blockUnresolvedCount;
+    int blockRecursiveSkipCount;
+    int blockDepthSkipCount;
+    int blockXrefCount;
+    int blockAnonymousCount;
+    int blockAttributeCount;
+    int blockAttdefCount;
+    int blockDynamicProxyCount;
+    int proxyObjectCount;
     char dwgVersionCode[16];
     char dwgVersionType[32];
     char dwgVersionDescription[96];
     char styleTableSummary[512];
     char unsupportedEntitySummary[256];
+    char blockReferenceSummary[384];
+    char xrefReferenceSummary[512];
     char errorMessage[512];
 } SKCADParseResult;
 
+#define SKCADParseOptionSkipText 1
+
 int sk_libredwg_parse_file(const char *path, SKCADParseResult *result);
 int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override, SKCADParseResult *result);
+int sk_libredwg_parse_file_with_options(const char *path, int codepage_override, int parse_options, SKCADParseResult *result);
 void sk_libredwg_free_parse_result(SKCADParseResult *result);
 
 #ifdef __cplusplus

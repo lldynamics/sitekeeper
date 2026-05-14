@@ -489,8 +489,8 @@ void
 bit_write_RLL (Bit_Chain *dat, BITCODE_RLL value)
 {
   // least significant word first
-  bit_write_RL (dat, value & 0xFFFFFFFF);
-  bit_write_RL (dat, value >> 32);
+  bit_write_RL (dat, (BITCODE_RL)(value & 0xFFFFFFFFULL));
+  bit_write_RL (dat, (BITCODE_RL)(value >> 32));
 }
 
 /** Write 1 raw 64bit long  (8 byte, BE).
@@ -499,8 +499,8 @@ void
 bit_write_RLL_BE (Bit_Chain *dat, BITCODE_RLL value)
 {
   // most significant byte first
-  bit_write_RL_BE (dat, value >> 32);
-  bit_write_RL_BE (dat, value & 0xFFFFFFFF);
+  bit_write_RL_BE (dat, (BITCODE_RL)(value >> 32));
+  bit_write_RL_BE (dat, (BITCODE_RL)(value & 0xFFFFFFFFULL));
 }
 
 /** Read 1 raw double (8 bytes, IEEE-754).
@@ -3376,6 +3376,9 @@ bit_TV_to_utf8 (const char *restrict src, const BITCODE_RS codepage)
   else if (!src)
     return NULL;
   {
+#if defined(__APPLE__)
+    return bit_TV_to_utf8_codepage (src, codepage);
+#else
 #ifdef HAVE_ICONV
     const bool is_asian_cp
         = dwg_codepage_isasian ((const Dwg_Codepage)codepage);
@@ -3384,8 +3387,8 @@ bit_TV_to_utf8 (const char *restrict src, const BITCODE_RS codepage)
     const char *charset = dwg_codepage_iconvstr ((Dwg_Codepage)codepage);
     const char utf8_cs[] = "UTF-8//TRANSLIT//IGNORE";
     iconv_t cd;
-    size_t nconv = (size_t)-1;
-    char *dest, *odest, *osrc;
+    char *dest, *odest, *osrc, *inbuf;
+    size_t inleft;
     size_t odestlen = destlen;
     if (!charset || !srclen)
       return (char *)src;
@@ -3408,59 +3411,80 @@ bit_TV_to_utf8 (const char *restrict src, const BITCODE_RS codepage)
         free (odest);
         return bit_TV_to_utf8_codepage (src, codepage);
       }
-    while (nconv == (size_t)-1)
+    inbuf = (char *)src;
+    inleft = srclen;
+    while (inleft > 0)
       {
+        size_t nconv;
 #  ifdef WINICONV_CONST
-        nconv = iconv (cd, (WINICONV_CONST char **restrict)&src,
-                       (size_t *)&srclen, (char **)&dest, (size_t *)&destlen);
+        nconv = iconv (cd, (WINICONV_CONST char **restrict)&inbuf,
+                       &inleft, (char **)&dest, &destlen);
 #  else
-        nconv = iconv (cd, (char **restrict)&src, (size_t *)&srclen,
-                       (char **)&dest, (size_t *)&destlen);
+        nconv = iconv (cd, (char **restrict)&inbuf, &inleft,
+                       (char **)&dest, &destlen);
 #  endif
-        if (nconv == (size_t)-1)
+        if (nconv != (size_t)-1)
+          continue;
+        if (errno == E2BIG)
           {
-            if (errno != EINVAL) // probably dest buffer too small
-              {
-                char *dest_new;
-                destlen *= 2;
-                if (destlen > 0x2FFFE)
-                  {
-                    loglevel |= 1;
-                    LOG_ERROR ("bit_TV_to_utf8: overlarge destlen %" PRIuSIZE
-                               " for %s",
-                               destlen, src);
-                    iconv_close (cd);
-                    free (odest);
-                    return NULL;
-                  }
-                dest_new = (char *)realloc (odest, destlen);
-                if (dest_new)
-                  {
-                    odest = dest = dest_new;
-                    odestlen = destlen;
-                    dest_new[destlen - 1] = '\0';
-                  }
-                else
-                  {
-                    loglevel |= 1;
-                    LOG_ERROR ("Out of memory");
-                    iconv_close (cd);
-                    // free (odest);
-                    return NULL;
-                  }
-              }
-            else
+            char *dest_new;
+            const size_t used = (size_t)(dest - odest);
+            size_t new_destlen = odestlen * 2;
+            if (new_destlen > 0x2FFFE)
               {
                 loglevel |= 1;
-                LOG_ERROR ("iconv \"%s\" failed with errno %d", src, errno);
+                LOG_ERROR ("bit_TV_to_utf8: overlarge destlen %" PRIuSIZE
+                           " for %s",
+                           new_destlen, src);
                 iconv_close (cd);
                 free (odest);
-                return (char *)bit_u_expand (osrc);
+                return NULL;
               }
+            dest_new = (char *)realloc (odest, new_destlen);
+            if (!dest_new)
+              {
+                loglevel |= 1;
+                LOG_ERROR ("Out of memory");
+                iconv_close (cd);
+                return NULL;
+              }
+            odest = dest_new;
+            odestlen = new_destlen;
+            dest = odest + used;
+            destlen = odestlen - used;
+            odest[odestlen - 1] = '\0';
+            continue;
           }
+        if (errno == EILSEQ || errno == EINVAL)
+          {
+            if (destlen <= 1)
+              {
+                char *dest_new;
+                const size_t used = (size_t)(dest - odest);
+                size_t new_destlen = odestlen * 2;
+                if (new_destlen > 0x2FFFE)
+                  break;
+                dest_new = (char *)realloc (odest, new_destlen);
+                if (!dest_new)
+                  break;
+                odest = dest_new;
+                odestlen = new_destlen;
+                dest = odest + used;
+                destlen = odestlen - used;
+                odest[odestlen - 1] = '\0';
+              }
+            *dest++ = '?';
+            destlen--;
+            inbuf++;
+            inleft--;
+            continue;
+          }
+        iconv_close (cd);
+        free (odest);
+        return bit_TV_to_utf8_codepage (osrc, codepage);
       }
     // flush the remains
-    iconv (cd, NULL, NULL, (char **)&dest, (size_t *)&destlen);
+    iconv (cd, NULL, NULL, (char **)&dest, &destlen);
     if (errno == 0 && destlen <= 0x2FFFE && (uintptr_t)dest >= (uintptr_t)odest
         && (uintptr_t)dest <= (uintptr_t)odest + odestlen)
       {
@@ -3477,6 +3501,7 @@ bit_TV_to_utf8 (const char *restrict src, const BITCODE_RS codepage)
       }
 #else
     return bit_TV_to_utf8_codepage (src, codepage);
+#endif
 #endif
   }
 }

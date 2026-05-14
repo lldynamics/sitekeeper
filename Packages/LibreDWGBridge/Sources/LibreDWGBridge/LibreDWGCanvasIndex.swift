@@ -45,7 +45,6 @@ struct DXFCanvasIndex {
     let model: DXFPreviewModel
     let geometryIndex: DXFSpatialGeometryIndex
     let visibleLayers: Set<String>
-    let lockedLayers: Set<String>
     let searchText: String
     let layerSearchText: String
 
@@ -53,14 +52,12 @@ struct DXFCanvasIndex {
         model: DXFPreviewModel,
         geometryIndex: DXFSpatialGeometryIndex? = nil,
         visibleLayers: Set<String>,
-        lockedLayers: Set<String>,
         searchText: String,
         layerSearchText: String
     ) {
         self.model = model
         self.geometryIndex = geometryIndex ?? DXFSpatialGeometryIndex(model: model)
         self.visibleLayers = visibleLayers
-        self.lockedLayers = lockedLayers
         self.searchText = searchText
         self.layerSearchText = layerSearchText
     }
@@ -78,26 +75,7 @@ struct DXFCanvasIndex {
     }
 
     var layerStats: [DXFLayerStat] {
-        var counter: [String: Int] = [:]
-        var kindCounter: [String: [DXFPreviewModel.PrimitiveKind: Int]] = [:]
-        func append(layer: String, kind: DXFPreviewModel.PrimitiveKind) {
-            counter[layer, default: 0] += 1
-            var kinds = kindCounter[layer] ?? [:]
-            kinds[kind, default: 0] += 1
-            kindCounter[layer] = kinds
-        }
-        for item in model.segments { append(layer: item.layer, kind: item.kind) }
-        for item in model.polylines { append(layer: item.layer, kind: item.kind) }
-        for item in model.circles { append(layer: item.layer, kind: item.kind) }
-        for item in model.texts { append(layer: item.layer, kind: item.kind) }
-        return counter
-            .map { layer, count in
-                DXFLayerStat(name: layer, count: count, kindCounts: kindCounter[layer] ?? [:])
-            }
-            .sorted {
-                if $0.count == $1.count { return $0.name < $1.name }
-                return $0.count > $1.count
-            }
+        geometryIndex.layerStats
     }
 
     var filteredLayerStats: [DXFLayerStat] {
@@ -160,44 +138,19 @@ struct DXFCanvasIndex {
     }
 
     func visibleSnapSourcePoints(limit: Int = 6000) -> DXFSnapPointSet {
-        let activeLayers = visibleLayers.subtracting(lockedLayers)
-        guard !activeLayers.isEmpty else { return DXFSnapPointSet(points: []) }
-        let all = geometryIndex.queryAll(visibleLayers: activeLayers)
+        guard !visibleLayers.isEmpty else { return DXFSnapPointSet(points: []) }
+        let all = geometryIndex.queryAll(visibleLayers: visibleLayers)
         return snapSourcePoints(from: all, limit: limit)
     }
 
     func visibleSnapSourcePoints(in viewport: CGRect, limit: Int = 6000) -> DXFSnapPointSet {
-        let activeLayers = visibleLayers.subtracting(lockedLayers)
-        guard !activeLayers.isEmpty else { return DXFSnapPointSet(points: []) }
-        let partial = geometryIndex.query(viewport: viewport, visibleLayers: activeLayers)
+        guard !visibleLayers.isEmpty else { return DXFSnapPointSet(points: []) }
+        let partial = geometryIndex.query(viewport: viewport, visibleLayers: visibleLayers)
         return snapSourcePoints(from: partial, limit: limit)
     }
 
     func layerBounds(for layerName: String) -> CGRect? {
-        var rect = CGRect.null
-
-        func include(_ point: CGPoint) {
-            rect = rect.union(CGRect(origin: point, size: .zero))
-        }
-
-        for segment in model.segments where segment.layer == layerName {
-            include(segment.from)
-            include(segment.to)
-        }
-        for polyline in model.polylines where polyline.layer == layerName {
-            for point in polyline.points {
-                include(point)
-            }
-        }
-        for circle in model.circles where circle.layer == layerName {
-            include(CGPoint(x: circle.center.x - circle.radius, y: circle.center.y - circle.radius))
-            include(CGPoint(x: circle.center.x + circle.radius, y: circle.center.y + circle.radius))
-        }
-        for text in model.texts where text.layer == layerName {
-            include(text.point)
-        }
-
-        return rect.isNull ? nil : rect
+        geometryIndex.layerBounds(for: layerName)
     }
 
     private func snapSourcePoints(from geometry: DXFVisibleGeometry, limit: Int) -> DXFSnapPointSet {
@@ -210,8 +163,14 @@ struct DXFCanvasIndex {
             limit
         ))
 
+        func append(_ point: DXFSnapSourcePoint) -> Bool {
+            guard points.count < limit else { return false }
+            points.append(point)
+            return points.count < limit
+        }
+
         for segment in geometry.segments {
-            points.append(.init(
+            guard append(.init(
                 point: segment.from,
                 kind: .endpoint,
                 layer: segment.layer,
@@ -219,8 +178,8 @@ struct DXFCanvasIndex {
                 styleRGB: segment.style.rgb,
                 styleWidth: segment.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: segment.to,
                 kind: .endpoint,
                 layer: segment.layer,
@@ -228,8 +187,8 @@ struct DXFCanvasIndex {
                 styleRGB: segment.style.rgb,
                 styleWidth: segment.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: CGPoint(x: (segment.from.x + segment.to.x) / 2, y: (segment.from.y + segment.to.y) / 2),
                 kind: .midpoint,
                 layer: segment.layer,
@@ -237,11 +196,11 @@ struct DXFCanvasIndex {
                 styleRGB: segment.style.rgb,
                 styleWidth: segment.style.width,
                 styleName: nil
-            ))
+            )) else { return DXFSnapPointSet(points: points) }
         }
         for polyline in geometry.polylines {
             for point in polyline.points {
-                points.append(.init(
+                guard append(.init(
                     point: point,
                     kind: .endpoint,
                     layer: polyline.layer,
@@ -249,13 +208,13 @@ struct DXFCanvasIndex {
                     styleRGB: polyline.style.rgb,
                     styleWidth: polyline.style.width,
                     styleName: nil
-                ))
+                )) else { return DXFSnapPointSet(points: points) }
             }
             if polyline.points.count >= 2 {
                 for idx in 1..<polyline.points.count {
                     let p0 = polyline.points[idx - 1]
                     let p1 = polyline.points[idx]
-                    points.append(.init(
+                    guard append(.init(
                         point: CGPoint(x: (p0.x + p1.x) / 2, y: (p0.y + p1.y) / 2),
                         kind: .midpoint,
                         layer: polyline.layer,
@@ -263,11 +222,11 @@ struct DXFCanvasIndex {
                         styleRGB: polyline.style.rgb,
                         styleWidth: polyline.style.width,
                         styleName: nil
-                    ))
+                    )) else { return DXFSnapPointSet(points: points) }
                 }
             }
             if let center = centerPoint(of: polyline.points) {
-                points.append(.init(
+                guard append(.init(
                     point: center,
                     kind: .center,
                     layer: polyline.layer,
@@ -275,11 +234,11 @@ struct DXFCanvasIndex {
                     styleRGB: polyline.style.rgb,
                     styleWidth: polyline.style.width,
                     styleName: nil
-                ))
+                )) else { return DXFSnapPointSet(points: points) }
             }
         }
         for circle in geometry.circles {
-            points.append(.init(
+            guard append(.init(
                 point: circle.center,
                 kind: .center,
                 layer: circle.layer,
@@ -287,8 +246,8 @@ struct DXFCanvasIndex {
                 styleRGB: circle.style.rgb,
                 styleWidth: circle.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: CGPoint(x: circle.center.x + circle.radius, y: circle.center.y),
                 kind: .endpoint,
                 layer: circle.layer,
@@ -296,8 +255,8 @@ struct DXFCanvasIndex {
                 styleRGB: circle.style.rgb,
                 styleWidth: circle.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: CGPoint(x: circle.center.x - circle.radius, y: circle.center.y),
                 kind: .endpoint,
                 layer: circle.layer,
@@ -305,8 +264,8 @@ struct DXFCanvasIndex {
                 styleRGB: circle.style.rgb,
                 styleWidth: circle.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: CGPoint(x: circle.center.x, y: circle.center.y + circle.radius),
                 kind: .endpoint,
                 layer: circle.layer,
@@ -314,8 +273,8 @@ struct DXFCanvasIndex {
                 styleRGB: circle.style.rgb,
                 styleWidth: circle.style.width,
                 styleName: nil
-            ))
-            points.append(.init(
+            )) else { return DXFSnapPointSet(points: points) }
+            guard append(.init(
                 point: CGPoint(x: circle.center.x, y: circle.center.y - circle.radius),
                 kind: .endpoint,
                 layer: circle.layer,
@@ -323,10 +282,10 @@ struct DXFCanvasIndex {
                 styleRGB: circle.style.rgb,
                 styleWidth: circle.style.width,
                 styleName: nil
-            ))
+            )) else { return DXFSnapPointSet(points: points) }
         }
         for text in geometry.texts {
-            points.append(.init(
+            guard append(.init(
                 point: text.point,
                 kind: .endpoint,
                 layer: text.layer,
@@ -334,9 +293,9 @@ struct DXFCanvasIndex {
                 styleRGB: text.style.rgb,
                 styleWidth: text.style.width,
                 styleName: text.styleName
-            ))
+            )) else { return DXFSnapPointSet(points: points) }
         }
-        return DXFSnapPointSet(points: Array(points.prefix(limit)))
+        return DXFSnapPointSet(points: points)
     }
 
     private func centerPoint(of points: [CGPoint]) -> CGPoint? {
@@ -434,11 +393,14 @@ struct DXFSpatialGeometryIndex {
     private let polylineBounds: [CGRect]
     private let circleBounds: [CGRect]
     private let textBounds: [CGRect]
+    let layerStats: [DXFLayerStat]
+    private let layerBoundsByName: [String: CGRect]
 
     private let segmentBuckets: [Int: [Int]]
     private let polylineBuckets: [Int: [Int]]
     private let circleBuckets: [Int: [Int]]
     private let textBuckets: [Int: [Int]]
+    private let queryScratch = DXFSpatialQueryScratch()
 
     init(model: DXFPreviewModel) {
         self.model = model
@@ -455,6 +417,15 @@ struct DXFSpatialGeometryIndex {
         self.polylineBounds = model.polylines.map(Self.polylineBounds)
         self.circleBounds = model.circles.map(Self.circleBounds)
         self.textBounds = model.texts.map(Self.textBounds)
+        let layerMetadata = Self.buildLayerMetadata(
+            model: model,
+            segmentBounds: segmentBounds,
+            polylineBounds: polylineBounds,
+            circleBounds: circleBounds,
+            textBounds: textBounds
+        )
+        self.layerStats = layerMetadata.stats
+        self.layerBoundsByName = layerMetadata.bounds
 
         self.segmentBuckets = Self.buildBuckets(
             itemBounds: segmentBounds,
@@ -495,11 +466,11 @@ struct DXFSpatialGeometryIndex {
         let rect = viewport.intersection(sceneBounds)
         guard !rect.isNull, rect.width >= 0, rect.height >= 0 else { return .empty }
 
-        let cells = cellsIntersecting(rect)
-        let segmentIndices = uniqueIndices(cells: cells, buckets: segmentBuckets, itemCount: model.segments.count)
-        let polylineIndices = uniqueIndices(cells: cells, buckets: polylineBuckets, itemCount: model.polylines.count)
-        let circleIndices = uniqueIndices(cells: cells, buckets: circleBuckets, itemCount: model.circles.count)
-        let textIndices = uniqueIndices(cells: cells, buckets: textBuckets, itemCount: model.texts.count)
+        let cellRange = cellRangeIntersecting(rect)
+        let segmentIndices = uniqueIndices(cellRange: cellRange, buckets: segmentBuckets, itemCount: model.segments.count)
+        let polylineIndices = uniqueIndices(cellRange: cellRange, buckets: polylineBuckets, itemCount: model.polylines.count)
+        let circleIndices = uniqueIndices(cellRange: cellRange, buckets: circleBuckets, itemCount: model.circles.count)
+        let textIndices = uniqueIndices(cellRange: cellRange, buckets: textBuckets, itemCount: model.texts.count)
 
         return DXFVisibleGeometry(
             segments: collectSegments(indices: segmentIndices, visibleLayers: visibleLayers, viewport: rect),
@@ -517,6 +488,10 @@ struct DXFSpatialGeometryIndex {
             circles: model.circles.filter { visibleLayers.contains($0.layer) },
             texts: model.texts.filter { visibleLayers.contains($0.layer) }
         )
+    }
+
+    func layerBounds(for layerName: String) -> CGRect? {
+        layerBoundsByName[layerName]
     }
 
     private func collectSegments(indices: [Int], visibleLayers: Set<String>, viewport: CGRect) -> [DXFPreviewModel.Segment] {
@@ -563,34 +538,17 @@ struct DXFSpatialGeometryIndex {
         return result
     }
 
-    private func cellsIntersecting(_ rect: CGRect) -> [Int] {
-        let minColumn = clampedColumn(forX: rect.minX)
-        let maxColumn = clampedColumn(forX: rect.maxX)
-        let minRow = clampedRow(forY: rect.minY)
-        let maxRow = clampedRow(forY: rect.maxY)
-
-        var cells: [Int] = []
-        cells.reserveCapacity((maxColumn - minColumn + 1) * (maxRow - minRow + 1))
-        for row in minRow...maxRow {
-            for column in minColumn...maxColumn {
-                cells.append(row * columns + column)
-            }
-        }
-        return cells
+    private func cellRangeIntersecting(_ rect: CGRect) -> DXFSpatialCellRange {
+        DXFSpatialCellRange(
+            minColumn: clampedColumn(forX: rect.minX),
+            maxColumn: clampedColumn(forX: rect.maxX),
+            minRow: clampedRow(forY: rect.minY),
+            maxRow: clampedRow(forY: rect.maxY)
+        )
     }
 
-    private func uniqueIndices(cells: [Int], buckets: [Int: [Int]], itemCount: Int) -> [Int] {
-        guard !cells.isEmpty, itemCount > 0 else { return [] }
-        var visited = Array(repeating: false, count: itemCount)
-        var result: [Int] = []
-        for cell in cells {
-            guard let indices = buckets[cell] else { continue }
-            for index in indices where !visited[index] {
-                visited[index] = true
-                result.append(index)
-            }
-        }
-        return result
+    private func uniqueIndices(cellRange: DXFSpatialCellRange, buckets: [Int: [Int]], itemCount: Int) -> [Int] {
+        queryScratch.uniqueIndices(cellRange: cellRange, columns: columns, buckets: buckets, itemCount: itemCount)
     }
 
     private func clampedColumn(forX x: CGFloat) -> Int {
@@ -638,6 +596,50 @@ struct DXFSpatialGeometryIndex {
             }
         }
         return buckets
+    }
+
+    private static func buildLayerMetadata(
+        model: DXFPreviewModel,
+        segmentBounds: [CGRect],
+        polylineBounds: [CGRect],
+        circleBounds: [CGRect],
+        textBounds: [CGRect]
+    ) -> (stats: [DXFLayerStat], bounds: [String: CGRect]) {
+        var counter: [String: Int] = [:]
+        var kindCounter: [String: [DXFPreviewModel.PrimitiveKind: Int]] = [:]
+        var boundsByName: [String: CGRect] = [:]
+
+        func append(layer: String, kind: DXFPreviewModel.PrimitiveKind, bounds: CGRect) {
+            counter[layer, default: 0] += 1
+            var kinds = kindCounter[layer] ?? [:]
+            kinds[kind, default: 0] += 1
+            kindCounter[layer] = kinds
+            guard !bounds.isNull else { return }
+            boundsByName[layer] = (boundsByName[layer] ?? .null).union(bounds)
+        }
+
+        for (index, item) in model.segments.enumerated() {
+            append(layer: item.layer, kind: item.kind, bounds: segmentBounds[index])
+        }
+        for (index, item) in model.polylines.enumerated() {
+            append(layer: item.layer, kind: item.kind, bounds: polylineBounds[index])
+        }
+        for (index, item) in model.circles.enumerated() {
+            append(layer: item.layer, kind: item.kind, bounds: circleBounds[index])
+        }
+        for (index, item) in model.texts.enumerated() {
+            append(layer: item.layer, kind: item.kind, bounds: textBounds[index])
+        }
+
+        let stats = counter
+            .map { layer, count in
+                DXFLayerStat(name: layer, count: count, kindCounts: kindCounter[layer] ?? [:])
+            }
+            .sorted {
+                if $0.count == $1.count { return $0.name < $1.name }
+                return $0.count > $1.count
+            }
+        return (stats, boundsByName)
     }
 
     private static func segmentBounds(_ segment: DXFPreviewModel.Segment) -> CGRect {
@@ -689,5 +691,62 @@ struct DXFSpatialGeometryIndex {
         let width = max(maxX - minX, epsilon)
         let height = max(maxY - minY, epsilon)
         return CGRect(x: minX, y: minY, width: width, height: height)
+    }
+}
+
+private struct DXFSpatialCellRange {
+    let minColumn: Int
+    let maxColumn: Int
+    let minRow: Int
+    let maxRow: Int
+
+    var isEmpty: Bool {
+        minColumn > maxColumn || minRow > maxRow
+    }
+
+    var estimatedCellCount: Int {
+        guard !isEmpty else { return 0 }
+        return (maxColumn - minColumn + 1) * (maxRow - minRow + 1)
+    }
+}
+
+private final class DXFSpatialQueryScratch {
+    private var marks: [UInt32] = []
+    private var generation: UInt32 = 0
+
+    func uniqueIndices(
+        cellRange: DXFSpatialCellRange,
+        columns: Int,
+        buckets: [Int: [Int]],
+        itemCount: Int
+    ) -> [Int] {
+        guard !cellRange.isEmpty, itemCount > 0 else { return [] }
+        prepareMarks(for: itemCount)
+
+        var result: [Int] = []
+        result.reserveCapacity(min(itemCount, cellRange.estimatedCellCount * 8))
+        for row in cellRange.minRow...cellRange.maxRow {
+            for column in cellRange.minColumn...cellRange.maxColumn {
+                let cell = row * columns + column
+                guard let indices = buckets[cell] else { continue }
+                for index in indices where marks[index] != generation {
+                    marks[index] = generation
+                    result.append(index)
+                }
+            }
+        }
+        return result
+    }
+
+    private func prepareMarks(for itemCount: Int) {
+        if generation == UInt32.max {
+            marks = Array(repeating: 0, count: max(marks.count, itemCount))
+            generation = 1
+        } else {
+            generation += 1
+            if marks.count < itemCount {
+                marks.append(contentsOf: repeatElement(0, count: itemCount - marks.count))
+            }
+        }
     }
 }

@@ -8,6 +8,9 @@ public struct LibreDWGTextAutoDetectionResult: Sendable {
     public let bigFontFile: String?
     public let score: Int
     public let styleSummary: String?
+    public let matchedFontSummary: String?
+    public let unresolvedFontSummary: String?
+    public let fontResolutionSummary: String?
     public let rawTextBytesHexSample: String?
     public let detectionSummary: String?
     public let summary: String
@@ -20,6 +23,9 @@ public struct LibreDWGTextAutoDetectionResult: Sendable {
         bigFontFile: String?,
         score: Int,
         styleSummary: String?,
+        matchedFontSummary: String?,
+        unresolvedFontSummary: String?,
+        fontResolutionSummary: String?,
         rawTextBytesHexSample: String?,
         detectionSummary: String?,
         summary: String
@@ -31,6 +37,9 @@ public struct LibreDWGTextAutoDetectionResult: Sendable {
         self.bigFontFile = bigFontFile
         self.score = score
         self.styleSummary = styleSummary
+        self.matchedFontSummary = matchedFontSummary
+        self.unresolvedFontSummary = unresolvedFontSummary
+        self.fontResolutionSummary = fontResolutionSummary
         self.rawTextBytesHexSample = rawTextBytesHexSample
         self.detectionSummary = detectionSummary
         self.summary = summary
@@ -38,17 +47,25 @@ public struct LibreDWGTextAutoDetectionResult: Sendable {
 }
 
 public enum LibreDWGTextAutoDetector {
-    public static func detect(fileURL: URL) throws -> LibreDWGTextAutoDetectionResult {
+    public static func detect(
+        fileURL: URL,
+        fontMappings: [LibreDWGFontMapping] = []
+    ) throws -> LibreDWGTextAutoDetectionResult {
         let model = try LibreDWGNativeParser.parse(
             fileURL: fileURL,
             preferredCodePage: nil,
-            preferredBigFont: 0
+            preferredBigFont: 0,
+            fontMappings: fontMappings
         )
-        return detect(model: model)
+        return detect(model: model, fontMappings: fontMappings)
     }
 
-    static func detect(model: DXFPreviewModel) -> LibreDWGTextAutoDetectionResult {
+    static func detect(
+        model: DXFPreviewModel,
+        fontMappings: [LibreDWGFontMapping] = []
+    ) -> LibreDWGTextAutoDetectionResult {
         let candidates = textProbeCandidates()
+        let customFontMappings = customFontMappings(from: fontMappings)
 
         var best: LibreDWGTextAutoDetectionResult?
 
@@ -61,13 +78,16 @@ public enum LibreDWGTextAutoDetector {
 
         if let best {
             let profile = dominantTextProfile(from: model)
+            let fontReport = fontResolutionReport(from: model, customMappings: customFontMappings)
             let resolvedCodePage = best.codePage ?? profile.codePage
-            let resolvedBigFont = best.bigFont ?? Int32(0)
-            let aliasSummary = CADSHXFontCatalog.diagnosticSummary(
+            let styleMatch = CADSHXFontCatalog.match(
                 styleName: profile.styleName,
                 fontFile: profile.fontFile,
-                bigFontFile: profile.bigFontFile
-            ) ?? "-"
+                bigFontFile: profile.bigFontFile,
+                customMappings: customFontMappings
+            )
+            let resolvedBigFont = resolvedBigFontCode(candidate: best.bigFont, styleMatch: styleMatch)
+            let aliasSummary = styleMatch?.summary ?? "-"
             let summaryParts = [
                 best.summary,
                 "单次解析重算",
@@ -77,7 +97,10 @@ public enum LibreDWGTextAutoDetector {
                 "字体 \(profile.fontFile ?? "-")",
                 "大字体 \(profile.bigFontFile ?? "-")",
             ]
-            let summary = summaryParts.joined(separator: "，")
+            var summary = summaryParts.joined(separator: "，")
+            if let fontResolutionSummary = fontReport.summary {
+                summary += "，\(fontResolutionSummary)"
+            }
             return LibreDWGTextAutoDetectionResult(
                 codePage: resolvedCodePage,
                 bigFont: resolvedBigFont,
@@ -86,20 +109,32 @@ public enum LibreDWGTextAutoDetector {
                 bigFontFile: profile.bigFontFile,
                 score: best.score,
                 styleSummary: profile.styleSummary ?? model.styleTableSummary,
+                matchedFontSummary: fontReport.matchedSummary,
+                unresolvedFontSummary: fontReport.unresolvedSummary,
+                fontResolutionSummary: fontReport.summary,
                 rawTextBytesHexSample: profile.rawTextBytesHexSample,
                 detectionSummary: summary,
                 summary: summary
             )
         }
         let profile = dominantTextProfile(from: model)
+        let fontReport = fontResolutionReport(from: model, customMappings: customFontMappings)
         return LibreDWGTextAutoDetectionResult(
             codePage: profile.codePage,
-            bigFont: 0,
+            bigFont: CADSHXFontCatalog.match(
+                styleName: profile.styleName,
+                fontFile: profile.fontFile,
+                bigFontFile: profile.bigFontFile,
+                customMappings: customFontMappings
+            )?.profile.rawValue ?? 0,
             styleName: profile.styleName,
             fontFile: profile.fontFile,
             bigFontFile: profile.bigFontFile,
             score: 0,
             styleSummary: profile.styleSummary ?? model.styleTableSummary,
+            matchedFontSummary: fontReport.matchedSummary,
+            unresolvedFontSummary: fontReport.unresolvedSummary,
+            fontResolutionSummary: fontReport.summary,
             rawTextBytesHexSample: profile.rawTextBytesHexSample,
             detectionSummary: "未找到可评分文字，已保留当前图纸文字方案。",
             summary: "未找到可评分文字，已保留当前图纸文字方案。"
@@ -130,6 +165,18 @@ public enum LibreDWGTextAutoDetector {
         append(65001, 0, "UTF-8 / 自动 SHX")
         append(932, 0, "Shift-JIS / 自动 SHX")
         return result
+    }
+
+    private static func resolvedBigFontCode(
+        candidate: Int32?,
+        styleMatch: CADSHXFontCatalog.Match?
+    ) -> Int32 {
+        if let candidate,
+           let profile = CADTextBigFontProfile(rawValue: candidate),
+           profile != .auto {
+            return candidate
+        }
+        return styleMatch?.profile.rawValue ?? 0
     }
 
     private static func evaluate(
@@ -167,6 +214,9 @@ public enum LibreDWGTextAutoDetector {
             bigFontFile: nil,
             score: score,
             styleSummary: nil,
+            matchedFontSummary: nil,
+            unresolvedFontSummary: nil,
+            fontResolutionSummary: nil,
             rawTextBytesHexSample: nil,
             detectionSummary: "\(candidate.name)，文字 \(decodedCount)/\(model.texts.count) 段，评分 \(score)",
             summary: "\(candidate.name)，文字 \(decodedCount)/\(model.texts.count) 段，评分 \(score)"
@@ -244,6 +294,95 @@ public enum LibreDWGTextAutoDetector {
     }
 
     private static func dominantStyleSummary(from histogram: [String: Int]) -> String? {
+        let sorted = histogram.sorted { lhs, rhs in
+            if lhs.value == rhs.value {
+                return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+            }
+            return lhs.value > rhs.value
+        }
+        guard !sorted.isEmpty else { return nil }
+        return sorted.prefix(5).map { "\($0.key) x\($0.value)" }.joined(separator: "；")
+    }
+
+    private struct FontResolutionReport {
+        let matchedSummary: String?
+        let unresolvedSummary: String?
+
+        var summary: String? {
+            var parts: [String] = []
+            if let matchedSummary {
+                parts.append("已匹配字体 \(matchedSummary)")
+            }
+            if let unresolvedSummary {
+                parts.append("未匹配字体 \(unresolvedSummary)")
+            }
+            return parts.isEmpty ? nil : parts.joined(separator: "；")
+        }
+    }
+
+    private static func fontResolutionReport(
+        from model: DXFPreviewModel,
+        customMappings: [CADSHXFontCatalog.CustomMapping] = []
+    ) -> FontResolutionReport {
+        var matched: [String: Int] = [:]
+        var unresolved: [String: Int] = [:]
+
+        for text in model.texts.prefix(2_000) {
+            let styleName = normalizedTextField(text.styleName)
+            let fontFile = normalizedTextField(text.fontFile)
+            let bigFontFile = normalizedTextField(text.bigFontFile)
+
+            if let match = CADSHXFontCatalog.match(
+                styleName: styleName,
+                fontFile: fontFile,
+                bigFontFile: bigFontFile,
+                customMappings: customMappings
+            ) {
+                matched[match.summary, default: 0] += 1
+            } else if let unresolvedName = unresolvedFontName(fontFile: fontFile, bigFontFile: bigFontFile) {
+                unresolved[unresolvedName, default: 0] += 1
+            }
+        }
+
+        return FontResolutionReport(
+            matchedSummary: histogramSummary(from: matched),
+            unresolvedSummary: histogramSummary(from: unresolved)
+        )
+    }
+
+    private static func customFontMappings(from fontMappings: [LibreDWGFontMapping]) -> [CADSHXFontCatalog.CustomMapping] {
+        fontMappings.compactMap {
+            CADSHXFontCatalog.CustomMapping(
+                sourceKind: $0.sourceKind,
+                pattern: $0.pattern,
+                profile: CADTextBigFontProfile(rawValue: $0.bigFont)
+            )
+        }
+    }
+
+    private static func unresolvedFontName(fontFile: String?, bigFontFile: String?) -> String? {
+        if let bigFontFile, shouldReportUnresolvedFont(bigFontFile) {
+            return "大字体 \(bigFontFile)"
+        }
+        if let fontFile, shouldReportUnresolvedFont(fontFile) {
+            return "字体 \(fontFile)"
+        }
+        return nil
+    }
+
+    private static func shouldReportUnresolvedFont(_ value: String) -> Bool {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .widthInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+        guard !normalized.isEmpty, normalized != "-" else { return false }
+        let systemFonts: Set<String> = [
+            "arial", "simsun", "simhei", "msyh", "songti", "heiti", "pingfang", "stfangsong",
+        ]
+        return !systemFonts.contains(normalized)
+    }
+
+    private static func histogramSummary(from histogram: [String: Int]) -> String? {
         let sorted = histogram.sorted { lhs, rhs in
             if lhs.value == rhs.value {
                 return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending

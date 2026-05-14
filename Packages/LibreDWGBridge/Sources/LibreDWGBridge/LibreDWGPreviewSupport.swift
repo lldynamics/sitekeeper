@@ -1,13 +1,92 @@
 import Foundation
 import SwiftUI
-import PDFKit
+
+enum DWGLiteSupportPolicy {
+    static let displayName = "DWG Lite"
+    static let scopeText = "本地读取 DWG 原文件，限定为 2D 施工图预览，优先显示平面几何、文字、圆弧、基础块引用和常见图层线型；不使用 PDF/DXF 代理预览。"
+    static let unsupportedObjectHint = "3D POLYLINE、3DFACE、3DSOLID、PROXY_ENTITY、AEC、天正对象、复杂动态块和未展开外部参照会进入未支持对象统计。"
+    static let dwgRepairHint = "请让出图方另存为普通 AutoCAD DWG（优先 AC1032/2018-2025 或更低版本），并清理天正/AEC/代理对象后再导入。"
+
+    static let supportedHeaders: Set<String> = [
+        "AC1009",
+        "AC1012",
+        "AC1014",
+        "AC1015",
+        "AC1018",
+        "AC1021",
+        "AC1024",
+        "AC1027",
+        "AC1032",
+        "AC1036",
+    ]
+
+    static func versionDescription(for magic: String) -> String {
+        switch magic {
+        case "AC1009":
+            return "AutoCAD R12 (AC1009)"
+        case "AC1012":
+            return "AutoCAD R13 (AC1012)"
+        case "AC1014":
+            return "AutoCAD R14 (AC1014)"
+        case "AC1015":
+            return "AutoCAD 2000/2000i/2002 (AC1015)"
+        case "AC1018":
+            return "AutoCAD 2004/2005/2006 (AC1018)"
+        case "AC1021":
+            return "AutoCAD 2007/2008/2009 (AC1021)"
+        case "AC1024":
+            return "AutoCAD 2010/2011/2012 (AC1024)"
+        case "AC1027":
+            return "AutoCAD 2013-2017 (AC1027)"
+        case "AC1032":
+            return "AutoCAD 2018-2025 (AC1032)"
+        case "AC1036":
+            return "AutoCAD 2026+ (AC1036)"
+        case "":
+            return "无法读取 DWG 版本"
+        default:
+            return "\(magic)（未知 DWG 版本）"
+        }
+    }
+
+    static func parsedHint(fileName: String, mode: LibreDWGPreviewLoadMode) -> String {
+        switch mode {
+        case .full:
+            return "已读取 DWG 原文件：\(fileName)"
+        case .geometryOnly:
+            return "已快速显示基础几何，文字和字体可按需加载。"
+        }
+    }
+
+    static func unsupportedVersionHint(_ header: String) -> String {
+        "\(displayName) 暂不支持 \(header) DWG。\(dwgRepairHint)"
+    }
+}
 
 enum PreviewState {
     case loading
-    case dxf(DXFPreviewModel, String?)
-    case pdf(URL, String?)
+    case dxf(DXFPreparedPreview)
     case dwgMetadata(DWGMetadata)
     case failed(String)
+}
+
+struct DXFPreparedPreview {
+    let model: DXFPreviewModel
+    let sourceHint: String?
+    let geometryIndex: DXFSpatialGeometryIndex
+    let isGeometryOnly: Bool
+
+    init(
+        model: DXFPreviewModel,
+        sourceHint: String?,
+        geometryIndex: DXFSpatialGeometryIndex? = nil,
+        isGeometryOnly: Bool = false
+    ) {
+        self.model = model
+        self.sourceHint = sourceHint
+        self.geometryIndex = geometryIndex ?? DXFSpatialGeometryIndex(model: model)
+        self.isGeometryOnly = isGeometryOnly
+    }
 }
 
 struct DWGMetadata {
@@ -38,7 +117,7 @@ struct DWGMetadata {
             fileName: fileURL.lastPathComponent,
             fileSize: sizeFormatter.string(fromByteCount: Int64(bytes)),
             modifiedAt: modified,
-            dwgVersion: dwgVersionDescription(for: magic),
+            dwgVersion: DWGLiteSupportPolicy.versionDescription(for: magic),
             headerHex: hex,
             hints: hints
         )
@@ -50,34 +129,6 @@ struct DWGMetadata {
         return try handle.read(upToCount: count) ?? Data()
     }
 
-    private static func dwgVersionDescription(for magic: String) -> String {
-        switch magic {
-        case "AC1009":
-            return "AutoCAD R12 (AC1009)"
-        case "AC1012":
-            return "AutoCAD R13 (AC1012)"
-        case "AC1014":
-            return "AutoCAD R14 (AC1014)"
-        case "AC1015":
-            return "AutoCAD 2000/2000i/2002 (AC1015)"
-        case "AC1018":
-            return "AutoCAD 2004/2005/2006 (AC1018)"
-        case "AC1021":
-            return "AutoCAD 2007/2008/2009 (AC1021)"
-        case "AC1024":
-            return "AutoCAD 2010/2011/2012 (AC1024)"
-        case "AC1027":
-            return "AutoCAD 2013-2017 (AC1027)"
-        case "AC1032":
-            return "AutoCAD 2018-2025 (AC1032)"
-        case "AC1036":
-            return "AutoCAD 2026+ (AC1036)"
-        case "":
-            return "无法读取 DWG 版本"
-        default:
-            return "\(magic)（未知 DWG 版本）"
-        }
-    }
 }
 
 struct DWGMetadataPreview: View {
@@ -87,10 +138,10 @@ struct DWGMetadataPreview: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
-                Label("DWG 元数据视图", systemImage: "doc.text.magnifyingglass")
+                Label("DWG Lite 元数据视图", systemImage: "doc.text.magnifyingglass")
                     .font(.headline)
                     .foregroundStyle(.orange)
-                Text("当前显示这份 DWG 的文件信息。应用会按 DWG 原文件解析，不使用 PDF/DXF 代理预览。")
+                Text(DWGLiteSupportPolicy.scopeText)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
 
@@ -116,7 +167,7 @@ struct DWGMetadataPreview: View {
 
                 if !info.hints.isEmpty {
                     VStack(alignment: .leading, spacing: 6) {
-                        Text("打不开原因")
+                        Text("解析提示")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.red)
                         ForEach(info.hints, id: \.self) { hint in
@@ -149,47 +200,5 @@ struct DWGMetadataPreview: View {
             Spacer(minLength: 0)
         }
         .font(.subheadline)
-    }
-}
-
-struct PDFSidecarPreview: View {
-    let fileURL: URL
-    let sourceHint: String?
-
-    var body: some View {
-        VStack(spacing: 10) {
-            if let sourceHint, !sourceHint.isEmpty {
-                Label(sourceHint, systemImage: "arrow.triangle.swap")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 4)
-            }
-            PDFKitView(url: fileURL)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(uiColor: .secondarySystemBackground))
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        }
-        .padding(10)
-    }
-}
-
-private struct PDFKitView: UIViewRepresentable {
-    let url: URL
-
-    func makeUIView(context: Context) -> PDFView {
-        let view = PDFView()
-        view.autoScales = true
-        view.displayDirection = .vertical
-        view.displayMode = .singlePageContinuous
-        view.backgroundColor = .systemBackground
-        view.document = PDFDocument(url: url)
-        return view
-    }
-
-    func updateUIView(_ uiView: PDFView, context: Context) {
-        if uiView.document?.documentURL != url {
-            uiView.document = PDFDocument(url: url)
-        }
     }
 }

@@ -1,30 +1,59 @@
 import Foundation
 import SwiftUI
 
+private enum LibreDWGLoadingMessages {
+    static let initial = LibreDWGPreviewLoadStage.readingGeometry.detail
+    static let progressSeconds: [UInt64] = [8, 20, 45, 90]
+}
+
 public struct LibreDWGBridgePreview: View {
     public let fileURL: URL
     public let preferredCodePage: Int32?
     public let preferredBigFont: Int32?
+    public let fontMappings: [LibreDWGFontMapping]
+    public let initialViewState: LibreDWGCanvasViewStateSnapshot?
     public let onCanvasTransformChange: (LibreDWGCanvasTransformSnapshot) -> Void
+    public let onViewStateChange: (LibreDWGCanvasViewStateSnapshot) -> Void
+    public let onTextRepairPresetRequest: (Int32?, Int32?) -> Void
     public let onSnapPointsChange: ([LibreDWGSnapPointPayload]) -> Void
     public let onTextAutoDetectionChange: (LibreDWGTextAutoDetectionSnapshot) -> Void
 
     @State private var state: PreviewState = .loading
     @State private var loadTask: Task<Void, Never>?
-    @State private var loadTimeoutTask: Task<Void, Never>?
+    @State private var loadProgressTask: Task<Void, Never>?
+    @State private var loadToken = UUID()
+    @State private var textLoadTask: Task<Void, Never>?
+    @State private var textLoadProgressTask: Task<Void, Never>?
+    @State private var textLoadToken = UUID()
+    @State private var wasCancelled = false
+    @State private var loadingStage: LibreDWGPreviewLoadStage = .readingGeometry
+    @State private var loadingStages: [LibreDWGPreviewLoadStage] = [.readingGeometry, .buildingIndex]
+    @State private var fullTextLoadingStage: LibreDWGPreviewLoadStage = .readingText
+    @State private var fullTextLoadMessage = LibreDWGPreviewLoadStage.readingText.detail
+    @State private var isLoadingFullText = false
+    @State private var fullTextLoadError: String?
+    @State private var loadingMessage = LibreDWGLoadingMessages.initial
 
     public init(
         fileURL: URL,
         preferredCodePage: Int32? = nil,
         preferredBigFont: Int32? = nil,
+        fontMappings: [LibreDWGFontMapping] = [],
+        initialViewState: LibreDWGCanvasViewStateSnapshot? = nil,
         onCanvasTransformChange: @escaping (LibreDWGCanvasTransformSnapshot) -> Void = { _ in },
+        onViewStateChange: @escaping (LibreDWGCanvasViewStateSnapshot) -> Void = { _ in },
+        onTextRepairPresetRequest: @escaping (Int32?, Int32?) -> Void = { _, _ in },
         onSnapPointsChange: @escaping ([LibreDWGSnapPointPayload]) -> Void = { _ in },
         onTextAutoDetectionChange: @escaping (LibreDWGTextAutoDetectionSnapshot) -> Void = { _ in }
     ) {
         self.fileURL = fileURL
         self.preferredCodePage = preferredCodePage
         self.preferredBigFont = preferredBigFont
+        self.fontMappings = fontMappings
+        self.initialViewState = initialViewState
         self.onCanvasTransformChange = onCanvasTransformChange
+        self.onViewStateChange = onViewStateChange
+        self.onTextRepairPresetRequest = onTextRepairPresetRequest
         self.onSnapPointsChange = onSnapPointsChange
         self.onTextAutoDetectionChange = onTextAutoDetectionChange
     }
@@ -37,30 +66,47 @@ public struct LibreDWGBridgePreview: View {
                 startLoadingPreview()
             }
             .onDisappear {
-                cancelLoadingPreview()
+                cancelActivePreviewLoading()
             }
     }
 
     private var taskIdentity: String {
-        "\(fileURL.path)#\(preferredCodePage.map(String.init) ?? "auto")#\(preferredBigFont.map(String.init) ?? "auto")"
+        "\(fileURL.path)#\(preferredCodePage.map(String.init) ?? "auto")#\(preferredBigFont.map(String.init) ?? "auto")#\(fontMappingsIdentity)"
+    }
+
+    private var fontMappingsIdentity: String {
+        fontMappings
+            .map { "\($0.sourceKind):\($0.pattern):\($0.bigFont)" }
+            .sorted()
+            .joined(separator: "|")
     }
 
     @ViewBuilder
     private var content: some View {
         switch state {
         case .loading:
-            ProgressView("正在加载图纸…")
-                .controlSize(.large)
-        case .dxf(let model, let sourceHint):
-            DXFCanvasPreview(
-                model: model,
-                sourceHint: sourceHint,
-                fileURL: fileURL,
-                onCanvasTransformChange: onCanvasTransformChange,
-                onSnapPointsChange: onSnapPointsChange
-            )
-        case .pdf(let url, let sourceHint):
-            PDFSidecarPreview(fileURL: url, sourceHint: sourceHint)
+            if wasCancelled {
+                cancelledLoadingView
+            } else {
+                loadingProgressView
+            }
+        case .dxf(let preview):
+            ZStack(alignment: .bottomTrailing) {
+                DXFCanvasPreview(
+                    model: preview.model,
+                    sourceHint: preview.sourceHint,
+                    geometryIndex: preview.geometryIndex,
+                    fileURL: fileURL,
+                    initialViewState: initialViewState,
+                    onCanvasTransformChange: onCanvasTransformChange,
+                    onViewStateChange: onViewStateChange,
+                    onTextRepairPresetRequest: onTextRepairPresetRequest,
+                    onSnapPointsChange: onSnapPointsChange
+                )
+                if preview.isGeometryOnly && fileURL.pathExtension.lowercased() == "dwg" {
+                    fullTextLoadControl
+                }
+            }
         case .dwgMetadata(let info):
             DWGMetadataPreview(fileURL: fileURL, info: info)
         case .failed(let reason):
@@ -72,50 +118,186 @@ public struct LibreDWGBridgePreview: View {
         }
     }
 
-    private var timeoutMessage: String {
-        "DWG 解析超过 20 秒，已停止等待本次预览。建议导出 CAD 诊断日志，检查 DWG 版本、对象数量、未支持实体和文字编码。"
+    private var loadingProgressView: some View {
+        VStack(spacing: 18) {
+            ProgressView()
+                .controlSize(.large)
+
+            VStack(spacing: 6) {
+                Text(loadingStage.title)
+                    .font(.headline)
+                Text(loadingMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            loadingStageRows(stages: loadingStages, currentStage: loadingStage)
+
+            Button(role: .cancel) {
+                cancelActivePreviewLoading(markCancelled: true)
+            } label: {
+                Label("取消解析", systemImage: "xmark.circle")
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+
+            Text("取消会停止当前等待和后续索引/文字流程；底层 DWG 读取已进入原生库时，可能需要返回后才完全释放。")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 360)
+        }
+        .padding(24)
+        .frame(maxWidth: 440)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var cancelledLoadingView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "xmark.circle")
+                .font(.system(size: 42, weight: .semibold))
+                .foregroundStyle(.secondary)
+            VStack(spacing: 6) {
+                Text("已取消解析")
+                    .font(.headline)
+                Text("当前图纸没有写入任何 CAD 原文件；需要时可以重新打开。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            Button {
+                startLoadingPreview()
+            } label: {
+                Label("重新打开", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+        }
+        .padding(24)
+        .frame(maxWidth: 380)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func loadingStageRows(
+        stages: [LibreDWGPreviewLoadStage],
+        currentStage: LibreDWGPreviewLoadStage
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(stages, id: \.self) { stage in
+                let state = loadingStageState(stage, currentStage: currentStage, stages: stages)
+                HStack(spacing: 8) {
+                    Image(systemName: state.iconName)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(state.tint)
+                        .frame(width: 18)
+                    Text(stage.title.replacingOccurrences(of: "正在", with: ""))
+                        .font(.caption.weight(stage == currentStage ? .semibold : .regular))
+                        .foregroundStyle(stage == currentStage ? .primary : .secondary)
+                    Spacer(minLength: 8)
+                    Text(state.title)
+                        .font(.caption2)
+                        .foregroundStyle(state.tint)
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: 360)
+        .background(Color(uiColor: .secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func loadingStageState(
+        _ stage: LibreDWGPreviewLoadStage,
+        currentStage: LibreDWGPreviewLoadStage,
+        stages: [LibreDWGPreviewLoadStage]
+    ) -> (title: String, iconName: String, tint: Color) {
+        guard let stageIndex = stages.firstIndex(of: stage),
+              let currentIndex = stages.firstIndex(of: currentStage) else {
+            return ("等待", "circle", .secondary)
+        }
+        if stageIndex < currentIndex {
+            return ("完成", "checkmark.circle.fill", .green)
+        }
+        if stageIndex == currentIndex {
+            return ("进行中", stage.systemImage, .accentColor)
+        }
+        return ("等待", "circle", .secondary)
     }
 
     @MainActor
     private func startLoadingPreview() {
         cancelLoadingPreview()
         state = .loading
+        wasCancelled = false
+        fullTextLoadError = nil
+        let token = UUID()
+        loadToken = token
         let identity = taskIdentity
         let currentFileURL = fileURL
         let currentPreferredCodePage = preferredCodePage
         let currentPreferredBigFont = preferredBigFont
+        let currentFontMappings = fontMappings
+        let shouldStageDWG = currentFileURL.pathExtension.lowercased() == "dwg"
+        loadingStages = shouldStageDWG ? [.readingGeometry, .buildingIndex] : [.readingGeometry, .buildingIndex]
+        loadingStage = .readingGeometry
+        loadingMessage = loadingStage.detail
 
         let task = Task.detached(priority: .userInitiated) {
-            let loadedState = await LibreDWGPreviewEngine.load(
-                fileURL: currentFileURL,
-                preferredCodePage: currentPreferredCodePage,
-                preferredBigFont: currentPreferredBigFont
-            )
-            await MainActor.run {
-                guard identity == taskIdentity, !Task.isCancelled else { return }
-                loadTimeoutTask?.cancel()
-                loadTimeoutTask = nil
-                loadTask = nil
-                state = loadedState
-                postTextAutoDetectionIfAvailable(for: loadedState, fileURL: currentFileURL)
+            let progress: LibreDWGPreviewProgressHandler = { stage in
+                await MainActor.run {
+                    guard identity == taskIdentity, loadToken == token else { return }
+                    loadingStage = stage
+                    loadingMessage = stage.detail
+                }
+            }
+            if shouldStageDWG {
+                let loadedState = await LibreDWGPreviewEngine.load(
+                    fileURL: currentFileURL,
+                    preferredCodePage: currentPreferredCodePage,
+                    preferredBigFont: currentPreferredBigFont,
+                    fontMappings: currentFontMappings,
+                    progress: progress,
+                    mode: .geometryOnly
+                )
+                await MainActor.run {
+                    guard identity == taskIdentity, loadToken == token else { return }
+                    loadProgressTask?.cancel()
+                    loadProgressTask = nil
+                    loadTask = nil
+                    state = loadedState
+                }
+            } else {
+                let loadedState = await LibreDWGPreviewEngine.load(
+                    fileURL: currentFileURL,
+                    preferredCodePage: currentPreferredCodePage,
+                    preferredBigFont: currentPreferredBigFont,
+                    fontMappings: currentFontMappings,
+                    progress: progress
+                )
+                await MainActor.run {
+                    guard identity == taskIdentity, loadToken == token else { return }
+                    loadProgressTask?.cancel()
+                    loadProgressTask = nil
+                    loadTask = nil
+                    state = loadedState
+                    postTextAutoDetectionIfAvailable(for: loadedState, fileURL: currentFileURL, fontMappings: currentFontMappings)
+                }
             }
         }
 
         loadTask = task
-        let timeoutReason = timeoutMessage
-        loadTimeoutTask = Task.detached(priority: .utility) {
-            try? await Task.sleep(for: .seconds(20))
-            guard !Task.isCancelled else { return }
-            task.cancel()
-            let timeoutState = Self.timeoutFallbackState(
-                fileURL: currentFileURL,
-                message: timeoutReason
-            )
-            await MainActor.run {
-                guard identity == taskIdentity else { return }
-                state = timeoutState
-                loadTask = nil
-                loadTimeoutTask = nil
+        loadProgressTask = Task.detached(priority: .utility) {
+            var elapsed: UInt64 = 0
+            for seconds in LibreDWGLoadingMessages.progressSeconds {
+                let delay = seconds > elapsed ? seconds - elapsed : 0
+                elapsed = seconds
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard identity == taskIdentity, loadToken == token else { return }
+                    loadingMessage = loadingStage.longRunningMessage(elapsedSeconds: seconds)
+                }
             }
         }
     }
@@ -124,41 +306,196 @@ public struct LibreDWGBridgePreview: View {
     private func cancelLoadingPreview() {
         loadTask?.cancel()
         loadTask = nil
-        loadTimeoutTask?.cancel()
-        loadTimeoutTask = nil
-    }
-
-    nonisolated private static func timeoutFallbackState(
-        fileURL: URL,
-        message: String
-    ) -> PreviewState {
-        guard fileURL.pathExtension.lowercased() == "dwg",
-              let info = try? DWGMetadata.from(fileURL: fileURL, hints: [message]) else {
-            return .failed(message)
-        }
-        return .dwgMetadata(info)
+        loadToken = UUID()
+        loadProgressTask?.cancel()
+        loadProgressTask = nil
+        textLoadTask?.cancel()
+        textLoadTask = nil
+        textLoadProgressTask?.cancel()
+        textLoadProgressTask = nil
+        textLoadToken = UUID()
+        isLoadingFullText = false
+        fullTextLoadError = nil
     }
 
     @MainActor
-    private func postTextAutoDetectionIfAvailable(for loadedState: PreviewState, fileURL: URL) {
-        guard case .dxf(let model, _) = loadedState,
-              fileURL.pathExtension.lowercased() == "dwg",
-              !model.texts.isEmpty else { return }
-        let result = LibreDWGTextAutoDetector.detect(model: model)
-        onTextAutoDetectionChange(
-            LibreDWGTextAutoDetectionSnapshot(
-                codePage: result.codePage,
-                bigFont: result.bigFont,
-                styleName: result.styleName,
-                fontFile: result.fontFile,
-                bigFontFile: result.bigFontFile,
-                autoDetectScore: result.score,
-                styleSummary: result.styleSummary,
-                rawTextBytesHexSample: result.rawTextBytesHexSample,
-                detectionSummary: result.detectionSummary,
-                summary: result.summary
+    private func cancelActivePreviewLoading(markCancelled: Bool = false) {
+        let currentFileURL = fileURL
+        cancelLoadingPreview()
+        Task.detached(priority: .utility) {
+            await LibreDWGPreviewEngine.cancelLoads(for: currentFileURL)
+        }
+        if markCancelled {
+            wasCancelled = true
+            state = .loading
+            loadingMessage = "已取消解析。"
+        }
+    }
+
+    @ViewBuilder
+    private var fullTextLoadControl: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if isLoadingFullText {
+                HStack(alignment: .top, spacing: 8) {
+                    ProgressView()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(fullTextLoadingStage.title)
+                            .font(.caption.weight(.semibold))
+                        Text(fullTextLoadMessage)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                loadingStageRows(stages: [.readingText, .buildingIndex], currentStage: fullTextLoadingStage)
+                Button(role: .cancel) {
+                    cancelFullTextLoading(markCancelled: true)
+                } label: {
+                    Label("取消文字解析", systemImage: "xmark.circle")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            } else {
+                Button {
+                    loadFullTextPreview()
+                } label: {
+                    Label("加载文字", systemImage: "text.viewfinder")
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
+
+                Text("已先显示基础几何，文字按需解析。")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let fullTextLoadError {
+                Text(fullTextLoadError)
+                    .font(.caption2)
+                    .foregroundStyle(.orange)
+                    .lineLimit(2)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: 320, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .padding(12)
+    }
+
+    @MainActor
+    private func loadFullTextPreview() {
+        guard fileURL.pathExtension.lowercased() == "dwg", !isLoadingFullText else { return }
+        isLoadingFullText = true
+        fullTextLoadError = nil
+        textLoadTask?.cancel()
+        textLoadProgressTask?.cancel()
+
+        let token = UUID()
+        textLoadToken = token
+        let identity = taskIdentity
+        let currentFileURL = fileURL
+        let currentPreferredCodePage = preferredCodePage
+        let currentPreferredBigFont = preferredBigFont
+        let currentFontMappings = fontMappings
+        fullTextLoadingStage = .readingText
+        fullTextLoadMessage = LibreDWGPreviewLoadStage.readingText.detail
+
+        textLoadTask = Task.detached(priority: .userInitiated) {
+            let progress: LibreDWGPreviewProgressHandler = { stage in
+                await MainActor.run {
+                    guard identity == taskIdentity, textLoadToken == token else { return }
+                    fullTextLoadingStage = stage
+                    fullTextLoadMessage = stage.detail
+                }
+            }
+            let fullState = await LibreDWGPreviewEngine.load(
+                fileURL: currentFileURL,
+                preferredCodePage: currentPreferredCodePage,
+                preferredBigFont: currentPreferredBigFont,
+                fontMappings: currentFontMappings,
+                progress: progress,
+                mode: .full
             )
-        )
+            await MainActor.run {
+                guard identity == taskIdentity, textLoadToken == token else { return }
+                isLoadingFullText = false
+                textLoadTask = nil
+                textLoadProgressTask?.cancel()
+                textLoadProgressTask = nil
+                switch fullState {
+                case .failed(let reason):
+                    fullTextLoadError = reason
+                default:
+                    fullTextLoadError = nil
+                    state = fullState
+                    postTextAutoDetectionIfAvailable(for: fullState, fileURL: currentFileURL, fontMappings: currentFontMappings)
+                }
+            }
+        }
+
+        textLoadProgressTask = Task.detached(priority: .utility) {
+            var elapsed: UInt64 = 0
+            for seconds in LibreDWGLoadingMessages.progressSeconds {
+                let delay = seconds > elapsed ? seconds - elapsed : 0
+                elapsed = seconds
+                try? await Task.sleep(for: .seconds(delay))
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard identity == taskIdentity, textLoadToken == token else { return }
+                    fullTextLoadMessage = fullTextLoadingStage.longRunningMessage(elapsedSeconds: seconds)
+                }
+            }
+        }
+    }
+
+    @MainActor
+    private func cancelFullTextLoading(markCancelled: Bool = false) {
+        let currentFileURL = fileURL
+        textLoadTask?.cancel()
+        textLoadTask = nil
+        textLoadProgressTask?.cancel()
+        textLoadProgressTask = nil
+        textLoadToken = UUID()
+        isLoadingFullText = false
+        Task.detached(priority: .utility) {
+            await LibreDWGPreviewEngine.cancelLoads(for: currentFileURL)
+        }
+        if markCancelled {
+            fullTextLoadError = "已取消文字解析。"
+        }
+    }
+
+    @MainActor
+    private func postTextAutoDetectionIfAvailable(
+        for loadedState: PreviewState,
+        fileURL: URL,
+        fontMappings: [LibreDWGFontMapping]
+    ) {
+        guard case .dxf(let preview) = loadedState,
+              fileURL.pathExtension.lowercased() == "dwg",
+              !preview.model.texts.isEmpty else { return }
+        let model = preview.model
+        Task.detached(priority: .utility) {
+            let result = LibreDWGTextAutoDetector.detect(model: model, fontMappings: fontMappings)
+            await MainActor.run {
+                onTextAutoDetectionChange(
+                    LibreDWGTextAutoDetectionSnapshot(
+                        codePage: result.codePage,
+                        bigFont: result.bigFont,
+                        styleName: result.styleName,
+                        fontFile: result.fontFile,
+                        bigFontFile: result.bigFontFile,
+                        autoDetectScore: result.score,
+                        styleSummary: result.styleSummary,
+                        matchedFontSummary: result.matchedFontSummary,
+                        unresolvedFontSummary: result.unresolvedFontSummary,
+                        fontResolutionSummary: result.fontResolutionSummary,
+                        rawTextBytesHexSample: result.rawTextBytesHexSample,
+                        detectionSummary: result.detectionSummary,
+                        summary: result.summary
+                    )
+                )
+            }
+        }
     }
 }
 
@@ -172,7 +509,8 @@ enum DXFPreviewParser {
     static func parse(
         fileURL: URL,
         preferredCodePage: Int32? = nil,
-        preferredBigFont: Int32? = nil
+        preferredBigFont: Int32? = nil,
+        fontMappings _: [LibreDWGFontMapping] = []
     ) throws -> DXFPreviewModel {
         let raw = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
         let decodedPayload = decodeText(raw, preferredCodePage: preferredCodePage)
@@ -280,7 +618,7 @@ enum DXFPreviewParser {
                         arcCount += 1
                     }
                 }
-            case "SOLID", "TRACE", "3DFACE":
+            case "SOLID", "TRACE":
                 if let x1 = fields.firstDouble(10),
                    let y1 = fields.firstDouble(20),
                    let x2 = fields.firstDouble(11),
@@ -484,7 +822,7 @@ enum DXFPreviewParser {
         )
         guard let bounds else {
             throw NSError(domain: "LibreDWGBridge", code: 1001, userInfo: [
-                NSLocalizedDescriptionKey: "未识别到可绘制的 DXF 几何元素（当前支持 LINE / ARC / LWPOLYLINE / POLYLINE / CIRCLE / SOLID / 3DFACE / DIMENSION / TEXT / MTEXT / ATTRIB）。",
+                NSLocalizedDescriptionKey: "未识别到可绘制的 DXF 几何元素（当前支持二维 LINE / ARC / LWPOLYLINE / POLYLINE / CIRCLE / SOLID / DIMENSION / TEXT / MTEXT / ATTRIB）。",
             ])
         }
 
@@ -501,6 +839,7 @@ enum DXFPreviewParser {
                 preferredBigFont: preferredBigFont,
                 usedPreferredCodePage: decodedPayload.usedPreferredCodePage
             ),
+            textIssueHint: textIssueHint(from: texts),
             bounds: bounds
         )
     }
@@ -587,6 +926,39 @@ enum DXFPreviewParser {
         }
         score += cadVocabularyScore(text)
         return score
+    }
+
+    private static func textIssueHint(from texts: [DXFPreviewModel.TextEntity]) -> DXFTextIssueHint? {
+        guard !texts.isEmpty else { return nil }
+        var suspiciousCount = 0
+        var mojibakeCount = 0
+        var styleDiagnostics: Set<String> = []
+
+        for text in texts {
+            if CADTextNormalizer.looksSuspicious(text.value) {
+                suspiciousCount += 1
+            }
+            if CADTextNormalizer.looksLikeMojibake(text.value) {
+                mojibakeCount += 1
+            }
+            if let styleName = text.styleName, !styleName.isEmpty {
+                styleDiagnostics.insert("样式 \(styleName)")
+            }
+            if let fontFile = text.fontFile, !fontFile.isEmpty {
+                styleDiagnostics.insert("字体 \(fontFile)")
+            }
+            if let bigFontFile = text.bigFontFile, !bigFontFile.isEmpty {
+                styleDiagnostics.insert("大字体 \(bigFontFile)")
+            }
+        }
+
+        guard suspiciousCount > 0 else { return nil }
+        return DXFTextIssueHint(
+            textCount: texts.count,
+            suspiciousTextCount: suspiciousCount,
+            mojibakeTextCount: mojibakeCount,
+            styleDiagnostics: Array(styleDiagnostics).sorted()
+        )
     }
 
     private static func cadVocabularyScore(_ text: String) -> Int {

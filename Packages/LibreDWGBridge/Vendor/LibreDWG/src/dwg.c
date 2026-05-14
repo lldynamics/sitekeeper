@@ -1456,7 +1456,6 @@ EXPORT Dwg_Object *
 get_first_owned_block (const Dwg_Object *hdr)
 {
   Dwg_Data *dwg = hdr->parent;
-  Dwg_Version_Type version = dwg->header.version;
   const Dwg_Object_BLOCK_HEADER *restrict _hdr
       = hdr->tio.object->tio.BLOCK_HEADER;
   if (hdr->fixedtype != DWG_TYPE_BLOCK_HEADER)
@@ -1474,8 +1473,6 @@ get_first_owned_block (const Dwg_Object *hdr)
         obj = dwg_next_object (obj);
       return obj;
     }
-  LOG_ERROR ("Unsupported version %s\n", dwg_version_type (version));
-  return NULL;
 }
 
 /** Returns the next block object after current owned by the block hdr, or
@@ -1485,8 +1482,6 @@ EXPORT Dwg_Object *
 get_next_owned_block (const Dwg_Object *restrict hdr,
                       const Dwg_Object *restrict current)
 {
-  Dwg_Data *dwg = hdr->parent;
-  Dwg_Version_Type version = dwg->header.version;
   const Dwg_Object_BLOCK_HEADER *restrict _hdr
       = hdr->tio.object->tio.BLOCK_HEADER;
   if (hdr->fixedtype != DWG_TYPE_BLOCK_HEADER)
@@ -1495,16 +1490,10 @@ get_next_owned_block (const Dwg_Object *restrict hdr,
       return NULL;
     }
 
-  if (1 || version >= R_13b1)
-    {
-      if (!_hdr->endblk_entity
-          || current->handle.value >= _hdr->endblk_entity->absolute_ref)
-        return NULL;
-      return dwg_next_object (current);
-    }
-
-  LOG_ERROR ("Unsupported version %s\n", dwg_version_type (version));
-  return NULL;
+  if (!_hdr->endblk_entity
+      || current->handle.value >= _hdr->endblk_entity->absolute_ref)
+    return NULL;
+  return dwg_next_object (current);
 }
 
 /** Returns the next block object until last_entity
@@ -1568,47 +1557,38 @@ get_next_owned_block_entity (const Dwg_Object *restrict hdr,
 EXPORT Dwg_Object *
 get_last_owned_block (const Dwg_Object *restrict hdr)
 {
-  Dwg_Data *dwg = hdr->parent;
   Dwg_Object_BLOCK_HEADER *restrict _hdr = hdr->tio.object->tio.BLOCK_HEADER;
-  const Dwg_Version_Type version = dwg->header.version;
   if (hdr->fixedtype != DWG_TYPE_BLOCK_HEADER)
     {
       LOG_ERROR ("Invalid BLOCK_HEADER type %d", hdr->fixedtype);
       return NULL;
     }
 
-  if (1 || version >= R_13b1)
+  if (_hdr->endblk_entity && _hdr->endblk_entity->obj)
+    return _hdr->endblk_entity->obj;
+  else
     {
-      if (_hdr->endblk_entity && _hdr->endblk_entity->obj)
-        return _hdr->endblk_entity->obj;
-      else
+      Dwg_Object *obj = (Dwg_Object *)hdr;
+      while (obj && obj->fixedtype != DWG_TYPE_ENDBLK)
+        obj = dwg_next_object (obj);
+      if (obj && obj->fixedtype == DWG_TYPE_ENDBLK)
         {
-          Dwg_Object *obj = (Dwg_Object *)hdr;
-          while (obj && obj->fixedtype != DWG_TYPE_ENDBLK)
-            obj = dwg_next_object (obj);
-          if (obj && obj->fixedtype == DWG_TYPE_ENDBLK)
+          if (!_hdr->endblk_entity)
             {
-              if (!_hdr->endblk_entity)
+              _hdr->endblk_entity
+                  = (BITCODE_H)calloc (1, sizeof (Dwg_Object_Ref));
+              if (_hdr->endblk_entity)
                 {
-                  _hdr->endblk_entity
-                      = (BITCODE_H)calloc (1, sizeof (Dwg_Object_Ref));
-                  if (_hdr->endblk_entity)
-                    {
-                      _hdr->endblk_entity->obj = obj;
-                      _hdr->endblk_entity->handleref.value
-                          = _hdr->endblk_entity->absolute_ref
-                          = obj->handle.value;
-                    }
+                  _hdr->endblk_entity->obj = obj;
+                  _hdr->endblk_entity->handleref.value
+                      = _hdr->endblk_entity->absolute_ref = obj->handle.value;
                 }
-              else if (!_hdr->endblk_entity->obj)
-                _hdr->endblk_entity->obj = obj;
             }
-          return obj;
+          else if (!_hdr->endblk_entity->obj)
+            _hdr->endblk_entity->obj = obj;
         }
+      return obj;
     }
-
-  LOG_ERROR ("Unsupported version %s\n", dwg_version_type (version));
-  return NULL;
 }
 
 EXPORT Dwg_Object *
@@ -3389,7 +3369,7 @@ dwg_next_handseed (Dwg_Data *dwg)
         }
       dwg->header_vars.HANDSEED->absolute_ref
           = dwg->header_vars.HANDSEED->handleref.value = seed;
-      dwg->auxheader.HANDSEED = seed;
+      dwg->auxheader.HANDSEED = (BITCODE_RL)seed;
       return seed;
     }
   else

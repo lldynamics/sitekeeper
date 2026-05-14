@@ -44,6 +44,11 @@ struct CADCanvasHost<Renderer: View, Overlay: View, ImmersiveOverlay: View, Imme
     }
 }
 
+enum CADCommandBarChrome {
+    case standard
+    case immersive
+}
+
 extension CADPreviewContainer {
     var immersiveTopSafePadding: CGFloat {
 #if os(iOS)
@@ -73,220 +78,9 @@ extension CADPreviewContainer {
 
     var immersiveTopControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 8) {
-                floatingCircleButton(systemImage: "xmark", label: String(localized: "完成")) {
-                    dismiss()
-                }
-
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(activeRequest.displayName)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.78)
-                    HStack(spacing: 5) {
-                        Image(systemName: engineStatusIcon)
-                            .font(.caption2)
-                            .foregroundStyle(engineStatusTint)
-                        Text(engineStatusText)
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                        if allowsOverlayEditing {
-                            Text("· \(unitHint)")
-                                .font(.caption2.monospacedDigit())
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.72)
-                        }
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.regularMaterial, in: Capsule())
-            }
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    floatingCircleButton(
-                        systemImage: "hand.tap",
-                        label: String(localized: "看图"),
-                        active: tool == .browse
-                    ) {
-                        selectOverlayTool(.browse)
-                    }
-
-                    if allowsOverlayEditing {
-                        floatingCircleButton(
-                            systemImage: "square.3.layers.3d",
-                            label: String(localized: "图层"),
-                            active: showOverlayLayerSheet
-                        ) {
-                            showOverlayLayerSheet = true
-                        }
-
-                        floatingCircleButton(
-                            systemImage: "magnifyingglass",
-                            label: String(localized: "搜索")
-                        ) {
-                            showDrawingTreeSheet = true
-                        }
-
-                        Menu {
-                            Button {
-                                selectOverlayTool(.length)
-                            } label: {
-                                Label(String(localized: "线长"), systemImage: "ruler")
-                            }
-                            Button {
-                                selectOverlayTool(.continuousLength)
-                            } label: {
-                                Label(String(localized: "连续长度"), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
-                            }
-                            Button {
-                                selectOverlayTool(.area)
-                            } label: {
-                                Label(String(localized: "面积"), systemImage: "square.dashed")
-                            }
-                            Divider()
-                            Button {
-                                openScaleCalibrationSheet()
-                            } label: {
-                                Label(String(localized: "测量标定"), systemImage: "slider.horizontal.3")
-                            }
-                        } label: {
-                            floatingCircleMenuLabel(
-                                systemImage: "ruler",
-                                label: String(localized: "测量"),
-                                active: tool == .length || tool == .continuousLength || tool == .area
-                            )
-                        }
-                        .disabled(!canCaptureDrawingOverlay)
-                        .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
-
-                        Menu {
-                            Button {
-                                selectOverlayTool(.annotation)
-                            } label: {
-                                Label(String(localized: "批注"), systemImage: "highlighter")
-                            }
-                            Button {
-                                selectOverlayTool(.redline)
-                            } label: {
-                                Label(String(localized: "红线"), systemImage: "scribble")
-                            }
-                            Button {
-                                selectOverlayTool(.note)
-                            } label: {
-                                Label(String(localized: "文字批注"), systemImage: "text.bubble")
-                            }
-                        } label: {
-                            floatingCircleMenuLabel(
-                                systemImage: "highlighter",
-                                label: String(localized: "批注"),
-                                active: tool == .annotation || tool == .redline || tool == .note
-                            )
-                        }
-                        .disabled(!canCaptureDrawingOverlay)
-                        .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
-
-                        floatingCircleButton(
-                            systemImage: "number.circle",
-                            label: String(localized: "数数"),
-                            active: tool == .count,
-                            disabled: !canCaptureDrawingOverlay
-                        ) {
-                            selectOverlayTool(.count)
-                        }
-
-                        floatingCircleButton(
-                            systemImage: "sum",
-                            label: String(localized: "算量"),
-                            active: showQuantitySheet
-                        ) {
-                            showQuantitySheet = true
-                        }
-                    }
-
-                    Menu {
-                        Button {
-                            showShareSheet = true
-                        } label: {
-                            Label(String(localized: "分享图纸"), systemImage: "square.and.arrow.up")
-                        }
-                        if hasMultipleProjectDrawings {
-                            Button {
-                                showDrawingTreeSheet = true
-                            } label: {
-                                Label(String(localized: "图纸包目录树"), systemImage: "list.bullet.indent")
-                            }
-                        }
-                        if shouldUseLibreDWGRenderer {
-                            Button {
-                                showTextEncodingDialog = true
-                            } label: {
-                                Label(String(localized: "文字编码与字体"), systemImage: "character.textbox")
-                            }
-                        }
-                        if allowsOverlayEditing {
-                            Button {
-                                showAnnotationExportFormatDialog = true
-                            } label: {
-                                Label(String(localized: "导出批注测量"), systemImage: "doc.text")
-                            }
-                            .disabled(!snapshot.hasOverlayContent)
-                        }
-                        if isCADFile {
-                            Button {
-                                Task {
-                                    await exportDiagnosticLog()
-                                }
-                            } label: {
-                                Label(String(localized: "导出 CAD 诊断日志"), systemImage: isExportingDiagnosticLog ? "hourglass" : "doc.text.magnifyingglass")
-                            }
-                            .disabled(isExportingDiagnosticLog)
-                        }
-                        Divider()
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isImmersivePreview = false
-                            }
-                        } label: {
-                            Label(String(localized: "退出全屏"), systemImage: "arrow.down.right.and.arrow.up.left")
-                        }
-                        if allowsOverlayEditing {
-                            Button(role: .destructive) {
-                                showResetConfirm = true
-                            } label: {
-                                Label(String(localized: "清空覆盖层"), systemImage: "trash")
-                            }
-                        }
-                    } label: {
-                        floatingCircleMenuLabel(
-                            systemImage: "ellipsis",
-                            label: String(localized: "更多"),
-                            active: false
-                        )
-                    }
-                }
-                .padding(2)
-            }
+            cadCommandHeader(chrome: .immersive)
+            cadPrimaryCommandBar(chrome: .immersive)
         }
-    }
-
-    @ViewBuilder
-    func topToolButton(for candidate: CADOverlayTool) -> some View {
-        let labelTitle = candidate.title
-        let labelIcon = candidate.icon
-        Button {
-            selectOverlayTool(candidate)
-        } label: {
-            Label(labelTitle, systemImage: labelIcon)
-                .font(.caption.weight(.semibold))
-        }
-        .buttonStyle(.bordered)
-        .tint(tool == candidate ? .appPrimaryAction : .secondary)
-        .disabled(!isOverlayToolEnabled(candidate))
     }
 
     func floatingCircleButton(
@@ -309,31 +103,419 @@ extension CADPreviewContainer {
         }
         .opacity(disabled ? 0.45 : 1)
         .disabled(disabled)
-        .accessibilityLabel(label)
+            .accessibilityLabel(label)
+    }
+
+    @ViewBuilder
+    func cadCommandHeader(chrome: CADCommandBarChrome) -> some View {
+        HStack(spacing: chrome == .immersive ? 8 : 10) {
+            cadIconButton(
+                systemImage: "xmark",
+                label: String(localized: "完成"),
+                chrome: chrome
+            ) {
+                dismiss()
+            }
+
+            VStack(alignment: .leading, spacing: chrome == .immersive ? 2 : 3) {
+                Text(activeRequest.displayName)
+                    .font(chrome == .immersive ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(chrome == .immersive ? 0.78 : 0.75)
+                if allowsOverlayEditing {
+                    Text(unitHint)
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            .padding(.horizontal, chrome == .immersive ? 10 : 0)
+            .padding(.vertical, chrome == .immersive ? 7 : 0)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if chrome == .immersive {
+                    Capsule().fill(.regularMaterial)
+                }
+            }
+
+            if allowsOverlayEditing {
+                cadIconButton(
+                    systemImage: "arrow.uturn.backward",
+                    label: String(localized: "撤销上一步"),
+                    chrome: chrome,
+                    disabled: !canUndoOverlayChange
+                ) {
+                    undoLastOverlayChange()
+                }
+
+                cadIconButton(
+                    systemImage: "arrow.uturn.forward",
+                    label: String(localized: "前进一步"),
+                    chrome: chrome,
+                    disabled: !canRedoOverlayChange
+                ) {
+                    redoOverlayChange()
+                }
+            }
+
+            cadIconButton(
+                systemImage: isImmersivePreview ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right",
+                label: isImmersivePreview ? String(localized: "退出全屏") : String(localized: "全屏图纸"),
+                chrome: chrome
+            ) {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isImmersivePreview.toggle()
+                }
+            }
+
+            cadMoreMenu(chrome: chrome)
+        }
+    }
+
+    var isMeasurementWorkflowActive: Bool {
+        tool == .length ||
+            tool == .continuousLength ||
+            tool == .area ||
+            tool == .count ||
+            showScaleSheet ||
+            showQuantitySheet
+    }
+
+    var isAnnotationWorkflowActive: Bool {
+        tool == .annotation ||
+            tool == .note
+    }
+
+    @ViewBuilder
+    func cadPrimaryCommandBar(chrome: CADCommandBarChrome) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                cadCommandButton(
+                    systemImage: "hand.tap",
+                    label: String(localized: "看图"),
+                    active: tool == .browse,
+                    chrome: chrome
+                ) {
+                    selectOverlayTool(.browse)
+                }
+
+                if allowsOverlayEditing {
+                    cadCommandButton(
+                        systemImage: "rectangle.3.group",
+                        label: String(localized: "显示"),
+                        active: showOverlayLayerSheet,
+                        chrome: chrome
+                    ) {
+                        showOverlayLayerSheet = true
+                    }
+
+                    cadMeasurementMenu(chrome: chrome)
+                    cadAnnotationMenu(chrome: chrome)
+                }
+            }
+            .padding(chrome == .immersive ? 2 : 0)
+        }
+    }
+
+    @ViewBuilder
+    func cadMeasurementMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadMeasurementMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "ruler",
+                    label: String(localized: "测量"),
+                    active: isMeasurementWorkflowActive,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(isMeasurementWorkflowActive ? .appPrimaryAction : .secondary)
+            .disabled(!canCaptureDrawingOverlay)
+            .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
+        case .immersive:
+            Menu {
+                cadMeasurementMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "ruler",
+                    label: String(localized: "测量"),
+                    active: isMeasurementWorkflowActive,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canCaptureDrawingOverlay)
+            .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
+        }
+    }
+
+    @ViewBuilder
+    func cadAnnotationMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadAnnotationMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "highlighter",
+                    label: String(localized: "批注"),
+                    active: isAnnotationWorkflowActive,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(isAnnotationWorkflowActive ? .appPrimaryAction : .secondary)
+            .disabled(!canCaptureDrawingOverlay)
+            .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
+        case .immersive:
+            Menu {
+                cadAnnotationMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "highlighter",
+                    label: String(localized: "批注"),
+                    active: isAnnotationWorkflowActive,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
+            .disabled(!canCaptureDrawingOverlay)
+            .opacity(canCaptureDrawingOverlay ? 1 : 0.45)
+        }
+    }
+
+    @ViewBuilder
+    func cadMoreMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadMoreMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "ellipsis",
+                    label: String(localized: "更多"),
+                    active: false,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel(String(localized: "更多图纸操作"))
+        case .immersive:
+            Menu {
+                cadMoreMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "ellipsis",
+                    label: String(localized: "更多"),
+                    active: false,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "更多图纸操作"))
+        }
+    }
+
+    @ViewBuilder
+    var cadMeasurementMenuContent: some View {
+        Button {
+            selectOverlayTool(.length)
+        } label: {
+            Label(String(localized: "线长"), systemImage: "ruler")
+        }
+        Button {
+            selectOverlayTool(.continuousLength)
+        } label: {
+            Label(String(localized: "连续长度"), systemImage: "point.topleft.down.curvedto.point.bottomright.up")
+        }
+        Button {
+            selectOverlayTool(.area)
+        } label: {
+            Label(String(localized: "面积"), systemImage: "square.dashed")
+        }
+        Button {
+            selectOverlayTool(.count)
+        } label: {
+            Label(String(localized: "数数"), systemImage: "number.circle")
+        }
+        Divider()
+        Button {
+            openScaleCalibrationSheet()
+        } label: {
+            Label(String(localized: "标定"), systemImage: "slider.horizontal.3")
+        }
+        Button {
+            showQuantitySheet = true
+        } label: {
+            Label(String(localized: "入算量"), systemImage: "sum")
+        }
+    }
+
+    @ViewBuilder
+    var cadAnnotationMenuContent: some View {
+        Button {
+            selectOverlayTool(.annotation)
+        } label: {
+            Label(String(localized: "手绘批注"), systemImage: "highlighter")
+        }
+        Button {
+            selectOverlayTool(.note)
+        } label: {
+            Label(String(localized: "文字批注"), systemImage: "text.bubble")
+        }
+    }
+
+    @ViewBuilder
+    var cadMoreMenuContent: some View {
+        Button {
+            showShareSheet = true
+        } label: {
+            Label(String(localized: "分享原 CAD 文件"), systemImage: "square.and.arrow.up")
+        }
+        if shouldUseLibreDWGRenderer {
+            Button {
+                saveCurrentViewState(showConfirmation: true)
+            } label: {
+                Label(String(localized: "保存当前视图状态"), systemImage: "bookmark")
+            }
+            Button {
+                showTextEncodingDialog = true
+            } label: {
+                Label(String(localized: "文字修复"), systemImage: "character.textbox")
+            }
+        }
+        if shouldShowCADDiagnosticCommand {
+            Button {
+                showCADDiagnosticSheet = true
+            } label: {
+                Label(String(localized: "诊断"), systemImage: "stethoscope")
+            }
+        }
+        if allowsOverlayEditing {
+            Menu {
+                Button {
+                    showAnnotationExportFormatDialog = true
+                } label: {
+                    Label(String(localized: "批注测量"), systemImage: "doc.text")
+                }
+                .disabled(!snapshot.hasOverlayContent)
+            } label: {
+                Label(String(localized: "导出"), systemImage: "square.and.arrow.up.on.square")
+            }
+            Divider()
+            Button(role: .destructive) {
+                showResetConfirm = true
+            } label: {
+                Label(String(localized: "清空覆盖层"), systemImage: "trash")
+            }
+        }
+    }
+
+    @ViewBuilder
+    func cadIconButton(
+        systemImage: String,
+        label: String,
+        chrome: CADCommandBarChrome,
+        active: Bool = false,
+        destructive: Bool = false,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        switch chrome {
+        case .standard:
+            Button(role: destructive ? .destructive : nil, action: action) {
+                Image(systemName: systemImage)
+                    .visibleIconStyle()
+                    .foregroundStyle(active ? Color.appRisk : Color.primary)
+            }
+            .disabled(disabled)
+            .accessibilityLabel(label)
+        case .immersive:
+            floatingCircleButton(
+                systemImage: systemImage,
+                label: label,
+                active: active,
+                disabled: disabled,
+                action: action
+            )
+        }
+    }
+
+    @ViewBuilder
+    func cadCommandButton(
+        systemImage: String,
+        label: String,
+        active: Bool,
+        chrome: CADCommandBarChrome,
+        disabled: Bool = false,
+        action: @escaping () -> Void
+    ) -> some View {
+        switch chrome {
+        case .standard:
+            Button(action: action) {
+                Label(label, systemImage: systemImage)
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.bordered)
+            .tint(active ? .appPrimaryAction : .secondary)
+            .disabled(disabled)
+            .opacity(disabled ? 0.45 : 1)
+        case .immersive:
+            floatingCircleButton(
+                systemImage: systemImage,
+                label: label,
+                active: active,
+                disabled: disabled,
+                action: action
+            )
+        }
+    }
+
+    func cadCommandMenuLabel(
+        systemImage: String,
+        label: String,
+        active: Bool,
+        chrome: CADCommandBarChrome
+    ) -> some View {
+        floatingCircleMenuLabel(
+            systemImage: systemImage,
+            label: label,
+            active: active,
+            chrome: chrome
+        )
     }
 
     func floatingCircleMenuLabel(
         systemImage: String,
         label: String,
-        active: Bool
+        active: Bool,
+        chrome: CADCommandBarChrome = .immersive
     ) -> some View {
-        Image(systemName: systemImage)
-            .font(.headline)
-            .frame(width: 38, height: 38)
-            .contentShape(Circle())
-            .foregroundStyle(active ? Color.white : Color.appPrimaryAction)
-            .background {
-                Circle().fill(active ? AnyShapeStyle(Color.appPrimaryAction) : AnyShapeStyle(.regularMaterial))
+        Group {
+            switch chrome {
+            case .standard:
+                Label(label, systemImage: systemImage)
+                    .font(.caption.weight(.semibold))
+            case .immersive:
+                Image(systemName: systemImage)
+                    .font(.headline)
+                    .frame(width: 38, height: 38)
+                    .contentShape(Circle())
+                    .foregroundStyle(active ? Color.white : Color.appPrimaryAction)
+                    .background {
+                        Circle().fill(active ? AnyShapeStyle(Color.appPrimaryAction) : AnyShapeStyle(.regularMaterial))
+                    }
             }
-            .accessibilityLabel(label)
+        }
+        .accessibilityLabel(label)
     }
 
     var immersiveOverlayControls: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if hasMultipleProjectDrawings {
-                drawingTabStrip
-            }
-
             Label(tool.guidance, systemImage: tool.icon)
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(tool == .browse ? .secondary : Color.appPrimaryAction)

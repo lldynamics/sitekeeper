@@ -1,8 +1,28 @@
 import CoreGraphics
 import Foundation
 
+enum LibreDWGNativeParseMode {
+    case full
+    case geometryOnly
+
+    var cOptions: Int32 {
+        switch self {
+        case .full:
+            return 0
+        case .geometryOnly:
+            return 1
+        }
+    }
+}
+
 enum LibreDWGNativeParser {
-    static func parse(fileURL: URL, preferredCodePage: Int32?, preferredBigFont: Int32?) throws -> DXFPreviewModel {
+    static func parse(
+        fileURL: URL,
+        preferredCodePage: Int32?,
+        preferredBigFont: Int32?,
+        fontMappings: [LibreDWGFontMapping] = [],
+        mode: LibreDWGNativeParseMode = .full
+    ) throws -> DXFPreviewModel {
         if shouldAttemptAC1036Compatibility(for: fileURL) {
             do {
                 let compatibilityURL = try makeAC1036CompatibilityCopy(for: fileURL)
@@ -11,8 +31,11 @@ enum LibreDWGNativeParser {
                 }
                 return try parseNative(
                     fileURL: compatibilityURL,
+                    xrefBaseFileURL: fileURL,
                     preferredCodePage: preferredCodePage,
-                    preferredBigFont: preferredBigFont
+                    preferredBigFont: preferredBigFont,
+                    fontMappings: fontMappings,
+                    mode: mode
                 )
             } catch {
                 throw NSError(domain: "LibreDWGBridge", code: 2010, userInfo: [
@@ -23,12 +46,22 @@ enum LibreDWGNativeParser {
 
         return try parseNative(
             fileURL: fileURL,
+            xrefBaseFileURL: fileURL,
             preferredCodePage: preferredCodePage,
-            preferredBigFont: preferredBigFont
+            preferredBigFont: preferredBigFont,
+            fontMappings: fontMappings,
+            mode: mode
         )
     }
 
-    private static func parseNative(fileURL: URL, preferredCodePage: Int32?, preferredBigFont: Int32?) throws -> DXFPreviewModel {
+    private static func parseNative(
+        fileURL: URL,
+        xrefBaseFileURL: URL,
+        preferredCodePage: Int32?,
+        preferredBigFont: Int32?,
+        fontMappings: [LibreDWGFontMapping],
+        mode: LibreDWGNativeParseMode
+    ) throws -> DXFPreviewModel {
         try Task.checkCancellation()
         nativeParseLock.lock()
         defer {
@@ -39,7 +72,7 @@ enum LibreDWGNativeParser {
         let overrideCodePage = preferredCodePage ?? 0
         let parseStart = CFAbsoluteTimeGetCurrent()
         let success = fileURL.path.withCString { path in
-            sk_libredwg_parse_file_with_codepage(path, Int32(overrideCodePage), &result)
+            sk_libredwg_parse_file_with_options(path, Int32(overrideCodePage), mode.cOptions, &result)
         }
         let parseDurationMilliseconds = max(1, Int((CFAbsoluteTimeGetCurrent() - parseStart) * 1000))
         defer {
@@ -51,6 +84,7 @@ enum LibreDWGNativeParser {
             let failure = buildFailureDiagnosticMessage(
                 failureReason: errorMessage(from: &result),
                 result: &result,
+                sourceFileURL: xrefBaseFileURL,
                 preferredCodePage: preferredCodePage,
                 parseDurationMilliseconds: parseDurationMilliseconds
             )
@@ -60,8 +94,9 @@ enum LibreDWGNativeParser {
         }
         guard let primitives = result.primitives, result.primitiveCount > 0 else {
             let diagnostic = buildFailureDiagnosticMessage(
-                failureReason: errorMessage(from: &result).isEmpty ? "LibreDWG 没有返回可绘制实体。" : errorMessage(from: &result),
+                failureReason: errorMessage(from: &result).isEmpty ? "DWG Lite 没有返回可绘制实体。" : errorMessage(from: &result),
                 result: &result,
+                sourceFileURL: xrefBaseFileURL,
                 preferredCodePage: preferredCodePage,
                 parseDurationMilliseconds: parseDurationMilliseconds
             )
@@ -69,7 +104,7 @@ enum LibreDWGNativeParser {
                 NSLocalizedDescriptionKey: diagnostic,
             ])
         }
-        guard result.primitiveCount <= 120_000 else {
+        guard result.primitiveCount <= result.primitiveLimit else {
             throw NSError(domain: "LibreDWGBridge", code: 2004, userInfo: [
                 NSLocalizedDescriptionKey: "DWG 实体数量过大（\(Int(result.primitiveCount))/\(Int(result.primitiveLimit))），已停止预览以避免内存不足。",
             ])
@@ -86,6 +121,13 @@ enum LibreDWGNativeParser {
         var swiftTextPrimitiveCount = 0
         var swiftSuspiciousTextCount = 0
         var swiftMojibakeTextCount = 0
+        let customFontMappings = fontMappings.compactMap {
+            CADSHXFontCatalog.CustomMapping(
+                sourceKind: $0.sourceKind,
+                pattern: $0.pattern,
+                profile: CADTextBigFontProfile(rawValue: $0.bigFont)
+            )
+        }
 
         func makeTextEntity(
             from primitive: SKCADPrimitive,
@@ -108,6 +150,7 @@ enum LibreDWGNativeParser {
                     rawTextBytesHex: rawTextBytesHex,
                     preferredCodePage: preferredCodePage,
                     preferredBigFont: preferredBigFont,
+                    customFontMappings: customFontMappings,
                     styleName: styleName,
                     fontFile: fontFile,
                     styleBigFontFile: bigFontFile
@@ -138,7 +181,8 @@ enum LibreDWGNativeParser {
             if let alias = CADSHXFontCatalog.diagnosticSummary(
                 styleName: styleName,
                 fontFile: fontFile,
-                bigFontFile: bigFontFile
+                bigFontFile: bigFontFile,
+                customMappings: customFontMappings
             ) {
                 textStyleDiagnostics.insert("映射 \(alias)")
             }
@@ -386,18 +430,23 @@ enum LibreDWGNativeParser {
 
         guard let bounds = computeBounds(segments: segments, polylines: polylines, circles: circles, texts: texts) else {
             throw NSError(domain: "LibreDWGBridge", code: 2003, userInfo: [
-                NSLocalizedDescriptionKey: "LibreDWG 已读取实体，但无法计算图纸范围。",
+                NSLocalizedDescriptionKey: "DWG Lite 已读取实体，但无法计算图纸范围。",
             ])
         }
 
         let drawableObjectCount = segments.count + polylines.count + circles.count + texts.count
         let fontDiagnostics = fontDiagnostics(from: texts)
         let styleTableSummary = fixedCString(from: &result.styleTableSummary)
+        let unsupportedObjectTypes = unsupportedObjectTypesText(from: &result)
+        let blockSummary = blockReferenceSummary(from: &result)
+        let xrefReferences = xrefReferences(from: &result, sourceFileURL: xrefBaseFileURL)
         let diagnostic = DWGLightweightDiagnostic(
             dwgVersion: dwgVersionDisplay(from: &result),
             totalObjectCount: max(0, Int(result.totalObjectCount)),
             drawableObjectCount: drawableObjectCount,
-            unsupportedObjectTypes: unsupportedObjectTypesText(from: &result),
+            unsupportedObjectTypes: unsupportedObjectTypes,
+            blockReferenceSummary: blockSummary,
+            xrefReferences: xrefReferences,
             textEncoding: resolvedTextEncoding(preferredCodePage: preferredCodePage, result: result),
             styleFonts: fontDiagnostics.styleFonts,
             bigFonts: fontDiagnostics.bigFonts,
@@ -431,6 +480,13 @@ enum LibreDWGNativeParser {
                 swiftMojibakeTextCount: swiftMojibakeTextCount,
                 textStyleDiagnostics: textStyleDiagnostics
             ),
+            textIssueHint: textIssueHint(
+                result: result,
+                swiftTextPrimitiveCount: swiftTextPrimitiveCount,
+                swiftSuspiciousTextCount: swiftSuspiciousTextCount,
+                swiftMojibakeTextCount: swiftMojibakeTextCount,
+                textStyleDiagnostics: textStyleDiagnostics
+            ),
             dwgDiagnostic: diagnostic,
             styleTableSummary: styleTableSummary.isEmpty ? nil : styleTableSummary,
             bounds: bounds
@@ -448,6 +504,7 @@ enum LibreDWGNativeParser {
         rawTextBytesHex: String?,
         preferredCodePage: Int32?,
         preferredBigFont: Int32?,
+        customFontMappings: [CADSHXFontCatalog.CustomMapping],
         styleName: String?,
         fontFile: String?,
         styleBigFontFile: String?
@@ -458,7 +515,8 @@ enum LibreDWGNativeParser {
             ? CADTextBigFontProfile.inferred(
                 styleName: styleName,
                 fontFile: fontFile,
-                bigFontFile: styleBigFontFile
+                bigFontFile: styleBigFontFile,
+                customMappings: customFontMappings
             )
             : selectedProfile
         return CADTextNormalizer.bestEffortNormalizedText(
@@ -485,6 +543,16 @@ enum LibreDWGNativeParser {
         let tempURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("sitekeeper-ac1036-\(UUID().uuidString)")
             .appendingPathExtension("dwg")
+        let sourcePath = fileURL.standardizedFileURL.resolvingSymlinksInPath().path
+        let scratchPath = tempURL.standardizedFileURL.resolvingSymlinksInPath().path
+        guard sourcePath != scratchPath else {
+            throw NSError(domain: "LibreDWGBridge", code: 2011, userInfo: [
+                NSLocalizedDescriptionKey: "AC1036 兼容读取未创建临时副本，已停止以保护原 DWG 文件。",
+            ])
+        }
+
+        // CAD preview must keep the source drawing read-only. AC1036 compatibility
+        // patches only this scratch copy, then the caller removes it after parsing.
         try FileManager.default.copyItem(at: fileURL, to: tempURL)
         let handle = try FileHandle(forWritingTo: tempURL)
         defer {
@@ -517,6 +585,172 @@ enum LibreDWGNativeParser {
         let bytes = UnsafeRawPointer(raw).assumingMemoryBound(to: UInt8.self)
         let buffer = UnsafeBufferPointer(start: bytes, count: length)
         return String(decoding: buffer, as: UTF8.self)
+    }
+
+    private static func xrefReferences(
+        from result: inout SKCADParseResult,
+        sourceFileURL: URL
+    ) -> [DWGXrefReference] {
+        guard let rawXrefs = result.xrefs,
+              result.xrefReferenceCount > 0 else {
+            return []
+        }
+        let count = min(Int(result.xrefReferenceCount), 256)
+        let buffer = UnsafeBufferPointer(start: rawXrefs, count: count)
+        return buffer.enumerated().map { index, raw in
+            let name = decodedCString(raw.name) ?? ""
+            let savedPath = decodedCString(raw.savedPath) ?? ""
+            let resolvedPath = resolveXrefLocalPath(
+                savedPath: savedPath,
+                name: name,
+                sourceFileURL: sourceFileURL
+            )
+            let status: DWGXrefReference.LocalStatus
+            if resolvedPath != nil {
+                status = .found
+            } else if savedPath.isEmpty {
+                status = .pathEmpty
+            } else {
+                status = .missing
+            }
+            return DWGXrefReference(
+                id: "\(index)-\(name)-\(savedPath)",
+                name: name,
+                savedPath: savedPath,
+                resolvedLocalPath: resolvedPath,
+                localStatus: status,
+                isOverlay: raw.isOverlay != 0,
+                isLoadedInDWG: raw.isLoaded != 0,
+                isResolvedInDWG: raw.isResolvedInDWG != 0,
+                referenceCount: max(0, Int(raw.referenceCount))
+            )
+        }
+    }
+
+    private static func resolveXrefLocalPath(
+        savedPath: String,
+        name: String,
+        sourceFileURL: URL
+    ) -> String? {
+        let sourceDirectory = sourceFileURL.deletingLastPathComponent()
+        var candidates: [URL] = []
+        var seen = Set<String>()
+
+        func appendCandidate(_ url: URL) {
+            let standardized = url.standardizedFileURL
+            guard seen.insert(standardized.path).inserted else { return }
+            candidates.append(standardized)
+        }
+
+        let cleanedPath = cleanedCADPath(savedPath)
+        if !cleanedPath.isEmpty {
+            if cleanedPath.hasPrefix("/") {
+                appendCandidate(URL(fileURLWithPath: cleanedPath))
+            } else if !isWindowsAbsolutePath(cleanedPath) {
+                appendCandidate(sourceDirectory.appendingPathComponent(cleanedPath))
+            }
+        }
+
+        let leafNames = xrefLeafNameCandidates(savedPath: cleanedPath, name: name)
+        if !leafNames.isEmpty {
+            let localDirs = [
+                sourceDirectory,
+                sourceDirectory.appendingPathComponent("xref", isDirectory: true),
+                sourceDirectory.appendingPathComponent("xrefs", isDirectory: true),
+                sourceDirectory.appendingPathComponent("XREF", isDirectory: true),
+                sourceDirectory.appendingPathComponent("参照", isDirectory: true),
+                sourceDirectory.appendingPathComponent("外部参照", isDirectory: true),
+                sourceDirectory.deletingLastPathComponent(),
+            ]
+            for directory in localDirs {
+                for leaf in leafNames {
+                    appendCandidate(directory.appendingPathComponent(leaf))
+                }
+            }
+        }
+
+        for candidate in candidates {
+            if let existing = existingLocalFilePath(candidate) {
+                return existing
+            }
+        }
+        return nil
+    }
+
+    private static func cleanedCADPath(_ path: String) -> String {
+        var cleaned = path.trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.hasPrefix("\""), cleaned.hasSuffix("\""), cleaned.count > 1 {
+            cleaned.removeFirst()
+            cleaned.removeLast()
+        }
+        if cleaned.lowercased().hasPrefix("file://"),
+           let url = URL(string: cleaned) {
+            cleaned = url.path
+        }
+        cleaned = cleaned.replacingOccurrences(of: "\\", with: "/")
+        while cleaned.hasPrefix("./") {
+            cleaned.removeFirst(2)
+        }
+        return cleaned
+    }
+
+    private static func xrefLeafNameCandidates(savedPath: String, name: String) -> [String] {
+        var candidates: [String] = []
+        var seen = Set<String>()
+
+        func append(_ raw: String) {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            let cleaned = cleanedCADPath(trimmed)
+            let leaf = cleaned.split(separator: "/").last.map(String.init) ?? cleaned
+            guard !leaf.isEmpty, seen.insert(leaf.lowercased()).inserted else { return }
+            candidates.append(leaf)
+            if !leaf.lowercased().hasSuffix(".dwg") {
+                let dwgLeaf = "\(leaf).dwg"
+                if seen.insert(dwgLeaf.lowercased()).inserted {
+                    candidates.append(dwgLeaf)
+                }
+            }
+        }
+
+        append(savedPath)
+        append(name)
+        return candidates
+    }
+
+    private static func isWindowsAbsolutePath(_ path: String) -> Bool {
+        let scalars = Array(path.unicodeScalars)
+        if scalars.count >= 2,
+           CharacterSet.letters.contains(scalars[0]),
+           scalars[1] == ":" {
+            return true
+        }
+        return path.hasPrefix("//")
+    }
+
+    private static func existingLocalFilePath(_ url: URL) -> String? {
+        let fileManager = FileManager.default
+        let path = url.standardizedFileURL.path
+        var isDirectory = ObjCBool(false)
+        if fileManager.fileExists(atPath: path, isDirectory: &isDirectory),
+           !isDirectory.boolValue {
+            return path
+        }
+
+        let directory = url.deletingLastPathComponent().standardizedFileURL
+        let leaf = url.lastPathComponent
+        guard !leaf.isEmpty,
+              let names = try? fileManager.contentsOfDirectory(atPath: directory.path),
+              let match = names.first(where: { $0.localizedCaseInsensitiveCompare(leaf) == .orderedSame }) else {
+            return nil
+        }
+        let matchedURL = directory.appendingPathComponent(match)
+        var matchedIsDirectory = ObjCBool(false)
+        guard fileManager.fileExists(atPath: matchedURL.path, isDirectory: &matchedIsDirectory),
+              !matchedIsDirectory.boolValue else {
+            return nil
+        }
+        return matchedURL.path
     }
 
     private static func decodingHint(
@@ -563,6 +797,27 @@ enum LibreDWGNativeParser {
             parts.append("未渲染对象 \(Int(result.unsupportedEntityCount))")
         }
         return parts.joined(separator: "，")
+    }
+
+    private static func textIssueHint(
+        result: SKCADParseResult,
+        swiftTextPrimitiveCount: Int,
+        swiftSuspiciousTextCount: Int,
+        swiftMojibakeTextCount: Int,
+        textStyleDiagnostics: Set<String>
+    ) -> DXFTextIssueHint? {
+        let textCount = swiftTextPrimitiveCount > 0 ? swiftTextPrimitiveCount : Int(result.textPrimitiveCount)
+        guard textCount > 0 else { return nil }
+        let rawSuspiciousCount = Int(result.suspiciousTextCount)
+        let suspiciousCount = swiftTextPrimitiveCount > 0 ? swiftSuspiciousTextCount : rawSuspiciousCount
+        guard suspiciousCount > 0 else { return nil }
+        return DXFTextIssueHint(
+            textCount: textCount,
+            suspiciousTextCount: suspiciousCount,
+            mojibakeTextCount: swiftMojibakeTextCount,
+            styleDiagnostics: Array(textStyleDiagnostics)
+                .sorted()
+        )
     }
 
     private static func codePageName(for codePage: Int32) -> String {
@@ -629,6 +884,7 @@ enum LibreDWGNativeParser {
     private static func buildFailureDiagnosticMessage(
         failureReason: String,
         result: inout SKCADParseResult,
+        sourceFileURL: URL,
         preferredCodePage: Int32?,
         parseDurationMilliseconds: Int
     ) -> String {
@@ -643,6 +899,11 @@ enum LibreDWGNativeParser {
             circles: [],
             texts: []
         )
+        let unsupportedObjectTypes = unsupportedObjectTypesText(from: &result)
+        let blockSummary = blockReferenceSummary(from: &result)
+        let xrefSummary = xrefReferences(from: &result, sourceFileURL: sourceFileURL)
+            .map { "\($0.title) \($0.localStatus.displayText)" }
+            .joined(separator: ", ")
         let fields: [String] = [
             "打开失败：\(trimmedReason)",
             "DWG 版本：\(dwgVersionDisplay(from: &result))",
@@ -652,7 +913,9 @@ enum LibreDWGNativeParser {
             "实体预算：\(Int(result.primitiveLimit))",
             "primitive 内存预算：\(memoryMegabytesText(result.primitiveMemoryBudget))",
             "primitive 缓冲估算：\(memoryMegabytesText(result.estimatedPrimitiveMemory))",
-            "未支持对象类型：\(unsupportedObjectTypesText(from: &result))",
+            "未支持对象类型：\(unsupportedObjectTypes)",
+            "图块：\(blockSummary)",
+            "外部参照：\(xrefSummary.isEmpty ? "无" : xrefSummary)",
             "文字编码：\(resolvedTextEncoding(preferredCodePage: preferredCodePage, result: result))",
             "STYLE 字体：-",
             "大字体：-",
@@ -687,6 +950,18 @@ enum LibreDWGNativeParser {
         }
         if result.unsupportedEntityCount > 0 {
             return "共 \(Int(result.unsupportedEntityCount)) 个未支持对象"
+        }
+        return "无"
+    }
+
+    private static func blockReferenceSummary(from result: inout SKCADParseResult) -> String {
+        let summary = fixedCString(from: &result.blockReferenceSummary)
+        let trimmed = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        if result.blockInsertCount > 0 || result.blockMInsertCount > 0 {
+            return "INSERT:\(Int(result.blockInsertCount)), MINSERT:\(Int(result.blockMInsertCount))"
         }
         return "无"
     }

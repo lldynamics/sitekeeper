@@ -21,15 +21,24 @@ enum CADTextBigFontProfile: Int32 {
         }
     }
 
-    static func inferred(from fontFile: String?) -> CADTextBigFontProfile {
-        inferred(styleName: nil, fontFile: fontFile, bigFontFile: nil)
+    static func inferred(
+        from fontFile: String?,
+        customMappings: [CADSHXFontCatalog.CustomMapping] = []
+    ) -> CADTextBigFontProfile {
+        inferred(styleName: nil, fontFile: fontFile, bigFontFile: nil, customMappings: customMappings)
     }
 
-    static func inferred(styleName: String?, fontFile: String?, bigFontFile: String?) -> CADTextBigFontProfile {
+    static func inferred(
+        styleName: String?,
+        fontFile: String?,
+        bigFontFile: String?,
+        customMappings: [CADSHXFontCatalog.CustomMapping] = []
+    ) -> CADTextBigFontProfile {
         CADSHXFontCatalog.match(
             styleName: styleName,
             fontFile: fontFile,
-            bigFontFile: bigFontFile
+            bigFontFile: bigFontFile,
+            customMappings: customMappings
         )?.profile ?? .auto
     }
 }
@@ -42,11 +51,54 @@ enum CADSHXFontCatalog {
         let confidence: Int
 
         var summary: String {
-            "\(source): \(alias) -> \(profile.diagnosticName)"
+            return "\(source): \(alias) -> \(profile.diagnosticName)"
         }
     }
 
-    static func match(styleName: String?, fontFile: String?, bigFontFile: String?) -> Match? {
+    struct CustomMapping {
+        let sourceKind: String
+        let pattern: String
+        let profile: CADTextBigFontProfile
+
+        init?(
+            sourceKind: String,
+            pattern: String,
+            profile: CADTextBigFontProfile?
+        ) {
+            let normalizedPattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalizedPattern.isEmpty, let profile, profile != .auto else { return nil }
+            self.sourceKind = Self.normalizedSourceKind(sourceKind)
+            self.pattern = normalizedPattern
+            self.profile = profile
+        }
+
+        func accepts(source: String) -> Bool {
+            sourceKind == "any" || sourceKind == source
+        }
+
+        private static func normalizedSourceKind(_ raw: String) -> String {
+            switch raw
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+                .lowercased() {
+            case "bigfont", "big_font", "bigfontfile", "bigfont_file", "big":
+                return "bigfont"
+            case "font", "fontfile", "font_file":
+                return "font"
+            case "style", "stylename", "style_name":
+                return "style"
+            default:
+                return "any"
+            }
+        }
+    }
+
+    static func match(
+        styleName: String?,
+        fontFile: String?,
+        bigFontFile: String?,
+        customMappings: [CustomMapping] = []
+    ) -> Match? {
         let orderedSources: [(label: String, value: String?)] = [
             ("bigfont", bigFontFile),
             ("font", fontFile),
@@ -55,7 +107,17 @@ enum CADSHXFontCatalog {
 
         var best: Match?
         for source in orderedSources {
-            for token in tokens(from: source.value) {
+            let sourceTokens = tokens(from: source.value)
+            for candidate in customMatches(
+                sourceLabel: source.label,
+                sourceTokens: sourceTokens,
+                mappings: customMappings
+            ) {
+                if best == nil || candidate.confidence > best!.confidence {
+                    best = candidate
+                }
+            }
+            for token in sourceTokens {
                 guard let candidate = match(token: token, source: source.label) else { continue }
                 if best == nil || candidate.confidence > best!.confidence {
                     best = candidate
@@ -65,8 +127,40 @@ enum CADSHXFontCatalog {
         return best
     }
 
-    static func diagnosticSummary(styleName: String?, fontFile: String?, bigFontFile: String?) -> String? {
-        match(styleName: styleName, fontFile: fontFile, bigFontFile: bigFontFile)?.summary
+    static func diagnosticSummary(
+        styleName: String?,
+        fontFile: String?,
+        bigFontFile: String?,
+        customMappings: [CustomMapping] = []
+    ) -> String? {
+        match(
+            styleName: styleName,
+            fontFile: fontFile,
+            bigFontFile: bigFontFile,
+            customMappings: customMappings
+        )?.summary
+    }
+
+    private static func customMatches(
+        sourceLabel: String,
+        sourceTokens: [String],
+        mappings: [CustomMapping]
+    ) -> [Match] {
+        guard !sourceTokens.isEmpty, !mappings.isEmpty else { return [] }
+        let sourceTokenSet = Set(sourceTokens)
+        return mappings.compactMap { mapping -> Match? in
+            guard mapping.accepts(source: sourceLabel) else { return nil }
+            let mappingTokens = tokens(from: mapping.pattern)
+            guard let alias = mappingTokens.first(where: { sourceTokenSet.contains($0) }) else {
+                return nil
+            }
+            return Match(
+                profile: mapping.profile,
+                alias: alias,
+                source: "项目替代/\(sourceLabel)",
+                confidence: 1_000 + sourceWeight(sourceLabel)
+            )
+        }
     }
 
     private static func match(token: String, source: String) -> Match? {
@@ -106,7 +200,7 @@ enum CADSHXFontCatalog {
             .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
             .lowercased()
         let stripped = folded
-            .replacingOccurrences(of: "\\.(shx|shp|ttf|ttc|otf|fon)$", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\.(shx|shp|fon)$", with: "", options: .regularExpression)
         let separators = CharacterSet(charactersIn: "/\\._- ()[]{}<>+")
         let parts = stripped.components(separatedBy: separators).filter { !$0.isEmpty }
         var result = [stripped]
@@ -121,30 +215,34 @@ enum CADSHXFontCatalog {
 
     private static let gbcbigAliases = table([
         ("gbcbig", 100), ("gbcbiggb", 98), ("gbcbig5", 96), ("gb", 64),
+        ("gcbig", 96), ("gbbig", 94), ("gbtxt", 88), ("gbtxt1", 84),
         ("gbenor", 92), ("gbeitc", 90), ("gbhz", 88), ("gbfs", 86),
+        ("gbhz1", 84), ("gbhz2", 84), ("gbst1", 78), ("gbst2", 78),
         ("gbfang", 84), ("gbfangsong", 84), ("gbst", 78), ("gblong", 78),
         ("hzd", 88), ("hzdx", 82), ("hzdxt", 82), ("hzdw", 76),
-        ("hzxy", 76), ("hzzd", 74), ("hzt", 70), ("hz", 60),
+        ("hzxy", 76), ("hzzd", 74), ("hzt", 70), ("hz", 60), ("hzst", 78),
+        ("hzsong", 78), ("hzhei", 76), ("hzxbs", 74), ("hzxk", 72),
         ("tssdeng", 98), ("tssdchn", 98), ("tssd", 96), ("tss", 84),
         ("tssdeng2", 90), ("tssdeng3", 90), ("tssdchn2", 90),
         ("tch", 72), ("thchn", 72), ("china", 70), ("chinese", 70),
-        ("simsun", 62), ("simhei", 62), ("msyh", 58), ("yahei", 58),
+        ("chinesegb", 86), ("chineses", 84), ("chinese_s", 84),
     ])
 
     private static let hztxtAliases = table([
         ("hztxt", 100), ("hztxt1", 96), ("hztxt2", 96), ("hztxt3", 92),
         ("hztxt", 96), ("hztext", 92), ("hzdx", 84), ("hzdxt", 84),
         ("hzxk", 82), ("hzdd", 78), ("hzzd", 78), ("hzt", 70),
+        ("hztxt_e", 88), ("hztext_e", 86), ("hzshx", 78),
         ("txt", 72), ("txt1", 70), ("txt2", 70), ("simplex", 70),
-        ("simplex8", 68), ("romans", 66), ("romanc", 64), ("romand", 64),
+        ("simplex8", 68), ("simplexgb", 76), ("romans", 66), ("romanc", 64), ("romand", 64),
         ("iso", 58), ("isocp", 58), ("isocp2", 58), ("gdt", 56),
         ("standard", 42),
     ])
 
     private static let hzfsAliases = table([
         ("hzfs", 100), ("hzfs1", 96), ("hzfs2", 96), ("hzfangsong", 96),
-        ("fs", 82), ("fsdb", 90), ("fsdb_e", 90), ("gbhzfs", 92),
-        ("simfang", 96), ("fangsong", 94), ("fang", 72), ("fsgb", 88),
+        ("fs", 82), ("fs1", 78), ("fs2", 78), ("fsdb", 90), ("fsdb_e", 90), ("gbhzfs", 92),
+        ("fsgb", 88),
         ("fzfs", 86), ("fzfangsong", 86), ("仿宋", 100), ("仿宋gb2312", 96),
         ("fangsong_gb2312", 96), ("stfangsong", 84), ("adobe fangsong std", 78),
     ])
@@ -189,6 +287,7 @@ enum CADTextNormalizer {
         let repaired = bestTextCandidate(
             from: [
                 shxDecoded,
+                repairUTF8DecodedAsLatin1Mojibake(in: shxDecoded),
                 repairSingleByteMojibake(in: shxDecoded, profile: bigFontProfile),
                 repairLegacyChineseDecodedUTF8Mojibake(in: shxDecoded, profile: bigFontProfile),
                 repairMixedSingleByteMojibake(in: shxDecoded, profile: bigFontProfile),
@@ -247,7 +346,7 @@ enum CADTextNormalizer {
         let normalizedDecoded = normalize(decodedText, bigFontProfile: bigFontProfile)
         var best = (
             text: normalizedDecoded,
-            score: decodedQualityScore(normalizedDecoded),
+            score: textCandidateScore(normalizedDecoded),
             codePage: preferredCodePage
         )
 
@@ -273,7 +372,8 @@ enum CADTextNormalizer {
 
             let normalized = normalize(decoded, bigFontProfile: bigFontProfile)
             guard !normalized.isEmpty else { continue }
-            let score = decodedQualityScore(normalized)
+            let score = textCandidateScore(normalized)
+                + codePagePreferenceBias(codePage, preferredCodePage: preferredCodePage)
             if score > best.score + 4 || shouldPreferRawByteDecode(current: best.text, candidate: normalized) {
                 best = (normalized, score, codePage)
             }
@@ -286,7 +386,7 @@ enum CADTextNormalizer {
         var best: (text: String, score: Int)?
         for candidate in candidates {
             guard !candidate.isEmpty else { continue }
-            let score = decodedQualityScore(candidate)
+            let score = mojibakeRepairScore(candidate)
             if best == nil || score > best!.score {
                 best = (candidate, score)
             }
@@ -387,6 +487,86 @@ enum CADTextNormalizer {
         return repaired
     }
 
+    private static func repairUTF8DecodedAsLatin1Mojibake(in raw: String) -> String {
+        guard raw.unicodeScalars.contains(where: { (0x00A0...0x00FF).contains($0.value) }) else {
+            return raw
+        }
+        let scalars = raw.unicodeScalars
+        let bytes = scalars.compactMap { scalar -> UInt8? in
+            windows1252Byte(for: scalar)
+        }
+        guard bytes.count == scalars.count,
+              let decoded = String(data: Data(bytes), encoding: .utf8),
+              shouldPreferMojibakeRepair(raw: raw, decoded: decoded) else {
+            return raw
+        }
+        return decoded
+    }
+
+    private static func windows1252Byte(for scalar: Unicode.Scalar) -> UInt8? {
+        if scalar.value <= 0x00FF {
+            return UInt8(scalar.value)
+        }
+        switch scalar.value {
+        case 0x20AC:
+            return 0x80
+        case 0x201A:
+            return 0x82
+        case 0x0192:
+            return 0x83
+        case 0x201E:
+            return 0x84
+        case 0x2026:
+            return 0x85
+        case 0x2020:
+            return 0x86
+        case 0x2021:
+            return 0x87
+        case 0x02C6:
+            return 0x88
+        case 0x2030:
+            return 0x89
+        case 0x0160:
+            return 0x8A
+        case 0x2039:
+            return 0x8B
+        case 0x0152:
+            return 0x8C
+        case 0x017D:
+            return 0x8E
+        case 0x2018:
+            return 0x91
+        case 0x2019:
+            return 0x92
+        case 0x201C:
+            return 0x93
+        case 0x201D:
+            return 0x94
+        case 0x2022:
+            return 0x95
+        case 0x2013:
+            return 0x96
+        case 0x2014:
+            return 0x97
+        case 0x02DC:
+            return 0x98
+        case 0x2122:
+            return 0x99
+        case 0x0161:
+            return 0x9A
+        case 0x203A:
+            return 0x9B
+        case 0x0153:
+            return 0x9C
+        case 0x017E:
+            return 0x9E
+        case 0x0178:
+            return 0x9F
+        default:
+            return nil
+        }
+    }
+
     private static func repairMixedSingleByteMojibake(in raw: String, profile: CADTextBigFontProfile) -> String {
         guard profile != .disabled,
               raw.unicodeScalars.contains(where: { (0x00A0...0x00FF).contains($0.value) }) else {
@@ -430,7 +610,7 @@ enum CADTextNormalizer {
         }
 
         var best = raw
-        var bestScore = decodedQualityScore(raw)
+        var bestScore = mojibakeRepairScore(raw)
         var seen: Set<UInt> = []
         for codePage in legacyChineseCodePageCandidates(for: profile) {
             guard let encoding = stringEncoding(for: codePage),
@@ -439,8 +619,8 @@ enum CADTextNormalizer {
                   let decoded = String(data: legacyData, encoding: .utf8) else {
                 continue
             }
-            let score = decodedQualityScore(decoded)
-            if score > bestScore + 8 || isLikelyLegacyDecodedUTF8MojibakeRepair(raw: raw, decoded: decoded) {
+            let score = mojibakeRepairScore(decoded)
+            if score > bestScore + 6 || isLikelyLegacyDecodedUTF8MojibakeRepair(raw: raw, decoded: decoded) {
                 best = decoded
                 bestScore = score
             }
@@ -477,7 +657,8 @@ enum CADTextNormalizer {
                   let decoded = String(data: data, encoding: encoding) else {
                 continue
             }
-            let score = decodedQualityScore(decoded)
+            let score = textCandidateScore(decoded)
+                + codePagePreferenceBias(codePage, preferredCodePage: nil)
             if best == nil || score > best!.score {
                 best = (decoded, score)
             }
@@ -515,8 +696,37 @@ enum CADTextNormalizer {
         if candidateScore > currentScore {
             return true
         }
+        if mojibakeRepairScore(candidate) > mojibakeRepairScore(current) + 4 {
+            return true
+        }
         let currentHasMojibake = current.unicodeScalars.contains { (0x00A0...0x00FF).contains($0.value) || $0.value == 0xFFFD }
         return currentHasMojibake && candidateScore >= currentScore - 4
+    }
+
+    private static func codePagePreferenceBias(_ codePage: Int32, preferredCodePage: Int32?) -> Int {
+        var bias = 0
+        if preferredCodePage == codePage {
+            bias += 20
+        }
+        switch codePage {
+        case 936, 54936:
+            bias += 18
+        case 65001:
+            bias += 6
+        case 950:
+            if preferredCodePage != 950 {
+                bias -= 6
+            }
+        case 932, 949:
+            if preferredCodePage == codePage {
+                bias -= 4
+            } else {
+                bias -= 24
+            }
+        default:
+            break
+        }
+        return bias
     }
 
     private static func stringEncoding(for codePage: Int32) -> String.Encoding? {
@@ -531,12 +741,16 @@ enum CADTextNormalizer {
         var score = 0
         for scalar in text.unicodeScalars {
             let value = scalar.value
-            if (0x3400...0x4DBF).contains(value) ||
-                (0x4E00...0x9FFF).contains(value) ||
-                (0xF900...0xFAFF).contains(value) ||
-                (0x3000...0x303F).contains(value) ||
-                (0xFF00...0xFFEF).contains(value) {
+            if isCJKIdeograph(value) {
                 score += 12
+            } else if isEastAsianPunctuation(value) {
+                score += 2
+            } else if isFullwidthASCII(value) {
+                score += 1
+            } else if isHalfwidthKatakana(value) {
+                score -= 16
+            } else if isBoxDrawing(value) {
+                score -= 18
             } else if (0xE000...0xF8FF).contains(value) {
                 score -= 36
             } else if value == 0xFFFD {
@@ -555,11 +769,34 @@ enum CADTextNormalizer {
         return score
     }
 
+    private static func textCandidateScore(_ text: String) -> Int {
+        mojibakeRepairScore(text)
+    }
+
     private static func isCJKOrPrivateUse(_ value: UInt32) -> Bool {
+        isCJKIdeograph(value) || (0xE000...0xF8FF).contains(value)
+    }
+
+    private static func isCJKIdeograph(_ value: UInt32) -> Bool {
         (0x3400...0x4DBF).contains(value) ||
             (0x4E00...0x9FFF).contains(value) ||
-            (0xE000...0xF8FF).contains(value) ||
             (0xF900...0xFAFF).contains(value)
+    }
+
+    private static func isEastAsianPunctuation(_ value: UInt32) -> Bool {
+        (0x3000...0x303F).contains(value)
+    }
+
+    private static func isFullwidthASCII(_ value: UInt32) -> Bool {
+        (0xFF01...0xFF5E).contains(value)
+    }
+
+    private static func isHalfwidthKatakana(_ value: UInt32) -> Bool {
+        (0xFF61...0xFF9F).contains(value)
+    }
+
+    private static func isBoxDrawing(_ value: UInt32) -> Bool {
+        (0x2500...0x257F).contains(value)
     }
 
     private static func isLikelyLegacyDecodedUTF8MojibakeRepair(raw: String, decoded: String) -> Bool {
@@ -577,10 +814,44 @@ enum CADTextNormalizer {
         if decodedVocabulary > 0 && rawSuspicion > decodedSuspicion {
             return true
         }
+        if mojibakeRepairScore(decoded) > mojibakeRepairScore(raw) + 6 {
+            return true
+        }
         if shorterRepair && rawSuspicion >= 2 && decodedQualityScore(decoded) + 18 >= decodedQualityScore(raw) {
             return true
         }
         return false
+    }
+
+    private static func shouldPreferMojibakeRepair(raw: String, decoded: String) -> Bool {
+        guard raw != decoded,
+              !decoded.unicodeScalars.contains(where: { $0.value == 0xFFFD || (0xE000...0xF8FF).contains($0.value) }) else {
+            return false
+        }
+        let rawSuspicion = mojibakeSuspicionScore(raw)
+        let decodedSuspicion = mojibakeSuspicionScore(decoded)
+        if rawSuspicion > decodedSuspicion && mojibakeRepairScore(decoded) + 2 >= mojibakeRepairScore(raw) {
+            return true
+        }
+        return mojibakeRepairScore(decoded) > mojibakeRepairScore(raw) + 6
+    }
+
+    private static func mojibakeRepairScore(_ text: String) -> Int {
+        decodedQualityScore(text)
+            + commonChineseScore(text)
+            - mojibakeSuspicionScore(text) * 18
+    }
+
+    private static func commonChineseScore(_ text: String) -> Int {
+        let common = Set("的一是在不了有和人这中大为上个国我以要他时来用们生到作地于出就分对成会可主发年动同工也能下过子说产种面而方后多定行学法所民得经十三之进着等部度家电力里如水化高自二理起小物现实加量都两体制机当使点从业本去把性好应开它合还因由其些然前外天政四日那社义事平形相全表间样与关各重新线内数正心反你明看原又么利比或但质气第向道命此变条只没结解问意建月公无系军很情者最立代想已通并提直题党程展五果料象员革位入常文总次品式活设及管特件长求老头基资边流路级少图山统接知较将组见计别她手角期根论运农指几九区强放决西被干做必战先回则任取据处队南给色光门即保治北造百规热领七海口东导器压志世金增争济阶油思术极交受联什认六共权收证改清美再采转更单风切打白教速花带安场身车例真务具万每目至达走积示议声报斗完类八离华名确才科张信马节话米整空元况今集温传土许步群广石记需段研界拉林律叫且究观越织装影算低持音众书布复容儿须际商非验连断深难近矿千周委素技备半办青省列习响约支般史感劳便团往酸历市克何除消构府称太准精值号率族维划选标写存候毛亲快效斯院查江型眼王按格养易置派层片始却专状育厂京识适属圆包火住调满县局照参红细引听该铁价严龙飞")
+        var score = 0
+        for scalar in text.unicodeScalars {
+            if common.contains(Character(scalar)) {
+                score += 3
+            }
+        }
+        score += cadVocabularyHitCount(text) * 12
+        return score
     }
 
     private static func cadVocabularyScore(_ text: String) -> Int {
@@ -636,6 +907,10 @@ enum CADTextNormalizer {
             let value = scalar.value
             if (0xE000...0xF8FF).contains(value) || value == 0xFFFD {
                 score += 3
+            } else if isHalfwidthKatakana(value) || isBoxDrawing(value) {
+                score += 2
+            } else if (0x0080...0x009F).contains(value) {
+                score += 2
             } else if (0x00A0...0x00FF).contains(value) {
                 score += 1
             }
@@ -646,7 +921,9 @@ enum CADTextNormalizer {
             "鍗", "闂", "瀛", "妗", "骞", "鐢", "皵", "抽潰", "藉伐",
             "寤虹", "缁撴", "缁欐", "娑堥", "鏍囬", "杞寸", "閰嶇",
             "鐓ф", "鍥炶", "鎻掑", "妗ユ", "绾跨", "璐熻", "绯荤",
-            "鍥剧",
+            "鍥剧", "鎬", "搴", "佹", "犲", "朵", "槸", "侀", "垪",
+            "銝", "靘", "摰", "餈", "撖", "榛", "瘜", "寰", "閬", "頧",
+            "ä", "å", "æ", "ç", "è", "é", "Ä", "Å", "Æ", "Ç", "È", "É",
         ]
         for fragment in suspiciousFragments where text.contains(fragment) {
             score += 2

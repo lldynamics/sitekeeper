@@ -15,17 +15,6 @@ struct CADViewerToolView: View {
     @State private var searchText = ""
     @AppStorage(UserPreferenceKeys.cadViewerRecentDrawingIDs) private var recentDrawingIDsRaw = ""
 
-    private struct DrawingProjectGroup: Identifiable {
-        let id: UUID
-        let title: String
-        let drawings: [ProjectDrawing]
-    }
-
-    private struct DrawingFolderGroup: Identifiable {
-        let id: String
-        let drawings: [ProjectDrawing]
-    }
-
     private static let drawingImportTypes: [UTType] = {
         var types: [UTType] = [.pdf, .zip]
         if let dwg = UTType(filenameExtension: "dwg") {
@@ -77,66 +66,13 @@ struct CADViewerToolView: View {
         }
     }
 
-    private var recentProjectGroups: [DrawingProjectGroup] {
-        var groups: [DrawingProjectGroup] = []
-        for drawing in recentDrawings {
-            if let index = groups.firstIndex(where: { $0.id == drawing.projectId }) {
-                var updated = groups[index]
-                updated = DrawingProjectGroup(
-                    id: updated.id,
-                    title: updated.title,
-                    drawings: updated.drawings + [drawing]
-                )
-                groups[index] = updated
-            } else {
-                groups.append(
-                    DrawingProjectGroup(
-                        id: drawing.projectId,
-                        title: projectName(for: drawing.projectId),
-                        drawings: [drawing]
-                    )
-                )
-            }
-        }
-        return groups
-    }
-
-    private var zipFolderGroups: [DrawingFolderGroup] {
-        let grouped = Dictionary(grouping: filteredDrawings) { drawing in
-            ProjectDetailDrawingHelper.zipFolderPath(for: drawing) ?? ""
-        }
-        return grouped
-            .filter { !$0.key.isEmpty }
-            .map { DrawingFolderGroup(id: $0.key, drawings: $0.value.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) }
-            .sorted { $0.id.localizedStandardCompare($1.id) == .orderedAscending }
-    }
-
-    private var selectedEngine: CADPreviewEngine {
-        CADPreviewEngineStore.selected
-    }
-
-    private var resolvedEngine: CADPreviewEngine {
-        CADPreviewCapability.resolvedEngine(selectedEngine)
-    }
-
     private var isLibreDWGUnavailable: Bool {
-        selectedEngine == .libreDWG && !CADPreviewCapability.isLibreDWGRendererAvailable()
+        !CADDrawingCapability.isLibreDWGRendererAvailable()
     }
 
     private var isLibreDWGUnbound: Bool {
-        selectedEngine == .libreDWG &&
-        CADPreviewCapability.isLibreDWGRendererAvailable() &&
+        CADDrawingCapability.isLibreDWGRendererAvailable() &&
         !CADRendererProvider.isLibreDWGRendererBound
-    }
-
-    private var engineStatusText: String {
-        if isLibreDWGUnavailable {
-            return "LibreDWG 未接入"
-        }
-        if isLibreDWGUnbound {
-            return "LibreDWG 未绑定"
-        }
-        return resolvedEngine.title
     }
 
     private var importStrategyMessage: String {
@@ -152,28 +88,6 @@ struct CADViewerToolView: View {
 
     var body: some View {
         List {
-            Section("预览引擎") {
-                HStack {
-                    Label(engineStatusText, systemImage: (isLibreDWGUnavailable || isLibreDWGUnbound) ? "exclamationmark.triangle.fill" : "viewfinder")
-                        .foregroundStyle((isLibreDWGUnavailable || isLibreDWGUnbound) ? Color.appWarning : Color.appDoc)
-                    Spacer()
-                    if selectedEngine != resolvedEngine {
-                        Text("已回退")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                if isLibreDWGUnavailable {
-                    Text("当前构建未包含 LibreDWGBridge，DWG/DXF 会显示接入提示，不再回退到系统数据预览。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                } else if isLibreDWGUnbound {
-                    Text("已检测到 LibreDWG 环境，但尚未注册渲染入口。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             Section("项目筛选") {
                 Picker("查看范围", selection: $selectedProjectID) {
                     Text("全部项目").tag(nil as UUID?)
@@ -187,7 +101,7 @@ struct CADViewerToolView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("搜索图纸名称、项目、目录", text: $searchText)
+                    TextField("搜索图纸名称、项目", text: $searchText)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                     if !searchText.isEmpty {
@@ -208,47 +122,20 @@ struct CADViewerToolView: View {
                 }
             }
 
-            Section("最近浏览") {
-                if recentDrawings.isEmpty {
-                    ContentUnavailableView(
-                        "暂无最近浏览",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("打开 CAD 图纸后会自动记录在这里。")
-                    )
-                } else {
-                    ForEach(recentProjectGroups) { group in
-                        DisclosureGroup {
-                            ForEach(group.drawings) { drawing in
-                                drawingRow(drawing, showsProject: false)
-                            }
-                        } label: {
-                            Label("\(group.title) · \(group.drawings.count) 张", systemImage: "folder")
-                        }
+            if !recentDrawings.isEmpty {
+                Section("最近打开") {
+                    ForEach(recentDrawings.prefix(3)) { drawing in
+                        drawingRow(drawing, showsProject: selectedProjectID == nil)
                     }
                 }
             }
 
-            if !zipFolderGroups.isEmpty {
-                Section("图纸包目录") {
-                    ForEach(zipFolderGroups) { group in
-                        DisclosureGroup {
-                            ForEach(group.drawings) { drawing in
-                                drawingRow(drawing, showsProject: selectedProjectID == nil)
-                            }
-                        } label: {
-                            Label("\(group.id) · \(group.drawings.count) 张", systemImage: "folder.badge.gearshape")
-                                .lineLimit(1)
-                        }
-                    }
-                }
-            }
-
-            Section(selectedProjectID == nil ? "全部 CAD 图纸" : "项目 CAD 图纸") {
+            Section(selectedProjectID == nil ? "全部图纸" : "项目图纸") {
                 if filteredDrawings.isEmpty {
                     ContentUnavailableView(
                         "暂无 CAD 图纸",
                         systemImage: "doc.viewfinder",
-                        description: Text("先在项目详情里导入 PDF / DWG / DXF 图纸。")
+                        description: Text("先在项目详情里导入 DWG / DXF 图纸；PDF 图纸会作为附件打开。")
                     )
                 } else {
                     ForEach(filteredDrawings) { drawing in
@@ -307,7 +194,7 @@ struct CADViewerToolView: View {
             Text(importStrategyMessage)
         }
         .fullScreenCover(item: $previewRequest) { request in
-            ProjectCADPreviewView(request: request)
+            CADPreviewContainer(request: request)
         }
         .operationToast(message: $operationMessage)
     }
@@ -359,25 +246,26 @@ struct CADViewerToolView: View {
     }
 
     private func openDrawing(_ drawing: ProjectDrawing) {
-        let previewTarget = ProjectDetailDrawingHelper.matchingRenderablePreview(
-            for: drawing,
-            in: store.projectDrawings
-        ) ?? drawing
-        switch ProjectDetailAssetActions.previewDrawingURL(for: previewTarget) {
+        switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
         case .success(let url):
             recordRecentDrawing(drawing.id)
             previewRequest = ProjectCADPreviewRequest(
-                projectId: previewTarget.projectId,
-                drawingID: previewTarget.id,
+                projectId: drawing.projectId,
+                drawingID: drawing.id,
                 fileURL: url,
-                displayName: previewTarget.name.isEmpty ? previewTarget.fileName : previewTarget.name,
-                fileType: previewTarget.fileType,
-                textEncoding: previewTarget.textEncoding,
-                textBigFont: previewTarget.textBigFont,
-                textSchemeSnapshot: previewTarget.textSchemeSnapshot,
-                overlaySnapshotData: previewTarget.cadOverlaySnapshotData,
+                displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                fileType: drawing.fileType,
+                textEncoding: drawing.textEncoding,
+                textBigFont: drawing.textBigFont,
+                textSchemeSnapshot: drawing.textSchemeSnapshot,
+                cadViewState: drawing.cadViewState,
+                projectFontMappings: store.projects.first(where: { $0.id == drawing.projectId })?.cadFontMappings ?? [],
+                overlaySnapshotData: drawing.cadOverlaySnapshotData,
                 onOverlaySnapshotChange: { drawingID, snapshotData in
                     updateOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
+                },
+                onViewStateChange: { drawingID, viewState in
+                    updateCADViewState(drawingID: drawingID, viewState: viewState)
                 },
                 onTextEncodingChange: { drawingID, encoding in
                     updateTextEncoding(drawingID: drawingID, encoding: encoding)
@@ -387,6 +275,9 @@ struct CADViewerToolView: View {
                 },
                 onTextSchemeSnapshotChange: { drawingID, snapshot in
                     updateTextSchemeSnapshot(drawingID: drawingID, snapshot: snapshot)
+                },
+                onProjectFontMappingsChange: { projectID, mappings in
+                    updateProjectFontMappings(projectID: projectID, mappings: mappings)
                 }
             )
         case .failure(let message):
@@ -486,7 +377,6 @@ struct CADViewerToolView: View {
             }
             store.projectDrawings.append(versioned)
             currentDrawings.append(versioned)
-            relinkDrawingFamily(forName: versioned.name, projectId: projectId, drawings: &currentDrawings)
             importedDrawings.append(versioned)
             importedCount += 1
         }
@@ -536,7 +426,6 @@ struct CADViewerToolView: View {
             selectedProjectID = projectId
             store.scheduleSave()
         }
-        let allProjectDrawings = store.projectDrawings.filter { $0.projectId == projectId }
         let previewHint = ""
 
         if importedCount > 0, failedNames.isEmpty {
@@ -545,47 +434,32 @@ struct CADViewerToolView: View {
             if !replaceHint.isEmpty {
                 operationMessage = "已导入 \(importedCount) 份图纸\(replaceHint)\(previewHint)"
             }
-            openFirstImportedDrawing(importedDrawings, allProjectDrawings: allProjectDrawings)
+            openFirstImportedDrawing(importedDrawings)
             return
         }
         if importedCount > 0, !failedNames.isEmpty {
             let replaceHint = replacedCount > 0 ? "，已替换 \(replacedCount) 份同格式旧文件" : ""
             operationMessage = "已导入 \(importedCount) 份，\(failedNames.count) 份失败\(replaceHint)\(previewHint)"
-            openFirstImportedDrawing(importedDrawings, allProjectDrawings: allProjectDrawings)
+            openFirstImportedDrawing(importedDrawings)
             return
         }
-        operationMessage = "没有可导入的图纸文件，请选择 PDF / DWG / DXF / ZIP。"
+        operationMessage = "没有可导入的图纸文件，请选择 DWG / DXF / PDF / ZIP。"
     }
 
-    private func openFirstImportedDrawing(_ importedDrawings: [ProjectDrawing], allProjectDrawings: [ProjectDrawing]) {
-        guard let firstRenderable = importedDrawings.first(where: { drawing in
-            drawing.fileType.lowercased() != "dwg" ||
-            ProjectDetailDrawingHelper.matchingRenderablePreview(for: drawing, in: allProjectDrawings) != nil ||
-            CADPreviewCapability.resolvedEngine(CADPreviewEngineStore.selected) == .libreDWG
-        }) ?? importedDrawings.first else { return }
-        openDrawing(firstRenderable)
-    }
-
-    private func relinkDrawingFamily(forName drawingName: String, projectId: UUID, drawings: inout [ProjectDrawing]) {
-        let nameKey = ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawingName)
-        guard !nameKey.isEmpty else { return }
-        for index in drawings.indices {
-            guard drawings[index].projectId == projectId else { continue }
-            guard ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawings[index].name) == nameKey else { continue }
-            guard ProjectDetailDrawingHelper.isCADSource(drawings[index].fileType) else { continue }
-            let linkedID = ProjectDetailDrawingHelper.matchingRenderablePreview(for: drawings[index], in: drawings)?.id
-            if drawings[index].linkedPreviewDrawingID != linkedID {
-                drawings[index].linkedPreviewDrawingID = linkedID
-                if let storeIndex = store.projectDrawings.firstIndex(where: { $0.id == drawings[index].id }) {
-                    store.projectDrawings[storeIndex].linkedPreviewDrawingID = linkedID
-                }
-            }
-        }
+    private func openFirstImportedDrawing(_ importedDrawings: [ProjectDrawing]) {
+        guard let firstDrawing = importedDrawings.first else { return }
+        openDrawing(firstDrawing)
     }
 
     private func updateOverlaySnapshot(drawingID: UUID, snapshotData: String) {
         guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
         store.projectDrawings[index].cadOverlaySnapshotData = snapshotData
+        store.scheduleSave()
+    }
+
+    private func updateCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
+        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
+        store.projectDrawings[index].cadViewState = viewState
         store.scheduleSave()
     }
 
@@ -607,6 +481,12 @@ struct CADViewerToolView: View {
         store.scheduleSave()
     }
 
+    private func updateProjectFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
+        guard let index = store.projects.firstIndex(where: { $0.id == projectID }) else { return }
+        store.projects[index].cadFontMappings = mappings
+        store.scheduleSave()
+    }
+
     private func recordRecentDrawing(_ drawingID: UUID) {
         var ids = recentDrawingIDs
         ids.removeAll { $0 == drawingID }
@@ -623,9 +503,6 @@ struct CADViewerToolView: View {
         parts.append(drawing.fileType.uppercased())
         if !drawing.importedAt.isEmpty {
             parts.append("导入 \(drawing.importedAt)")
-        }
-        if let folder = ProjectDetailDrawingHelper.zipFolderPath(for: drawing) {
-            parts.append("ZIP \(folder)")
         }
         return parts.joined(separator: " · ")
     }
@@ -670,25 +547,25 @@ struct CADViewerToolView: View {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
             if isLibreDWGUnavailable {
-                return ("预览: LibreDWG 未接入", false)
+                return ("DWG Lite 未接入", false)
             }
             if isLibreDWGUnbound {
-                return ("预览: LibreDWG 未绑定", false)
+                return ("DWG Lite 未绑定", false)
             }
-            return ("预览: 应用内 DXF 直览", true)
+            return ("DXF 直览", true)
         }
         if fileType == "pdf" {
-            return ("预览: 应用内 PDF 直览", true)
+            return ("PDF 附件", true)
         }
         if fileType == "dwg" {
             if isLibreDWGUnavailable {
-                return ("预览: LibreDWG 未接入", false)
+                return ("DWG Lite 未接入", false)
             }
             if isLibreDWGUnbound {
-                return ("预览: LibreDWG 未绑定", false)
+                return ("DWG Lite 未绑定", false)
             }
-            return ("预览: 应用内 DWG 直览", true)
+            return ("DWG Lite 本地直览", true)
         }
-        return ("预览: 文件独立打开", true)
+        return ("文件独立打开", true)
     }
 }

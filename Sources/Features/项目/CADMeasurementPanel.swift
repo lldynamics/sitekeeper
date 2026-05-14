@@ -102,6 +102,7 @@ extension CADPreviewContainer {
                     Button(String(localized: "保存")) {
                         let parsed = ReportBuilder.number(scaleDraft)
                         guard parsed > 0 else { return }
+                        recordUndoSnapshot()
                         snapshot.metersPerDrawingUnit = parsed
                         showScaleSheet = false
                     }
@@ -215,6 +216,7 @@ extension CADPreviewContainer {
                             }
                             .swipeActions {
                                 Button(role: .destructive) {
+                                    recordUndoSnapshot()
                                     snapshot.quantityItems.removeAll { $0.id == item.id }
                                 } label: {
                                     Label(String(localized: "删除"), systemImage: "trash")
@@ -242,17 +244,7 @@ extension CADPreviewContainer {
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
-                        snapshot.quantityItems.append(
-                            CADQuantityItem(
-                                name: String(localized: "新条目"),
-                                unit: String(localized: "项"),
-                                quantity: "1",
-                                unitPrice: "0",
-                                wasteRate: "0",
-                                source: String(localized: "手动"),
-                                sourceLinkKind: .manual
-                            )
-                        )
+                        appendManualQuantityItem()
                     } label: {
                         Image(systemName: "plus").visibleIconStyle()
                     }

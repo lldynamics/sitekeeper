@@ -15,6 +15,44 @@ public struct LibreDWGCanvasTransformSnapshot: Equatable {
     }
 }
 
+public struct LibreDWGCanvasViewStateSnapshot: Equatable {
+    public let zoomScale: CGFloat
+    public let panOffset: CGSize
+    public let viewportCenter: CGPoint?
+    public let usesSavedVisibleLayers: Bool
+    public let visibleLayerNames: [String]
+
+    public init(
+        zoomScale: CGFloat,
+        panOffset: CGSize,
+        viewportCenter: CGPoint?,
+        usesSavedVisibleLayers: Bool,
+        visibleLayerNames: [String]
+    ) {
+        self.zoomScale = zoomScale
+        self.panOffset = panOffset
+        self.viewportCenter = viewportCenter
+        self.usesSavedVisibleLayers = usesSavedVisibleLayers
+        self.visibleLayerNames = visibleLayerNames
+    }
+}
+
+public struct LibreDWGFontMapping: Hashable, Sendable {
+    public let sourceKind: String
+    public let pattern: String
+    public let bigFont: Int32
+
+    public init(
+        sourceKind: String,
+        pattern: String,
+        bigFont: Int32
+    ) {
+        self.sourceKind = sourceKind
+        self.pattern = pattern
+        self.bigFont = bigFont
+    }
+}
+
 public struct LibreDWGSnapPointPayload: Equatable {
     public let point: CGPoint
     public let snapKind: String
@@ -51,6 +89,9 @@ public struct LibreDWGTextAutoDetectionSnapshot: Equatable {
     public let bigFontFile: String?
     public let autoDetectScore: Int
     public let styleSummary: String?
+    public let matchedFontSummary: String?
+    public let unresolvedFontSummary: String?
+    public let fontResolutionSummary: String?
     public let rawTextBytesHexSample: String?
     public let detectionSummary: String?
     public let summary: String
@@ -63,6 +104,9 @@ public struct LibreDWGTextAutoDetectionSnapshot: Equatable {
         bigFontFile: String?,
         autoDetectScore: Int,
         styleSummary: String?,
+        matchedFontSummary: String?,
+        unresolvedFontSummary: String?,
+        fontResolutionSummary: String?,
         rawTextBytesHexSample: String?,
         detectionSummary: String?,
         summary: String
@@ -74,6 +118,9 @@ public struct LibreDWGTextAutoDetectionSnapshot: Equatable {
         self.bigFontFile = bigFontFile
         self.autoDetectScore = autoDetectScore
         self.styleSummary = styleSummary
+        self.matchedFontSummary = matchedFontSummary
+        self.unresolvedFontSummary = unresolvedFontSummary
+        self.fontResolutionSummary = fontResolutionSummary
         self.rawTextBytesHexSample = rawTextBytesHexSample
         self.detectionSummary = detectionSummary
         self.summary = summary
@@ -81,10 +128,7 @@ public struct LibreDWGTextAutoDetectionSnapshot: Equatable {
 }
 
 extension Notification.Name {
-    static let libreDWGCanvasTransformDidChange = Notification.Name("LibreDWGBridgeCanvasTransformDidChange")
-    static let libreDWGSnapPointsDidChange = Notification.Name("LibreDWGBridgeSnapPointsDidChange")
     static let libreDWGFocusSourcePoint = Notification.Name("LibreDWGBridgeFocusSourcePoint")
-    static let libreDWGTextAutoDetectionDidChange = Notification.Name("LibreDWGBridgeTextAutoDetectionDidChange")
 }
 
 struct DWGLightweightDiagnostic {
@@ -92,12 +136,108 @@ struct DWGLightweightDiagnostic {
     let totalObjectCount: Int
     let drawableObjectCount: Int
     let unsupportedObjectTypes: String
+    let blockReferenceSummary: String
+    let xrefReferences: [DWGXrefReference]
     let textEncoding: String
     let styleFonts: String
     let bigFonts: String
     let parseDurationMilliseconds: Int
     let estimatedMemoryMB: Double
     let failureReason: String?
+
+    var hasMissingXrefs: Bool {
+        xrefReferences.contains { $0.localStatus == .missing || $0.localStatus == .pathEmpty }
+    }
+
+    var xrefSummary: String {
+        guard !xrefReferences.isEmpty else { return "无" }
+        let found = xrefReferences.filter { $0.localStatus == .found }.count
+        let missing = xrefReferences.filter { $0.localStatus == .missing || $0.localStatus == .pathEmpty }.count
+        var parts = ["XREF:\(xrefReferences.count)"]
+        if found > 0 {
+            parts.append("本地已找到:\(found)")
+        }
+        if missing > 0 {
+            parts.append("本地缺失:\(missing)")
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
+struct DWGXrefReference: Identifiable, Equatable {
+    enum LocalStatus: String {
+        case found
+        case missing
+        case pathEmpty
+
+        var displayText: String {
+            switch self {
+            case .found:
+                return "本地已找到"
+            case .missing:
+                return "本地缺失"
+            case .pathEmpty:
+                return "未记录路径"
+            }
+        }
+    }
+
+    let id: String
+    let name: String
+    let savedPath: String
+    let resolvedLocalPath: String?
+    let localStatus: LocalStatus
+    let isOverlay: Bool
+    let isLoadedInDWG: Bool
+    let isResolvedInDWG: Bool
+    let referenceCount: Int
+
+    var title: String {
+        if !name.isEmpty {
+            return name
+        }
+        if !savedPath.isEmpty {
+            let normalizedPath = savedPath.replacingOccurrences(of: "\\", with: "/")
+            return normalizedPath.split(separator: "/").last.map(String.init) ?? savedPath
+        }
+        return "未命名 XREF"
+    }
+
+    var sourceSummary: String {
+        var parts: [String] = []
+        if isOverlay {
+            parts.append("overlay")
+        }
+        if isLoadedInDWG || isResolvedInDWG {
+            parts.append("DWG 已加载")
+        }
+        if referenceCount > 0 {
+            parts.append("引用 \(referenceCount)")
+        }
+        return parts.isEmpty ? "-" : parts.joined(separator: " / ")
+    }
+}
+
+struct DXFTextIssueHint: Equatable {
+    let textCount: Int
+    let suspiciousTextCount: Int
+    let mojibakeTextCount: Int
+    let styleDiagnostics: [String]
+
+    var shouldSuggestTextRepair: Bool {
+        textCount > 0 && suspiciousTextCount > 0
+    }
+
+    var summary: String {
+        var parts = ["疑似乱码 \(suspiciousTextCount)/\(max(textCount, 1))"]
+        if mojibakeTextCount > 0, mojibakeTextCount != suspiciousTextCount {
+            parts.append("典型乱码 \(mojibakeTextCount)")
+        }
+        if !styleDiagnostics.isEmpty {
+            parts.append(styleDiagnostics.prefix(2).joined(separator: " / "))
+        }
+        return parts.joined(separator: "，")
+    }
 }
 
 enum DXFSnapPointKind: String, Codable {
@@ -256,6 +396,7 @@ struct DXFPreviewModel {
     var unsupportedEntityCount: Int = 0
     var unsupportedEntitySummary: String? = nil
     var textDecodingHint: String? = nil
+    var textIssueHint: DXFTextIssueHint? = nil
     var dwgDiagnostic: DWGLightweightDiagnostic? = nil
     var styleTableSummary: String? = nil
     var bounds: CGRect

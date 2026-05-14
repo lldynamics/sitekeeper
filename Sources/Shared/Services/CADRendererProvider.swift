@@ -7,6 +7,20 @@ struct CADRendererCanvasTransform: Equatable {
     let panOffset: CGSize
 }
 
+struct CADRendererViewState: Equatable {
+    let zoomScale: CGFloat
+    let panOffset: CGSize
+    let viewportCenter: CGPoint?
+    let usesSavedVisibleLayers: Bool
+    let visibleLayerNames: [String]
+}
+
+struct CADRendererFontMapping: Hashable, Sendable {
+    let sourceKind: String
+    let pattern: String
+    let bigFont: Int32
+}
+
 struct CADRendererSnapPointPayload: Equatable {
     let point: CGPoint
     let snapKind: String
@@ -25,6 +39,9 @@ struct CADTextAutoDetectionResult {
     let bigFontFile: String?
     let autoDetectScore: Int
     let styleSummary: String?
+    let matchedFontSummary: String?
+    let unresolvedFontSummary: String?
+    let fontResolutionSummary: String?
     let rawTextBytesHexSample: String?
     let detectionSummary: String?
     let summary: String
@@ -32,14 +49,16 @@ struct CADTextAutoDetectionResult {
 
 struct CADRendererCallbacks {
     var onCanvasTransformChange: (CADRendererCanvasTransform) -> Void = { _ in }
+    var onViewStateChange: (CADRendererViewState) -> Void = { _ in }
+    var onTextRepairPresetRequest: (Int32?, Int32?) -> Void = { _, _ in }
     var onSnapPointsChange: ([CADRendererSnapPointPayload]) -> Void = { _ in }
     var onTextAutoDetectionChange: (CADTextAutoDetectionResult) -> Void = { _ in }
 }
 
 @MainActor
 enum CADRendererProvider {
-    typealias LibreDWGRendererBuilder = (URL, Int32?, Int32?, CADRendererCallbacks) -> AnyView
-    typealias LibreDWGTextAutoDetector = (URL) async throws -> CADTextAutoDetectionResult
+    typealias LibreDWGRendererBuilder = (URL, Int32?, Int32?, CADRendererViewState?, [CADRendererFontMapping], CADRendererCallbacks) -> AnyView
+    typealias LibreDWGTextAutoDetector = (URL, [CADRendererFontMapping]) async throws -> CADTextAutoDetectionResult
     typealias LibreDWGDiagnosticReporter = (URL, Int32?, Int32?) async throws -> String
 
     private static var libreDWGRendererBuilder: LibreDWGRendererBuilder?
@@ -80,16 +99,21 @@ enum CADRendererProvider {
         for fileURL: URL,
         preferredTextCodePage: Int32?,
         preferredTextBigFont: Int32?,
+        initialViewState: CADRendererViewState? = nil,
+        fontMappings: [CADRendererFontMapping] = [],
         callbacks: CADRendererCallbacks = CADRendererCallbacks()
     ) -> AnyView? {
         ensureConfiguredIfNeeded()
-        return libreDWGRendererBuilder?(fileURL, preferredTextCodePage, preferredTextBigFont, callbacks)
+        return libreDWGRendererBuilder?(fileURL, preferredTextCodePage, preferredTextBigFont, initialViewState, fontMappings, callbacks)
     }
 
-    static func detectLibreDWGTextOptions(for fileURL: URL) async throws -> CADTextAutoDetectionResult? {
+    static func detectLibreDWGTextOptions(
+        for fileURL: URL,
+        fontMappings: [CADRendererFontMapping] = []
+    ) async throws -> CADTextAutoDetectionResult? {
         ensureConfiguredIfNeeded()
         guard let libreDWGTextAutoDetector else { return nil }
-        return try await libreDWGTextAutoDetector(fileURL)
+        return try await libreDWGTextAutoDetector(fileURL, fontMappings)
     }
 
     static func makeLibreDWGDiagnosticReport(

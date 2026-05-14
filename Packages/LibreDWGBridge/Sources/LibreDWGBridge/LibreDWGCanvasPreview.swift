@@ -1,19 +1,41 @@
 import Foundation
 import SwiftUI
 
+private struct DXFStrokeBatchKey: Hashable {
+    let rgb: UInt32
+    let layer: String
+    let widthBucket: Int
+
+    init(style: DXFPreviewModel.StrokeStyle, layer: String) {
+        self.rgb = style.rgb
+        self.layer = layer
+        self.widthBucket = Int((max(style.width, 0.45) * 100).rounded())
+    }
+
+    var lineWidth: CGFloat {
+        CGFloat(widthBucket) / 100
+    }
+
+    var color: Color {
+        DXFCanvasRenderer.color(from: rgb, layer: layer)
+    }
+}
+
 struct DXFCanvasPreview: View {
     let model: DXFPreviewModel
     let sourceHint: String?
+    let geometryIndex: DXFSpatialGeometryIndex
     let fileURL: URL
+    let initialViewState: LibreDWGCanvasViewStateSnapshot?
     let onCanvasTransformChange: (LibreDWGCanvasTransformSnapshot) -> Void
+    let onViewStateChange: (LibreDWGCanvasViewStateSnapshot) -> Void
+    let onTextRepairPresetRequest: (Int32?, Int32?) -> Void
     let onSnapPointsChange: ([LibreDWGSnapPointPayload]) -> Void
-    private let geometryIndex: DXFSpatialGeometryIndex
     private let maxZoomScale: CGFloat = 800
     @State private var zoomScale: CGFloat = 1
     @State private var panOffset: CGSize = .zero
     @State private var canvasSize: CGSize = .zero
     @State private var visibleLayers: Set<String> = []
-    @State private var lockedLayers: Set<String> = []
     @State private var showLayerSheet = false
     @State private var showSearchResults = false
     @State private var showDiagnosticSheet = false
@@ -22,24 +44,35 @@ struct DXFCanvasPreview: View {
     @State private var selectedSearchTextID: UUID?
     @State private var probeCanvasPoint: CGPoint?
     @State private var showCoordinateLegend = true
+    @State private var showMinimap = false
     @State private var controlsCollapsed = true
     @State private var controlsAutoHideToken = UUID()
+    @State private var didApplyInitialViewState = false
+    @State private var lastPostedViewState: LibreDWGCanvasViewStateSnapshot?
+    @State private var dismissedTextRepairHint = false
     @GestureState private var pinchScale: CGFloat = 1
     @GestureState private var dragOffset: CGSize = .zero
 
     init(
         model: DXFPreviewModel,
         sourceHint: String?,
+        geometryIndex: DXFSpatialGeometryIndex,
         fileURL: URL,
+        initialViewState: LibreDWGCanvasViewStateSnapshot? = nil,
         onCanvasTransformChange: @escaping (LibreDWGCanvasTransformSnapshot) -> Void = { _ in },
+        onViewStateChange: @escaping (LibreDWGCanvasViewStateSnapshot) -> Void = { _ in },
+        onTextRepairPresetRequest: @escaping (Int32?, Int32?) -> Void = { _, _ in },
         onSnapPointsChange: @escaping ([LibreDWGSnapPointPayload]) -> Void = { _ in }
     ) {
         self.model = model
         self.sourceHint = sourceHint
+        self.geometryIndex = geometryIndex
         self.fileURL = fileURL
+        self.initialViewState = initialViewState
         self.onCanvasTransformChange = onCanvasTransformChange
+        self.onViewStateChange = onViewStateChange
+        self.onTextRepairPresetRequest = onTextRepairPresetRequest
         self.onSnapPointsChange = onSnapPointsChange
-        self.geometryIndex = DXFSpatialGeometryIndex(model: model)
     }
 
     private var canvasIndex: DXFCanvasIndex {
@@ -47,7 +80,6 @@ struct DXFCanvasPreview: View {
             model: model,
             geometryIndex: geometryIndex,
             visibleLayers: visibleLayers,
-            lockedLayers: lockedLayers,
             searchText: searchText,
             layerSearchText: layerSearchText
         )
@@ -58,9 +90,24 @@ struct DXFCanvasPreview: View {
     }
 
     private var effectiveOffset: CGSize {
-        CGSize(
-            width: panOffset.width + dragOffset.width,
-            height: panOffset.height + dragOffset.height
+        let scaledOffset: CGSize
+        if pinchScale != 1, canvasSize != .zero {
+            let center = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+            scaledOffset = panOffsetForZoom(
+                effectiveScale,
+                anchor: center,
+                currentZoom: zoomScale,
+                currentPanOffset: panOffset
+            )
+        } else {
+            scaledOffset = panOffset
+        }
+        return clampedPanOffset(
+            CGSize(
+                width: scaledOffset.width + dragOffset.width,
+                height: scaledOffset.height + dragOffset.height
+            ),
+            zoom: effectiveScale
         )
     }
 
@@ -80,8 +127,35 @@ struct DXFCanvasPreview: View {
         canvasIndex.matchedTexts
     }
 
-    private var visibleSnapSourcePoints: DXFSnapPointSet {
-        canvasIndex.visibleSnapSourcePoints()
+    private var shouldShowMinimap: Bool {
+        showMinimap && !controlsCollapsed && effectiveScale >= 2
+    }
+
+    private var shouldShowTextRepairHint: Bool {
+        !dismissedTextRepairHint && (model.textIssueHint?.shouldSuggestTextRepair ?? false)
+    }
+
+    private var shouldShowLightweightDiagnosticCommand: Bool {
+        if model.textIssueHint?.shouldSuggestTextRepair == true {
+            return true
+        }
+        if let unsupported = model.unsupportedEntitySummary?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !unsupported.isEmpty {
+            return true
+        }
+        if let diagnostic = model.dwgDiagnostic {
+            if diagnostic.hasMissingXrefs {
+                return true
+            }
+            if let failureReason = diagnostic.failureReason?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !failureReason.isEmpty {
+                return true
+            }
+            if diagnostic.totalObjectCount > 0, diagnostic.drawableObjectCount == 0 {
+                return true
+            }
+        }
+        return false
     }
 
     var body: some View {
@@ -119,22 +193,14 @@ struct DXFCanvasPreview: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
                 } else {
                     VStack(spacing: 8) {
-                        if let sourceHint, !sourceHint.isEmpty {
-                            Label(sourceHint, systemImage: "arrow.triangle.swap")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.horizontal, 4)
-                        }
                         DXFCanvasToolbar(
                             searchText: $searchText,
                             showCoordinateLegend: $showCoordinateLegend,
+                            showMinimap: $showMinimap,
                             effectiveScale: effectiveScale,
                             layerStats: layerStats,
                             primaryLayerStats: primaryLayerStats,
                             visibleLayers: visibleLayers,
-                            lockedLayers: lockedLayers,
                             matchedTexts: matchedTexts,
                             selectedSearchTextID: selectedSearchTextID,
                             probeSourcePoint: probeSourcePoint(transform: transform),
@@ -152,6 +218,9 @@ struct DXFCanvasPreview: View {
                             onZoomIn: {
                                 zoom(by: 1.6)
                             },
+                            onMinimapToggle: {
+                                showControlsTemporarily(scheduleAutoHide: false)
+                            },
                             onCollapse: collapseControls,
                             onShowSearchResults: {
                                 showControlsTemporarily(scheduleAutoHide: false)
@@ -163,7 +232,6 @@ struct DXFCanvasPreview: View {
                             },
                             onMoveSearchSelection: moveSearchSelection,
                             onToggleLayer: toggleLayer,
-                            onToggleLayerLock: toggleLayerLock,
                             onIsolateLayer: isolateLayer,
                             onFocusLayer: focusLayer,
                             onSelectText: selectSearchResult
@@ -181,7 +249,17 @@ struct DXFCanvasPreview: View {
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
                         .allowsHitTesting(false)
 
-                    minimap(transform: transform)
+                    if shouldShowMinimap {
+                        minimap(transform: transform)
+                    }
+                }
+
+                if shouldShowTextRepairHint {
+                    textRepairHintView
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, controlsCollapsed ? 12 : 54)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+                        .zIndex(4)
                 }
             }
             .frame(width: proxy.size.width, height: proxy.size.height)
@@ -189,7 +267,6 @@ struct DXFCanvasPreview: View {
                 DXFLayerSheet(
                     layerSearchText: $layerSearchText,
                     visibleLayers: $visibleLayers,
-                    lockedLayers: $lockedLayers,
                     layerStats: layerStats,
                     filteredLayerStats: canvasIndex.filteredLayerStats,
                     onIsolate: { layerName in
@@ -223,20 +300,26 @@ struct DXFCanvasPreview: View {
                 )
             }
             .onAppear {
-                if visibleLayers.isEmpty {
-                    visibleLayers = Set(layerStats.map(\.name))
-                }
+                restoreInitialViewStateIfNeeded(canvasSize: proxy.size)
                 postCanvasTransform(transform)
-                postSnapPoints()
+                postViewState(transform)
+                postSnapPoints(in: transform.viewportRectInSource())
             }
             .onChange(of: canvasSize) { _, _ in
+                panOffset = clampedPanOffset(panOffset, zoom: zoomScale)
                 postCanvasTransform(transform)
+                postViewState(transform)
+                postSnapPoints(in: transform.viewportRectInSource())
             }
             .onChange(of: zoomScale) { _, _ in
                 postCanvasTransform(transform)
+                postViewState(transform)
+                postSnapPoints(in: transform.viewportRectInSource())
             }
             .onChange(of: panOffset) { _, _ in
                 postCanvasTransform(transform)
+                postViewState(transform)
+                postSnapPoints(in: transform.viewportRectInSource())
             }
             .onChange(of: searchText) { _, _ in
                 syncSearchSelection()
@@ -244,18 +327,20 @@ struct DXFCanvasPreview: View {
             }
             .onChange(of: visibleLayers) { _, _ in
                 syncSearchSelection()
-                postSnapPoints()
-                showControlsTemporarily()
-            }
-            .onChange(of: lockedLayers) { _, _ in
-                syncSearchSelection()
-                postSnapPoints()
+                postViewState(transform)
+                postSnapPoints(in: transform.viewportRectInSource())
                 showControlsTemporarily()
             }
             .onChange(of: showLayerSheet) { _, isPresented in
                 if !isPresented {
                     scheduleControlsAutoHide()
                 }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: Notification.Name("LibreDWGBridgeShowLayerSheet"))) { notification in
+                guard let filePath = notification.userInfo?["filePath"] as? String,
+                      filePath == fileURL.path else { return }
+                showControlsTemporarily(scheduleAutoHide: false)
+                showLayerSheet = true
             }
             .task(id: controlsAutoHideToken) {
                 await autoHideControlsIfNeeded(for: controlsAutoHideToken)
@@ -283,52 +368,219 @@ struct DXFCanvasPreview: View {
         .accessibilityLabel("显示看图工具")
     }
 
+    private var textRepairHintView: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "character.book.closed")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.orange)
+                .frame(width: 22, height: 22)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("当前可能缺字体或编码不匹配")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                if let summary = model.textIssueHint?.summary {
+                    Text(summary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+            }
+
+            Button {
+                dismissedTextRepairHint = true
+                onTextRepairPresetRequest(936, 1)
+            } label: {
+                Text("GBK/大字体")
+                    .font(.caption.weight(.semibold))
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.mini)
+
+            Button {
+                dismissedTextRepairHint = true
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.semibold))
+                    .frame(width: 24, height: 24)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("关闭文字提示")
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: min(canvasSize.width - 24, 430), alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.orange.opacity(0.25), lineWidth: 0.8)
+        )
+        .shadow(color: Color.black.opacity(0.12), radius: 8, x: 0, y: 3)
+    }
+
+    private func restoreInitialViewStateIfNeeded(canvasSize size: CGSize) {
+        guard !didApplyInitialViewState else { return }
+        didApplyInitialViewState = true
+
+        let allLayers = Set(layerStats.map(\.name))
+        guard let initialViewState else {
+            if visibleLayers.isEmpty {
+                visibleLayers = allLayers
+            }
+            return
+        }
+
+        if initialViewState.usesSavedVisibleLayers {
+            visibleLayers = Set(initialViewState.visibleLayerNames).intersection(allLayers)
+        } else {
+            visibleLayers = allLayers
+        }
+
+        let restoredZoom = clampScale(initialViewState.zoomScale)
+        zoomScale = restoredZoom
+
+        let restoreSize = size.width > 0 && size.height > 0 ? size : canvasSize
+        if let viewportCenter = initialViewState.viewportCenter,
+           restoreSize.width > 0,
+           restoreSize.height > 0 {
+            panOffset = panOffsetToCenter(
+                sourcePoint: viewportCenter,
+                zoom: restoredZoom,
+                canvasSize: restoreSize
+            )
+        } else if restoreSize.width > 0, restoreSize.height > 0 {
+            panOffset = clampedPanOffset(
+                initialViewState.panOffset,
+                zoom: restoredZoom,
+                canvasSize: restoreSize
+            )
+        } else {
+            panOffset = initialViewState.panOffset
+        }
+    }
+
+    @ViewBuilder
     private func drawingCanvas(visibleGeometry: DXFVisibleGeometry) -> some View {
-        TimelineView(.animation(minimumInterval: 0.25)) { timeline in
-            let searchPulse = DXFCanvasRenderer.searchHighlightPulse(hasSelection: selectedSearchTextID != nil, hasSearchText: !normalizedSearchText.isEmpty, at: timeline.date)
-            Canvas { context, size in
+        if shouldAnimateSearchHighlight {
+            TimelineView(.animation(minimumInterval: 0.25)) { timeline in
+                drawingCanvasBody(visibleGeometry: visibleGeometry, pulseDate: timeline.date)
+            }
+        } else {
+            drawingCanvasBody(visibleGeometry: visibleGeometry, pulseDate: nil)
+        }
+    }
+
+    private var shouldAnimateSearchHighlight: Bool {
+        selectedSearchTextID != nil && !normalizedSearchText.isEmpty
+    }
+
+    private func drawingCanvasBody(visibleGeometry: DXFVisibleGeometry, pulseDate: Date?) -> some View {
+        let searchPulse = pulseDate.map {
+            DXFCanvasRenderer.searchHighlightPulse(
+                hasSelection: selectedSearchTextID != nil,
+                hasSearchText: !normalizedSearchText.isEmpty,
+                at: $0
+            )
+        } ?? 0
+        return Canvas { context, size in
             let activeTransform = CADCanvasTransform(
                 bounds: model.bounds,
                 size: size,
                 zoomScale: effectiveScale,
                 panOffset: effectiveOffset
             )
+            let visiblePrimitiveCount = visibleGeometry.segments.count
+                + visibleGeometry.polylines.count
+                + visibleGeometry.circles.count
+                + visibleGeometry.texts.count
+            let isDenseOverview = effectiveScale < 3.5 && visiblePrimitiveCount > 12_000
+            let minimumPolylineStep = isDenseOverview ? CGFloat(0.85) : CGFloat(0.2)
+            let allowsHatchPattern = !isDenseOverview && (effectiveScale > 4 || visiblePrimitiveCount < 4_000)
 
+            var segmentBatches: [DXFStrokeBatchKey: Path] = [:]
+            segmentBatches.reserveCapacity(min(visibleGeometry.segments.count, 128))
             for segment in visibleGeometry.segments {
-                var path = Path()
+                let key = DXFStrokeBatchKey(style: segment.style, layer: segment.layer)
+                var path = segmentBatches[key] ?? Path()
                 path.move(to: activeTransform.point(segment.from))
                 path.addLine(to: activeTransform.point(segment.to))
-                context.stroke(path, with: .color(DXFCanvasRenderer.color(from: segment.style.rgb, layer: segment.layer)), lineWidth: max(segment.style.width, 0.45))
+                segmentBatches[key] = path
+            }
+            for (key, path) in segmentBatches {
+                context.stroke(path, with: .color(key.color), lineWidth: key.lineWidth)
             }
 
+            var regularPolylineBatches: [DXFStrokeBatchKey: Path] = [:]
+            regularPolylineBatches.reserveCapacity(min(visibleGeometry.polylines.count, 128))
             for polyline in visibleGeometry.polylines where polyline.points.count > 1 {
-                var path = Path()
-                path.move(to: activeTransform.point(polyline.points[0]))
-                for point in polyline.points.dropFirst() {
-                    path.addLine(to: activeTransform.point(point))
+                let path = polylinePath(
+                    for: polyline.points,
+                    transform: activeTransform,
+                    minimumScreenDistance: minimumPolylineStep
+                )
+                if canBatch(polyline) {
+                    let key = DXFStrokeBatchKey(style: polyline.style, layer: polyline.layer)
+                    var batchedPath = regularPolylineBatches[key] ?? Path()
+                    batchedPath.addPath(path)
+                    regularPolylineBatches[key] = batchedPath
+                    continue
                 }
-                DXFCanvasRenderer.drawPolyline(polyline, path: path, in: &context)
+                DXFCanvasRenderer.drawPolyline(
+                    polyline,
+                    path: path,
+                    in: &context,
+                    allowsHatchPattern: allowsHatchPattern
+                )
                 if polyline.renderKind == .dimension {
                     DXFCanvasRenderer.drawDimensionTicks(for: polyline, in: &context, transform: activeTransform)
                 }
             }
+            for (key, path) in regularPolylineBatches {
+                context.stroke(
+                    path,
+                    with: .color(key.color),
+                    style: StrokeStyle(lineWidth: key.lineWidth, lineCap: .round, lineJoin: .round)
+                )
+            }
 
+            var circleBatches: [DXFStrokeBatchKey: Path] = [:]
+            circleBatches.reserveCapacity(min(visibleGeometry.circles.count, 128))
             for circle in visibleGeometry.circles {
                 let center = activeTransform.point(circle.center)
                 let radius = activeTransform.radius(circle.radius)
                 let rect = CGRect(x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2)
-                context.stroke(Path(ellipseIn: rect), with: .color(DXFCanvasRenderer.color(from: circle.style.rgb, layer: circle.layer)), lineWidth: max(circle.style.width, 0.45))
+                let key = DXFStrokeBatchKey(style: circle.style, layer: circle.layer)
+                var path = circleBatches[key] ?? Path()
+                path.addEllipse(in: rect)
+                circleBatches[key] = path
+            }
+            for (key, path) in circleBatches {
+                context.stroke(path, with: .color(key.color), lineWidth: key.lineWidth)
             }
 
             let selectedID = selectedSearchTextID
-            let foldedQuery = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            let rawSearchText = normalizedSearchText
+            let foldedQuery = rawSearchText.isEmpty
+                ? ""
+                : rawSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             for text in visibleGeometry.texts {
-                let point = activeTransform.point(text.point)
-                let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-                let isMatch = !foldedQuery.isEmpty && value.contains(foldedQuery)
+                let isMatch: Bool
+                if foldedQuery.isEmpty {
+                    isMatch = false
+                } else {
+                    let value = text.value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+                    isMatch = value.contains(foldedQuery)
+                }
                 let isSelected = selectedID == text.id
                 let renderColor = DXFCanvasRenderer.textColor(for: text, isMatch: isMatch, isSelected: isSelected, pulse: searchPulse)
                 let fontSize = DXFCanvasRenderer.textFontSize(for: text, transform: activeTransform, isSelected: isSelected)
+                guard shouldDrawText(text, fontSize: fontSize, isMatch: isMatch, isSelected: isSelected, isDenseOverview: isDenseOverview) else {
+                    continue
+                }
+                let point = activeTransform.point(text.point)
                 var textContext = context
                 textContext.translateBy(x: point.x, y: point.y)
                 textContext.rotate(by: .radians(-text.rotation))
@@ -363,7 +615,6 @@ struct DXFCanvasPreview: View {
                 context.stroke(marker, with: .color(.orange), lineWidth: 1.4)
             }
             }
-        }
         .overlay {
             GeometryReader { canvasProxy in
                 Color.clear
@@ -373,6 +624,61 @@ struct DXFCanvasPreview: View {
                     }
             }
         }
+    }
+
+    private func canBatch(_ polyline: DXFPreviewModel.Polyline) -> Bool {
+        polyline.renderKind == .regular &&
+            polyline.kind != .blockRef &&
+            polyline.kind != .unknownProxy
+    }
+
+    private func polylinePath(
+        for points: [CGPoint],
+        transform: CADCanvasTransform,
+        minimumScreenDistance: CGFloat
+    ) -> Path {
+        var path = Path()
+        guard let first = points.first else { return path }
+        var lastRendered = transform.point(first)
+        path.move(to: lastRendered)
+        guard points.count > 1 else { return path }
+
+        let minimumDistanceSquared = minimumScreenDistance * minimumScreenDistance
+        for point in points.dropFirst().dropLast() {
+            let rendered = transform.point(point)
+            let dx = rendered.x - lastRendered.x
+            let dy = rendered.y - lastRendered.y
+            guard dx * dx + dy * dy >= minimumDistanceSquared else { continue }
+            path.addLine(to: rendered)
+            lastRendered = rendered
+        }
+        path.addLine(to: transform.point(points[points.count - 1]))
+        return path
+    }
+
+    private func shouldDrawText(
+        _ text: DXFPreviewModel.TextEntity,
+        fontSize: CGFloat,
+        isMatch: Bool,
+        isSelected: Bool,
+        isDenseOverview: Bool
+    ) -> Bool {
+        if isSelected || isMatch {
+            return true
+        }
+        if isDenseOverview {
+            switch text.renderKind {
+            case .dimension:
+                return fontSize >= 5.5
+            case .hatch:
+                return fontSize >= 6
+            case .leader, .attribute:
+                return fontSize >= 7
+            case .regular:
+                return fontSize >= 8
+            }
+        }
+        return fontSize >= 3.5 || text.renderKind == .dimension
     }
 
     private func footerStrip(visibleGeometry: DXFVisibleGeometry) -> some View {
@@ -393,13 +699,21 @@ struct DXFCanvasPreview: View {
                 if let unsupportedEntitySummary = model.unsupportedEntitySummary, !unsupportedEntitySummary.isEmpty {
                     Label("未渲染 \(unsupportedEntitySummary)", systemImage: "exclamationmark.triangle")
                 }
-                if let diagnostic = model.dwgDiagnostic {
+                if shouldShowLightweightDiagnosticCommand, let diagnostic = model.dwgDiagnostic {
                     Button {
                         showDiagnosticSheet = true
                     } label: {
-                        Label("诊断 \(diagnostic.dwgVersion)", systemImage: "stethoscope")
+                        Label("诊断", systemImage: "stethoscope")
                     }
                     .buttonStyle(.plain)
+                    let blockSummary = diagnostic.blockReferenceSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !blockSummary.isEmpty, blockSummary != "无" {
+                        Label("图块 \(blockSummary)", systemImage: "square.stack.3d.up")
+                    }
+                    let xrefSummary = diagnostic.xrefSummary.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !xrefSummary.isEmpty, xrefSummary != "无" {
+                        Label("外参 \(xrefSummary)", systemImage: diagnostic.hasMissingXrefs ? "exclamationmark.triangle" : "link")
+                    }
                     Label("\(diagnostic.parseDurationMilliseconds) ms", systemImage: "timer")
                     Label(String(format: "%.2f MB", diagnostic.estimatedMemoryMB), systemImage: "memorychip")
                 }
@@ -507,7 +821,6 @@ struct DXFCanvasPreview: View {
     }
 
     private func setLayer(_ layerName: String, visible: Bool) {
-        guard !lockedLayers.contains(layerName) else { return }
         if visible {
             visibleLayers.insert(layerName)
         } else {
@@ -515,26 +828,8 @@ struct DXFCanvasPreview: View {
         }
     }
 
-    private func setLayer(_ layerName: String, locked: Bool) {
-        if locked {
-            lockedLayers.insert(layerName)
-        } else {
-            lockedLayers.remove(layerName)
-        }
-    }
-
     private func toggleLayer(_ layerName: String) {
-        guard !lockedLayers.contains(layerName) else {
-            showControlsTemporarily(scheduleAutoHide: false)
-            return
-        }
         setLayer(layerName, visible: !visibleLayers.contains(layerName))
-        showControlsTemporarily(scheduleAutoHide: false)
-    }
-
-    private func toggleLayerLock(_ layerName: String) {
-        let locked = lockedLayers.contains(layerName)
-        setLayer(layerName, locked: !locked)
         showControlsTemporarily(scheduleAutoHide: false)
     }
 
@@ -586,12 +881,21 @@ struct DXFCanvasPreview: View {
     }
 
     private func doubleTapZoom(at location: CGPoint) {
-        if effectiveScale >= 18 {
-            fitToAll()
-        } else {
-            applyZoom(clampScale(zoomScale * 2.2), anchor: location)
-            showControlsTemporarily()
+        guard canvasSize != .zero else { return }
+        let currentTransform = CADCanvasTransform(
+            bounds: model.bounds,
+            size: canvasSize,
+            zoomScale: effectiveScale,
+            panOffset: effectiveOffset
+        )
+        let sourcePoint = currentTransform.sourcePoint(location)
+        let targetZoom = clampScale(max(zoomScale * 2.2, zoomScale + 1))
+        withAnimation(.easeInOut(duration: 0.18)) {
+            zoomScale = targetZoom
+            panOffset = panOffsetToCenter(sourcePoint: sourcePoint, zoom: targetZoom)
         }
+        probeCanvasPoint = CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+        showControlsTemporarily()
     }
 
     private func centerFromMinimapTap(_ location: CGPoint, animated: Bool = true) {
@@ -620,53 +924,138 @@ struct DXFCanvasPreview: View {
         )
     }
 
-    private func applyZoom(_ newZoom: CGFloat, anchor: CGPoint?) {
+    private func applyZoom(_ newZoom: CGFloat, anchor: CGPoint?, animated: Bool = true) {
         let clampedZoom = clampScale(newZoom)
-        let nextOffset: CGSize
-        if clampedZoom <= 1.001 || canvasSize == .zero {
-            nextOffset = .zero
-        } else if let anchor, anchor.x.isFinite, anchor.y.isFinite {
-            let currentTransform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: canvasSize,
-                zoomScale: zoomScale,
-                panOffset: panOffset
-            )
-            let sourceAnchor = currentTransform.sourcePoint(anchor)
-            let baseTransform = CADCanvasTransform(
-                bounds: model.bounds,
-                size: canvasSize,
-                zoomScale: clampedZoom,
-                panOffset: .zero
-            )
-            let renderedPoint = baseTransform.point(sourceAnchor)
-            nextOffset = CGSize(
-                width: anchor.x - renderedPoint.x,
-                height: anchor.y - renderedPoint.y
-            )
-        } else {
-            nextOffset = panOffset
-        }
-
-        withAnimation(.easeInOut(duration: 0.16)) {
+        let nextOffset = panOffsetForZoom(
+            clampedZoom,
+            anchor: anchor,
+            currentZoom: zoomScale,
+            currentPanOffset: panOffset
+        )
+        let update = {
             zoomScale = clampedZoom
             panOffset = nextOffset
+        }
+        if animated {
+            withAnimation(.easeInOut(duration: 0.16), update)
+        } else {
+            update()
         }
     }
 
     private func panOffsetToCenter(sourcePoint: CGPoint, zoom: CGFloat) -> CGSize {
-        guard canvasSize != .zero else { return .zero }
+        panOffsetToCenter(sourcePoint: sourcePoint, zoom: zoom, canvasSize: canvasSize)
+    }
+
+    private func panOffsetToCenter(sourcePoint: CGPoint, zoom: CGFloat, canvasSize size: CGSize) -> CGSize {
+        guard size != .zero else { return .zero }
         let baseTransform = CADCanvasTransform(
             bounds: model.bounds,
-            size: canvasSize,
+            size: size,
             zoomScale: zoom,
             panOffset: .zero
         )
         let renderedPoint = baseTransform.point(sourcePoint)
-        return CGSize(
-            width: canvasSize.width / 2 - renderedPoint.x,
-            height: canvasSize.height / 2 - renderedPoint.y
+        let offset = CGSize(
+            width: size.width / 2 - renderedPoint.x,
+            height: size.height / 2 - renderedPoint.y
         )
+        return clampedPanOffset(offset, zoom: zoom, canvasSize: size)
+    }
+
+    private func panOffsetForZoom(
+        _ newZoom: CGFloat,
+        anchor: CGPoint?,
+        currentZoom: CGFloat,
+        currentPanOffset: CGSize
+    ) -> CGSize {
+        let clampedZoom = clampScale(newZoom)
+        guard clampedZoom > 1.001, canvasSize != .zero else { return .zero }
+        guard let anchor, anchor.x.isFinite, anchor.y.isFinite else {
+            return clampedPanOffset(currentPanOffset, zoom: clampedZoom)
+        }
+        let currentTransform = CADCanvasTransform(
+            bounds: model.bounds,
+            size: canvasSize,
+            zoomScale: currentZoom,
+            panOffset: currentPanOffset
+        )
+        let sourceAnchor = currentTransform.sourcePoint(anchor)
+        let baseTransform = CADCanvasTransform(
+            bounds: model.bounds,
+            size: canvasSize,
+            zoomScale: clampedZoom,
+            panOffset: .zero
+        )
+        let renderedPoint = baseTransform.point(sourceAnchor)
+        let offset = CGSize(
+            width: anchor.x - renderedPoint.x,
+            height: anchor.y - renderedPoint.y
+        )
+        return clampedPanOffset(offset, zoom: clampedZoom)
+    }
+
+    private func clampedPanOffset(_ proposed: CGSize, zoom: CGFloat) -> CGSize {
+        clampedPanOffset(proposed, zoom: zoom, canvasSize: canvasSize)
+    }
+
+    private func clampedPanOffset(_ proposed: CGSize, zoom: CGFloat, canvasSize size: CGSize) -> CGSize {
+        guard size.width > 0, size.height > 0, zoom > 1.001 else { return .zero }
+        let rect = contentRect(zoom: zoom, panOffset: proposed, canvasSize: size)
+        guard rect.width.isFinite, rect.height.isFinite else { return proposed }
+
+        var offset = proposed
+        let horizontalPadding = min(max(size.width * 0.08, 18), 64)
+        let verticalPadding = min(max(size.height * 0.08, 18), 64)
+
+        if rect.width <= size.width - horizontalPadding * 2 {
+            offset.width += size.width / 2 - rect.midX
+        } else {
+            if rect.minX > horizontalPadding {
+                offset.width -= rect.minX - horizontalPadding
+            }
+            if rect.maxX < size.width - horizontalPadding {
+                offset.width += size.width - horizontalPadding - rect.maxX
+            }
+        }
+
+        if rect.height <= size.height - verticalPadding * 2 {
+            offset.height += size.height / 2 - rect.midY
+        } else {
+            if rect.minY > verticalPadding {
+                offset.height -= rect.minY - verticalPadding
+            }
+            if rect.maxY < size.height - verticalPadding {
+                offset.height += size.height - verticalPadding - rect.maxY
+            }
+        }
+        return offset
+    }
+
+    private func contentRect(zoom: CGFloat, panOffset: CGSize) -> CGRect {
+        contentRect(zoom: zoom, panOffset: panOffset, canvasSize: canvasSize)
+    }
+
+    private func contentRect(zoom: CGFloat, panOffset: CGSize, canvasSize size: CGSize) -> CGRect {
+        let transform = CADCanvasTransform(
+            bounds: model.bounds,
+            size: size,
+            zoomScale: zoom,
+            panOffset: panOffset
+        )
+        let points = [
+            transform.point(CGPoint(x: model.bounds.minX, y: model.bounds.minY)),
+            transform.point(CGPoint(x: model.bounds.minX, y: model.bounds.maxY)),
+            transform.point(CGPoint(x: model.bounds.maxX, y: model.bounds.minY)),
+            transform.point(CGPoint(x: model.bounds.maxX, y: model.bounds.maxY))
+        ]
+        let xs = points.map(\.x)
+        let ys = points.map(\.y)
+        guard let minX = xs.min(), let maxX = xs.max(),
+              let minY = ys.min(), let maxY = ys.max() else {
+            return .zero
+        }
+        return CGRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY)
     }
 
     private func showControlsTemporarily(scheduleAutoHide: Bool = true) {
@@ -726,10 +1115,10 @@ struct DXFCanvasPreview: View {
                     state = value
                 }
                 .onEnded { value in
-                    zoomScale = clampScale(zoomScale * value)
-                    if zoomScale <= 1.001 {
-                        panOffset = .zero
-                    }
+                    let center = canvasSize == .zero
+                        ? nil
+                        : CGPoint(x: canvasSize.width / 2, y: canvasSize.height / 2)
+                    applyZoom(clampScale(zoomScale * value), anchor: center, animated: false)
                 },
             DragGesture(minimumDistance: 2, coordinateSpace: .local)
                 .updating($dragOffset) { value, state, _ in
@@ -744,8 +1133,13 @@ struct DXFCanvasPreview: View {
                         panOffset = .zero
                         return
                     }
-                    panOffset.width += value.translation.width
-                    panOffset.height += value.translation.height
+                    panOffset = clampedPanOffset(
+                        CGSize(
+                            width: panOffset.width + value.translation.width,
+                            height: panOffset.height + value.translation.height
+                        ),
+                        zoom: zoomScale
+                    )
                 }
         )
     }
@@ -823,9 +1217,33 @@ struct DXFCanvasPreview: View {
         )
     }
 
-    private func postSnapPoints() {
+    private func postViewState(_ transform: CADCanvasTransform) {
+        let viewportCenter: CGPoint?
+        if transform.size.width > 0, transform.size.height > 0 {
+            viewportCenter = transform.sourcePoint(
+                CGPoint(x: transform.size.width / 2, y: transform.size.height / 2)
+            )
+        } else {
+            viewportCenter = nil
+        }
+        let snapshot = LibreDWGCanvasViewStateSnapshot(
+            zoomScale: transform.zoomScale,
+            panOffset: transform.panOffset,
+            viewportCenter: viewportCenter,
+            usesSavedVisibleLayers: true,
+            visibleLayerNames: visibleLayers.sorted {
+                $0.localizedStandardCompare($1) == .orderedAscending
+            }
+        )
+        guard snapshot != lastPostedViewState else { return }
+        lastPostedViewState = snapshot
+        onViewStateChange(snapshot)
+    }
+
+    private func postSnapPoints(in viewport: CGRect) {
+        let sourcePoints = canvasIndex.visibleSnapSourcePoints(in: viewport)
         onSnapPointsChange(
-            visibleSnapSourcePoints.points.map { point in
+            sourcePoints.points.map { point in
                 LibreDWGSnapPointPayload(
                     point: point.point,
                     snapKind: point.kind.rawValue,

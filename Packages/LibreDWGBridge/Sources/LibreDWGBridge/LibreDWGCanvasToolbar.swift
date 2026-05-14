@@ -5,12 +5,12 @@ import SwiftUI
 struct DXFCanvasToolbar: View {
     @Binding var searchText: String
     @Binding var showCoordinateLegend: Bool
+    @Binding var showMinimap: Bool
 
     let effectiveScale: CGFloat
     let layerStats: [DXFLayerStat]
     let primaryLayerStats: [DXFLayerStat]
     let visibleLayers: Set<String>
-    let lockedLayers: Set<String>
     let matchedTexts: [DXFPreviewModel.TextEntity]
     let selectedSearchTextID: UUID?
     let probeSourcePoint: CGPoint?
@@ -20,12 +20,12 @@ struct DXFCanvasToolbar: View {
     let onCoordinateToggle: () -> Void
     let onZoomOut: () -> Void
     let onZoomIn: () -> Void
+    let onMinimapToggle: () -> Void
     let onCollapse: () -> Void
     let onShowSearchResults: () -> Void
     let onCenterSelectedText: () -> Void
     let onMoveSearchSelection: (Int) -> Void
     let onToggleLayer: (String) -> Void
-    let onToggleLayerLock: (String) -> Void
     let onIsolateLayer: (String) -> Void
     let onFocusLayer: (String) -> Void
     let onSelectText: (DXFPreviewModel.TextEntity) -> Void
@@ -61,17 +61,18 @@ struct DXFCanvasToolbar: View {
                 .buttonStyle(.borderedProminent)
 
                 Button {
-                    onShowLayers()
-                } label: {
-                    Label("图层开关", systemImage: "square.3.layers.3d")
-                }
-                .buttonStyle(.bordered)
-
-                Button {
                     showCoordinateLegend.toggle()
                     onCoordinateToggle()
                 } label: {
                     Label(showCoordinateLegend ? "隐藏坐标" : "显示坐标", systemImage: "scope")
+                }
+                .buttonStyle(.bordered)
+
+                Button {
+                    showMinimap.toggle()
+                    onMinimapToggle()
+                } label: {
+                    Label(showMinimap ? "隐藏小地图" : "小地图", systemImage: "map")
                 }
                 .buttonStyle(.bordered)
 
@@ -128,32 +129,21 @@ struct DXFCanvasToolbar: View {
 
     private func layerQuickMenu(for layer: DXFLayerStat) -> some View {
         let isVisible = visibleLayers.contains(layer.name)
-        let isLocked = lockedLayers.contains(layer.name)
         return Menu {
             Button(isVisible ? "隐藏该层" : "显示该层") {
                 onToggleLayer(layer.name)
             }
-            .disabled(isLocked)
             Button("只看该层") {
                 onIsolateLayer(layer.name)
             }
-            .disabled(isLocked)
             Button("定位该层") {
                 onFocusLayer(layer.name)
-            }
-            Button(isLocked ? "解锁该层" : "锁定该层") {
-                onToggleLayerLock(layer.name)
             }
         } label: {
             HStack(spacing: 5) {
                 Circle()
                     .fill(DXFCanvasRenderer.color(from: 0, layer: layer.name))
                     .frame(width: 7, height: 7)
-                if isLocked {
-                    Image(systemName: "lock.fill")
-                        .font(.caption2)
-                        .foregroundStyle(.orange)
-                }
                 Text(layer.name)
                     .lineLimit(1)
                 Text("\(layer.count)")
@@ -267,7 +257,7 @@ struct DXFCanvasToolbar: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 0)
-            Text("图层 \(visibleLayers.count)/\(max(layerStats.count, 1))")
+            Text("图纸图层 \(visibleLayers.count)/\(max(layerStats.count, 1))")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

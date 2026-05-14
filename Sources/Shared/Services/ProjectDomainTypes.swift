@@ -5,9 +5,6 @@ enum CADDrawingTextEncoding: String, CaseIterable, Codable {
     case gbk936
     case gb18030
     case big5950
-    case shiftJIS932
-    case korean949
-    case utf8
 
     var displayName: String {
         switch self {
@@ -19,12 +16,6 @@ enum CADDrawingTextEncoding: String, CaseIterable, Codable {
             return "简中 GB18030（54936）"
         case .big5950:
             return "繁中 Big5（CP950）"
-        case .shiftJIS932:
-            return "日文 Shift-JIS（CP932）"
-        case .korean949:
-            return "韩文 CP949"
-        case .utf8:
-            return "UTF-8（65001）"
         }
     }
 
@@ -38,23 +29,16 @@ enum CADDrawingTextEncoding: String, CaseIterable, Codable {
             return 54936
         case .big5950:
             return 950
-        case .shiftJIS932:
-            return 932
-        case .korean949:
-            return 949
-        case .utf8:
-            return 65001
         }
     }
 }
 
-enum CADDrawingTextBigFont: String, CaseIterable, Codable {
+enum CADDrawingTextBigFont: String, CaseIterable, Codable, Sendable {
     case auto
     case gbcbig
     case hztxt
     case hzfs
     case big5
-    case disabled
 
     var displayName: String {
         switch self {
@@ -68,8 +52,6 @@ enum CADDrawingTextBigFont: String, CaseIterable, Codable {
             return "仿宋 HZFS（含 simfang）"
         case .big5:
             return "繁中 Big5"
-        case .disabled:
-            return "关闭字体映射"
         }
     }
 
@@ -85,9 +67,110 @@ enum CADDrawingTextBigFont: String, CaseIterable, Codable {
             return 3
         case .big5:
             return 4
-        case .disabled:
-            return 9
         }
+    }
+}
+
+extension CADDrawingTextBigFont {
+    static func inferredFromFontName(_ rawName: String) -> CADDrawingTextBigFont {
+        let normalized = rawName
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+            .replacingOccurrences(of: "\\.(shx|shp|fon)$", with: "", options: .regularExpression)
+
+        let tokens = Set(
+            [normalized] +
+            normalized.components(separatedBy: CharacterSet(charactersIn: "/\\._- ()[]{}<>+"))
+                .filter { !$0.isEmpty }
+        )
+
+        let big5Aliases: Set<String> = ["big5", "chineset", "chinese_t", "cht", "mingliu", "pmingliu", "kaiu", "msung", "bkai"]
+        let hzfsAliases: Set<String> = ["hzfs", "hzfs1", "hzfs2", "hzfangsong", "fs", "fs1", "fs2"]
+        let hztxtAliases: Set<String> = ["hztxt", "hztxt1", "hztxt2", "hztext", "txt", "simplex", "romans", "romanc", "romand", "isocp"]
+        let gbcbigAliases: Set<String> = ["gbcbig", "gbcbiggb", "gbtxt", "gbenor", "gbeitc", "gbhz", "gbfs", "tssdeng", "tssdchn", "tssd", "chinesegb"]
+
+        if !tokens.isDisjoint(with: big5Aliases) { return .big5 }
+        if !tokens.isDisjoint(with: hzfsAliases) { return .hzfs }
+        if !tokens.isDisjoint(with: hztxtAliases) { return .hztxt }
+        if !tokens.isDisjoint(with: gbcbigAliases) { return .gbcbig }
+        return .auto
+    }
+}
+
+enum CADProjectFontMappingSource: String, CaseIterable, Codable, Identifiable, Sendable {
+    case bigFontFile = "bigfont"
+    case fontFile = "font"
+    case styleName = "style"
+    case any = "any"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .bigFontFile:
+            return "大字体文件"
+        case .fontFile:
+            return "字体文件"
+        case .styleName:
+            return "文字样式"
+        case .any:
+            return "任意匹配"
+        }
+    }
+}
+
+struct CADProjectFontMapping: Identifiable, Codable, Equatable, Sendable {
+    var id: UUID
+    var source: CADProjectFontMappingSource
+    var pattern: String
+    var bigFont: CADDrawingTextBigFont
+
+    init(
+        id: UUID = UUID(),
+        source: CADProjectFontMappingSource = .bigFontFile,
+        pattern: String,
+        bigFont: CADDrawingTextBigFont = .gbcbig
+    ) {
+        self.id = id
+        self.source = source
+        self.pattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.bigFont = bigFont
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, source, pattern, bigFont
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        source = try container.decodeStringEnum(
+            CADProjectFontMappingSource.self,
+            forKey: .source,
+            default: .bigFontFile
+        )
+        pattern = try container.decodeIfPresent(String.self, forKey: .pattern) ?? ""
+        bigFont = try container.decodeStringEnum(
+            CADDrawingTextBigFont.self,
+            forKey: .bigFont,
+            default: .gbcbig
+        )
+    }
+
+    var normalizedPattern: String {
+        pattern.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var isUsable: Bool {
+        !normalizedPattern.isEmpty && bigFont.bridgeCode != nil && bigFont != .auto
+    }
+
+    var deduplicationKey: String {
+        let folded = normalizedPattern
+            .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
+            .lowercased()
+        return "\(source.rawValue)|\(folded)"
     }
 }
 
@@ -99,6 +182,9 @@ struct CADDrawingTextSchemeSnapshot: Codable, Equatable {
     var bigFontFile: String?
     var autoDetectScore: Int?
     var styleSummary: String?
+    var matchedFontSummary: String?
+    var unresolvedFontSummary: String?
+    var fontResolutionSummary: String?
     var rawTextBytesHexSample: String?
     var detectionSummary: String?
 
@@ -110,6 +196,9 @@ struct CADDrawingTextSchemeSnapshot: Codable, Equatable {
         bigFontFile: String? = nil,
         autoDetectScore: Int? = nil,
         styleSummary: String? = nil,
+        matchedFontSummary: String? = nil,
+        unresolvedFontSummary: String? = nil,
+        fontResolutionSummary: String? = nil,
         rawTextBytesHexSample: String? = nil,
         detectionSummary: String? = nil
     ) {
@@ -120,8 +209,79 @@ struct CADDrawingTextSchemeSnapshot: Codable, Equatable {
         self.bigFontFile = bigFontFile
         self.autoDetectScore = autoDetectScore
         self.styleSummary = styleSummary
+        self.matchedFontSummary = matchedFontSummary
+        self.unresolvedFontSummary = unresolvedFontSummary
+        self.fontResolutionSummary = fontResolutionSummary
         self.rawTextBytesHexSample = rawTextBytesHexSample
         self.detectionSummary = detectionSummary
+    }
+}
+
+struct CADDrawingViewState: Codable, Equatable {
+    var zoomScale: Double
+    var panOffsetX: Double
+    var panOffsetY: Double
+    var viewportCenterX: Double?
+    var viewportCenterY: Double?
+    var usesSavedVisibleLayers: Bool
+    var visibleLayerNames: [String]
+
+    enum CodingKeys: String, CodingKey {
+        case zoomScale
+        case panOffsetX
+        case panOffsetY
+        case viewportCenterX
+        case viewportCenterY
+        case usesSavedVisibleLayers
+        case visibleLayerNames
+    }
+
+    init(
+        zoomScale: Double = 1,
+        panOffsetX: Double = 0,
+        panOffsetY: Double = 0,
+        viewportCenterX: Double? = nil,
+        viewportCenterY: Double? = nil,
+        usesSavedVisibleLayers: Bool = false,
+        visibleLayerNames: [String] = []
+    ) {
+        self.zoomScale = zoomScale
+        self.panOffsetX = panOffsetX
+        self.panOffsetY = panOffsetY
+        self.viewportCenterX = viewportCenterX
+        self.viewportCenterY = viewportCenterY
+        self.usesSavedVisibleLayers = usesSavedVisibleLayers
+        self.visibleLayerNames = visibleLayerNames
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        zoomScale = try container.decodeIfPresent(Double.self, forKey: .zoomScale) ?? 1
+        panOffsetX = try container.decodeIfPresent(Double.self, forKey: .panOffsetX) ?? 0
+        panOffsetY = try container.decodeIfPresent(Double.self, forKey: .panOffsetY) ?? 0
+        viewportCenterX = try container.decodeIfPresent(Double.self, forKey: .viewportCenterX)
+        viewportCenterY = try container.decodeIfPresent(Double.self, forKey: .viewportCenterY)
+        visibleLayerNames = try container.decodeIfPresent([String].self, forKey: .visibleLayerNames) ?? []
+        usesSavedVisibleLayers = try container.decodeIfPresent(Bool.self, forKey: .usesSavedVisibleLayers) ?? !visibleLayerNames.isEmpty
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(zoomScale, forKey: .zoomScale)
+        try container.encode(panOffsetX, forKey: .panOffsetX)
+        try container.encode(panOffsetY, forKey: .panOffsetY)
+        try container.encodeIfPresent(viewportCenterX, forKey: .viewportCenterX)
+        try container.encodeIfPresent(viewportCenterY, forKey: .viewportCenterY)
+        try container.encode(usesSavedVisibleLayers, forKey: .usesSavedVisibleLayers)
+        try container.encode(visibleLayerNames, forKey: .visibleLayerNames)
+    }
+
+    var hasSavedViewport: Bool {
+        zoomScale > 1.0001 ||
+        abs(panOffsetX) > 0.5 ||
+        abs(panOffsetY) > 0.5 ||
+        (viewportCenterX != nil && viewportCenterY != nil) ||
+        usesSavedVisibleLayers
     }
 }
 
@@ -133,13 +293,13 @@ struct ProjectDrawing: Identifiable, Codable {
     var fileType: String
     var version: String
     var isCurrentVersion: Bool
-    var linkedPreviewDrawingID: UUID?
     var relatedLogDate: String
     var issueStatus: DrawingIssueStatus
     var issueNote: String
     var textEncoding: CADDrawingTextEncoding
     var textBigFont: CADDrawingTextBigFont
     var textSchemeSnapshot: CADDrawingTextSchemeSnapshot
+    var cadViewState: CADDrawingViewState
     var importedAt: String
     var note: String
     var cadOverlaySnapshotData: String
@@ -152,13 +312,13 @@ struct ProjectDrawing: Identifiable, Codable {
         fileType: String,
         version: String = "V1",
         isCurrentVersion: Bool = true,
-        linkedPreviewDrawingID: UUID? = nil,
         relatedLogDate: String = "",
         issueStatus: DrawingIssueStatus = .none,
         issueNote: String = "",
         textEncoding: CADDrawingTextEncoding = .auto,
         textBigFont: CADDrawingTextBigFont = .auto,
         textSchemeSnapshot: CADDrawingTextSchemeSnapshot = .init(),
+        cadViewState: CADDrawingViewState = .init(),
         importedAt: String = Formatters.now(),
         note: String = "",
         cadOverlaySnapshotData: String = ""
@@ -170,20 +330,20 @@ struct ProjectDrawing: Identifiable, Codable {
         self.fileType = fileType
         self.version = version
         self.isCurrentVersion = isCurrentVersion
-        self.linkedPreviewDrawingID = linkedPreviewDrawingID
         self.relatedLogDate = relatedLogDate
         self.issueStatus = issueStatus
         self.issueNote = issueNote
         self.textEncoding = textEncoding
         self.textBigFont = textBigFont
         self.textSchemeSnapshot = textSchemeSnapshot
+        self.cadViewState = cadViewState
         self.importedAt = importedAt
         self.note = note
         self.cadOverlaySnapshotData = cadOverlaySnapshotData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, fileName, fileType, version, isCurrentVersion, linkedPreviewDrawingID, relatedLogDate, issueStatus, issueNote, textEncoding, textBigFont, textSchemeSnapshot, importedAt, note, cadOverlaySnapshotData
+        case id, projectId, name, fileName, fileType, version, isCurrentVersion, relatedLogDate, issueStatus, issueNote, textEncoding, textBigFont, textSchemeSnapshot, cadViewState, importedAt, note, cadOverlaySnapshotData
     }
 
     init(from decoder: Decoder) throws {
@@ -195,7 +355,6 @@ struct ProjectDrawing: Identifiable, Codable {
         fileType = try container.decodeIfPresent(String.self, forKey: .fileType) ?? ""
         version = try container.decodeIfPresent(String.self, forKey: .version) ?? "V1"
         isCurrentVersion = try container.decodeIfPresent(Bool.self, forKey: .isCurrentVersion) ?? true
-        linkedPreviewDrawingID = try container.decodeIfPresent(UUID.self, forKey: .linkedPreviewDrawingID)
         relatedLogDate = try container.decodeIfPresent(String.self, forKey: .relatedLogDate) ?? ""
         issueStatus = try container.decodeStringEnum(
             DrawingIssueStatus.self,
@@ -214,6 +373,7 @@ struct ProjectDrawing: Identifiable, Codable {
             default: .auto
         )
         textSchemeSnapshot = try container.decodeIfPresent(CADDrawingTextSchemeSnapshot.self, forKey: .textSchemeSnapshot) ?? .init()
+        cadViewState = try container.decodeIfPresent(CADDrawingViewState.self, forKey: .cadViewState) ?? .init()
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         cadOverlaySnapshotData = try container.decodeIfPresent(String.self, forKey: .cadOverlaySnapshotData) ?? ""

@@ -39,13 +39,15 @@ extension CADPreviewContainer {
                         }
                         let text = noteDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         guard !text.isEmpty else { return }
-                        snapshot.notes.append(
-                            CADTextNote(
-                                text: text,
-                                point: CADPoint(point),
-                                createdAt: Formatters.now()
-                            )
+                        recordUndoSnapshot()
+                        let note = CADTextNote(
+                            text: text,
+                            point: CADPoint(point),
+                            createdAt: Formatters.now(),
+                            colorHex: selectedNoteOverlayColorHex()
                         )
+                        hiddenOverlayColorHexes.remove(noteColorHex(note))
+                        snapshot.notes.append(note)
                         AppHaptics.success()
                         showNoteSheet = false
                         pendingNotePoint = nil
@@ -101,14 +103,14 @@ extension CADPreviewContainer {
 
         for stroke in snapshot.strokes {
             rows.append([
-                stroke.kind == .redline ? String(localized: "红线") : String(localized: "批注线"),
+                String(localized: "批注线"),
                 "",
                 "\(stroke.points.count) \(String(localized: "点"))",
                 "",
                 "",
                 String(localized: "图纸批注"),
                 strokeLayerName(stroke),
-                stroke.colorHex ?? "",
+                strokeColorHex(stroke),
                 coordinateListText(stroke.points.map(\.cgPoint)),
                 ""
             ])
@@ -123,7 +125,7 @@ extension CADPreviewContainer {
                 "m",
                 String(localized: "测量"),
                 "",
-                "",
+                lengthMeasurementColorHex(measurement),
                 coordinateListText(measurement.points.map(\.cgPoint)),
                 ""
             ])
@@ -138,7 +140,7 @@ extension CADPreviewContainer {
                 "m²",
                 String(localized: "测量"),
                 "",
-                "",
+                areaMeasurementColorHex(measurement),
                 coordinateListText(measurement.points.map(\.cgPoint)),
                 ""
             ])
@@ -153,7 +155,7 @@ extension CADPreviewContainer {
                 "",
                 String(localized: "图纸批注"),
                 "",
-                "",
+                noteColorHex(note),
                 coordinateText(note.point.cgPoint),
                 note.createdAt
             ])

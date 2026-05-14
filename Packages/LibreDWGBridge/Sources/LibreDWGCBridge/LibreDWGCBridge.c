@@ -29,6 +29,7 @@ typedef struct SKParseContext {
   SKCADParseResult *result;
   Dwg_Data *dwg;
   int capacity;
+  int parseOptions;
   BITCODE_RS textCodepageOverride;
   bool hasTextCodepageOverride;
   struct {
@@ -50,9 +51,9 @@ typedef struct SKStrokeStyle {
 } SKStrokeStyle;
 
 #define SK_MAX_RECURSION_DEPTH 48
-#define SK_MAX_PRIMITIVE_COUNT 120000
+#define SK_MAX_PRIMITIVE_COUNT 260000
 #define SK_MAX_DWG_OBJECT_COUNT 500000
-#define SK_MAX_PRIMITIVE_BUFFER_BYTES (64ULL * 1024ULL * 1024ULL)
+#define SK_MAX_PRIMITIVE_BUFFER_BYTES (160ULL * 1024ULL * 1024ULL)
 #define SK_MAX_RAW_TEXT_SAMPLE_BYTES 1024
 
 static void sk_fill_budget_metadata(SKCADParseResult *result) {
@@ -252,11 +253,12 @@ static bool sk_ensure_capacity(SKParseContext *ctx, int extraCount) {
 
   int nextCapacity = ctx->capacity > 0 ? ctx->capacity : 256;
   while (nextCapacity < required) {
-    if (nextCapacity > SK_MAX_PRIMITIVE_COUNT / 2) {
+    if (nextCapacity >= SK_MAX_PRIMITIVE_COUNT) {
       sk_set_error(ctx->result, "DWG 实体数量过大，无法分配内存。");
       return false;
     }
-    nextCapacity <<= 1;
+    const int doubled = nextCapacity << 1;
+    nextCapacity = doubled > SK_MAX_PRIMITIVE_COUNT ? SK_MAX_PRIMITIVE_COUNT : doubled;
   }
 
   if ((size_t)nextCapacity > (size_t)(SK_MAX_PRIMITIVE_BUFFER_BYTES / sizeof(SKCADPrimitive))) {
@@ -374,6 +376,20 @@ static void sk_free_primitive_members(SKCADPrimitive *primitive) {
     primitive->points = NULL;
   }
   primitive->pointCount = 0;
+}
+
+static void sk_free_xref_reference(SKCADXrefReference *xref) {
+  if (!xref) {
+    return;
+  }
+  if (xref->name) {
+    free(xref->name);
+    xref->name = NULL;
+  }
+  if (xref->savedPath) {
+    free(xref->savedPath);
+    xref->savedPath = NULL;
+  }
 }
 
 static bool sk_is_valid_utf8(const char *text) {
@@ -495,9 +511,27 @@ static int sk_read_utf8_codepoint(const unsigned char **cursor) {
 static bool sk_codepoint_is_cjk(int codepoint) {
   return (codepoint >= 0x3400 && codepoint <= 0x4DBF) ||
          (codepoint >= 0x4E00 && codepoint <= 0x9FFF) ||
-         (codepoint >= 0xF900 && codepoint <= 0xFAFF) ||
-         (codepoint >= 0x3000 && codepoint <= 0x303F) ||
-         (codepoint >= 0xFF00 && codepoint <= 0xFFEF);
+         (codepoint >= 0xF900 && codepoint <= 0xFAFF);
+}
+
+static bool sk_codepoint_is_east_asian_punctuation(int codepoint) {
+  return codepoint >= 0x3000 && codepoint <= 0x303F;
+}
+
+static bool sk_codepoint_is_halfwidth_katakana(int codepoint) {
+  return codepoint >= 0xFF61 && codepoint <= 0xFF9F;
+}
+
+static bool sk_codepoint_is_fullwidth_ascii(int codepoint) {
+  return codepoint >= 0xFF01 && codepoint <= 0xFF5E;
+}
+
+static bool sk_codepoint_is_box_drawing(int codepoint) {
+  return codepoint >= 0x2500 && codepoint <= 0x257F;
+}
+
+static bool sk_codepoint_is_private_use(int codepoint) {
+  return codepoint >= 0xE000 && codepoint <= 0xF8FF;
 }
 
 static bool sk_contains_utf8(const char *text, const char *needle) {
@@ -523,7 +557,13 @@ static int sk_cad_vocabulary_score(const char *text) {
     }
   }
 
-  const char *suspiciousGlyphs[] = { "Ê", "Ð", "Ä", "Ã", "Â", "Ó", "Æ", "Ë", "·", "µ", "Ç" };
+  const char *suspiciousGlyphs[] = {
+    "Ê", "Ð", "Ä", "Ã", "Â", "Ó", "Æ", "Ë", "·", "µ", "Ç",
+    "涓", "鐨", "鏂", "鍙", "杩", "锛", "銆", "鈥", "澶", "笁",
+    "鍗", "闂", "瀛", "妗", "骞", "鐢", "皵", "寤虹", "缁撴",
+    "缁欐", "娑堥", "鏍囬", "杞寸", "閰嶇", "鐓ф", "鍥炶",
+    "鎻掑", "绾跨", "璐熻", "绯荤", "鍥剧"
+  };
   for (size_t index = 0; index < sizeof(suspiciousGlyphs) / sizeof(suspiciousGlyphs[0]); index++) {
     if (sk_contains_utf8(text, suspiciousGlyphs[index])) {
       score -= 18;
@@ -546,6 +586,16 @@ static int sk_text_quality_score(const char *text) {
     }
     if (sk_codepoint_is_cjk(codepoint)) {
       score += 12;
+    } else if (sk_codepoint_is_east_asian_punctuation(codepoint)) {
+      score += 2;
+    } else if (sk_codepoint_is_fullwidth_ascii(codepoint)) {
+      score += 1;
+    } else if (sk_codepoint_is_halfwidth_katakana(codepoint)) {
+      score -= 16;
+    } else if (sk_codepoint_is_box_drawing(codepoint)) {
+      score -= 18;
+    } else if (sk_codepoint_is_private_use(codepoint)) {
+      score -= 36;
     } else if (codepoint == 0xFFFD) {
       score -= 40;
     } else if (codepoint >= 0x00A0 && codepoint <= 0x00FF) {
@@ -561,6 +611,37 @@ static int sk_text_quality_score(const char *text) {
   }
   score += sk_cad_vocabulary_score(text);
   return score;
+}
+
+static int sk_codepage_preference_bias(BITCODE_RS candidateCodepage,
+                                       BITCODE_RS preferredCodepage) {
+  int bias = 0;
+  if (preferredCodepage > 0 && candidateCodepage == preferredCodepage) {
+    bias += 20;
+  }
+
+  switch (candidateCodepage) {
+  case CP_ANSI_936:
+    bias += 18;
+    break;
+  case CP_UTF8:
+    bias += 6;
+    break;
+  case CP_ANSI_950:
+    if (preferredCodepage != CP_ANSI_950) {
+      bias -= 6;
+    }
+    break;
+  case CP_ANSI_932:
+  case CP_ANSI_949:
+    if (preferredCodepage != candidateCodepage) {
+      bias -= 24;
+    }
+    break;
+  default:
+    break;
+  }
+  return bias;
 }
 
 static bool sk_text_looks_latin1_mojibake(const char *text) {
@@ -605,14 +686,17 @@ static char *sk_latin1_bytes_from_utf8(const char *text) {
 }
 
 static void sk_choose_candidate(char **best, int *bestScore, int *bestCodepage,
-                                char *candidate, BITCODE_RS candidateCodepage) {
+                                char *candidate, BITCODE_RS candidateCodepage,
+                                BITCODE_RS preferredCodepage) {
   if (!candidate || !candidate[0]) {
     if (candidate) {
       free(candidate);
     }
     return;
   }
-  const int score = sk_text_quality_score(candidate);
+  const int score = sk_text_quality_score(candidate) +
+                    sk_codepage_preference_bias(candidateCodepage,
+                                                preferredCodepage);
   if (!*best || score > *bestScore) {
     if (*best) {
       free(*best);
@@ -639,7 +723,8 @@ static char *sk_utf8_copy_with_codepage(const char *text, BITCODE_RS codepage,
   const bool isValidUTF8 = sk_is_valid_utf8(text);
 
   if (isValidUTF8) {
-    sk_choose_candidate(&best, &bestScore, &bestCodepage, sk_strdup_safe(text), CP_UTF8);
+    sk_choose_candidate(&best, &bestScore, &bestCodepage, sk_strdup_safe(text),
+                        CP_UTF8, codepage);
   }
 
   // DWG codepage sometimes comes as 0 in the header for legacy drawings.
@@ -649,13 +734,15 @@ static char *sk_utf8_copy_with_codepage(const char *text, BITCODE_RS codepage,
   };
   if (!isValidUTF8 && codepage > 0) {
     sk_choose_candidate(&best, &bestScore, &bestCodepage,
-                        sk_copy_converted_utf8(text, codepage), codepage);
+                        sk_copy_converted_utf8(text, codepage), codepage,
+                        codepage);
   }
   if (isValidUTF8 && codepage > 0 && codepage != CP_UTF8 && sk_text_looks_latin1_mojibake(text)) {
     char *latin1Bytes = sk_latin1_bytes_from_utf8(text);
     if (latin1Bytes) {
       sk_choose_candidate(&best, &bestScore, &bestCodepage,
-                          sk_copy_converted_utf8(latin1Bytes, codepage), codepage);
+                          sk_copy_converted_utf8(latin1Bytes, codepage),
+                          codepage, codepage);
       free(latin1Bytes);
     }
   }
@@ -672,12 +759,14 @@ static char *sk_utf8_copy_with_codepage(const char *text, BITCODE_RS codepage,
       char *latin1Bytes = sk_latin1_bytes_from_utf8(text);
       if (latin1Bytes) {
         sk_choose_candidate(&best, &bestScore, &bestCodepage,
-                            sk_copy_converted_utf8(latin1Bytes, fallback), fallback);
+                            sk_copy_converted_utf8(latin1Bytes, fallback),
+                            fallback, codepage);
         free(latin1Bytes);
       }
     } else {
       sk_choose_candidate(&best, &bestScore, &bestCodepage,
-                          sk_copy_converted_utf8(text, fallback), fallback);
+                          sk_copy_converted_utf8(text, fallback), fallback,
+                          codepage);
     }
   }
   if (best) {
@@ -707,6 +796,151 @@ static char *sk_utf8_copy_with_codepage(const char *text, BITCODE_RS codepage,
 
 static char *sk_utf8_copy(const char *text, BITCODE_RS codepage) {
   return sk_utf8_copy_with_codepage(text, codepage, NULL);
+}
+
+static void sk_append_normalized_utf8(char *destination, size_t capacity,
+                                      size_t *length, const char *value) {
+  if (!destination || !length || !value || capacity == 0) {
+    return;
+  }
+  while (*value && *length + 1 < capacity) {
+    destination[*length] = *value;
+    *length += 1;
+    value += 1;
+  }
+  destination[*length] = '\0';
+}
+
+static char sk_ascii_lower(char value) {
+  if (value >= 'A' && value <= 'Z') {
+    return (char)(value - 'A' + 'a');
+  }
+  return value;
+}
+
+static char *sk_normalize_cad_text(const char *text) {
+  if (!text || !text[0]) {
+    return NULL;
+  }
+
+  const size_t length = strlen(text);
+  const size_t capacity = length * 4 + 1;
+  char *result = (char *)malloc(capacity);
+  if (!result) {
+    return sk_strdup_safe(text);
+  }
+
+  size_t out = 0;
+  for (size_t index = 0; index < length;) {
+    const unsigned char current = (const unsigned char)text[index];
+    if (current == '%' && index + 2 < length && text[index + 1] == '%') {
+      switch (sk_ascii_lower(text[index + 2])) {
+      case 'c':
+        sk_append_normalized_utf8(result, capacity, &out, "\xCE\xA6");
+        index += 3;
+        continue;
+      case 'd':
+        sk_append_normalized_utf8(result, capacity, &out, "\xC2\xB0");
+        index += 3;
+        continue;
+      case 'p':
+        sk_append_normalized_utf8(result, capacity, &out, "\xC2\xB1");
+        index += 3;
+        continue;
+      case '%':
+        sk_append_normalized_utf8(result, capacity, &out, "%");
+        index += 3;
+        continue;
+      case 'u':
+      case 'o':
+        index += 3;
+        continue;
+      default:
+        break;
+      }
+    }
+
+    if (current == '\\' && index + 1 < length) {
+      const char code = sk_ascii_lower(text[index + 1]);
+      switch (code) {
+      case 'p':
+        sk_append_normalized_utf8(result, capacity, &out, "\n");
+        index += 2;
+        continue;
+      case '~':
+        sk_append_normalized_utf8(result, capacity, &out, " ");
+        index += 2;
+        continue;
+      case 'l':
+      case 'o':
+      case 'k':
+        index += 2;
+        continue;
+      case 'a':
+      case 'c':
+      case 'f':
+      case 'h':
+      case 'w':
+      case 'q':
+      case 't':
+        index += 2;
+        while (index < length && text[index] != ';') {
+          index += 1;
+        }
+        if (index < length && text[index] == ';') {
+          index += 1;
+        }
+        continue;
+      case 's':
+        index += 2;
+        while (index < length && text[index] != ';') {
+          const char stacked = text[index];
+          if (stacked == '#' || stacked == '^') {
+            sk_append_normalized_utf8(result, capacity, &out, "/");
+          } else if ((unsigned char)stacked >= 0x20) {
+            char buffer[2] = {stacked, '\0'};
+            sk_append_normalized_utf8(result, capacity, &out, buffer);
+          }
+          index += 1;
+        }
+        if (index < length && text[index] == ';') {
+          index += 1;
+        }
+        continue;
+      default:
+        break;
+      }
+    }
+
+    if (current < 0x20) {
+      if (current == '\n' || current == '\r') {
+        sk_append_normalized_utf8(result, capacity, &out, "\n");
+      } else if (current == '\t') {
+        sk_append_normalized_utf8(result, capacity, &out, " ");
+      }
+      index += 1;
+      continue;
+    }
+
+    if (out + 1 >= capacity) {
+      break;
+    }
+    result[out++] = (char)current;
+    result[out] = '\0';
+    index += 1;
+  }
+
+  while (out > 0 && (result[out - 1] == ' ' || result[out - 1] == '\n' ||
+                     result[out - 1] == '\r' || result[out - 1] == '\t')) {
+    out -= 1;
+  }
+  result[out] = '\0';
+
+  if (!result[0]) {
+    free(result);
+    return NULL;
+  }
+  return result;
 }
 
 static BITCODE_RS sk_context_codepage(const SKParseContext *ctx) {
@@ -839,8 +1073,14 @@ static double sk_default_stroke_width(void) {
 }
 
 static double sk_stroke_width_from_linewt(BITCODE_RC linewt,
-                                          const Dwg_Object_LAYER *layer) {
+                                          const Dwg_Object_LAYER *layer,
+                                          const SKStrokeStyle *blockStyle,
+                                          bool inheritsLayerZero) {
   int lw100th = dxf_cvt_lweight((BITCODE_BSd)linewt);
+  if ((lw100th == -2 || (lw100th == -1 && inheritsLayerZero)) &&
+      blockStyle) {
+    return blockStyle->width;
+  }
   if ((lw100th == -1 || lw100th == -2 || lw100th == -3) && layer) {
     lw100th = dxf_cvt_lweight((BITCODE_BSd)layer->linewt);
   }
@@ -864,7 +1104,8 @@ static double sk_stroke_width_from_linewt(BITCODE_RC linewt,
   return points;
 }
 
-static SKStrokeStyle sk_style_from_entity(const Dwg_Object_Entity *entity) {
+static SKStrokeStyle sk_style_from_entity(const Dwg_Object_Entity *entity,
+                                          const SKStrokeStyle *blockStyle) {
   SKStrokeStyle style;
   style.rgb = sk_default_rgb();
   style.width = sk_default_stroke_width();
@@ -873,30 +1114,44 @@ static SKStrokeStyle sk_style_from_entity(const Dwg_Object_Entity *entity) {
   }
 
   const Dwg_Object_LAYER *layer = dwg_get_entity_layer(entity);
+  const char *layerName = layer ? layer->name : NULL;
+  const bool inheritsLayerZero =
+      blockStyle && (!layerName || !layerName[0] || strcmp(layerName, "0") == 0);
   const Dwg_Color *source = &entity->color;
+  const bool byBlock = source->method == DWG_COLOR_METHOD_BYBLOCK ||
+                       source->index == 0;
   const bool byLayer = source->method == DWG_COLOR_METHOD_BYLAYER ||
                        source->index == 256 ||
                        source->method == DWG_COLOR_METHOD_VOID;
-  if (byLayer && layer) {
+  if ((byBlock || (byLayer && inheritsLayerZero)) && blockStyle) {
+    style.rgb = blockStyle->rgb;
+  } else if (byLayer && layer) {
     source = &layer->color;
+    const unsigned int rgb = sk_rgb_from_color(source);
+    style.rgb = rgb != 0 ? rgb : sk_default_rgb();
+  } else {
+    unsigned int rgb = sk_rgb_from_color(source);
+    if (rgb == 0 && layer && source != &layer->color) {
+      rgb = sk_rgb_from_color(&layer->color);
+    }
+    style.rgb = rgb != 0 ? rgb : sk_default_rgb();
   }
-
-  unsigned int rgb = sk_rgb_from_color(source);
-  if (rgb == 0 && layer && source != &layer->color) {
-    rgb = sk_rgb_from_color(&layer->color);
-  }
-  style.rgb = rgb != 0 ? rgb : sk_default_rgb();
-  style.width = sk_stroke_width_from_linewt(entity->linewt, layer);
+  style.width = sk_stroke_width_from_linewt(entity->linewt, layer, blockStyle,
+                                            inheritsLayerZero);
   return style;
 }
 
-static const char *sk_layer_name_from_entity(const Dwg_Object_Entity *entity) {
+static const char *sk_layer_name_from_entity(const Dwg_Object_Entity *entity,
+                                             const char *blockLayerName) {
   if (!entity) {
     return "0";
   }
   const Dwg_Object_LAYER *layer = dwg_get_entity_layer(entity);
   if (!layer || !layer->name || !layer->name[0]) {
-    return "0";
+    return (blockLayerName && blockLayerName[0]) ? blockLayerName : "0";
+  }
+  if (strcmp(layer->name, "0") == 0 && blockLayerName && blockLayerName[0]) {
+    return blockLayerName;
   }
   return layer->name;
 }
@@ -943,6 +1198,8 @@ static const char *sk_entity_type_name(int type) {
     return "PROXY_OBJECT/AEC";
   case DWG_TYPE_DYNAMICBLOCKPROXYNODE:
     return "DYNAMICBLOCKPROXYNODE";
+  case DWG_TYPE_POLYLINE_3D:
+    return "POLYLINE_3D";
   case DWG_TYPE_POLYLINE_MESH:
     return "POLYLINE_MESH";
   case DWG_TYPE_POLYLINE_PFACE:
@@ -987,6 +1244,204 @@ static void sk_write_unsupported_summary(const SKParseContext *ctx) {
             sizeof(ctx->result->unsupportedEntitySummary) -
                 strlen(ctx->result->unsupportedEntitySummary) - 1);
   }
+}
+
+static void sk_add_clamped_count(int *destination, unsigned long long value) {
+  if (!destination || value == 0) {
+    return;
+  }
+  const unsigned long long current = *destination > 0 ? (unsigned long long)*destination : 0;
+  const unsigned long long next = current + value;
+  *destination = next > 2147483647ULL ? 2147483647 : (int)next;
+}
+
+static bool sk_block_header_is_xref(const Dwg_Object_BLOCK_HEADER *header) {
+  if (!header) {
+    return false;
+  }
+  return header->blkisxref || header->is_xref_ref || header->is_xref_dep ||
+         header->xrefoverlaid || header->xref_loaded ||
+         (header->xref_pname && header->xref_pname[0]);
+}
+
+static void sk_record_block_header_metadata(SKParseContext *ctx,
+                                            const Dwg_Object *blockHeaderObject) {
+  if (!ctx || !ctx->result || !blockHeaderObject ||
+      blockHeaderObject->fixedtype != DWG_TYPE_BLOCK_HEADER ||
+      !blockHeaderObject->tio.object ||
+      !blockHeaderObject->tio.object->tio.BLOCK_HEADER) {
+    return;
+  }
+  const Dwg_Object_BLOCK_HEADER *header =
+      blockHeaderObject->tio.object->tio.BLOCK_HEADER;
+  if (sk_block_header_is_xref(header)) {
+    ctx->result->blockXrefCount += 1;
+  }
+  if (header->anonymous) {
+    ctx->result->blockAnonymousCount += 1;
+  }
+}
+
+static void sk_append_count_summary(char *summary, size_t capacity,
+                                    const char *label, int count);
+
+static const Dwg_Object_BLOCK_HEADER *sk_block_header_from_object(
+    const Dwg_Object *object) {
+  if (!object || object->fixedtype != DWG_TYPE_BLOCK_HEADER ||
+      !object->tio.object || !object->tio.object->tio.BLOCK_HEADER) {
+    return NULL;
+  }
+  return object->tio.object->tio.BLOCK_HEADER;
+}
+
+static int sk_clamped_reference_count_from_block_header(
+    const Dwg_Object_BLOCK_HEADER *header) {
+  if (!header) {
+    return 0;
+  }
+  unsigned long long count = 0;
+  if (header->num_inserts > 0) {
+    count = (unsigned long long)header->num_inserts;
+  } else if (header->used > 0) {
+    count = (unsigned long long)header->used;
+  }
+  return count > 2147483647ULL ? 2147483647 : (int)count;
+}
+
+static void sk_write_xref_reference_summary(SKCADParseResult *result) {
+  if (!result) {
+    return;
+  }
+
+  char summary[sizeof(result->xrefReferenceSummary)];
+  summary[0] = '\0';
+  sk_append_count_summary(summary, sizeof(summary), "XREF",
+                          result->xrefReferenceCount);
+  int loadedCount = 0;
+  int overlayCount = 0;
+  int pathCount = 0;
+  for (int index = 0; index < result->xrefReferenceCount; index++) {
+    const SKCADXrefReference *xref = &result->xrefs[index];
+    if (xref->isLoaded || xref->isResolvedInDWG) {
+      loadedCount += 1;
+    }
+    if (xref->isOverlay) {
+      overlayCount += 1;
+    }
+    if (xref->savedPath && xref->savedPath[0]) {
+      pathCount += 1;
+    }
+  }
+  sk_append_count_summary(summary, sizeof(summary), "DWG已加载", loadedCount);
+  sk_append_count_summary(summary, sizeof(summary), "overlay", overlayCount);
+  sk_append_count_summary(summary, sizeof(summary), "带路径", pathCount);
+  sk_copy_fixed(result->xrefReferenceSummary,
+                sizeof(result->xrefReferenceSummary), summary);
+}
+
+static void sk_collect_xref_references(SKParseContext *ctx) {
+  if (!ctx || !ctx->result || !ctx->dwg || !ctx->dwg->object ||
+      ctx->dwg->num_objects == 0) {
+    return;
+  }
+
+  int count = 0;
+  for (BITCODE_BL index = 0; index < ctx->dwg->num_objects; index++) {
+    const Dwg_Object_BLOCK_HEADER *header =
+        sk_block_header_from_object(&ctx->dwg->object[index]);
+    if (sk_block_header_is_xref(header)) {
+      count += 1;
+    }
+  }
+
+  ctx->result->xrefReferenceCount = count;
+  ctx->result->blockXrefCount = count;
+  if (count <= 0) {
+    sk_write_xref_reference_summary(ctx->result);
+    return;
+  }
+
+  ctx->result->xrefs =
+      (SKCADXrefReference *)calloc((size_t)count, sizeof(SKCADXrefReference));
+  if (!ctx->result->xrefs) {
+    ctx->result->xrefReferenceCount = 0;
+    ctx->result->blockXrefCount = 0;
+    sk_set_error(ctx->result, "DWG XREF 清单内存分配失败。");
+    return;
+  }
+
+  int cursor = 0;
+  for (BITCODE_BL index = 0; index < ctx->dwg->num_objects && cursor < count; index++) {
+    const Dwg_Object_BLOCK_HEADER *header =
+        sk_block_header_from_object(&ctx->dwg->object[index]);
+    if (!sk_block_header_is_xref(header)) {
+      continue;
+    }
+
+    SKCADXrefReference *xref = &ctx->result->xrefs[cursor++];
+    xref->name = sk_utf8_copy(header->name, sk_context_codepage(ctx));
+    xref->savedPath = sk_utf8_copy(header->xref_pname, sk_context_codepage(ctx));
+    xref->isOverlay = header->xrefoverlaid ? 1 : 0;
+    xref->isLoaded = header->xref_loaded ? 1 : 0;
+    xref->isResolvedInDWG = header->is_xref_resolved ? 1 : 0;
+    xref->referenceCount = sk_clamped_reference_count_from_block_header(header);
+  }
+
+  sk_write_xref_reference_summary(ctx->result);
+}
+
+static void sk_append_count_summary(char *summary, size_t capacity,
+                                    const char *label, int count) {
+  if (!summary || capacity == 0 || !label || count <= 0) {
+    return;
+  }
+  const size_t used = strlen(summary);
+  if (used + 1 >= capacity) {
+    return;
+  }
+  char item[64];
+  snprintf(item, sizeof(item), "%s:%d", label, count);
+  if (summary[0]) {
+    strncat(summary, ", ", capacity - strlen(summary) - 1);
+    if (strlen(summary) + 1 >= capacity) {
+      return;
+    }
+  }
+  strncat(summary, item, capacity - strlen(summary) - 1);
+}
+
+static void sk_write_block_reference_summary(SKCADParseResult *result) {
+  if (!result) {
+    return;
+  }
+  char summary[sizeof(result->blockReferenceSummary)];
+  summary[0] = '\0';
+  sk_append_count_summary(summary, sizeof(summary), "INSERT",
+                          result->blockInsertCount);
+  sk_append_count_summary(summary, sizeof(summary), "MINSERT",
+                          result->blockMInsertCount);
+  sk_append_count_summary(summary, sizeof(summary), "展开",
+                          result->blockExpandedCount);
+  sk_append_count_summary(summary, sizeof(summary), "属性",
+                          result->blockAttributeCount);
+  sk_append_count_summary(summary, sizeof(summary), "属性定义",
+                          result->blockAttdefCount);
+  sk_append_count_summary(summary, sizeof(summary), "外部参照",
+                          result->blockXrefCount);
+  sk_append_count_summary(summary, sizeof(summary), "匿名块",
+                          result->blockAnonymousCount);
+  sk_append_count_summary(summary, sizeof(summary), "缺失块",
+                          result->blockUnresolvedCount);
+  sk_append_count_summary(summary, sizeof(summary), "递归跳过",
+                          result->blockRecursiveSkipCount);
+  sk_append_count_summary(summary, sizeof(summary), "层级过深",
+                          result->blockDepthSkipCount);
+  sk_append_count_summary(summary, sizeof(summary), "动态块代理",
+                          result->blockDynamicProxyCount);
+  sk_append_count_summary(summary, sizeof(summary), "代理对象",
+                          result->proxyObjectCount);
+  sk_copy_fixed(result->blockReferenceSummary,
+                sizeof(result->blockReferenceSummary), summary);
 }
 
 static bool sk_append_line_kind(SKParseContext *ctx, SKAffineTransform2D transform,
@@ -1224,6 +1679,9 @@ static bool sk_append_text_kind(SKParseContext *ctx, SKAffineTransform2D transfo
   if (!text || !text[0]) {
     return true;
   }
+  if (ctx && (ctx->parseOptions & SKCADParseOptionSkipText) != 0) {
+    return true;
+  }
   if (!sk_ensure_capacity(ctx, 1)) {
     return false;
   }
@@ -1240,7 +1698,10 @@ static bool sk_append_text_kind(SKParseContext *ctx, SKAffineTransform2D transfo
   primitive->strokeRGB = style.rgb;
   primitive->strokeWidth = style.width;
   primitive->rawTextBytesHex = sk_hex_copy(text);
-  primitive->text = sk_context_utf8_copy_with_codepage(ctx, text, &primitive->chosenCodepage);
+  char *decodedText =
+      sk_context_utf8_copy_with_codepage(ctx, text, &primitive->chosenCodepage);
+  primitive->text = sk_normalize_cad_text(decodedText);
+  free(decodedText);
   if (textStyle) {
     primitive->textStyleName = sk_context_utf8_copy(ctx, textStyle->name);
     primitive->fontFile = sk_context_utf8_copy(ctx, textStyle->font_file);
@@ -1347,13 +1808,10 @@ static bool sk_append_polyline_from_subentities(SKParseContext *ctx,
     }
     case DWG_TYPE_VERTEX_3D:
     case DWG_TYPE_VERTEX_MESH:
-    case DWG_TYPE_VERTEX_PFACE: {
-      const Dwg_Entity_VERTEX_3D *vertex = subentity->tio.entity->tio.VERTEX_3D;
-      if (vertex) {
-        x = vertex->point.x;
-        y = vertex->point.y;
-        didAppendPoint = true;
-      }
+    case DWG_TYPE_VERTEX_PFACE:
+    case DWG_TYPE_VERTEX_PFACE_FACE: {
+      ctx->result->unsupportedEntityCount += 1;
+      sk_track_unsupported(ctx, subentity->fixedtype);
       break;
     }
     case DWG_TYPE_SEQEND:
@@ -1905,8 +2363,28 @@ static bool sk_append_marker(SKParseContext *ctx, SKAffineTransform2D transform,
   return true;
 }
 
+static SKCADPoint sk_block_base_point(const Dwg_Object *blockHeaderObject) {
+  SKCADPoint point;
+  point.x = 0.0;
+  point.y = 0.0;
+  if (!blockHeaderObject ||
+      blockHeaderObject->fixedtype != DWG_TYPE_BLOCK_HEADER ||
+      !blockHeaderObject->tio.object ||
+      !blockHeaderObject->tio.object->tio.BLOCK_HEADER) {
+    return point;
+  }
+  const Dwg_Object_BLOCK_HEADER *header =
+      blockHeaderObject->tio.object->tio.BLOCK_HEADER;
+  if (isfinite(header->base_pt.x) && isfinite(header->base_pt.y)) {
+    point.x = header->base_pt.x;
+    point.y = header->base_pt.y;
+  }
+  return point;
+}
+
 static SKAffineTransform2D sk_insert_transform(double tx, double ty, double sx,
-                                               double sy, double rotation) {
+                                               double sy, double rotation,
+                                               SKCADPoint blockBasePoint) {
   if (!isfinite(sx) || fabs(sx) < 1e-9) {
     sx = 1.0;
   }
@@ -1924,8 +2402,8 @@ static SKAffineTransform2D sk_insert_transform(double tx, double ty, double sx,
   out.b = -s * sy;
   out.c = s * sx;
   out.d = c * sy;
-  out.tx = tx;
-  out.ty = ty;
+  out.tx = tx - (out.a * blockBasePoint.x + out.b * blockBasePoint.y);
+  out.ty = ty - (out.c * blockBasePoint.x + out.d * blockBasePoint.y);
   return out;
 }
 
@@ -1944,12 +2422,16 @@ static bool sk_is_in_stack(const Dwg_Object *object, const Dwg_Object **stack,
 
 static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object,
                                    SKAffineTransform2D transform,
-                                   const Dwg_Object **stack, int stackCount);
+                                   const Dwg_Object **stack, int stackCount,
+                                   const SKStrokeStyle *blockStyle,
+                                   const char *blockLayerName);
 
 static bool sk_parse_block_entities(SKParseContext *ctx,
                                     const Dwg_Object *blockHeaderObject,
                                     SKAffineTransform2D transform,
-                                    const Dwg_Object **stack, int stackCount) {
+                                    const Dwg_Object **stack, int stackCount,
+                                    const SKStrokeStyle *blockStyle,
+                                    const char *blockLayerName) {
   if (!ctx || !blockHeaderObject ||
       blockHeaderObject->fixedtype != DWG_TYPE_BLOCK_HEADER) {
     return true;
@@ -1957,11 +2439,13 @@ static bool sk_parse_block_entities(SKParseContext *ctx,
 
   if (sk_is_in_stack(blockHeaderObject, stack, stackCount)) {
     ctx->result->unsupportedEntityCount += 1;
+    ctx->result->blockRecursiveSkipCount += 1;
     sk_track_unsupported(ctx, DWG_TYPE_INSERT);
     return true;
   }
 
   if (stackCount >= SK_MAX_RECURSION_DEPTH) {
+    ctx->result->blockDepthSkipCount += 1;
     sk_set_error(ctx->result, "DWG 块引用层级过深，已停止递归展开。");
     return false;
   }
@@ -1975,7 +2459,7 @@ static bool sk_parse_block_entities(SKParseContext *ctx,
   Dwg_Object *entity = get_first_owned_entity(blockHeaderObject);
   while (entity) {
     if (!sk_parse_entity_object(ctx, entity, transform, nextStack,
-                                stackCount + 1)) {
+                                stackCount + 1, blockStyle, blockLayerName)) {
       return false;
     }
     entity = get_next_owned_entity(blockHeaderObject, entity);
@@ -1983,14 +2467,49 @@ static bool sk_parse_block_entities(SKParseContext *ctx,
   return true;
 }
 
+static bool sk_parse_insert_owned_attribs(SKParseContext *ctx,
+                                          const Dwg_Object *insertObject,
+                                          SKAffineTransform2D transform,
+                                          const Dwg_Object **stack,
+                                          int stackCount,
+                                          const SKStrokeStyle *blockStyle,
+                                          const char *blockLayerName) {
+  if (!ctx || !insertObject) {
+    return true;
+  }
+
+  Dwg_Object *subentity = get_first_owned_subentity(insertObject);
+  while (subentity) {
+    if (subentity->fixedtype == DWG_TYPE_ATTRIB) {
+      if (!sk_parse_entity_object(ctx, subentity, transform, stack, stackCount,
+                                  blockStyle, blockLayerName)) {
+        return false;
+      }
+    }
+    subentity = get_next_owned_subentity(insertObject, subentity);
+  }
+  return true;
+}
+
 static bool sk_parse_insert_entity(SKParseContext *ctx,
+                                   const Dwg_Object *insertObject,
                                    const Dwg_Entity_INSERT *insertEntity,
                                    SKAffineTransform2D transform,
-                                   const Dwg_Object **stack, int stackCount) {
+                                   const Dwg_Object **stack, int stackCount,
+                                   const SKStrokeStyle *insertStyle,
+                                   const char *insertLayerName) {
+  if (ctx && ctx->result) {
+    ctx->result->blockInsertCount += 1;
+  }
   if (!insertEntity || !insertEntity->block_header) {
     ctx->result->unsupportedEntityCount += 1;
+    ctx->result->blockUnresolvedCount += 1;
     sk_track_unsupported(ctx, DWG_TYPE_INSERT);
     return true;
+  }
+  if (ctx && ctx->result && insertEntity->has_attribs) {
+    sk_add_clamped_count(&ctx->result->blockAttributeCount,
+                         (unsigned long long)insertEntity->num_owned);
   }
 
   Dwg_Object *blockHeaderObject =
@@ -1999,29 +2518,56 @@ static bool sk_parse_insert_entity(SKParseContext *ctx,
           : dwg_ref_object(ctx->dwg, insertEntity->block_header);
   if (!blockHeaderObject || blockHeaderObject->fixedtype != DWG_TYPE_BLOCK_HEADER) {
     ctx->result->unsupportedEntityCount += 1;
+    ctx->result->blockUnresolvedCount += 1;
     sk_track_unsupported(ctx, DWG_TYPE_INSERT);
     return true;
   }
+  sk_record_block_header_metadata(ctx, blockHeaderObject);
 
   const double sx = insertEntity->scale.x;
   const double sy = insertEntity->scale.y;
+  const SKCADPoint blockBasePoint = sk_block_base_point(blockHeaderObject);
   const SKAffineTransform2D local = sk_insert_transform(
       insertEntity->ins_pt.x, insertEntity->ins_pt.y, sx, sy,
-      insertEntity->rotation);
+      insertEntity->rotation, blockBasePoint);
   const SKAffineTransform2D composed = sk_compose_transform(transform, local);
 
-  return sk_parse_block_entities(ctx, blockHeaderObject, composed, stack,
-                                 stackCount);
+  const bool parsed = sk_parse_block_entities(ctx, blockHeaderObject, composed,
+                                              stack, stackCount, insertStyle,
+                                              insertLayerName);
+  if (!parsed) {
+    return false;
+  }
+  if (!sk_parse_insert_owned_attribs(ctx, insertObject, transform, stack,
+                                     stackCount, insertStyle,
+                                     insertLayerName)) {
+    return false;
+  }
+  if (ctx && ctx->result) {
+    ctx->result->blockExpandedCount += 1;
+  }
+  return true;
 }
 
 static bool sk_parse_minsert_entity(SKParseContext *ctx,
+                                    const Dwg_Object *insertObject,
                                     const Dwg_Entity_MINSERT *insertEntity,
                                     SKAffineTransform2D transform,
-                                    const Dwg_Object **stack, int stackCount) {
+                                    const Dwg_Object **stack, int stackCount,
+                                    const SKStrokeStyle *insertStyle,
+                                    const char *insertLayerName) {
+  if (ctx && ctx->result) {
+    ctx->result->blockMInsertCount += 1;
+  }
   if (!insertEntity || !insertEntity->block_header) {
     ctx->result->unsupportedEntityCount += 1;
+    ctx->result->blockUnresolvedCount += 1;
     sk_track_unsupported(ctx, DWG_TYPE_MINSERT);
     return true;
+  }
+  if (ctx && ctx->result && insertEntity->has_attribs) {
+    sk_add_clamped_count(&ctx->result->blockAttributeCount,
+                         (unsigned long long)insertEntity->num_owned);
   }
 
   Dwg_Object *blockHeaderObject =
@@ -2030,9 +2576,11 @@ static bool sk_parse_minsert_entity(SKParseContext *ctx,
           : dwg_ref_object(ctx->dwg, insertEntity->block_header);
   if (!blockHeaderObject || blockHeaderObject->fixedtype != DWG_TYPE_BLOCK_HEADER) {
     ctx->result->unsupportedEntityCount += 1;
+    ctx->result->blockUnresolvedCount += 1;
     sk_track_unsupported(ctx, DWG_TYPE_MINSERT);
     return true;
   }
+  sk_record_block_header_metadata(ctx, blockHeaderObject);
 
   int rows = (int)insertEntity->num_rows;
   int cols = (int)insertEntity->num_cols;
@@ -2045,9 +2593,10 @@ static bool sk_parse_minsert_entity(SKParseContext *ctx,
 
   const double baseScaleX = insertEntity->scale.x;
   const double baseScaleY = insertEntity->scale.y;
+  const SKCADPoint blockBasePoint = sk_block_base_point(blockHeaderObject);
   const SKAffineTransform2D baseTransform = sk_insert_transform(
       insertEntity->ins_pt.x, insertEntity->ins_pt.y, baseScaleX, baseScaleY,
-      insertEntity->rotation);
+      insertEntity->rotation, blockBasePoint);
   const SKAffineTransform2D composedBase =
       sk_compose_transform(transform, baseTransform);
 
@@ -2061,8 +2610,16 @@ static bool sk_parse_minsert_entity(SKParseContext *ctx,
       const SKAffineTransform2D finalTransform =
           sk_compose_transform(composedBase, offset);
       if (!sk_parse_block_entities(ctx, blockHeaderObject, finalTransform, stack,
-                                   stackCount)) {
+                                   stackCount, insertStyle, insertLayerName)) {
         return false;
+      }
+      if (!sk_parse_insert_owned_attribs(ctx, insertObject, finalTransform, stack,
+                                         stackCount, insertStyle,
+                                         insertLayerName)) {
+        return false;
+      }
+      if (ctx && ctx->result) {
+        ctx->result->blockExpandedCount += 1;
       }
     }
   }
@@ -2072,14 +2629,17 @@ static bool sk_parse_minsert_entity(SKParseContext *ctx,
 
 static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object,
                                    SKAffineTransform2D transform,
-                                   const Dwg_Object **stack, int stackCount) {
+                                   const Dwg_Object **stack, int stackCount,
+                                   const SKStrokeStyle *blockStyle,
+                                   const char *blockLayerName) {
   if (!ctx || !object || object->supertype != DWG_SUPERTYPE_ENTITY ||
       !object->tio.entity) {
     return true;
   }
 
-  const SKStrokeStyle style = sk_style_from_entity(object->tio.entity);
-  const char *layerName = sk_layer_name_from_entity(object->tio.entity);
+  const SKStrokeStyle style = sk_style_from_entity(object->tio.entity, blockStyle);
+  const char *layerName =
+      sk_layer_name_from_entity(object->tio.entity, blockLayerName);
 
   switch (object->fixedtype) {
   case DWG_TYPE_LINE: {
@@ -2151,6 +2711,9 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
   }
 
   case DWG_TYPE_ATTDEF: {
+    if (ctx->result) {
+      ctx->result->blockAttdefCount += 1;
+    }
     const Dwg_Entity_ATTDEF *attdef = object->tio.entity->tio.ATTDEF;
     if (!attdef) {
       return true;
@@ -2183,11 +2746,9 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
   }
 
   case DWG_TYPE_POLYLINE_3D: {
-    const Dwg_Entity_POLYLINE_3D *polyline = object->tio.entity->tio.POLYLINE_3D;
-    const bool closed = polyline && ((polyline->flag & 1) == 1);
-    return sk_append_polyline_from_subentities(ctx, object, transform, closed,
-                                               style, layerName,
-                                               SKCADPrimitivePolyline);
+    ctx->result->unsupportedEntityCount += 1;
+    sk_track_unsupported(ctx, object->fixedtype);
+    return true;
   }
 
   case DWG_TYPE_ELLIPSE: {
@@ -2212,19 +2773,9 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
   }
 
   case DWG_TYPE__3DFACE: {
-    const Dwg_Entity__3DFACE *face = object->tio.entity->tio._3DFACE;
-    if (!face) {
-      return true;
-    }
-    return sk_append_solid_outline(
-        ctx,
-        transform,
-        face->corner1.x, face->corner1.y,
-        face->corner2.x, face->corner2.y,
-        face->corner3.x, face->corner3.y,
-        face->corner4.x, face->corner4.y,
-        style,
-        layerName);
+    ctx->result->unsupportedEntityCount += 1;
+    sk_track_unsupported(ctx, object->fixedtype);
+    return true;
   }
 
   case DWG_TYPE_DIMENSION_LINEAR: {
@@ -2389,7 +2940,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         return false;
       }
     }
-    return sk_parse_insert_entity(ctx, insertEntity, transform, stack, stackCount);
+    return sk_parse_insert_entity(ctx, object, insertEntity, transform, stack,
+                                  stackCount, &style, layerName);
   }
 
   case DWG_TYPE_MINSERT: {
@@ -2401,7 +2953,8 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
         return false;
       }
     }
-    return sk_parse_minsert_entity(ctx, insertEntity, transform, stack, stackCount);
+    return sk_parse_minsert_entity(ctx, object, insertEntity, transform, stack,
+                                   stackCount, &style, layerName);
   }
 
   case DWG_TYPE_BLOCK:
@@ -2418,6 +2971,11 @@ static bool sk_parse_entity_object(SKParseContext *ctx, const Dwg_Object *object
     if (object->fixedtype == DWG_TYPE_PROXY_ENTITY ||
         object->fixedtype == DWG_TYPE_PROXY_OBJECT ||
         object->fixedtype == DWG_TYPE_DYNAMICBLOCKPROXYNODE) {
+      if (object->fixedtype == DWG_TYPE_DYNAMICBLOCKPROXYNODE) {
+        ctx->result->blockDynamicProxyCount += 1;
+      } else {
+        ctx->result->proxyObjectCount += 1;
+      }
       if (!sk_append_marker(ctx, transform, 0.0, 0.0, style, layerName,
                             SKCADPrimitiveUnknownProxy)) {
         return false;
@@ -2437,7 +2995,7 @@ static bool sk_parse_root_entities(SKParseContext *ctx) {
 
   if (modelSpace && modelSpace->fixedtype == DWG_TYPE_BLOCK_HEADER) {
     parsedRoots += 1;
-    if (!sk_parse_block_entities(ctx, modelSpace, identity, NULL, 0)) {
+    if (!sk_parse_block_entities(ctx, modelSpace, identity, NULL, 0, NULL, NULL)) {
       return false;
     }
   }
@@ -2445,7 +3003,7 @@ static bool sk_parse_root_entities(SKParseContext *ctx) {
   if (paperSpace && paperSpace->fixedtype == DWG_TYPE_BLOCK_HEADER &&
       paperSpace != modelSpace) {
     parsedRoots += 1;
-    if (!sk_parse_block_entities(ctx, paperSpace, identity, NULL, 0)) {
+    if (!sk_parse_block_entities(ctx, paperSpace, identity, NULL, 0, NULL, NULL)) {
       return false;
     }
   }
@@ -2460,7 +3018,7 @@ static bool sk_parse_root_entities(SKParseContext *ctx) {
   // table, so do one conservative all-entity scan before reporting an empty file.
   for (BITCODE_BL index = 0; index < ctx->dwg->num_objects; index++) {
     const Dwg_Object *object = &ctx->dwg->object[index];
-    if (!sk_parse_entity_object(ctx, object, identity, NULL, 0)) {
+    if (!sk_parse_entity_object(ctx, object, identity, NULL, 0, NULL, NULL)) {
       return false;
     }
   }
@@ -2468,11 +3026,17 @@ static bool sk_parse_root_entities(SKParseContext *ctx) {
 }
 
 int sk_libredwg_parse_file(const char *path, SKCADParseResult *result) {
-  return sk_libredwg_parse_file_with_codepage(path, 0, result);
+  return sk_libredwg_parse_file_with_options(path, 0, 0, result);
 }
 
 int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override,
                                          SKCADParseResult *result) {
+  return sk_libredwg_parse_file_with_options(path, codepage_override, 0, result);
+}
+
+int sk_libredwg_parse_file_with_options(const char *path, int codepage_override,
+                                        int parse_options,
+                                        SKCADParseResult *result) {
   if (!result) {
     return 0;
   }
@@ -2492,7 +3056,7 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
     sk_set_error(
         result,
         "LibreDWG 读取到严重 DWG 错误（错误码 %d），已停止原生解析以避免闪退。"
-        "可先用外部 CAD App 打开，或转换为 DXF/PDF 后预览。",
+        "请检查原 DWG 是否损坏、是否包含大量代理/AEC/天正对象，或导出 CAD 诊断日志定位。",
         readStatus);
     dwg_free(&dwg);
     return 0;
@@ -2514,6 +3078,7 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
   ctx.result = result;
   ctx.dwg = &dwg;
   ctx.capacity = 0;
+  ctx.parseOptions = parse_options;
   ctx.hasTextCodepageOverride = codepage_override > 0;
   ctx.textCodepageOverride = codepage_override > 0
                                  ? sk_dwg_codepage_from_external(codepage_override)
@@ -2524,7 +3089,9 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
   result->effectiveCodepage = (int)sk_context_codepage(&ctx);
 
   const bool parsed = sk_parse_root_entities(&ctx);
+  sk_collect_xref_references(&ctx);
   sk_write_unsupported_summary(&ctx);
+  sk_write_block_reference_summary(result);
   sk_write_style_table_summary(result, &dwg);
   if (!parsed) {
     if (!result->errorMessage[0]) {
@@ -2556,30 +3123,30 @@ int sk_libredwg_parse_file_with_codepage(const char *path, int codepage_override
       if (stats[0]) {
         if (readStatus != 0) {
           sk_set_error(result,
-                       "未识别到可绘制实体（读取状态 %d）。已支持 LINE/ARC/CIRCLE/TEXT/"
+                       "未识别到可绘制实体（读取状态 %d）。已支持二维 LINE/ARC/CIRCLE/TEXT/"
                        "MTEXT/LWPOLYLINE/POLYLINE/ELLIPSE/INSERT/MINSERT/DIMENSION/"
-                       "HATCH/LEADER/MULTILEADER/SOLID/3DFACE；当前主要未支持：%s。",
+                       "HATCH/LEADER/MULTILEADER/SOLID；当前主要未支持：%s。",
                        readStatus, stats);
         } else {
           sk_set_error(result,
-                       "未识别到可绘制实体。已支持 LINE/ARC/CIRCLE/TEXT/MTEXT/"
+                       "未识别到可绘制实体。已支持二维 LINE/ARC/CIRCLE/TEXT/MTEXT/"
                        "LWPOLYLINE/POLYLINE/ELLIPSE/INSERT/MINSERT/DIMENSION/"
-                       "HATCH/LEADER/MULTILEADER/SOLID/3DFACE；当前主要未支持：%s。",
+                       "HATCH/LEADER/MULTILEADER/SOLID；当前主要未支持：%s。",
                        stats);
         }
       } else {
         if (readStatus != 0) {
           sk_set_error(result,
-                       "未识别到可绘制实体（读取状态 %d，当前支持 LINE / ARC / CIRCLE / "
+                       "未识别到可绘制实体（读取状态 %d，当前支持二维 LINE / ARC / CIRCLE / "
                        "TEXT / MTEXT / LWPOLYLINE / POLYLINE / ELLIPSE / INSERT / "
                        "MINSERT / DIMENSION / HATCH / LEADER / MULTILEADER / SOLID / "
-                       "3DFACE）。",
+                       "常见图层线型）。",
                        readStatus);
         } else {
           sk_set_error(result,
-                       "未识别到可绘制实体（当前支持 LINE / ARC / CIRCLE / TEXT / "
+                       "未识别到可绘制实体（当前支持二维 LINE / ARC / CIRCLE / TEXT / "
                        "MTEXT / LWPOLYLINE / POLYLINE / ELLIPSE / INSERT / MINSERT / "
-                       "DIMENSION / HATCH / LEADER / MULTILEADER / SOLID / 3DFACE）。");
+                       "DIMENSION / HATCH / LEADER / MULTILEADER / SOLID / 常见图层线型）。");
         }
       }
     }
@@ -2611,6 +3178,12 @@ void sk_libredwg_free_parse_result(SKCADParseResult *result) {
       sk_free_primitive_members(&result->primitives[index]);
     }
     free(result->primitives);
+  }
+  if (result->xrefs) {
+    for (int index = 0; index < result->xrefReferenceCount; index++) {
+      sk_free_xref_reference(&result->xrefs[index]);
+    }
+    free(result->xrefs);
   }
 
   memset(result, 0, sizeof(*result));

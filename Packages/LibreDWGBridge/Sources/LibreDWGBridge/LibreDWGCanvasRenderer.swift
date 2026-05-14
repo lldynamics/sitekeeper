@@ -1,6 +1,11 @@
 import CoreGraphics
 import Foundation
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#elseif canImport(AppKit)
+import AppKit
+#endif
 
 enum DXFCanvasRenderer {
     static func color(from rgb: UInt32, layer: String) -> Color {
@@ -195,11 +200,12 @@ enum DXFCanvasRenderer {
     static func drawPolyline(
         _ polyline: DXFPreviewModel.Polyline,
         path: Path,
-        in context: inout GraphicsContext
+        in context: inout GraphicsContext,
+        allowsHatchPattern: Bool = true
     ) {
         switch polyline.renderKind {
         case .hatch:
-            drawHatch(polyline, path: path, in: &context)
+            drawHatch(polyline, path: path, in: &context, allowsPattern: allowsHatchPattern)
         case .dimension:
             context.stroke(
                 path,
@@ -262,7 +268,8 @@ enum DXFCanvasRenderer {
     private static func drawHatch(
         _ polyline: DXFPreviewModel.Polyline,
         path: Path,
-        in context: inout GraphicsContext
+        in context: inout GraphicsContext,
+        allowsPattern: Bool
     ) {
         let baseColor = color(from: polyline.style.rgb, layer: polyline.layer)
         let isClosed = polyline.points.count >= 3 &&
@@ -270,7 +277,9 @@ enum DXFCanvasRenderer {
 
         if isClosed {
             context.fill(path, with: .color(baseColor.opacity(0.07)))
-            drawHatchPattern(in: path.boundingRect, clippedTo: path, color: baseColor, in: &context)
+            if allowsPattern {
+                drawHatchPattern(in: path.boundingRect, clippedTo: path, color: baseColor, in: &context)
+            }
         }
         context.stroke(
             path,
@@ -331,7 +340,7 @@ enum DXFCanvasRenderer {
         } else {
             context.draw(
                 Text(value)
-                    .font(.system(size: fontSize, weight: textWeight(for: text), design: .default))
+                    .font(cadTextFont(size: fontSize, weight: textWeight(for: text)))
                     .foregroundStyle(color),
                 at: .zero,
                 anchor: .leading
@@ -381,6 +390,31 @@ enum DXFCanvasRenderer {
         return text.value.contains { SHXGlyphPathLibrary.glyph(for: $0) != nil }
     }
 
+    private static func cadTextFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        if let fontName = preferredCJKFontName {
+            return .custom(fontName, size: size).weight(weight)
+        }
+        return .system(size: size, weight: weight, design: .default)
+    }
+
+    private static let preferredCJKFontName: String? = {
+        let candidates = [
+            "PingFangSC-Regular",
+            "HiraginoSansGB-W3",
+            "STHeitiSC-Medium",
+            "SongtiSC-Regular"
+        ]
+#if canImport(UIKit)
+        let availableNames = Set(UIFont.familyNames.flatMap { UIFont.fontNames(forFamilyName: $0) })
+        return candidates.first { availableNames.contains($0) }
+#elseif canImport(AppKit)
+        let availableNames = Set(NSFontManager.shared.availableFonts)
+        return candidates.first { availableNames.contains($0) }
+#else
+        return nil
+#endif
+    }()
+
     private static func drawTextWithSHXFallback(
         _ value: String,
         fontSize: CGFloat,
@@ -411,7 +445,7 @@ enum DXFCanvasRenderer {
                 let textContext = context
                 textContext.draw(
                     Text(String(character))
-                        .font(.system(size: fontSize, weight: .regular, design: .default))
+                        .font(cadTextFont(size: fontSize))
                         .foregroundStyle(color),
                     at: CGPoint(x: cursorX, y: baselineY),
                     anchor: .leading

@@ -4,7 +4,6 @@ import SwiftUI
 struct DXFLayerSheet: View {
     @Binding var layerSearchText: String
     @Binding var visibleLayers: Set<String>
-    @Binding var lockedLayers: Set<String>
     let layerStats: [DXFLayerStat]
     let filteredLayerStats: [DXFLayerStat]
     let onIsolate: (String) -> Void
@@ -24,35 +23,25 @@ struct DXFLayerSheet: View {
                         }
                     }
                 }
-                Section("图层开关") {
+                Section("图纸图层") {
                     LabeledContent("当前显示", value: "\(visibleLayers.count)/\(max(layerStats.count, 1))")
-                    LabeledContent("已锁定", value: "\(lockedLayers.count)")
                     Button("显示全部") {
                         visibleLayers = Set(layerStats.map(\.name))
                     }
-                    Button("隐藏未锁定图层", role: .destructive) {
-                        visibleLayers = visibleLayers.intersection(lockedLayers)
-                    }
-                    .disabled(visibleLayers.subtracting(lockedLayers).isEmpty)
-                    Button("锁定当前可见图层") {
-                        lockedLayers.formUnion(visibleLayers)
+                    Button("隐藏全部", role: .destructive) {
+                        visibleLayers.removeAll()
                     }
                     .disabled(visibleLayers.isEmpty)
-                    Button("全部解锁") {
-                        lockedLayers.removeAll()
-                    }
-                    .disabled(lockedLayers.isEmpty)
 
                     if filteredLayerStats.isEmpty {
                         ContentUnavailableView(
                             "没有匹配图层",
-                            systemImage: "square.3.layers.3d.down.right.slash",
+                            systemImage: "square.on.square",
                             description: Text("换个关键词继续搜索")
                         )
                     }
 
                     ForEach(filteredLayerStats) { layer in
-                        let isLocked = lockedLayers.contains(layer.name)
                         HStack(spacing: 10) {
                             Toggle(isOn: Binding(
                                 get: { visibleLayers.contains(layer.name) },
@@ -67,22 +56,11 @@ struct DXFLayerSheet: View {
                                         .foregroundStyle(.secondary)
                                 }
                             }
-                            .disabled(isLocked)
 
                             Button("只看") {
                                 onIsolate(layer.name)
                             }
                             .buttonStyle(.bordered)
-                            .disabled(isLocked)
-
-                            Button {
-                                setLayer(layer.name, locked: !isLocked)
-                            } label: {
-                                Image(systemName: isLocked ? "lock.fill" : "lock.open")
-                            }
-                            .buttonStyle(.bordered)
-                            .tint(isLocked ? Color.orange : .secondary)
-                            .accessibilityLabel(isLocked ? "解锁图层 \(layer.name)" : "锁定图层 \(layer.name)")
 
                             Button {
                                 onFocus(layer.name)
@@ -95,7 +73,7 @@ struct DXFLayerSheet: View {
                     }
                 }
             }
-            .navigationTitle("图层")
+            .navigationTitle("图纸图层")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -108,19 +86,10 @@ struct DXFLayerSheet: View {
     }
 
     private func setLayer(_ layerName: String, visible: Bool) {
-        guard !lockedLayers.contains(layerName) else { return }
         if visible {
             visibleLayers.insert(layerName)
         } else {
             visibleLayers.remove(layerName)
-        }
-    }
-
-    private func setLayer(_ layerName: String, locked: Bool) {
-        if locked {
-            lockedLayers.insert(layerName)
-        } else {
-            lockedLayers.remove(layerName)
         }
     }
 }
@@ -220,6 +189,15 @@ struct DWGLightweightDiagnosticSheet: View {
                         row("对象总数", "\(diagnostic.totalObjectCount)")
                         row("可绘制对象数", "\(diagnostic.drawableObjectCount)")
                         row("未支持对象类型", diagnostic.unsupportedObjectTypes)
+                        row("图块", diagnostic.blockReferenceSummary)
+                        row("外部参照", diagnostic.xrefSummary)
+                    }
+                    if !diagnostic.xrefReferences.isEmpty {
+                        Section("外部参照 XREF") {
+                            ForEach(diagnostic.xrefReferences) { xref in
+                                xrefRow(xref)
+                            }
+                        }
                     }
                     Section("文字与样式") {
                         row("文字编码", diagnostic.textEncoding)
@@ -246,7 +224,7 @@ struct DWGLightweightDiagnosticSheet: View {
                     )
                 }
             }
-            .navigationTitle("DWG 轻量诊断")
+            .navigationTitle("解析诊断")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -262,5 +240,34 @@ struct DWGLightweightDiagnosticSheet: View {
     private func row(_ title: String, _ value: String) -> some View {
         LabeledContent(title, value: value)
             .font(.subheadline)
+    }
+
+    private func xrefRow(_ xref: DWGXrefReference) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text(xref.title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                Text(xref.localStatus.displayText)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(xref.localStatus == .found ? .green : .orange)
+            }
+            Text(xref.sourceSummary)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if !xref.savedPath.isEmpty {
+                Text("DWG 路径：\(xref.savedPath)")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+            if let resolvedLocalPath = xref.resolvedLocalPath {
+                Text("本地路径：\(resolvedLocalPath)")
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(.vertical, 3)
     }
 }
