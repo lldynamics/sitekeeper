@@ -463,7 +463,7 @@ struct ProjectDrawingSectionView: View {
                 ProjectInlineEmptyState(
                     "还没有图纸",
                     systemImage: "doc.viewfinder",
-                    detail: "支持 PDF、DWG、DXF 导入和预览。"
+                    detail: "支持 DWG、DXF 看图，PDF 作为图纸附件打开。"
                 )
                 Button(action: onImportDrawing) {
                     Label("导图纸", systemImage: "doc.viewfinder.fill")
@@ -616,14 +616,20 @@ struct ProjectDrawingSectionView: View {
     private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
-            return ("预览: 应用内可直览", true)
+            return ("DXF 直览", true)
         }
         if fileType == "pdf" {
-            return ("预览: 应用内可直览", true)
+            return ("PDF 附件", true)
         }
         if fileType == "dwg" {
-            return ("预览: DWG 原件独立打开", true)
+            if !CADDrawingCapability.isLibreDWGRendererAvailable() {
+                return ("DWG Lite 未接入", false)
+            }
+            if !CADRendererProvider.isLibreDWGRendererBound {
+                return ("DWG Lite 未绑定", false)
+            }
+            return ("DWG Lite 本地直览", true)
         }
-        return ("预览: 文件独立打开", true)
+        return ("文件独立打开", true)
     }
 }

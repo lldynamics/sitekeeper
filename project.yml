@@ -77,6 +77,13 @@ targets:
       - path: Packages/LibreDWGBridge/Vendor/LibreDWG/src
         excludes:
           - "*.h"
+          - "*.inc"
+          - "*.in"
+          - "*.spec"
+          - "codepages/*.h"
+          - "codepages/*.TXT"
+          - "codepages/Makefile.am"
+          - "codepages/txt2h.pl"
     settings:
       base:
         SWIFT_VERSION: "5.0"

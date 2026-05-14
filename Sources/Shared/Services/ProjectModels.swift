@@ -15,6 +15,7 @@ struct Project: Identifiable, Codable {
     var paymentStatus: PaymentStatus
     @NonNegativeNumberText var materialCost: String
     @NonNegativeNumberText var laborCost: String
+    var cadFontMappings: [CADProjectFontMapping]
 
     init(
         id: UUID = UUID(),
@@ -30,7 +31,8 @@ struct Project: Identifiable, Codable {
         paidAmount: String = "",
         paymentStatus: PaymentStatus = .unpaid,
         materialCost: String = "",
-        laborCost: String = ""
+        laborCost: String = "",
+        cadFontMappings: [CADProjectFontMapping] = []
     ) {
         self.id = id
         self.name = name
@@ -46,11 +48,12 @@ struct Project: Identifiable, Codable {
         self.paymentStatus = paymentStatus
         self.materialCost = materialCost
         self.laborCost = laborCost
+        self.cadFontMappings = cadFontMappings
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, location, status, customerName, customerPhone, startDate, expectedEndDate
-        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost
+        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, cadFontMappings
     }
 
     init(from decoder: Decoder) throws {
@@ -69,6 +72,7 @@ struct Project: Identifiable, Codable {
         paymentStatus = try container.decodeStringEnum(PaymentStatus.self, forKey: .paymentStatus, default: .unpaid)
         materialCost = try container.decodeIfPresent(String.self, forKey: .materialCost) ?? ""
         laborCost = try container.decodeIfPresent(String.self, forKey: .laborCost) ?? ""
+        cadFontMappings = try container.decodeIfPresent([CADProjectFontMapping].self, forKey: .cadFontMappings) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -87,6 +91,7 @@ struct Project: Identifiable, Codable {
         try container.encode(paymentStatus.rawValue, forKey: .paymentStatus)
         try container.encode(materialCost, forKey: .materialCost)
         try container.encode(laborCost, forKey: .laborCost)
+        try container.encode(cadFontMappings, forKey: .cadFontMappings)
     }
 }
 

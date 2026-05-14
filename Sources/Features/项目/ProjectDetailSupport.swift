@@ -156,8 +156,6 @@ struct ProjectDrawingEditSheet: View {
     @State private var relatedLogDate: String
     @State private var issueStatus: DrawingIssueStatus
     @State private var issueNote: String
-    @State private var textEncoding: CADDrawingTextEncoding
-    @State private var textBigFont: CADDrawingTextBigFont
     @State private var note: String
     @State private var showDeleteConfirm = false
 
@@ -179,8 +177,6 @@ struct ProjectDrawingEditSheet: View {
         _relatedLogDate = State(initialValue: drawing.relatedLogDate)
         _issueStatus = State(initialValue: drawing.issueStatus)
         _issueNote = State(initialValue: drawing.issueNote)
-        _textEncoding = State(initialValue: drawing.textEncoding)
-        _textBigFont = State(initialValue: drawing.textBigFont)
         _note = State(initialValue: drawing.note)
     }
 
@@ -214,21 +210,6 @@ struct ProjectDrawingEditSheet: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    Section("文字编码与字体") {
-                        Picker("编码", selection: $textEncoding) {
-                            ForEach(CADDrawingTextEncoding.allCases, id: \.self) { encoding in
-                                Text(encoding.displayName).tag(encoding)
-                            }
-                        }
-                        Picker("SHX/大字体", selection: $textBigFont) {
-                            ForEach(CADDrawingTextBigFont.allCases, id: \.self) { profile in
-                                Text(profile.displayName).tag(profile)
-                            }
-                        }
-                        Text("遇到中文乱码可切换编码或 SHX/大字体映射后重试预览。设置会保存到这张图纸。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                 }
                 Section {
                     Button {
@@ -256,12 +237,9 @@ struct ProjectDrawingEditSheet: View {
                         updated.name = trimmed.isEmpty ? drawing.name : trimmed
                         updated.version = version
                         updated.isCurrentVersion = isCurrentVersion
-                        updated.linkedPreviewDrawingID = nil
                         updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.textEncoding = textEncoding
-                        updated.textBigFont = textBigFont
                         updated.note = note
                         onSave(updated)
                         dismiss()

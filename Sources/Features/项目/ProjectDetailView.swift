@@ -444,7 +444,7 @@ struct ProjectDetailContainer: View {
             importErrorMessage: $assetState.importErrorMessage
         )
         .fullScreenCover(item: $assetState.cadPreviewRequest) { request in
-            ProjectCADPreviewView(request: request)
+            CADPreviewContainer(request: request)
         }
         .onAppear {
             handleOnAppear(snapshot: snapshot)

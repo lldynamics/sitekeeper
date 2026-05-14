@@ -17,35 +17,39 @@ extension CADPreviewContainer {
 
             ForEach(visibleStrokes) { stroke in
                 let isSelected = selectedStrokeID == stroke.id
-                pathView(points: canvasPoints(fromStored: stroke.points.map(\.cgPoint)))
+                let renderedPoints = canvasPoints(fromStored: stroke.points.map(\.cgPoint))
+                let renderedPath = pathView(points: renderedPoints)
+                let color = strokeColor(stroke)
+                renderedPath
                     .stroke(
-                        isSelected ? Color.appWarning.opacity(0.42) : strokeColor(stroke),
+                        isSelected ? Color.appWarning.opacity(0.42) : color,
                         style: StrokeStyle(
                             lineWidth: isSelected ? stroke.lineWidth + 7 : stroke.lineWidth,
                             lineCap: .round,
                             lineJoin: .round
                         )
                     )
-                pathView(points: canvasPoints(fromStored: stroke.points.map(\.cgPoint)))
+                renderedPath
                     .stroke(
-                        strokeColor(stroke),
+                        color,
                         style: StrokeStyle(
                             lineWidth: isSelected ? stroke.lineWidth + 1.4 : stroke.lineWidth,
                             lineCap: .round,
                             lineJoin: .round
                         )
                     )
-                    .shadow(color: strokeColor(stroke).opacity(isSelected ? 0.32 : 0.18), radius: isSelected ? 5 : (stroke.kind == .redline ? 3 : 1.5))
+                    .shadow(color: color.opacity(isSelected ? 0.32 : 0.18), radius: isSelected ? 5 : 1.5)
             }
 
             if isOverlayGroupVisible(.measurement) {
-                ForEach(snapshot.lengthMeasurements) { measurement in
+                ForEach(visibleLengthMeasurements) { measurement in
                     let isHighlighted = highlightedLengthMeasurementID == measurement.id
                     let storedPoints = measurement.points.map(\.cgPoint)
                     let renderedPoints = canvasPoints(fromStored: storedPoints)
+                    let color = colorFromHex(lengthMeasurementColorHex(measurement), fallback: Color.appStrokeInfo)
                     measurementPolyline(renderedPoints)
                         .stroke(
-                            isHighlighted ? Color.appWarning : Color.appStrokeInfo,
+                            isHighlighted ? Color.appWarning : color,
                             style: StrokeStyle(
                                 lineWidth: isHighlighted ? 3.6 : 2,
                                 lineCap: .round,
@@ -64,29 +68,19 @@ extension CADPreviewContainer {
             }
 
             if isOverlayGroupVisible(.measurement) {
-                ForEach(snapshot.areaMeasurements) { area in
+                ForEach(visibleAreaMeasurements) { area in
                     let isHighlighted = highlightedAreaMeasurementID == area.id
                     let storedPoints = area.points.map(\.cgPoint)
                     let renderedPoints = canvasPoints(fromStored: storedPoints)
+                    let color = colorFromHex(areaMeasurementColorHex(area), fallback: Color.appStrokeSuccess)
                     if renderedPoints.count >= 3 {
-                        Path { path in
-                            path.move(to: renderedPoints[0])
-                            for point in renderedPoints.dropFirst() {
-                                path.addLine(to: point)
-                            }
-                            path.closeSubpath()
-                        }
-                        .fill(isHighlighted ? Color.appWarning.opacity(0.22) : Color.appSuccessSurfaceSubtle)
+                        let renderedPath = closedPath(points: renderedPoints)
+                        renderedPath
+                        .fill(isHighlighted ? Color.appWarning.opacity(0.22) : color.opacity(0.14))
 
-                        Path { path in
-                            path.move(to: renderedPoints[0])
-                            for point in renderedPoints.dropFirst() {
-                                path.addLine(to: point)
-                            }
-                            path.closeSubpath()
-                        }
+                        renderedPath
                         .stroke(
-                            isHighlighted ? Color.appWarning : Color.appStrokeSuccess,
+                            isHighlighted ? Color.appWarning : color,
                             style: StrokeStyle(lineWidth: isHighlighted ? 3 : 2, lineJoin: .round, dash: [5, 3])
                         )
 
@@ -99,7 +93,8 @@ extension CADPreviewContainer {
             }
 
             if isOverlayGroupVisible(.notes) {
-                ForEach(snapshot.notes) { note in
+                ForEach(visibleNotes) { note in
+                    let color = colorFromHex(noteColorHex(note), fallback: Color.appStrokeWarning)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(String(localized: "批注"))
                             .font(.caption2.weight(.bold))
@@ -113,18 +108,20 @@ extension CADPreviewContainer {
                     .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
                     .overlay(
                         RoundedRectangle(cornerRadius: 8)
-                            .stroke(Color.appStrokeWarning, lineWidth: 1)
+                            .stroke(color, lineWidth: 1)
                     )
                     .position(canvasPoint(fromStored: note.point.cgPoint))
                 }
             }
 
             if isOverlayGroupVisible(.counts) {
+                let highlightedIDs = highlightedCountMarkerIDs
+                let highlightedCategory = highlightedCountCategory
                 ForEach(Array(snapshot.countMarkers.enumerated()), id: \.element.id) { index, marker in
                     countMarkerBadge(
                         number: index + 1,
                         category: marker.category,
-                        isHighlighted: highlightedCountMarkerIDs.contains(marker.id) || highlightedCountCategory == marker.category
+                        isHighlighted: highlightedIDs.contains(marker.id) || highlightedCategory == marker.category
                     )
                     .position(canvasPoint(fromStored: marker.point.cgPoint))
                 }
@@ -143,18 +140,21 @@ extension CADPreviewContainer {
             }
 
             if !activeStrokePoints.isEmpty {
+                let kind: CADStroke.StrokeKind = .annotation
+                let color = colorFromHex(selectedStrokeColorHex(for: kind), fallback: strokeColor(kind))
                 pathView(points: canvasPoints(fromStored: activeStrokePoints))
                     .stroke(
-                        colorFromHex(selectedStrokeColorHex(for: tool == .redline ? .redline : .annotation), fallback: strokeColor(tool == .redline ? .redline : .annotation)),
+                        color,
                         style: StrokeStyle(lineWidth: overlayStrokeWidth(for: tool), lineCap: .round, lineJoin: .round)
                     )
-                    .shadow(color: colorFromHex(selectedStrokeColorHex(for: tool == .redline ? .redline : .annotation), fallback: strokeColor(tool == .redline ? .redline : .annotation)).opacity(0.22), radius: 3)
+                    .shadow(color: color.opacity(0.22), radius: 3)
             }
 
             if !activeDragLengthPoints.isEmpty {
                 let renderedPoints = canvasPoints(fromStored: activeDragLengthPoints)
+                let color = colorFromHex(selectedMeasurementOverlayColorHex(), fallback: Color.appStrokeInfo)
                 measurementPolyline(renderedPoints)
-                    .stroke(Color.appStrokeInfo, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round))
                 if let center = centerPoint(of: renderedPoints) {
                     measurementBadge(text: lengthLabel(for: activeDragLengthPoints))
                         .position(center)
@@ -162,13 +162,17 @@ extension CADPreviewContainer {
             }
 
             if !pendingLengthPoints.isEmpty {
-                measurementPolyline(canvasPoints(fromStored: pendingLengthPoints))
-                    .stroke(Color.appStrokeInfo, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [4, 2]))
+                let renderedPoints = canvasPoints(fromStored: pendingLengthPoints)
+                let color = colorFromHex(selectedMeasurementOverlayColorHex(), fallback: Color.appStrokeInfo)
+                measurementPolyline(renderedPoints)
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [4, 2]))
             }
 
             if !pendingAreaPoints.isEmpty {
-                measurementPolyline(canvasPoints(fromStored: pendingAreaPoints))
-                    .stroke(Color.appStrokeSuccess, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [3, 3]))
+                let renderedPoints = canvasPoints(fromStored: pendingAreaPoints)
+                let color = colorFromHex(selectedMeasurementOverlayColorHex(), fallback: Color.appStrokeSuccess)
+                measurementPolyline(renderedPoints)
+                    .stroke(color, style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round, dash: [3, 3]))
             }
         }
         .frame(width: size.width, height: size.height, alignment: .topLeading)
@@ -186,14 +190,12 @@ extension CADPreviewContainer {
         DragGesture(minimumDistance: 0, coordinateSpace: .local)
             .onChanged { value in
                 switch tool {
-                case .annotation, .redline:
+                case .annotation:
                     guard ensureDrawingCoordinateCaptureAvailable(showAlertIfMissing: activeStrokePoints.isEmpty) else { return }
                     if activeStrokePoints.isEmpty {
-                        guard let start = storedDrawingPoint(fromCanvas: value.startLocation) else { return }
-                        activeStrokePoints.append(start)
+                        appendActiveStrokePoint(fromCanvas: value.startLocation, force: true)
                     }
-                    guard let point = storedDrawingPoint(fromCanvas: value.location) else { return }
-                    activeStrokePoints.append(point)
+                    appendActiveStrokePoint(fromCanvas: value.location)
                 case .length:
                     guard ensureDrawingCoordinateCaptureAvailable(showAlertIfMissing: activeDragLengthPoints.isEmpty) else { return }
                     if activeDragLengthPoints.isEmpty {
@@ -208,25 +210,28 @@ extension CADPreviewContainer {
                     break
                 }
             }
-            .onEnded { _ in
+            .onEnded { value in
                 switch tool {
-                case .annotation, .redline:
+                case .annotation:
                     guard ensureDrawingCoordinateCaptureAvailable(showAlertIfMissing: false) else {
                         activeStrokePoints.removeAll()
                         return
                     }
+                    appendActiveStrokePoint(fromCanvas: value.location, force: true)
                     guard activeStrokePoints.count > 1 else {
                         activeStrokePoints.removeAll()
                         return
                     }
                     let stroke = CADStroke(
-                        kind: tool == .redline ? .redline : .annotation,
+                        kind: .annotation,
                         points: activeStrokePoints.map(CADPoint.init),
                         lineWidth: overlayStrokeWidth(for: tool),
-                        colorHex: selectedStrokeColorHex(for: tool == .redline ? .redline : .annotation),
+                        colorHex: selectedStrokeColorHex(for: .annotation),
                         layerName: selectedStrokeLayer
                     )
                     hiddenStrokeLayers.remove(strokeLayerName(stroke))
+                    hiddenOverlayColorHexes.remove(strokeColorHex(stroke))
+                    recordUndoSnapshot()
                     snapshot.strokes.append(stroke)
                     activeStrokePoints.removeAll()
                     AppHaptics.impact(.light, intensity: 0.65)
@@ -236,9 +241,14 @@ extension CADPreviewContainer {
                         return
                     }
                     guard activeDragLengthPoints.count == 2 else { return }
-                    snapshot.lengthMeasurements.append(
-                        CADLengthMeasurement(points: activeDragLengthPoints.map(CADPoint.init), name: "\(String(localized: "线长")) \(snapshot.lengthMeasurements.count + 1)")
+                    recordUndoSnapshot()
+                    let measurement = CADLengthMeasurement(
+                        points: activeDragLengthPoints.map(CADPoint.init),
+                        name: "\(String(localized: "线长")) \(snapshot.lengthMeasurements.count + 1)",
+                        colorHex: selectedMeasurementOverlayColorHex()
                     )
+                    hiddenOverlayColorHexes.remove(lengthMeasurementColorHex(measurement))
+                    snapshot.lengthMeasurements.append(measurement)
                     activeDragLengthPoints.removeAll()
                     AppHaptics.impact(.light, intensity: 0.65)
                 default:
@@ -250,6 +260,11 @@ extension CADPreviewContainer {
     var overlayTapGesture: some Gesture {
         SpatialTapGesture()
             .onEnded { value in
+                if isDeletingOverlayItem {
+                    deleteOverlayItem(atCanvasPoint: value.location)
+                    return
+                }
+
                 switch tool {
                 case .browse:
                     guard isSelectingStroke else { return }
@@ -268,28 +283,23 @@ extension CADPreviewContainer {
                 case .note:
                     guard ensureDrawingCoordinateCaptureAvailable() else { return }
                     guard let snapped = snappedOverlayPoint(value.location) else { return }
-                    if let removeIndex = nearestNoteIndex(toCanvasPoint: value.location) {
-                        snapshot.notes.remove(at: removeIndex)
-                    } else {
-                        pendingNotePoint = snapped
-                        noteDraft = ""
-                        showNoteSheet = true
-                    }
+                    guard nearestNoteIndex(toCanvasPoint: value.location) == nil else { return }
+                    pendingNotePoint = snapped
+                    noteDraft = ""
+                    showNoteSheet = true
                 case .count:
                     guard ensureDrawingCoordinateCaptureAvailable() else { return }
                     guard let snapped = snappedOverlayPoint(value.location) else { return }
-                    if let removeIndex = nearestCountMarkerIndex(toCanvasPoint: value.location) {
-                        snapshot.countMarkers.remove(at: removeIndex)
-                    } else {
-                        snapshot.countMarkers.append(
-                            CADCountMarker(
-                                point: CADPoint(snapped),
-                                category: selectedCountCategory,
-                                createdAt: Formatters.now()
-                            )
+                    guard nearestCountMarkerIndex(toCanvasPoint: value.location) == nil else { return }
+                    recordUndoSnapshot()
+                    snapshot.countMarkers.append(
+                        CADCountMarker(
+                            point: CADPoint(snapped),
+                            category: selectedCountCategory,
+                            createdAt: Formatters.now()
                         )
-                        AppHaptics.impact(.light, intensity: 0.65)
-                    }
+                    )
+                    AppHaptics.impact(.light, intensity: 0.65)
                 default:
                     break
                 }
@@ -305,6 +315,34 @@ extension CADPreviewContainer {
 
     var bottomControlBarContent: some View {
         HStack(spacing: 10) {
+            Button {
+                undoLastOverlayChange()
+            } label: {
+                Label(String(localized: "撤销"), systemImage: "arrow.uturn.backward")
+            }
+            .buttonStyle(.bordered)
+            .disabled(!canUndoOverlayChange)
+
+            Button {
+                redoOverlayChange()
+            } label: {
+                Label(String(localized: "前进"), systemImage: "arrow.uturn.forward")
+            }
+            .buttonStyle(.bordered)
+            .disabled(!canRedoOverlayChange)
+
+            Button {
+                deleteCurrentOverlayItem()
+            } label: {
+                Label(
+                    isDeletingOverlayItem ? String(localized: "退出删除") : String(localized: "删除"),
+                    systemImage: isDeletingOverlayItem ? "xmark.circle" : "trash"
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(isDeletingOverlayItem ? Color.appRisk : nil)
+            .disabled(!canDeleteCurrentOverlayItem && !isDeletingOverlayItem)
+
             switch tool {
             case .continuousLength:
                 Button(String(localized: "完成连续测量")) {
@@ -353,17 +391,9 @@ extension CADPreviewContainer {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
 
-                Text(String(localized: "点空白新增，点编号删除"))
+                Text(String(localized: "点空白新增，删除请用删除模式"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-
-                Button(String(localized: "撤销一个")) {
-                    if !snapshot.countMarkers.isEmpty {
-                        _ = snapshot.countMarkers.removeLast()
-                    }
-                }
-                .buttonStyle(.bordered)
-                .disabled(snapshot.countMarkers.isEmpty)
 
                 Button(String(localized: "加入算量")) {
                     appendQuantityFromCountCategory(selectedCountCategory)
@@ -372,18 +402,6 @@ extension CADPreviewContainer {
                 .disabled(selectedCategoryCount == 0)
             case .annotation:
                 overlayStrokeControlStrip(kind: .annotation)
-                Button(String(localized: "撤销一笔")) {
-                    removeLastStroke(kind: .annotation)
-                }
-                .buttonStyle(.bordered)
-                .disabled(annotationStrokeCount == 0)
-            case .redline:
-                overlayStrokeControlStrip(kind: .redline)
-                Button(String(localized: "撤销一笔")) {
-                    removeLastStroke(kind: .redline)
-                }
-                .buttonStyle(.bordered)
-                .disabled(redlineStrokeCount == 0)
             case .length:
                 Text(tool.guidance)
                     .font(.caption)
@@ -391,25 +409,20 @@ extension CADPreviewContainer {
                 Text("\(String(localized: "吸附"))：\(snapModeSummaryText)")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                Button(String(localized: "撤销一条")) {
-                    removeLastLengthMeasurement()
-                }
-                .buttonStyle(.bordered)
-                .disabled(snapshot.lengthMeasurements.isEmpty)
             case .note:
-                Text(String(localized: "点空白新增，点现有批注删除"))
+                Text(String(localized: "点空白新增，删除请用删除模式"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button(String(localized: "撤销一个")) {
-                    removeLastNote()
-                }
-                .buttonStyle(.bordered)
-                .disabled(snapshot.notes.isEmpty)
             default:
                 if tool == .browse {
                     Text("\(String(localized: "批注")) \(snapshot.strokes.count) · \(String(localized: "测量")) \(snapshot.lengthMeasurements.count + snapshot.areaMeasurements.count) · \(String(localized: "数数")) \(snapshot.countMarkers.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
+                    if isDeletingOverlayItem {
+                        Text(String(localized: "点要删除的批注、测量、文字或编号"))
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(Color.appRisk)
+                    }
                     if let selectedStroke {
                         selectedStrokeControlStrip(stroke: selectedStroke)
                     } else {
@@ -420,7 +433,7 @@ extension CADPreviewContainer {
                             }
                             .buttonStyle(.appProminent(tint: .appPrimaryAction))
                             .disabled(snapshot.strokes.isEmpty)
-                            Text(String(localized: "点按已有批注或红线进行编辑"))
+                            Text(String(localized: "点按已有批注进行编辑"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         } else {
@@ -467,11 +480,11 @@ extension CADPreviewContainer {
                     Button {
                         selectedStrokeLayer = layer
                     } label: {
-                        Label(layer, systemImage: selectedStrokeLayer == layer ? "checkmark" : "square.3.layers.3d")
+                        Label(layer, systemImage: selectedStrokeLayer == layer ? "checkmark" : "square.on.square")
                     }
                 }
             } label: {
-                Label(selectedStrokeLayer, systemImage: "square.3.layers.3d")
+                Label(selectedStrokeLayer, systemImage: "square.on.square")
                     .lineLimit(1)
             }
             .buttonStyle(.bordered)
@@ -479,11 +492,7 @@ extension CADPreviewContainer {
             Menu {
                 ForEach(overlayColorOptions) { option in
                     Button {
-                        if kind == .redline {
-                            selectedRedlineColorHex = option.hex
-                        } else {
-                            selectedAnnotationColorHex = option.hex
-                        }
+                        selectedAnnotationColorHex = option.hex
                     } label: {
                         Label(option.name, systemImage: selectedStrokeColorHex(for: kind) == option.hex ? "checkmark.circle.fill" : "circle.fill")
                     }
@@ -507,20 +516,20 @@ extension CADPreviewContainer {
 
     func selectedStrokeControlStrip(stroke: CADStroke) -> some View {
         HStack(spacing: 8) {
-            Text(stroke.kind == .redline ? String(localized: "已选红线") : String(localized: "已选批注"))
+            Text(String(localized: "已选批注"))
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(stroke.kind == .redline ? Color.appRisk : Color.appPrimaryAction)
+                .foregroundStyle(Color.appPrimaryAction)
 
             Menu {
                 ForEach(overlayStrokeLayerOptions, id: \.self) { layer in
                     Button {
                         updateSelectedStrokeLayer(layer)
                     } label: {
-                        Label(layer, systemImage: strokeLayerName(stroke) == layer ? "checkmark" : "square.3.layers.3d")
+                        Label(layer, systemImage: strokeLayerName(stroke) == layer ? "checkmark" : "square.on.square")
                     }
                 }
             } label: {
-                Label(strokeLayerName(stroke), systemImage: "square.3.layers.3d")
+                Label(strokeLayerName(stroke), systemImage: "square.on.square")
                     .lineLimit(1)
             }
             .buttonStyle(.bordered)
@@ -557,7 +566,7 @@ extension CADPreviewContainer {
     }
 
     var overlayAccessibilityLabel: String {
-        String(localized: "CAD 图纸覆盖层")
+        String(localized: "CAD 图纸显示和标记")
     }
 
     var overlayAccessibilityValue: String {
@@ -567,8 +576,26 @@ extension CADPreviewContainer {
     var overlayLayerEditor: some View {
         NavigationStack {
             List {
-                Section(String(localized: "显示覆盖层")) {
-                    ForEach(CADOverlayVisibilityGroup.allCases, id: \.self) { group in
+                if shouldUseLibreDWGRenderer {
+                    Section(String(localized: "图纸显示")) {
+                        Button {
+                            openDrawingLayerPanelFromDisplayPanel()
+                        } label: {
+                            Label(String(localized: "图纸图层"), systemImage: "rectangle.3.group")
+                        }
+                        Button {
+                            showOverlayLayerSheet = false
+                            DispatchQueue.main.async {
+                                showTextEncodingDialog = true
+                            }
+                        } label: {
+                            Label(String(localized: "文字修复"), systemImage: "character.textbox")
+                        }
+                    }
+                }
+
+                Section(String(localized: "我的标记")) {
+                    ForEach(overlayVisibilityGroups, id: \.self) { group in
                         Toggle(isOn: overlayGroupVisibleBinding(group)) {
                             Label {
                                 HStack {
@@ -588,13 +615,36 @@ extension CADPreviewContainer {
                 Section {
                     ForEach(overlayStrokeLayerOptions, id: \.self) { layer in
                         Toggle(isOn: strokeLayerVisibleBinding(layer)) {
-                            Label(layer, systemImage: "square.3.layers.3d")
+                            Label(layer, systemImage: "square.on.square")
                         }
                     }
                 } header: {
-                    Text(String(localized: "批注/红线图层"))
+                    Text(String(localized: "我的标记图层"))
                 } footer: {
                     Text(String(localized: "关闭图层只影响当前查看，不会删除已画内容。"))
+                }
+
+                if !overlayColorVisibilityOptions.isEmpty {
+                    Section {
+                        ForEach(overlayColorVisibilityOptions) { option in
+                            Toggle(isOn: overlayColorVisibleBinding(option.hex)) {
+                                HStack(spacing: 10) {
+                                    Circle()
+                                        .fill(colorFromHex(option.hex, fallback: .appPrimaryAction))
+                                        .frame(width: 12, height: 12)
+                                    Text(option.name)
+                                    Spacer(minLength: 8)
+                                    Text("\(overlayColorItemCount(for: option.hex))")
+                                        .font(.caption.monospacedDigit())
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    } header: {
+                        Text(String(localized: "按颜色显示"))
+                    } footer: {
+                        Text(String(localized: "按颜色隐藏只影响当前查看；批注、测量和文字批注都会按颜色一起筛选。"))
+                    }
                 }
 
                 Section(String(localized: "吸附策略")) {
@@ -615,17 +665,31 @@ extension CADPreviewContainer {
                         }
                     }
 
+                    HStack(spacing: 8) {
+                        TextField(String(localized: "新增图层名称"), text: $newOverlayLayerName)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button(String(localized: "新增")) {
+                            addCustomStrokeLayer()
+                        }
+                        .disabled(newOverlayLayerName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+
                     overlayColorPicker(
                         title: String(localized: "批注颜色"),
                         selectedHex: $selectedAnnotationColorHex
                     )
                     overlayColorPicker(
-                        title: String(localized: "红线颜色"),
-                        selectedHex: $selectedRedlineColorHex
+                        title: String(localized: "测量颜色"),
+                        selectedHex: $selectedMeasurementColorHex
+                    )
+                    overlayColorPicker(
+                        title: String(localized: "文字批注颜色"),
+                        selectedHex: $selectedNoteColorHex
                     )
                 }
             }
-            .navigationTitle(String(localized: "覆盖层设置"))
+            .navigationTitle(String(localized: "显示"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -637,6 +701,18 @@ extension CADPreviewContainer {
         }
     }
 
+    func openDrawingLayerPanelFromDisplayPanel() {
+        showOverlayLayerSheet = false
+        let filePath = activeRequest.fileURL.path
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            NotificationCenter.default.post(
+                name: Notification.Name("LibreDWGBridgeShowLayerSheet"),
+                object: nil,
+                userInfo: ["filePath": filePath]
+            )
+        }
+    }
+
     func overlayColorPicker(title: String, selectedHex: Binding<String>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
@@ -644,13 +720,13 @@ extension CADPreviewContainer {
             HStack(spacing: 10) {
                 ForEach(overlayColorOptions) { option in
                     Button {
-                        selectedHex.wrappedValue = option.hex
+                        selectedHex.wrappedValue = normalizedColorHex(option.hex)
                     } label: {
                         ZStack {
                             Circle()
                                 .fill(colorFromHex(option.hex, fallback: .appPrimaryAction))
                                 .frame(width: 28, height: 28)
-                            if selectedHex.wrappedValue == option.hex {
+                            if normalizedColorHex(selectedHex.wrappedValue) == normalizedColorHex(option.hex) {
                                 Image(systemName: "checkmark")
                                     .font(.caption.weight(.bold))
                                     .foregroundStyle(.white)
@@ -660,6 +736,16 @@ extension CADPreviewContainer {
                     .buttonStyle(.plain)
                     .accessibilityLabel(option.name)
                 }
+            }
+            HStack(spacing: 10) {
+                ColorPicker(String(localized: "自定义"), selection: $customOverlayColor, supportsOpacity: false)
+                    .labelsHidden()
+                Button(String(localized: "新增颜色")) {
+                    if let hex = addCustomOverlayColor(customOverlayColor) {
+                        selectedHex.wrappedValue = hex
+                    }
+                }
+                .buttonStyle(.bordered)
             }
         }
         .padding(.vertical, 4)

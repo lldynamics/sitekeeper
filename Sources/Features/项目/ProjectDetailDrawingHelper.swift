@@ -67,22 +67,6 @@ enum ProjectDetailDrawingHelper {
         return Int(upper)
     }
 
-    static func matchingPDFPreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        nil
-    }
-
-    static func matchingDXFPreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        nil
-    }
-
-    static func matchingRenderablePreview(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> ProjectDrawing? {
-        nil
-    }
-
-    static func cadDrawingsWithoutRenderablePreview(in drawings: [ProjectDrawing]) -> [ProjectDrawing] {
-        []
-    }
-
     static func conflictedDrawingNames(for urls: [URL], in drawings: [ProjectDrawing]) -> [String] {
         let existingKeys = Set(drawings.map { normalizedDrawingNameKey($0.name) }.filter { !$0.isEmpty })
         var names: [String] = []
@@ -169,39 +153,6 @@ enum ProjectDetailDrawingHelper {
             .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
             .lowercased()
             .replacingOccurrences(of: "[\\s_\\-]+", with: "", options: .regularExpression)
-    }
-
-    private static func matchingPreview(
-        for drawing: ProjectDrawing,
-        in drawings: [ProjectDrawing],
-        acceptedExtensions: Set<String>
-    ) -> ProjectDrawing? {
-        if let linkedID = drawing.linkedPreviewDrawingID,
-           let linked = drawings.first(where: { $0.id == linkedID && $0.projectId == drawing.projectId }),
-           acceptedExtensions.contains(linked.fileType.lowercased()) {
-            return linked
-        }
-
-        let family = drawingFamily(for: drawing, in: drawings)
-            .filter { acceptedExtensions.contains($0.fileType.lowercased()) }
-
-        guard !family.isEmpty else { return nil }
-        let versionKey = normalizedVersion(drawing.version)
-
-        if let sameVersion = family
-            .filter({ normalizedVersion($0.version) == versionKey })
-            .sorted(by: preferredDrawingSort)
-            .first {
-            return sameVersion
-        }
-
-        return family
-            .filter { candidate in
-                candidate.isCurrentVersion
-            }
-            .sorted(by: preferredDrawingSort)
-            .first
-            ?? family.sorted(by: preferredDrawingSort).first
     }
 
     private static func drawingFamily(for drawing: ProjectDrawing, in drawings: [ProjectDrawing]) -> [ProjectDrawing] {

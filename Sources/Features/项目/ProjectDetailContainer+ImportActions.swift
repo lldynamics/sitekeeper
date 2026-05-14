@@ -74,7 +74,6 @@ extension ProjectDetailContainer {
 
             store.appendProjectDrawing(versioned)
             currentDrawings.append(versioned)
-            relinkDrawingFamily(forName: versioned.name, drawings: &currentDrawings)
             importedCount += 1
         }
 
@@ -125,22 +124,7 @@ extension ProjectDetailContainer {
         if !failedNames.isEmpty {
             presentImportError("以下文件导入失败：\(failedNames.joined(separator: "、"))")
         } else if importedCount == 0 {
-            presentImportError("没有可导入的图纸文件，请选择 PDF / DWG / DXF / ZIP。")
-        }
-    }
-
-    private func relinkDrawingFamily(forName drawingName: String, drawings: inout [ProjectDrawing]) {
-        let nameKey = ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawingName)
-        guard !nameKey.isEmpty else { return }
-        for index in drawings.indices {
-            guard drawings[index].projectId == projectId else { continue }
-            guard ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawings[index].name) == nameKey else { continue }
-            if drawings[index].linkedPreviewDrawingID != nil {
-                drawings[index].linkedPreviewDrawingID = nil
-                if let storeIndex = store.projectDrawings.firstIndex(where: { $0.id == drawings[index].id }) {
-                    store.projectDrawings[storeIndex].linkedPreviewDrawingID = nil
-                }
-            }
+            presentImportError("没有可导入的图纸文件，请选择 DWG / DXF / PDF / ZIP。")
         }
     }
 
@@ -177,9 +161,14 @@ extension ProjectDetailContainer {
                 textEncoding: drawing.textEncoding,
                 textBigFont: drawing.textBigFont,
                 textSchemeSnapshot: drawing.textSchemeSnapshot,
+                cadViewState: drawing.cadViewState,
+                projectFontMappings: projectStore.projects.first(where: { $0.id == drawing.projectId })?.cadFontMappings ?? [],
                 overlaySnapshotData: drawing.cadOverlaySnapshotData,
                 onOverlaySnapshotChange: { drawingID, snapshotData in
                     updateDrawingOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
+                },
+                onViewStateChange: { drawingID, viewState in
+                    updateDrawingCADViewState(drawingID: drawingID, viewState: viewState)
                 },
                 onTextEncodingChange: { drawingID, encoding in
                     updateDrawingTextEncoding(drawingID: drawingID, encoding: encoding)
@@ -189,6 +178,9 @@ extension ProjectDetailContainer {
                 },
                 onTextSchemeSnapshotChange: { drawingID, snapshot in
                     updateDrawingTextSchemeSnapshot(drawingID: drawingID, snapshot: snapshot)
+                },
+                onProjectFontMappingsChange: { projectID, mappings in
+                    updateProjectCADFontMappings(projectID: projectID, mappings: mappings)
                 }
             )
         case .failure(let message):
@@ -200,6 +192,12 @@ extension ProjectDetailContainer {
     func updateDrawingOverlaySnapshot(drawingID: UUID, snapshotData: String) {
         guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
         store.projectDrawings[index].cadOverlaySnapshotData = snapshotData
+        store.scheduleSave()
+    }
+
+    func updateDrawingCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
+        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
+        store.projectDrawings[index].cadViewState = viewState
         store.scheduleSave()
     }
 
@@ -218,6 +216,12 @@ extension ProjectDetailContainer {
     func updateDrawingTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
         guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
         store.projectDrawings[index].textSchemeSnapshot = snapshot
+        store.scheduleSave()
+    }
+
+    func updateProjectCADFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
+        guard let index = projectStore.projects.firstIndex(where: { $0.id == projectID }) else { return }
+        store.projects[index].cadFontMappings = mappings
         store.scheduleSave()
     }
 
