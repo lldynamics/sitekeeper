@@ -49,6 +49,12 @@ if ! git diff --quiet -- sitekeeper.xcodeproj project.yml; then
   exit 4
 fi
 
+echo "==> Checking file deletion policy"
+scripts/release/check_file_deletion_policy.sh
+
+echo "==> Checking LibreDWG GPL compliance"
+REQUIRE_LIBREDWG_RELEASE_COMPLIANCE=1 scripts/release/check_libredwg_gpl_compliance.sh
+
 BUILD_CMD=(
   xcodebuild
   -project sitekeeper.xcodeproj

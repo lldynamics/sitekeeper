@@ -9,13 +9,17 @@ enum StreamingZipArchiveWriterError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidPath(let path):
-            return "ZIP 路径无效：\(path)"
+            return String(format: String(localized: "ZIP 路径无效：%@"), path)
         case .writerClosed:
-            return "ZIP 写入器已关闭。"
+            return String(localized: "ZIP 写入器已关闭。")
         case .sourceFileMissing(let name):
-            return "源文件不存在：\(name)"
+            return String(format: String(localized: "源文件不存在：%@"), name)
         case .writeSizeMismatch(let expected, let actual):
-            return "ZIP 写入大小不一致（预期 \(expected) 字节，实际 \(actual) 字节）。"
+            return String(
+                format: String(localized: "ZIP 写入大小不一致（预期 %lld 字节，实际 %lld 字节）。"),
+                Int64(expected),
+                Int64(actual)
+            )
         }
     }
 }
@@ -44,7 +48,12 @@ struct StreamingZipArchiveWriter {
             do {
                 try FileManager.default.removeItem(at: fileURL)
             } catch {
-                StorageIssueLog.record("创建 ZIP 前清理旧文件失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "zip.writer.cleanup_existing_failed",
+                    category: .zipArchive,
+                    details: ["file": fileURL.lastPathComponent],
+                    error: error
+                )
                 throw error
             }
         }
@@ -144,7 +153,12 @@ struct StreamingZipArchiveWriter {
             do {
                 try input.close()
             } catch {
-                StorageIssueLog.record("ZIP 源文件句柄关闭失败：\(sourceFileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "zip.writer.close_source_handle_failed",
+                    category: .zipArchive,
+                    details: ["file": sourceFileURL.lastPathComponent],
+                    error: error
+                )
             }
         }
         let chunkSize = 256 * 1024

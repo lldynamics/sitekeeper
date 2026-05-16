@@ -3,6 +3,7 @@ package com.chengjinfang.sitekeeper.database.record
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.chengjinfang.sitekeeper.model.backup.BackupSnapshotJson
 import com.chengjinfang.sitekeeper.model.backup.SiteTodo
 
 @Entity(
@@ -19,7 +20,10 @@ data class SiteTodoEntity(
     val issueType: String,
     val isDone: Boolean,
     val completedAt: String?,
-    val note: String
+    val note: String,
+    val rectificationBeforePhotoFileName: String?,
+    val rectificationAfterPhotoFileName: String?,
+    val linkedConstructionMethodIdsJson: String
 )
 
 data class SiteTodoSummary(
@@ -30,7 +34,10 @@ data class SiteTodoSummary(
     val priority: String,
     val issueType: String,
     val isDone: Boolean,
-    val note: String
+    val note: String,
+    val rectificationBeforePhotoFileName: String?,
+    val rectificationAfterPhotoFileName: String?,
+    val linkedConstructionMethodIds: List<String>
 )
 
 fun SiteTodo.toEntity(): SiteTodoEntity =
@@ -44,7 +51,10 @@ fun SiteTodo.toEntity(): SiteTodoEntity =
         issueType = issueType,
         isDone = isDone,
         completedAt = completedAt,
-        note = note
+        note = note,
+        rectificationBeforePhotoFileName = rectificationBeforePhotoFileName,
+        rectificationAfterPhotoFileName = rectificationAfterPhotoFileName,
+        linkedConstructionMethodIdsJson = BackupSnapshotJson.encodeStringList(linkedConstructionMethodIDs)
     )
 
 fun SiteTodoEntity.toSummary(): SiteTodoSummary =
@@ -56,5 +66,8 @@ fun SiteTodoEntity.toSummary(): SiteTodoSummary =
         priority = priority,
         issueType = issueType,
         isDone = isDone,
-        note = note
+        note = note,
+        rectificationBeforePhotoFileName = rectificationBeforePhotoFileName,
+        rectificationAfterPhotoFileName = rectificationAfterPhotoFileName,
+        linkedConstructionMethodIds = BackupSnapshotJson.decodeStringList(linkedConstructionMethodIdsJson)
     )

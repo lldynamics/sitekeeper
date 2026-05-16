@@ -7,6 +7,7 @@ struct ProjectDetailRouteState {
     var presentation: ProjectDetailPresentation?
     var editingRoute: ProjectDetailEditingRoute?
     var anchorRequest: ProjectDetailAnchorRequest?
+    var documentScanCategory: ProjectDocumentCategory?
 }
 
 enum ProjectDetailEditingRoute: Identifiable {

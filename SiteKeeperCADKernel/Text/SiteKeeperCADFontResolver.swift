@@ -1,4 +1,5 @@
 import Foundation
+import CoreText
 #if canImport(UIKit)
 import UIKit
 #elseif canImport(AppKit)
@@ -84,6 +85,7 @@ extension SiteKeeperCADKernel {
             let uniqueCandidates = dedupe(candidates)
             let resolved = resolveFirstAvailable(
                 uniqueCandidates,
+                displayText: displayText,
                 runtimeProbe: runtimeProbe,
                 missingFonts: &missingFonts,
                 warnings: &warnings
@@ -140,6 +142,7 @@ extension SiteKeeperCADKernel {
 
         private func resolveFirstAvailable(
             _ candidates: [CADRuntimeFontProbe.FontCandidate],
+            displayText: String,
             runtimeProbe: CADRuntimeFontProbe,
             missingFonts: inout [String],
             warnings: inout [String]
@@ -151,10 +154,14 @@ extension SiteKeeperCADKernel {
                     if firstNamedCandidate == nil {
                         firstNamedCandidate = name
                     }
-                    if runtimeProbe.isNamedFontAvailable(name) {
+                    if let resolvedName = runtimeProbe.availableFontName(for: name) {
+                        guard runtimeProbe.font(named: resolvedName, supports: displayText) else {
+                            warnings.append("CAD_TEXT_FONT_LACKS_GLYPHS:\(name)")
+                            continue
+                        }
                         let fallbackApplied = firstNamedCandidate != nil &&
                             name.caseInsensitiveCompare(firstNamedCandidate ?? name) != .orderedSame
-                        return (name: name, wasAvailable: true, fallbackApplied: fallbackApplied)
+                        return (name: resolvedName, wasAvailable: true, fallbackApplied: fallbackApplied)
                     }
                     missingFonts.append(name)
                     warnings.append("CAD_TEXT_FONT_UNAVAILABLE:\(name)")
@@ -190,13 +197,58 @@ extension SiteKeeperCADKernel {
         }
 
         func isNamedFontAvailable(_ name: String) -> Bool {
+            availableFontName(for: name) != nil
+        }
+
+        func availableFontName(for name: String) -> String? {
             #if canImport(UIKit)
-            return UIFont(name: name, size: 12) != nil
+            if let font = UIFont(name: name, size: 12) {
+                return font.fontName
+            }
+            let matchingFamily = UIFont.familyNames.first {
+                $0.caseInsensitiveCompare(name) == .orderedSame
+            }
+            guard let family = matchingFamily,
+                  let fontName = UIFont.fontNames(forFamilyName: family).first,
+                  UIFont(name: fontName, size: 12) != nil else {
+                return nil
+            }
+            return fontName
             #elseif canImport(AppKit)
-            return NSFont(name: name, size: 12) != nil
+            if let font = NSFont(name: name, size: 12) {
+                return font.fontName
+            }
+            let matchingFamily = NSFontManager.shared.availableFontFamilies.first {
+                $0.caseInsensitiveCompare(name) == .orderedSame
+            }
+            guard let family = matchingFamily,
+                  let members = NSFontManager.shared.availableMembers(ofFontFamily: family),
+                  let fontName = members.first?.first as? String,
+                  NSFont(name: fontName, size: 12) != nil else {
+                return nil
+            }
+            return fontName
             #else
-            return false
+            return nil
             #endif
+        }
+
+        func font(named name: String, supports text: String) -> Bool {
+            let probeText = text.cjkCoverageProbeText
+            guard !probeText.isEmpty else { return true }
+            let font = CTFontCreateWithName(name as CFString, 12, nil)
+            let characters = Array(probeText.utf16)
+            guard !characters.isEmpty else { return true }
+            var glyphs = Array(repeating: CGGlyph(), count: characters.count)
+            return characters.withUnsafeBufferPointer { characterBuffer in
+                glyphs.withUnsafeMutableBufferPointer { glyphBuffer in
+                    guard let characterBase = characterBuffer.baseAddress,
+                          let glyphBase = glyphBuffer.baseAddress else {
+                        return false
+                    }
+                    return CTFontGetGlyphsForCharacters(font, characterBase, glyphBase, characters.count)
+                }
+            }
         }
 
         func systemFontName() -> String {
@@ -227,5 +279,23 @@ private extension String {
                 return false
             }
         }
+    }
+
+    var cjkCoverageProbeText: String {
+        var scalars = String.UnicodeScalarView()
+        for scalar in unicodeScalars {
+            switch scalar.value {
+            case 0x3400...0x4DBF,
+                 0x4E00...0x9FFF,
+                 0xF900...0xFAFF:
+                scalars.append(scalar)
+            default:
+                continue
+            }
+            if scalars.count >= 16 {
+                break
+            }
+        }
+        return String(scalars)
     }
 }

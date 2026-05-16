@@ -59,4 +59,52 @@ struct QuickNoteImportTests {
         #expect(FileManager.default.fileExists(atPath: u1.path))
         #expect(FileManager.default.fileExists(atPath: u2.path))
     }
+
+    @Test func quickNoteRemovalDefersAttachmentDeletionUntilCommit() throws {
+        QuickNoteAttachmentStorage.clearAttachmentsDirectory()
+        defer { QuickNoteAttachmentStorage.clearAttachmentsDirectory() }
+
+        let fileName = try QuickNoteAttachmentStorage.saveDataOrThrow(
+            Data([0x01, 0x02, 0x03]),
+            fileName: "delete-deferred-\(UUID().uuidString).bin"
+        )
+        let attachment = QuickNoteAttachment(kind: .file, fileName: fileName)
+        let note = QuickNote(title: "待删除", attachments: [attachment])
+        let store = DataStore()
+        store.clearAllBusinessData(deleteStoredFiles: false)
+        store.quickNotes = [note]
+
+        let deletion = store.removeQuickNotes(
+            ids: Set([note.id]),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.quickNoteAttachments(
+                [attachment],
+                summary: "quickNote.attachments"
+            )
+        )
+
+        #expect(store.quickNotes.isEmpty)
+        #expect(QuickNoteAttachmentStorage.exists(fileName: fileName))
+        #expect(deletion.restoredItems(current: store.quickNotes, id: \.id).map(\.id) == [note.id])
+
+        deletion.performDeferredFileCleanup()
+        #expect(!QuickNoteAttachmentStorage.exists(fileName: fileName))
+    }
+
+    @Test func quickNoteAttachmentThrowingCleanupDeletesFile() throws {
+        QuickNoteAttachmentStorage.clearAttachmentsDirectory()
+        defer { QuickNoteAttachmentStorage.clearAttachmentsDirectory() }
+
+        let fileName = try QuickNoteAttachmentStorage.saveDataOrThrow(
+            Data([0x0D, 0x0E, 0x0F]),
+            fileName: "quick-note-throwing-cleanup-\(UUID().uuidString).bin"
+        )
+        #expect(QuickNoteAttachmentStorage.exists(fileName: fileName))
+
+        try DataStoreDeferredFileCleanup.deleteQuickNoteAttachmentFilesOrThrow(
+            [fileName],
+            summary: "quickNoteImportTests.throwingCleanup"
+        )
+
+        #expect(!QuickNoteAttachmentStorage.exists(fileName: fileName))
+    }
 }

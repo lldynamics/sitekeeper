@@ -8,13 +8,13 @@ extension SiteKeeperCADKernel {
         var maxRenderCommands: Int
         var maxFrameTimeMilliseconds: Double
 
-        init(maxRenderCommands: Int = 20_000, maxFrameTimeMilliseconds: Double = 250) {
+        init(maxRenderCommands: Int = 120_000, maxFrameTimeMilliseconds: Double = 500) {
             self.maxRenderCommands = max(1, maxRenderCommands)
             self.maxFrameTimeMilliseconds = max(1, maxFrameTimeMilliseconds)
         }
 
         static let standard = CADRenderBudget()
-        static let interactive = CADRenderBudget(maxRenderCommands: 4_000, maxFrameTimeMilliseconds: 16)
+        static let interactive = CADRenderBudget(maxRenderCommands: 8_000, maxFrameTimeMilliseconds: 16)
     }
 
     struct CADRenderOptions: Equatable, Codable {

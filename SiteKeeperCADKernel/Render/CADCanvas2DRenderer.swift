@@ -203,6 +203,8 @@ extension SiteKeeperCADKernel {
             textTraces: inout [CADTextTrace]
         ) -> [CADRenderCommand] {
             switch entity.kind {
+            case .point:
+                return [.marker(CADSpatialIndex.effectiveBounds(for: entity).center, label: nil, style: style)]
             case .text, .mtext, .attrib:
                 guard let text = entity.text else {
                     return unsupportedPlaceholder(for: entity, reason: "Text entity has no text payload.")

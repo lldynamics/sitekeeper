@@ -23,9 +23,9 @@ struct CalculationCoreTests {
         let result = EngineeringCalculations.unitConvertValidated(value: 100, fromFactor: 10, toFactor: 0)
         switch result {
         case .failure(.mustBeGreaterThanZero(field: "目标单位系数")):
-            #expect(true)
+            break
         default:
-            #expect(false)
+            Issue.record("预期目标单位系数应返回 mustBeGreaterThanZero 错误")
         }
     }
 
@@ -51,9 +51,9 @@ struct CalculationCoreTests {
         let result = EngineeringCalculations.circuitCurrentValidated(powerKW: 10, voltage: 220, powerFactor: 1.2, isThreePhase: false)
         switch result {
         case .failure(.outOfRange(field: "功率因数", min: 0, max: 1)):
-            #expect(true)
+            break
         default:
-            #expect(false)
+            Issue.record("预期功率因数应返回 outOfRange 错误")
         }
     }
 
@@ -118,9 +118,9 @@ struct CalculationCoreTests {
         )
         switch result {
         case .failure(.notFinite(field: "电流")):
-            #expect(true)
+            break
         default:
-            #expect(false)
+            Issue.record("预期电流应返回 notFinite 错误")
         }
     }
 
@@ -164,9 +164,9 @@ struct CalculationCoreTests {
         let result = EngineeringCalculations.conduitFillRateValidated(conduitInnerDiameter: 25, wireDiameter: 3.5, wireCount: 0)
         switch result {
         case .failure(.countOutOfRange(field: "导线根数", min: 1, max: 100_000)):
-            #expect(true)
+            break
         default:
-            #expect(false)
+            Issue.record("预期导线根数应返回 countOutOfRange 错误")
         }
     }
 

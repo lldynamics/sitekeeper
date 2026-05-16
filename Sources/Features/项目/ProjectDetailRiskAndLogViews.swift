@@ -5,10 +5,19 @@ struct ProjectDetailRiskStripView: View {
     let unpaidAmount: Double
     let unpricedQuoteCount: Int
     let hasTodayLog: Bool
+    var missingDocumentCategoryCount = 0
+    var documentActionCount = 0
+    var legacyDocumentCount = 0
 
     private var level: Color {
-        if overdueCount > 0 || unpaidAmount > 0 || unpricedQuoteCount > 0 || !hasTodayLog {
-            return overdueCount >= 2 || unpaidAmount > 10000 ? .appRisk : .appPrimaryAction
+        if overdueCount > 0 ||
+            unpaidAmount > 0 ||
+            unpricedQuoteCount > 0 ||
+            missingDocumentCategoryCount > 0 ||
+            documentActionCount > 0 ||
+            legacyDocumentCount > 0 ||
+            !hasTodayLog {
+            return overdueCount >= 2 || unpaidAmount > 10000 || missingDocumentCategoryCount >= 3 ? .appRisk : .appPrimaryAction
         }
         return .appSuccess
     }
@@ -23,6 +32,15 @@ struct ProjectDetailRiskStripView: View {
         }
         if unpricedQuoteCount > 0 {
             items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .appPrimaryAction))
+        }
+        if missingDocumentCategoryCount > 0 {
+            items.append((String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)), .appWarning))
+        }
+        if documentActionCount > 0 {
+            items.append((String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)), .appPrimaryAction))
+        }
+        if legacyDocumentCount > 0 {
+            items.append((String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)), .appWarning))
         }
         if !hasTodayLog {
             items.append((String(localized: "今日日志未写"), .appRisk))
@@ -57,7 +75,7 @@ struct ProjectDetailRiskStripView: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityHint(String(localized: "用于快速判断延期、回款、报价和日志填写风险"))
+            .accessibilityHint(String(localized: "用于快速判断延期、回款、报价、日志和资料缺项风险"))
         }
     }
 }

@@ -268,54 +268,68 @@ struct ProjectWarehouseView: View {
         let movementSnapshot = store.projectWarehouseMovements
         let documentSnapshot = store.projectDocuments
         let financialSnapshot = store.projectFinancialRecords
-        let deletedCount = movementSnapshot.filter { ids.contains($0.id) }.count
-        guard deletedCount > 0 else { return }
+        let movementTargets = movementSnapshot.filter { ids.contains($0.id) }
+        guard !movementTargets.isEmpty else { return }
 
-        var updatedMovements = movementSnapshot.filter { !ids.contains($0.id) }
-        var updatedDocuments = documentSnapshot
-        var updatedFinancialRecords = financialSnapshot
+        var removableDocumentIDs: Set<UUID> = []
         var removableFileNames: [String] = []
 
         if deleteAttachments {
             let linkedDocumentIds = Set(
+                movementTargets.flatMap(\.linkedDocumentIds)
+            )
+            let remainingMovementDocumentIds = Set(
                 movementSnapshot
-                    .filter { ids.contains($0.id) }
+                    .filter { !ids.contains($0.id) }
                     .flatMap(\.linkedDocumentIds)
             )
-            let remainingMovementDocumentIds = Set(updatedMovements.flatMap(\.linkedDocumentIds))
             let linkedFinancialDocumentIds = Set(financialSnapshot.flatMap(\.linkedDocumentIds))
-            let removableDocumentIds = linkedDocumentIds
+            removableDocumentIDs = linkedDocumentIds
                 .subtracting(remainingMovementDocumentIds)
                 .subtracting(linkedFinancialDocumentIds)
-            if !removableDocumentIds.isEmpty {
-                removableFileNames = updatedDocuments
-                    .filter { removableDocumentIds.contains($0.id) }
-                    .map(\.fileName)
-                updatedDocuments.removeAll { removableDocumentIds.contains($0.id) }
-                for index in updatedFinancialRecords.indices {
-                    updatedFinancialRecords[index].linkedDocumentIds.removeAll { removableDocumentIds.contains($0) }
-                }
-                for index in updatedMovements.indices {
-                    updatedMovements[index].linkedDocumentIds.removeAll { removableDocumentIds.contains($0) }
-                }
+            removableFileNames = documentSnapshot
+                .filter { removableDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        }
+
+        let summary = deleteAttachments
+        ? String(format: String(localized: "删除 %lld 条出入库流水（含附件）"), Int64(movementTargets.count))
+        : String(format: String(localized: "删除 %lld 条出入库流水"), Int64(movementTargets.count))
+        let movementDeletion = store.removeProjectWarehouseMovements(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: summary,
+                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(removableFileNames.count)),
+                source: "ProjectWarehouseView"
+            )
+        )
+        guard !movementDeletion.isEmpty else { return }
+
+        var deferredCleanup: DataStoreDeferredFileCleanup?
+        if deleteAttachments, !removableDocumentIDs.isEmpty {
+            let documentDeletion = ProjectDetailFinanceDocumentActions.executeDocumentDeletion(
+                ids: removableDocumentIDs,
+                store: store,
+                documentCleanupMode: .deferred
+            )
+            if let documentDeletion {
+                deferredCleanup = DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    documentDeletion.removableDocumentFileNames,
+                    summary: "projectWarehouse.documentFiles"
+                )
             }
         }
 
-        store.projectWarehouseMovements = updatedMovements
-        store.projectDocuments = updatedDocuments
-        store.projectFinancialRecords = updatedFinancialRecords
         pendingDeleteMovementIds.removeAll()
 
         let message = deleteAttachments
-        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(deletedCount))
-        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(deletedCount))
+        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(movementDeletion.deletedCount))
+        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(movementDeletion.deletedCount))
         undoableDeletion.queue(
             notice: $operationNotice,
             message: message,
             commit: {
-                for fileName in removableFileNames {
-                    ProjectDocumentStorage.delete(fileName: fileName)
-                }
+                deferredCleanup?.perform()
                 store.scheduleSave()
             },
             undo: {
@@ -324,11 +338,7 @@ struct ProjectWarehouseView: View {
                 store.projectFinancialRecords = financialSnapshot
                 store.scheduleSave()
             },
-            audit: UndoableDeletionAuditContext(
-                summary: message,
-                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(removableFileNames.count)),
-                source: "ProjectWarehouseView"
-            )
+            audit: movementDeletion.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 

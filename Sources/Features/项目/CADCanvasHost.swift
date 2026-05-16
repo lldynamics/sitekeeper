@@ -213,11 +213,54 @@ extension CADPreviewContainer {
                         showOverlayLayerSheet = true
                     }
 
+                    if shouldShowNativeCADLayerMenu {
+                        cadDrawingLayerMenu(chrome: chrome)
+                    }
+
                     cadMeasurementMenu(chrome: chrome)
                     cadAnnotationMenu(chrome: chrome)
                 }
             }
             .padding(chrome == .immersive ? 2 : 0)
+        }
+    }
+
+    var shouldShowNativeCADLayerMenu: Bool {
+        isDWGFile && !nativeCADLayers.isEmpty
+    }
+
+    var nativeCADHiddenLayerCount: Int {
+        nativeCADLayers.filter { !isNativeCADLayerVisible($0) }.count
+    }
+
+    @ViewBuilder
+    func cadDrawingLayerMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadDrawingLayerMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "square.3.layers.3d",
+                    label: String(localized: "图层"),
+                    active: nativeCADHiddenLayerCount > 0,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(nativeCADHiddenLayerCount > 0 ? .appPrimaryAction : .secondary)
+        case .immersive:
+            Menu {
+                cadDrawingLayerMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "square.3.layers.3d",
+                    label: String(localized: "图层"),
+                    active: nativeCADHiddenLayerCount > 0,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -359,6 +402,43 @@ extension CADPreviewContainer {
     }
 
     @ViewBuilder
+    var cadDrawingLayerMenuContent: some View {
+        Button {
+            showAllNativeCADLayers()
+        } label: {
+            Label(String(localized: "显示全部图层"), systemImage: "eye")
+        }
+
+        Divider()
+
+        ForEach(nativeCADLayers) { layer in
+            Button {
+                toggleNativeCADLayer(layer.id)
+            } label: {
+                Label(layer.name, systemImage: isNativeCADLayerVisible(layer) ? "checkmark.circle.fill" : "circle")
+            }
+        }
+    }
+
+    func isNativeCADLayerVisible(_ layer: CADPoC.CADLayer) -> Bool {
+        nativeCADVisibleLayerIDs?.contains(layer.id) ?? layer.isVisible
+    }
+
+    func toggleNativeCADLayer(_ layerID: String) {
+        var nextVisible = nativeCADVisibleLayerIDs ?? Set(nativeCADLayers.filter(\.isVisible).map(\.id))
+        if nextVisible.contains(layerID) {
+            nextVisible.remove(layerID)
+        } else {
+            nextVisible.insert(layerID)
+        }
+        nativeCADVisibleLayerIDs = nextVisible
+    }
+
+    func showAllNativeCADLayers() {
+        nativeCADVisibleLayerIDs = Set(nativeCADLayers.map(\.id))
+    }
+
+    @ViewBuilder
     var cadAnnotationMenuContent: some View {
         Button {
             selectOverlayTool(.annotation)
@@ -406,13 +486,6 @@ extension CADPreviewContainer {
                 showTextEncodingDialog = true
             } label: {
                 Label(String(localized: "文字修复"), systemImage: "character.textbox")
-            }
-        }
-        if shouldShowCADDiagnosticCommand {
-            Button {
-                showCADDiagnosticSheet = true
-            } label: {
-                Label(String(localized: "诊断"), systemImage: "stethoscope")
             }
         }
         if allowsOverlayEditing {

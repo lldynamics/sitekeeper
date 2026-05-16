@@ -4,7 +4,6 @@ struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
-    @AppStorage(UserPreferenceKeys.cadDWGConversionServiceURL) private var cadDWGConversionServiceURL = ""
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataBackupGate = false
     @State private var showClearLocalDataSheet = false
@@ -79,15 +78,6 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
-            Section(String(localized: "CAD 看图")) {
-                TextField(String(localized: "CAD 转换服务地址"), text: $cadDWGConversionServiceURL)
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .autocorrectionDisabled()
-                Text(String(localized: "用于把 DWG 转换为可在线查看的图纸数据。服务端运行 LibreDWG，App 只读取转换后的 CADDatabase；留空时只能打开 DXF 或已转换图纸。"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             Section(String(localized: "实验功能")) {
                 Toggle(String(localized: "显示模板管理入口"), isOn: $showTemplates)

@@ -8,7 +8,6 @@ struct DataHealthView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var storageIssuesVersion = UUID()
-    @State private var operationAuditVersion = UUID()
     private let showsNavigationTitle: Bool
 
     init(showsNavigationTitle: Bool = true) {
@@ -97,11 +96,6 @@ struct DataHealthView: View {
     private var storageIssues: [String] {
         _ = storageIssuesVersion
         return StorageIssueLog.entries()
-    }
-
-    private var operationAuditEntries: [OperationAuditEntry] {
-        _ = operationAuditVersion
-        return OperationAuditLog.entries()
     }
 
     private var widgetHealth: WidgetDataHealthSnapshot {
@@ -515,28 +509,6 @@ struct DataHealthView: View {
         }
     }
 
-    private var operationAuditRows: [DataHealthIssue] {
-        operationAuditEntries.enumerated().map { offset, entry in
-            let timestamp = Formatters.dateTime.string(from: Date(timeIntervalSince1970: entry.timestamp))
-            var detailParts = [timestamp, entry.summary]
-            if !entry.detail.isEmpty {
-                detailParts.append(entry.detail)
-            }
-            if !entry.source.isEmpty {
-                detailParts.append(entry.source)
-            }
-            return DataHealthIssue(
-                id: "operation-audit-\(offset)-\(entry.id.uuidString)",
-                title: "\(operationAuditActionLabel(entry.action)) · \(operationAuditOutcomeLabel(entry.outcome))",
-                detail: issueDetail(detailParts),
-                systemImage: operationAuditSystemImage(entry.action),
-                color: operationAuditColor(entry.outcome),
-                actionTitle: nil,
-                route: nil
-            )
-        }
-    }
-
     private var totalIssues: Int {
         missingPhotoFiles.count
         + missingDocumentFiles.count
@@ -587,7 +559,6 @@ struct DataHealthView: View {
                 LabeledContent(l("可自动修复项目关联"), value: "\(autoFixableInvalidProjectRefs.count)")
                 LabeledContent(l("需手动处理项目关联"), value: "\(manualInvalidProjectRefs.count)")
                 LabeledContent(l("存储错误记录"), value: "\(storageIssues.count)")
-                LabeledContent(l("操作审计日志"), value: "\(operationAuditEntries.count)")
             }
 
             Section(l("存储空间")) {
@@ -636,27 +607,12 @@ struct DataHealthView: View {
                 } label: {
                     Label(l("导出健康报告"), systemImage: "square.and.arrow.up")
                 }
-                if !operationAuditEntries.isEmpty {
-                    Button {
-                        exportOperationAuditLog()
-                    } label: {
-                        Label(l("导出操作审计日志 CSV"), systemImage: "doc.text")
-                    }
-                }
                 if !storageIssues.isEmpty {
                     Button(role: .destructive) {
                         StorageIssueLog.clear()
                         storageIssuesVersion = UUID()
                     } label: {
                         Label(l("清空存储错误记录"), systemImage: "trash")
-                    }
-                }
-                if !operationAuditEntries.isEmpty {
-                    Button(role: .destructive) {
-                        OperationAuditLog.clear()
-                        operationAuditVersion = UUID()
-                    } label: {
-                        Label(l("清空操作审计日志"), systemImage: "trash")
                     }
                 }
             }
@@ -674,7 +630,6 @@ struct DataHealthView: View {
             issueSection(title: l("无效项目关联（可自动修复）"), items: autoFixableInvalidProjectRefIssues)
             issueSection(title: l("无效项目关联（需手动处理）"), items: manualInvalidProjectRefIssues)
             issueSection(title: l("存储错误记录"), items: storageIssueRows)
-            issueSection(title: l("操作审计日志"), items: operationAuditRows)
         }
         .modifier(OptionalInlineTitleModifier(
             isEnabled: showsNavigationTitle,
@@ -859,62 +814,6 @@ struct DataHealthView: View {
         String(id.uuidString.prefix(8))
     }
 
-    private func operationAuditActionLabel(_ action: OperationAuditEntry.Action) -> String {
-        switch action {
-        case .import:
-            return l("导入")
-        case .restore:
-            return l("恢复")
-        case .cleanup:
-            return l("清理")
-        case .repair:
-            return l("修复")
-        case .delete:
-            return l("删除")
-        }
-    }
-
-    private func operationAuditOutcomeLabel(_ outcome: OperationAuditEntry.Outcome) -> String {
-        switch outcome {
-        case .started:
-            return l("开始")
-        case .succeeded:
-            return l("完成")
-        case .failed:
-            return l("失败")
-        case .cancelled:
-            return l("取消")
-        }
-    }
-
-    private func operationAuditSystemImage(_ action: OperationAuditEntry.Action) -> String {
-        switch action {
-        case .import:
-            return "square.and.arrow.down"
-        case .restore:
-            return "arrow.uturn.backward.circle"
-        case .cleanup:
-            return "trash"
-        case .repair:
-            return "wrench.and.screwdriver"
-        case .delete:
-            return "trash.slash"
-        }
-    }
-
-    private func operationAuditColor(_ outcome: OperationAuditEntry.Outcome) -> Color {
-        switch outcome {
-        case .started:
-            return .appPrimaryAction
-        case .succeeded:
-            return .appSuccess
-        case .failed:
-            return .appRisk
-        case .cancelled:
-            return .appWarning
-        }
-    }
-
     private func repairReferenceIssues() {
         let beforeCount = referenceIssueCount
         OperationAuditLog.record(
@@ -1007,7 +906,6 @@ struct DataHealthView: View {
             detail: "\(String(format: l("%d 项"), fixedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
-        operationAuditVersion = UUID()
     }
 
     private func clearMediaThumbnailCaches() {
@@ -1025,10 +923,28 @@ struct DataHealthView: View {
             detail: String(format: l("%d 项"), beforeCount),
             source: "DataHealthView"
         )
-        PhotoStorage.delete(fileNames: orphanPhotoFiles)
-        DrawingStorage.delete(fileNames: orphanDrawingFiles)
-        ProjectDocumentStorage.delete(fileNames: orphanDocumentFiles)
-        QuickNoteAttachmentStorage.delete(fileNames: orphanQuickNoteAttachmentFiles)
+        DataStoreDeferredFileCleanup.combined(
+            summary: "dataHealth.cleanupOrphanFiles",
+            cleanups: [
+                DataStoreDeferredFileCleanup.photoFiles(
+                    orphanPhotoFiles,
+                    summary: "dataHealth.orphanPhotos"
+                ),
+                DataStoreDeferredFileCleanup.drawingFiles(
+                    orphanDrawingFiles,
+                    summary: "dataHealth.orphanDrawings"
+                ),
+                DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    orphanDocumentFiles,
+                    summary: "dataHealth.orphanProjectDocuments"
+                ),
+                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                    orphanQuickNoteAttachmentFiles,
+                    summary: "dataHealth.orphanQuickNoteAttachments"
+                )
+            ]
+        )
+        .perform()
         store.scheduleSave()
         let afterCount = orphanFileIssueCount
         let cleanedCount = max(beforeCount - afterCount, 0)
@@ -1039,7 +955,6 @@ struct DataHealthView: View {
             detail: "\(String(format: l("%d 项"), cleanedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
-        operationAuditVersion = UUID()
     }
 
     private func invalidOptionalProjectId(_ id: UUID?, validProjectIds: Set<UUID>) -> Bool {
@@ -1061,8 +976,7 @@ struct DataHealthView: View {
             (l("资料悬空关联"), danglingDocumentLinkIssues.map(\.exportText)),
             (l("无效项目关联（可自动修复）"), autoFixableInvalidProjectRefIssues.map(\.exportText)),
             (l("无效项目关联（需手动处理）"), manualInvalidProjectRefIssues.map(\.exportText)),
-            (l("存储错误记录"), storageIssueRows.map(\.exportText)),
-            (l("操作审计日志"), operationAuditRows.map(\.exportText))
+            (l("存储错误记录"), storageIssueRows.map(\.exportText))
         ]
         var lines = [
             lf("%@ 数据健康报告", AppBrand.displayName),
@@ -1083,39 +997,6 @@ struct DataHealthView: View {
             data: Data(lines.joined(separator: "\n").utf8),
             contentType: .plainText,
             defaultFilename: l("数据健康报告.txt")
-        )
-        showExporter = true
-    }
-
-    private func exportOperationAuditLog() {
-        let headers = [
-            l("时间"),
-            l("操作"),
-            l("结果"),
-            l("摘要"),
-            l("详情"),
-            l("来源"),
-            "ID"
-        ]
-        let rows = operationAuditEntries.map { entry in
-            ReportBuilder.csv([
-                Formatters.dateTime.string(from: Date(timeIntervalSince1970: entry.timestamp)),
-                operationAuditActionLabel(entry.action),
-                operationAuditOutcomeLabel(entry.outcome),
-                entry.summary,
-                entry.detail,
-                entry.source,
-                entry.id.uuidString
-            ])
-        }
-        let lines = [
-            ReportBuilder.csv(headers)
-        ] + rows
-
-        exportPayload = ExportPayload(
-            data: Data(lines.joined(separator: "\n").utf8),
-            contentType: .commaSeparatedText,
-            defaultFilename: l("操作审计日志.csv")
         )
         showExporter = true
     }

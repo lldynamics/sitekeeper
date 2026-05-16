@@ -178,44 +178,12 @@ extension ProjectDetailContainer {
         let documentSnapshot = store.projectDocuments
         let financialSnapshot = store.projectFinancialRecords
         let warehouseSnapshot = store.projectWarehouseMovements
-        var updatedDocuments = documentSnapshot
-        var updatedFinancialRecords = financialSnapshot
-        var updatedWarehouseMovements = warehouseSnapshot
-        var removableFileNames: [String] = []
-
-        let recordsToDelete = financialSnapshot.filter { ids.contains($0.id) }
-        let linkedDocumentIds = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
-        let linkedByRecordFieldIds: Set<UUID> = Set(
-            documentSnapshot.compactMap { document in
-                guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
-                return document.id
-            }
-        )
-        let targetDocumentIds = linkedDocumentIds.union(linkedByRecordFieldIds)
-
-        if deleteLinkedDocuments {
-            if !targetDocumentIds.isEmpty {
-                removableFileNames = updatedDocuments
-                    .filter { targetDocumentIds.contains($0.id) }
-                    .map(\.fileName)
-                updatedDocuments.removeAll { targetDocumentIds.contains($0.id) }
-                for index in updatedFinancialRecords.indices {
-                    updatedFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
-                }
-                for index in updatedWarehouseMovements.indices {
-                    updatedWarehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
-                }
-            }
-        } else if !targetDocumentIds.isEmpty {
-            for index in updatedDocuments.indices where targetDocumentIds.contains(updatedDocuments[index].id) {
-                updatedDocuments[index].linkedFinancialRecordId = nil
-            }
-        }
-        updatedFinancialRecords.removeAll { ids.contains($0.id) }
-
-        store.projectDocuments = updatedDocuments
-        store.projectFinancialRecords = updatedFinancialRecords
-        store.projectWarehouseMovements = updatedWarehouseMovements
+        guard let deletion = ProjectDetailFinanceDocumentActions.executeFinancialRecordDeletion(
+            ids: ids,
+            deleteLinkedDocuments: deleteLinkedDocuments,
+            store: store,
+            documentCleanupMode: .deferred
+        ) else { return }
 
         let undoSnapshot = ProjectDeletionUndoSnapshot(
             projectDocuments: documentSnapshot,
@@ -223,12 +191,12 @@ extension ProjectDetailContainer {
             projectWarehouseMovements: warehouseSnapshot
         )
         let message = deleteLinkedDocuments
-            ? String(format: String(localized: "已删除 %lld 条账目（含票据）"), Int64(ids.count))
-            : String(format: String(localized: "已删除 %lld 条账目"), Int64(ids.count))
+            ? String(format: String(localized: "已删除 %lld 条账目（含票据）"), Int64(deletion.financialDeletion.deletedCount))
+            : String(format: String(localized: "已删除 %lld 条账目"), Int64(deletion.financialDeletion.deletedCount))
         queueUndoableProjectDeletion(
             message: message,
             snapshot: undoSnapshot,
-            removableDocumentFileNames: removableFileNames
+            removableDocumentFileNames: deletion.removableDocumentFileNames
         )
     }
 
@@ -261,23 +229,11 @@ extension ProjectDetailContainer {
         let documentSnapshot = store.projectDocuments
         let financialSnapshot = store.projectFinancialRecords
         let warehouseSnapshot = store.projectWarehouseMovements
-        let documentID = document.id
-
-        var updatedDocuments = documentSnapshot
-        var updatedFinancialRecords = financialSnapshot
-        var updatedWarehouseMovements = warehouseSnapshot
-
-        updatedDocuments.removeAll { $0.id == documentID }
-        for index in updatedFinancialRecords.indices {
-            updatedFinancialRecords[index].linkedDocumentIds.removeAll { $0 == documentID }
-        }
-        for index in updatedWarehouseMovements.indices {
-            updatedWarehouseMovements[index].linkedDocumentIds.removeAll { $0 == documentID }
-        }
-
-        store.projectDocuments = updatedDocuments
-        store.projectFinancialRecords = updatedFinancialRecords
-        store.projectWarehouseMovements = updatedWarehouseMovements
+        guard let deletion = ProjectDetailFinanceDocumentActions.executeDocumentDeletion(
+            ids: Set([document.id]),
+            store: store,
+            documentCleanupMode: .deferred
+        ) else { return }
 
         queueUndoableProjectDeletion(
             message: String(localized: "已删除票据资料"),
@@ -286,7 +242,7 @@ extension ProjectDetailContainer {
                 projectFinancialRecords: financialSnapshot,
                 projectWarehouseMovements: warehouseSnapshot
             ),
-            removableDocumentFileNames: [document.fileName]
+            removableDocumentFileNames: deletion.removableDocumentFileNames
         )
     }
 
@@ -312,13 +268,15 @@ extension ProjectDetailContainer {
         snapshot: ProjectDeletionUndoSnapshot,
         removableDocumentFileNames: [String]
     ) {
+        let deferredCleanup = DataStoreDeferredFileCleanup.projectDocumentFiles(
+            removableDocumentFileNames,
+            summary: "projectDetail.undoDocumentFiles"
+        )
         undoableDeletion.queue(
             notice: $operationNotice,
             message: message,
             commit: {
-                for fileName in removableDocumentFileNames {
-                    ProjectDocumentStorage.delete(fileName: fileName)
-                }
+                deferredCleanup?.perform()
                 store.scheduleSave()
             },
             undo: {

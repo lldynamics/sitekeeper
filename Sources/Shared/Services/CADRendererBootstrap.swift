@@ -21,12 +21,7 @@ enum CADRendererBootstrap {
                 summary: "自有 CAD 文字引擎已启用，DWG 几何/文字解析接入后会输出 text trace。"
             )
         }
-        SiteKeeperCADKernel.CADDWGGeometryAdapterRegistry.register(
-            SiteKeeperCADKernel.DWGSidecarJSONGeometryAdapter()
-        )
-        SiteKeeperCADKernel.CADDWGGeometryAdapterRegistry.register(
-            CADRemoteDWGConversionAdapter()
-        )
+        SiteKeeperCADKernel.CADDWGGeometryAdapterRegistry.reset()
         CADViewerEngineRegistry.configure(engine: SiteKeeperCADKernelAppViewerEngine())
     }
 }

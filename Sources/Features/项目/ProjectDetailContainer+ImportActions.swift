@@ -10,6 +10,7 @@ extension ProjectDetailContainer {
             amount: record.amount,
             linkedFinancialRecordId: record.id,
             linkedConstructionMethodIDs: [],
+            formedAt: record.date,
             note: record.note
         )
     }
@@ -56,8 +57,14 @@ extension ProjectDetailContainer {
             versioned.isCurrentVersion = resolved.isCurrentVersion
 
             if let replacement = resolved.replacement {
-                DrawingStorage.delete(fileName: replacement.fileName)
-                store.removeProjectDrawings(ids: Set([replacement.id]))
+                store.removeProjectDrawings(
+                    ids: Set([replacement.id]),
+                    deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
+                        [replacement.fileName],
+                        summary: "projectDetail.importReplacement"
+                    ),
+                    recordsAuditImmediately: true
+                )
                 currentDrawings.removeAll { $0.id == replacement.id }
             }
 

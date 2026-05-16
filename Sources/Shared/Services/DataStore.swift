@@ -4,6 +4,20 @@ import Observation
 import WidgetKit
 #endif
 
+struct DataStoreProjectFileCleanupResult: Equatable {
+    var photoFileNames: Set<String> = []
+    var quickNoteAttachmentFileNames: Set<String> = []
+    var projectDocumentFileNames: Set<String> = []
+    var drawingFileNames: Set<String> = []
+
+    var totalFileCount: Int {
+        photoFileNames.count
+            + quickNoteAttachmentFileNames.count
+            + projectDocumentFileNames.count
+            + drawingFileNames.count
+    }
+}
+
 @MainActor
 @Observable
 final class DataStore {
@@ -161,11 +175,27 @@ final class DataStore {
     private let historyRecordMaxTotalCount = 200
     private let historyRecordMaxCountPerTool = 50
 
+    private static func recordIssue(
+        _ event: String,
+        details: [String: String] = [:],
+        error: Error? = nil
+    ) {
+        StorageIssueLog.recordEvent(
+            event,
+            category: .dataStore,
+            details: details,
+            error: error
+        )
+    }
+
     private static var defaultDocumentsDirectory: URL {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             return dir
         }
-        StorageIssueLog.record("无法访问应用文档目录，已回退到临时目录", category: .dataStore)
+        recordIssue(
+            "datastore.documents_directory_unavailable",
+            details: ["fallback": "temporary-directory"]
+        )
         return FileManager.default.temporaryDirectory
     }
 
@@ -215,9 +245,10 @@ final class DataStore {
                 do {
                     try decodeError.rawData.write(to: backupURL, options: .atomic)
                 } catch {
-                    StorageIssueLog.record(
-                        "损坏数据备份写入失败：\(backupName)，\(error.localizedDescription)",
-                        category: .dataStore
+                    Self.recordIssue(
+                        "datastore.corrupt_backup_write_failed",
+                        details: ["file": backupName],
+                        error: error
                     )
                 }
                 persistenceErrorMessage = String(
@@ -272,9 +303,12 @@ final class DataStore {
         deletedUserMaterials = snapshot.deletedUserMaterials
         hiddenPresetKeys = snapshot.hiddenPresetKeys
         if !snapshot.legacyPaymentRecords.isEmpty {
-            StorageIssueLog.record(
-                "检测到旧收款记录 \(snapshot.legacyPaymentRecords.count) 条，已自动迁移为财务流水",
-                category: .dataStore
+            Self.recordIssue(
+                "datastore.legacy_payment_records_migrated",
+                details: [
+                    "recordCount": String(snapshot.legacyPaymentRecords.count),
+                    "target": "project_financial_records"
+                ]
             )
             needsSaveAfterInitialLoad = true
         }
@@ -829,6 +863,31 @@ final class DataStore {
         )
     }
 
+    func appendQuickNote(_ note: QuickNote) {
+        appendElement(note, to: \.quickNotes)
+    }
+
+    func insertQuickNoteAtTop(_ note: QuickNote) {
+        insertElement(note, at: 0, to: \.quickNotes)
+    }
+
+    @discardableResult
+    func removeQuickNotes(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<QuickNote> {
+        removeElements(
+            from: \.quickNotes,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
     func appendProjectWarehouseMovement(_ movement: ProjectWarehouseMovement) {
         appendElement(movement, to: \.projectWarehouseMovements)
     }
@@ -854,6 +913,157 @@ final class DataStore {
         )
     }
 
+    @discardableResult
+    func clearProjectPhotoReferences(projectId: UUID) -> DataStoreProjectFileCleanupResult {
+        var logs = dailyLogs
+        var todos = siteTodos
+        var selectedPhotoNames = Set<String>()
+
+        for index in logs.indices where logs[index].projectId == projectId {
+            selectedPhotoNames.formUnion(logs[index].allPhotoFileNames)
+            logs[index].photoFileName = nil
+            logs[index].photos = []
+        }
+        for index in todos.indices where todos[index].projectId == projectId {
+            if let before = todos[index].rectificationBeforePhotoFileName {
+                selectedPhotoNames.insert(before)
+            }
+            if let after = todos[index].rectificationAfterPhotoFileName {
+                selectedPhotoNames.insert(after)
+            }
+            todos[index].rectificationBeforePhotoFileName = nil
+            todos[index].rectificationAfterPhotoFileName = nil
+        }
+
+        dailyLogs = logs
+        siteTodos = todos
+
+        let remainingPhotoNames = PhotoStorage.referencedFileNames(logs: dailyLogs, todos: siteTodos)
+        return DataStoreProjectFileCleanupResult(
+            photoFileNames: selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
+        )
+    }
+
+    @discardableResult
+    func clearProjectVideoReferences(
+        projectId: UUID,
+        videoFileExtensions: Set<String>
+    ) -> DataStoreProjectFileCleanupResult {
+        var notes = quickNotes
+        var selectedAttachmentNames = Set<String>()
+
+        for index in notes.indices where notes[index].projectId == projectId {
+            let videos = notes[index].attachments.filter { $0.attachmentKind == .video }
+            selectedAttachmentNames.formUnion(videos.map(\.fileName))
+            notes[index].attachments.removeAll { $0.attachmentKind == .video }
+        }
+        quickNotes = notes
+
+        let videoDocumentIDs = Set(
+            projectDocuments
+                .filter { $0.projectId == projectId }
+                .filter { document in
+                    let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    return videoFileExtensions.contains(ext) && !Self.isStorageCleanupTicketCategory(document.category)
+                }
+                .map(\.id)
+        )
+        let videoDocumentFileNames = Set(
+            projectDocuments
+                .filter { videoDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+        removeProjectDocuments(ids: videoDocumentIDs)
+        unlinkProjectDocumentReferences(ids: videoDocumentIDs)
+
+        let extraMethodAttachments = constructionMethods.flatMap(\.attachments)
+            + constructionMethods.flatMap(\.tutorialAttachments)
+        let remainingAttachmentNames = QuickNoteAttachmentStorage.referencedFileNames(
+            for: quickNotes,
+            extraAttachments: extraMethodAttachments
+        )
+        let remainingDocumentNames = Set(projectDocuments.map(\.fileName))
+
+        return DataStoreProjectFileCleanupResult(
+            quickNoteAttachmentFileNames: selectedAttachmentNames.filter { !remainingAttachmentNames.contains($0) },
+            projectDocumentFileNames: videoDocumentFileNames.filter { !remainingDocumentNames.contains($0) }
+        )
+    }
+
+    @discardableResult
+    func clearProjectCADReferences(
+        projectId: UUID,
+        cadFileExtensions: Set<String>
+    ) -> DataStoreProjectFileCleanupResult {
+        let drawingIDs = Set(
+            projectDrawings
+                .filter { drawing in
+                    let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    return drawing.projectId == projectId && cadFileExtensions.contains(ext)
+                }
+                .map(\.id)
+        )
+        let drawingFileNames = Set(
+            projectDrawings
+                .filter { drawingIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+
+        removeProjectDrawings(ids: drawingIDs)
+
+        let remainingDrawingNames = Set(projectDrawings.map(\.fileName))
+        return DataStoreProjectFileCleanupResult(
+            drawingFileNames: drawingFileNames.filter { !remainingDrawingNames.contains($0) }
+        )
+    }
+
+    @discardableResult
+    func clearProjectTicketDocumentReferences(projectId: UUID) -> DataStoreProjectFileCleanupResult {
+        let documentIDs = Set(
+            projectDocuments
+                .filter { $0.projectId == projectId && Self.isStorageCleanupTicketCategory($0.category) }
+                .map(\.id)
+        )
+        let documentFileNames = Set(
+            projectDocuments
+                .filter { documentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+
+        removeProjectDocuments(ids: documentIDs)
+        unlinkProjectDocumentReferences(ids: documentIDs)
+
+        let remainingDocumentNames = Set(projectDocuments.map(\.fileName))
+        return DataStoreProjectFileCleanupResult(
+            projectDocumentFileNames: documentFileNames.filter { !remainingDocumentNames.contains($0) }
+        )
+    }
+
+    func unlinkProjectDocumentReferences(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+
+        var records = projectFinancialRecords
+        for index in records.indices {
+            records[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
+        projectFinancialRecords = records
+
+        var movements = projectWarehouseMovements
+        for index in movements.indices {
+            movements[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
+        projectWarehouseMovements = movements
+    }
+
+    private static func isStorageCleanupTicketCategory(_ category: ProjectDocumentCategory) -> Bool {
+        switch category {
+        case .invoice, .receipt, .paymentRequest:
+            return true
+        default:
+            return false
+        }
+    }
+
     func appendMaterialPriceEntry(_ entry: MaterialPriceEntry) {
         appendElement(entry, to: \.materialPriceEntries)
     }
@@ -867,6 +1077,23 @@ final class DataStore {
     }
 
     @discardableResult
+    func removeUserMaterials(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<UserMaterial> {
+        removeElements(
+            from: \.userMaterials,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
+    @discardableResult
     func removeMaterialPriceEntries(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -875,6 +1102,23 @@ final class DataStore {
     ) -> DataStoreRemovalResult<MaterialPriceEntry> {
         removeElements(
             from: \.materialPriceEntries,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
+    @discardableResult
+    func removeMaterialSheetDrafts(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<MaterialSheetDraft> {
+        removeElements(
+            from: \.materialSheetDrafts,
             ids: ids,
             id: \.id,
             audit: audit,
@@ -908,6 +1152,23 @@ final class DataStore {
         )
     }
 
+    @discardableResult
+    func removeConstructionMethods(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<ConstructionMethod> {
+        removeElements(
+            from: \.constructionMethods,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
     func importSampleData(replacingExisting: Bool) {
 #if DEBUG
         guard AppFeatureFlags.allowsSampleDataImport else {
@@ -930,22 +1191,116 @@ final class DataStore {
         scheduleSave()
     }
 
-    func removeCalculationHistory(ids: Set<UUID>) {
-        guard !ids.isEmpty else { return }
-        historyRecords.removeAll { ids.contains($0.id) }
-        scheduleSave()
+    @discardableResult
+    func removeCalculationHistory(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<HistoryRecord> {
+        removeElements(
+            from: \.historyRecords,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
     }
 
-    func clearCalculationHistory() {
-        guard !historyRecords.isEmpty else { return }
-        historyRecords.removeAll()
-        scheduleSave()
+    @discardableResult
+    func clearCalculationHistory(
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<HistoryRecord> {
+        removeElements(
+            from: \.historyRecords,
+            where: { _ in true },
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
     }
 
-    func enforceCalculationHistoryRetention() {
+    @discardableResult
+    func enforceCalculationHistoryRetention(
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<HistoryRecord> {
         let trimmed = applyingHistoryRetention(to: historyRecords)
-        guard trimmed.count != historyRecords.count else { return }
-        historyRecords = trimmed
+        let keptIDs = Set(trimmed.map(\.id))
+        return removeElements(
+            from: \.historyRecords,
+            where: { !keptIDs.contains($0.id) },
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
+    private func projectDeletionSnapshot() -> DataStoreProjectDeletionSnapshot {
+        DataStoreProjectDeletionSnapshot(
+            projects: projects,
+            materialItems: materialItems,
+            quoteItems: quoteItems,
+            laborRecords: laborRecords,
+            dailyLogs: dailyLogs,
+            progressTasks: progressTasks,
+            lightingCircuitPlans: lightingCircuitPlans,
+            siteTodos: siteTodos,
+            projectDrawings: projectDrawings,
+            projectContacts: projectContacts,
+            projectFinancialRecords: projectFinancialRecords,
+            projectDocuments: projectDocuments,
+            quickNotes: quickNotes,
+            projectWarehouseMovements: projectWarehouseMovements,
+            materialSheetDrafts: materialSheetDrafts
+        )
+    }
+
+    private func projectDeletionFileCleanup(
+        logs: [DailyLog],
+        todos: [SiteTodo],
+        drawings: [ProjectDrawing],
+        documents: [ProjectDocument],
+        quickNotes: [QuickNote]
+    ) -> DataStoreDeferredFileCleanup {
+        DataStoreDeferredFileCleanup.combined(
+            summary: String(localized: "删除项目关联文件"),
+            cleanups: [
+                DataStoreDeferredFileCleanup.photoFiles(
+                    logs.flatMap(\.allPhotoFileNames)
+                        + todos.compactMap(\.rectificationBeforePhotoFileName)
+                        + todos.compactMap(\.rectificationAfterPhotoFileName),
+                    summary: "project.photoFiles"
+                ),
+                DataStoreDeferredFileCleanup.drawingFiles(
+                    drawings.map(\.fileName),
+                    summary: "project.drawingFiles"
+                ),
+                DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    documents.map(\.fileName),
+                    summary: "project.documentFiles"
+                ),
+                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                    quickNotes.flatMap { note in
+                        note.attachments.map(\.fileName)
+                    },
+                    summary: "project.quickNoteAttachmentFiles"
+                )
+            ]
+        )
+    }
+
+    private func restoredSnapshotItems<Item: Identifiable>(
+        snapshot: [Item],
+        current: [Item]
+    ) -> [Item] where Item.ID: Hashable {
+        let snapshotIDs = Set(snapshot.map(\.id))
+        let newItems = current.filter { !snapshotIDs.contains($0.id) }
+        return newItems + snapshot
     }
 
     func relatedDataCount(for projectId: UUID) -> Int {
@@ -966,43 +1321,63 @@ final class DataStore {
             + materialLibraryStore.materialSheetDraftCount(for: projectId)
     }
 
-    func deleteProject(_ projectId: UUID) {
-        let projectLogs = projectStore.dailyLogs(for: projectId)
-        let projectTodos = projectStore.siteTodos(for: projectId)
-        let projectDrawingItems = projectStore.projectDrawings(for: projectId)
-        let projectDocumentItems = projectStore.projectDocuments(for: projectId)
-        let projectQuickNotes = projectStore.quickNotes(for: projectId)
+    @discardableResult
+    func removeProjectCascade(
+        _ projectId: UUID,
+        audit: DataStoreDeletionAuditContext? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreProjectDeletionResult {
+        let snapshot = projectDeletionSnapshot()
+        let removedProject = snapshot.projects.first { $0.id == projectId }
+        let projectLogs = snapshot.dailyLogs.filter { $0.projectId == projectId }
+        let projectTodos = snapshot.siteTodos.filter { $0.projectId == projectId }
+        let projectDrawingItems = snapshot.projectDrawings.filter { $0.projectId == projectId }
+        let projectDocumentItems = snapshot.projectDocuments.filter { $0.projectId == projectId }
+        let projectQuickNotes = snapshot.quickNotes.filter { $0.projectId == projectId }
+        let fileCleanup = projectDeletionFileCleanup(
+            logs: projectLogs,
+            todos: projectTodos,
+            drawings: projectDrawingItems,
+            documents: projectDocumentItems,
+            quickNotes: projectQuickNotes
+        )
 
-        // 照片（日志 + 待办整改前后）
-        let logPhotos = projectLogs.flatMap(\.allPhotoFileNames)
-        let todoPhotos = projectTodos.compactMap(\.rectificationBeforePhotoFileName) +
-            projectTodos.compactMap(\.rectificationAfterPhotoFileName)
-        PhotoStorage.delete(fileNames: logPhotos + todoPhotos)
-
-        // 图纸文件
-        for drawing in projectDrawingItems {
-            DrawingStorage.delete(fileName: drawing.fileName)
+        guard removedProject != nil else {
+            return DataStoreProjectDeletionResult(
+                projectId: projectId,
+                snapshot: snapshot,
+                removedProject: nil,
+                deletedRecordCount: 0,
+                audit: audit,
+                deferredFileCleanup: fileCleanup
+            )
         }
 
-        // 文档文件
-        for document in projectDocumentItems {
-            ProjectDocumentStorage.delete(fileName: document.fileName)
-        }
+        let deletedRecordCount = 1
+            + snapshot.materialItems.filter { $0.projectId == projectId }.count
+            + snapshot.quoteItems.filter { $0.projectId == projectId }.count
+            + snapshot.laborRecords.filter { $0.projectId == projectId }.count
+            + projectLogs.count
+            + snapshot.progressTasks.filter { $0.projectId == projectId }.count
+            + snapshot.lightingCircuitPlans.filter { $0.projectId == projectId }.count
+            + projectTodos.count
+            + projectDrawingItems.count
+            + snapshot.projectContacts.filter { $0.projectId == projectId }.count
+            + snapshot.projectFinancialRecords.filter { $0.projectId == projectId }.count
+            + projectDocumentItems.count
+            + projectQuickNotes.count
+            + snapshot.projectWarehouseMovements.filter { $0.projectId == projectId }.count
+            + snapshot.materialSheetDrafts.filter { $0.projectId == projectId }.count
 
-        // 随手记附件
-        let quickNoteAttachments = projectQuickNotes.flatMap(\.attachments)
-        QuickNoteAttachmentStorage.delete(attachments: quickNoteAttachments)
-
-        // 数据记录
-        materialItems.removeAll { $0.projectId == projectId }
-        quoteItems.removeAll { $0.projectId == projectId }
-        laborRecords.removeAll { $0.projectId == projectId }
-        dailyLogs.removeAll { $0.projectId == projectId }
-        progressTasks.removeAll { $0.projectId == projectId }
-        lightingCircuitPlans.removeAll { $0.projectId == projectId }
-        siteTodos.removeAll { $0.projectId == projectId }
-        projectDrawings.removeAll { $0.projectId == projectId }
-        projectContacts = projectContacts.compactMap { contact in
+        materialItems = snapshot.materialItems.filter { $0.projectId != projectId }
+        quoteItems = snapshot.quoteItems.filter { $0.projectId != projectId }
+        laborRecords = snapshot.laborRecords.filter { $0.projectId != projectId }
+        dailyLogs = snapshot.dailyLogs.filter { $0.projectId != projectId }
+        progressTasks = snapshot.progressTasks.filter { $0.projectId != projectId }
+        lightingCircuitPlans = snapshot.lightingCircuitPlans.filter { $0.projectId != projectId }
+        siteTodos = snapshot.siteTodos.filter { $0.projectId != projectId }
+        projectDrawings = snapshot.projectDrawings.filter { $0.projectId != projectId }
+        projectContacts = snapshot.projectContacts.compactMap { contact in
             if contact.projectId == projectId {
                 return nil
             }
@@ -1010,22 +1385,85 @@ final class DataStore {
             cleaned.relatedProjectIds.removeAll { $0 == projectId }
             return cleaned
         }
-        projectFinancialRecords.removeAll { $0.projectId == projectId }
-        projectDocuments.removeAll { $0.projectId == projectId }
-        quickNotes.removeAll { $0.projectId == projectId }
-        projectWarehouseMovements.removeAll { $0.projectId == projectId }
-        materialSheetDrafts.removeAll { $0.projectId == projectId }
-        projects.removeAll { $0.id == projectId }
+        projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId != projectId }
+        projectDocuments = snapshot.projectDocuments.filter { $0.projectId != projectId }
+        quickNotes = snapshot.quickNotes.filter { $0.projectId != projectId }
+        projectWarehouseMovements = snapshot.projectWarehouseMovements.filter { $0.projectId != projectId }
+        materialSheetDrafts = snapshot.materialSheetDrafts.filter { $0.projectId != projectId }
+        projects = snapshot.projects.filter { $0.id != projectId }
+
+        let result = DataStoreProjectDeletionResult(
+            projectId: projectId,
+            snapshot: snapshot,
+            removedProject: removedProject,
+            deletedRecordCount: deletedRecordCount,
+            audit: audit,
+            deferredFileCleanup: fileCleanup
+        )
+        if recordsAuditImmediately {
+            result.recordAuditStarted()
+            result.performDeferredFileCleanup()
+            result.recordAuditSucceeded()
+        }
+        return result
+    }
+
+    func restoreProjectCascade(_ deletion: DataStoreProjectDeletionResult) {
+        guard !deletion.isEmpty else { return }
+        projects = restoredSnapshotItems(snapshot: deletion.snapshot.projects, current: projects)
+        materialItems = restoredSnapshotItems(snapshot: deletion.snapshot.materialItems, current: materialItems)
+        quoteItems = restoredSnapshotItems(snapshot: deletion.snapshot.quoteItems, current: quoteItems)
+        laborRecords = restoredSnapshotItems(snapshot: deletion.snapshot.laborRecords, current: laborRecords)
+        dailyLogs = restoredSnapshotItems(snapshot: deletion.snapshot.dailyLogs, current: dailyLogs)
+        progressTasks = restoredSnapshotItems(snapshot: deletion.snapshot.progressTasks, current: progressTasks)
+        lightingCircuitPlans = restoredSnapshotItems(snapshot: deletion.snapshot.lightingCircuitPlans, current: lightingCircuitPlans)
+        siteTodos = restoredSnapshotItems(snapshot: deletion.snapshot.siteTodos, current: siteTodos)
+        projectDrawings = restoredSnapshotItems(snapshot: deletion.snapshot.projectDrawings, current: projectDrawings)
+        projectContacts = restoredSnapshotItems(snapshot: deletion.snapshot.projectContacts, current: projectContacts)
+        projectFinancialRecords = restoredSnapshotItems(
+            snapshot: deletion.snapshot.projectFinancialRecords,
+            current: projectFinancialRecords
+        )
+        projectDocuments = restoredSnapshotItems(snapshot: deletion.snapshot.projectDocuments, current: projectDocuments)
+        quickNotes = restoredSnapshotItems(snapshot: deletion.snapshot.quickNotes, current: quickNotes)
+        projectWarehouseMovements = restoredSnapshotItems(
+            snapshot: deletion.snapshot.projectWarehouseMovements,
+            current: projectWarehouseMovements
+        )
+        materialSheetDrafts = restoredSnapshotItems(snapshot: deletion.snapshot.materialSheetDrafts, current: materialSheetDrafts)
+    }
+
+    func deleteProject(_ projectId: UUID) {
+        let deletion = removeProjectCascade(projectId)
+        deletion.performDeferredFileCleanup()
         scheduleSave()
     }
 
     func clearAllBusinessData(deleteStoredFiles: Bool = true) {
         cancelScheduledSave()
         if deleteStoredFiles {
-            PhotoStorage.delete(fileNames: PhotoStorage.allStoredFileNames())
-            DrawingStorage.delete(fileNames: DrawingStorage.allStoredFileNames())
-            ProjectDocumentStorage.delete(fileNames: ProjectDocumentStorage.allStoredFileNames())
-            QuickNoteAttachmentStorage.delete(fileNames: QuickNoteAttachmentStorage.allStoredFileNames())
+            DataStoreDeferredFileCleanup.combined(
+                summary: "dataStore.clearAllBusinessData",
+                cleanups: [
+                    DataStoreDeferredFileCleanup.photoFiles(
+                        PhotoStorage.allStoredFileNames(),
+                        summary: "dataStore.clearAll.photos"
+                    ),
+                    DataStoreDeferredFileCleanup.drawingFiles(
+                        DrawingStorage.allStoredFileNames(),
+                        summary: "dataStore.clearAll.drawings"
+                    ),
+                    DataStoreDeferredFileCleanup.projectDocumentFiles(
+                        ProjectDocumentStorage.allStoredFileNames(),
+                        summary: "dataStore.clearAll.projectDocuments"
+                    ),
+                    DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                        QuickNoteAttachmentStorage.allStoredFileNames(),
+                        summary: "dataStore.clearAll.quickNoteAttachments"
+                    )
+                ]
+            )
+            .perform()
             StorageIssueLog.clear()
         }
         clearAllData()
@@ -1045,16 +1483,28 @@ final class DataStore {
 
             onProgress?(String(localized: "正在并行删除照片/图纸/资料/附件"))
             async let deletePhotos: Void = Task.detached(priority: .userInitiated) {
-                PhotoStorage.delete(fileNames: photoNames)
+                DataStoreDeferredFileCleanup.photoFiles(
+                    photoNames,
+                    summary: "dataStore.clearAllAsync.photos"
+                )?.perform()
             }.value
             async let deleteDrawings: Void = Task.detached(priority: .userInitiated) {
-                DrawingStorage.delete(fileNames: drawingNames)
+                DataStoreDeferredFileCleanup.drawingFiles(
+                    drawingNames,
+                    summary: "dataStore.clearAllAsync.drawings"
+                )?.perform()
             }.value
             async let deleteDocuments: Void = Task.detached(priority: .userInitiated) {
-                ProjectDocumentStorage.delete(fileNames: documentNames)
+                DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    documentNames,
+                    summary: "dataStore.clearAllAsync.projectDocuments"
+                )?.perform()
             }.value
             async let deleteAttachments: Void = Task.detached(priority: .userInitiated) {
-                QuickNoteAttachmentStorage.delete(fileNames: attachmentNames)
+                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                    attachmentNames,
+                    summary: "dataStore.clearAllAsync.quickNoteAttachments"
+                )?.perform()
             }.value
             _ = await (deletePhotos, deleteDrawings, deleteDocuments, deleteAttachments)
 
@@ -1200,7 +1650,11 @@ final class DataStore {
         do {
             data = try JSONEncoder().encode(widgetData)
         } catch {
-            StorageIssueLog.record("Widget 数据编码失败：\(error.localizedDescription)", category: .dataStore)
+            Self.recordIssue(
+                "datastore.widget_payload_encode_failed",
+                details: ["target": "widget_data"],
+                error: error
+            )
             return
         }
         defaults.set(data, forKey: "widget_data")
@@ -1288,6 +1742,19 @@ final class DataStore {
 actor DataStorePersistenceActor {
     private let storeURL: URL
 
+    private static func recordIssue(
+        _ event: String,
+        details: [String: String] = [:],
+        error: Error? = nil
+    ) {
+        StorageIssueLog.recordEvent(
+            event,
+            category: .dataStore,
+            details: details,
+            error: error
+        )
+    }
+
     struct LoadDecodeError: Error {
         let rawData: Data
     }
@@ -1323,13 +1790,24 @@ actor DataStorePersistenceActor {
                 } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
                     // ignore missing legacy file
                 } catch {
-                    StorageIssueLog.record(
-                        "旧数据文件迁移后清理失败：\(legacyStoreURL.lastPathComponent)，\(error.localizedDescription)",
-                        category: .dataStore
+                    Self.recordIssue(
+                        "datastore.legacy_store_cleanup_failed",
+                        details: [
+                            "file": legacyStoreURL.lastPathComponent,
+                            "target": primaryStoreURL.lastPathComponent
+                        ],
+                        error: error
                     )
                 }
             } catch {
-                StorageIssueLog.record("旧数据文件迁移失败：\(error.localizedDescription)", category: .dataStore)
+                Self.recordIssue(
+                    "datastore.legacy_store_migration_failed",
+                    details: [
+                        "source": legacyStoreURL.lastPathComponent,
+                        "target": primaryStoreURL.lastPathComponent
+                    ],
+                    error: error
+                )
             }
         }
         return snapshot

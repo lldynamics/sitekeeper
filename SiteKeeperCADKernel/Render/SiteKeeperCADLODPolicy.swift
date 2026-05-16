@@ -26,7 +26,8 @@ extension SiteKeeperCADKernel {
         static let standard = CADLODPolicy()
 
         func shouldSimplify(entityCount: Int, zoomScale: Double) -> Bool {
-            entityCount > simplifyEntityThreshold || zoomScale < zoomedOutScaleThreshold
+            zoomScale < zoomedOutScaleThreshold
+                || (entityCount > simplifyEntityThreshold && zoomScale < zoomedOutScaleThreshold * 4)
         }
 
         func decision(
@@ -74,7 +75,7 @@ extension SiteKeeperCADKernel {
 
         private func zoomingDecision(for entity: CADEntity, zoomScale: Double) -> CADLODDecision {
             switch entity.kind {
-            case .line, .polyline, .lwPolyline, .circle, .arc, .ellipse:
+            case .line, .point, .polyline, .lwPolyline, .circle, .arc, .ellipse:
                 if isTinyLine(entity, zoomScale: zoomScale) {
                     return .skip("CAD_LOD_ZOOMING_TINY_LINE_SKIPPED")
                 }

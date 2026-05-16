@@ -514,30 +514,32 @@ struct LaborRecordView: View {
         let idSet = Set(ids)
         guard !idSet.isEmpty else { return }
 
-        let snapshot = store.laborRecords
-        let targets = snapshot.filter { idSet.contains($0.id) }
+        let targets = store.laborRecords.filter { idSet.contains($0.id) }
         guard !targets.isEmpty else { return }
+        let deletion = store.removeLaborRecords(
+            ids: idSet,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除人工记录"),
+                detail: targets.map { [$0.teamName, $0.workType].filter { !$0.isEmpty }.joined(separator: " / ") }.joined(separator: "、"),
+                source: "LaborRecordView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
 
-        store.laborRecords.removeAll { idSet.contains($0.id) }
         undoableDeletion.queue(
             notice: $operationNotice,
-            message: String(format: String(localized: "已删除 %lld 条人工记录"), Int64(targets.count)),
+            message: String(format: String(localized: "已删除 %lld 条人工记录"), Int64(deletion.deletedCount)),
             commit: {
                 store.scheduleSave()
             },
             undo: {
-                store.laborRecords = UndoableDeletionCoordinator.restoringItems(
-                    snapshot: snapshot,
+                store.laborRecords = deletion.restoredItems(
                     current: store.laborRecords,
-                    deletedIDs: idSet
+                    id: \.id
                 )
                 store.scheduleSave()
             },
-            audit: UndoableDeletionAuditContext(
-                summary: String(format: String(localized: "删除人工记录 %lld 条"), Int64(targets.count)),
-                detail: targets.map { [$0.teamName, $0.workType].filter { !$0.isEmpty }.joined(separator: " / ") }.joined(separator: "、"),
-                source: "LaborRecordView"
-            )
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 

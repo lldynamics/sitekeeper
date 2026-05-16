@@ -85,7 +85,7 @@ enum BackupImportCoordinator {
         sanitizeMaterialProjectReferences(in: store)
     }
 
-    static func cleanupOverwrittenFiles(previous: BackupSnapshot, imported: BackupSnapshot) {
+    static func overwrittenLocalFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
         let oldPhotoNames = photoFileNames(in: previous)
         let newPhotoNames = photoFileNames(in: imported)
         let oldDrawingNames = Set(previous.projectDrawings.map(\.fileName).filter { !$0.isEmpty })
@@ -95,10 +95,60 @@ enum BackupImportCoordinator {
         let oldQuickNoteAttachmentNames = quickNoteAttachmentFileNames(in: previous)
         let newQuickNoteAttachmentNames = quickNoteAttachmentFileNames(in: imported)
 
-        PhotoStorage.delete(fileNames: Array(oldPhotoNames.subtracting(newPhotoNames)))
-        DrawingStorage.delete(fileNames: Array(oldDrawingNames.subtracting(newDrawingNames)))
-        ProjectDocumentStorage.delete(fileNames: Array(oldDocumentNames.subtracting(newDocumentNames)))
-        QuickNoteAttachmentStorage.delete(fileNames: Array(oldQuickNoteAttachmentNames.subtracting(newQuickNoteAttachmentNames)))
+        return BackupFileImpactSummary(
+            photoFileNames: oldPhotoNames.subtracting(newPhotoNames).filter { PhotoStorage.exists(fileName: $0) },
+            drawingFileNames: oldDrawingNames.subtracting(newDrawingNames).filter { DrawingStorage.exists(fileName: $0) },
+            documentFileNames: oldDocumentNames.subtracting(newDocumentNames).filter { ProjectDocumentStorage.exists(fileName: $0) },
+            quickNoteAttachmentFileNames: oldQuickNoteAttachmentNames.subtracting(newQuickNoteAttachmentNames).filter {
+                QuickNoteAttachmentStorage.exists(fileName: $0)
+            }
+        )
+    }
+
+    @discardableResult
+    static func cleanupOverwrittenFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
+        let impact = overwrittenLocalFiles(previous: previous, imported: imported)
+        var cleanupErrors: [String] = []
+
+        func runCleanup(_ label: String, _ cleanup: () throws -> Void) {
+            do {
+                try cleanup()
+            } catch {
+                cleanupErrors.append("\(label): \(error.localizedDescription)")
+            }
+        }
+
+        runCleanup("photo") {
+            try DataStoreDeferredFileCleanup.deletePhotoFilesOrThrow(
+                impact.photoFileNames,
+                summary: "backupImport.photos"
+            )
+        }
+        runCleanup("drawing") {
+            try DataStoreDeferredFileCleanup.deleteDrawingFilesOrThrow(
+                impact.drawingFileNames,
+                summary: "backupImport.drawings"
+            )
+        }
+        runCleanup("document") {
+            try DataStoreDeferredFileCleanup.deleteProjectDocumentFilesOrThrow(
+                impact.documentFileNames,
+                summary: "backupImport.projectDocuments"
+            )
+        }
+        runCleanup("quickNoteAttachment") {
+            try DataStoreDeferredFileCleanup.deleteQuickNoteAttachmentFilesOrThrow(
+                impact.quickNoteAttachmentFileNames,
+                summary: "backupImport.quickNoteAttachments"
+            )
+        }
+
+        if !cleanupErrors.isEmpty {
+            StorageIssueLog.record(
+                "覆盖导入清理旧文件失败：\(cleanupErrors.joined(separator: "；"))"
+            )
+        }
+        return impact
     }
 
     private static func appendUniqueByID<T: Identifiable>(_ incoming: [T], to current: inout [T]) where T.ID: Hashable {

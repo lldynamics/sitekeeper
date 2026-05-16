@@ -472,6 +472,11 @@ struct ProjectDocument: Identifiable, Codable {
     @NonNegativeNumberText var amount: String
     var linkedFinancialRecordId: UUID?
     var linkedConstructionMethodIDs: [UUID]
+    var submissionStatus: ProjectDocumentSubmissionStatus
+    var responsiblePerson: String
+    var formedAt: String
+    var archiveNumber: String
+    var workSection: String
     var createdAt: String
     var note: String
 
@@ -479,13 +484,18 @@ struct ProjectDocument: Identifiable, Codable {
         id: UUID = UUID(),
         projectId: UUID,
         title: String,
-        category: ProjectDocumentCategory = .construction,
+        category: ProjectDocumentCategory = .constructionRecord,
         fileName: String,
         fileType: String = "pdf",
         pageCount: Int = 1,
         amount: String = "",
         linkedFinancialRecordId: UUID? = nil,
         linkedConstructionMethodIDs: [UUID] = [],
+        submissionStatus: ProjectDocumentSubmissionStatus = .notSubmitted,
+        responsiblePerson: String = "",
+        formedAt: String = "",
+        archiveNumber: String = "",
+        workSection: String = "",
         createdAt: String = Formatters.now(),
         note: String = ""
     ) {
@@ -499,12 +509,17 @@ struct ProjectDocument: Identifiable, Codable {
         self.amount = amount
         self.linkedFinancialRecordId = linkedFinancialRecordId
         self.linkedConstructionMethodIDs = linkedConstructionMethodIDs
+        self.submissionStatus = submissionStatus
+        self.responsiblePerson = responsiblePerson
+        self.formedAt = formedAt
+        self.archiveNumber = archiveNumber
+        self.workSection = workSection
         self.createdAt = createdAt
         self.note = note
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, linkedConstructionMethodIDs, createdAt, note
+        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, linkedConstructionMethodIDs, submissionStatus, responsiblePerson, formedAt, archiveNumber, workSection, createdAt, note
     }
 
     init(from decoder: Decoder) throws {
@@ -523,8 +538,39 @@ struct ProjectDocument: Identifiable, Codable {
         amount = try container.decodeIfPresent(String.self, forKey: .amount) ?? ""
         linkedFinancialRecordId = try container.decodeIfPresent(UUID.self, forKey: .linkedFinancialRecordId)
         linkedConstructionMethodIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedConstructionMethodIDs) ?? []
+        submissionStatus = try container.decodeStringEnum(
+            ProjectDocumentSubmissionStatus.self,
+            forKey: .submissionStatus,
+            default: .notSubmitted
+        )
+        responsiblePerson = try container.decodeIfPresent(String.self, forKey: .responsiblePerson) ?? ""
+        formedAt = try container.decodeIfPresent(String.self, forKey: .formedAt) ?? ""
+        archiveNumber = try container.decodeIfPresent(String.self, forKey: .archiveNumber) ?? ""
+        workSection = try container.decodeIfPresent(String.self, forKey: .workSection) ?? ""
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+    }
+}
+
+enum ProjectDocumentSubmissionStatus: String, CaseIterable, Codable {
+    case notSubmitted = "未报验"
+    case pending = "待报验"
+    case submitted = "已报验"
+    case returned = "退回修改"
+    case confirmed = "已确认"
+    case archived = "已归档"
+
+    var displayName: String { rawValue }
+}
+
+extension ProjectDocumentSubmissionStatus {
+    var requiresArchiveAttention: Bool {
+        switch self {
+        case .notSubmitted, .pending, .returned:
+            return true
+        case .submitted, .confirmed, .archived:
+            return false
+        }
     }
 }
 
@@ -738,6 +784,14 @@ enum ProjectContactRole: String, CaseIterable, Codable {
 enum ProjectDocumentCategory: String, CaseIterable, Codable {
     case paymentRequest = "请款资料"
     case construction = "施工资料"
+    case constructionTechnical = "施工技术"
+    case constructionMaterial = "施工物资"
+    case constructionSurvey = "施工测量"
+    case constructionRecord = "施工记录"
+    case constructionTest = "施工试验"
+    case constructionManagement = "施工管理"
+    case processAcceptance = "过程验收"
+    case completionAcceptance = "竣工验收"
     case invoice = "发票"
     case receipt = "收据"
     case contract = "合同"
@@ -745,6 +799,167 @@ enum ProjectDocumentCategory: String, CaseIterable, Codable {
     case other = "其他资料"
 
     var displayName: String { rawValue }
+
+    static let defaultConstructionArchiveRequirements: [ProjectDocumentCategory] = [
+        .constructionTechnical,
+        .constructionMaterial,
+        .constructionSurvey,
+        .constructionRecord,
+        .constructionTest,
+        .constructionManagement,
+        .processAcceptance,
+        .completionAcceptance
+    ]
+
+    static func normalizedConstructionArchiveRequirements(
+        _ categories: [ProjectDocumentCategory]
+    ) -> [ProjectDocumentCategory] {
+        let allowed = Set(defaultConstructionArchiveRequirements)
+        var seen = Set<ProjectDocumentCategory>()
+        var normalized: [ProjectDocumentCategory] = []
+        for category in categories where allowed.contains(category) {
+            guard seen.insert(category).inserted else { continue }
+            normalized.append(category)
+        }
+        guard !normalized.isEmpty else {
+            return defaultConstructionArchiveRequirements
+        }
+        let order = Dictionary(uniqueKeysWithValues: defaultConstructionArchiveRequirements.enumerated().map { ($0.element, $0.offset) })
+        return normalized.sorted { lhs, rhs in
+            (order[lhs] ?? Int.max) < (order[rhs] ?? Int.max)
+        }
+    }
+
+    var isConstructionArchive: Bool {
+        switch self {
+        case .construction,
+             .constructionTechnical,
+             .constructionMaterial,
+             .constructionSurvey,
+             .constructionRecord,
+             .constructionTest,
+             .constructionManagement,
+             .processAcceptance,
+             .completionAcceptance,
+             .acceptance:
+            return true
+        case .paymentRequest, .invoice, .receipt, .contract, .other:
+            return false
+        }
+    }
+
+    var isBusinessArchive: Bool {
+        switch self {
+        case .paymentRequest, .invoice, .receipt, .contract:
+            return true
+        case .construction,
+             .constructionTechnical,
+             .constructionMaterial,
+             .constructionSurvey,
+             .constructionRecord,
+             .constructionTest,
+             .constructionManagement,
+             .processAcceptance,
+             .completionAcceptance,
+             .acceptance,
+             .other:
+            return false
+        }
+    }
+}
+
+struct DocumentArchiveChecklistSnapshot {
+    let requiredCategories: [ProjectDocumentCategory]
+    let items: [DocumentArchiveChecklistItem]
+    let legacyDocumentCount: Int
+
+    init(
+        documents: [ProjectDocument],
+        requiredCategories: [ProjectDocumentCategory] = ProjectDocumentCategory.defaultConstructionArchiveRequirements
+    ) {
+        let normalizedCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(requiredCategories)
+        self.requiredCategories = normalizedCategories
+        items = normalizedCategories.map { category in
+            let categoryDocuments = documents.filter { $0.category == category }
+            return DocumentArchiveChecklistItem(category: category, documents: categoryDocuments)
+        }
+        legacyDocumentCount = documents.filter {
+            $0.category == .construction || $0.category == .acceptance
+        }.count
+    }
+
+    var requiredCount: Int { items.count }
+    var coveredCount: Int { items.filter { !$0.isMissing }.count }
+    var missingCount: Int { items.filter(\.isMissing).count }
+    var actionCount: Int { items.reduce(0) { $0 + $1.actionCount } }
+    var returnedDocumentCount: Int { items.reduce(0) { $0 + $1.returnedCount } }
+    var archivedDocumentCount: Int { items.reduce(0) { $0 + $1.archivedCount } }
+    var hasAttention: Bool { missingCount > 0 || actionCount > 0 || legacyDocumentCount > 0 }
+
+    var statusLine: String {
+        if !hasAttention {
+            return String(localized: "清单完整")
+        }
+        var parts: [String] = []
+        if missingCount > 0 {
+            parts.append(String(format: String(localized: "缺 %lld 类"), Int64(missingCount)))
+        }
+        if actionCount > 0 {
+            parts.append(String(format: String(localized: "待处理 %lld 份"), Int64(actionCount)))
+        }
+        if legacyDocumentCount > 0 {
+            parts.append(String(format: String(localized: "待细分 %lld 份"), Int64(legacyDocumentCount)))
+        }
+        return parts.joined(separator: " · ")
+    }
+}
+
+struct DocumentArchiveChecklistItem: Identifiable {
+    let category: ProjectDocumentCategory
+    let documentCount: Int
+    let actionCount: Int
+    let returnedCount: Int
+    let archivedCount: Int
+
+    var id: ProjectDocumentCategory { category }
+    var isMissing: Bool { documentCount == 0 }
+
+    init(category: ProjectDocumentCategory, documents: [ProjectDocument]) {
+        self.category = category
+        documentCount = documents.count
+        actionCount = documents.filter(\.submissionStatus.requiresArchiveAttention).count
+        returnedCount = documents.filter { $0.submissionStatus == .returned }.count
+        archivedCount = documents.filter { $0.submissionStatus == .archived }.count
+    }
+
+    var statusText: String {
+        if isMissing { return String(localized: "缺项") }
+        if returnedCount > 0 { return String(localized: "退回") }
+        if actionCount > 0 { return String(localized: "待处理") }
+        if archivedCount == documentCount { return String(localized: "已归档") }
+        return String(localized: "已覆盖")
+    }
+
+    var detailText: String {
+        if isMissing {
+            return String(localized: "暂无资料")
+        }
+        var parts = [String(format: String(localized: "%lld 份资料"), Int64(documentCount))]
+        if actionCount > 0 {
+            parts.append(String(format: String(localized: "待处理 %lld"), Int64(actionCount)))
+        }
+        if archivedCount > 0 {
+            parts.append(String(format: String(localized: "已归档 %lld"), Int64(archivedCount)))
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    var systemImage: String {
+        if isMissing { return "exclamationmark.circle" }
+        if returnedCount > 0 { return "arrow.uturn.backward.circle" }
+        if actionCount > 0 { return "clock.badge.exclamationmark" }
+        return "checkmark.circle"
+    }
 }
 
 enum PhotoTag: String, CaseIterable, Codable {

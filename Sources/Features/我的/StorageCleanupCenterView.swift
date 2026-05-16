@@ -6,6 +6,7 @@ struct StorageCleanupCenterView: View {
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
     @AppStorage(UserPreferenceKeys.storageCleanupLargeFileThresholdMB) private var largeFileThresholdMB = StorageCleanupLargeFileThresholdOption.defaultMegabytes
+    @AppStorage(UserPreferenceKeys.storageCleanupTrashRetentionDays) private var cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.defaultDays
     @State private var cloudBackups: [CloudBackupFile] = []
     @State private var cloudBackupError: String?
     @State private var isRefreshingCloudBackups = false
@@ -15,6 +16,7 @@ struct StorageCleanupCenterView: View {
     @State private var pendingCleanupCategory: ProjectStorageCleanupCategory = .all
     @State private var showCleanupProjectAlert = false
     @State private var cleanupStatusMessage = ""
+    @State private var cleanupTrashBatches: [StorageCleanupTrashBatch] = []
 
     private let showsNavigationTitle: Bool
     private let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
@@ -41,6 +43,10 @@ struct StorageCleanupCenterView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+
+            cleanupTrashPolicySection
+
+            cleanupTrashSection
 
             Section(String(localized: "空间汇总")) {
                 ForEach(categorySummaries) { summary in
@@ -161,6 +167,8 @@ struct StorageCleanupCenterView: View {
         .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: String(localized: "存储清理中心")))
         .onAppear {
             normalizeLargeFileThresholdPreference()
+            normalizeCleanupTrashRetentionPreference()
+            refreshCleanupTrash()
         }
         .task {
             await refreshCloudBackups()
@@ -187,6 +195,98 @@ struct StorageCleanupCenterView: View {
 
     private var largeFileThresholdBytes: Int {
         StorageCleanupLargeFileThresholdOption.bytes(for: largeFileThresholdMB)
+    }
+
+    private var normalizedCleanupTrashRetentionDays: Int {
+        StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
+    }
+
+    private var cleanupTrashRecoveryDeadlineText: String {
+        Formatters.date.string(from: cleanupTrashExpirationDate(from: Date()))
+    }
+
+    private var cleanupTrashPolicySection: some View {
+        Section {
+            Picker(selection: $cleanupTrashRetentionDays) {
+                ForEach(StorageCleanupTrashRetentionOption.allCases) { option in
+                    Text(option.displayName)
+                        .tag(option.days)
+                }
+            } label: {
+                Label(String(localized: "回收站保留时间"), systemImage: "clock.arrow.circlepath")
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(
+                String(
+                    format: String(localized: "之后新清理的文件可恢复至 %@。"),
+                    cleanupTrashRecoveryDeadlineText
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        } header: {
+            Text(String(localized: "回收站策略"))
+        } footer: {
+            Text(String(localized: "只影响之后新清理的批次；已有回收站批次仍按原到期时间处理。"))
+        }
+    }
+
+    private var cleanupTrashSection: some View {
+        Section {
+            if cleanupTrashBatches.isEmpty {
+                Text(String(localized: "暂无可恢复的清理记录。"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(cleanupTrashBatches) { batch in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(batch.summary)
+                                .font(.callout.weight(.semibold))
+                            Spacer()
+                            Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.appWarning)
+                        }
+                        Text(
+                            String(
+                                format: String(localized: "可恢复至 %@"),
+                                Formatters.date.string(from: batch.expiresAt)
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                        HStack {
+                            Button {
+                                restoreCleanupTrash(batch)
+                            } label: {
+                                Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button(role: .destructive) {
+                                permanentlyDeleteCleanupTrash(batch)
+                            } label: {
+                                Label(String(localized: "永久删除"), systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .font(.caption)
+                    }
+                    .padding(.vertical, 3)
+                }
+            }
+        } header: {
+            Text(String(localized: "清理回收站"))
+        } footer: {
+            Text(
+                String(
+                    format: String(localized: "项目文件清理后会先进入回收站，当前保留 %lld 天。过期批次会在进入本页时自动永久删除。"),
+                    Int64(normalizedCleanupTrashRetentionDays)
+                )
+            )
+        }
     }
 
     private var largeFileRuleSuggestionText: String {
@@ -462,6 +562,19 @@ struct StorageCleanupCenterView: View {
         }
     }
 
+    private func normalizeCleanupTrashRetentionPreference() {
+        let normalized = StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
+        if cleanupTrashRetentionDays != normalized {
+            cleanupTrashRetentionDays = normalized
+        }
+    }
+
+    private func cleanupTrashExpirationDate(from date: Date) -> Date {
+        let retentionDays = max(normalizedCleanupTrashRetentionDays, 1)
+        return Calendar.current.date(byAdding: .day, value: retentionDays, to: date)
+            ?? date.addingTimeInterval(TimeInterval(retentionDays * 24 * 60 * 60))
+    }
+
     private func isTicketCategory(_ category: ProjectDocumentCategory) -> Bool {
         switch category {
         case .invoice, .receipt, .paymentRequest:
@@ -508,8 +621,10 @@ struct StorageCleanupCenterView: View {
             lines.append(String(localized: "预计删除文件 0 个。"))
         }
 
-        if !preview.recordItems.isEmpty {
-            lines.append(String(localized: "预计影响记录："))
+        lines.append(String(localized: "预计影响记录："))
+        if preview.recordItems.isEmpty {
+            lines.append(String(localized: "- 无关联记录变更"))
+        } else {
             for item in preview.recordItems {
                 lines.append(String(format: String(localized: "- %@ %lld 条"), item.title, Int64(item.count)))
             }
@@ -520,6 +635,13 @@ struct StorageCleanupCenterView: View {
             lines.append(String(format: String(localized: "示例文件：%@"), preview.sampleFileNames.prefix(5).joined(separator: sampleSeparator)))
         }
 
+        lines.append(
+            String(
+                format: String(localized: "清理后文件将进入回收站，可恢复至 %@（%lld 天内）。"),
+                Formatters.date.string(from: cleanupTrashExpirationDate(from: Date())),
+                Int64(normalizedCleanupTrashRetentionDays)
+            )
+        )
         lines.append(backupReminderMessage())
         return lines.joined(separator: "\n")
     }
@@ -726,9 +848,99 @@ struct StorageCleanupCenterView: View {
         return candidates.max()
     }
 
+    private func refreshCleanupTrash() {
+        let purgedCount = StorageCleanupTrashStore.purgeExpiredBatches(now: Date())
+        cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+        if purgedCount > 0 {
+            StorageIssueLog.record(
+                String(
+                    format: String(localized: "清理回收站已自动永久删除 %lld 个过期批次。"),
+                    Int64(purgedCount)
+                )
+            )
+        }
+    }
+
+    private func restoreCleanupTrash(_ batch: StorageCleanupTrashBatch) {
+        OperationAuditLog.record(
+            action: .restore,
+            outcome: .started,
+            summary: String(localized: "恢复清理回收站"),
+            detail: batch.summary,
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try StorageCleanupTrashStore.restore(batch)
+            batch.snapshot.restore(into: store)
+            store.scheduleSave()
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已从清理回收站恢复：%@。"),
+                batch.summary
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .succeeded,
+                summary: String(localized: "恢复清理回收站"),
+                detail: "\(batch.summary) · restored=\(batch.fileCount)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "清理回收站恢复失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .failed,
+                summary: String(localized: "恢复清理回收站"),
+                detail: "\(batch.summary) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
+    private func permanentlyDeleteCleanupTrash(_ batch: StorageCleanupTrashBatch) {
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: String(localized: "永久删除清理回收站"),
+            detail: batch.summary,
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try StorageCleanupTrashStore.permanentlyDelete(batch)
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已永久删除清理回收站批次：%@。"),
+                batch.summary
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .succeeded,
+                summary: String(localized: "永久删除清理回收站"),
+                detail: "\(batch.summary) · deleted=\(batch.fileCount)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "永久删除清理回收站失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .failed,
+                summary: String(localized: "永久删除清理回收站"),
+                detail: "\(batch.summary) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
     private func cleanupProjectFiles(_ usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) {
         let projectId = usage.projectId
         let auditDetail = "\(usage.projectName) · \(category.displayName)"
+        let undoSnapshot = StorageCleanupUndoSnapshot.capture(from: store)
         OperationAuditLog.record(
             action: .cleanup,
             outcome: .started,
@@ -736,162 +948,103 @@ struct StorageCleanupCenterView: View {
             detail: auditDetail,
             source: "StorageCleanupCenterView"
         )
-        let deletedCount: Int
+        var cleanupPlan = DeferredProjectFileCleanupPlan()
 
         switch category {
         case .photos:
-            deletedCount = cleanupProjectPhotos(projectId)
+            cleanupPlan.merge(cleanupProjectPhotos(projectId))
         case .videos:
-            deletedCount = cleanupProjectVideos(projectId)
+            cleanupPlan.merge(cleanupProjectVideos(projectId))
         case .cad:
-            deletedCount = cleanupProjectCAD(projectId)
+            cleanupPlan.merge(cleanupProjectCAD(projectId))
         case .tickets:
-            deletedCount = cleanupProjectTickets(projectId)
+            cleanupPlan.merge(cleanupProjectTickets(projectId))
         case .all:
-            deletedCount =
-                cleanupProjectPhotos(projectId)
-                + cleanupProjectVideos(projectId)
-                + cleanupProjectCAD(projectId)
-                + cleanupProjectTickets(projectId)
+            cleanupPlan.merge(cleanupProjectPhotos(projectId))
+            cleanupPlan.merge(cleanupProjectVideos(projectId))
+            cleanupPlan.merge(cleanupProjectCAD(projectId))
+            cleanupPlan.merge(cleanupProjectTickets(projectId))
         }
 
-        cleanupStatusMessage = String(
-            format: String(localized: "已清理 %@ 的%@：%lld 个文件。"),
+        let summary = String(
+            format: String(localized: "%@ · %@"),
             usage.projectName,
-            category.resultTitle,
-            Int64(deletedCount)
+            category.resultTitle
         )
-        store.scheduleSave()
+        do {
+            let retentionDays = normalizedCleanupTrashRetentionDays
+            let batch = try StorageCleanupTrashStore.quarantine(
+                plan: cleanupPlan,
+                snapshot: undoSnapshot,
+                summary: summary,
+                retentionDays: retentionDays
+            )
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已将 %@ 的%@移入清理回收站：%lld 个文件，可恢复至 %@。"),
+                usage.projectName,
+                category.resultTitle,
+                Int64(batch.fileCount),
+                Formatters.date.string(from: batch.expiresAt)
+            )
+            store.scheduleSave()
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .succeeded,
+                summary: String(localized: "按项目清理"),
+                detail: "\(auditDetail) · trashed=\(batch.fileCount) · retentionDays=\(retentionDays)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            undoSnapshot.restore(into: store)
+            cleanupStatusMessage = String(
+                format: String(localized: "清理回收站写入失败：%@"),
+                error.localizedDescription
+            )
+            store.scheduleSave()
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .failed,
+                summary: String(localized: "按项目清理"),
+                detail: "\(auditDetail) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
         pendingCleanupProject = nil
-        OperationAuditLog.record(
-            action: .cleanup,
-            outcome: .succeeded,
-            summary: String(localized: "按项目清理"),
-            detail: "\(auditDetail) · deleted=\(deletedCount)",
-            source: "StorageCleanupCenterView"
+    }
+
+    @discardableResult
+    private func cleanupProjectPhotos(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectPhotoReferences(projectId: projectId)
         )
     }
 
     @discardableResult
-    private func cleanupProjectPhotos(_ projectId: UUID) -> Int {
-        let logIndexes = store.dailyLogs.indices.filter { store.dailyLogs[$0].projectId == projectId }
-        let todoIndexes = store.siteTodos.indices.filter { store.siteTodos[$0].projectId == projectId }
-
-        var selectedPhotoNames = Set<String>()
-        for index in logIndexes {
-            selectedPhotoNames.formUnion(store.dailyLogs[index].allPhotoFileNames)
-            store.dailyLogs[index].photoFileName = nil
-            store.dailyLogs[index].photos = []
-        }
-        for index in todoIndexes {
-            if let before = store.siteTodos[index].rectificationBeforePhotoFileName {
-                selectedPhotoNames.insert(before)
-            }
-            if let after = store.siteTodos[index].rectificationAfterPhotoFileName {
-                selectedPhotoNames.insert(after)
-            }
-            store.siteTodos[index].rectificationBeforePhotoFileName = nil
-            store.siteTodos[index].rectificationAfterPhotoFileName = nil
-        }
-
-        let remainingPhotoNames = PhotoStorage.referencedFileNames(logs: store.dailyLogs, todos: store.siteTodos)
-        let deletablePhotoNames = selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
-        PhotoStorage.delete(fileNames: Array(deletablePhotoNames))
-        return deletablePhotoNames.count
+    private func cleanupProjectVideos(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        return DeferredProjectFileCleanupPlan(
+            store.clearProjectVideoReferences(
+                projectId: projectId,
+                videoFileExtensions: videoFileExtensions
+            )
+        )
     }
 
     @discardableResult
-    private func cleanupProjectVideos(_ projectId: UUID) -> Int {
-        let noteIndexes = store.quickNotes.indices.filter { store.quickNotes[$0].projectId == projectId }
-        var selectedAttachmentNames = Set<String>()
-        for index in noteIndexes {
-            let videos = store.quickNotes[index].attachments.filter { $0.attachmentKind == .video }
-            selectedAttachmentNames.formUnion(videos.map(\.fileName))
-            store.quickNotes[index].attachments.removeAll { $0.attachmentKind == .video }
-        }
-
-        let videoDocumentIDs = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId }
-                .filter { document in
-                    let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    return videoFileExtensions.contains(ext) && !isTicketCategory(document.category)
-                }
-                .map(\.id)
+    private func cleanupProjectCAD(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectCADReferences(
+                projectId: projectId,
+                cadFileExtensions: cadFileExtensions
+            )
         )
-        let videoDocumentFileNames = Set(
-            store.projectDocuments
-                .filter { videoDocumentIDs.contains($0.id) }
-                .map(\.fileName)
-        )
-        store.projectDocuments.removeAll { videoDocumentIDs.contains($0.id) }
-        unlinkDocuments(ids: videoDocumentIDs)
-
-        let extraMethodAttachments = store.constructionMethods.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.tutorialAttachments)
-        let remainingAttachmentNames = QuickNoteAttachmentStorage.referencedFileNames(
-            for: store.quickNotes,
-            extraAttachments: extraMethodAttachments
-        )
-        let deletableAttachmentNames = selectedAttachmentNames.filter { !remainingAttachmentNames.contains($0) }
-        QuickNoteAttachmentStorage.delete(fileNames: Array(deletableAttachmentNames))
-
-        let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
-        let deletableDocumentNames = videoDocumentFileNames.filter { !remainingDocumentNames.contains($0) }
-        ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
-
-        return deletableAttachmentNames.count + deletableDocumentNames.count
     }
 
     @discardableResult
-    private func cleanupProjectCAD(_ projectId: UUID) -> Int {
-        let drawingFileNames = Set(
-            store.projectDrawings
-                .filter { $0.projectId == projectId }
-                .filter { drawing in
-                    let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    return cadFileExtensions.contains(ext)
-                }
-                .map(\.fileName)
+    private func cleanupProjectTickets(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectTicketDocumentReferences(projectId: projectId)
         )
-        store.projectDrawings.removeAll { drawing in
-            drawing.projectId == projectId
-                && cadFileExtensions.contains(drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-        }
-        let remainingDrawingNames = Set(store.projectDrawings.map(\.fileName))
-        let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNames.contains($0) }
-        DrawingStorage.delete(fileNames: Array(deletableDrawingNames))
-        return deletableDrawingNames.count
-    }
-
-    @discardableResult
-    private func cleanupProjectTickets(_ projectId: UUID) -> Int {
-        let removedDocumentIDs = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId && isTicketCategory($0.category) }
-                .map(\.id)
-        )
-        let documentFileNames = Set(
-            store.projectDocuments
-                .filter { removedDocumentIDs.contains($0.id) }
-                .map(\.fileName)
-        )
-        store.projectDocuments.removeAll { removedDocumentIDs.contains($0.id) }
-        unlinkDocuments(ids: removedDocumentIDs)
-        let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
-        let deletableDocumentNames = documentFileNames.filter { !remainingDocumentNames.contains($0) }
-        ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
-        return deletableDocumentNames.count
-    }
-
-    private func unlinkDocuments(ids: Set<UUID>) {
-        guard !ids.isEmpty else { return }
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
-        }
-        for index in store.projectWarehouseMovements.indices {
-            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
-        }
     }
 
     @MainActor
@@ -975,6 +1128,424 @@ struct StorageCleanupCenterView: View {
         fileNames.reduce(0) { partial, fileName in
             partial + size(fileName)
         }
+    }
+}
+
+private struct StorageCleanupUndoSnapshot: Codable {
+    let dailyLogs: [DailyLog]
+    let siteTodos: [SiteTodo]
+    let quickNotes: [QuickNote]
+    let projectDrawings: [ProjectDrawing]
+    let projectDocuments: [ProjectDocument]
+    let projectFinancialRecords: [ProjectFinancialRecord]
+    let projectWarehouseMovements: [ProjectWarehouseMovement]
+
+    @MainActor
+    static func capture(from store: DataStore) -> StorageCleanupUndoSnapshot {
+        StorageCleanupUndoSnapshot(
+            dailyLogs: store.dailyLogs,
+            siteTodos: store.siteTodos,
+            quickNotes: store.quickNotes,
+            projectDrawings: store.projectDrawings,
+            projectDocuments: store.projectDocuments,
+            projectFinancialRecords: store.projectFinancialRecords,
+            projectWarehouseMovements: store.projectWarehouseMovements
+        )
+    }
+
+    @MainActor
+    func restore(into store: DataStore) {
+        store.dailyLogs = dailyLogs
+        store.siteTodos = siteTodos
+        store.quickNotes = quickNotes
+        store.projectDrawings = projectDrawings
+        store.projectDocuments = projectDocuments
+        store.projectFinancialRecords = projectFinancialRecords
+        store.projectWarehouseMovements = projectWarehouseMovements
+    }
+}
+
+private struct DeferredProjectFileCleanupPlan: Codable {
+    var photoFileNames: Set<String> = []
+    var quickNoteAttachmentFileNames: Set<String> = []
+    var projectDocumentFileNames: Set<String> = []
+    var drawingFileNames: Set<String> = []
+
+    init(
+        photoFileNames: Set<String> = [],
+        quickNoteAttachmentFileNames: Set<String> = [],
+        projectDocumentFileNames: Set<String> = [],
+        drawingFileNames: Set<String> = []
+    ) {
+        self.photoFileNames = photoFileNames
+        self.quickNoteAttachmentFileNames = quickNoteAttachmentFileNames
+        self.projectDocumentFileNames = projectDocumentFileNames
+        self.drawingFileNames = drawingFileNames
+    }
+
+    init(_ result: DataStoreProjectFileCleanupResult) {
+        self.init(
+            photoFileNames: result.photoFileNames,
+            quickNoteAttachmentFileNames: result.quickNoteAttachmentFileNames,
+            projectDocumentFileNames: result.projectDocumentFileNames,
+            drawingFileNames: result.drawingFileNames
+        )
+    }
+
+    var totalFileCount: Int {
+        photoFileNames.count
+            + quickNoteAttachmentFileNames.count
+            + projectDocumentFileNames.count
+            + drawingFileNames.count
+    }
+
+    mutating func merge(_ other: DeferredProjectFileCleanupPlan) {
+        photoFileNames.formUnion(other.photoFileNames)
+        quickNoteAttachmentFileNames.formUnion(other.quickNoteAttachmentFileNames)
+        projectDocumentFileNames.formUnion(other.projectDocumentFileNames)
+        drawingFileNames.formUnion(other.drawingFileNames)
+    }
+}
+
+private struct StorageCleanupTrashBatch: Identifiable, Codable {
+    let id: UUID
+    let summary: String
+    let createdAt: Date
+    let expiresAt: Date
+    let snapshot: StorageCleanupUndoSnapshot
+    let files: [StorageCleanupTrashFile]
+
+    var fileCount: Int { files.count }
+}
+
+private struct StorageCleanupTrashFile: Identifiable, Codable {
+    let id: UUID
+    let kind: StorageCleanupTrashFileKind
+    let originalFileName: String
+    let trashedFileName: String
+}
+
+private enum StorageCleanupTrashFileKind: String, Codable {
+    case photoOriginal
+    case photoThumbnail
+    case drawing
+    case quickNoteAttachment
+    case projectDocument
+
+    func originalURL(for fileName: String) -> URL {
+        switch self {
+        case .photoOriginal:
+            return PhotoStorage.fileURL(for: fileName)
+        case .photoThumbnail:
+            return PhotoStorage.thumbnailStorageURL(for: fileName)
+        case .drawing:
+            return DrawingStorage.fileURL(for: fileName)
+        case .quickNoteAttachment:
+            return QuickNoteAttachmentStorage.fileURL(for: fileName)
+        case .projectDocument:
+            return ProjectDocumentStorage.fileURL(for: fileName)
+        }
+    }
+
+    func invalidateCache(for fileName: String) {
+        switch self {
+        case .photoOriginal, .photoThumbnail:
+            PhotoCache.shared.invalidate(fileName: fileName)
+        case .drawing, .quickNoteAttachment, .projectDocument:
+            break
+        }
+    }
+}
+
+private enum StorageCleanupTrashError: LocalizedError {
+    case rootUnavailable
+    case manifestWriteFailed
+    case moveToTrashFailed(String)
+    case restoreFailed(String)
+    case permanentDeleteFailed(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .rootUnavailable:
+            return String(localized: "无法访问清理回收站目录。")
+        case .manifestWriteFailed:
+            return String(localized: "无法保存清理回收站清单。")
+        case let .moveToTrashFailed(fileName):
+            return String(format: String(localized: "无法移入清理回收站：%@"), fileName)
+        case let .restoreFailed(fileName):
+            return String(format: String(localized: "无法恢复清理回收站文件：%@"), fileName)
+        case let .permanentDeleteFailed(fileName):
+            return String(format: String(localized: "无法永久删除清理回收站文件：%@"), fileName)
+        }
+    }
+}
+
+private enum StorageCleanupTrashStore {
+    private static let manifestFileName = "manifest.json"
+
+    private static var rootURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("StorageCleanupTrash", isDirectory: true)
+    }
+
+    private static var manifestURL: URL? {
+        rootURL?.appendingPathComponent(manifestFileName)
+    }
+
+    static func loadBatches() -> [StorageCleanupTrashBatch] {
+        guard let manifestURL else { return [] }
+        guard FileManager.default.fileExists(atPath: manifestURL.path) else { return [] }
+        do {
+            let data = try Data(contentsOf: manifestURL)
+            return try JSONDecoder().decode([StorageCleanupTrashBatch].self, from: data)
+                .sorted { lhs, rhs in lhs.createdAt > rhs.createdAt }
+        } catch {
+            StorageIssueLog.record(
+                String(format: String(localized: "清理回收站清单读取失败：%@"), error.localizedDescription)
+            )
+            return []
+        }
+    }
+
+    static func quarantine(
+        plan: DeferredProjectFileCleanupPlan,
+        snapshot: StorageCleanupUndoSnapshot,
+        summary: String,
+        retentionDays: Int
+    ) throws -> StorageCleanupTrashBatch {
+        guard let rootURL else { throw StorageCleanupTrashError.rootUnavailable }
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+
+        let batchID = UUID()
+        let createdAt = Date()
+        let expiresAt = Calendar.current.date(
+            byAdding: .day,
+            value: max(retentionDays, 1),
+            to: createdAt
+        ) ?? createdAt.addingTimeInterval(TimeInterval(max(retentionDays, 1) * 24 * 60 * 60))
+
+        var movedFiles: [StorageCleanupTrashFile] = []
+        do {
+            for source in trashSources(for: plan) {
+                if let file = try moveToTrash(source, batchID: batchID) {
+                    movedFiles.append(file)
+                }
+            }
+
+            let batch = StorageCleanupTrashBatch(
+                id: batchID,
+                summary: summary,
+                createdAt: createdAt,
+                expiresAt: expiresAt,
+                snapshot: snapshot,
+                files: movedFiles
+            )
+            var batches = loadBatches()
+            batches.removeAll { $0.id == batch.id }
+            batches.append(batch)
+            try saveBatches(batches)
+            return batch
+        } catch {
+            rollback(files: movedFiles, batchID: batchID)
+            throw error
+        }
+    }
+
+    static func restore(_ batch: StorageCleanupTrashBatch) throws {
+        for file in batch.files {
+            try restore(file: file, batchID: batch.id)
+        }
+        try removeBatchDirectory(batch.id)
+        var batches = loadBatches()
+        batches.removeAll { $0.id == batch.id }
+        try saveBatches(batches)
+    }
+
+    static func permanentlyDelete(_ batch: StorageCleanupTrashBatch) throws {
+        do {
+            try removeBatchDirectory(batch.id)
+            var batches = loadBatches()
+            batches.removeAll { $0.id == batch.id }
+            try saveBatches(batches)
+        } catch {
+            throw StorageCleanupTrashError.permanentDeleteFailed(batch.summary)
+        }
+    }
+
+    static func purgeExpiredBatches(now: Date) -> Int {
+        let batches = loadBatches()
+        let expired = batches.filter { $0.expiresAt <= now }
+        guard !expired.isEmpty else { return 0 }
+
+        for batch in expired {
+            try? removeBatchDirectory(batch.id)
+        }
+        let active = batches.filter { $0.expiresAt > now }
+        do {
+            try saveBatches(active)
+        } catch {
+            StorageIssueLog.record(
+                String(format: String(localized: "清理回收站过期清单更新失败：%@"), error.localizedDescription)
+            )
+        }
+        return expired.count
+    }
+
+    private static func saveBatches(_ batches: [StorageCleanupTrashBatch]) throws {
+        guard let rootURL, let manifestURL else { throw StorageCleanupTrashError.rootUnavailable }
+        do {
+            try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+            let data = try JSONEncoder().encode(batches.sorted { lhs, rhs in lhs.createdAt > rhs.createdAt })
+            try data.write(to: manifestURL, options: .atomic)
+        } catch {
+            throw StorageCleanupTrashError.manifestWriteFailed
+        }
+    }
+
+    private static func trashSources(for plan: DeferredProjectFileCleanupPlan) -> [StorageCleanupTrashSource] {
+        var sources: [StorageCleanupTrashSource] = []
+        sources += plan.photoFileNames.sorted().flatMap { fileName in
+            [
+                StorageCleanupTrashSource(kind: .photoOriginal, fileName: fileName),
+                StorageCleanupTrashSource(kind: .photoThumbnail, fileName: fileName)
+            ]
+        }
+        sources += plan.quickNoteAttachmentFileNames.sorted().map {
+            StorageCleanupTrashSource(kind: .quickNoteAttachment, fileName: $0)
+        }
+        sources += plan.projectDocumentFileNames.sorted().map {
+            StorageCleanupTrashSource(kind: .projectDocument, fileName: $0)
+        }
+        sources += plan.drawingFileNames.sorted().flatMap { fileName in
+            ([fileName] + DrawingStorage.sidecarFileNames(for: fileName)).map {
+                StorageCleanupTrashSource(kind: .drawing, fileName: $0)
+            }
+        }
+        return sources
+    }
+
+    private static func moveToTrash(
+        _ source: StorageCleanupTrashSource,
+        batchID: UUID
+    ) throws -> StorageCleanupTrashFile? {
+        let sourceURL = source.kind.originalURL(for: source.fileName)
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else { return nil }
+
+        guard let destinationURL = trashURL(
+            batchID: batchID,
+            kind: source.kind,
+            trashedFileName: "\(UUID().uuidString)-\(source.fileName)"
+        ) else {
+            throw StorageCleanupTrashError.rootUnavailable
+        }
+
+        do {
+            try FileManager.default.createDirectory(
+                at: destinationURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.moveItem(at: sourceURL, to: destinationURL)
+            source.kind.invalidateCache(for: source.fileName)
+            return StorageCleanupTrashFile(
+                id: UUID(),
+                kind: source.kind,
+                originalFileName: source.fileName,
+                trashedFileName: destinationURL.lastPathComponent
+            )
+        } catch {
+            throw StorageCleanupTrashError.moveToTrashFailed(source.fileName)
+        }
+    }
+
+    private static func restore(file: StorageCleanupTrashFile, batchID: UUID) throws {
+        guard let trashedURL = trashURL(
+            batchID: batchID,
+            kind: file.kind,
+            trashedFileName: file.trashedFileName
+        ) else {
+            throw StorageCleanupTrashError.rootUnavailable
+        }
+
+        let originalURL = file.kind.originalURL(for: file.originalFileName)
+        let manager = FileManager.default
+        guard manager.fileExists(atPath: trashedURL.path) else {
+            if manager.fileExists(atPath: originalURL.path) {
+                file.kind.invalidateCache(for: file.originalFileName)
+                return
+            }
+            throw StorageCleanupTrashError.restoreFailed(file.originalFileName)
+        }
+
+        do {
+            try manager.createDirectory(
+                at: originalURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if manager.fileExists(atPath: originalURL.path) {
+                try manager.removeItem(at: trashedURL)
+            } else {
+                try manager.moveItem(at: trashedURL, to: originalURL)
+            }
+            file.kind.invalidateCache(for: file.originalFileName)
+        } catch {
+            throw StorageCleanupTrashError.restoreFailed(file.originalFileName)
+        }
+    }
+
+    private static func rollback(files: [StorageCleanupTrashFile], batchID: UUID) {
+        for file in files.reversed() {
+            try? restore(file: file, batchID: batchID)
+        }
+        try? removeBatchDirectory(batchID)
+    }
+
+    private static func trashURL(
+        batchID: UUID,
+        kind: StorageCleanupTrashFileKind,
+        trashedFileName: String
+    ) -> URL? {
+        rootURL?
+            .appendingPathComponent(batchID.uuidString, isDirectory: true)
+            .appendingPathComponent(kind.rawValue, isDirectory: true)
+            .appendingPathComponent(trashedFileName)
+    }
+
+    private static func removeBatchDirectory(_ batchID: UUID) throws {
+        guard let batchURL = rootURL?.appendingPathComponent(batchID.uuidString, isDirectory: true) else {
+            throw StorageCleanupTrashError.rootUnavailable
+        }
+        guard FileManager.default.fileExists(atPath: batchURL.path) else { return }
+        do {
+            try FileManager.default.removeItem(at: batchURL)
+        } catch {
+            throw StorageCleanupTrashError.permanentDeleteFailed(batchID.uuidString)
+        }
+    }
+}
+
+private struct StorageCleanupTrashSource {
+    let kind: StorageCleanupTrashFileKind
+    let fileName: String
+}
+
+private enum StorageCleanupTrashRetentionOption: Int, CaseIterable, Identifiable {
+    case days3 = 3
+    case days7 = 7
+    case days14 = 14
+    case days30 = 30
+
+    static let defaultDays = Self.days7.rawValue
+
+    var id: Int { rawValue }
+    var days: Int { rawValue }
+    var displayName: String {
+        String(format: String(localized: "%lld 天"), Int64(rawValue))
+    }
+
+    static func normalizedDays(_ days: Int) -> Int {
+        allCases.min { lhs, rhs in
+            abs(lhs.rawValue - days) < abs(rhs.rawValue - days)
+        }?.rawValue ?? defaultDays
     }
 }
 

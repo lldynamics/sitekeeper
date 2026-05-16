@@ -661,7 +661,7 @@ struct WatermarkCameraToolView: View {
             capturedPhoto.image,
             title: "水印照片-\(Formatters.dateTime.string(from: capturedPhoto.capturedAt))",
             createdAt: Formatters.dateTime.string(from: capturedPhoto.capturedAt),
-            category: .construction,
+            category: .constructionRecord,
             note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
             projectId: selectedProjectId,
             store: store

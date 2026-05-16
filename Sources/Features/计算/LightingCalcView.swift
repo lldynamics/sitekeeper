@@ -15,36 +15,36 @@ struct LightingCalcView: View {
 
     var body: some View {
         Form {
-            Section("房间参数") {
-                LabeledContent("长度 (m)") {
+            Section(calculatorLoc("房间参数")) {
+                LabeledContent(calculatorLoc("长度 (m)")) {
                     TextField("6", text: $roomLength.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(roomLength, min: 0.5, max: 10_000, hint: "请输入 0.5–10000"))
-                CalculatorPresetChips(title: "长度预设", options: ["4", "6", "8", "10", "12"], selection: $roomLength)
-                LabeledContent("宽度 (m)") {
+                CalculatorValidationHint(message: rangeMessage(roomLength, min: 0.5, max: 10_000, hint: calculatorLoc("请输入 0.5–10000")))
+                CalculatorPresetChips(title: calculatorLoc("长度预设"), options: ["4", "6", "8", "10", "12"], selection: $roomLength)
+                LabeledContent(calculatorLoc("宽度 (m)")) {
                     TextField("4", text: $roomWidth.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(roomWidth, min: 0.5, max: 10_000, hint: "请输入 0.5–10000"))
-                CalculatorPresetChips(title: "宽度预设", options: ["3", "4", "5", "6", "8"], selection: $roomWidth)
+                CalculatorValidationHint(message: rangeMessage(roomWidth, min: 0.5, max: 10_000, hint: calculatorLoc("请输入 0.5–10000")))
+                CalculatorPresetChips(title: calculatorLoc("宽度预设"), options: ["3", "4", "5", "6", "8"], selection: $roomWidth)
             }
-            Section("照明要求") {
-                LabeledContent("目标照度 (lux)") {
+            Section(calculatorLoc("照明要求")) {
+                LabeledContent(calculatorLoc("目标照度 (lux)")) {
                     TextField("300", text: $targetLux.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(targetLux, min: 50, max: 2000, hint: "请输入 50–2000"))
+                CalculatorValidationHint(message: rangeMessage(targetLux, min: 50, max: 2000, hint: calculatorLoc("请输入 50–2000")))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(RoomType.presets) { preset in
-                            Button(preset.name) {
+                            Button(preset.localizedName) {
                                 targetLux = String(preset.lux)
                             }
                             .font(.caption2).padding(.horizontal, 8).padding(.vertical, 4)
@@ -54,34 +54,34 @@ struct LightingCalcView: View {
                         }
                     }
                 }
-                LabeledContent("单灯光通量 (lm)") {
+                LabeledContent(calculatorLoc("单灯光通量 (lm)")) {
                     TextField("2400", text: $lumensPerFixture.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(lumensPerFixture, min: 100, max: 200_000, hint: "请输入 100–200000"))
-                CalculatorPresetChips(title: "常用光通量", options: ["1200", "1800", "2400", "3200", "4000"], selection: $lumensPerFixture)
-                LabeledContent("利用系数 (0-1)") {
+                CalculatorValidationHint(message: rangeMessage(lumensPerFixture, min: 100, max: 200_000, hint: calculatorLoc("请输入 100–200000")))
+                CalculatorPresetChips(title: calculatorLoc("常用光通量"), options: ["1200", "1800", "2400", "3200", "4000"], selection: $lumensPerFixture)
+                LabeledContent(calculatorLoc("利用系数 (0-1)")) {
                     TextField("0.6", text: $utilizationFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(utilizationFactor, min: 0.1, max: 1, hint: "请输入 0.1–1"))
-                CalculatorPresetChips(title: "利用系数", options: ["0.50", "0.60", "0.70", "0.80"], selection: $utilizationFactor)
-                LabeledContent("维护系数 (0-1)") {
+                CalculatorValidationHint(message: rangeMessage(utilizationFactor, min: 0.1, max: 1, hint: calculatorLoc("请输入 0.1–1")))
+                CalculatorPresetChips(title: calculatorLoc("利用系数"), options: ["0.50", "0.60", "0.70", "0.80"], selection: $utilizationFactor)
+                LabeledContent(calculatorLoc("维护系数 (0-1)")) {
                     TextField("0.8", text: $maintenanceFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(maintenanceFactor, min: 0.1, max: 1, hint: "请输入 0.1–1"))
-                CalculatorPresetChips(title: "维护系数", options: ["0.70", "0.80", "0.90"], selection: $maintenanceFactor)
+                CalculatorValidationHint(message: rangeMessage(maintenanceFactor, min: 0.1, max: 1, hint: calculatorLoc("请输入 0.1–1")))
+                CalculatorPresetChips(title: calculatorLoc("维护系数"), options: ["0.70", "0.80", "0.90"], selection: $maintenanceFactor)
             }
 
             Section {
-                Button("估算") {
+                Button(calculatorLoc("估算")) {
                     isInputFocused = false
                     calc()
                 }
@@ -90,15 +90,15 @@ struct LightingCalcView: View {
             }
 
             if let resultModel {
-                Section("估算结果") {
+                Section(calculatorLoc("估算结果")) {
                     CalculatorResultCard(
-                        title: "照明估算结果",
+                        title: calculatorLoc("照明估算结果"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("照明估算")
+        .navigationTitle(calculatorLoc("照明估算"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
@@ -114,7 +114,7 @@ struct LightingCalcView: View {
               let lumen = CalculatorInputParser.double(lumensPerFixture), lumen > 0,
               let uf = CalculatorInputParser.double(utilizationFactor), uf > 0, uf <= 1,
               let mf = CalculatorInputParser.double(maintenanceFactor), mf > 0, mf <= 1 else {
-            presentError("请输入有效数值")
+            presentError(calculatorLoc("请输入有效数值"))
             return
         }
         let area = l * w
@@ -122,28 +122,28 @@ struct LightingCalcView: View {
         let count = Int(ceil(totalLumens / lumen))
         let perArea = Double(count) / area
         resultModel = .singleSection(
-            headline: "建议 \(count) 盏",
-            formula: "需总光通量 = 面积×照度 ÷ (利用系数×维护系数)",
+            headline: calculatorLocFormat("建议 %lld 盏", Int64(count)),
+            formula: calculatorLoc("需总光通量 = 面积×照度 ÷ (利用系数×维护系数)"),
             items: [
-                CalculationResult.item("房间面积", "\(String(format: "%.2f", area)) m²"),
-                CalculationResult.item("总光通量需求", "\(String(format: "%.0f", totalLumens)) lm"),
-                CalculationResult.item("每平米灯具数量", "\(String(format: "%.1f", perArea)) 盏", status: .pass),
+                CalculationResult.item(calculatorLoc("房间面积"), "\(String(format: "%.2f", area)) m²"),
+                CalculationResult.item(calculatorLoc("总光通量需求"), "\(String(format: "%.0f", totalLumens)) lm"),
+                CalculationResult.item(calculatorLoc("每平米灯具数量"), calculatorLocFormat("%@ 盏", String(format: "%.1f", perArea)), status: .pass),
             ]
         )
 
         resultText = """
-        房间面积: \(String(format: "%.2f", area)) m²
-        总光通量需求: \(String(format: "%.0f", totalLumens)) lm
-        需要灯具: \(count) 盏
-        每平米: \(String(format: "%.1f", perArea)) 盏
+        \(calculatorLoc("房间面积")): \(String(format: "%.2f", area)) m²
+        \(calculatorLoc("总光通量需求")): \(String(format: "%.0f", totalLumens)) lm
+        \(calculatorLoc("需要灯具")): \(calculatorLocFormat("%lld 盏", Int64(count)))
+        \(calculatorLoc("每平米")): \(calculatorLocFormat("%@ 盏", String(format: "%.1f", perArea)))
         """
-        saveHistory("\(count) 盏")
+        saveHistory(calculatorLocFormat("%lld 盏", Int64(count)))
     }
 
     private func saveHistory(_ r: String) {
         store.appendCalculationHistory(
-            tool: "照明估算",
-            input: "\(roomLength)×\(roomWidth)m, \(targetLux)lux",
+            tool: calculatorLoc("照明估算"),
+            input: calculatorLocFormat("%@×%@m, %@lux", roomLength, roomWidth, targetLux),
             result: r
         )
     }
@@ -151,7 +151,7 @@ struct LightingCalcView: View {
     private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
+        guard let value = CalculatorInputParser.double(trimmed) else { return calculatorLoc("请输入数值") }
         return (value >= min && value <= max) ? nil : hint
     }
 
@@ -163,15 +163,19 @@ struct LightingCalcView: View {
 
 struct RoomType: Identifiable {
     let id = UUID()
-    let name: String
+    let nameKey: String
     let lux: Int
 
+    var localizedName: String {
+        calculatorLoc(nameKey)
+    }
+
     static let presets: [RoomType] = [
-        RoomType(name: "办公室", lux: 300),
-        RoomType(name: "教室", lux: 300),
-        RoomType(name: "车间", lux: 200),
-        RoomType(name: "仓库", lux: 150),
-        RoomType(name: "走廊", lux: 100),
-        RoomType(name: "商场", lux: 500),
+        RoomType(nameKey: "办公室", lux: 300),
+        RoomType(nameKey: "教室", lux: 300),
+        RoomType(nameKey: "车间", lux: 200),
+        RoomType(nameKey: "仓库", lux: 150),
+        RoomType(nameKey: "走廊", lux: 100),
+        RoomType(nameKey: "商场", lux: 500),
     ]
 }

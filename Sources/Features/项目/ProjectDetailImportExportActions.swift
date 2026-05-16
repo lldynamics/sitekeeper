@@ -50,7 +50,7 @@ enum ProjectDetailImportExportActions {
                 progress: progress,
                 shouldCancel: shouldCancel
             )
-            let defaultFilename = "\(project.name)_项目交付包.zip"
+            let defaultFilename = ReportBuilder.projectPackageArchiveFileName(projectName: project.name)
             let preparedURL = try ExportFileURLPreparer.prepare(sourceFileURL: zipURL, suggestedFileName: defaultFilename)
             return .success(ExportPayload(fileURL: preparedURL, contentType: .zipArchive, defaultFilename: defaultFilename))
         } catch {

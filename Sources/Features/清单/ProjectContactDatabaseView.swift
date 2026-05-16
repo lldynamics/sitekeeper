@@ -18,6 +18,8 @@ struct ProjectContactDatabaseView: View {
     @State private var showImportFeedbackAlert = false
     @State private var mergeConfirmPhone: String?
     @State private var showMergeConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedContactId: UUID? = nil) {
         self.focusedContactId = focusedContactId
@@ -89,7 +91,11 @@ struct ProjectContactDatabaseView: View {
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
                 title: "删除联系人？",
-                itemNoun: "联系人"
+                itemNoun: "联系人",
+                singularMessage: "删除后可在提示中撤销。",
+                pluralMessage: { count, noun in
+                    "将删除 \(count) 条\(noun)，可在提示中撤销。"
+                }
             ),
             onDeleteConfirmed: deleteContacts,
             rowContent: { contact in
@@ -214,6 +220,10 @@ struct ProjectContactDatabaseView: View {
                 Text("将删除 \(group.contacts.count - 1) 个重复联系人，仅保留每个项目中身份信息最完整的记录。")
             }
         }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
     }
 
     private var filterBars: some View {
@@ -281,18 +291,63 @@ struct ProjectContactDatabaseView: View {
     }
 
     private func deleteContact(_ contact: ProjectContact) {
-        store.projectContacts.removeAll { $0.id == contact.id }
-        store.scheduleSave()
+        deleteContacts(Set([contact.id]), source: "ProjectContactDatabaseView")
     }
 
-    private func deleteContacts(_ ids: Set<UUID>) {
+    private func deleteContacts(_ ids: Set<UUID>, source: String = "ProjectContactDatabaseView") {
         guard !ids.isEmpty else { return }
-        store.projectContacts.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+        let targets = store.projectContacts.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeProjectContacts(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除联系人 %lld 位"), Int64(targets.count)),
+                detail: contactAuditDetail(targets),
+                source: source
+            )
+        )
+        queueContactDeletion(
+            deletion,
+            message: String(format: String(localized: "已删除 %lld 位联系人"), Int64(deletion.deletedCount))
+        )
     }
 
     private func deleteContacts(_ items: [ProjectContact]) {
         deleteContacts(Set(items.map(\.id)))
+    }
+
+    private func queueContactDeletion(
+        _ deletion: DataStoreRemovalResult<ProjectContact>,
+        message: String
+    ) {
+        guard !deletion.isEmpty else { return }
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: message,
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.projectContacts = deletion.restoredItems(
+                    current: store.projectContacts,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func contactAuditDetail(_ contacts: [ProjectContact]) -> String {
+        ListFormatter.localizedString(
+            byJoining: contacts.map { contact in
+                [contact.name, contact.phone, projectName(contact.projectId)]
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+            }
+        )
     }
 
     /// 同一手机号关联的项目名列表
@@ -326,8 +381,22 @@ struct ProjectContactDatabaseView: View {
                 toKeep.insert(best.id)
             }
         }
-        store.projectContacts.removeAll { !toKeep.contains($0.id) }
-        store.scheduleSave()
+        let idsToDelete = Set(all.map(\.id)).subtracting(toKeep)
+        let targets = store.projectContacts.filter { idsToDelete.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeProjectContacts(
+            ids: idsToDelete,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "合并重复联系人，删除 %lld 位"), Int64(targets.count)),
+                detail: "\(phoneKey) · \(contactAuditDetail(targets))",
+                source: "ProjectContactDatabaseView"
+            )
+        )
+        queueContactDeletion(
+            deletion,
+            message: String(format: String(localized: "已合并联系人，删除 %lld 个重复项"), Int64(deletion.deletedCount))
+        )
     }
 
     /// 导出 vCard

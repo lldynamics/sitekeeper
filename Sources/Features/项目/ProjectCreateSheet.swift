@@ -20,6 +20,7 @@ struct ProjectCreateSheet: View {
     @Binding var materialCost: String
     @Binding var laborCost: String
     @Binding var paymentStatus: PaymentStatus
+    @Binding var requiredDocumentCategories: Set<ProjectDocumentCategory>
     let focusedField: FocusState<ProjectCreateNumericField?>.Binding
     let canCreate: Bool
     let onCancel: () -> Void
@@ -34,6 +35,7 @@ struct ProjectCreateSheet: View {
                         .lineLimit(2...4)
                     TextField(String(localized: "负责人"), text: $managerName)
                 }
+                ProjectDocumentChecklistTemplateSection(selectedCategories: $requiredDocumentCategories)
                 Section(String(localized: "客户")) {
                     TextField(String(localized: "客户姓名/单位"), text: $customerName)
                     TextField(String(localized: "客户电话"), text: $customerPhone)
@@ -128,5 +130,34 @@ struct ProjectCreateSheet: View {
             }
         }
         .presentationDetents([.large])
+    }
+}
+
+struct ProjectDocumentChecklistTemplateSection: View {
+    @Binding var selectedCategories: Set<ProjectDocumentCategory>
+
+    var body: some View {
+        Section(String(localized: "资料清单模板")) {
+            ForEach(ProjectDocumentCategory.defaultConstructionArchiveRequirements, id: \.self) { category in
+                Toggle(isOn: binding(for: category)) {
+                    Text(category.displayName)
+                }
+            }
+        }
+    }
+
+    private func binding(for category: ProjectDocumentCategory) -> Binding<Bool> {
+        Binding(
+            get: {
+                selectedCategories.contains(category)
+            },
+            set: { isEnabled in
+                if isEnabled {
+                    selectedCategories.insert(category)
+                } else if selectedCategories.count > 1 {
+                    selectedCategories.remove(category)
+                }
+            }
+        )
     }
 }

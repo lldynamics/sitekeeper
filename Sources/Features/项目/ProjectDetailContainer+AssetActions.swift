@@ -37,7 +37,10 @@ extension ProjectDetailContainer {
             notice: $operationNotice,
             message: String(localized: "已删除项目照片"),
             commit: {
-                PhotoStorage.delete(fileName: deletedFileName)
+                DataStoreDeferredFileCleanup.photoFiles(
+                    [deletedFileName],
+                    summary: "projectDetail.photoFiles"
+                )?.perform()
                 store.scheduleSave()
             },
             undo: {

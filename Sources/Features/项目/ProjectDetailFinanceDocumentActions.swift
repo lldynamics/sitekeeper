@@ -12,6 +12,137 @@ enum ProjectDetailActionResult<Value> {
 enum ProjectDetailFinanceDocumentActions {
     private static let maxImportedDocumentBytes = ImportLimitPolicy.maxImportBytes
 
+    enum LinkedDocumentCleanupMode {
+        case deferred
+        case immediate
+    }
+
+    struct FinancialRecordDeletionExecution {
+        let financialDeletion: DataStoreRemovalResult<ProjectFinancialRecord>
+        let removableDocumentFileNames: [String]
+        let linkedDocumentCount: Int
+    }
+
+    struct DocumentDeletionExecution {
+        let documentDeletion: DataStoreRemovalResult<ProjectDocument>
+        let removableDocumentFileNames: [String]
+    }
+
+    @MainActor
+    static func executeDocumentDeletion(
+        ids: Set<UUID>,
+        store: DataStore,
+        documentCleanupMode: LinkedDocumentCleanupMode,
+        audit: DataStoreDeletionAuditContext? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DocumentDeletionExecution? {
+        guard !ids.isEmpty else { return nil }
+        let targets = store.projectDocuments.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return nil }
+
+        let removableFileNames = targets.map(\.fileName)
+        let deferredFileCleanup: DataStoreDeferredFileCleanup?
+        switch documentCleanupMode {
+        case .deferred:
+            deferredFileCleanup = nil
+        case .immediate:
+            deferredFileCleanup = DataStoreDeferredFileCleanup.projectDocumentFiles(
+                removableFileNames,
+                summary: "projectDetail.documentFile"
+            )
+        }
+
+        let documentDeletion = store.removeProjectDocuments(
+            ids: ids,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+        guard !documentDeletion.isEmpty else { return nil }
+
+        for index in store.projectFinancialRecords.indices {
+            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
+        for index in store.projectWarehouseMovements.indices {
+            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        }
+        return DocumentDeletionExecution(
+            documentDeletion: documentDeletion,
+            removableDocumentFileNames: removableFileNames
+        )
+    }
+
+    @MainActor
+    static func executeFinancialRecordDeletion(
+        ids: Set<UUID>,
+        deleteLinkedDocuments: Bool,
+        store: DataStore,
+        documentCleanupMode: LinkedDocumentCleanupMode,
+        financialAudit: DataStoreDeletionAuditContext? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> FinancialRecordDeletionExecution? {
+        guard !ids.isEmpty else { return nil }
+
+        let recordsToDelete = store.projectFinancialRecords.filter { ids.contains($0.id) }
+        guard !recordsToDelete.isEmpty else { return nil }
+        let linkedDocumentIds = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
+        let linkedByRecordFieldIds: Set<UUID> = Set(
+            store.projectDocuments.compactMap { document in
+                guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
+                return document.id
+            }
+        )
+        let targetDocumentIds = linkedDocumentIds.union(linkedByRecordFieldIds)
+
+        var removableFileNames: [String] = []
+        if deleteLinkedDocuments {
+            if !targetDocumentIds.isEmpty {
+                removableFileNames = store.projectDocuments
+                    .filter { targetDocumentIds.contains($0.id) }
+                    .map(\.fileName)
+
+                let deferredFileCleanup: DataStoreDeferredFileCleanup?
+                switch documentCleanupMode {
+                case .deferred:
+                    deferredFileCleanup = nil
+                case .immediate:
+                    deferredFileCleanup = DataStoreDeferredFileCleanup.projectDocumentFiles(
+                        removableFileNames,
+                        summary: "projectDetail.financialLinkedDocumentFiles"
+                    )
+                }
+                store.removeProjectDocuments(
+                    ids: targetDocumentIds,
+                    deferredFileCleanup: deferredFileCleanup,
+                    recordsAuditImmediately: recordsAuditImmediately
+                )
+                for index in store.projectFinancialRecords.indices {
+                    store.projectFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                }
+                for index in store.projectWarehouseMovements.indices {
+                    store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                }
+            }
+        } else if !targetDocumentIds.isEmpty {
+            for index in store.projectDocuments.indices {
+                guard targetDocumentIds.contains(store.projectDocuments[index].id) else { continue }
+                store.projectDocuments[index].linkedFinancialRecordId = nil
+            }
+        }
+
+        let financialDeletion = store.removeProjectFinancialRecords(
+            ids: ids,
+            audit: financialAudit,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+        guard !financialDeletion.isEmpty else { return nil }
+        return FinancialRecordDeletionExecution(
+            financialDeletion: financialDeletion,
+            removableDocumentFileNames: removableFileNames,
+            linkedDocumentCount: targetDocumentIds.count
+        )
+    }
+
     @MainActor
     static func saveScannedDocument(
         target: ProjectScanTarget,
@@ -41,14 +172,21 @@ enum ProjectDetailFinanceDocumentActions {
 
     @MainActor
     static func deleteDocument(_ document: ProjectDocument, store: DataStore) {
-        ProjectDocumentStorage.delete(fileName: document.fileName)
-        store.removeProjectDocuments(ids: Set([document.id]))
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { $0 == document.id }
-        }
-        for index in store.projectWarehouseMovements.indices {
-            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { $0 == document.id }
-        }
+        let detailParts = [document.title, document.fileName]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        let audit = DataStoreDeletionAuditContext(
+            summary: String(localized: "删除票据资料 1 条"),
+            detail: detailParts.joined(separator: " · "),
+            source: "ProjectDetailFinanceDocumentActions"
+        )
+        guard executeDocumentDeletion(
+            ids: Set([document.id]),
+            store: store,
+            documentCleanupMode: .immediate,
+            audit: audit,
+            recordsAuditImmediately: true
+        ) != nil else { return }
         store.scheduleSave()
     }
 
@@ -69,36 +207,34 @@ enum ProjectDetailFinanceDocumentActions {
     ) {
         guard !ids.isEmpty else { return }
         let recordsToDelete = store.projectFinancialRecords.filter { ids.contains($0.id) }
-        let linkedDocumentIds = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
-        let linkedByRecordFieldIds: Set<UUID> = Set(
-            store.projectDocuments.compactMap { document in
-                guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
-                return document.id
-            }
+        guard !recordsToDelete.isEmpty else { return }
+        let linkedDocumentCount = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
+            .union(
+                Set(
+                    store.projectDocuments.compactMap { document in
+                        guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
+                        return document.id
+                    }
+                )
+            )
+            .count
+        let financialAudit = DataStoreDeletionAuditContext(
+            summary: deleteLinkedDocuments ? String(localized: "删除账目（含票据）") : String(localized: "删除账目"),
+            detail: String(
+                format: String(localized: "账目 %lld 条，关联票据 %lld 条"),
+                Int64(recordsToDelete.count),
+                Int64(linkedDocumentCount)
+            ),
+            source: "ProjectDetailFinanceDocumentActions"
         )
-        let targetDocumentIds = linkedDocumentIds.union(linkedByRecordFieldIds)
-
-        if deleteLinkedDocuments {
-            if !targetDocumentIds.isEmpty {
-                for document in store.projectDocuments where targetDocumentIds.contains(document.id) {
-                    ProjectDocumentStorage.delete(fileName: document.fileName)
-                }
-                store.removeProjectDocuments(ids: targetDocumentIds)
-                for index in store.projectFinancialRecords.indices {
-                    store.projectFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
-                }
-                for index in store.projectWarehouseMovements.indices {
-                    store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
-                }
-            }
-        } else if !targetDocumentIds.isEmpty {
-            for index in store.projectDocuments.indices {
-                guard targetDocumentIds.contains(store.projectDocuments[index].id) else { continue }
-                store.projectDocuments[index].linkedFinancialRecordId = nil
-            }
-        }
-
-        store.removeProjectFinancialRecords(ids: ids)
+        guard executeFinancialRecordDeletion(
+            ids: ids,
+            deleteLinkedDocuments: deleteLinkedDocuments,
+            store: store,
+            documentCleanupMode: .immediate,
+            financialAudit: financialAudit,
+            recordsAuditImmediately: true
+        ) != nil else { return }
         store.scheduleSave()
     }
 
@@ -138,7 +274,7 @@ enum ProjectDetailFinanceDocumentActions {
             if sourceType == "pdf" {
                 pageCount = ProjectDetailFinanceDocumentHelper.pdfPageCount(at: url)
                 fileType = "pdf"
-                category = .invoice
+                category = linkedFinancialRecordId == nil ? .constructionRecord : .invoice
                 do {
                     fileName = try ProjectDocumentStorage.saveImportedFileOrThrow(from: url, projectId: projectId, fileExtension: fileType)
                 } catch {
@@ -148,7 +284,7 @@ enum ProjectDetailFinanceDocumentActions {
             } else if sourceType == "image" {
                 pageCount = 1
                 fileType = ext.isEmpty ? "jpg" : ext
-                category = .receipt
+                category = linkedFinancialRecordId == nil ? .constructionRecord : .receipt
                 do {
                     fileName = try ProjectDocumentStorage.saveImportedFileOrThrow(from: url, projectId: projectId, fileExtension: fileType)
                 } catch {
@@ -345,6 +481,11 @@ enum ProjectDetailFinanceDocumentActions {
             amount: target.amount,
             linkedFinancialRecordId: target.linkedFinancialRecordId,
             linkedConstructionMethodIDs: target.linkedConstructionMethodIDs,
+            submissionStatus: target.submissionStatus,
+            responsiblePerson: target.responsiblePerson,
+            formedAt: target.formedAt,
+            archiveNumber: target.archiveNumber,
+            workSection: target.workSection,
             createdAt: createdAt,
             note: target.note
         )

@@ -389,6 +389,8 @@ extension SiteKeeperCADKernel {
                     .replacingOccurrences(of: "_", with: "")
                     .replacingOccurrences(of: "-", with: "")
                 switch normalized {
+                case "point":
+                    return .point
                 case "line":
                     return .line
                 case "polyline":

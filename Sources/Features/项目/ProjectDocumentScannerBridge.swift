@@ -61,6 +61,11 @@ struct ProjectScanTarget: Identifiable {
     var amount: String
     var linkedFinancialRecordId: UUID?
     var linkedConstructionMethodIDs: [UUID] = []
+    var submissionStatus: ProjectDocumentSubmissionStatus = .notSubmitted
+    var responsiblePerson: String = ""
+    var formedAt: String = ""
+    var archiveNumber: String = ""
+    var workSection: String = ""
     var note: String
 }
 

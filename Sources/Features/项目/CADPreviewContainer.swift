@@ -76,6 +76,228 @@ struct ProjectCADPreviewRequest: Identifiable {
     }
 }
 
+struct CADDiagnosticMachineTrace: Codable {
+    struct FileInfo: Codable {
+        let displayName: String
+        let path: String
+        let fileType: String
+        let fileByteCount: Int
+        let headerHex: String
+        let importedAt: String
+    }
+
+    struct Environment: Codable {
+        let appVersion: String
+        let buildNumber: String
+        let cadEngineInstalled: Bool
+        let rendererBound: Bool
+        let viewerMode: String
+        let fallbackViewerActive: Bool
+        let performanceFallbackActive: Bool
+        let performanceFallbackReason: String?
+    }
+
+    struct Pipeline: Codable {
+        let failureLayer: String
+        let failureStage: String
+        let openState: String
+        let importSource: String?
+        let conclusion: String
+        let traceSource: String
+    }
+
+    struct Counts: Codable {
+        let rawEntityCount: Int
+        let adapterEntityCount: Int
+        let databaseEntityCount: Int
+        let drawableEntityCount: Int
+        let renderCommandCount: Int
+        let visibleLayerCount: Int
+    }
+
+    struct Bounds: Codable {
+        let minX: Double
+        let minY: Double
+        let maxX: Double
+        let maxY: Double
+    }
+
+    struct TextState: Codable {
+        let selectedEncoding: String
+        let selectedBigFont: String
+        let codePageOverride: Int32?
+        let bigFontCode: Int32?
+        let detectedCodePage: String?
+        let detectedStyleName: String?
+        let detectedFontFile: String?
+        let detectedBigFontFile: String?
+        let autoDetectScore: Int?
+        let unresolvedFontSummary: String?
+        let fontResolutionSummary: String?
+        let rawTextBytesHexSample: String?
+    }
+
+    struct Performance: Codable {
+        let entityCountInViewport: Int
+        let drawCallCount: Int
+        let frameTimeMilliseconds: Double
+        let skippedEntityCount: Int
+        let visibleLayerCount: Int
+        let simplifiedMode: Bool
+        let renderCommandCount: Int
+        let textCommandCount: Int
+        let textOverlayCount: Int
+        let renderMilliseconds: Double
+        let firstFrameMilliseconds: Double
+    }
+
+    struct OpenQuality: Codable {
+        let level: String
+        let title: String
+        let summary: String
+        let allowsMarkup: Bool
+        let supportsSearch: Bool
+        let detailLines: [String]
+    }
+
+    struct KernelTrace: Codable {
+        let fileName: String
+        let fileByteCount: Int
+        let dwgVersion: String?
+        let libreDwgAvailable: Bool
+        let dwgreadJsonExitCode: Int?
+        let dwgreadDxfExitCode: Int?
+        let dwg2dxfExitCode: Int?
+        let jsonRawEntityCount: Int
+        let dxfRawEntityCount: Int
+        let adapterEntityCount: Int
+        let databaseEntityCount: Int
+        let drawableEntityCount: Int
+        let renderCommandCount: Int
+        let extents: Bounds?
+        let currentLayout: String?
+        let visibleLayerCount: Int
+        let openState: String
+        let failureStage: String
+    }
+
+    struct NativeTrace: Codable {
+        struct RawEntityCounts: Codable {
+            let line: Int
+            let polyline: Int
+            let circle: Int
+            let arc: Int
+            let insert: Int
+            let ellipse: Int
+            let spline: Int
+            let filledShape: Int
+            let dimension: Int
+            let hatch: Int
+            let text: Int
+            let total: Int
+        }
+
+        let fileName: String
+        let importSource: String
+        let rawEntityCounts: RawEntityCounts
+        let expandedInsertEntityCount: Int
+        let entityCount: Int
+        let drawableEntityCount: Int
+        let renderCommandCount: Int
+        let bounds: Bounds?
+        let openedForRender: Bool
+    }
+
+    let schemaVersion: Int
+    let traceKind: String
+    let generatedAt: String
+    let humanReportFile: String
+    let machineTraceFile: String
+    let file: FileInfo
+    let environment: Environment
+    let pipeline: Pipeline
+    let counts: Counts
+    let text: TextState
+    let performance: Performance?
+    let openQuality: OpenQuality?
+    let kernelTrace: KernelTrace?
+    let nativeTrace: NativeTrace?
+    let diagnostics: [String]
+    let notes: [String]
+}
+
+private extension CADDiagnosticMachineTrace.Bounds {
+    init?(_ bounds: SiteKeeperCADKernel.CADBounds?) {
+        guard let bounds, !bounds.isEmpty else { return nil }
+        self.init(minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY)
+    }
+}
+
+private extension CADDiagnosticMachineTrace.KernelTrace {
+    init(_ trace: SiteKeeperCADKernel.DWGOpenPipelineTrace) {
+        self.init(
+            fileName: trace.fileName,
+            fileByteCount: trace.fileSize,
+            dwgVersion: trace.dwgVersion,
+            libreDwgAvailable: trace.libreDwgAvailable,
+            dwgreadJsonExitCode: trace.dwgreadJsonExitCode,
+            dwgreadDxfExitCode: trace.dwgreadDxfExitCode,
+            dwg2dxfExitCode: trace.dwg2dxfExitCode,
+            jsonRawEntityCount: trace.jsonRawEntityCount,
+            dxfRawEntityCount: trace.dxfRawEntityCount,
+            adapterEntityCount: trace.adapterEntityCount,
+            databaseEntityCount: trace.databaseEntityCount,
+            drawableEntityCount: trace.drawableEntityCount,
+            renderCommandCount: trace.renderCommandCount,
+            extents: CADDiagnosticMachineTrace.Bounds(trace.extents),
+            currentLayout: trace.currentLayout,
+            visibleLayerCount: trace.visibleLayerCount,
+            openState: trace.openState.rawValue,
+            failureStage: trace.failureStage
+        )
+    }
+}
+
+private extension CADDiagnosticMachineTrace.NativeTrace {
+    init(_ trace: CADPoC.CADOpenTrace) {
+        let rawCounts = RawEntityCounts(
+            line: trace.rawLineCount,
+            polyline: trace.rawPolylineCount,
+            circle: trace.rawCircleCount,
+            arc: trace.rawArcCount,
+            insert: trace.rawInsertCount,
+            ellipse: trace.rawEllipseCount,
+            spline: trace.rawSplineCount,
+            filledShape: trace.rawFilledShapeCount,
+            dimension: trace.rawDimensionCount,
+            hatch: trace.rawHatchCount,
+            text: trace.rawTextCount,
+            total: trace.rawLineCount
+                + trace.rawPolylineCount
+                + trace.rawCircleCount
+                + trace.rawArcCount
+                + trace.rawInsertCount
+                + trace.rawEllipseCount
+                + trace.rawSplineCount
+                + trace.rawFilledShapeCount
+                + trace.rawDimensionCount
+                + trace.rawHatchCount
+                + trace.rawTextCount
+        )
+        self.init(
+            fileName: trace.fileName,
+            importSource: trace.importSource,
+            rawEntityCounts: rawCounts,
+            expandedInsertEntityCount: trace.expandedInsertEntityCount,
+            entityCount: trace.entityCount,
+            drawableEntityCount: trace.drawableEntityCount,
+            renderCommandCount: trace.renderCommandCount,
+            bounds: CADDiagnosticMachineTrace.Bounds(trace.bounds),
+            openedForRender: trace.openedForRender
+        )
+    }
+}
+
 struct CADKernelUnavailableView: View {
     let fileURL: URL
     let message: String
@@ -968,6 +1190,7 @@ enum CADOverlayDeleteTarget: Equatable {
 struct CADPreviewContainer: View {
     let request: ProjectCADPreviewRequest
     @Environment(\.dismiss) var dismiss
+    @Environment(DataStore.self) var store
 
     @State var activeRequest: ProjectCADPreviewRequest
     @State var tool: CADOverlayTool = .browse
@@ -1030,9 +1253,12 @@ struct CADPreviewContainer: View {
     @State var nativeCenterSnapPoints: [CGPoint] = []
     @State var nativeSnapSourcePoints: [CADNativeSnapSourcePoint] = []
     @State private var nativeSnapPointBuckets = CADNativeSnapPointBuckets()
+    @State var nativeCADLayers: [CADPoC.CADLayer] = []
+    @State var nativeCADVisibleLayerIDs: Set<String>?
     @State var enabledSnapModes: Set<CADSnapMode> = Set(CADSnapMode.allCases)
     @State var cadPreviewReloadToken = UUID()
     @State var lastRendererPerformance: CADRendererPerformanceSnapshot?
+    @State var lastCADOpenTrace: CADPoC.CADOpenTrace?
     @State var forceFallbackForPerformance = false
     @State var forceFallbackReason: String?
     @State var alertMessage = ""
@@ -1098,11 +1324,18 @@ struct CADPreviewContainer: View {
     }
 
     var allowsOverlayEditing: Bool {
+        if isDWGFile {
+            return true
+        }
         guard isCADFile else { return true }
         if case .online = cadOpenRoute {
             return true
         }
         return false
+    }
+
+    var shouldUseCADOverlayHost: Bool {
+        isCADFile && (isDWGFile || shouldUseCADKernelRenderer)
     }
 
     var unsupportedKernelMessage: String {
@@ -1528,6 +1761,12 @@ struct CADPreviewContainer: View {
                     cadOpenQuality = quality
                 }
             },
+            onOpenTraceChange: { trace in
+                Task { @MainActor in
+                    guard expectedFilePath == activeRequest.fileURL.path else { return }
+                    lastCADOpenTrace = trace
+                }
+            },
             onPerformanceSample: { sample in
                 Task { @MainActor in
                     guard expectedFilePath == activeRequest.fileURL.path else { return }
@@ -1549,6 +1788,19 @@ struct CADPreviewContainer: View {
                 return AnyView(
                     CADViewerRoute(
                         request: activeRequest,
+                        showsToolbar: false,
+                        initialViewState: initialRendererViewState,
+                        callbacks: rendererCallbacks,
+                        visibleLayerIDs: nativeCADVisibleLayerIDs,
+                        onLayersChanged: { layers in
+                            nativeCADLayers = layers
+                        },
+                        onVisibleLayerIDsChanged: { layerIDs in
+                            nativeCADVisibleLayerIDs = layerIDs
+                        },
+                        onClose: {
+                            dismiss()
+                        },
                         onReportIssue: {
                             Task { @MainActor in
                                 await exportDiagnosticLog()
@@ -1607,7 +1859,7 @@ struct CADPreviewContainer: View {
 
     var body: some View {
         Group {
-            if isCADFile && !shouldUseCADKernelRenderer {
+            if !shouldUseCADOverlayHost {
                 previewContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -1656,7 +1908,13 @@ struct CADPreviewContainer: View {
                 textSchemeSnapshot = activeRequest.textSchemeSnapshot
                 currentCADViewState = activeRequest.cadViewState
                 lastPersistedCADViewState = activeRequest.cadViewState
+                nativeCADLayers = []
+                let savedCADLayerIDs = Set(activeRequest.cadViewState.visibleLayerNames)
+                nativeCADVisibleLayerIDs = activeRequest.cadViewState.usesSavedVisibleLayers && !savedCADLayerIDs.isEmpty
+                    ? savedCADLayerIDs
+                    : nil
                 lastRendererPerformance = nil
+                lastCADOpenTrace = nil
                 forceFallbackForPerformance = false
                 forceFallbackReason = nil
                 if isCADFile, !isDWGFile, CADRendererProvider.isRendererBound {
@@ -1794,17 +2052,20 @@ struct CADPreviewContainer: View {
             }
             .fileExporter(
                 isPresented: diagnosticExporterPresented,
-                document: ExportDocument(data: diagnosticExportPayload?.data ?? Data()),
-                contentType: diagnosticExportPayload?.contentType ?? .plainText,
-                defaultFilename: diagnosticExportPayload?.defaultFilename ?? "CAD诊断日志.txt"
+                document: ExportDocument(
+                    data: diagnosticExportPayload?.data ?? Data(),
+                    sourceFileURL: diagnosticExportPayload?.sourceFileURL
+                ),
+                contentType: diagnosticExportPayload?.contentType ?? .zipArchive,
+                defaultFilename: diagnosticExportPayload?.defaultFilename ?? "CAD诊断包.zip"
             ) { result in
                 switch result {
                 case .success:
-                    alertMessage = String(localized: "CAD 诊断日志已导出。")
+                    alertMessage = String(localized: "CAD 诊断包已导出。")
                     showAlert = true
                 case .failure(let error):
                     if (error as? CocoaError)?.code != .userCancelled {
-                        alertMessage = "\(String(localized: "CAD 诊断日志导出失败"))：\(error.localizedDescription)"
+                        alertMessage = "\(String(localized: "CAD 诊断包导出失败"))：\(error.localizedDescription)"
                         showAlert = true
                     }
                 }
@@ -2137,6 +2398,8 @@ struct CADPreviewContainer: View {
             title: String(localized: "问题点 \(snapshot.issueMarkers.count + 1)"),
             note: "",
             photoFileName: photoFileName,
+            layerName: nearestDrawingLayerName(toStoredPoint: point),
+            measurementSummary: nearestMeasurementSummary(toStoredPoint: point),
             colorHex: "E24A7A",
             createdAt: Formatters.now()
         )
@@ -2347,20 +2610,31 @@ struct CADPreviewContainer: View {
         isExportingDiagnosticLog = true
         defer { isExportingDiagnosticLog = false }
 
+        var rendererReport: String?
+        var reporterErrorMessage: String?
         do {
-            let report = try await CADRendererProvider.makeDiagnosticReport(
+            rendererReport = try await CADRendererProvider.makeDiagnosticReport(
                 for: activeRequest.fileURL,
                 preferredTextCodePage: selectedTextEncoding.codePageOverride,
                 preferredTextBigFont: selectedTextBigFont.bridgeCode
-            ) ?? fallbackDiagnosticLog()
-            diagnosticExportPayload = ExportPayload(
-                data: Data(report.utf8),
-                contentType: .plainText,
-                defaultFilename: diagnosticLogFileName()
             )
         } catch {
-            let report = fallbackDiagnosticLog(extraMessage: "\(String(localized: "CAD 内核诊断生成失败"))：\(error.localizedDescription)")
+            reporterErrorMessage = "\(String(localized: "CAD 内核诊断生成失败"))：\(error.localizedDescription)"
             StorageIssueLog.record("CAD 诊断日志生成失败：\(activeRequest.displayName)，\(error.localizedDescription)")
+        }
+
+        do {
+            let report = fallbackDiagnosticLog(
+                extraMessage: reporterErrorMessage,
+                rendererReport: rendererReport
+            )
+            diagnosticExportPayload = try diagnosticPackagePayload(humanReport: report)
+        } catch {
+            let report = fallbackDiagnosticLog(
+                extraMessage: "\(String(localized: "CAD 诊断包生成失败"))：\(error.localizedDescription)",
+                rendererReport: rendererReport
+            )
+            StorageIssueLog.record("CAD 诊断包生成失败：\(activeRequest.displayName)，\(error.localizedDescription)")
             diagnosticExportPayload = ExportPayload(
                 data: Data(report.utf8),
                 contentType: .plainText,
@@ -2369,12 +2643,38 @@ struct CADPreviewContainer: View {
         }
     }
 
-    func diagnosticLogFileName() -> String {
+    func diagnosticBaseName() -> String {
         let baseName = activeRequest.displayName
             .trimmingCharacters(in: .whitespacesAndNewlines)
             .replacingOccurrences(of: "/", with: "-")
-        let name = baseName.isEmpty ? activeRequest.fileURL.deletingPathExtension().lastPathComponent : baseName
-        return "\(name)_CAD诊断日志.txt"
+        return baseName.isEmpty ? activeRequest.fileURL.deletingPathExtension().lastPathComponent : baseName
+    }
+
+    func diagnosticPackageFileName() -> String {
+        "\(diagnosticBaseName())_CAD诊断包.zip"
+    }
+
+    func diagnosticLogFileName() -> String {
+        "\(diagnosticBaseName())_CAD诊断日志.txt"
+    }
+
+    func diagnosticReportFileName() -> String {
+        "diagnostic_report.txt"
+    }
+
+    func diagnosticMachineTraceFileName() -> String {
+        "pipeline_trace.json"
+    }
+
+    func diagnosticPackagePayload(humanReport: String) throws -> ExportPayload {
+        var zip = SimpleZipArchiveBuilder()
+        zip.addFile(path: diagnosticReportFileName(), data: Data(humanReport.utf8))
+        zip.addFile(path: diagnosticMachineTraceFileName(), data: try diagnosticMachineTraceData())
+        return ExportPayload(
+            data: zip.build(),
+            contentType: .zipArchive,
+            defaultFilename: diagnosticPackageFileName()
+        )
     }
 
     func fallbackScreenshotFileName() -> String {
@@ -2385,93 +2685,352 @@ struct CADPreviewContainer: View {
         return "\(name)_兼容预览反馈.png"
     }
 
-    func fallbackDiagnosticLog(extraMessage: String? = nil) -> String {
+    func fallbackDiagnosticLog(extraMessage: String? = nil, rendererReport: String? = nil) -> String {
         var lines: [String] = []
-        lines.append("CAD 图纸诊断日志")
-        lines.append("生成时间：\(Formatters.dateTime.string(from: Date()))")
+        lines.append(String(localized: "CAD 技术排查报告"))
+        lines.append("\(String(localized: "生成时间"))：\(Formatters.dateTime.string(from: Date()))")
         lines.append("")
-        lines.append("## 文件")
-        lines.append("文件名：\(activeRequest.fileURL.lastPathComponent)")
-        lines.append("路径：\(activeRequest.fileURL.path)")
-        lines.append("类型：\(activeRequest.fileType.uppercased())")
-        lines.append("大小：\(fallbackFileSizeText())")
-        lines.append("文件头 Hex：\(fallbackHeaderHex())")
-        lines.append("源文件写入：否（批注、测量、文字编码和字体设置只保存在应用项目数据中）")
+        lines.append("## \(String(localized: "文件"))")
+        lines.append("\(String(localized: "文件名"))：\(activeRequest.fileURL.lastPathComponent)")
+        lines.append("\(String(localized: "路径"))：\(activeRequest.fileURL.path)")
+        lines.append("\(String(localized: "类型"))：\(activeRequest.fileType.uppercased())")
+        lines.append("\(String(localized: "大小"))：\(fallbackFileSizeText())")
+        lines.append("\(String(localized: "文件头 Hex"))：\(fallbackHeaderHex())")
+        lines.append("\(String(localized: "源文件写入"))：\(String(localized: "否（批注、测量、文字编码和字体设置只保存在应用项目数据中）"))")
+        lines.append("\(String(localized: "机器 trace"))：\(diagnosticMachineTraceFileName())")
         lines.append("")
-        lines.append("## 预览环境")
-        lines.append("CAD 看图内核可用：\(CADDrawingCapability.isCADEngineInstalled() ? "是" : "否")")
-        lines.append("Renderer 已绑定：\(CADRendererProvider.isRendererBound ? "是" : "否")")
-        lines.append("看图模式：\(selectedCADViewerMode.title)")
+        lines.append("## \(String(localized: "预览环境"))")
+        lines.append("\(String(localized: "CAD 看图内核可用"))：\(CADDrawingCapability.isCADEngineInstalled() ? String(localized: "是") : String(localized: "否"))")
+        lines.append("\(String(localized: "Renderer 已绑定"))：\(CADRendererProvider.isRendererBound ? String(localized: "是") : String(localized: "否"))")
+        lines.append("\(String(localized: "看图模式"))：\(selectedCADViewerMode.title)")
+        let pipeline = diagnosticPipeline()
+        lines.append("\(String(localized: "结论"))：\(pipeline.conclusion)")
+        lines.append("failureLayer：\(pipeline.failureLayer)")
+        lines.append("failureStage：\(pipeline.failureStage)")
         if forceFallbackForPerformance {
-            lines.append("性能降级：是")
-            lines.append("降级原因：\(forceFallbackReason ?? "-")")
+            lines.append("\(String(localized: "性能降级"))：\(String(localized: "是"))")
+            lines.append("\(String(localized: "降级原因"))：\(forceFallbackReason ?? "-")")
         }
         if let performance = lastRendererPerformance {
-            lines.append("性能采样：visible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), renderMs=\(Int(performance.renderMs))ms, firstFrameMs=\(Int(performance.firstFrameMs))ms, skipped=\(performance.skippedEntityCount), layers=\(performance.visibleLayerCount)")
+            lines.append("\(String(localized: "性能采样"))：visible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), textCommands=\(performance.textCommandCount), textOverlays=\(performance.textOverlayCount), renderMs=\(Int(performance.renderMs))ms, firstFrameMs=\(Int(performance.firstFrameMs))ms, skipped=\(performance.skippedEntityCount), layers=\(performance.visibleLayerCount)")
+            if performance.textCommandCount > 0 && performance.textOverlayCount == 0 {
+                lines.append("\(String(localized: "文字渲染诊断"))：CAD 已生成文字命令，但当前帧没有可见文字贴图；优先检查 viewport、文字坐标、图层和字体栅格化。")
+            }
         }
         if shouldUseFallbackViewer {
             let outputs = CADFallbackOutputResolver.resolve(fileURL: activeRequest.fileURL)
-            lines.append("兼容预览输出：\(outputs.summary)")
+            lines.append("\(String(localized: "兼容预览输出"))：\(outputs.summary)")
         }
-        lines.append("当前文字编码：\(selectedTextEncoding.displayName)")
-        lines.append("当前 SHX/大字体：\(selectedTextBigFont.displayName)")
+        lines.append("\(String(localized: "当前文字编码"))：\(selectedTextEncoding.displayName)")
+        lines.append("\(String(localized: "当前 SHX/大字体"))：\(selectedTextBigFont.displayName)")
         if !activeRequest.projectFontMappings.isEmpty {
-            lines.append("本项目字体映射：")
+            lines.append("\(String(localized: "本项目字体映射"))：")
             for mapping in projectFontMappingRows.prefix(12) {
                 lines.append("- \(mapping.source.displayName)：\(mapping.pattern) -> \(mapping.bigFont.displayName)")
             }
         }
         if let codePage = textSchemeSnapshot.codePage {
-            lines.append("当前命中编码：\(codePageDisplayName(codePage))")
+            lines.append("\(String(localized: "当前命中编码"))：\(codePageDisplayName(codePage))")
         }
         if let styleName = textSchemeSnapshot.styleName {
-            lines.append("当前样式：\(styleName)")
+            lines.append("\(String(localized: "当前样式"))：\(styleName)")
         }
         if let fontFile = textSchemeSnapshot.fontFile {
-            lines.append("当前字体：\(fontFile)")
+            lines.append("\(String(localized: "当前字体"))：\(fontFile)")
         }
         if let bigFontFile = textSchemeSnapshot.bigFontFile {
-            lines.append("当前大字体文件：\(bigFontFile)")
+            lines.append("\(String(localized: "当前大字体文件"))：\(bigFontFile)")
         }
         if let score = textSchemeSnapshot.autoDetectScore {
-            lines.append("自动识别评分：\(score)")
+            lines.append("\(String(localized: "自动识别评分"))：\(score)")
         }
         if let styleSummary = textSchemeSnapshot.styleSummary, !styleSummary.isEmpty {
-            lines.append("STYLE 表：\(styleSummary)")
+            lines.append("\(String(localized: "STYLE 表"))：\(styleSummary)")
         }
         if let matchedFontSummary = textSchemeSnapshot.matchedFontSummary, !matchedFontSummary.isEmpty {
-            lines.append("已匹配字体：\(matchedFontSummary)")
+            lines.append("\(String(localized: "已匹配字体"))：\(matchedFontSummary)")
         }
         if let unresolvedFontSummary = textSchemeSnapshot.unresolvedFontSummary, !unresolvedFontSummary.isEmpty {
-            lines.append("未匹配字体：\(unresolvedFontSummary)")
+            lines.append("\(String(localized: "未匹配字体"))：\(unresolvedFontSummary)")
         }
         if let fontResolutionSummary = textSchemeSnapshot.fontResolutionSummary, !fontResolutionSummary.isEmpty {
-            lines.append("字体解析：\(fontResolutionSummary)")
+            lines.append("\(String(localized: "字体解析"))：\(fontResolutionSummary)")
         }
         if let rawSample = textSchemeSnapshot.rawTextBytesHexSample, !rawSample.isEmpty {
             lines.append("raw text bytes：\(rawSample)")
         }
         if let summary = textSchemeSnapshot.detectionSummary, !summary.isEmpty {
-            lines.append("识别摘要：\(summary)")
+            lines.append("\(String(localized: "识别摘要"))：\(summary)")
         }
         if let engineStatusHint {
-            lines.append("提示：\(engineStatusHint)")
+            lines.append("\(String(localized: "提示"))：\(engineStatusHint)")
+        }
+        if let rendererReport, !rendererReport.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            lines.append("")
+            lines.append("## \(String(localized: "内核报告"))")
+            lines.append(rendererReport)
         }
         if let extraMessage {
             lines.append("")
-            lines.append("## 诊断生成错误")
+            lines.append("## \(String(localized: "诊断生成错误"))")
             lines.append(extraMessage)
         }
         return lines.joined(separator: "\n")
     }
 
+    func diagnosticMachineTraceData() throws -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        return try encoder.encode(diagnosticMachineTrace())
+    }
+
+    func diagnosticMachineTrace() -> CADDiagnosticMachineTrace {
+        let kernelTrace = cadOpenTechnicalDetails?.pipelineTrace
+        let nativeTrace = lastCADOpenTrace
+        let pipeline = diagnosticPipeline(kernelTrace: kernelTrace, nativeTrace: nativeTrace)
+        let counts = diagnosticCounts(kernelTrace: kernelTrace, nativeTrace: nativeTrace)
+        let diagnostics = cadOpenTechnicalDetails?.diagnostics ?? []
+        let appVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? ""
+        let buildNumber = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""
+
+        return CADDiagnosticMachineTrace(
+            schemaVersion: 1,
+            traceKind: "sitekeeper.cad.open",
+            generatedAt: ISO8601DateFormatter().string(from: Date()),
+            humanReportFile: diagnosticReportFileName(),
+            machineTraceFile: diagnosticMachineTraceFileName(),
+            file: CADDiagnosticMachineTrace.FileInfo(
+                displayName: activeRequest.displayName,
+                path: activeRequest.fileURL.path,
+                fileType: activeRequest.fileType.uppercased(),
+                fileByteCount: diagnosticFileByteCount(),
+                headerHex: fallbackHeaderHex(),
+                importedAt: activeRequest.importedAt
+            ),
+            environment: CADDiagnosticMachineTrace.Environment(
+                appVersion: appVersion,
+                buildNumber: buildNumber,
+                cadEngineInstalled: CADDrawingCapability.isCADEngineInstalled(),
+                rendererBound: CADRendererProvider.isRendererBound,
+                viewerMode: selectedCADViewerMode.rawValue,
+                fallbackViewerActive: shouldUseFallbackViewer,
+                performanceFallbackActive: forceFallbackForPerformance,
+                performanceFallbackReason: forceFallbackReason
+            ),
+            pipeline: pipeline,
+            counts: counts,
+            text: CADDiagnosticMachineTrace.TextState(
+                selectedEncoding: selectedTextEncoding.rawValue,
+                selectedBigFont: selectedTextBigFont.rawValue,
+                codePageOverride: selectedTextEncoding.codePageOverride,
+                bigFontCode: selectedTextBigFont.bridgeCode,
+                detectedCodePage: textSchemeSnapshot.codePage.map(codePageDisplayName),
+                detectedStyleName: textSchemeSnapshot.styleName,
+                detectedFontFile: textSchemeSnapshot.fontFile,
+                detectedBigFontFile: textSchemeSnapshot.bigFontFile,
+                autoDetectScore: textSchemeSnapshot.autoDetectScore,
+                unresolvedFontSummary: textSchemeSnapshot.unresolvedFontSummary,
+                fontResolutionSummary: textSchemeSnapshot.fontResolutionSummary,
+                rawTextBytesHexSample: textSchemeSnapshot.rawTextBytesHexSample
+            ),
+            performance: lastRendererPerformance.map { performance in
+                CADDiagnosticMachineTrace.Performance(
+                    entityCountInViewport: performance.entityCountInViewport,
+                    drawCallCount: performance.drawCallCount,
+                    frameTimeMilliseconds: performance.frameTimeMilliseconds,
+                    skippedEntityCount: performance.skippedEntityCount,
+                    visibleLayerCount: performance.visibleLayerCount,
+                    simplifiedMode: performance.simplifiedMode,
+                    renderCommandCount: performance.renderCommandCount,
+                    textCommandCount: performance.textCommandCount,
+                    textOverlayCount: performance.textOverlayCount,
+                    renderMilliseconds: performance.renderMs,
+                    firstFrameMilliseconds: performance.firstFrameMs
+                )
+            },
+            openQuality: cadOpenQuality.map { quality in
+                CADDiagnosticMachineTrace.OpenQuality(
+                    level: quality.level,
+                    title: quality.title,
+                    summary: quality.summary,
+                    allowsMarkup: quality.allowsMarkup,
+                    supportsSearch: quality.supportsSearch,
+                    detailLines: quality.detailLines
+                )
+            },
+            kernelTrace: kernelTrace.map(CADDiagnosticMachineTrace.KernelTrace.init),
+            nativeTrace: nativeTrace.map(CADDiagnosticMachineTrace.NativeTrace.init),
+            diagnostics: diagnostics,
+            notes: diagnosticNotes(pipeline: pipeline, diagnostics: diagnostics)
+        )
+    }
+
+    func diagnosticPipeline(
+        kernelTrace: SiteKeeperCADKernel.DWGOpenPipelineTrace? = nil,
+        nativeTrace: CADPoC.CADOpenTrace? = nil
+    ) -> CADDiagnosticMachineTrace.Pipeline {
+        if let kernelTrace {
+            let failureLayer = diagnosticFailureLayer(kernelTrace)
+            return CADDiagnosticMachineTrace.Pipeline(
+                failureLayer: failureLayer,
+                failureStage: kernelTrace.failureStage,
+                openState: kernelTrace.openState.rawValue,
+                importSource: cadOpenTechnicalDetails?.importEngine,
+                conclusion: diagnosticConclusion(for: failureLayer),
+                traceSource: "kernel_pipeline_trace"
+            )
+        }
+
+        if let nativeTrace {
+            let failureLayer = diagnosticFailureLayer(nativeTrace)
+            return CADDiagnosticMachineTrace.Pipeline(
+                failureLayer: failureLayer,
+                failureStage: nativeTrace.openedForRender ? "rendered" : failureLayer,
+                openState: nativeTrace.openedForRender ? "rendered" : "unsupported",
+                importSource: nativeTrace.importSource,
+                conclusion: diagnosticConclusion(for: failureLayer),
+                traceSource: "native_canvas_trace"
+            )
+        }
+
+        let failureLayer = CADRendererProvider.isRendererBound ? "unknown" : "render"
+        return CADDiagnosticMachineTrace.Pipeline(
+            failureLayer: failureLayer,
+            failureStage: CADRendererProvider.isRendererBound ? "missing_trace" : "renderer_unbound",
+            openState: currentOpenStateRawValue(),
+            importSource: cadOpenTechnicalDetails?.importEngine,
+            conclusion: diagnosticConclusion(for: failureLayer),
+            traceSource: "fallback_context"
+        )
+    }
+
+    func diagnosticCounts(
+        kernelTrace: SiteKeeperCADKernel.DWGOpenPipelineTrace?,
+        nativeTrace: CADPoC.CADOpenTrace?
+    ) -> CADDiagnosticMachineTrace.Counts {
+        if let kernelTrace {
+            return CADDiagnosticMachineTrace.Counts(
+                rawEntityCount: max(kernelTrace.jsonRawEntityCount, kernelTrace.dxfRawEntityCount),
+                adapterEntityCount: kernelTrace.adapterEntityCount,
+                databaseEntityCount: kernelTrace.databaseEntityCount,
+                drawableEntityCount: kernelTrace.drawableEntityCount,
+                renderCommandCount: kernelTrace.renderCommandCount,
+                visibleLayerCount: kernelTrace.visibleLayerCount
+            )
+        }
+
+        if let nativeTrace {
+            let rawCount = CADDiagnosticMachineTrace.NativeTrace(nativeTrace).rawEntityCounts.total
+            return CADDiagnosticMachineTrace.Counts(
+                rawEntityCount: rawCount,
+                adapterEntityCount: nativeTrace.entityCount,
+                databaseEntityCount: nativeTrace.entityCount,
+                drawableEntityCount: nativeTrace.drawableEntityCount,
+                renderCommandCount: nativeTrace.renderCommandCount,
+                visibleLayerCount: nativeCADVisibleLayerIDs?.count ?? nativeCADLayers.filter(\.isVisible).count
+            )
+        }
+
+        return CADDiagnosticMachineTrace.Counts(
+            rawEntityCount: 0,
+            adapterEntityCount: 0,
+            databaseEntityCount: cadOpenTechnicalDetails?.pipelineTrace?.databaseEntityCount ?? 0,
+            drawableEntityCount: cadOpenTechnicalDetails?.drawableEntityCount ?? 0,
+            renderCommandCount: lastRendererPerformance?.renderCommandCount ?? 0,
+            visibleLayerCount: lastRendererPerformance?.visibleLayerCount ?? nativeCADVisibleLayerIDs?.count ?? nativeCADLayers.count
+        )
+    }
+
+    func diagnosticFailureLayer(_ trace: SiteKeeperCADKernel.DWGOpenPipelineTrace) -> String {
+        if trace.openState == .rendered || trace.failureStage == "rendered" {
+            return "none"
+        }
+        if trace.jsonRawEntityCount == 0,
+           trace.dxfRawEntityCount == 0,
+           trace.adapterEntityCount == 0,
+           trace.databaseEntityCount == 0 {
+            return "libredwg"
+        }
+        if trace.adapterEntityCount == 0 { return "adapter" }
+        if trace.drawableEntityCount == 0 { return "database" }
+        if trace.renderCommandCount == 0 { return "render" }
+
+        let stage = trace.failureStage.lowercased()
+        if stage.contains("libredwg") || stage.contains("geometry_source") || stage.contains("import") {
+            return "libredwg"
+        }
+        if stage.contains("adapter") { return "adapter" }
+        if stage.contains("database") || stage.contains("drawable") { return "database" }
+        if stage.contains("render") { return "render" }
+        return "unknown"
+    }
+
+    func diagnosticFailureLayer(_ trace: CADPoC.CADOpenTrace) -> String {
+        if trace.openedForRender {
+            return "none"
+        }
+        let rawCount = CADDiagnosticMachineTrace.NativeTrace(trace).rawEntityCounts.total
+        if rawCount == 0 { return "libredwg" }
+        if trace.entityCount == 0 { return "adapter" }
+        if trace.drawableEntityCount == 0 { return "database" }
+        if trace.renderCommandCount == 0 { return "render" }
+        return "unknown"
+    }
+
+    func diagnosticConclusion(for failureLayer: String) -> String {
+        switch failureLayer {
+        case "none":
+            return "CAD pipeline reached renderable output."
+        case "libredwg":
+            return "LibreDWG did not provide drawable geometry."
+        case "adapter":
+            return "Raw geometry exists but adapter produced no database entities."
+        case "database":
+            return "Database entities exist but no drawable entities are available."
+        case "render":
+            return "Drawable entities exist but render commands are unavailable."
+        default:
+            return "CAD pipeline failure layer is unknown."
+        }
+    }
+
+    func currentOpenStateRawValue() -> String {
+        switch cadOpenRoute {
+        case .online(let result), .unsupported(let result):
+            switch result.openState {
+            case .rendered:
+                return "rendered"
+            case .unsupported:
+                return "unsupported"
+            case .failed:
+                return "failed"
+            }
+        }
+    }
+
+    func diagnosticNotes(pipeline: CADDiagnosticMachineTrace.Pipeline, diagnostics: [String]) -> [String] {
+        var notes: [String] = []
+        if pipeline.failureLayer == "libredwg" {
+            notes.append("Stop at LibreDWG until raw drawable geometry is available.")
+        }
+        if diagnostics.isEmpty {
+            notes.append("No kernel diagnostics were attached to this export.")
+        }
+        return notes
+    }
+
     func fallbackFileSizeText() -> String {
+        let bytes = diagnosticFileByteCount()
+        guard bytes > 0 else { return "-" }
+        return QuickNoteAttachmentStorage.formattedFileSize(bytes)
+    }
+
+    func diagnosticFileByteCount() -> Int {
         do {
             let values = try activeRequest.fileURL.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
-            let bytes = values.fileSize ?? values.totalFileAllocatedSize ?? 0
-            return QuickNoteAttachmentStorage.formattedFileSize(bytes)
+            return values.fileSize ?? values.totalFileAllocatedSize ?? activeRequest.fileSizeBytes
         } catch {
-            return "-"
+            return activeRequest.fileSizeBytes
         }
     }
 

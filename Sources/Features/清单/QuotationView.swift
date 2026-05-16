@@ -808,30 +808,32 @@ struct QuotationView: View {
         let idSet = Set(ids)
         guard !idSet.isEmpty else { return }
 
-        let snapshot = store.quoteItems
-        let targets = snapshot.filter { idSet.contains($0.id) }
+        let targets = store.quoteItems.filter { idSet.contains($0.id) }
         guard !targets.isEmpty else { return }
+        let deletion = store.removeQuoteItems(
+            ids: idSet,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除报价"),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "QuotationView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
 
-        store.quoteItems.removeAll { idSet.contains($0.id) }
         undoableDeletion.queue(
             notice: $operationNotice,
-            message: String(format: String(localized: "已删除 %lld 条报价"), Int64(targets.count)),
+            message: String(format: String(localized: "已删除 %lld 条报价"), Int64(deletion.deletedCount)),
             commit: {
                 store.scheduleSave()
             },
             undo: {
-                store.quoteItems = UndoableDeletionCoordinator.restoringItems(
-                    snapshot: snapshot,
+                store.quoteItems = deletion.restoredItems(
                     current: store.quoteItems,
-                    deletedIDs: idSet
+                    id: \.id
                 )
                 store.scheduleSave()
             },
-            audit: UndoableDeletionAuditContext(
-                summary: String(format: String(localized: "删除报价 %lld 条"), Int64(targets.count)),
-                detail: targets.map(\.name).joined(separator: "、"),
-                source: "QuotationView"
-            )
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 

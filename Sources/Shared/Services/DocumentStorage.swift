@@ -4,6 +4,26 @@ import UIKit
 import AVFoundation
 import UniformTypeIdentifiers
 
+private enum DocumentStorageIssueLogger {
+    static func record(
+        _ event: String,
+        fileName: String? = nil,
+        error: Error? = nil,
+        details: [String: String] = [:]
+    ) {
+        var payload = details
+        if let fileName, !fileName.isEmpty {
+            payload["file"] = fileName
+        }
+        StorageIssueLog.recordEvent(
+            event,
+            category: .fileStorage,
+            details: payload,
+            error: error
+        )
+    }
+}
+
 struct ProjectDocumentBackupFile: Identifiable, Codable {
     var id: String { fileName }
     var fileName: String
@@ -15,7 +35,10 @@ enum ProjectDocumentStorage {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             return dir
         }
-        StorageIssueLog.record("无法访问应用文档目录，项目资料目录已回退到临时目录")
+        DocumentStorageIssueLogger.record(
+            "project_document.base_directory_unavailable",
+            details: ["fallback": "temporary-directory"]
+        )
         return FileManager.default.temporaryDirectory
     }
 
@@ -28,7 +51,7 @@ enum ProjectDocumentStorage {
         do {
             return try savePDFOrThrow(data: data, projectId: projectId)
         } catch {
-            StorageIssueLog.record("项目资料保存失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("project_document.save_failed", error: error)
             return nil
         }
     }
@@ -71,7 +94,7 @@ enum ProjectDocumentStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("项目资料读取失败：\(fileName)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("project_document.read_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -81,8 +104,8 @@ enum ProjectDocumentStorage {
         return await DocumentStorageBackgroundReader.data(
             from: url,
             missingFileCode: .fileReadNoSuchFile,
-            missingLogPrefix: nil,
-            failureLogPrefix: "项目资料读取失败",
+            missingLogEvent: nil,
+            failureLogEvent: "project_document.read_failed",
             fileName: fileName
         )
     }
@@ -91,7 +114,7 @@ enum ProjectDocumentStorage {
         do {
             try deleteOrThrow(fileName: fileName)
         } catch {
-            StorageIssueLog.record("项目资料删除失败：\(fileName)")
+            DocumentStorageIssueLogger.record("project_document.delete_failed", fileName: fileName, error: error)
         }
     }
 
@@ -121,7 +144,7 @@ enum ProjectDocumentStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return 0
         } catch {
-            StorageIssueLog.record("项目资料文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("project_document.file_size_failed", fileName: fileName, error: error)
             return 0
         }
     }
@@ -140,7 +163,7 @@ enum ProjectDocumentStorage {
             let files = try FileManager.default.contentsOfDirectory(at: documentDir, includingPropertiesForKeys: nil)
             return files.map(\.lastPathComponent).sorted()
         } catch {
-            StorageIssueLog.record("项目资料目录读取失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("project_document.directory_list_failed", error: error)
             return []
         }
     }
@@ -158,7 +181,7 @@ enum ProjectDocumentStorage {
         do {
             try restoreOrThrow(files)
         } catch {
-            StorageIssueLog.record("项目资料恢复失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("project_document.restore_failed", error: error)
         }
     }
 
@@ -193,7 +216,10 @@ enum DrawingStorage {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             return dir
         }
-        StorageIssueLog.record("无法访问应用文档目录，图纸目录已回退到临时目录")
+        DocumentStorageIssueLogger.record(
+            "drawing.base_directory_unavailable",
+            details: ["fallback": "temporary-directory"]
+        )
         return FileManager.default.temporaryDirectory
     }
 
@@ -206,7 +232,7 @@ enum DrawingStorage {
         do {
             return try saveImportedFileOrThrow(from: sourceURL, projectId: projectId)
         } catch {
-            StorageIssueLog.record("图纸导入失败：\(sourceURL.lastPathComponent)")
+            DocumentStorageIssueLogger.record("drawing.import_failed", fileName: sourceURL.lastPathComponent, error: error)
             return nil
         }
     }
@@ -214,7 +240,7 @@ enum DrawingStorage {
     static func saveImportedFileOrThrow(from sourceURL: URL, projectId: UUID) throws -> ProjectDrawing {
         guard let ext = drawingFileExtension(for: sourceURL) else {
             let rawType = sourceURL.pathExtension.lowercased()
-            throw FileStorageError.unsupportedFileType(rawType.isEmpty ? "未知类型" : rawType)
+            throw FileStorageError.unsupportedFileType(rawType.isEmpty ? String(localized: "未知类型") : rawType)
         }
         guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
             throw FileStorageError.unsupportedFileType(ext)
@@ -250,7 +276,7 @@ enum DrawingStorage {
     static func saveImportedDataOrThrow(data: Data, sourceFileName: String, projectId: UUID) throws -> ProjectDrawing {
         let ext = (sourceFileName as NSString).pathExtension.lowercased()
         guard ProjectDrawing.allowedFileExtensions.contains(ext) else {
-            throw FileStorageError.unsupportedFileType(ext.isEmpty ? "未知类型" : ext)
+            throw FileStorageError.unsupportedFileType(ext.isEmpty ? String(localized: "未知类型") : ext)
         }
         let rawBaseName = ((sourceFileName as NSString).lastPathComponent as NSString).deletingPathExtension
         let displayName = rawBaseName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -300,7 +326,7 @@ enum DrawingStorage {
         do {
             return try sourceURL.resourceValues(forKeys: [.contentTypeKey]).contentType
         } catch {
-            StorageIssueLog.record("图纸文件类型读取失败：\(sourceURL.lastPathComponent)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("drawing.content_type_read_failed", fileName: sourceURL.lastPathComponent, error: error)
             return nil
         }
     }
@@ -328,7 +354,7 @@ enum DrawingStorage {
         do {
             try deleteOrThrow(fileName: fileName)
         } catch {
-            StorageIssueLog.record("图纸删除失败：\(fileName)")
+            DocumentStorageIssueLogger.record("drawing.delete_failed", fileName: fileName, error: error)
         }
     }
 
@@ -353,7 +379,7 @@ enum DrawingStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("图纸读取失败：\(fileName)")
+            DocumentStorageIssueLogger.record("drawing.read_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -363,8 +389,8 @@ enum DrawingStorage {
         return await DocumentStorageBackgroundReader.data(
             from: url,
             missingFileCode: .fileReadNoSuchFile,
-            missingLogPrefix: nil,
-            failureLogPrefix: "图纸读取失败",
+            missingLogEvent: nil,
+            failureLogEvent: "drawing.read_failed",
             fileName: fileName
         )
     }
@@ -381,7 +407,7 @@ enum DrawingStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return 0
         } catch {
-            StorageIssueLog.record("图纸文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("drawing.file_size_failed", fileName: fileName, error: error)
             return 0
         }
     }
@@ -404,7 +430,7 @@ enum DrawingStorage {
             let files = try FileManager.default.contentsOfDirectory(at: drawingDir, includingPropertiesForKeys: nil)
             return files.map(\.lastPathComponent).sorted()
         } catch {
-            StorageIssueLog.record("图纸目录读取失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("drawing.directory_list_failed", error: error)
             return []
         }
     }
@@ -424,7 +450,7 @@ enum DrawingStorage {
         do {
             try restoreOrThrow(files)
         } catch {
-            StorageIssueLog.record("图纸恢复失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("drawing.restore_failed", error: error)
         }
     }
 
@@ -493,7 +519,7 @@ enum DrawingStorage {
             do {
                 try FileManager.default.removeItem(at: url)
             } catch {
-                StorageIssueLog.record("图纸 sidecar 删除失败：\(sidecar)，\(error.localizedDescription)")
+                DocumentStorageIssueLogger.record("drawing.sidecar_delete_failed", fileName: sidecar, error: error)
             }
         }
     }
@@ -518,7 +544,10 @@ enum QuickNoteAttachmentStorage {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             return dir
         }
-        StorageIssueLog.record("无法访问应用文档目录，随手记附件目录已回退到临时目录")
+        DocumentStorageIssueLogger.record(
+            "quick_note_attachment.base_directory_unavailable",
+            details: ["fallback": "temporary-directory"]
+        )
         return FileManager.default.temporaryDirectory
     }
 
@@ -535,7 +564,7 @@ enum QuickNoteAttachmentStorage {
         do {
             return try saveImageOrThrow(image, compressionQuality: compressionQuality)
         } catch {
-            StorageIssueLog.record("随手记图片附件保存失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.image_save_failed", error: error)
             return nil
         }
     }
@@ -557,7 +586,7 @@ enum QuickNoteAttachmentStorage {
         do {
             return try saveDataOrThrow(data, fileName: fileName)
         } catch {
-            StorageIssueLog.record("随手记附件保存失败：\(fileName)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.save_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -602,7 +631,7 @@ enum QuickNoteAttachmentStorage {
                 guard seconds.isFinite, seconds > 0 else { return nil }
                 return seconds
             } catch {
-                StorageIssueLog.record("随手记视频时长读取失败：\(source.lastPathComponent)，\(error.localizedDescription)")
+                DocumentStorageIssueLogger.record("quick_note_attachment.video_duration_failed", fileName: source.lastPathComponent, error: error)
                 return nil
             }
         }()
@@ -619,7 +648,7 @@ enum QuickNoteAttachmentStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("随手记附件读取失败：\(fileName)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.read_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -629,8 +658,8 @@ enum QuickNoteAttachmentStorage {
         return await DocumentStorageBackgroundReader.data(
             from: url,
             missingFileCode: .fileReadNoSuchFile,
-            missingLogPrefix: nil,
-            failureLogPrefix: "随手记附件读取失败",
+            missingLogEvent: nil,
+            failureLogEvent: "quick_note_attachment.read_failed",
             fileName: fileName
         )
     }
@@ -650,7 +679,7 @@ enum QuickNoteAttachmentStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return 0
         } catch {
-            StorageIssueLog.record("随手记附件体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.file_size_failed", fileName: url.lastPathComponent, error: error)
             return 0
         }
     }
@@ -671,7 +700,7 @@ enum QuickNoteAttachmentStorage {
         do {
             try deleteOrThrow(fileName: fileName)
         } catch {
-            StorageIssueLog.record("随手记附件删除失败：\(fileName)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.delete_failed", fileName: fileName, error: error)
         }
     }
 
@@ -714,7 +743,7 @@ enum QuickNoteAttachmentStorage {
             let files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil)
             return files.map(\.lastPathComponent).sorted()
         } catch {
-            StorageIssueLog.record("随手记附件目录读取失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.directory_list_failed", error: error)
             return []
         }
     }
@@ -745,7 +774,7 @@ enum QuickNoteAttachmentStorage {
         do {
             try restoreOrThrow(files)
         } catch {
-            StorageIssueLog.record("随手记附件恢复失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.restore_failed", error: error)
         }
     }
 
@@ -772,7 +801,7 @@ enum QuickNoteAttachmentStorage {
         do {
             cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
         } catch {
-            StorageIssueLog.record("随手记视频缩略图生成失败：\(fileName)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.video_thumbnail_failed", fileName: fileName, error: error)
             return nil
         }
         let image = UIImage(cgImage: cgImage)
@@ -787,7 +816,7 @@ enum QuickNoteAttachmentStorage {
         do {
             files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
         } catch {
-            StorageIssueLog.record("随手记缩略图目录读取失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.thumbnail_directory_list_failed", error: error)
             return 0
         }
         return files.reduce(0) { total, url in
@@ -796,7 +825,7 @@ enum QuickNoteAttachmentStorage {
                 let values = try url.resourceValues(forKeys: [.fileSizeKey, .totalFileAllocatedSizeKey])
                 return total + (values.fileSize ?? values.totalFileAllocatedSize ?? 0)
             } catch {
-                StorageIssueLog.record("随手记缩略图体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                DocumentStorageIssueLogger.record("quick_note_attachment.thumbnail_file_size_failed", fileName: url.lastPathComponent, error: error)
                 return total
             }
         }
@@ -807,14 +836,14 @@ enum QuickNoteAttachmentStorage {
         do {
             files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil)
         } catch {
-            StorageIssueLog.record("随手记缩略图目录读取失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.thumbnail_directory_list_failed", error: error)
             return
         }
         for url in files where url.lastPathComponent.hasPrefix("thumb-") {
             do {
                 try FileManager.default.removeItem(at: url)
             } catch {
-                StorageIssueLog.record("随手记缩略图清理失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                DocumentStorageIssueLogger.record("quick_note_attachment.thumbnail_cleanup_failed", fileName: url.lastPathComponent, error: error)
             }
         }
     }
@@ -832,7 +861,7 @@ enum QuickNoteAttachmentStorage {
         do {
             attachments = try JSONDecoder().decode([QuickNoteAttachment].self, from: data)
         } catch {
-            StorageIssueLog.record("随手记草稿附件解析失败：\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.draft_decode_failed", error: error)
             return []
         }
         var names = Set(attachments.map(\.fileName))
@@ -854,7 +883,7 @@ enum QuickNoteAttachmentStorage {
         do {
             try FileManager.default.removeItem(at: attachmentDir)
         } catch {
-            StorageIssueLog.record("随手记附件目录清理失败：\(attachmentDir.lastPathComponent)，\(error.localizedDescription)")
+            DocumentStorageIssueLogger.record("quick_note_attachment.directory_cleanup_failed", fileName: attachmentDir.lastPathComponent, error: error)
         }
     }
 }
@@ -876,20 +905,20 @@ private enum DocumentStorageBackgroundReader {
     static func data(
         from url: URL,
         missingFileCode: CocoaError.Code,
-        missingLogPrefix: String?,
-        failureLogPrefix: String,
+        missingLogEvent: String?,
+        failureLogEvent: String,
         fileName: String
     ) async -> Data? {
         await Task.detached(priority: .utility) {
             do {
                 return try Data(contentsOf: url, options: .mappedIfSafe)
             } catch let cocoaError as CocoaError where cocoaError.code == missingFileCode {
-                if let missingLogPrefix {
-                    StorageIssueLog.record("\(missingLogPrefix)：\(fileName)")
+                if let missingLogEvent {
+                    DocumentStorageIssueLogger.record(missingLogEvent, fileName: fileName)
                 }
                 return nil
             } catch {
-                StorageIssueLog.record("\(failureLogPrefix)：\(fileName)，\(error.localizedDescription)")
+                DocumentStorageIssueLogger.record(failureLogEvent, fileName: fileName, error: error)
                 return nil
             }
         }.value

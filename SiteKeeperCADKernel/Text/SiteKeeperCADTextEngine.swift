@@ -11,6 +11,11 @@ extension SiteKeeperCADKernel {
             style: CADTextStyle,
             height: Double? = nil,
             rotationRadians: Double = 0,
+            widthFactor: Double? = nil,
+            boxWidth: Double? = nil,
+            boxHeight: Double? = nil,
+            horizontalAlignmentCode: Int? = nil,
+            verticalAlignmentCode: Int? = nil,
             warnings existingWarnings: [String] = []
         ) -> CADTextRun {
             let decoded = decoder.decode(rawText: rawText)
@@ -39,7 +44,12 @@ extension SiteKeeperCADKernel {
                 insertionPoint: insertionPoint,
                 textStyleId: style.id,
                 height: height ?? style.fixedHeight ?? 2.5,
-                rotationRadians: rotationRadians
+                rotationRadians: rotationRadians,
+                widthFactor: widthFactor ?? style.widthFactor,
+                boxWidth: boxWidth,
+                boxHeight: boxHeight,
+                horizontalAlignmentCode: horizontalAlignmentCode,
+                verticalAlignmentCode: verticalAlignmentCode
             )
         }
     }

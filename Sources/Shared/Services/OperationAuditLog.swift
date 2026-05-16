@@ -81,7 +81,12 @@ enum OperationAuditLog {
         do {
             return try JSONDecoder().decode([OperationAuditEntry].self, from: data)
         } catch {
-            StorageIssueLog.record("操作审计日志读取失败：\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "operation_audit.load_failed",
+                category: .dataStore,
+                details: ["store": key],
+                error: error
+            )
             UserDefaults.standard.removeObject(forKey: key)
             return []
         }
@@ -92,7 +97,12 @@ enum OperationAuditLog {
             let data = try JSONEncoder().encode(entries)
             UserDefaults.standard.set(data, forKey: key)
         } catch {
-            StorageIssueLog.record("操作审计日志写入失败：\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "operation_audit.save_failed",
+                category: .dataStore,
+                details: ["store": key],
+                error: error
+            )
         }
     }
 }

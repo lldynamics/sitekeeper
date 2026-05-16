@@ -93,6 +93,8 @@ struct MaterialSheetView: View {
     @State private var itemExpanded: Set<UUID> = []
     @State private var exportProjectName = ""
     @State private var exportPreparer = ""
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @FocusState private var isMaterialSearchFocused: Bool
 
     init(initialDraftID: UUID? = nil) {
@@ -276,13 +278,15 @@ struct MaterialSheetView: View {
         }
         .sheet(isPresented: $showCreateDraftSheet) { createDraftSheet }
         .sheet(isPresented: $showRenameDraftSheet) { renameDraftSheet }
-        .alert("清空材料单？", isPresented: $showClearConfirm) {
+        .alert(String(localized: "清空材料单？"), isPresented: $showClearConfirm) {
             Button(String(localized: "取消"), role: .cancel) {}
-            Button(String(localized: "清空"), role: .destructive) { sheetItems.removeAll() }
+            Button(String(localized: "清空"), role: .destructive) {
+                clearCurrentSheetItemsWithUndo()
+            }
         } message: {
             Text(String(format: String(localized: "当前材料单中的 %d 项材料将被移除。"), sheetItems.count))
         }
-        .confirmationDialog("删除材料项", isPresented: $showDeleteItemConfirm, titleVisibility: .visible) {
+        .confirmationDialog(String(localized: "删除材料项"), isPresented: $showDeleteItemConfirm, titleVisibility: .visible) {
             Button(String(localized: "删除"), role: .destructive) {
                 confirmDeleteSheetItems()
             }
@@ -309,6 +313,10 @@ struct MaterialSheetView: View {
         }
         .onChange(of: exportPreparer) { _, _ in
             persistCurrentDraft()
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
@@ -559,11 +567,38 @@ struct MaterialSheetView: View {
               let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
             return
         }
+        let draft = store.materialSheetDrafts[index]
+        let previousDrafts = store.materialSheetDrafts
+        let previousSelectedDraftID = selectedDraftID
         var drafts = store.materialSheetDrafts
         drafts[index].isArchived = true
         drafts[index].updatedAt = Formatters.now()
         store.materialSheetDrafts = drafts
         store.scheduleSave()
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已归档材料单「%@」"), draftDisplayName(draft)),
+            undoMessage: String(localized: "已恢复材料单草稿"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialSheetDrafts = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: previousDrafts,
+                    current: store.materialSheetDrafts,
+                    deletedIDs: Set([draft.id])
+                )
+                self.selectedDraftID = previousSelectedDraftID
+                loadSelectedDraftIntoEditor()
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "归档材料单草稿"),
+                detail: draftDisplayName(draft),
+                source: "MaterialSheetView"
+            )
+        )
     }
 
     private func ensureDraftSelection() {
@@ -621,8 +656,12 @@ struct MaterialSheetView: View {
     }
 
     private func saveSheetToMaterialListAndClear() {
+        guard !sheetItems.isEmpty else { return }
         saveToMaterialList()
-        sheetItems.removeAll()
+        clearCurrentSheetItemsWithUndo(
+            message: String(localized: "已保存到材料清单并清空材料单"),
+            auditSummary: String(localized: "保存并清空材料单")
+        )
     }
 
     private func photoSelectionBinding(for itemId: UUID) -> Binding<[PhotosPickerItem]> {
@@ -771,10 +810,73 @@ struct MaterialSheetView: View {
     private func confirmDeleteSheetItems() {
         let ids = pendingDeleteSheetItemIDs
         guard !ids.isEmpty else { return }
+        let count = sheetItems.filter { ids.contains($0.id) }.count
+        queueSheetItemDeletion(
+            ids: ids,
+            message: String(format: String(localized: "已删除 %lld 项材料单项目"), Int64(count)),
+            auditSummary: String(format: String(localized: "删除材料单项目 %lld 项"), Int64(count))
+        )
+        pendingDeleteSheetItemIDs.removeAll()
+    }
+
+    private func clearCurrentSheetItemsWithUndo(
+        message: String = String(localized: "已清空材料单"),
+        auditSummary: String? = nil
+    ) {
+        let ids = Set(sheetItems.map(\.id))
+        guard !ids.isEmpty else { return }
+        queueSheetItemDeletion(
+            ids: ids,
+            message: message,
+            auditSummary: auditSummary ?? String(format: String(localized: "清空材料单 %lld 项"), Int64(ids.count))
+        )
+    }
+
+    private func queueSheetItemDeletion(ids: Set<UUID>, message: String, auditSummary: String) {
+        let snapshot = sheetItems
+        let deletedItems = snapshot.filter { ids.contains($0.id) }
+        guard !deletedItems.isEmpty else { return }
+
+        let previousExpanded = itemExpanded
+        let previousPhotoSelections = rowPhotoSelections
         sheetItems.removeAll { ids.contains($0.id) }
         itemExpanded.subtract(ids)
         rowPhotoSelections = rowPhotoSelections.filter { !ids.contains($0.key) }
-        pendingDeleteSheetItemIDs.removeAll()
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: message,
+            undoMessage: String(localized: "已恢复材料单内容"),
+            commit: {
+                persistCurrentDraft()
+            },
+            undo: {
+                sheetItems = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: sheetItems,
+                    deletedIDs: ids
+                )
+                itemExpanded = previousExpanded
+                rowPhotoSelections = previousPhotoSelections
+                persistCurrentDraft()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: auditSummary,
+                detail: materialSheetItemAuditDetail(deletedItems),
+                source: "MaterialSheetView"
+            )
+        )
+    }
+
+    private func materialSheetItemAuditDetail(_ items: [MaterialSheetItem]) -> String {
+        ListFormatter.localizedString(
+            byJoining: items.map { item in
+                let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
+                let specification = item.specification.trimmingCharacters(in: .whitespacesAndNewlines)
+                if name.isEmpty { return String(localized: "未命名材料") }
+                return specification.isEmpty ? name : "\(name) \(specification)"
+            }
+        )
     }
 
     @ViewBuilder

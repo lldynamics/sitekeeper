@@ -121,6 +121,27 @@ struct SimpleZipArchiveReader {
         }
     }
 
+    private static func recordIssue(
+        _ event: String,
+        fileURL: URL? = nil,
+        path: String? = nil,
+        error: Error? = nil
+    ) {
+        var details: [String: String] = [:]
+        if let fileURL {
+            details["file"] = fileURL.lastPathComponent
+        }
+        if let path, !path.isEmpty {
+            details["path"] = path
+        }
+        StorageIssueLog.recordEvent(
+            "zip_reader.\(event)",
+            category: .zipArchive,
+            details: details,
+            error: error
+        )
+    }
+
     static func read(_ data: Data) throws -> [Entry] {
         var entries: [Entry] = []
         var offset = 0
@@ -175,10 +196,7 @@ struct SimpleZipArchiveReader {
             do {
                 try handle.close()
             } catch {
-                StorageIssueLog.record(
-                    "ZIP 扫描句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)",
-                    category: .zipArchive
-                )
+                recordIssue("scan_handle_close_failed", fileURL: fileURL, error: error)
             }
         }
 
@@ -251,10 +269,7 @@ struct SimpleZipArchiveReader {
                             do {
                                 try readHandle.close()
                             } catch {
-                                StorageIssueLog.record(
-                                    "ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)",
-                                    category: .zipArchive
-                                )
+                                recordIssue("entry_read_handle_close_failed", fileURL: fileURL, path: path, error: error)
                             }
                         }
                         try readHandle.seek(toOffset: dataOffset)
@@ -281,10 +296,7 @@ struct SimpleZipArchiveReader {
                                 do {
                                     try readHandle.close()
                                 } catch {
-                                    StorageIssueLog.record(
-                                        "ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)",
-                                        category: .zipArchive
-                                    )
+                                    recordIssue("entry_read_handle_close_failed", fileURL: fileURL, path: path, error: error)
                                 }
                             }
                             try readHandle.seek(toOffset: dataOffset)
@@ -371,18 +383,12 @@ struct SimpleZipArchiveReader {
             do {
                 try readHandle.close()
             } catch {
-                StorageIssueLog.record(
-                    "ZIP 读取句柄关闭失败：\(archiveURL.lastPathComponent)，\(error.localizedDescription)",
-                    category: .zipArchive
-                )
+                recordIssue("entry_copy_read_handle_close_failed", fileURL: archiveURL, error: error)
             }
             do {
                 try writeHandle.close()
             } catch {
-                StorageIssueLog.record(
-                    "ZIP 写入句柄关闭失败：\(destinationURL.lastPathComponent)，\(error.localizedDescription)",
-                    category: .zipArchive
-                )
+                recordIssue("entry_copy_write_handle_close_failed", fileURL: destinationURL, error: error)
             }
         }
 

@@ -177,16 +177,24 @@ struct BackupImportPreviewView: View {
                     LabeledContent(String(localized: "项目资料"), value: "\(snapshot.projectDocuments.count) 份")
                     LabeledContent(String(localized: "随手记"), value: "\(snapshot.quickNotes.count) 条")
                     LabeledContent(String(localized: "施工日志"), value: "\(snapshot.dailyLogs.count) 条")
-                    LabeledContent(String(localized: "现场照片"), value: "\(preview.photoFileCount) 张")
-                    LabeledContent(String(localized: "图纸文件"), value: "\(preview.drawingFileCount) 份")
-                    LabeledContent(String(localized: "扫描资料"), value: "\(preview.documentFileCount) 份")
-                    LabeledContent(String(localized: "随手记/工艺附件"), value: "\(preview.quickNoteAttachmentFileCount) 份")
                     LabeledContent(String(localized: "材料价格库"), value: "\(snapshot.materialPriceEntries.count) 条")
                     LabeledContent(String(localized: "供应商库"), value: "\(snapshot.supplierProfiles.count) 条")
                     LabeledContent(String(localized: "施工工艺库"), value: "\(snapshot.constructionMethods.count) 条")
                     LabeledContent(String(localized: "进度任务"), value: "\(snapshot.progressTasks.count) 条")
                     LabeledContent(String(localized: "历史计算"), value: "\(snapshot.historyRecords.count) 条")
                 }
+                BackupFileImpactSectionView(
+                    title: String(localized: "将恢复到本机的原文件"),
+                    summary: preview.incomingFiles,
+                    emptyMessage: String(localized: "该备份不包含独立原文件，导入时只会恢复数据索引。"),
+                    footer: String(localized: "这些原文件会随导入一起恢复到本机。")
+                )
+                BackupFileImpactSectionView(
+                    title: String(localized: "若选择覆盖，将移除的本机原文件"),
+                    summary: preview.overwrittenLocalFiles,
+                    emptyMessage: String(localized: "当前本机没有会被这份备份移除的原文件。"),
+                    footer: String(localized: "仅覆盖导入会执行这一步；合并导入不会删除现有原文件。")
+                )
                 Section(String(localized: "导入方式")) {
                     Picker(String(localized: "方式"), selection: $importMode) {
                         Text(String(localized: "合并（保留现有数据）")).tag(ImportMode.merge)
@@ -194,7 +202,7 @@ struct BackupImportPreviewView: View {
                     }
                     .pickerStyle(.segmented)
                     if importMode == .overwrite {
-                        Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
+                        Text(String(localized: "覆盖会替换当前本机数据，并移除上方列出的本机原文件。请先导出备份。"))
                             .font(.caption)
                             .foregroundStyle(.appWarning)
                     }
@@ -231,6 +239,72 @@ struct BackupImportPreviewView: View {
             .onChange(of: importMode) { _, mode in
                 if mode != .overwrite {
                     isOverwriteImportArmed = false
+                }
+            }
+        }
+    }
+}
+
+private struct BackupFileImpactSectionView: View {
+    let title: String
+    let summary: BackupFileImpactSummary
+    let emptyMessage: String
+    let footer: String?
+
+    var body: some View {
+        Section {
+            if summary.isEmpty {
+                Text(emptyMessage)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                LabeledContent(String(localized: "合计"), value: "\(summary.totalCount) 项")
+                categoryDisclosure(
+                    title: String(localized: "现场照片"),
+                    value: "\(summary.photoFileCount) 张",
+                    fileNames: summary.photoFileNames
+                )
+                categoryDisclosure(
+                    title: String(localized: "图纸文件"),
+                    value: "\(summary.drawingFileCount) 份",
+                    fileNames: summary.drawingFileNames
+                )
+                categoryDisclosure(
+                    title: String(localized: "扫描资料"),
+                    value: "\(summary.documentFileCount) 份",
+                    fileNames: summary.documentFileNames
+                )
+                categoryDisclosure(
+                    title: String(localized: "随手记/工艺附件"),
+                    value: "\(summary.quickNoteAttachmentFileCount) 份",
+                    fileNames: summary.quickNoteAttachmentFileNames
+                )
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            if let footer {
+                Text(footer)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func categoryDisclosure(title: String, value: String, fileNames: [String]) -> some View {
+        if !fileNames.isEmpty {
+            DisclosureGroup {
+                ForEach(fileNames, id: \.self) { fileName in
+                    Text(fileName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+            } label: {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Text(value)
+                        .foregroundStyle(.secondary)
                 }
             }
         }

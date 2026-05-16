@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# Guard legacy bridge/runtime links and direct App-side LibreDWG execution.
+# Guard legacy bridge/runtime links and CLI-based LibreDWG conversion in production code.
 PATTERNS=(
   'LibreDWGBridge'
   'LibreDWGCanvasRenderer'
@@ -13,6 +13,10 @@ PATTERNS=(
   'LibreDWGGeometrySource'
   'LibreDWGDXFConversionSource'
   'LibreDWGJSONAdapter'
+  'CADRemoteDWGConversionAdapter'
+  'CADRemoteDWGConversionSettings'
+  'cad\.dwgConversion\.serviceURL'
+  'CAD_DWG_REMOTE_LIBREDWG_JSON_USED'
   'DWGGeometryCommandRunner'
   '\bdwgread\b'
   '\bdwg2dxf\b'
@@ -25,18 +29,12 @@ TARGETS=(
   "$ROOT_DIR/SiteKeeperCADKernel"
 )
 
-if MATCHES="$(rg -n --color=never "${TARGETS[@]}" \
-  --regexp "${PATTERNS[0]}" \
-  --regexp "${PATTERNS[1]}" \
-  --regexp "${PATTERNS[2]}" \
-  --regexp "${PATTERNS[3]}" \
-  --regexp "${PATTERNS[4]}" \
-  --regexp "${PATTERNS[5]}" \
-  --regexp "${PATTERNS[6]}" \
-  --regexp "${PATTERNS[7]}" \
-  --regexp "${PATTERNS[8]}" \
-  --regexp "${PATTERNS[9]}" \
-  --regexp "${PATTERNS[10]}" || true)"; then
+RG_ARGS=(-n --color=never)
+for pattern in "${PATTERNS[@]}"; do
+  RG_ARGS+=(--regexp "$pattern")
+done
+
+if MATCHES="$(rg "${RG_ARGS[@]}" "${TARGETS[@]}" || true)"; then
   if [[ -n "$MATCHES" ]]; then
     echo "[cad-guard] 生产路径检测到遗留 CAD 桥接引用："
     echo "$MATCHES"

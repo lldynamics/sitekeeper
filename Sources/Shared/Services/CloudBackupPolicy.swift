@@ -60,6 +60,25 @@ enum CloudBackupAutoInterval: String, CaseIterable {
     }
 }
 
+enum CloudBackupRetentionCountOption: Int, CaseIterable, Identifiable {
+    case keep3 = 3
+    case keep5 = 5
+    case keep10 = 10
+    case keep20 = 20
+
+    static let defaultValue = keep5.rawValue
+
+    var id: Int { rawValue }
+
+    var title: String {
+        String(format: String(localized: "保留最近 %lld 份"), Int64(rawValue))
+    }
+
+    static func normalized(_ value: Int) -> Int {
+        allCases.first(where: { $0.rawValue == value })?.rawValue ?? defaultValue
+    }
+}
+
 enum CloudBackupSettingsStore {
     static func loadContentOptions() -> CloudBackupContentOptions {
         CloudBackupContentOptions(
@@ -78,6 +97,14 @@ enum CloudBackupSettingsStore {
 
     static func loadAutoBackupRequiresWiFi() -> Bool {
         UserPreferences.bool(UserPreferenceKeys.cloudBackupAutoRequiresWiFi, default: false)
+    }
+
+    static func loadRetentionCount() -> Int {
+        let rawValue = UserPreferences.int(
+            UserPreferenceKeys.cloudBackupRetentionCount,
+            default: CloudBackupRetentionCountOption.defaultValue
+        )
+        return CloudBackupRetentionCountOption.normalized(rawValue)
     }
 
     static func loadLastSuccessDate() -> Date? {
@@ -258,6 +285,7 @@ actor CloudBackupCoordinator {
     ) async throws -> CloudBackupExecutionResult {
         var archiveFileURL: URL?
         let relay = TaskCancellationRelay()
+        let retentionCount = CloudBackupSettingsStore.loadRetentionCount()
         do {
             let archive = try await withTaskCancellationHandler {
                 try await Task.detached(priority: .userInitiated) {
@@ -273,7 +301,10 @@ actor CloudBackupCoordinator {
             archiveFileURL = archive.fileURL
 
             let savedFile = try await Task.detached(priority: .utility) {
-                try CloudBackupService.saveArchiveToCloud(archiveFileURL: archive.fileURL)
+                try CloudBackupService.saveArchiveToCloud(
+                    archiveFileURL: archive.fileURL,
+                    keepMostRecent: retentionCount
+                )
             }.value
             let files = try await Task.detached(priority: .utility) {
                 try CloudBackupService.listBackups()
@@ -281,7 +312,15 @@ actor CloudBackupCoordinator {
             do {
                 try FileManager.default.removeItem(at: archive.fileURL)
             } catch {
-                StorageIssueLog.record("云备份上传后清理临时包失败：\(archive.fileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "cloud_backup.temp_archive_cleanup_failed",
+                    category: .cloudBackup,
+                    details: [
+                        "file": archive.fileURL.lastPathComponent,
+                        "phase": "after-upload"
+                    ],
+                    error: error
+                )
             }
             archiveFileURL = nil
             return CloudBackupExecutionResult(savedFile: savedFile, allBackups: files)
@@ -290,7 +329,15 @@ actor CloudBackupCoordinator {
                 do {
                     try FileManager.default.removeItem(at: archiveFileURL)
                 } catch {
-                    StorageIssueLog.record("云备份异常清理临时包失败：\(archiveFileURL.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.recordEvent(
+                        "cloud_backup.temp_archive_cleanup_failed",
+                        category: .cloudBackup,
+                        details: [
+                            "file": archiveFileURL.lastPathComponent,
+                            "phase": "failure-cleanup"
+                        ],
+                        error: error
+                    )
                 }
             }
             throw error

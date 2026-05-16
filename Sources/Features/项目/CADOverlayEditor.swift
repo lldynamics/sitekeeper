@@ -498,6 +498,32 @@ extension CADPreviewContainer {
                     Text("\(String(localized: "批注")) \(snapshot.strokes.count + snapshot.arrowAnnotations.count) · \(String(localized: "测量")) \(snapshot.lengthMeasurements.count + snapshot.areaMeasurements.count) · \(String(localized: "问题")) \(snapshot.issueMarkers.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
+                    if !snapshot.issueMarkers.isEmpty {
+                        Menu {
+                            ForEach(snapshot.issueMarkers) { marker in
+                                Menu(marker.title) {
+                                    Button {
+                                        createTodoAndQuickNote(fromCADIssue: marker)
+                                    } label: {
+                                        Label(String(localized: "转待办 + 随手记"), systemImage: "square.and.pencil")
+                                    }
+                                    Button {
+                                        createSiteTodo(fromCADIssue: marker)
+                                    } label: {
+                                        Label(String(localized: "只转现场待办"), systemImage: "checklist")
+                                    }
+                                    Button {
+                                        createQuickNote(fromCADIssue: marker)
+                                    } label: {
+                                        Label(String(localized: "只转随手记"), systemImage: "bubble.left.and.text.bubble.right")
+                                    }
+                                }
+                            }
+                        } label: {
+                            Label(String(localized: "转记录"), systemImage: "arrowshape.turn.up.right")
+                        }
+                        .buttonStyle(.appProminent(tint: .appPrimaryAction))
+                    }
                     if isDeletingOverlayItem {
                         Text(String(localized: "点要删除的批注、测量、文字或编号"))
                             .font(.caption2.weight(.semibold))

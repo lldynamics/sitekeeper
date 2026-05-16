@@ -126,8 +126,8 @@ final class SitekeeperUITests: XCTestCase {
         XCTAssertTrue(browserButton.waitForExistence(timeout: 5))
         browserButton.tap()
 
-        XCTAssertTrue(app.navigationBars["全局文件检索"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["暂无全局文件"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["暂无项目资料"].waitForExistence(timeout: 5))
     }
 
     func testClearLocalDataFlowRequiresConfirmationPhrase() {
@@ -219,7 +219,7 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "04-project-home")
 
         app.buttons["project-file-browser-entry"].tap()
-        XCTAssertTrue(app.navigationBars["全局文件检索"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "05-project-files")
         app.navigationBars.buttons.firstMatch.tap()
 

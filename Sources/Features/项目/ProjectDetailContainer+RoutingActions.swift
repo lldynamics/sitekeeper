@@ -99,6 +99,8 @@ extension ProjectDetailContainer {
             missingReceiptCount: snapshot.missingReceiptCount,
             unsettledFinancialCount: snapshot.unsettledFinancialCount,
             unsettledFinancialAmount: unsettledFinancialAmount(snapshot: snapshot),
+            openTodoCount: snapshot.openTodoCount,
+            backupState: ProjectDeliveryBackupState.current(),
             missingOriginalEntries: ProjectDetailImportExportActions.missingProjectPackageFiles(
                 documents: snapshot.relatedDocuments,
                 drawings: snapshot.relatedDrawings,
