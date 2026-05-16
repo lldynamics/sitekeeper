@@ -43,5 +43,10 @@ sitekeeper.xcodeproj/project.xcworkspace/xcuserdata/**/UserInterfaceState.xcuser
 
 # Android local/build artifacts
 android/.gradle/
+android/.kotlin/
 android/local.properties
 android/**/build/
+
+# Local Xcode derived outputs generated inside repo build/
+build/
+build/DerivedData-*/

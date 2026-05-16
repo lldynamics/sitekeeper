@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
-"""Validate the local DWG regression manifest without the removed legacy parser.
+"""Validate the local DWG regression manifest metadata.
 
-This compatibility entrypoint intentionally no longer builds or runs the old C
-probe. Use Deprecated/CAD/RegressionTools/cad_regression.py for deprecated
-SiteKeeperCADKernel diagnostics output.
+This script intentionally does not run the removed legacy parser probe. It only
+checks manifest structure, sample states, and optional DWG header matching.
 """
 
 from __future__ import annotations
@@ -17,7 +16,7 @@ from typing import Any
 
 
 VALID_STATUSES = {"needed", "ready", "blocked"}
-DEFAULT_MANIFEST = Path("Deprecated/CAD/RegressionTools/DWG/manifest.json")
+DEFAULT_MANIFEST = Path("samples/cad/dwg/manifest.json")
 
 
 @dataclass
@@ -202,7 +201,7 @@ def validate_manifest(manifest_path: Path, strict: bool) -> tuple[dict[str, Any]
         "findings": [finding.__dict__ for finding in findings],
         "parser": {
             "status": "removed",
-            "message": "Legacy parser probe has been removed. Run Deprecated/CAD/RegressionTools/cad_regression.py instead.",
+            "message": "Legacy parser probe has been removed. This command validates manifest metadata only.",
         },
     }
     return report, findings
@@ -215,7 +214,7 @@ def print_summary(report: dict[str, Any], findings: list[Finding]) -> None:
         "Status: "
         + ", ".join(f"{key}={value}" for key, value in status_counts.items())
     )
-    print("Parser: removed; use Deprecated/CAD/RegressionTools/cad_regression.py")
+    print("Parser: removed; metadata validation only")
     errors = [finding for finding in findings if finding.level == "error"]
     warnings = [finding for finding in findings if finding.level == "warning"]
     print(f"Findings: errors={len(errors)}, warnings={len(warnings)}")
