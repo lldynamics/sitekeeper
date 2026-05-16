@@ -287,7 +287,12 @@ struct ExportView: View {
             LabeledContent("日期格式异常", value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
             LabeledContent("文件名", value: previewFilename)
             if enableDateFilter, previewResult.invalidDateCount > 0 {
-                Text(String(localized: "有 \(previewResult.invalidDateCount) 条记录日期格式异常，已按\"不命中日期筛选\"处理。"))
+                Text(
+                    String(
+                        format: String(localized: "有 %lld 条记录日期格式异常，已按\"不命中日期筛选\"处理。"),
+                        Int64(previewResult.invalidDateCount)
+                    )
+                )
                     .font(.caption2)
                     .foregroundStyle(.appWarning)
             }
@@ -474,7 +479,7 @@ enum ExportFormat: String, CaseIterable {
 }
 
 struct ExportDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.data, .plainText, .commaSeparatedText, .pdf, .excelHTML, .zipArchive, .jpeg] }
+    static var readableContentTypes: [UTType] { [.data, .plainText, .commaSeparatedText, .pdf, .excelHTML, .zipArchive, .jpeg, .png] }
     var data: Data
     var sourceFileURL: URL?
 

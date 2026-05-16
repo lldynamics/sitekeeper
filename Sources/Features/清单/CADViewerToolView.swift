@@ -66,13 +66,8 @@ struct CADViewerToolView: View {
         }
     }
 
-    private var isLibreDWGUnavailable: Bool {
-        !CADDrawingCapability.isLibreDWGRendererAvailable()
-    }
-
-    private var isLibreDWGUnbound: Bool {
-        CADDrawingCapability.isLibreDWGRendererAvailable() &&
-        !CADRendererProvider.isLibreDWGRendererBound
+    private var isCADKernelReady: Bool {
+        CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
     }
 
     private var importStrategyMessage: String {
@@ -117,6 +112,20 @@ struct CADViewerToolView: View {
                 }
                 if !normalizedSearchText.isEmpty {
                     Text("匹配 \(filteredDrawings.count) 张图纸")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if isCADKernelReady {
+                Section("内核调试") {
+                    Button {
+                        openKernelFixtureSample()
+                    } label: {
+                        Label("打开 simple_floor_plan.json", systemImage: "wrench.and.screwdriver")
+                    }
+                    .buttonStyle(.plain)
+                    Text("使用 samples/cad/intermediate/simple_floor_plan.json 验证交互式内核渲染。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -255,6 +264,8 @@ struct CADViewerToolView: View {
                 fileURL: url,
                 displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
                 fileType: drawing.fileType,
+                importedAt: drawing.importedAt,
+                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
                 textEncoding: drawing.textEncoding,
                 textBigFont: drawing.textBigFont,
                 textSchemeSnapshot: drawing.textSchemeSnapshot,
@@ -494,6 +505,66 @@ struct CADViewerToolView: View {
         recentDrawingIDsRaw = ids.prefix(12).map(\.uuidString).joined(separator: "\n")
     }
 
+    private func openKernelFixtureSample() {
+        do {
+            let fileURL = try prepareKernelFixtureFile()
+            let request = makeKernelFixtureRequest(fileURL: fileURL)
+            previewRequest = request
+        } catch {
+            operationMessage = "样例图纸加载失败：\(error.localizedDescription)"
+        }
+    }
+
+    private func prepareKernelFixtureFile() throws -> URL {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("samples/cad/intermediate/simple_floor_plan.json")
+        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
+            throw CocoaError(.fileNoSuchFile)
+        }
+
+        let fixtureDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("sitekeeper-cad-kernel-fixtures", isDirectory: true)
+        try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
+
+        let destinationURL = fixtureDirectory.appendingPathComponent("simple_floor_plan.json")
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        return destinationURL
+    }
+
+    private func makeKernelFixtureRequest(fileURL: URL) -> ProjectCADPreviewRequest {
+        let projectID = selectedProjectID ?? store.projects.first?.id ?? UUID()
+        let drawingID = UUID()
+        let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.intValue ?? 0
+
+        return ProjectCADPreviewRequest(
+            projectId: projectID,
+            drawingID: drawingID,
+            fileURL: fileURL,
+            displayName: "simple_floor_plan.json",
+            fileType: "dxf",
+            importedAt: Formatters.now(),
+            fileSizeBytes: fileSize,
+            textEncoding: .auto,
+            textBigFont: .auto,
+            textSchemeSnapshot: .init(),
+            cadViewState: .init(),
+            projectFontMappings: [],
+            overlaySnapshotData: "",
+            onOverlaySnapshotChange: { _, _ in },
+            onViewStateChange: { _, _ in },
+            onTextEncodingChange: { _, _ in },
+            onTextBigFontChange: { _, _ in },
+            onTextSchemeSnapshotChange: { _, _ in },
+            onProjectFontMappingsChange: { _, _ in }
+        )
+    }
+
     private func detailText(for drawing: ProjectDrawing, showsProject: Bool) -> String {
         var parts = [String]()
         if showsProject {
@@ -546,25 +617,13 @@ struct CADViewerToolView: View {
     private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
-            if isLibreDWGUnavailable {
-                return ("DWG Lite 未接入", false)
-            }
-            if isLibreDWGUnbound {
-                return ("DWG Lite 未绑定", false)
-            }
-            return ("DXF 直览", true)
+            return isCADKernelReady ? ("CAD 在线查看可用", true) : ("在线查看未接入", false)
         }
         if fileType == "pdf" {
             return ("PDF 附件", true)
         }
         if fileType == "dwg" {
-            if isLibreDWGUnavailable {
-                return ("DWG Lite 未接入", false)
-            }
-            if isLibreDWGUnbound {
-                return ("DWG Lite 未绑定", false)
-            }
-            return ("DWG Lite 本地直览", true)
+            return isCADKernelReady ? ("DWG 诊断查看", false) : ("在线查看未接入", false)
         }
         return ("文件独立打开", true)
     }

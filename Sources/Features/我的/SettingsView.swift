@@ -4,14 +4,29 @@ struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
+    @AppStorage(UserPreferenceKeys.cadDWGConversionServiceURL) private var cadDWGConversionServiceURL = ""
     @State private var showSampleImportConfirm = false
-    @State private var showClearLocalDataConfirm = false
+    @State private var showClearLocalDataBackupGate = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
+    @State private var clearLocalDataFlowStartedAt = 0.0
     @State private var clearLocalDataPhase = ""
 
     private var allowsSampleDataImport: Bool {
         AppFeatureFlags.allowsSampleDataImport
+    }
+
+    private var clearLocalDataSnapshot: String {
+        [
+            "projects=\(store.projects.count)",
+            "logs=\(store.dailyLogs.count)",
+            "todos=\(store.siteTodos.count)",
+            "quotes=\(store.quoteItems.count)",
+            "materials=\(store.materialItems.count)",
+            "drawings=\(store.projectDrawings.count)",
+            "documents=\(store.projectDocuments.count)",
+            "notes=\(store.quickNotes.count)"
+        ].joined(separator: ", ")
     }
 
     var body: some View {
@@ -38,8 +53,9 @@ struct SettingsView: View {
                 Text("超过该天数未成功备份时，工作台会显示“备份超期”提醒。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Button("清空本机全部数据（不可恢复）", role: .destructive) {
-                    showClearLocalDataConfirm = true
+                Button(String(localized: "清空本机全部数据（需先备份）"), role: .destructive) {
+                    clearLocalDataFlowStartedAt = Date().timeIntervalSince1970
+                    showClearLocalDataBackupGate = true
                 }
                 .disabled(isClearingLocalData)
                 Text("将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP。")
@@ -49,11 +65,24 @@ struct SettingsView: View {
                     HStack(spacing: 8) {
                         ProgressView()
                             .controlSize(.small)
-                        Text(clearLocalDataPhase.isEmpty ? "正在清空本机数据，请稍候..." : "\(clearLocalDataPhase)...")
+                        Text(
+                            clearLocalDataPhase.isEmpty
+                                ? String(localized: "正在清空本机数据，请稍候...")
+                                : String(format: String(localized: "%@..."), clearLocalDataPhase)
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
+            }
+            Section("CAD 看图") {
+                TextField("CAD 转换服务地址", text: $cadDWGConversionServiceURL)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .autocorrectionDisabled()
+                Text("用于把 DWG 转换为可在线查看的图纸数据。服务端运行 LibreDWG，App 只读取转换后的 CADDatabase；留空时只能打开 DXF 或已转换图纸。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
             Section("实验功能") {
                 Toggle("显示模板管理入口", isOn: $showTemplates)
@@ -78,21 +107,27 @@ struct SettingsView: View {
                 Text("将写入示例项目、日志、报价和材料，便于演示功能。")
             }
         }
-        .alert("即将清空本机数据", isPresented: $showClearLocalDataConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("继续", role: .destructive) {
+        .sheet(isPresented: $showClearLocalDataBackupGate) {
+            ClearLocalDataBackupGateSheet(flowStartedAt: clearLocalDataFlowStartedAt) {
+                showClearLocalDataBackupGate = false
                 showClearLocalDataSheet = true
             }
-        } message: {
-            Text("此操作会删除本机全部项目数据与附件文件，且无法恢复。建议先在「数据管理」里导出 ZIP。")
         }
         .sheet(isPresented: $showClearLocalDataSheet) {
             ClearLocalDataConfirmationSheet {
                 Task {
+                    let snapshot = clearLocalDataSnapshot
                     await MainActor.run {
                         showClearLocalDataSheet = false
                         isClearingLocalData = true
-                        clearLocalDataPhase = "正在准备"
+                        clearLocalDataPhase = String(localized: "正在准备")
+                        OperationAuditLog.record(
+                            action: .delete,
+                            outcome: .started,
+                            summary: String(localized: "清空本机全部数据"),
+                            detail: snapshot,
+                            source: "SettingsView"
+                        )
                     }
                     await store.clearAllBusinessDataAsync(deleteStoredFiles: true) { phase in
                         clearLocalDataPhase = phase
@@ -100,10 +135,23 @@ struct SettingsView: View {
                     await MainActor.run {
                         isClearingLocalData = false
                         clearLocalDataPhase = ""
+                        OperationAuditLog.record(
+                            action: .delete,
+                            outcome: .succeeded,
+                            summary: String(localized: "清空本机全部数据"),
+                            detail: snapshot,
+                            source: "SettingsView"
+                        )
                     }
                 }
             } onCancel: {
                 showClearLocalDataSheet = false
+                OperationAuditLog.record(
+                    action: .delete,
+                    outcome: .cancelled,
+                    summary: String(localized: "清空本机全部数据"),
+                    source: "SettingsView"
+                )
             }
         }
         .onAppear {
@@ -111,6 +159,86 @@ struct SettingsView: View {
         }
     }
 
+}
+
+private struct ClearLocalDataBackupGateSheet: View {
+    @Environment(\.dismiss) private var dismiss
+    @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
+
+    let flowStartedAt: Double
+    let onContinue: () -> Void
+
+    private var hasBackupCreatedInThisFlow: Bool {
+        localBackupLastSuccessAt > flowStartedAt
+    }
+
+    private var backupStatusText: String {
+        guard localBackupLastSuccessAt > 0 else {
+            return String(localized: "尚未生成本机备份")
+        }
+        let date = Date(timeIntervalSince1970: localBackupLastSuccessAt)
+        return String(format: String(localized: "最近本机备份：%@"), Formatters.dateTime.string(from: date))
+    }
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Label(String(localized: "先备份再清空"), systemImage: "externaldrive.badge.checkmark")
+                    .font(.title3.weight(.semibold))
+
+                Text(String(localized: "清空本机数据前，必须先生成一份新的本机备份 ZIP。"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+
+                NavigationLink {
+                    DataManagementView(initialTab: "备份")
+                } label: {
+                    Label(String(localized: "去备份并导出 ZIP"), systemImage: "externaldrive")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+
+                Text(String(localized: "导出完成后回到这里继续。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Text(backupStatusText)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if hasBackupCreatedInThisFlow {
+                    Label(String(localized: "已检测到本次流程内的新备份"), systemImage: "checkmark.seal.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.appSuccess)
+                } else {
+                    Label(String(localized: "请先完成本机备份后再继续清空。"), systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.appRisk)
+                }
+
+                Spacer(minLength: 0)
+
+                HStack(spacing: 12) {
+                    Button(String(localized: "取消"), role: .cancel) {
+                        dismiss()
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
+
+                    Button(String(localized: "继续清空"), role: .destructive) {
+                        onContinue()
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .frame(maxWidth: .infinity)
+                    .disabled(!hasBackupCreatedInThisFlow)
+                }
+            }
+            .padding(20)
+            .navigationTitle(String(localized: "清空本机数据"))
+            .navigationBarTitleDisplayMode(.inline)
+        }
+    }
 }
 
 private struct FavoriteCalcEditor: View {
@@ -147,13 +275,15 @@ private struct ClearLocalDataConfirmationSheet: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
-    private static let requiredPhrase = "确认删除数据"
-
     @State private var input = ""
     @FocusState private var isFocused: Bool
 
+    private var requiredPhrase: String {
+        String(localized: "确认删除数据")
+    }
+
     private var isInputValid: Bool {
-        input == Self.requiredPhrase
+        input == requiredPhrase
     }
 
     var body: some View {
@@ -164,19 +294,19 @@ private struct ClearLocalDataConfirmationSheet: View {
                     .foregroundStyle(.appRisk)
                     .padding(.top, 24)
 
-                Text("即将清空本机全部数据")
+                Text(String(localized: "即将清空本机全部数据"))
                     .font(.title2.weight(.semibold))
 
-                Text("此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。\n建议先在「数据管理」中导出一份 ZIP。")
+                Text(String(localized: "此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。"))
                     .font(.body)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("请输入「\(Self.requiredPhrase)」以确认：")
+                    Text(String(format: String(localized: "请输入「%@」以确认："), requiredPhrase))
                         .font(.callout.weight(.medium))
-                    TextField(Self.requiredPhrase, text: $input)
+                    TextField(requiredPhrase, text: $input)
                         .textFieldStyle(.roundedBorder)
                         .focused($isFocused)
                         .autocorrectionDisabled()
@@ -190,7 +320,7 @@ private struct ClearLocalDataConfirmationSheet: View {
                     .buttonStyle(.bordered)
                     .controlSize(.large)
 
-                    Button("确认清空", role: .destructive) {
+                    Button(String(localized: "确认清空"), role: .destructive) {
                         onConfirm()
                     }
                     .buttonStyle(.borderedProminent)

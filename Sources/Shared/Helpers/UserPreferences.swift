@@ -31,6 +31,7 @@ enum UserPreferenceKeys {
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
     static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
+    static let cadDWGConversionServiceURL = "cad.dwgConversion.serviceURL"
     static let showTemplates = "feature.showTemplates"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
     static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
@@ -359,7 +360,7 @@ enum AppBrand {
 }
 
 enum AppPolicy {
-    static let privacyPolicyLastUpdated = "2026年5月9日"
+    static let privacyPolicyLastUpdated = "2026年5月15日"
 }
 
 enum AppFeatureFlags {
@@ -394,9 +395,10 @@ enum UserPreferences {
 enum UnitDisplay {
     static func quantityWithUnit(_ quantity: String, unit: String, useMetric: Bool) -> String {
         guard !useMetric else { return "\(quantity) \(unit)" }
-        guard let numeric = Double(quantity.replacingOccurrences(of: ",", with: ".")) else {
+        guard let numericDecimal = DataValueParser.decimalValueIfPresent(from: quantity, requiresEntireString: true) else {
             return "\(quantity) \(translatedUnit(unit, useMetric: useMetric))"
         }
+        let numeric = NSDecimalNumber(decimal: numericDecimal).doubleValue
         guard let converted = convert(value: numeric, from: unit) else {
             return "\(quantity) \(translatedUnit(unit, useMetric: useMetric))"
         }
@@ -440,7 +442,17 @@ enum UnitDisplay {
 
 enum InputValidator {
     static func nonNegativeNumber(_ text: String) -> Bool {
-        guard let value = Double(text.replacingOccurrences(of: ",", with: ".")) else { return false }
-        return value >= 0
+        guard let value = DataValueParser.decimalValueIfPresent(from: text, requiresEntireString: true) else {
+            return false
+        }
+        return value >= .zero
+    }
+
+    static func validate(
+        _ text: String,
+        kind: NumericInputKind,
+        requirement: NumericInputRequirement
+    ) -> NumericInputValidation {
+        NumericInputSupport.validate(text, kind: kind, requirement: requirement)
     }
 }

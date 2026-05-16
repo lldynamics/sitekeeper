@@ -19,7 +19,7 @@ struct CloudBackupListRow: View {
                     Text(file.formattedModifiedAt)
                         .font(.subheadline.weight(.semibold))
                     if isLatest {
-                        Text("最近")
+                        Text(String(localized: "最近"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.appWarning)
                     }
@@ -33,7 +33,7 @@ struct CloudBackupListRow: View {
                     .lineLimit(1)
             }
             Spacer()
-            Button("恢复") {
+            Button(String(localized: "恢复")) {
                 onRestore()
             }
             .buttonStyle(.bordered)
@@ -73,24 +73,24 @@ struct BackupQuickStartCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
-                Label("先完成首份备份", systemImage: "shield.lefthalf.filled.badge.checkmark")
+                Label(String(localized: "先完成首份备份"), systemImage: "shield.lefthalf.filled.badge.checkmark")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(.appWarning)
                 Spacer()
-                Button("不再提示", action: onDismiss)
+                Button(String(localized: "不再提示"), action: onDismiss)
                     .font(.caption.weight(.semibold))
             }
 
-            Text("建议先导出一份完整 ZIP。后续误删、覆盖导入或换机时都能快速恢复。")
+            Text(String(localized: "建议先导出一份完整 ZIP。后续误删、覆盖导入或换机时都能快速恢复。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             Button(action: onExport) {
-                Label("立即导出首份备份 ZIP", systemImage: "square.and.arrow.up")
+                Label(String(localized: "立即导出首份备份 ZIP"), systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.appProminent(tint: .appWarning))
 
-            Text("导入备份可在下方“本地备份”中选择 ZIP；旧版备份会自动兼容。")
+            Text(String(localized: "导入备份可在下方“本地备份”中选择 ZIP；旧版备份会自动兼容。"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
@@ -164,55 +164,55 @@ struct BackupImportPreviewView: View {
         let snapshot = preview.snapshot
         NavigationStack {
             Form {
-                Section("导入预览") {
-                    LabeledContent("材料", value: "\(snapshot.materialItems.count) 条")
-                    LabeledContent("报价", value: "\(snapshot.quoteItems.count) 条")
-                    LabeledContent("人工记录", value: "\(snapshot.laborRecords.count) 条")
-                    LabeledContent("项目", value: "\(snapshot.projects.count) 个")
-                    LabeledContent("回路方案", value: "\(snapshot.lightingCircuitPlans.count) 条")
-                    LabeledContent("现场待办", value: "\(snapshot.siteTodos.count) 条")
-                    LabeledContent("项目图纸", value: "\(snapshot.projectDrawings.count) 份")
-                    LabeledContent("项目联系人", value: "\(snapshot.projectContacts.count) 位")
-                    LabeledContent("零星收支", value: "\(snapshot.projectFinancialRecords.count) 条")
-                    LabeledContent("项目资料", value: "\(snapshot.projectDocuments.count) 份")
-                    LabeledContent("随手记", value: "\(snapshot.quickNotes.count) 条")
-                    LabeledContent("施工日志", value: "\(snapshot.dailyLogs.count) 条")
-                    LabeledContent("现场照片", value: "\(preview.photoFileCount) 张")
-                    LabeledContent("图纸文件", value: "\(preview.drawingFileCount) 份")
-                    LabeledContent("扫描资料", value: "\(preview.documentFileCount) 份")
-                    LabeledContent("随手记/工艺附件", value: "\(preview.quickNoteAttachmentFileCount) 份")
-                    LabeledContent("材料价格库", value: "\(snapshot.materialPriceEntries.count) 条")
-                    LabeledContent("供应商库", value: "\(snapshot.supplierProfiles.count) 条")
-                    LabeledContent("施工工艺库", value: "\(snapshot.constructionMethods.count) 条")
-                    LabeledContent("进度任务", value: "\(snapshot.progressTasks.count) 条")
-                    LabeledContent("历史计算", value: "\(snapshot.historyRecords.count) 条")
+                Section(String(localized: "导入预览")) {
+                    LabeledContent(String(localized: "材料"), value: "\(snapshot.materialItems.count) 条")
+                    LabeledContent(String(localized: "报价"), value: "\(snapshot.quoteItems.count) 条")
+                    LabeledContent(String(localized: "人工记录"), value: "\(snapshot.laborRecords.count) 条")
+                    LabeledContent(String(localized: "项目"), value: "\(snapshot.projects.count) 个")
+                    LabeledContent(String(localized: "回路方案"), value: "\(snapshot.lightingCircuitPlans.count) 条")
+                    LabeledContent(String(localized: "现场待办"), value: "\(snapshot.siteTodos.count) 条")
+                    LabeledContent(String(localized: "项目图纸"), value: "\(snapshot.projectDrawings.count) 份")
+                    LabeledContent(String(localized: "项目联系人"), value: "\(snapshot.projectContacts.count) 位")
+                    LabeledContent(String(localized: "零星收支"), value: "\(snapshot.projectFinancialRecords.count) 条")
+                    LabeledContent(String(localized: "项目资料"), value: "\(snapshot.projectDocuments.count) 份")
+                    LabeledContent(String(localized: "随手记"), value: "\(snapshot.quickNotes.count) 条")
+                    LabeledContent(String(localized: "施工日志"), value: "\(snapshot.dailyLogs.count) 条")
+                    LabeledContent(String(localized: "现场照片"), value: "\(preview.photoFileCount) 张")
+                    LabeledContent(String(localized: "图纸文件"), value: "\(preview.drawingFileCount) 份")
+                    LabeledContent(String(localized: "扫描资料"), value: "\(preview.documentFileCount) 份")
+                    LabeledContent(String(localized: "随手记/工艺附件"), value: "\(preview.quickNoteAttachmentFileCount) 份")
+                    LabeledContent(String(localized: "材料价格库"), value: "\(snapshot.materialPriceEntries.count) 条")
+                    LabeledContent(String(localized: "供应商库"), value: "\(snapshot.supplierProfiles.count) 条")
+                    LabeledContent(String(localized: "施工工艺库"), value: "\(snapshot.constructionMethods.count) 条")
+                    LabeledContent(String(localized: "进度任务"), value: "\(snapshot.progressTasks.count) 条")
+                    LabeledContent(String(localized: "历史计算"), value: "\(snapshot.historyRecords.count) 条")
                 }
-                Section("导入方式") {
-                    Picker("方式", selection: $importMode) {
-                        Text("合并（保留现有数据）").tag(ImportMode.merge)
-                        Text("覆盖（替换全部数据）").tag(ImportMode.overwrite)
+                Section(String(localized: "导入方式")) {
+                    Picker(String(localized: "方式"), selection: $importMode) {
+                        Text(String(localized: "合并（保留现有数据）")).tag(ImportMode.merge)
+                        Text(String(localized: "覆盖（替换全部数据）")).tag(ImportMode.overwrite)
                     }
                     .pickerStyle(.segmented)
                     if importMode == .overwrite {
-                        Text("覆盖会删除当前本机数据，请先导出备份。")
+                        Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
                             .font(.caption)
                             .foregroundStyle(.appWarning)
                     }
                 }
                 Section {
                     if importMode == .merge {
-                        Button("确认导入", action: onApplyImport)
+                        Button(String(localized: "确认导入"), action: onApplyImport)
                             .frame(maxWidth: .infinity)
                             .fontWeight(.semibold)
                             .tint(.appWarning)
                     } else if isOverwriteImportArmed {
-                        Button("确认覆盖导入", role: .destructive, action: onApplyImport)
-                        Button("返回合并导入", role: .cancel) {
+                        Button(String(localized: "确认覆盖导入"), role: .destructive, action: onApplyImport)
+                        Button(String(localized: "返回合并导入"), role: .cancel) {
                             importMode = .merge
                             isOverwriteImportArmed = false
                         }
                     } else {
-                        Button("继续（下一步确认覆盖）", role: .destructive) {
+                        Button(String(localized: "继续（下一步确认覆盖）"), role: .destructive) {
                             isOverwriteImportArmed = true
                             AppHaptics.warning()
                         }
@@ -221,11 +221,11 @@ struct BackupImportPreviewView: View {
                     }
                 }
             }
-            .navigationTitle("确认导入")
+            .navigationTitle(String(localized: "确认导入"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消", action: onCancel)
+                    Button(String(localized: "取消"), action: onCancel)
                 }
             }
             .onChange(of: importMode) { _, mode in

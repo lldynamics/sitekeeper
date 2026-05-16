@@ -128,7 +128,7 @@ extension CADPreviewContainer {
                             systemImage: "sparkles"
                         )
                     }
-                    .disabled(isAutoDetectingText || !shouldUseLibreDWGRenderer)
+                    .disabled(isAutoDetectingText || !shouldUseCADKernelRenderer)
 
                     Button {
                         applyRecommendedChineseTextRepair()
@@ -136,7 +136,7 @@ extension CADPreviewContainer {
                     } label: {
                         Label("推荐中文组合", systemImage: "character.book.closed")
                     }
-                    .disabled(!shouldUseLibreDWGRenderer)
+                    .disabled(!shouldUseCADKernelRenderer)
 
                     Text("推荐：\(recommendedChineseTextRepairTitle)")
                         .font(.caption)
@@ -148,7 +148,7 @@ extension CADPreviewContainer {
                     } label: {
                         Label("恢复自动识别", systemImage: "arrow.counterclockwise")
                     }
-                    .disabled(!shouldUseLibreDWGRenderer)
+                    .disabled(!shouldUseCADKernelRenderer)
                 }
 
                 if hasFontResolutionFeedback {
@@ -175,7 +175,7 @@ extension CADPreviewContainer {
                             } label: {
                                 Label("保存当前字体替代", systemImage: "tray.and.arrow.down")
                             }
-                            .disabled(!shouldUseLibreDWGRenderer)
+                            .disabled(!shouldUseCADKernelRenderer)
                         } else {
                             Text("检测到未匹配 SHX/大字体时，这里会出现可保存的项目替代表。")
                                 .font(.caption)
@@ -423,11 +423,11 @@ extension CADPreviewContainer {
         defer { isAutoDetectingText = false }
 
         do {
-            guard let result = try await CADRendererProvider.detectLibreDWGTextOptions(
+            guard let result = try await CADRendererProvider.detectTextOptions(
                 for: activeRequest.fileURL,
                 fontMappings: activeRequest.rendererFontMappings
             ) else {
-                alertMessage = String(localized: "当前构建没有可用的 LibreDWG 文字自动识别器。")
+                alertMessage = String(localized: "当前自有 CAD 内核还没有接入文字自动识别引擎。")
                 showAlert = true
                 return
             }
@@ -578,6 +578,8 @@ extension CADPreviewContainer {
             fileURL: activeRequest.fileURL,
             displayName: activeRequest.displayName,
             fileType: activeRequest.fileType,
+            importedAt: activeRequest.importedAt,
+            fileSizeBytes: activeRequest.fileSizeBytes,
             textEncoding: textEncoding ?? activeRequest.textEncoding,
             textBigFont: textBigFont ?? activeRequest.textBigFont,
             textSchemeSnapshot: textSchemeSnapshot ?? activeRequest.textSchemeSnapshot,
@@ -604,6 +606,7 @@ extension CADPreviewContainer {
         nativeMidpointSnapPoints.removeAll()
         nativeCenterSnapPoints.removeAll()
         nativeSnapSourcePoints.removeAll()
+        cadOpenQuality = nil
         cadPreviewReloadToken = UUID()
     }
 }

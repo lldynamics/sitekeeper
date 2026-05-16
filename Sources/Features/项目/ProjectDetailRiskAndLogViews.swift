@@ -16,13 +16,13 @@ struct ProjectDetailRiskStripView: View {
     private var riskItems: [(text: String, color: Color)] {
         var items: [(String, Color)] = []
         if overdueCount > 0 {
-            items.append((String(localized: "延期 \(overdueCount)"), .appRisk))
+            items.append((String(format: String(localized: "延期 %lld"), Int64(overdueCount)), .appRisk))
         }
         if unpaidAmount > 0 {
-            items.append((String(localized: "未收 \(ReportBuilder.money(unpaidAmount))"), .appPrimaryAction))
+            items.append((String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)), .appPrimaryAction))
         }
         if unpricedQuoteCount > 0 {
-            items.append((String(localized: "待补报价 \(unpricedQuoteCount)"), .appPrimaryAction))
+            items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .appPrimaryAction))
         }
         if !hasTodayLog {
             items.append((String(localized: "今日日志未写"), .appRisk))
@@ -119,12 +119,21 @@ struct ProjectDetailLogRowView: View {
                     .lineLimit(1)
             }
             if !log.photoAttachments.isEmpty {
-                Label(String(localized: "\(log.photoAttachments.count) 张照片"), systemImage: "camera.fill")
+                Label(
+                    String(format: String(localized: "%lld 张照片"), Int64(log.photoAttachments.count)),
+                    systemImage: "camera.fill"
+                )
                     .font(.caption2)
                     .foregroundStyle(Color.appDoc)
             }
             if !log.linkedConstructionMethodIDs.isEmpty {
-                Label(String(localized: "关联工艺 \(log.linkedConstructionMethodIDs.count) 条"), systemImage: "link.badge.plus")
+                Label(
+                    String(
+                        format: String(localized: "关联工艺 %lld 条"),
+                        Int64(log.linkedConstructionMethodIDs.count)
+                    ),
+                    systemImage: "link.badge.plus"
+                )
                     .font(.caption2)
                     .foregroundStyle(Color.appPrimaryAction)
             }

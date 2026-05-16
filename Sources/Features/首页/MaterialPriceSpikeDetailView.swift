@@ -92,16 +92,16 @@ struct MaterialPriceSpikeDetailView: View {
                 Toggle(String(localized: "显示已忽略项"), isOn: $showIgnored)
 
                 LabeledContent(String(localized: "当前命中")) {
-                    Text("\(activeSpikeCount) 项")
+                    Text(String(format: String(localized: "%lld 项"), Int64(activeSpikeCount)))
                         .foregroundStyle(activeSpikeCount > 0 ? Color.appFinance : .secondary)
                 }
                 LabeledContent(String(localized: "涉及项目")) {
-                    Text("\(affectedProjectCount) 个")
+                    Text(String(format: String(localized: "%lld 个"), Int64(affectedProjectCount)))
                         .foregroundStyle(.secondary)
                 }
                 if ignoredSpikeCount > 0 {
                     LabeledContent(String(localized: "已忽略")) {
-                        Text("\(ignoredSpikeCount) 项")
+                        Text(String(format: String(localized: "%lld 项"), Int64(ignoredSpikeCount)))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -146,12 +146,15 @@ struct MaterialPriceSpikeDetailView: View {
             presenting: pendingThresholdAdjustment
         ) { detail in
             let target = thresholdSuggestion(for: detail)
-            Button("调整到 \(percentText(target))") {
+            Button(String(format: String(localized: "调整到 %@"), percentText(target))) {
                 applyThresholdSuggestion(for: detail)
             }
             Button(String(localized: "取消"), role: .cancel) {}
         } message: { detail in
-            Text("该操作会把全局阈值提高到 \(percentText(thresholdSuggestion(for: detail)))，低于新阈值的异动将不再提醒。")
+            Text(String(
+                format: String(localized: "该操作会把全局阈值提高到 %@，低于新阈值的异动将不再提醒。"),
+                percentText(thresholdSuggestion(for: detail))
+            ))
         }
         .navigationTitle(String(localized: "材料价格异动"))
         .navigationBarTitleDisplayMode(.inline)
@@ -262,8 +265,18 @@ private struct MaterialPriceSpikeRow: View {
                     .foregroundStyle(.secondary)
 
                     VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
-                        Text("上次 \(ReportBuilder.money(detail.previousPrice))/\(detail.unit)（\(spikeDisplayDate(detail.previousDateText))）")
-                        Text("本次 \(ReportBuilder.money(detail.latestPrice))/\(detail.unit)（\(spikeDisplayDate(detail.latestDateText))）")
+                        Text(String(
+                            format: String(localized: "上次 %@/%@（%@）"),
+                            ReportBuilder.money(detail.previousPrice),
+                            detail.unit,
+                            spikeDisplayDate(detail.previousDateText)
+                        ))
+                        Text(String(
+                            format: String(localized: "本次 %@/%@（%@）"),
+                            ReportBuilder.money(detail.latestPrice),
+                            detail.unit,
+                            spikeDisplayDate(detail.latestDateText)
+                        ))
                         .foregroundStyle(.primary)
                     }
                     .font(.caption)

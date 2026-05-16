@@ -19,9 +19,9 @@ struct QuickNoteAttachmentStrip: View {
                             attachmentCard(attachment)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("预览附件")
+                        .accessibilityLabel(attachment.attachmentKind == .audio ? "播放语音附件" : "预览附件")
                         .accessibilityValue("\(attachment.attachmentKind.title) \(label(for: attachment))")
-                        .accessibilityHint("双击打开附件预览")
+                        .accessibilityHint(attachment.attachmentKind == .audio ? "双击播放或收起语音" : "双击打开附件预览")
 
                         if showsRemoveButton {
                             Button { onRemove(attachment) } label: {
@@ -218,8 +218,61 @@ struct QuickNoteAttachmentPreview: View {
     }
 }
 
+struct QuickNoteInlineAudioAttachmentPlayer: View {
+    let attachment: QuickNoteAttachment
+    var onClose: () -> Void = {}
+
+    var body: some View {
+        if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Label(title, systemImage: "waveform")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel("收起语音播放器")
+                }
+
+                QuickNoteAudioPlayer(
+                    url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName),
+                    style: .inline
+                )
+            }
+            .padding(10)
+            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            Label("语音文件不存在", systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(10)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var title: String {
+        guard let duration = attachment.durationSeconds, duration > 0 else {
+            return "语音"
+        }
+        return "语音 \(Int(duration))s"
+    }
+}
+
+enum QuickNoteAudioPlayerStyle {
+    case full
+    case inline
+}
+
 struct QuickNoteAudioPlayer: View {
     let url: URL
+    var style: QuickNoteAudioPlayerStyle = .full
     @State private var player: AVAudioPlayer?
     @State private var isPlaying = false
     @State private var currentTime: Double = 0
@@ -227,6 +280,19 @@ struct QuickNoteAudioPlayer: View {
     @State private var timer: Timer?
 
     var body: some View {
+        Group {
+            switch style {
+            case .full:
+                fullPlayer
+            case .inline:
+                inlinePlayer
+            }
+        }
+        .onAppear(perform: preparePlayer)
+        .onDisappear(perform: stopPlayback)
+    }
+
+    private var fullPlayer: some View {
         VStack(spacing: 16) {
             Image(systemName: "waveform.circle.fill")
                 .font(.system(size: 64))
@@ -248,8 +314,31 @@ struct QuickNoteAudioPlayer: View {
             }
             .buttonStyle(.appProminent())
         }
-        .onAppear(perform: preparePlayer)
-        .onDisappear(perform: stopPlayback)
+    }
+
+    private var inlinePlayer: some View {
+        HStack(spacing: 10) {
+            Button { togglePlay() } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Color.appWarning, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(isPlaying ? "暂停播放" : "播放语音")
+
+            Slider(value: Binding(
+                get: { currentTime },
+                set: { seek(to: $0) }
+            ), in: 0...max(duration, 1))
+            .tint(.appWarning)
+
+            Text("\(formatTime(currentTime))/\(formatTime(duration))")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 82, alignment: .trailing)
+        }
     }
 
     private func preparePlayer() {

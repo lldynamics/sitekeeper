@@ -6,7 +6,7 @@
   "notes": [
     "真实 DWG 文件只保存在本地 samples/，默认不提交。",
     "status=ready 的样本必须存在，脚本会校验 DWG header magic。",
-    "expected 字段记录预期，dwg_regression.py 会用 LibreDWGBridge probe 自动比对 ready 样本。"
+    "expected 字段记录预期；旧解析 probe 已移除，真实回归请使用 scripts/cad/cad_regression.py。"
   ],
   "samples": [
     {

@@ -10,8 +10,12 @@ struct CADDiagnosticPanel<Content: View>: View {
 
 extension CADPreviewContainer {
     var shouldShowCADDiagnosticCommand: Bool {
-        guard isCADFile else { return false }
+        guard CADTechnicalDiagnosticsVisibility.isEnabled else { return false }
+        guard isCADFile, shouldUseCADKernelRenderer else { return false }
         if engineStatusHint != nil {
+            return true
+        }
+        if let cadOpenQuality, !cadOpenQuality.isReady {
             return true
         }
         if hasUnresolvedFontDiagnosticIssue {
@@ -45,19 +49,38 @@ extension CADPreviewContainer {
             List {
                 Section(String(localized: "预览状态")) {
                     diagnosticRow(
-                        title: String(localized: "DWG Lite"),
-                        value: CADDrawingCapability.isLibreDWGRendererAvailable() ? String(localized: "可用") : String(localized: "不可用")
+                        title: String(localized: "看图内核"),
+                        value: CADDrawingCapability.isCADEngineInstalled() ? String(localized: "已接入") : String(localized: "未接入")
                     )
                     diagnosticRow(
                         title: String(localized: "看图入口"),
-                        value: CADRendererProvider.isLibreDWGRendererBound ? String(localized: "已绑定") : String(localized: "未绑定")
+                        value: CADRendererProvider.isRendererBound ? String(localized: "已绑定") : String(localized: "未绑定")
                     )
                     diagnosticRow(
                         title: String(localized: "源文件写入"),
                         value: String(localized: "否")
                     )
+                    diagnosticRow(
+                        title: String(localized: "看图模式"),
+                        value: selectedCADViewerMode.title
+                    )
                     if let engineStatusHint {
                         diagnosticRow(title: String(localized: "提示"), value: engineStatusHint)
+                    }
+                }
+
+                Section(String(localized: "打开质量")) {
+                    if let cadOpenQuality = cadOpenQualityForDisplay {
+                        diagnosticRow(title: String(localized: "状态"), value: cadOpenQuality.title)
+                        diagnosticRow(title: String(localized: "处理"), value: cadOpenQuality.summary)
+                        diagnosticRow(title: String(localized: "批注定位"), value: cadOpenQuality.allowsMarkup ? String(localized: "可用") : String(localized: "不可用"))
+                        diagnosticRow(title: String(localized: "文字搜索"), value: cadOpenQuality.supportsSearch ? String(localized: "可用") : String(localized: "不可用"))
+                        ForEach(Array(cadOpenQuality.detailLines.enumerated()), id: \.offset) { _, detail in
+                            Text(detail)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
                     }
                 }
 
@@ -112,6 +135,48 @@ extension CADPreviewContainer {
                 .font(.caption.monospaced())
                 .multilineTextAlignment(.trailing)
                 .textSelection(.enabled)
+        }
+    }
+
+    var cadOpenQualityForDisplay: CADOpenQualitySnapshot? {
+        if let cadOpenQuality {
+            return cadOpenQuality
+        }
+        guard isCADFile else { return nil }
+
+        if !CADRendererProvider.isRendererBound {
+            return CADOpenQualitySnapshot(
+                level: "kernelUnavailable",
+                title: String(localized: "CAD 看图内核未绑定"),
+                summary: CADViewerMessages.engineMissingMessage,
+                primaryAction: String(localized: "下载原图"),
+                detailLines: [CADViewerMessages.engineMissingMessage],
+                allowsMarkup: false,
+                supportsSearch: false
+            )
+        }
+
+        switch cadOpenRoute {
+        case .online:
+            return CADOpenQualitySnapshot(
+                level: "ready",
+                title: String(localized: "在线预览可用"),
+                summary: String(localized: "图纸已进入可交互预览。"),
+                primaryAction: String(localized: "查看图纸"),
+                detailLines: [String(localized: "打开质量回调尚未返回，当前显示入口状态。")],
+                allowsMarkup: true,
+                supportsSearch: true
+            )
+        case .unsupported(let result):
+            return CADOpenQualitySnapshot(
+                level: "kernelBootstrap",
+                title: String(localized: "在线预览不可用"),
+                summary: result.message,
+                primaryAction: String(localized: "下载原图"),
+                detailLines: result.technicalDetails?.diagnostics ?? [result.message],
+                allowsMarkup: false,
+                supportsSearch: false
+            )
         }
     }
 }

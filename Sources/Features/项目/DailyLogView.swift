@@ -37,7 +37,7 @@ private struct DailyLogComposerState {
 private struct DailyLogEditorState {
     var logId: UUID?
     var date = Date()
-    var weather = "晴"
+    var weather = String(localized: "晴")
     var content = ""
     var workers = ""
     var safety = ""
@@ -108,9 +108,21 @@ struct DailyLogView: View {
     }
 
     private let weatherOptions = ["晴", "多云", "阴", "小雨", "大雨", "雪"]
-    private let contentTemplates = ["完成今日计划施工，现场质量正常", "完成线路敷设，待下一步复核", "完成材料进场与现场整理"]
-    private let safetyTemplates = ["已进行班前安全交底，未发现安全隐患", "临边洞口已复查，临电使用正常", "发现问题已现场整改并复核"]
-    private let materialTemplates = ["主材已进场并完成清点", "辅材已补齐，数量待复核", "暂无新增材料进场"]
+    private let contentTemplates = [
+        String(localized: "完成今日计划施工，现场质量正常"),
+        String(localized: "完成线路敷设，待下一步复核"),
+        String(localized: "完成材料进场与现场整理")
+    ]
+    private let safetyTemplates = [
+        String(localized: "已进行班前安全交底，未发现安全隐患"),
+        String(localized: "临边洞口已复查，临电使用正常"),
+        String(localized: "发现问题已现场整改并复核")
+    ]
+    private let materialTemplates = [
+        String(localized: "主材已进场并完成清点"),
+        String(localized: "辅材已补齐，数量待复核"),
+        String(localized: "暂无新增材料进场")
+    ]
 
     private var filtered: [DailyLog] {
         var result = store.dailyLogs
@@ -175,14 +187,14 @@ struct DailyLogView: View {
                 compactLogLayout
             }
         }
-        .searchable(text: $searchText, prompt: "按日期、内容、安全事项搜索")
-        .navigationTitle("施工日志")
+        .searchable(text: $searchText, prompt: String(localized: "按日期、内容、安全事项搜索"))
+        .navigationTitle(String(localized: "施工日志"))
         .toolbar {
             if !usesSplitLogLayout {
                 ToolbarItem(placement: .topBarLeading) {
                     Menu {
-                        Picker("项目", selection: $filterProjectId) {
-                            Text("全部项目").tag(nil as UUID?)
+                        Picker(String(localized: "项目"), selection: $filterProjectId) {
+                            Text(String(localized: "全部项目")).tag(nil as UUID?)
                             ForEach(store.projects) { project in
                                 Text(project.name).tag(project.id as UUID?)
                             }
@@ -190,10 +202,10 @@ struct DailyLogView: View {
                         Button {
                             showDateFilter = true
                         } label: {
-                            Label(isDateFilterActive ? "调整日期筛选" : "日期筛选", systemImage: "calendar")
+                            Label(isDateFilterActive ? String(localized: "调整日期筛选") : String(localized: "日期筛选"), systemImage: "calendar")
                         }
                         if filterProjectId != nil || isDateFilterActive {
-                            Button("清除筛选") {
+                            Button(String(localized: "清除筛选")) {
                                 filterProjectId = nil
                                 isDateFilterActive = false
                             }
@@ -203,35 +215,35 @@ struct DailyLogView: View {
                             .visibleIconStyle()
                     }
                     .buttonStyle(.appIcon())
-                    .accessibilityLabel("筛选与排序")
+                    .accessibilityLabel(String(localized: "筛选与排序"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { showAdd = true } label: {
                         Image(systemName: "plus").visibleIconStyle()
                     }
                     .buttonStyle(.appIcon())
-                        .accessibilityLabel("新建施工日志")
+                        .accessibilityLabel(String(localized: "新建施工日志"))
                 }
             }
         }
         .sheet(isPresented: $showDateFilter) {
             NavigationStack {
                 Form {
-                    DatePicker("开始", selection: $filterStart, displayedComponents: .date)
-                    DatePicker("结束", selection: $filterEnd, displayedComponents: .date)
-                    Toggle("启用日期筛选", isOn: $isDateFilterActive)
+                    DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
+                    DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
+                    Toggle(String(localized: "启用日期筛选"), isOn: $isDateFilterActive)
                 }
-                .navigationTitle("日期筛选")
+                .navigationTitle(String(localized: "日期筛选"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("清除") {
+                        Button(String(localized: "清除")) {
                             isDateFilterActive = false
                             showDateFilter = false
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("确定") {
+                        Button(String(localized: "确定")) {
                             isDateFilterActive = true
                             showDateFilter = false
                         }
@@ -262,10 +274,10 @@ struct DailyLogView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .pdf,
-            defaultFilename: exportPayload?.defaultFilename ?? "现场照片页.pdf"
+            defaultFilename: exportPayload?.defaultFilename ?? String(localized: "现场照片页.pdf")
         ) { _ in }
-        .alert("施工日志", isPresented: $showAlert) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "施工日志"), isPresented: $showAlert) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(alertMessage)
         }
@@ -294,16 +306,16 @@ struct DailyLogView: View {
             List {
                 modePickerSection
                 splitFilterSection
-                Section("快捷操作") {
+                Section(String(localized: "快捷操作")) {
                     Button {
                         showAdd = true
                     } label: {
-                        Label("新建施工日志", systemImage: "plus.circle.fill")
+                        Label(String(localized: "新建施工日志"), systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.appProminent())
                 }
             }
-            .navigationTitle("日志筛选")
+            .navigationTitle(String(localized: "日志筛选"))
         } detail: {
             List {
                 logDetailContent
@@ -314,7 +326,7 @@ struct DailyLogView: View {
 
     private var modePickerSection: some View {
         Section {
-            Picker("视图", selection: $viewMode) {
+            Picker(String(localized: "视图"), selection: $viewMode) {
                 ForEach(DailyLogMode.allCases, id: \.self) { mode in
                     Text(mode.displayName).tag(mode)
                 }
@@ -324,9 +336,9 @@ struct DailyLogView: View {
     }
 
     private var splitFilterSection: some View {
-        Section("筛选") {
-            Picker("项目", selection: $filterProjectId) {
-                Text("全部项目").tag(nil as UUID?)
+        Section(String(localized: "筛选")) {
+            Picker(String(localized: "项目"), selection: $filterProjectId) {
+                Text(String(localized: "全部项目")).tag(nil as UUID?)
                 ForEach(store.projects) { project in
                     Text(project.name).tag(project.id as UUID?)
                 }
@@ -334,10 +346,10 @@ struct DailyLogView: View {
             Button {
                 showDateFilter = true
             } label: {
-                Label(isDateFilterActive ? "调整日期筛选" : "日期筛选", systemImage: "calendar")
+                Label(isDateFilterActive ? String(localized: "调整日期筛选") : String(localized: "日期筛选"), systemImage: "calendar")
             }
             if filterProjectId != nil || isDateFilterActive {
-                Button("清除筛选") {
+                Button(String(localized: "清除筛选")) {
                     filterProjectId = nil
                     isDateFilterActive = false
                 }
@@ -348,14 +360,18 @@ struct DailyLogView: View {
     @ViewBuilder
     private var logDetailContent: some View {
         if filtered.isEmpty {
-            ContentUnavailableView("暂无施工日志", systemImage: "book.pages", description: Text("添加日志后可按项目、日期、内容和安全事项检索"))
+            ContentUnavailableView(
+                String(localized: "暂无施工日志"),
+                systemImage: "book.pages",
+                description: Text(String(localized: "添加日志后可按项目、日期、内容和安全事项检索"))
+            )
         } else if viewMode == .list {
             ForEach(filtered) { log in
                 logRow(log)
                     .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                        Button("复制") { copyLogToToday(log) }
+                        Button(String(localized: "复制")) { copyLogToToday(log) }
                             .tint(Color.appDoc)
-                        Button("编辑") { startEdit(log) }
+                        Button(String(localized: "编辑")) { startEdit(log) }
                             .tint(Color.appPrimaryAction)
                     }
             }
@@ -378,13 +394,13 @@ struct DailyLogView: View {
                             Image(systemName: "chevron.left")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("上个月")
-                        .accessibilityHint("查看上个月日志")
+                        .accessibilityLabel(String(localized: "上个月"))
+                        .accessibilityHint(String(localized: "查看上个月日志"))
                         Spacer()
                         Button {
                             jumpToToday()
                         } label: {
-                            Text(isCalendarOnCurrentMonth && isTodaySelected ? "今天" : "回到今天")
+                            Text(isCalendarOnCurrentMonth && isTodaySelected ? String(localized: "今天") : String(localized: "回到今天"))
                                 .font(.caption.weight(.semibold))
                                 .padding(.horizontal, 10)
                                 .padding(.vertical, 4)
@@ -394,16 +410,16 @@ struct DailyLogView: View {
                                 )
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("回到今天")
-                        .accessibilityHint("返回本月并选中今天")
+                        .accessibilityLabel(String(localized: "回到今天"))
+                        .accessibilityHint(String(localized: "返回本月并选中今天"))
                         Button {
                             moveMonth(1)
                         } label: {
                             Image(systemName: "chevron.right")
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("下个月")
-                        .accessibilityHint("查看下个月日志")
+                        .accessibilityLabel(String(localized: "下个月"))
+                        .accessibilityHint(String(localized: "查看下个月日志"))
                     }
                     .overlay {
                         Button {
@@ -413,12 +429,20 @@ struct DailyLogView: View {
                                 .font(.headline)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("当前月份，双击回到今天")
-                        .accessibilityHint("返回本月并选中今天")
+                        .accessibilityLabel(String(localized: "当前月份，双击回到今天"))
+                        .accessibilityHint(String(localized: "返回本月并选中今天"))
                     }
 
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: 7), spacing: 6) {
-                        ForEach(["一", "二", "三", "四", "五", "六", "日"], id: \.self) { weekday in
+                        ForEach([
+                            String(localized: "一"),
+                            String(localized: "二"),
+                            String(localized: "三"),
+                            String(localized: "四"),
+                            String(localized: "五"),
+                            String(localized: "六"),
+                            String(localized: "日")
+                        ], id: \.self) { weekday in
                             Text(weekday)
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
@@ -444,17 +468,17 @@ struct DailyLogView: View {
             Section(dayTitle(selectedCalendarDate)) {
                 if selectedDateLogs.isEmpty {
                     ContentUnavailableView(
-                        "当天暂无日志",
+                        String(localized: "当天暂无日志"),
                         systemImage: "calendar.badge.exclamationmark",
-                        description: Text("可切换日期或新增一条施工日志。")
+                        description: Text(String(localized: "可切换日期或新增一条施工日志。"))
                     )
                 } else {
                     ForEach(selectedDateLogs) { log in
                         logRow(log)
                             .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                                Button("复制") { copyLogToToday(log) }
+                                Button(String(localized: "复制")) { copyLogToToday(log) }
                                     .tint(Color.appDoc)
-                                Button("编辑") { startEdit(log) }
+                                Button(String(localized: "编辑")) { startEdit(log) }
                                     .tint(Color.appPrimaryAction)
                             }
                     }
@@ -536,8 +560,8 @@ struct DailyLogView: View {
                                     }
                                 }
                                 .buttonStyle(.plain)
-                                .accessibilityLabel("查看日志照片，标签 \(photo.tag.displayName)")
-                                .accessibilityHint("打开照片详情")
+                                .accessibilityLabel(String(format: String(localized: "查看日志照片，标签 %@"), photo.tag.displayName))
+                                .accessibilityHint(String(localized: "打开照片详情"))
                                 Text(photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(Color.appDoc)
@@ -559,18 +583,18 @@ struct DailyLogView: View {
     }
 
     private var photoWallContent: some View {
-        Section("照片墙") {
+        Section(String(localized: "照片墙")) {
             let items = filteredPhotoWallItems()
             HStack {
-                Picker("标签", selection: $photoTagFilter) {
-                    Text("全部").tag(nil as PhotoTag?)
+                Picker(String(localized: "标签"), selection: $photoTagFilter) {
+                    Text(String(localized: "全部")).tag(nil as PhotoTag?)
                     ForEach(PhotoTag.allCases, id: \.self) { item in
                         Text(item.displayName).tag(item as PhotoTag?)
                     }
                 }
                 .pickerStyle(.menu)
                 Spacer()
-                Button(isPhotoSelecting ? "结束批量" : "批量操作") {
+                Button(isPhotoSelecting ? String(localized: "结束批量") : String(localized: "批量操作")) {
                     isPhotoSelecting.toggle()
                     if !isPhotoSelecting {
                         selectedPhotoKeys.removeAll()
@@ -580,17 +604,17 @@ struct DailyLogView: View {
             }
             if isPhotoSelecting {
                 HStack {
-                    Picker("批量标签", selection: $batchPhotoTag) {
+                    Picker(String(localized: "批量标签"), selection: $batchPhotoTag) {
                         ForEach(PhotoTag.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
                     .pickerStyle(.menu)
-                    Button("应用到\(selectedPhotoKeys.count)张") {
+                    Button(String(format: String(localized: "应用到%lld张"), Int64(selectedPhotoKeys.count))) {
                         applyBatchTagToSelectedPhotos()
                     }
                     .disabled(selectedPhotoKeys.isEmpty)
-                    Button("清空选择") {
+                    Button(String(localized: "清空选择")) {
                         selectedPhotoKeys.removeAll()
                     }
                     .disabled(selectedPhotoKeys.isEmpty)
@@ -600,15 +624,15 @@ struct DailyLogView: View {
             Button {
                 exportPhotoWallPDF(items: items)
             } label: {
-                Label("按当前项目/筛选导出照片页", systemImage: "square.and.arrow.up")
+                Label(String(localized: "按当前项目/筛选导出照片页"), systemImage: "square.and.arrow.up")
                     .font(.caption)
             }
             .disabled(items.isEmpty)
             if items.isEmpty {
                 ContentUnavailableView(
-                    "暂无现场照片",
+                    String(localized: "暂无现场照片"),
                     systemImage: "photo.on.rectangle",
-                    description: Text("添加日志照片后可在这里按标签查看。")
+                    description: Text(String(localized: "添加日志照片后可在这里按标签查看。"))
                 )
             } else {
                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: AppSpacing.tight), count: 3), spacing: AppSpacing.normal) {
@@ -659,7 +683,7 @@ struct DailyLogView: View {
                                     .lineLimit(1)
                                 if hasRectificationPair(logId: item.logId),
                                    (item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter) {
-                                    Text("已配对")
+                                    Text(String(localized: "已配对"))
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(Color.appSuccess)
                                 }
@@ -680,7 +704,7 @@ struct DailyLogView: View {
                         .buttonStyle(.plain)
                         .accessibilityElement(children: .combine)
                         .accessibilityLabel("\(item.logDate)，\(item.photo.tag.displayName)")
-                        .accessibilityHint(isPhotoSelecting ? "双击切换选择状态" : "双击查看照片详情")
+                        .accessibilityHint(isPhotoSelecting ? String(localized: "双击切换选择状态") : String(localized: "双击查看照片详情"))
                     }
                 }
                 .padding(.vertical, 4)
@@ -745,12 +769,12 @@ struct DailyLogView: View {
         if let filterProjectId, let project = store.projects.first(where: { $0.id == filterProjectId }) {
             projectName = project.name
         } else {
-            projectName = "全部项目"
+            projectName = String(localized: "全部项目")
         }
         let payloads = items.map { item in
             ReportPhotoItem(
                 date: item.logDate,
-                projectName: item.projectId.flatMap { pid in store.projects.first(where: { $0.id == pid })?.name } ?? "未归属",
+                projectName: item.projectId.flatMap { pid in store.projects.first(where: { $0.id == pid })?.name } ?? String(localized: "未归属"),
                 tag: item.photo.tag.displayName,
                 note: item.photo.note,
                 fileName: item.photo.fileName
@@ -758,10 +782,17 @@ struct DailyLogView: View {
         }
         photoWallExportTask?.cancel()
         photoWallExportTask = Task {
-            let data = await ReportBuilder.makePhotoWallPDFAsync(title: "\(projectName)-现场照片页", items: payloads)
+            let data = await ReportBuilder.makePhotoWallPDFAsync(
+                title: String(format: String(localized: "%@-现场照片页"), projectName),
+                items: payloads
+            )
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "\(projectName)_现场照片页.pdf")
+                exportPayload = ExportPayload(
+                    data: data,
+                    contentType: .pdf,
+                    defaultFilename: String(format: String(localized: "%@_现场照片页.pdf"), projectName)
+                )
                 showExporter = true
                 photoWallExportTask = nil
             }
@@ -771,62 +802,62 @@ struct DailyLogView: View {
     private var addLogForm: some View {
         NavigationStack {
             Form {
-                Section("基础信息") {
-                    DatePicker("日期", selection: $composer.date, displayedComponents: .date)
-                    Picker("天气", selection: $composer.weather) {
-                        ForEach(weatherOptions, id: \.self) { Text($0).tag($0) }
+                Section(String(localized: "基础信息")) {
+                    DatePicker(String(localized: "日期"), selection: $composer.date, displayedComponents: .date)
+                    Picker(String(localized: "天气"), selection: $composer.weather) {
+                        ForEach(weatherOptions, id: \.self) { Text(String(localized: String.LocalizationValue($0))).tag($0) }
                     }
-                    TextField("人数", text: $composer.workers)
-                    Picker("选择工程", selection: $composer.projectId) {
-                        Text("无归属").tag(nil as UUID?)
+                    TextField(String(localized: "人数"), text: $composer.workers)
+                    Picker(String(localized: "选择工程"), selection: $composer.projectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
                 }
-                Section("施工内容") {
-                    Menu("套用内容模板") {
+                Section(String(localized: "施工内容")) {
+                    Menu(String(localized: "套用内容模板")) {
                         ForEach(contentTemplates, id: \.self) { tpl in
                             Button(tpl) { composer.content = tpl }
                         }
                     }
                     if !store.templates.filter({ $0.category == .dailyLog }).isEmpty {
-                        Menu("套用我的日志模板") {
+                        Menu(String(localized: "套用我的日志模板")) {
                             ForEach(store.templates.filter { $0.category == .dailyLog }) { template in
                                 Button(template.name) { applyDailyLogTemplate(template) }
                             }
                         }
                     }
-                    TextField("内容", text: $composer.content, axis: .vertical)
+                    TextField(String(localized: "内容"), text: $composer.content, axis: .vertical)
                         .lineLimit(3...6)
                 }
-                Section("安全与材料") {
-                    Menu("套用安全模板") {
+                Section(String(localized: "安全与材料")) {
+                    Menu(String(localized: "套用安全模板")) {
                         ForEach(safetyTemplates, id: \.self) { tpl in
                             Button(tpl) { composer.safety = tpl }
                         }
                     }
-                    TextField("安全事项", text: $composer.safety, axis: .vertical)
+                    TextField(String(localized: "安全事项"), text: $composer.safety, axis: .vertical)
                         .lineLimit(2...4)
-                    Menu("套用材料模板") {
+                    Menu(String(localized: "套用材料模板")) {
                         ForEach(materialTemplates, id: \.self) { tpl in
                             Button(tpl) { composer.materials = tpl }
                         }
                     }
-                    TextField("材料进场", text: $composer.materials, axis: .vertical)
+                    TextField(String(localized: "材料进场"), text: $composer.materials, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("计划与质量") {
+                Section(String(localized: "计划与质量")) {
                     Button {
                         composer.tomorrowPlan = generateTomorrowPlanFromTodos(for: composer.projectId)
                     } label: {
-                        Label("从今日待办生成明日计划", systemImage: "wand.and.stars")
+                        Label(String(localized: "从今日待办生成明日计划"), systemImage: "wand.and.stars")
                     }
-                    TextField("明日计划", text: $composer.tomorrowPlan, axis: .vertical)
+                    TextField(String(localized: "明日计划"), text: $composer.tomorrowPlan, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("质量问题", text: $composer.qualityIssue, axis: .vertical)
+                    TextField(String(localized: "质量问题"), text: $composer.qualityIssue, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("整改记录", text: $composer.rectification, axis: .vertical)
+                    TextField(String(localized: "整改记录"), text: $composer.rectification, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("现场确认人", text: $composer.confirmer)
+                    TextField(String(localized: "现场确认人"), text: $composer.confirmer)
                 }
                 constructionMethodLinkSection(selection: $composer.linkedMethodIDs)
                 DailyLogWatermarkPhotoSection(
@@ -836,17 +867,17 @@ struct DailyLogView: View {
                     onOpenCamera: { composer.showLogCamera = true }
                 )
             }
-            .navigationTitle("写日志")
+            .navigationTitle(String(localized: "写日志"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         showAdd = false
                         clearDraft()
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         save()
                         showAdd = false
                     }
@@ -866,7 +897,7 @@ struct DailyLogView: View {
                             drafts.append(PhotoDraft(data: normalizedData))
                         }
                     } catch {
-                        StorageIssueLog.record("施工日志图片导入失败：\(error.localizedDescription)")
+                        StorageIssueLog.record(String(format: String(localized: "施工日志图片导入失败：%@"), error.localizedDescription))
                     }
                 }
                 await MainActor.run {
@@ -891,51 +922,51 @@ struct DailyLogView: View {
     private var editLogForm: some View {
         NavigationStack {
             Form {
-                Section("基础信息") {
-                    DatePicker("日期", selection: $editor.date, displayedComponents: .date)
-                    Picker("天气", selection: $editor.weather) {
-                        ForEach(weatherOptions, id: \.self) { Text($0).tag($0) }
+                Section(String(localized: "基础信息")) {
+                    DatePicker(String(localized: "日期"), selection: $editor.date, displayedComponents: .date)
+                    Picker(String(localized: "天气"), selection: $editor.weather) {
+                        ForEach(weatherOptions, id: \.self) { Text(String(localized: String.LocalizationValue($0))).tag($0) }
                     }
-                    TextField("人数", text: $editor.workers)
-                    Picker("选择工程", selection: $editor.projectId) {
-                        Text("无归属").tag(nil as UUID?)
+                    TextField(String(localized: "人数"), text: $editor.workers)
+                    Picker(String(localized: "选择工程"), selection: $editor.projectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
                 }
-                Section("施工内容") {
-                    TextField("内容", text: $editor.content, axis: .vertical)
+                Section(String(localized: "施工内容")) {
+                    TextField(String(localized: "内容"), text: $editor.content, axis: .vertical)
                         .lineLimit(3...6)
                 }
-                Section("安全与材料") {
-                    TextField("安全事项", text: $editor.safety, axis: .vertical)
+                Section(String(localized: "安全与材料")) {
+                    TextField(String(localized: "安全事项"), text: $editor.safety, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("材料进场", text: $editor.materials, axis: .vertical)
+                    TextField(String(localized: "材料进场"), text: $editor.materials, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("计划与质量") {
+                Section(String(localized: "计划与质量")) {
                     Button {
                         editor.tomorrowPlan = generateTomorrowPlanFromTodos(for: editor.projectId)
                     } label: {
-                        Label("从今日待办生成明日计划", systemImage: "wand.and.stars")
+                        Label(String(localized: "从今日待办生成明日计划"), systemImage: "wand.and.stars")
                     }
-                    TextField("明日计划", text: $editor.tomorrowPlan, axis: .vertical)
+                    TextField(String(localized: "明日计划"), text: $editor.tomorrowPlan, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("质量问题", text: $editor.qualityIssue, axis: .vertical)
+                    TextField(String(localized: "质量问题"), text: $editor.qualityIssue, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("整改记录", text: $editor.rectification, axis: .vertical)
+                    TextField(String(localized: "整改记录"), text: $editor.rectification, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("现场确认人", text: $editor.confirmer)
+                    TextField(String(localized: "现场确认人"), text: $editor.confirmer)
                 }
                 constructionMethodLinkSection(selection: $editor.linkedMethodIDs)
             }
-            .navigationTitle("编辑日志")
+            .navigationTitle(String(localized: "编辑日志"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showEdit = false }
+                    Button(String(localized: "取消")) { showEdit = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         saveEditedLog()
                         showEdit = false
                     }
@@ -952,7 +983,7 @@ struct DailyLogView: View {
         do {
             fileNames = try PhotoStorage.saveManyOrThrow(originals: composer.photoDrafts.map(\.data), logId: logId)
         } catch {
-            alertMessage = "现场照片保存失败：\(error.localizedDescription)"
+            alertMessage = String(format: String(localized: "现场照片保存失败：%@"), error.localizedDescription)
             showAlert = true
             return
         }
@@ -1150,9 +1181,9 @@ struct DailyLogView: View {
 
     @ViewBuilder
     private func constructionMethodLinkSection(selection: Binding<Set<UUID>>) -> some View {
-        Section("关联施工工艺") {
+        Section(String(localized: "关联施工工艺")) {
             if store.constructionMethods.isEmpty {
-                Text("暂无工艺条目，可先在工具箱-施工工艺库新增")
+                Text(String(localized: "暂无工艺条目，可先在工具箱-施工工艺库新增"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
@@ -1192,7 +1223,7 @@ struct DailyLogView: View {
 
     private func constructionMethodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "未命名工艺" : title
+        return title.isEmpty ? String(localized: "未命名工艺") : title
     }
 
     private func linkedMethodTitles(for ids: [UUID]) -> [String] {
@@ -1244,9 +1275,9 @@ struct DailyLogView: View {
 
     private func logWatermarkPhotoNote(capturedAt: Date) -> String {
         [
-            "来源: 拍照",
-            "拍摄时间: \(Formatters.dateTime.string(from: capturedAt))",
-            "标签: \(composer.cameraPhotoTag.rawValue)"
+            String(localized: "来源: 拍照"),
+            String(format: String(localized: "拍摄时间: %@"), Formatters.dateTime.string(from: capturedAt)),
+            String(format: String(localized: "标签: %@"), composer.cameraPhotoTag.displayName)
         ].compactMap { $0 }.joined(separator: "\n")
     }
 
@@ -1262,7 +1293,7 @@ private enum DailyLogDateFormatters {
         let formatter = DateFormatter()
         formatter.locale = Locale.autoupdatingCurrent
         formatter.timeZone = TimeZone.autoupdatingCurrent
-        formatter.dateFormat = "yyyy年M月"
+        formatter.setLocalizedDateFormatFromTemplate("yyyyMM")
         return formatter
     }()
 
@@ -1270,7 +1301,7 @@ private enum DailyLogDateFormatters {
         let formatter = DateFormatter()
         formatter.locale = Locale.autoupdatingCurrent
         formatter.timeZone = TimeZone.autoupdatingCurrent
-        formatter.dateFormat = "M月d日"
+        formatter.setLocalizedDateFormatFromTemplate("Md")
         return formatter
     }()
 }

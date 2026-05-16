@@ -56,6 +56,7 @@ enum Formatters {
         let f = NumberFormatter()
         f.locale = posixLocale
         f.numberStyle = .decimal
+        f.usesGroupingSeparator = true
         f.minimumFractionDigits = minFraction
         f.maximumFractionDigits = maxFraction
         return f.string(from: NSNumber(value: v)) ?? String(v)

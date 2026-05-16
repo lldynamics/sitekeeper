@@ -763,7 +763,7 @@ extension DashboardView {
 
     @MainActor
     func showQuickActionFeedback(title: String) {
-        quickActionToastMessage = String(localized: "已打开\(title)")
+        quickActionToastMessage = String(format: String(localized: "已打开%@"), title)
     }
 
     @MainActor
@@ -813,22 +813,42 @@ extension DashboardView {
             + openTodos * 20
 
         if overdue > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "延期 \(overdue)"), color: .appRisk, score: score)
+            return DashboardProjectSignal(
+                subtitle: String(format: String(localized: "延期 %lld"), Int64(overdue)),
+                color: .appRisk,
+                score: score
+            )
         }
         if todayTodo > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "今日 \(todayTodo)"), color: .appPrimaryAction, score: score)
+            return DashboardProjectSignal(
+                subtitle: String(format: String(localized: "今日 %lld"), Int64(todayTodo)),
+                color: .appPrimaryAction,
+                score: score
+            )
         }
         if missingReceipt > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "缺票 \(missingReceipt)"), color: .appPrimaryAction, score: score)
+            return DashboardProjectSignal(
+                subtitle: String(format: String(localized: "缺票 %lld"), Int64(missingReceipt)),
+                color: .appPrimaryAction,
+                score: score
+            )
         }
         if priceSpike > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "价格异动 \(priceSpike)"), color: .appPrimaryAction, score: score)
+            return DashboardProjectSignal(
+                subtitle: String(format: String(localized: "价格异动 %lld"), Int64(priceSpike)),
+                color: .appPrimaryAction,
+                score: score
+            )
         }
         if missingLog {
             return DashboardProjectSignal(subtitle: String(localized: "未写日志"), color: .appDoc, score: score)
         }
         if openTodos > 0 {
-            return DashboardProjectSignal(subtitle: String(localized: "待办 \(openTodos)"), color: .appPrimaryAction, score: score)
+            return DashboardProjectSignal(
+                subtitle: String(format: String(localized: "待办 %lld"), Int64(openTodos)),
+                color: .appPrimaryAction,
+                score: score
+            )
         }
         return DashboardProjectSignal(subtitle: String(localized: "最近使用"), color: .appSuccess, score: score)
     }

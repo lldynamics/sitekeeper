@@ -110,6 +110,9 @@ struct ProjectWarehouseView: View {
     @State private var showImportError = false
     @State private var showDeleteMovementConfirm = false
     @State private var pendingDeleteMovementIds: Set<UUID> = []
+    @State private var operationNotice: OperationToastNotice?
+    @State private var pendingDeleteCommitTask: Task<Void, Never>?
+    @State private var pendingDeleteCommit: (() -> Void)?
 
     private var movements: [ProjectWarehouseMovement] {
         store.projectWarehouseMovements
@@ -171,8 +174,17 @@ struct ProjectWarehouseView: View {
                 pendingDeleteMovementIds.removeAll()
             }
         } message: {
-            Text(String(localized: "将删除 \(pendingDeleteMovementIds.count) 条出入库流水。可选择保留资料原件，避免误删送货单/照片。"))
+            Text(
+                String(
+                    format: String(localized: "将删除 %lld 条出入库流水。可选择保留资料原件，避免误删送货单/照片。"),
+                    Int64(pendingDeleteMovementIds.count)
+                )
+            )
         }
+        .onDisappear {
+            flushPendingWarehouseDeletionIfNeeded()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     private var warehouseActionSection: some View {
@@ -252,29 +264,78 @@ struct ProjectWarehouseView: View {
 
     private func deleteMovements(ids: Set<UUID>, deleteAttachments: Bool) {
         guard !ids.isEmpty else { return }
+        flushPendingWarehouseDeletionIfNeeded()
+
+        let movementSnapshot = store.projectWarehouseMovements
+        let documentSnapshot = store.projectDocuments
+        let financialSnapshot = store.projectFinancialRecords
+
+        var updatedMovements = movementSnapshot.filter { !ids.contains($0.id) }
+        var updatedDocuments = documentSnapshot
+        var updatedFinancialRecords = financialSnapshot
+        var removableFileNames: [String] = []
+
         if deleteAttachments {
-            let linkedDocumentIds = Set(movements.filter { ids.contains($0.id) }.flatMap(\.linkedDocumentIds))
-            let remainingMovementDocumentIds = Set(
-                store.projectWarehouseMovements
-                    .filter { !ids.contains($0.id) }
+            let linkedDocumentIds = Set(
+                movementSnapshot
+                    .filter { ids.contains($0.id) }
                     .flatMap(\.linkedDocumentIds)
             )
-            let linkedFinancialDocumentIds = Set(
-                store.projectFinancialRecords.flatMap(\.linkedDocumentIds)
-            )
+            let remainingMovementDocumentIds = Set(updatedMovements.flatMap(\.linkedDocumentIds))
+            let linkedFinancialDocumentIds = Set(financialSnapshot.flatMap(\.linkedDocumentIds))
             let removableDocumentIds = linkedDocumentIds
                 .subtracting(remainingMovementDocumentIds)
                 .subtracting(linkedFinancialDocumentIds)
             if !removableDocumentIds.isEmpty {
-                for document in store.projectDocuments where removableDocumentIds.contains(document.id) {
-                    ProjectDocumentStorage.delete(fileName: document.fileName)
+                removableFileNames = updatedDocuments
+                    .filter { removableDocumentIds.contains($0.id) }
+                    .map(\.fileName)
+                updatedDocuments.removeAll { removableDocumentIds.contains($0.id) }
+                for index in updatedFinancialRecords.indices {
+                    updatedFinancialRecords[index].linkedDocumentIds.removeAll { removableDocumentIds.contains($0) }
                 }
-                store.removeProjectDocuments(ids: removableDocumentIds)
+                for index in updatedMovements.indices {
+                    updatedMovements[index].linkedDocumentIds.removeAll { removableDocumentIds.contains($0) }
+                }
             }
         }
-        store.removeProjectWarehouseMovements(ids: ids)
+
+        store.projectWarehouseMovements = updatedMovements
+        store.projectDocuments = updatedDocuments
+        store.projectFinancialRecords = updatedFinancialRecords
         pendingDeleteMovementIds.removeAll()
-        store.scheduleSave()
+
+        pendingDeleteCommit = {
+            for fileName in removableFileNames {
+                ProjectDocumentStorage.delete(fileName: fileName)
+            }
+            store.scheduleSave()
+        }
+        pendingDeleteCommitTask = Task { @MainActor in
+            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
+            pendingDeleteCommit?()
+            pendingDeleteCommit = nil
+            pendingDeleteCommitTask = nil
+        }
+
+        let message = deleteAttachments
+        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(ids.count))
+        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(ids.count))
+        operationNotice = OperationToastNotice(
+            message: message,
+            actionTitle: String(localized: "撤销"),
+            action: {
+                pendingDeleteCommitTask?.cancel()
+                pendingDeleteCommitTask = nil
+                pendingDeleteCommit = nil
+                store.projectWarehouseMovements = movementSnapshot
+                store.projectDocuments = documentSnapshot
+                store.projectFinancialRecords = financialSnapshot
+                store.scheduleSave()
+                operationNotice = .info(String(localized: "已撤销删除"))
+            },
+            autoDismissDuration: .seconds(4)
+        )
     }
 
     private func linkedDocuments(for movement: ProjectWarehouseMovement) -> [ProjectDocument] {
@@ -318,5 +379,12 @@ struct ProjectWarehouseView: View {
         guard !failures.isEmpty else { return }
         importErrorMessage = "以下附件未能导入：\(failures.joined(separator: "、"))"
         showImportError = true
+    }
+
+    private func flushPendingWarehouseDeletionIfNeeded() {
+        pendingDeleteCommitTask?.cancel()
+        pendingDeleteCommitTask = nil
+        pendingDeleteCommit?()
+        pendingDeleteCommit = nil
     }
 }

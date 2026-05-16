@@ -25,21 +25,21 @@ struct BackupCloudSectionView: View {
     let onRestoreBackup: (CloudBackupFile) -> Void
 
     private var cloudStatusHintColor: Color {
-        if cloudStatusMessage.contains("失败") || cloudStatusMessage.contains("未能") {
+        if cloudStatusMessage.contains(String(localized: "失败")) || cloudStatusMessage.contains(String(localized: "未能")) {
             return .appWarning
         }
         return .secondary
     }
 
     var body: some View {
-        Section("iCloud 云备份") {
+        Section(String(localized: "iCloud 云备份")) {
             Button(action: onUploadBackup) {
-                Label("立即备份到 iCloud", systemImage: "icloud.and.arrow.up")
+                Label(String(localized: "立即备份到 iCloud"), systemImage: "icloud.and.arrow.up")
             }
             .disabled(isBusy)
 
             Button(action: onRefreshBackups) {
-                Label("刷新云端备份列表", systemImage: "arrow.clockwise")
+                Label(String(localized: "刷新云端备份列表"), systemImage: "arrow.clockwise")
             }
             .disabled(isBusy || isRefreshingCloudBackups)
 
@@ -47,7 +47,7 @@ struct BackupCloudSectionView: View {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text("正在读取 iCloud 备份…")
+                    Text(String(localized: "正在读取 iCloud 备份…"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -57,37 +57,37 @@ struct BackupCloudSectionView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Toggle("业务数据", isOn: $cloudIncludeBusinessRecords)
-            Toggle("项目记录", isOn: $cloudIncludeProjectRecords)
-            Toggle("项目资料与随手记", isOn: $cloudIncludeProjectFilesAndNotes)
+            Toggle(String(localized: "业务数据"), isOn: $cloudIncludeBusinessRecords)
+            Toggle(String(localized: "项目记录"), isOn: $cloudIncludeProjectRecords)
+            Toggle(String(localized: "项目资料与随手记"), isOn: $cloudIncludeProjectFilesAndNotes)
                 .disabled(!cloudIncludeProjectRecords)
-            Toggle("原文件附件（照片/图纸/文档）", isOn: $cloudIncludeAttachments)
+            Toggle(String(localized: "原文件附件（照片/图纸/文档）"), isOn: $cloudIncludeAttachments)
                 .disabled(!cloudIncludeProjectRecords || !cloudIncludeProjectFilesAndNotes)
-            Toggle("资料库（材料价/供应商/工艺）", isOn: $cloudIncludeKnowledgeBase)
+            Toggle(String(localized: "资料库（材料价/供应商/工艺）"), isOn: $cloudIncludeKnowledgeBase)
 
             Text(cloudBackupScopeHint)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 
-            Picker("自动备份", selection: $cloudAutoIntervalRawValue) {
+            Picker(String(localized: "自动备份"), selection: $cloudAutoIntervalRawValue) {
                 ForEach(CloudBackupAutoInterval.allCases, id: \.rawValue) { interval in
                     Text(interval.title).tag(interval.rawValue)
                 }
             }
 
             if cloudAutoInterval != .disabled {
-                Toggle("仅在 Wi‑Fi 下自动备份", isOn: $cloudAutoBackupRequiresWiFi)
+                Toggle(String(localized: "仅在 Wi‑Fi 下自动备份"), isOn: $cloudAutoBackupRequiresWiFi)
                     .disabled(isBusy)
                 Text(cloudAutoNetworkHint)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let nextDate = cloudNextAutoBackupDate {
-                    LabeledContent("下次预计", value: Formatters.dateTime.string(from: nextDate))
+                    LabeledContent(String(localized: "下次预计"), value: Formatters.dateTime.string(from: nextDate))
                 }
             }
 
             if let lastSuccessDate = cloudLastSuccessDate {
-                LabeledContent("最近成功", value: Formatters.dateTime.string(from: lastSuccessDate))
+                LabeledContent(String(localized: "最近成功"), value: Formatters.dateTime.string(from: lastSuccessDate))
             }
             if !cloudAutoLastStatus.isEmpty {
                 Text(cloudAutoLastStatus)
@@ -97,7 +97,7 @@ struct BackupCloudSectionView: View {
 
             if cloudBackups.isEmpty {
                 if !isRefreshingCloudBackups {
-                    Text("iCloud 中还没有备份。")
+                    Text(String(localized: "iCloud 中还没有备份。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

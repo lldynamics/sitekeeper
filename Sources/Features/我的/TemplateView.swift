@@ -140,9 +140,15 @@ struct ApplyTemplateSheet: View {
     private var applyConfirmMessage: String {
         switch template.category {
         case .material:
-            return String(localized: "将新增 \(materialParseResult.items.count) 条材料记录。未识别行不会导入。")
+            return String(
+                format: String(localized: "将新增 %lld 条材料记录。未识别行不会导入。"),
+                Int64(materialParseResult.items.count)
+            )
         case .quotation:
-            return String(localized: "将新增 \(quotationParseResult.items.count) 条报价记录。未识别行不会导入。")
+            return String(
+                format: String(localized: "将新增 %lld 条报价记录。未识别行不会导入。"),
+                Int64(quotationParseResult.items.count)
+            )
         case .dailyLog:
             return "将新增 1 条日志记录。"
         }
@@ -304,8 +310,12 @@ struct ApplyTemplateSheet: View {
 
             let name = String(line[..<splitIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
             let valuePart = String(line[line.index(after: splitIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let quantity = valuePart.filter { "0123456789.".contains($0) }
-            let unit = valuePart.filter { !"0123456789.".contains($0) && !$0.isWhitespace }
+            let parsed = NumericInputSupport.splitNumberAndUnit(
+                in: valuePart,
+                kind: .quantity,
+                defaultNumber: "1",
+                defaultUnit: "个"
+            )
 
             guard !name.isEmpty else {
                 result.rejectedLines.append(line)
@@ -315,8 +325,8 @@ struct ApplyTemplateSheet: View {
             result.items.append(
                 ParsedMaterialTemplateItem(
                     name: name,
-                    quantity: quantity.isEmpty ? "1" : quantity,
-                    unit: unit.isEmpty ? "个" : unit
+                    quantity: parsed.number,
+                    unit: parsed.unit
                 )
             )
         }
@@ -339,7 +349,7 @@ struct ApplyTemplateSheet: View {
 
             let name = String(line[..<splitIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
             let valuePart = String(line[line.index(after: splitIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let price = valuePart.filter { "0123456789.".contains($0) }
+            let price = NumericInputSupport.firstNumberString(in: valuePart, kind: .amount)
 
             guard !name.isEmpty, !price.isEmpty else {
                 result.rejectedLines.append(line)

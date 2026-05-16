@@ -33,7 +33,7 @@ extension ProjectDetailContainer {
     }
 
     func deleteDocument(_ document: ProjectDocument) {
-        ProjectDetailAssetActions.deleteDocument(document, store: store)
+        deleteProjectDocumentWithUndo(document)
     }
 
     func saveDocumentEdit(_ document: ProjectDocument) {

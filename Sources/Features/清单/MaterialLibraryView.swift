@@ -175,7 +175,7 @@ struct MaterialLibraryView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "slider.horizontal.3")
                                 .font(.caption)
-                            Text("分类管理")
+                            Text(String(localized: "分类管理"))
                                 .font(.caption.weight(.medium))
                         }
                         .padding(.horizontal, 12)
@@ -185,7 +185,7 @@ struct MaterialLibraryView: View {
                         .clipShape(Capsule())
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("分类管理")
+                    .accessibilityLabel(String(localized: "分类管理"))
                 }
                 .padding(.horizontal).padding(.vertical, 8)
             }
@@ -195,7 +195,7 @@ struct MaterialLibraryView: View {
 
             List {
                 if !recentSearchKeywords.isEmpty && searchText.isEmpty {
-                    Section("最近搜索") {
+                    Section(String(localized: "最近搜索")) {
                         ForEach(recentSearchKeywords, id: \.self) { term in
                             Button {
                                 searchText = term
@@ -203,7 +203,7 @@ struct MaterialLibraryView: View {
                                 Label(term, systemImage: "clock.arrow.circlepath")
                             }
                             .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                Button("移除", role: .destructive) {
+                                Button(String(localized: "移除"), role: .destructive) {
                                     removeRecentSearchKeyword(term)
                                 }
                             }
@@ -212,20 +212,20 @@ struct MaterialLibraryView: View {
                 }
 
                 if !recentMaterials.isEmpty && searchText.isEmpty {
-                    Section("最近使用") {
+                    Section(String(localized: "最近使用")) {
                         ForEach(recentMaterials) { item in
                             switch item.source {
                             case .preset(let material):
                                 presetMaterialRow(material)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(Color.appWarning)
-                                        Button("删除材料", role: .destructive) { requestDeletePresetMaterial(material) }
+                                        Button(String(localized: "从最近移除")) { removeRecentKey(item.key) }.tint(Color.appWarning)
+                                        Button(String(localized: "删除材料"), role: .destructive) { requestDeletePresetMaterial(material) }
                                     }
                             case .user(let material):
                                 userMaterialRow(material)
                                     .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                        Button("从最近移除") { removeRecentKey(item.key) }.tint(Color.appWarning)
-                                        Button("删除", role: .destructive) { requestDeleteUserMaterial(material) }
+                                        Button(String(localized: "从最近移除")) { removeRecentKey(item.key) }.tint(Color.appWarning)
+                                        Button(String(localized: "删除"), role: .destructive) { requestDeleteUserMaterial(material) }
                                     }
                             }
                         }
@@ -233,11 +233,11 @@ struct MaterialLibraryView: View {
                 }
 
                 if !filteredUser.isEmpty {
-                    Section("自定义材料") {
+                    Section(String(localized: "自定义材料")) {
                         ForEach(filteredUser) { mat in
                             userMaterialRow(mat)
                                 .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                    Button("删除", role: .destructive) { requestDeleteUserMaterial(mat) }
+                                    Button(String(localized: "删除"), role: .destructive) { requestDeleteUserMaterial(mat) }
                                 }
                         }
                     }
@@ -247,13 +247,13 @@ struct MaterialLibraryView: View {
                     ForEach(filteredPreset) { mat in
                         presetMaterialRow(mat)
                             .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                                Button("删除材料", role: .destructive) { requestDeletePresetMaterial(mat) }
+                                Button(String(localized: "删除材料"), role: .destructive) { requestDeletePresetMaterial(mat) }
                             }
                     }
                 }
 
                 if showRecycleBin {
-                    Section("回收站") {
+                    Section(String(localized: "回收站")) {
                         ForEach(Array(store.hiddenPresetKeys), id: \.self) { key in
                             deletedPresetRow(key: key)
                         }
@@ -275,20 +275,20 @@ struct MaterialLibraryView: View {
         .navigationTitle("材料库")
         .toolbar {
             if batchState.isBatchSelectionMode {
-                Button("取消") {
+                Button(String(localized: "取消")) {
                     exitBatchSelectionMode()
                 }
                 Button {
                     openBatchAppendSheet()
                 } label: {
-                    Label("批量加入", systemImage: "square.and.arrow.down.on.square")
+                    Label(String(localized: "批量加入"), systemImage: "square.and.arrow.down.on.square")
                 }
                 .disabled(selectedBatchMaterialContexts.isEmpty)
             } else {
-                Button("批量") {
+                Button(String(localized: "批量")) {
                     batchState.isBatchSelectionMode = true
                 }
-                Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel("添加自定义材料")
+                Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel(String(localized: "添加自定义材料"))
             }
         }
         .sheet(isPresented: $showAddSheet) {
@@ -358,12 +358,12 @@ struct MaterialLibraryView: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") {
+                        Button(String(localized: "取消")) {
                             appendState.pendingAddContext = nil
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("添加") {
+                        Button(String(localized: "添加")) {
                             let appended = appendMaterialsToSheet(
                                 [context],
                                 quantityText: appendState.pendingAddQuantity,
@@ -403,10 +403,10 @@ struct MaterialLibraryView: View {
             }
         }
         .confirmationDialog("删除材料", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+            Button(String(localized: "删除"), role: .destructive) {
                 confirmPendingDeleteMaterial()
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingDeleteTarget = nil
             }
         } message: {
@@ -419,19 +419,25 @@ struct MaterialLibraryView: View {
             }
         }
         .alert("已添加到材料单", isPresented: $appendState.showOpenMaterialSheetPrompt) {
-            Button("不再提示") {
+            Button(String(localized: "不再提示")) {
                 promptAfterAdd = false
             }
-            Button("稍后", role: .cancel) {}
-            Button("前往材料单") {
+            Button(String(localized: "稍后"), role: .cancel) {}
+            Button(String(localized: "前往材料单")) {
                 appendState.navigateToMaterialSheet = true
             }
         } message: {
             let title = appendState.recentlyAddedDraftTitle.isEmpty ? "未命名材料单" : appendState.recentlyAddedDraftTitle
             if appendState.recentlyAddedItemCount > 1 {
-                Text("已将 \(appendState.recentlyAddedItemCount) 项材料添加到「\(title)」")
+                Text(
+                    String(
+                        format: String(localized: "已将 %d 项材料添加到「%@」"),
+                        appendState.recentlyAddedItemCount,
+                        title
+                    )
+                )
             } else {
-                Text("已添加到「\(title)」")
+                Text(String(format: String(localized: "已添加到「%@」"), title))
             }
         }
         .navigationDestination(isPresented: $appendState.navigateToMaterialSheet) {
@@ -467,7 +473,7 @@ struct MaterialLibraryView: View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             if let draft = defaultTargetMaterialSheetDraft {
                 HStack(alignment: .center, spacing: AppSpacing.tight) {
-                    Label("默认目标材料单", systemImage: "pin.fill")
+                    Label(String(localized: "默认目标材料单"), systemImage: "pin.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(Color.appPrimaryAction)
                     Spacer()
@@ -486,10 +492,10 @@ struct MaterialLibraryView: View {
                         Button {
                             createAndSelectDefaultMaterialSheetDraft()
                         } label: {
-                            Label("新建材料单", systemImage: "plus.circle.fill")
+                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                         }
                     } label: {
-                        Label("切换", systemImage: "arrow.triangle.2.circlepath")
+                        Label(String(localized: "切换"), systemImage: "arrow.triangle.2.circlepath")
                             .font(.caption.weight(.semibold))
                     }
                     .buttonStyle(.bordered)
@@ -515,7 +521,7 @@ struct MaterialLibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.appPrimaryAction)
-                    .accessibilityLabel("新建默认材料单")
+                    .accessibilityLabel(String(localized: "新建默认材料单"))
                     Button {
                         appendState.recentlyAddedDraftID = draft.id
                         appendState.navigateToMaterialSheet = true
@@ -525,22 +531,22 @@ struct MaterialLibraryView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(Color.appPrimaryAction)
-                    .accessibilityLabel("打开当前材料单")
+                    .accessibilityLabel(String(localized: "打开当前材料单"))
                 }
 
-                Label("点材料后的 + 默认加入这里；需要换单时先在这里切换。", systemImage: "bolt.fill")
+                Label(String(localized: "点材料后的 + 默认加入这里；需要换单时先在这里切换。"), systemImage: "bolt.fill")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: AppSpacing.tight) {
-                    Label("暂无默认材料单", systemImage: "tray")
+                    Label(String(localized: "暂无默认材料单"), systemImage: "tray")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button {
                         createAndSelectDefaultMaterialSheetDraft()
                     } label: {
-                        Label("创建", systemImage: "plus.circle.fill")
+                        Label(String(localized: "创建"), systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.appProminent())
                     .controlSize(.small)
@@ -655,7 +661,7 @@ struct MaterialLibraryView: View {
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "tag").font(.caption)
-                        Text("标价").font(.caption2)
+                        Text(String(localized: "标价")).font(.caption2)
                     }
                     .foregroundStyle(Color.appPrimaryAction)
                     .padding(.horizontal, 8).padding(.vertical, 4)
@@ -670,7 +676,7 @@ struct MaterialLibraryView: View {
 
             if batchState.isBatchSelectionMode {
                 if isSelected {
-                    Text("已选")
+                    Text(String(localized: "已选"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(Color.appPrimaryAction)
                 }
@@ -681,7 +687,7 @@ struct MaterialLibraryView: View {
                         .font(.title3)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("添加\(name)到材料单")
+                .accessibilityLabel(String(format: String(localized: "添加%@到材料单"), name))
                 .accessibilityValue(materialAccessibilityLabel(name: name, spec: spec, unit: unit, price: price))
             }
         }
@@ -751,7 +757,7 @@ struct MaterialLibraryView: View {
                     .foregroundStyle(.secondary)
                 Spacer()
                 if !selectedBatchMaterialContexts.isEmpty {
-                    Button("清空") {
+                    Button(String(localized: "清空")) {
                         batchState.selectedMaterialContextsByKey = [:]
                     }
                     .font(.footnote)
@@ -760,7 +766,7 @@ struct MaterialLibraryView: View {
             Button {
                 openBatchAppendSheet()
             } label: {
-                Label("批量加入材料单", systemImage: "square.and.arrow.down.on.square")
+                Label(String(localized: "批量加入材料单"), systemImage: "square.and.arrow.down.on.square")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.appProminent())
@@ -803,12 +809,12 @@ struct MaterialLibraryView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         batchState.pendingBatchAddContext = nil
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
+                    Button(String(localized: "添加")) {
                         let appended = confirmAppendMaterials(
                             context.materials,
                             quantityText: batchState.pendingBatchAddQuantity,
@@ -845,7 +851,7 @@ struct MaterialLibraryView: View {
                 Text(spec).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("恢复") {
+            Button(String(localized: "恢复")) {
                 store.hiddenPresetKeys.remove(key)
                 store.scheduleSave()
             }
@@ -864,7 +870,7 @@ struct MaterialLibraryView: View {
                 Text(item.specification).font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("恢复") {
+            Button(String(localized: "恢复")) {
                 store.deletedUserMaterials.removeAll { $0.id == item.id }
                 store.userMaterials.append(item)
                 store.scheduleSave()
@@ -1419,16 +1425,16 @@ private struct MaterialLibraryAppendToSheetForm: View {
 
     var body: some View {
         Form {
-            Section("材料") {
+            Section(String(localized: "材料")) {
                 LabeledContent("名称", value: context.name)
                 if !context.specification.isEmpty {
                     LabeledContent("规格", value: context.specification)
                 }
                 LabeledContent("单位", value: context.unit)
             }
-            Section("添加参数") {
+            Section(String(localized: "添加参数")) {
                 HStack {
-                    TextField("数量", text: $quantity)
+                    TextField(String(localized: "数量"), text: $quantity)
                         .keyboardType(.decimalPad)
                         .focused(focusedField, equals: .quantity)
                     Text(context.unit)
@@ -1436,28 +1442,28 @@ private struct MaterialLibraryAppendToSheetForm: View {
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    TextField("单价（可选）", text: $unitPrice)
+                    TextField(String(localized: "单价（可选）"), text: $unitPrice)
                         .keyboardType(.decimalPad)
                         .focused(focusedField, equals: .unitPrice)
-                    Text("元/\(context.unit)")
+                    Text(String(format: String(localized: "元/%@"), context.unit))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                TextField("备注（可选）", text: $note, axis: .vertical)
+                TextField(String(localized: "备注（可选）"), text: $note, axis: .vertical)
                     .lineLimit(2...4)
                     .focused(focusedField, equals: .note)
             }
-            Section("保存到材料单") {
+            Section(String(localized: "保存到材料单")) {
                 if targetMode == .existing {
                     if activeMaterialSheetDrafts.isEmpty {
-                        Text("暂无可用材料单，请新建一个材料单。")
+                        Text(String(localized: "暂无可用材料单，请新建一个材料单。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Button {
                             targetMode = .create
                             projectId = nil
                         } label: {
-                            Label("新建材料单", systemImage: "plus.circle.fill")
+                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                         }
                     } else {
                         LabeledContent("当前目标") {
@@ -1481,16 +1487,16 @@ private struct MaterialLibraryAppendToSheetForm: View {
                                 targetMode = .create
                                 projectId = nil
                             } label: {
-                                Label("新建材料单", systemImage: "plus.circle.fill")
+                                Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                             }
                         } label: {
-                            Label("切换目标", systemImage: "arrow.triangle.2.circlepath")
+                            Label(String(localized: "切换目标"), systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                 } else {
-                    TextField("材料单名称", text: $draftTitle)
-                    Picker("归属项目", selection: $projectId) {
-                        Text("无归属").tag(nil as UUID?)
+                    TextField(String(localized: "材料单名称"), text: $draftTitle)
+                    Picker(String(localized: "归属项目"), selection: $projectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
@@ -1500,7 +1506,7 @@ private struct MaterialLibraryAppendToSheetForm: View {
                             targetMode = .existing
                             draftId = draftId ?? activeMaterialSheetDrafts.first?.id
                         } label: {
-                            Label("改用已有材料单", systemImage: "tray.full.fill")
+                            Label(String(localized: "改用已有材料单"), systemImage: "tray.full.fill")
                         }
                     }
                 }
@@ -1530,38 +1536,38 @@ private struct MaterialLibraryBatchAppendForm: View {
 
     var body: some View {
         Form {
-            Section("已选材料 (\(context.materials.count))") {
+            Section(String(format: String(localized: "已选材料 (%d)"), context.materials.count)) {
                 ForEach(context.materials.prefix(5)) { item in
                     Text(item.displayName)
                 }
                 if context.materials.count > 5 {
-                    Text("其余 \(context.materials.count - 5) 项将在保存后一并加入")
+                    Text(String(format: String(localized: "其余 %d 项将在保存后一并加入"), context.materials.count - 5))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("添加参数") {
+            Section(String(localized: "添加参数")) {
                 HStack {
-                    TextField("数量", text: $quantity)
+                    TextField(String(localized: "数量"), text: $quantity)
                         .keyboardType(.decimalPad)
-                    Text("每项")
+                    Text(String(localized: "每项"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("保存到材料单") {
+            Section(String(localized: "保存到材料单")) {
                 if targetMode == .existing {
                     if activeMaterialSheetDrafts.isEmpty {
-                        Text("暂无可用材料单，请新建一个材料单。")
+                        Text(String(localized: "暂无可用材料单，请新建一个材料单。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Button {
                             targetMode = .create
                             projectId = nil
                         } label: {
-                            Label("新建材料单", systemImage: "plus.circle.fill")
+                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                         }
                     } else {
                         LabeledContent("当前目标") {
@@ -1585,16 +1591,16 @@ private struct MaterialLibraryBatchAppendForm: View {
                                 targetMode = .create
                                 projectId = nil
                             } label: {
-                                Label("新建材料单", systemImage: "plus.circle.fill")
+                                Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                             }
                         } label: {
-                            Label("切换目标", systemImage: "arrow.triangle.2.circlepath")
+                            Label(String(localized: "切换目标"), systemImage: "arrow.triangle.2.circlepath")
                         }
                     }
                 } else {
-                    TextField("材料单名称", text: $draftTitle)
-                    Picker("归属项目", selection: $projectId) {
-                        Text("无归属").tag(nil as UUID?)
+                    TextField(String(localized: "材料单名称"), text: $draftTitle)
+                    Picker(String(localized: "归属项目"), selection: $projectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
@@ -1604,7 +1610,7 @@ private struct MaterialLibraryBatchAppendForm: View {
                             targetMode = .existing
                             draftId = draftId ?? activeMaterialSheetDrafts.first?.id
                         } label: {
-                            Label("改用已有材料单", systemImage: "tray.full.fill")
+                            Label(String(localized: "改用已有材料单"), systemImage: "tray.full.fill")
                         }
                     }
                 }
