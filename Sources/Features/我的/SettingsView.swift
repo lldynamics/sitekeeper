@@ -31,26 +31,31 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section("显示") {
-                Text("公制单位、自动保存、主题、配色和语言已放到“我的”首页快捷设置。")
+            Section(String(localized: "显示")) {
+                Text(String(localized: "公制单位、自动保存、主题、配色和语言已放到“我的”首页快捷设置。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+#if DEBUG
             if allowsSampleDataImport {
-                Section("示例数据") {
-                    Text("默认不预置示例项目和记录。如需演示，可手动导入示例数据。")
+                Section(String(localized: "示例数据")) {
+                    Text(String(localized: "默认不预置示例项目和记录。如需演示，可手动导入示例数据。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Button("导入示例数据（覆盖当前本地数据）", role: .destructive) {
+                    Button(String(localized: "导入示例数据（覆盖当前本地数据）"), role: .destructive) {
                         showSampleImportConfirm = true
                     }
                 }
             }
-            Section("数据管理") {
+#endif
+            Section(String(localized: "数据管理")) {
                 Stepper(value: $backupHealthReminderDays, in: 1 ... 30) {
-                    LabeledContent("备份健康提醒阈值", value: "\(backupHealthReminderDays) 天")
+                    LabeledContent(
+                        String(localized: "备份健康提醒阈值"),
+                        value: String(format: String(localized: "%lld 天"), Int64(backupHealthReminderDays))
+                    )
                 }
-                Text("超过该天数未成功备份时，工作台会显示“备份超期”提醒。")
+                Text(String(localized: "超过该天数未成功备份时，工作台会显示“备份超期”提醒。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(String(localized: "清空本机全部数据（需先备份）"), role: .destructive) {
@@ -58,7 +63,7 @@ struct SettingsView: View {
                     showClearLocalDataBackupGate = true
                 }
                 .disabled(isClearingLocalData)
-                Text("将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP。")
+                Text(String(localized: "将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if isClearingLocalData {
@@ -75,38 +80,45 @@ struct SettingsView: View {
                     }
                 }
             }
-            Section("CAD 看图") {
-                TextField("CAD 转换服务地址", text: $cadDWGConversionServiceURL)
+            Section(String(localized: "CAD 看图")) {
+                TextField(String(localized: "CAD 转换服务地址"), text: $cadDWGConversionServiceURL)
                     .textInputAutocapitalization(.never)
                     .keyboardType(.URL)
                     .autocorrectionDisabled()
-                Text("用于把 DWG 转换为可在线查看的图纸数据。服务端运行 LibreDWG，App 只读取转换后的 CADDatabase；留空时只能打开 DXF 或已转换图纸。")
+                Text(String(localized: "用于把 DWG 转换为可在线查看的图纸数据。服务端运行 LibreDWG，App 只读取转换后的 CADDatabase；留空时只能打开 DXF 或已转换图纸。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("实验功能") {
-                Toggle("显示模板管理入口", isOn: $showTemplates)
-                Text("默认关闭。开启后会在工具箱显示“模板管理”。")
+            Section(String(localized: "实验功能")) {
+                Toggle(String(localized: "显示模板管理入口"), isOn: $showTemplates)
+                Text(String(localized: "默认关闭。开启后会在工具箱显示“模板管理”。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Section("关于") {
-                HStack { Text("版本"); Spacer(); Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0").foregroundStyle(.secondary) }
+            Section(String(localized: "关于")) {
+                HStack {
+                    Text(String(localized: "版本"))
+                    Spacer()
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .navigationTitle("设置").navigationBarTitleDisplayMode(.inline)
-        .alert("导入示例数据？", isPresented: $showSampleImportConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("覆盖并导入", role: .destructive) {
+        .navigationTitle(String(localized: "设置")).navigationBarTitleDisplayMode(.inline)
+#if DEBUG
+        .alert(String(localized: "导入示例数据？"), isPresented: $showSampleImportConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "覆盖并导入"), role: .destructive) {
                 store.importSampleData(replacingExisting: true)
             }
         } message: {
             if store.hasAnyBusinessData {
-                Text("将清空当前本地数据并写入示例项目、日志、报价和材料。此操作不可撤销。")
+                Text(String(localized: "将清空当前本地数据并写入示例项目、日志、报价和材料。此操作不可撤销。"))
             } else {
-                Text("将写入示例项目、日志、报价和材料，便于演示功能。")
+                Text(String(localized: "将写入示例项目、日志、报价和材料，便于演示功能。"))
             }
         }
+#endif
         .sheet(isPresented: $showClearLocalDataBackupGate) {
             ClearLocalDataBackupGateSheet(flowStartedAt: clearLocalDataFlowStartedAt) {
                 showClearLocalDataBackupGate = false
@@ -191,7 +203,7 @@ private struct ClearLocalDataBackupGateSheet: View {
                     .foregroundStyle(.secondary)
 
                 NavigationLink {
-                    DataManagementView(initialTab: "备份")
+                    DataManagementView(initialRoute: .backup)
                 } label: {
                     Label(String(localized: "去备份并导出 ZIP"), systemImage: "externaldrive")
                         .frame(maxWidth: .infinity)
@@ -267,7 +279,7 @@ private struct FavoriteCalcEditor: View {
                 }
             }
         }
-        .navigationTitle("收藏计算器").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "收藏计算器")).navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -314,7 +326,7 @@ private struct ClearLocalDataConfirmationSheet: View {
                 .padding(.horizontal)
 
                 HStack(spacing: 16) {
-                    Button("取消", role: .cancel) {
+                    Button(String(localized: "取消"), role: .cancel) {
                         onCancel()
                     }
                     .buttonStyle(.bordered)

@@ -4,15 +4,6 @@ import SwiftUI
 enum CADRendererBootstrap {
     static func configure() {
         CADRendererProvider.clearRenderer()
-        CADRendererProvider.registerRenderer { fileURL, _, _, initialViewState, _, callbacks in
-            AnyView(
-                SiteKeeperCADKernelRendererHost(
-                    fileURL: fileURL,
-                    initialViewState: initialViewState,
-                    callbacks: callbacks
-                )
-            )
-        }
         CADRendererProvider.registerTextAutoDetector { _, _ in
             CADTextAutoDetectionResult(
                 codePage: nil,
@@ -29,9 +20,6 @@ enum CADRendererBootstrap {
                 detectionSummary: "SiteKeeperCADKernel text engine is active; diagnostic DWG import is available.",
                 summary: "自有 CAD 文字引擎已启用，DWG 几何/文字解析接入后会输出 text trace。"
             )
-        }
-        CADRendererProvider.registerDiagnosticReporter { fileURL, _, _ in
-            await SiteKeeperCADKernelDiagnosticReporter.makeReport(for: fileURL)
         }
         SiteKeeperCADKernel.CADDWGGeometryAdapterRegistry.register(
             SiteKeeperCADKernel.DWGSidecarJSONGeometryAdapter()

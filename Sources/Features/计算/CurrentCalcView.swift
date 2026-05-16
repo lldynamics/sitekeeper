@@ -15,7 +15,7 @@ struct CurrentCalcView: View {
         Form {
             Section("输入参数") {
                 LabeledContent("功率 (kW)") {
-                    TextField("例如 10", text: $power)
+                    TextField("例如 10", text: $power.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -23,7 +23,7 @@ struct CurrentCalcView: View {
                 CalculatorValidationHint(message: rangeMessage(power, min: 0.1, max: 5_000_000, hint: "请输入 0.1–5000000"))
                 CalculatorPresetChips(title: "常用功率", options: ["3", "5", "10", "20", "30", "50"], selection: $power)
                 LabeledContent("电压 (V)") {
-                    TextField("220", text: $voltage)
+                    TextField("220", text: $voltage.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -31,7 +31,7 @@ struct CurrentCalcView: View {
                 CalculatorValidationHint(message: rangeMessage(voltage, min: 12, max: 100_000, hint: "请输入 12–100000"))
                 CalculatorPresetChips(title: "电压预设", options: ["220", "380"], selection: $voltage)
                 LabeledContent("功率因数") {
-                    TextField("0.85", text: $powerFactor)
+                    TextField("0.85", text: $powerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)

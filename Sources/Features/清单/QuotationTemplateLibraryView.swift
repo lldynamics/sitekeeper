@@ -7,6 +7,8 @@ struct QuotationTemplateLibraryView: View {
     @State private var showAdd = false
     @State private var editingTemplate: ProjectTemplate?
     @State private var didOpenFocusedTemplate = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedTemplateId: UUID? = nil) {
         self.focusedTemplateId = focusedTemplateId
@@ -68,17 +70,49 @@ struct QuotationTemplateLibraryView: View {
                 }
                 editingTemplate = nil
             } onDelete: { target in
-                store.templates.removeAll { $0.id == target.id }
-                store.scheduleSave()
+                deleteTemplateIds(Set([target.id]))
                 editingTemplate = nil
             }
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
     private func deleteTemplates(_ offsets: IndexSet) {
-        let ids = offsets.compactMap { templates.indices.contains($0) ? templates[$0].id : nil }
-        store.templates.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+        let ids = Set(offsets.compactMap { templates.indices.contains($0) ? templates[$0].id : nil })
+        deleteTemplateIds(ids)
+    }
+
+    private func deleteTemplateIds(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+
+        let snapshot = store.templates
+        let targets = snapshot.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        store.removeTemplates(ids: ids)
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 个报价模板"), Int64(targets.count)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.templates = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.templates,
+                    deletedIDs: ids
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除报价模板 %lld 个"), Int64(targets.count)),
+                detail: targets.map(\.name).joined(separator: "、"),
+                source: "QuotationTemplateLibraryView"
+            )
+        )
     }
 
     private func openFocusedTemplateIfNeeded() {

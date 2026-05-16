@@ -16,18 +16,18 @@ struct WallAreaView: View {
     var body: some View {
         Form {
             Section("墙面尺寸 (m)") {
-                LabeledContent("墙 1 长 (m)") { TextField("0", text: $l1).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent("墙 2 长 (m)") { TextField("0", text: $l2).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent("墙 3 长 (m)") { TextField("0", text: $l3).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent("墙 4 长 (m)") { TextField("0", text: $l4).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent("层高 (m)") { TextField("2.8", text: $height).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("墙 1 长 (m)") { TextField("0", text: $l1.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("墙 2 长 (m)") { TextField("0", text: $l2.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("墙 3 长 (m)") { TextField("0", text: $l3.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("墙 4 长 (m)") { TextField("0", text: $l4.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("层高 (m)") { TextField("2.8", text: $height.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(height, min: 1.8, max: 20, hint: "请输入 1.8–20"))
                 CalculatorPresetChips(title: "层高预设", options: ["2.6", "2.8", "3.0", "3.2", "3.6"], selection: $height)
                 CalculatorValidationHint(message: wallLengthMessage)
             }
             Section("扣除面积 (m²)") {
-                LabeledContent("门总面积 (m²)") { TextField("0", text: $doors).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent("窗总面积 (m²)") { TextField("0", text: $windows).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("门总面积 (m²)") { TextField("0", text: $doors.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("窗总面积 (m²)") { TextField("0", text: $windows.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: optionalRangeMessage(doors, min: 0, max: 5000, hint: "请输入 0–5000"))
                 CalculatorValidationHint(message: optionalRangeMessage(windows, min: 0, max: 5000, hint: "请输入 0–5000"))
             }
@@ -57,7 +57,7 @@ struct WallAreaView: View {
     }
 
     private func calc() {
-        let walls = [l1, l2, l3, l4].compactMap { Double($0) }.filter { $0 > 0 }
+        let walls = [l1, l2, l3, l4].compactMap { CalculatorInputParser.double($0) }.filter { $0 > 0 }
         guard let h = CalculatorInputParser.double(height), h > 0, !walls.isEmpty else {
             presentError("请至少输入一面墙长度")
             return

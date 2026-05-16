@@ -13,9 +13,11 @@
 		021C67C19338BF8D610C3C1A /* CalculatorTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA9C71AA55008F5E9FE24F0 /* CalculatorTabView.swift */; };
 		031AE5458E3DECE8BD387949 /* ConstructionMethodTutorialEditorSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67BC4AD630568878D87F705 /* ConstructionMethodTutorialEditorSections.swift */; };
 		049AF3E26BEEA71938C14ADB /* StorageCleanupCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D01229C310BF30CD7D5BC49 /* StorageCleanupCenterView.swift */; };
+		0512791181B5A74718272AB1 /* CADImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BB3DC368C315D7F5090423F /* CADImportEngine.swift */; };
 		0568F3D0D3EBE629ECC1CB2F /* CADLayoutResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5652ADEB6B71009FADC83DA8 /* CADLayoutResolver.swift */; };
 		06764CCD2443108030F6FBF4 /* QuickNoteComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EB15CA31C31A6F07770B1E /* QuickNoteComposerView.swift */; };
 		06AC7FD3E979D85D1D28EBC9 /* CADSelectionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F11155B931C632B153E9D46E /* CADSelectionEngine.swift */; };
+		06AF8AC2FE60405A43E4E724 /* SiteKeeperCADRenderCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21AB2E9366B8854A04AB5E94 /* SiteKeeperCADRenderCommand.swift */; };
 		077FC492077CB4BB1E383D31 /* ProjectDetailSubpageSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3EE0F41C369597A7EF38A7 /* ProjectDetailSubpageSupport.swift */; };
 		08429971AF139DF8B47B0C48 /* ConstructionMethodDetailEditorViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A65AB6F66D1E31FA519F824C /* ConstructionMethodDetailEditorViews.swift */; };
 		08B4D49A71F436C66AA21B65 /* ProjectDetailRiskAndLogViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256D1629C5EC1A3DAB1C1869 /* ProjectDetailRiskAndLogViews.swift */; };
@@ -31,25 +33,28 @@
 		11C42ADA09E7F8EA7CE3C5FE /* ProjectFileDataModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A80C6B67AD7DB6AAF9AB06B /* ProjectFileDataModels.swift */; };
 		11F1A9F8B7309F5EFC3013D0 /* CalculatorInteractionKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8574D913CAA0D388BC0D7016 /* CalculatorInteractionKit.swift */; };
 		122BBE596EB0BAE9CA0D0B5B /* DailyLogSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDEBF7A43640538111CEE0E /* DailyLogSupportViews.swift */; };
+		123F64EBE2716A05A69DED53 /* CADPoCLineImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831E094AE1DB5E9D53E5CDC3 /* CADPoCLineImportTests.swift */; };
 		138FA28720F9675E91A7B210 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760AA521D532102AF50F99C0 /* DashboardView.swift */; };
+		140CDAD78DCB5A45A300110A /* SiteKeeperCADLODPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FCFA95CE0EDCC607DCD01B /* SiteKeeperCADLODPolicy.swift */; };
+		147D46AD0F82C18DD62C5D86 /* CADLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A462DE85E9B863BCF29121 /* CADLayer.swift */; };
 		14DDE10B7CC94CF17F934F32 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF1D19FA8ABABCC63B7823BD /* Localizable.strings */; };
 		15901DAD483671B5F0296FD4 /* DomainStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF6234D3600524CC11D17D1 /* DomainStores.swift */; };
 		166B2EE5D4DE8832DB643039 /* ProjectDetailContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C1FF2E6371B840A26AD992 /* ProjectDetailContactsSection.swift */; };
-		171A6EA5F73FD6B83A0FF567 /* SiteKeeperCADKernelRendererHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 815B970CF3CF72EF4CEB9BE1 /* SiteKeeperCADKernelRendererHost.swift */; };
 		1AB367B83271037B3EA54D9B /* QuickToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7376EF597CECA03446DB09 /* QuickToolViews.swift */; };
 		1B5A55381A6A9AEA2C4D1B64 /* WidgetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6506FA40B6293CD6C0C01A54 /* WidgetViews.swift */; };
 		1B5C6C119D9772EBD0713EDA /* CADPerformanceTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BFEEA5B45C9E3B9CC4C312B /* CADPerformanceTrace.swift */; };
-		1BD3FCF0A0D36BA27ECEEC3B /* CADKernelPreviewHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF923F1C09D0B83A8DC4CD77 /* CADKernelPreviewHost.swift */; };
 		1C47CBD71566791EB5A1AD4F /* WidgetSharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A05742820D2AE76B133AF4 /* WidgetSharedModels.swift */; };
 		1E85459184A4D5C13AF5CD74 /* BackupExportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E9C2C3E3653013CC92112615 /* BackupExportCoordinator.swift */; };
 		1F8449B594645397C67B95CF /* ProjectDetailFocusedItemApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B3E721193D965E9B8038EE /* ProjectDetailFocusedItemApplier.swift */; };
 		1F8BF7D5C26AAA8F27D8603F /* sitekeeperWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 10E0FEEB51AC8ADCB8D027DD /* sitekeeperWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		2012DA2D96934F839DF1334D /* ProjectWarehouseStorageSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7166F125C49CD341AAFD4FB /* ProjectWarehouseStorageSupport.swift */; };
+		2018DDDE0167CE0272544D48 /* CADLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B09F7EFFD0A96FD1A53668E /* CADLayout.swift */; };
 		20A3F401C69BAA396445A93D /* ContactPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D328E2BFB846539A1D5581BC /* ContactPickerView.swift */; };
 		23229396833F8ADEDCA0F918 /* CADRendererProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1312B319974269FA21A132B7 /* CADRendererProvider.swift */; };
 		23BCE63E650C7632B0CACD1E /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEE19B8944E85B1B13D1C659 /* HistoryView.swift */; };
 		2508EBE8B577B0F156442962 /* ProjectCreateSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */; };
 		26CE22B6A2F75927817F3365 /* CADVector.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71A5693B24073F30CE68A06 /* CADVector.swift */; };
+		26D1F129362603B91BB2883C /* CADQuadTree.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1FB9B1F6687B0575F50321D0 /* CADQuadTree.swift */; };
 		2785ADA59E63BD7693A2E7BE /* CADBlockResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3074627CBDB8F7B5B33B4E1C /* CADBlockResolver.swift */; };
 		27BDA9B6E4F452B43A0178B0 /* ProjectListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164BEF177F56E909B506F569 /* ProjectListView.swift */; };
 		28F709ED086E4B01DD9B332C /* ProjectDetailDocumentActionSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9702B3F32D0B603EF21D14A2 /* ProjectDetailDocumentActionSection.swift */; };
@@ -63,7 +68,7 @@
 		2F3DA75520D5EFBDB43BB664 /* WidgetSharedModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 99A05742820D2AE76B133AF4 /* WidgetSharedModels.swift */; };
 		2FE2E2DB6DF0CDD1BC126F52 /* ProjectDetailBookkeepingSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 84032917C65A208CE3CCFAEC /* ProjectDetailBookkeepingSection.swift */; };
 		3055593B57404D1E97460981 /* CADDimensionExploder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C3D3698E0FA23B9AD804804 /* CADDimensionExploder.swift */; };
-		306D1C11F315EAC9055769A2 /* CADImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 554384FE7734D5F79D2732C4 /* CADImportEngine.swift */; };
+		3247D45C1DB261A9BA7A4191 /* DataStoreDeletionPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ECC49508EBCF1D87A0DE6FD /* DataStoreDeletionPolicy.swift */; };
 		325D388350A6F5774EFCF5D7 /* CloudBackupService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19575CC6981FFE2CBA9878F3 /* CloudBackupService.swift */; };
 		3281E5853BD5FEA1134AE0F0 /* ProjectContactRoleField.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EAF2C96189183408C88276F /* ProjectContactRoleField.swift */; };
 		3290DE4AF7228DB01552F6D5 /* UserPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F6EE4E4EDA5E6D919328BC7 /* UserPreferences.swift */; };
@@ -76,11 +81,10 @@
 		386CAE3A6DFE1FBBDE27A300 /* ProjectDetailContainer+AssetActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8166E93656DD9D0549D0D3EB /* ProjectDetailContainer+AssetActions.swift */; };
 		38BAC8F8E2A4A43D09E1C7AB /* ProjectDetailSheetCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4829BA0F85A62731DF2B3FD6 /* ProjectDetailSheetCoordinator.swift */; };
 		390902228035D5CEA00DCF25 /* AppUIComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8929512A6B81BA48A276C2F9 /* AppUIComponents.swift */; };
-		3918ECCB271B292F362B9ADC /* CADMatrix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 164B7D8FEB13DE7CDB26581E /* CADMatrix.swift */; };
 		39993526A7612DE10175D1AE /* PhotoCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA75CA804E78E5F141EE268A /* PhotoCache.swift */; };
-		3A8D9E5532AACF19EDCFD95A /* CADKernelTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 59558CC771E7E994C1CBC2D2 /* CADKernelTypes.swift */; };
 		3AE2C48C10765C3F67A0D8D9 /* BreakerSelectView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1787C52081124C5137E429E8 /* BreakerSelectView.swift */; };
 		3AFFF4B7D060F17120D88A0D /* CADRenderTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A6A265776C170AED0BB499B /* CADRenderTile.swift */; };
+		3B18143250BF972740CFA630 /* SiteKeeperCADTextEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 29785D312893849AAAC2AAF0 /* SiteKeeperCADTextEngine.swift */; };
 		3BD18FFAB6F51F52E9DD9316 /* WidgetDataBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F6D1A05442DB59741BBFEF8 /* WidgetDataBuilderTests.swift */; };
 		3C1B85196CBB8A928C2EC116 /* ProjectDetailOnAppearRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7FE0F2A36DA219F6DA3DB6AA /* ProjectDetailOnAppearRouter.swift */; };
 		3CB4B4874CC86799907FB439 /* ProjectModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5CDEDAB1FB1901FFFA144B9 /* ProjectModels.swift */; };
@@ -89,12 +93,14 @@
 		3EB17416FE44FAFCDDC4A7BC /* CADTextDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D560AB9A24AF7EE2A88AFC6 /* CADTextDecoder.swift */; };
 		3F24D19AB38DE16E40AAFDBB /* SiteKeeperCADKernelAppViewerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 597EA8B9DF31FBE377014927 /* SiteKeeperCADKernelAppViewerEngine.swift */; };
 		405BF254D5570D1244EE5D82 /* ProjectDocumentSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17F03E43DF1B547479B5D30C /* ProjectDocumentSheets.swift */; };
+		408B60CB332DD1C090C59226 /* SiteKeeperCADImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 256A856DA2B3BBF50F61A059 /* SiteKeeperCADImportEngine.swift */; };
 		41F24DD9C23ADBF1754A90C1 /* CADRenderCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3F56607B224A251273DE7A73 /* CADRenderCache.swift */; };
 		42B3E9A2426EFFA50D35B84F /* DWGGeometrySourceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CE85D8B97DBCD5B304852F7 /* DWGGeometrySourceResolver.swift */; };
 		44CC108D238A540792B0FC22 /* CADSplineTessellator.swift in Sources */ = {isa = PBXBuildFile; fileRef = E474B3B7049D4594A4BDFE77 /* CADSplineTessellator.swift */; };
 		45609D0DBA9EE1A14D88C3E0 /* CADPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17E453112969845E2FF2F663 /* CADPoint.swift */; };
 		477AA69E18BE5214FA62A4F4 /* DocumentStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40CAC7B297EA2A7E933E48E0 /* DocumentStorage.swift */; };
-		488A971994E94C7296C195F8 /* CADLODPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 24CE4B82BE9EE342D527B8E3 /* CADLODPolicy.swift */; };
+		4814D4DD9A1191B506BCBDDD /* CADPoCCleanupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B3AB9723C10EDBBC200375D /* CADPoCCleanupTests.swift */; };
+		4848F1C3E9EB3131B8DF3E0A /* CADViewerToolbar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D82E2283136A15DFFFA95A84 /* CADViewerToolbar.swift */; };
 		4A525010ADE2477075E14427 /* QuotationTemplateLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81C9B271A85C9023F79D67CC /* QuotationTemplateLibraryView.swift */; };
 		4B64BB294B3784DB3B9059AF /* ZipArchiveBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC69EC4DED9A191C70CA551C /* ZipArchiveBuilder.swift */; };
 		4B6D787938310B209E9DACC8 /* NonNegativeNumberText.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7EC4AE541B26144C015CEF3C /* NonNegativeNumberText.swift */; };
@@ -102,12 +108,11 @@
 		4E522BF7BC0CE9F1B4DBA6E5 /* ProjectDetailContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439DF61136E3AC8C5FEA1E39 /* ProjectDetailContent.swift */; };
 		4EA6D53412DFA77EF0899815 /* ProjectDetailDrawingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDDB2E1BB40FB83D3E3918A5 /* ProjectDetailDrawingHelper.swift */; };
 		50406C00346AA64450A6961F /* VoltageDropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D8177485D327812FA329566 /* VoltageDropView.swift */; };
-		50434966F61E99820D7B39D1 /* CADLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 643E54C9BE78B47924C08626 /* CADLayout.swift */; };
 		50E6ADFF5B8232DCBDCDF554 /* AppQuickLookPreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFE0BF9E80A01179FF1F4745 /* AppQuickLookPreviewController.swift */; };
 		52009F99F7D287FAE7C1D635 /* ProjectWarehouseRowViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C165A68F21698CA58E533BED /* ProjectWarehouseRowViews.swift */; };
 		5225B45566E4195017AE8B17 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93F54B13A53AD71668D8770A /* SettingsView.swift */; };
 		5307FD65F4298D8D7C0AF648 /* QuickNoteImagePreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6CD454D7847A5152CE28C06 /* QuickNoteImagePreviewController.swift */; };
-		541A87D41B3E4ABE0CD43BDE /* CADEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A60F6CBD3B088C295908B6 /* CADEntity.swift */; };
+		53EEDCD466EB02798FD1E8EC /* CADMetalRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4CF6CAC42D6E665376720E7 /* CADMetalRenderer.swift */; };
 		54BE76D20927B0051A2DF8F1 /* CADCanvas2DRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CEDDFD7BC4749B701E1CEA2 /* CADCanvas2DRenderer.swift */; };
 		553FF60A3F81EE9BFDAA1A28 /* ReportBuilderTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 121682DA41D443B8F5798D21 /* ReportBuilderTypes.swift */; };
 		55C35FC14AC927565448696B /* UnitConverterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14FA53FF67E94865E39DCF47 /* UnitConverterTests.swift */; };
@@ -119,21 +124,24 @@
 		5A92A7A3B300FD82C3C2F12E /* CADRenderOptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E78A30F8ED1B90B405B1CD67 /* CADRenderOptions.swift */; };
 		5B367D131F6430B71160F707 /* BackupViewComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB3F6873F1E5A4216ED973D8 /* BackupViewComponents.swift */; };
 		5C6436E073E162ED314A41F3 /* CADFile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 794CF6D3B9266AD8C446DB53 /* CADFile.swift */; };
+		5C96BE30CFBB865E35B4BEAC /* CADEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A4A24E666AA548F445460 /* CADEntity.swift */; };
 		5D1FD3F72C3D4B68A78BD6ED /* ConduitFillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFBCA4A5A1F8490B7C3E8EF5 /* ConduitFillView.swift */; };
 		5FFC171EAC587D4EB09D7CB1 /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 61F674B8E45B003886E09CC2 /* LaunchScreen.storyboard */; };
 		607F15CFB2D148C088ADE87C /* QuickNoteDrawingSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F76D16BAAA588C3C6C5B21F /* QuickNoteDrawingSheet.swift */; };
 		6094D6DCFF4838935362A37B /* MaterialPriceSpikeDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB59CEBE7ADADAB3DA34B206 /* MaterialPriceSpikeDetailView.swift */; };
 		6233A2DCB7BF0E1E37A16A2B /* FileURLDocumentExporter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 06E97AC8E24FD8556C056DFF /* FileURLDocumentExporter.swift */; };
 		62D901AD7C618F1EF222AC90 /* ProjectDetailModeSectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4A58364364364D71FC17072 /* ProjectDetailModeSectionsView.swift */; };
+		63591F8FE7EF6FCBBBF93166 /* CADViewerEngineSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A371824F993B927BD1F3A687 /* CADViewerEngineSupport.swift */; };
 		635B6829FECE84BE5867060E /* DashboardDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4979E4F17DC5A6EB4044A53D /* DashboardDataProvider.swift */; };
 		63EEBD589CAF59B60BC4DC7D /* ProjectDetailContainer+RoutingActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5CF845B5D40A72E4EB495FD /* ProjectDetailContainer+RoutingActions.swift */; };
-		644CC838958D78EDB00E862E /* CADRenderCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 203A833811E9C3AF295A9792 /* CADRenderCommand.swift */; };
+		6666AFC45AAE2CEF4084127C /* LibreDWGNativeImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D99CBC12507525742FEA0EE5 /* LibreDWGNativeImportEngine.swift */; };
 		66D940B36ADF60B814A7B404 /* QuickNoteImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B07A6B567A6E10060B8B0F /* QuickNoteImportTests.swift */; };
 		67249F2E77B93CF444AB2A4C /* SearchableFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3AD084787DBF24842A6B094 /* SearchableFilter.swift */; };
 		6A90A2285E4F5C1BD52C523E /* ActivityShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19927017F6DFC6A0C5518223 /* ActivityShareSheet.swift */; };
 		6ACE22F2DC641FA58263E4A2 /* LightingCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D21E85AB36B7CB445235DF49 /* LightingCalcView.swift */; };
 		6ADDB3C7E96AF9526B4B0F94 /* DataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54CE9C936E4195975DF82B0A /* DataStore.swift */; };
 		6BFA36B4AC36D8EFF1606155 /* ProjectDetailImportExportActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336009C801B064E5717D6864 /* ProjectDetailImportExportActions.swift */; };
+		6C74EC307CB972612BB61A6E /* CADRenderCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = 801FF7DB70BAFE0EB7E5356A /* CADRenderCommand.swift */; };
 		6CCED7A06978C253EC4D214D /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7298CD0AF72D95D616E86553 /* FeedbackView.swift */; };
 		6D3D0416B1B2E1E83D3C6077 /* EngineeringRecommendationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA79110E1F5A0CB6C7E3C4C7 /* EngineeringRecommendationTests.swift */; };
 		6D4FC8EF8F3C48BC245B8999 /* ProjectDetailRoutingHelpersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0A47B45883D47DBEC4EB6F92 /* ProjectDetailRoutingHelpersTests.swift */; };
@@ -141,17 +149,19 @@
 		6E200156370F5F94D52B6375 /* BackupCloudTaskCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E5C6771F81F45FB8EB79468 /* BackupCloudTaskCoordinator.swift */; };
 		6EA47F087671D5074C254CB0 /* FilteredDeletionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A337E0EB7D6CEEA5BDE2598B /* FilteredDeletionTests.swift */; };
 		6EB67D9D9842D2D83D4B000C /* CADSHXFontMapping.swift in Sources */ = {isa = PBXBuildFile; fileRef = F36707F18374E17865432223 /* CADSHXFontMapping.swift */; };
+		6EFCE2D98D39678A3D91351A /* CADViewerContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DCF37AF289DFD24B610E4460 /* CADViewerContainer.swift */; };
 		6FA30098D98B2681987684C5 /* CADTextTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E585B6365B058F99DAC2DBE /* CADTextTrace.swift */; };
 		6FAB709B582FE7533F855432 /* ProjectFinancialRecordSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 87352DF4A2BF1CDF99D4F38E /* ProjectFinancialRecordSheets.swift */; };
+		6FAC977D7D5B657AADFF8A8B /* CADCanvasView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08B422F182901CAE07736B6D /* CADCanvasView.swift */; };
+		70087F2ADDB605A0A156BD13 /* SampleDataFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36B250670BE71DEBCCF19F4D /* SampleDataFixture.swift */; };
 		73AE3B906D073CD98BA78710 /* DataStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 056AB39F31672A2DCA541C45 /* DataStoreTests.swift */; };
 		746E599C2C388808C7F1CC22 /* QuickNoteVideoImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F291723D1A680B9EC07AAD3 /* QuickNoteVideoImport.swift */; };
-		74CA85F4692311D0F663A10A /* DXFImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 41AAB0FFF35DFE0722B7DB0D /* DXFImportEngine.swift */; };
 		74D1E8A8AF03BF85B03830B0 /* CADViewerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49B83CC4F3D989D2D0BBBF3E /* CADViewerEngine.swift */; };
 		75149C7E388C6FDEC8B6603E /* CADTextStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 216C8FFC15F9DD53AF92AF9E /* CADTextStyle.swift */; };
 		75305825E0E90D8C13116FBA /* DataManagementView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E07B641CCB2C8322F1828D1B /* DataManagementView.swift */; };
 		75D8980E7534EA093AC316F0 /* ProjectWarehouseMovementSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E888169D4CB7E4B16315F58 /* ProjectWarehouseMovementSheet.swift */; };
 		75F3C3E4DB488518AE186F91 /* UnsupportedCADImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07DC7D5638B5CC6FB26B2E6E /* UnsupportedCADImportEngine.swift */; };
-		768C4708C11E2079413A574C /* CADSpatialIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD3B2EA4310966473BAB3BDF /* CADSpatialIndex.swift */; };
+		76097DAB6844A2E43BF09AEA /* UndoableDeletionCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46ED2426859CCDB2F7E81B14 /* UndoableDeletionCoordinatorTests.swift */; };
 		77ACA49723F8EB8AF467A6BF /* ProjectDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7934768262AC52DE1B6FAE8F /* ProjectDetailSupport.swift */; };
 		785B6354FB155978B52DE5BE /* CADRemoteDWGConversionAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7984859CFCBE7202906F23C /* CADRemoteDWGConversionAdapter.swift */; };
 		7898D3A7F62C4FF4292178B6 /* ProjectDetailContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E20ED318315B0CB65F0D2DB4 /* ProjectDetailContentView.swift */; };
@@ -163,13 +173,13 @@
 		7C25D97C0A6016F456C5FFB9 /* BackupCloudSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36090225AFC1274CF3728D0F /* BackupCloudSectionView.swift */; };
 		7CD1530837576F14721C6138 /* QuickNoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D359CB72F12979CF60C2F23 /* QuickNoteEditorView.swift */; };
 		7CDDBC6332ACE5E29963B127 /* FinanceModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FC01EF51EBB7E6DB01ED607 /* FinanceModels.swift */; };
-		8055B64786A24122DE5C213F /* CADKernelImporting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E210BF3B6BCE2698C765157 /* CADKernelImporting.swift */; };
 		806D557C702163D77F0A4D49 /* ProjectDetailStateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FBA0FAD32D417259A51D508 /* ProjectDetailStateModels.swift */; };
 		82BEA3C3FBDFBD6BAA05F7A5 /* CADDatabase.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63B5A2D45F38956D8F64F932 /* CADDatabase.swift */; };
 		8335CF7C2E357FEE775BEFBF /* NumericInputSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 186CD231D7CAB6BEBDB9BCE6 /* NumericInputSupportTests.swift */; };
 		84517E792EB556AA0A1B2B81 /* ProjectWarehouseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 103021DA6C242691589FF90D /* ProjectWarehouseView.swift */; };
 		85BDBE26D43726C24EB4D684 /* QuoteCalculationsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67AAD921173C1D20D1C32EA1 /* QuoteCalculationsTests.swift */; };
 		86900C6DB79232015EEC1168 /* CADDrawingCapability.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C6F8D7B8C7AA23EA37DA44 /* CADDrawingCapability.swift */; };
+		86DED75A16D035170A99A8DC /* SiteKeeperCADBounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2A65EFE4ABEE72FF0E4C61C /* SiteKeeperCADBounds.swift */; };
 		86F7267546DD1D570C41B579 /* CADBlock.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8512918BF7C87CA3AB371FA2 /* CADBlock.swift */; };
 		86F79B165E2E1E76200B1CDB /* ReceiptOCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 825145B4C09AEF7ED185BC66 /* ReceiptOCRService.swift */; };
 		88C19C202C6DE48EABFFA2C1 /* SitekeeperApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 411BA3A20FB966EF6233DF40 /* SitekeeperApp.swift */; };
@@ -190,8 +200,9 @@
 		92A973F9CEBAEA64CC67C38D /* CADDrawingDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = C6FC4AF878BC0C9022241EFE /* CADDrawingDiagnostics.swift */; };
 		9321EB5D7EB47352804D3F13 /* ChecklistTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4363D3D382D70C14F8E9CA2 /* ChecklistTabView.swift */; };
 		933E5AB8CC5242C9B5FAE33F /* SitekeeperWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 083AD06C66EE1140B64674BA /* SitekeeperWidget.swift */; };
+		94381B6962E707C2B1AB4934 /* CADBounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58CEF1A0E701EB5A38C12D01 /* CADBounds.swift */; };
 		943C3EE41C35683D4012EC73 /* ProjectContactDatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D72EFBF67240B997CEC61202 /* ProjectContactDatabaseView.swift */; };
-		956509DB9668ABE8A97455A7 /* CADFontResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 69623525AE7877BCF489591E /* CADFontResolver.swift */; };
+		980E055123C78A5682D250FD /* CADOpenTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C548890465502281B177C7C /* CADOpenTrace.swift */; };
 		984AF17365443FFFBA9EF137 /* DailyLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E16B009A5ED41D4A70FBCB92 /* DailyLogView.swift */; };
 		987E5D38BEA2DD5AA1E9BE2A /* ProjectFileSearchIndexService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C46D8C098152E54F70DDA00E /* ProjectFileSearchIndexService.swift */; };
 		9AE1984582D1B9FDE8D21FE9 /* ReportBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2160350B1ECABF4523316109 /* ReportBuilder.swift */; };
@@ -201,9 +212,12 @@
 		9FA50F30FF2FAE0E90589A96 /* ProjectEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEF888CD3BE72CF9F5C4733F /* ProjectEditSheet.swift */; };
 		9FABF647436374995AE0F1FD /* CADRegressionSuite.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1528BAAF95A38805402DFFC /* CADRegressionSuite.swift */; };
 		A0260015336FA77F61D80244 /* CADRenderEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F086F8AB3D9044C89AE5379A /* CADRenderEngine.swift */; };
+		A05B8CE64AA04A63094E3AA6 /* CADFontResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4D1FD9D9EB00E051EC7FE98C /* CADFontResolver.swift */; };
 		A05F4BAA26B0084FC680AF22 /* BackupLocalSectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACA233F97E0768FC43002EC4 /* BackupLocalSectionsView.swift */; };
 		A08D188275C381F6FD0E4B86 /* ProjectDetailExportWorkflow.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDEBAA98C89A19F5CD5E5CC1 /* ProjectDetailExportWorkflow.swift */; };
 		A1B84FA177B8E361173770EA /* BackupArchiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2463B432CFB59269EBFD300C /* BackupArchiveService.swift */; };
+		A1B8853638BF156DDEC8E69D /* CADTextEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E24078D01003BF8BE1CC931 /* CADTextEngine.swift */; };
+		A298270CB3394170742BF5ED /* SiteKeeperCADLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23E6A99567A3D0E29F4AAEF7 /* SiteKeeperCADLayer.swift */; };
 		A3A4C048F583E6A5AD145471 /* AppStoreScreenshotUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43FF2251ACC9E67949773AA2 /* AppStoreScreenshotUITests.swift */; };
 		A42D0781162605FF95D7CAD8 /* FileStorageError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1D605B64067E8EB75BD803 /* FileStorageError.swift */; };
 		A6631088875E4C72BBB7B35C /* ExternalCADSDKImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB64BDF37EB439F8D4FF9F39 /* ExternalCADSDKImportEngine.swift */; };
@@ -211,7 +225,6 @@
 		A9A6B44478AE99AE0C28D24A /* ProjectDetailContainer+FinanceActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C79A1F094A55D9CA2A1590 /* ProjectDetailContainer+FinanceActions.swift */; };
 		A9E1C55CEB032283D50B5211 /* ProjectDetailSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D9F1E7265C56A1656197B14 /* ProjectDetailSections.swift */; };
 		AA68C2D130525D7D219AF2DA /* CADOpenResult.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12405E18C03EDC6AE05AAB28 /* CADOpenResult.swift */; };
-		AB05EBB625172741421F4945 /* CADUnsupportedViewerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E5929F27D1BF3B1E7EAB4D0 /* CADUnsupportedViewerEngine.swift */; };
 		AB89D80CF013F712799D44B8 /* DWGOpenPipelineTrace.swift in Sources */ = {isa = PBXBuildFile; fileRef = F59F2A0151E06AA7AF3A8FCB /* DWGOpenPipelineTrace.swift */; };
 		ABDD24F65C28C38676ED3665 /* ProjectDetailListSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BCB7A785DCD3B5FDDF79680 /* ProjectDetailListSections.swift */; };
 		AC62C3C9E0F467AB034BBA08 /* CADXrefResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02EDB998F301C7996EA03D5C /* CADXrefResolver.swift */; };
@@ -223,17 +236,18 @@
 		ADF0B80870EE4CC2B61BD986 /* ZipArchiveStreamingWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 09B078E195120CAB8FC0461B /* ZipArchiveStreamingWriter.swift */; };
 		AEE33D10668AEA063CD99C52 /* VisibleIconStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = A682D1467226751FA2D2F79F /* VisibleIconStyle.swift */; };
 		AF20EF03116990A38D9A1B93 /* WatermarkCameraToolView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 548F15976D950714095D768F /* WatermarkCameraToolView.swift */; };
+		AF4FF82700F916B0E17E3E56 /* SiteKeeperCADFontResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47AAB79AE6AF5682ADECA74D /* SiteKeeperCADFontResolver.swift */; };
 		B0DDBD328C5C01DC3176FEA9 /* NumericInputSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A82E8D2252CA8115E3CFB084 /* NumericInputSupport.swift */; };
 		B1C8D350B53983C5B702BE70 /* BackupViewState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 763C2CC88837FE14E03DA564 /* BackupViewState.swift */; };
 		B1DDF858ED5A1285D0402223 /* ProjectFinancialMetricsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90E5376C71FA3A09C058012C /* ProjectFinancialMetricsTests.swift */; };
 		B202F7A3B29AB12627D3BF13 /* IntermediateJSONImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C243BCB3973FBB52B5A961F /* IntermediateJSONImportEngine.swift */; };
 		B20B6BDDDEC5281498DFE610 /* CADExternalSDKDrawing+Bridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = B63C546A327F5A41D74E032D /* CADExternalSDKDrawing+Bridge.swift */; };
+		B3F479E4F0D86D00B3E72763 /* CADPreviewSupportModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3655FF6F66C80F3A842BEA2A /* CADPreviewSupportModels.swift */; };
 		B412C8F20CF33B1B6AE8C84D /* StorageIssueLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A66AB89ECEC918F84D3A2F7 /* StorageIssueLog.swift */; };
 		B44D594CFC2CEF94ABA189C4 /* RealtimeSearchSuggestions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6BEA54DAA09BF065D60B44EC /* RealtimeSearchSuggestions.swift */; };
 		B4C5AD1F70D57CF3B888537C /* TransferLimitPolicyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C3226D841448E7C5FE59FBC /* TransferLimitPolicyTests.swift */; };
 		B4D2A3F82C422A755D653995 /* WallAreaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E402EBA7AFC783AC384C2F89 /* WallAreaView.swift */; };
 		B6B5F87595A1CD02B44DD660 /* DashboardPanelViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */; };
-		B73917C2956BF653F8EE95C3 /* CADFallbackViewer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3701EDA6238E9E6CF008C07 /* CADFallbackViewer.swift */; };
 		B85F9CBA5549C9E8884DE7B4 /* CADDiagnosticPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31DDC6F30C3143E9C416044E /* CADDiagnosticPanel.swift */; };
 		B8601B552AC7F7C5A1BB95E1 /* MaterialIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E31FACD3D227A747F6EDB27 /* MaterialIdentity.swift */; };
 		B862B8FBC752EAA9431F027D /* BackupImportExportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 096A4D2087D014735E5675FC /* BackupImportExportTests.swift */; };
@@ -241,6 +255,8 @@
 		B90B629DD219AFE2E8E010F8 /* DataValueParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD5001C37AE02B658C330290 /* DataValueParser.swift */; };
 		B921AF719CFAA67FAAF4C98E /* CADMTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577D652EAB5A95D3E47B0A3D /* CADMTextParser.swift */; };
 		B97BED578BAF6B8979E72AED /* MaterialDomainLogicTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA1A7E00013B60F69E7585A /* MaterialDomainLogicTests.swift */; };
+		B990C27534362E2FE4708861 /* SiteKeeperCADSpatialIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AFB36A8A6FECFA42233DBAE /* SiteKeeperCADSpatialIndex.swift */; };
+		BA20857CD5AE69517FB32691 /* SiteKeeperDXFImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2ECB1CDAB38F02D1E1C4125F /* SiteKeeperDXFImportEngine.swift */; };
 		BA69751EBAFECC7D75D91E80 /* ChecklistToolboxComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C014D4D4B4A893B9BFD661 /* ChecklistToolboxComponents.swift */; };
 		BA91D1176B1DA23B8D740524 /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3928B4B987F1D88C346E951 /* ProjectDetailView.swift */; };
 		BBABB76B1D2919E385E8D29B /* MaterialPriceDatabaseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3020960542BFA06A00C6DD55 /* MaterialPriceDatabaseViews.swift */; };
@@ -252,15 +268,18 @@
 		C0B8EE072C0A1BC9F3BAD6F0 /* PhotoStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 940B38FFDFCBE98EB586BC39 /* PhotoStorage.swift */; };
 		C14892C71ABA9AB4FB1F445E /* ProjectWarehouseMovementMediaImportHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4ECD45A2F897D83219089B55 /* ProjectWarehouseMovementMediaImportHelper.swift */; };
 		C1614093800FC0635A95B49A /* CADMeasurementPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = F885A3CA8372AF6B7060ECD7 /* CADMeasurementPanel.swift */; };
+		C1F485CF1A25CB64C893B01A /* CADViewerRoute.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7007161CEAA6B8F221A7DB7F /* CADViewerRoute.swift */; };
 		C22A5019EC5C3CA9EF24E81A /* UnitConverterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5FE553E470FAD208145B486 /* UnitConverterView.swift */; };
 		C2B181FC5479859264A9A7BB /* CommonMaterial.swift in Sources */ = {isa = PBXBuildFile; fileRef = CACDF93FA0E9CA4E49AA105D /* CommonMaterial.swift */; };
 		C34C5099E419E17DF8F423AB /* DWGGeometryImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97555A08343B75DFF5B7EB40 /* DWGGeometryImportEngine.swift */; };
 		C3A4F0BE6BDF564CA6A22EBB /* ProjectDetailFinanceDocumentActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 577CF970D5F1E364293AC60E /* ProjectDetailFinanceDocumentActions.swift */; };
 		C47A970B23A80836C35F8A2C /* FormattersTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB1FE691C9B0C95AD44BD88F /* FormattersTests.swift */; };
 		C4BC0A42E952121897A26019 /* ConstructionMethodDraftStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBBB43AA23452BC5D19E0C23 /* ConstructionMethodDraftStore.swift */; };
+		C5DB0B1056F7F89C9C6830AB /* SiteKeeperCADEntity.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8329694461139793496FF01B /* SiteKeeperCADEntity.swift */; };
 		C7A720FAE38A0D445517F898 /* EngineeringCalculations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CC2D88EC5B97307308301E7 /* EngineeringCalculations.swift */; };
 		C7CF257F01F79E42EC18EBB7 /* ProjectDetailMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076F9419A1D48EC057AA6CE7 /* ProjectDetailMetrics.swift */; };
 		C81A41789E8B36F67604E1BB /* CADRenderFrame.swift in Sources */ = {isa = PBXBuildFile; fileRef = F76A6BD642445157457CE1B8 /* CADRenderFrame.swift */; };
+		C83DF2380C8B5D45FD6789B8 /* DXFImportEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2B434A5D19FF73774EB91062 /* DXFImportEngine.swift */; };
 		C84F2349EC274810C90AD9F1 /* UnitDisplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B12FF8822A30A05B12994A2 /* UnitDisplayTests.swift */; };
 		CA3ADC0DA41E8279408CABA1 /* WatermarkCameraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */; };
 		CB7D4E7D361510807D02BA44 /* OperationAuditLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E3A4003E2FE77FC52F904AD /* OperationAuditLog.swift */; };
@@ -274,32 +293,34 @@
 		D03D03356416466B3349B29E /* DataHealthView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DE593EED44A3F05EB71A463B /* DataHealthView.swift */; };
 		D04E2A74B58254018A5F4409 /* NumericInputComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D799A0842127E223C6A57E4 /* NumericInputComponents.swift */; };
 		D0EF7C59332FFACEE25A95EA /* ReportBuilder+CSV.swift in Sources */ = {isa = PBXBuildFile; fileRef = 39551CE6172AA1A7E24AD1C1 /* ReportBuilder+CSV.swift */; };
+		D105BC37853D348CE14089C3 /* CADLODPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDA45A77FF26D7F20C5B9C89 /* CADLODPolicy.swift */; };
 		D1824C9DE089985A222B48CC /* ProjectDetailExportOverlayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD1656F9D9CCD32B2FD4B2DB /* ProjectDetailExportOverlayView.swift */; };
 		D1A73CA7F3CB569936A62D1D /* CalculationCoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD7AEB6F8FD2CCD32F0F1BBC /* CalculationCoreTests.swift */; };
 		D2E41464AC601FE80242CFBD /* ProjectBusinessCardsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 170C0B0C4FF2642905A80AE7 /* ProjectBusinessCardsView.swift */; };
 		D44C4731261F3C60BC677F12 /* ToolRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD78F7D40405DC8511A91F6 /* ToolRow.swift */; };
+		D4BAFABE29883C2AC4C9DF85 /* CADSpatialIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39ECC8B2113176203A396D7 /* CADSpatialIndex.swift */; };
 		D4F79037708EAEBB897A76A1 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C300676B36A45E7D4575BECF /* WidgetData.swift */; };
 		D58AD9E2F0C8579CE9936DB8 /* CADProxyObjectHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEF4AF5F9802B118448D72AC /* CADProxyObjectHandler.swift */; };
 		D648637B46DDC1F59E23238E /* CADHatchTessellator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FED9FB8ABBAC8585C3985E0 /* CADHatchTessellator.swift */; };
 		D73E8D41DAA3F96486FFBD08 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 923AE3B0FFF61161AE20DB05 /* PrivacyInfo.xcprivacy */; };
 		D7DA1BA2B0D407BA45C2C755 /* TrayFillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB26E09C695868B0D9F5D4F0 /* TrayFillView.swift */; };
-		DB26498722FA3CD0528B64EE /* CADLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 000086570EA2DE17870AF6C1 /* CADLayer.swift */; };
 		DD1F4408C8B53F2EFAAF025E /* CADOverlayEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD6C99BA8D5B3F03DBF55078 /* CADOverlayEditor.swift */; };
 		DF447ED9D5C153C96E3F2311 /* ProjectDeliveryGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63CD43E1A5E07E696A5030C /* ProjectDeliveryGuideView.swift */; };
 		E16BB697A3C6EF7A475AFA23 /* ReportBuilderPDFSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6B7697ECB30029D6A569FD /* ReportBuilderPDFSections.swift */; };
 		E3070FB52101FBFB2B0B24DF /* ExportFileURLPreparer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 297634101F9FB00324C59D76 /* ExportFileURLPreparer.swift */; };
 		E4BFD220D1934581CA0EEF5E /* ProjectContactSheets.swift in Sources */ = {isa = PBXBuildFile; fileRef = CAE16E0EDD8084F2E129AE92 /* ProjectContactSheets.swift */; };
+		E50F61737132BA59BEC19255 /* SiteKeeperCADLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3136C460A11FB279D143AFA5 /* SiteKeeperCADLayout.swift */; };
 		E523EB87430B9101AC886FD6 /* BackupOverviewSectionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5898C7E398DD42FF34A27F65 /* BackupOverviewSectionsView.swift */; };
 		E6A310CE81EB4D4FE97A8F6D /* MaterialLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E2D99A9402B863B9C900990 /* MaterialLibraryView.swift */; };
 		E857FCA546592FA87F2BC10A /* RealtimeSearchSuggestionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8C155CB1E0074FAC8F655AC4 /* RealtimeSearchSuggestionViews.swift */; };
 		E873CB9016CCE438CD51DB9C /* ConcreteCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729B93E3CE7951F8D0371388 /* ConcreteCalcView.swift */; };
+		E877D359EACEC905C524958D /* CADMatrix.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AE00B53A70648454B7EA7E9 /* CADMatrix.swift */; };
 		E8A1EDE25A86E059E0562F8D /* ProjectDetailFinanceDocumentHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D862C746AA4A9AA0DDE0B82 /* ProjectDetailFinanceDocumentHelper.swift */; };
-		E8F72C66E9A13EE962FB34C3 /* CADTextEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1363E20C0FA1B4107C35AF65 /* CADTextEngine.swift */; };
 		E9685843A4AB1C12EC8803DA /* ProjectFileSceneViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = F64E6BE994B57F732D933EB2 /* ProjectFileSceneViews.swift */; };
+		EA9DF0FB1BD9077D4DE0CD97 /* CADRenderPipeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E925F12DFCBFCDF3D890A6A /* CADRenderPipeline.swift */; };
 		EBF4DED1888F9D3A085F66E1 /* CADTransform.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBC9E61ED42673488789AF31 /* CADTransform.swift */; };
 		EC3E4972486D45F7A7E43EA5 /* ReportBuilder+HTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = 807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */; };
 		ED9522570D587CFA3CD029DC /* SearchableDatabaseView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 936128794CE6921B6814E27E /* SearchableDatabaseView.swift */; };
-		EDB8A241986FE56A890D1CAF /* CADBounds.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4C73EE95047E3F4031C539D3 /* CADBounds.swift */; };
 		EE0E82DDE3B91E90AD9469B4 /* MaterialSheetView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A7FB5700AE73DBF3DCAFD98 /* MaterialSheetView.swift */; };
 		EE8075288AA892E74D701F13 /* CADViewerToolView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7836734CF94D567B60152C50 /* CADViewerToolView.swift */; };
 		EFEB2CF9B94B6329CC96DEB2 /* CADDrawableEntityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 96529B82CC01E37917D7CA85 /* CADDrawableEntityResolver.swift */; };
@@ -311,12 +332,12 @@
 		F4249E0028EAFCD0CAC2E119 /* DashboardCardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4BDFEDAF2A0AB171A2E5AD /* DashboardCardViews.swift */; };
 		F6B60B3FDAF9A31996575662 /* RebarCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C3C185DA16C0F501CECB44 /* RebarCalcView.swift */; };
 		F6C6A41266CB9D7C2FE80F9B /* CADCanvasHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94617C16D84D986A5D1A1FA /* CADCanvasHost.swift */; };
-		F6E24D6E17A46E4A04BDA6A1 /* CADKernelDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5529A03FD4F0C85DA3CF4B99 /* CADKernelDiagnostics.swift */; };
 		F81AD0E05DA239A237835648 /* CADTextOptionsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1485AEC3B982D9A0FE3AD4EE /* CADTextOptionsPanel.swift */; };
 		F857D90A9D40F022EC4C38DB /* BackupSnapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F11CDA6D5FB30C3DD2100E2 /* BackupSnapshot.swift */; };
 		F90E5AD1BF9427CB08F4661E /* ClipboardService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1DEA49D3C2A851EF033E6B6 /* ClipboardService.swift */; };
 		FA88F755A091D61DEBFA08E6 /* QuickNoteFilePreviewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = E3EB7B84F57B933891E2486A /* QuickNoteFilePreviewController.swift */; };
 		FB17AB5AD20E51913A6A2F56 /* CADAnnotationPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8342247C8F4B7248C36D7DD /* CADAnnotationPanel.swift */; };
+		FC0760F84406149394A47EA4 /* SiteKeeperCADMatrix.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC4B22860C8E485A07C2F5FE /* SiteKeeperCADMatrix.swift */; };
 		FC94E38FFE05D025AF3587C6 /* BackupView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6AD7C64B05C239730920B245 /* BackupView.swift */; };
 /* End PBXBuildFile section */
 
@@ -359,11 +380,11 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		000086570EA2DE17870AF6C1 /* CADLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLayer.swift; sourceTree = "<group>"; };
 		004AB4F520676BBED4174F72 /* ProjectDetailFocusRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailFocusRouter.swift; sourceTree = "<group>"; };
 		0073A0CC360109AF8AF9C61F /* CADTextNormalizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextNormalizer.swift; sourceTree = "<group>"; };
 		00B7F8E0978C1287D39C046A /* SitekeeperUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperUITests.swift; sourceTree = "<group>"; };
 		02EDB998F301C7996EA03D5C /* CADXrefResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADXrefResolver.swift; sourceTree = "<group>"; };
+		03FCFA95CE0EDCC607DCD01B /* SiteKeeperCADLODPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADLODPolicy.swift; sourceTree = "<group>"; };
 		04E44847F055E52B9B8E9D5D /* ReportBuilder+PDF.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+PDF.swift"; sourceTree = "<group>"; };
 		056AB39F31672A2DCA541C45 /* DataStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStoreTests.swift; sourceTree = "<group>"; };
 		06E97AC8E24FD8556C056DFF /* FileURLDocumentExporter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileURLDocumentExporter.swift; sourceTree = "<group>"; };
@@ -371,9 +392,11 @@
 		076F9419A1D48EC057AA6CE7 /* ProjectDetailMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailMetrics.swift; sourceTree = "<group>"; };
 		07DC7D5638B5CC6FB26B2E6E /* UnsupportedCADImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedCADImportEngine.swift; sourceTree = "<group>"; };
 		083AD06C66EE1140B64674BA /* SitekeeperWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperWidget.swift; sourceTree = "<group>"; };
+		08B422F182901CAE07736B6D /* CADCanvasView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADCanvasView.swift; sourceTree = "<group>"; };
 		096A4D2087D014735E5675FC /* BackupImportExportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupImportExportTests.swift; sourceTree = "<group>"; };
 		09B078E195120CAB8FC0461B /* ZipArchiveStreamingWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipArchiveStreamingWriter.swift; sourceTree = "<group>"; };
 		0A47B45883D47DBEC4EB6F92 /* ProjectDetailRoutingHelpersTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailRoutingHelpersTests.swift; sourceTree = "<group>"; };
+		0AE00B53A70648454B7EA7E9 /* CADMatrix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMatrix.swift; sourceTree = "<group>"; };
 		0AF6234D3600524CC11D17D1 /* DomainStores.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DomainStores.swift; sourceTree = "<group>"; };
 		0E4BDFEDAF2A0AB171A2E5AD /* DashboardCardViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCardViews.swift; sourceTree = "<group>"; };
 		0F11CDA6D5FB30C3DD2100E2 /* BackupSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSnapshot.swift; sourceTree = "<group>"; };
@@ -386,11 +409,9 @@
 		12405E18C03EDC6AE05AAB28 /* CADOpenResult.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADOpenResult.swift; sourceTree = "<group>"; };
 		1312B319974269FA21A132B7 /* CADRendererProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRendererProvider.swift; sourceTree = "<group>"; };
 		1346EB245E40EE5EA3A52F12 /* ProjectDetailScaffoldSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailScaffoldSections.swift; sourceTree = "<group>"; };
-		1363E20C0FA1B4107C35AF65 /* CADTextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextEngine.swift; sourceTree = "<group>"; };
 		1485AEC3B982D9A0FE3AD4EE /* CADTextOptionsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextOptionsPanel.swift; sourceTree = "<group>"; };
 		14FA53FF67E94865E39DCF47 /* UnitConverterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitConverterTests.swift; sourceTree = "<group>"; };
 		160D944F3132C84BA9392FBE /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		164B7D8FEB13DE7CDB26581E /* CADMatrix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMatrix.swift; sourceTree = "<group>"; };
 		164BEF177F56E909B506F569 /* ProjectListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListView.swift; sourceTree = "<group>"; };
 		170C0B0C4FF2642905A80AE7 /* ProjectBusinessCardsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectBusinessCardsView.swift; sourceTree = "<group>"; };
 		1787C52081124C5137E429E8 /* BreakerSelectView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BreakerSelectView.swift; sourceTree = "<group>"; };
@@ -402,35 +423,46 @@
 		19575CC6981FFE2CBA9878F3 /* CloudBackupService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupService.swift; sourceTree = "<group>"; };
 		19927017F6DFC6A0C5518223 /* ActivityShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityShareSheet.swift; sourceTree = "<group>"; };
 		1B1D605B64067E8EB75BD803 /* FileStorageError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileStorageError.swift; sourceTree = "<group>"; };
+		1B3AB9723C10EDBBC200375D /* CADPoCCleanupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPoCCleanupTests.swift; sourceTree = "<group>"; };
 		1B9E9A6E59C005E6871292C9 /* ProjectDetailModePanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailModePanels.swift; sourceTree = "<group>"; };
 		1C4EBCD14A48B3DB6FD716AF /* SiteKeeperCADViewerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADViewerEngine.swift; sourceTree = "<group>"; };
 		1CB326235877391A5AB19570 /* sitekeeper-iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "sitekeeper-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		1CC2FD2FD620E8CEC2718637 /* CADPreviewContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPreviewContainer.swift; sourceTree = "<group>"; };
 		1D25318B363CF02D65649DDD /* TileCalcView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TileCalcView.swift; sourceTree = "<group>"; };
 		1F76D16BAAA588C3C6C5B21F /* QuickNoteDrawingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteDrawingSheet.swift; sourceTree = "<group>"; };
-		203A833811E9C3AF295A9792 /* CADRenderCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRenderCommand.swift; sourceTree = "<group>"; };
+		1FB9B1F6687B0575F50321D0 /* CADQuadTree.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADQuadTree.swift; sourceTree = "<group>"; };
 		2160350B1ECABF4523316109 /* ReportBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportBuilder.swift; sourceTree = "<group>"; };
 		216C8FFC15F9DD53AF92AF9E /* CADTextStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextStyle.swift; sourceTree = "<group>"; };
+		21AB2E9366B8854A04AB5E94 /* SiteKeeperCADRenderCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADRenderCommand.swift; sourceTree = "<group>"; };
+		23E6A99567A3D0E29F4AAEF7 /* SiteKeeperCADLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADLayer.swift; sourceTree = "<group>"; };
 		2463B432CFB59269EBFD300C /* BackupArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupArchiveService.swift; sourceTree = "<group>"; };
-		24CE4B82BE9EE342D527B8E3 /* CADLODPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLODPolicy.swift; sourceTree = "<group>"; };
+		256A856DA2B3BBF50F61A059 /* SiteKeeperCADImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADImportEngine.swift; sourceTree = "<group>"; };
 		256D1629C5EC1A3DAB1C1869 /* ProjectDetailRiskAndLogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailRiskAndLogViews.swift; sourceTree = "<group>"; };
 		297634101F9FB00324C59D76 /* ExportFileURLPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFileURLPreparer.swift; sourceTree = "<group>"; };
+		29785D312893849AAAC2AAF0 /* SiteKeeperCADTextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADTextEngine.swift; sourceTree = "<group>"; };
 		2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanelViews.swift; sourceTree = "<group>"; };
+		2B434A5D19FF73774EB91062 /* DXFImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DXFImportEngine.swift; sourceTree = "<group>"; };
+		2BB3DC368C315D7F5090423F /* CADImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADImportEngine.swift; sourceTree = "<group>"; };
 		2BFEEA5B45C9E3B9CC4C312B /* CADPerformanceTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPerformanceTrace.swift; sourceTree = "<group>"; };
 		2C3226D841448E7C5FE59FBC /* TransferLimitPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferLimitPolicyTests.swift; sourceTree = "<group>"; };
 		2CFEBE187A5D4C6B3530CED6 /* TaskProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskProgressView.swift; sourceTree = "<group>"; };
 		2D01229C310BF30CD7D5BC49 /* StorageCleanupCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCleanupCenterView.swift; sourceTree = "<group>"; };
 		2D9F1E7265C56A1656197B14 /* ProjectDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSections.swift; sourceTree = "<group>"; };
 		2E585B6365B058F99DAC2DBE /* CADTextTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextTrace.swift; sourceTree = "<group>"; };
+		2ECB1CDAB38F02D1E1C4125F /* SiteKeeperDXFImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperDXFImportEngine.swift; sourceTree = "<group>"; };
+		2ECC49508EBCF1D87A0DE6FD /* DataStoreDeletionPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStoreDeletionPolicy.swift; sourceTree = "<group>"; };
 		2F6EE4E4EDA5E6D919328BC7 /* UserPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferences.swift; sourceTree = "<group>"; };
 		2FA8472380C1DE4F76CBE5BF /* PrivacyPolicyView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PrivacyPolicyView.swift; sourceTree = "<group>"; };
 		2FBA0FAD32D417259A51D508 /* ProjectDetailStateModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailStateModels.swift; sourceTree = "<group>"; };
 		3020960542BFA06A00C6DD55 /* MaterialPriceDatabaseViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialPriceDatabaseViews.swift; sourceTree = "<group>"; };
 		3074627CBDB8F7B5B33B4E1C /* CADBlockResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADBlockResolver.swift; sourceTree = "<group>"; };
 		30F5EA4484948E6D64CC4736 /* sitekeeperTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = sitekeeperTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		3136C460A11FB279D143AFA5 /* SiteKeeperCADLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADLayout.swift; sourceTree = "<group>"; };
 		31DDC6F30C3143E9C416044E /* CADDiagnosticPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADDiagnosticPanel.swift; sourceTree = "<group>"; };
 		336009C801B064E5717D6864 /* ProjectDetailImportExportActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailImportExportActions.swift; sourceTree = "<group>"; };
 		36090225AFC1274CF3728D0F /* BackupCloudSectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCloudSectionView.swift; sourceTree = "<group>"; };
+		3655FF6F66C80F3A842BEA2A /* CADPreviewSupportModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPreviewSupportModels.swift; sourceTree = "<group>"; };
+		36B250670BE71DEBCCF19F4D /* SampleDataFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SampleDataFixture.swift; sourceTree = "<group>"; };
 		378512787117E253BCF6AAA8 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		39551CE6172AA1A7E24AD1C1 /* ReportBuilder+CSV.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+CSV.swift"; sourceTree = "<group>"; };
 		3A80C6B67AD7DB6AAF9AB06B /* ProjectFileDataModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileDataModels.swift; sourceTree = "<group>"; };
@@ -440,13 +472,14 @@
 		40ADA138D9824BC64DCDEEEE /* QuickNoteTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteTimelineView.swift; sourceTree = "<group>"; };
 		40CAC7B297EA2A7E933E48E0 /* DocumentStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStorage.swift; sourceTree = "<group>"; };
 		411BA3A20FB966EF6233DF40 /* SitekeeperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperApp.swift; sourceTree = "<group>"; };
-		41AAB0FFF35DFE0722B7DB0D /* DXFImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DXFImportEngine.swift; sourceTree = "<group>"; };
 		422908E7944F11B9948AAFF3 /* CADPath.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPath.swift; sourceTree = "<group>"; };
 		4352DA57CB946000FEB04D19 /* LaborRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaborRecordView.swift; sourceTree = "<group>"; };
 		439DF61136E3AC8C5FEA1E39 /* ProjectDetailContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailContent.swift; sourceTree = "<group>"; };
 		43FF2251ACC9E67949773AA2 /* AppStoreScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotUITests.swift; sourceTree = "<group>"; };
 		451BEF8A91226A73956E9A05 /* MaterialCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialCenterView.swift; sourceTree = "<group>"; };
 		4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreateSheet.swift; sourceTree = "<group>"; };
+		46ED2426859CCDB2F7E81B14 /* UndoableDeletionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoableDeletionCoordinatorTests.swift; sourceTree = "<group>"; };
+		47AAB79AE6AF5682ADECA74D /* SiteKeeperCADFontResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADFontResolver.swift; sourceTree = "<group>"; };
 		47F4074A64739725AEB722A5 /* sitekeeper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = sitekeeper.entitlements; sourceTree = "<group>"; };
 		4829BA0F85A62731DF2B3FD6 /* ProjectDetailSheetCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSheetCoordinator.swift; sourceTree = "<group>"; };
 		4921B6049660BCF7C260E4B8 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -457,21 +490,20 @@
 		4B55CD63C2E9554CC7D17378 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		4B9862922699CFE73B88A937 /* BackupImportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupImportCoordinator.swift; sourceTree = "<group>"; };
 		4C243BCB3973FBB52B5A961F /* IntermediateJSONImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IntermediateJSONImportEngine.swift; sourceTree = "<group>"; };
-		4C73EE95047E3F4031C539D3 /* CADBounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADBounds.swift; sourceTree = "<group>"; };
+		4C548890465502281B177C7C /* CADOpenTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADOpenTrace.swift; sourceTree = "<group>"; };
 		4CC09621F0F7D4C3B9F1B44A /* QuotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotationView.swift; sourceTree = "<group>"; };
+		4D1FD9D9EB00E051EC7FE98C /* CADFontResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADFontResolver.swift; sourceTree = "<group>"; };
 		4E5C6771F81F45FB8EB79468 /* BackupCloudTaskCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupCloudTaskCoordinator.swift; sourceTree = "<group>"; };
 		4E6B7697ECB30029D6A569FD /* ReportBuilderPDFSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportBuilderPDFSections.swift; sourceTree = "<group>"; };
 		4ECD45A2F897D83219089B55 /* ProjectWarehouseMovementMediaImportHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWarehouseMovementMediaImportHelper.swift; sourceTree = "<group>"; };
 		4FFE33C9C4928CA6DE495801 /* SiteTodoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteTodoView.swift; sourceTree = "<group>"; };
 		548F15976D950714095D768F /* WatermarkCameraToolView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraToolView.swift; sourceTree = "<group>"; };
 		54CE9C936E4195975DF82B0A /* DataStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStore.swift; sourceTree = "<group>"; };
-		5529A03FD4F0C85DA3CF4B99 /* CADKernelDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADKernelDiagnostics.swift; sourceTree = "<group>"; };
-		554384FE7734D5F79D2732C4 /* CADImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADImportEngine.swift; sourceTree = "<group>"; };
 		5652ADEB6B71009FADC83DA8 /* CADLayoutResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLayoutResolver.swift; sourceTree = "<group>"; };
 		577CF970D5F1E364293AC60E /* ProjectDetailFinanceDocumentActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailFinanceDocumentActions.swift; sourceTree = "<group>"; };
 		577D652EAB5A95D3E47B0A3D /* CADMTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMTextParser.swift; sourceTree = "<group>"; };
 		5898C7E398DD42FF34A27F65 /* BackupOverviewSectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupOverviewSectionsView.swift; sourceTree = "<group>"; };
-		59558CC771E7E994C1CBC2D2 /* CADKernelTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADKernelTypes.swift; sourceTree = "<group>"; };
+		58CEF1A0E701EB5A38C12D01 /* CADBounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADBounds.swift; sourceTree = "<group>"; };
 		597EA8B9DF31FBE377014927 /* SiteKeeperCADKernelAppViewerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADKernelAppViewerEngine.swift; sourceTree = "<group>"; };
 		59E47DA201232504FBAC8AB8 /* AsyncStorageImageViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AsyncStorageImageViews.swift; sourceTree = "<group>"; };
 		5B0FD5A007654C3185210C70 /* ProjectFileGuideComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileGuideComponents.swift; sourceTree = "<group>"; };
@@ -482,34 +514,33 @@
 		5D799A0842127E223C6A57E4 /* NumericInputComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputComponents.swift; sourceTree = "<group>"; };
 		5E3EE0F41C369597A7EF38A7 /* ProjectDetailSubpageSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSubpageSupport.swift; sourceTree = "<group>"; };
 		5E6CD5BCA1F1814F6825506C /* ProjectDetailDocumentsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailDocumentsSection.swift; sourceTree = "<group>"; };
+		5E925F12DFCBFCDF3D890A6A /* CADRenderPipeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRenderPipeline.swift; sourceTree = "<group>"; };
 		5ECB4235867FFE034E36B0B7 /* sitekeeperUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = sitekeeperUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		61F674B8E45B003886E09CC2 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		62C1F62A97A63509952B211F /* CADMeasureTool.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMeasureTool.swift; sourceTree = "<group>"; };
 		63B5A2D45F38956D8F64F932 /* CADDatabase.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADDatabase.swift; sourceTree = "<group>"; };
-		643E54C9BE78B47924C08626 /* CADLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLayout.swift; sourceTree = "<group>"; };
 		6506FA40B6293CD6C0C01A54 /* WidgetViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetViews.swift; sourceTree = "<group>"; };
 		65794FF60697C713B8D7393A /* DecimalValueObjects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DecimalValueObjects.swift; sourceTree = "<group>"; };
 		67A9BC56C5B52BC89121EDDC /* QuickNoteAttachmentViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteAttachmentViews.swift; sourceTree = "<group>"; };
 		67AAD921173C1D20D1C32EA1 /* QuoteCalculationsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuoteCalculationsTests.swift; sourceTree = "<group>"; };
 		68A81978908795373DF1E25F /* ProjectDetailAssetActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailAssetActions.swift; sourceTree = "<group>"; };
-		69623525AE7877BCF489591E /* CADFontResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADFontResolver.swift; sourceTree = "<group>"; };
 		6A66AB89ECEC918F84D3A2F7 /* StorageIssueLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageIssueLog.swift; sourceTree = "<group>"; };
 		6A6A265776C170AED0BB499B /* CADRenderTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRenderTile.swift; sourceTree = "<group>"; };
 		6A7FB5700AE73DBF3DCAFD98 /* MaterialSheetView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialSheetView.swift; sourceTree = "<group>"; };
 		6AD7C64B05C239730920B245 /* BackupView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupView.swift; sourceTree = "<group>"; };
+		6AFB36A8A6FECFA42233DBAE /* SiteKeeperCADSpatialIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADSpatialIndex.swift; sourceTree = "<group>"; };
 		6BEA54DAA09BF065D60B44EC /* RealtimeSearchSuggestions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeSearchSuggestions.swift; sourceTree = "<group>"; };
 		6C3D3698E0FA23B9AD804804 /* CADDimensionExploder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADDimensionExploder.swift; sourceTree = "<group>"; };
 		6CC2D88EC5B97307308301E7 /* EngineeringCalculations.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineeringCalculations.swift; sourceTree = "<group>"; };
 		6D1F74A5A0DBB074250CB098 /* ProjectTimelineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectTimelineView.swift; sourceTree = "<group>"; };
-		6E210BF3B6BCE2698C765157 /* CADKernelImporting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADKernelImporting.swift; sourceTree = "<group>"; };
 		6E2D99A9402B863B9C900990 /* MaterialLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialLibraryView.swift; sourceTree = "<group>"; };
-		6E5929F27D1BF3B1E7EAB4D0 /* CADUnsupportedViewerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADUnsupportedViewerEngine.swift; sourceTree = "<group>"; };
 		6E888169D4CB7E4B16315F58 /* ProjectWarehouseMovementSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWarehouseMovementSheet.swift; sourceTree = "<group>"; };
 		6EA9C71AA55008F5E9FE24F0 /* CalculatorTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculatorTabView.swift; sourceTree = "<group>"; };
 		6EAF2C96189183408C88276F /* ProjectContactRoleField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectContactRoleField.swift; sourceTree = "<group>"; };
 		6F53771B64BBF6CB0F00F648 /* CodableEnumFallbacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodableEnumFallbacks.swift; sourceTree = "<group>"; };
 		6FD40D1821A736A7A616FEC2 /* ToolboxCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolboxCatalog.swift; sourceTree = "<group>"; };
 		6FF01221CE62385EB26EE44A /* DWGGeometrySource.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWGGeometrySource.swift; sourceTree = "<group>"; };
+		7007161CEAA6B8F221A7DB7F /* CADViewerRoute.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADViewerRoute.swift; sourceTree = "<group>"; };
 		7298CD0AF72D95D616E86553 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
 		729B93E3CE7951F8D0371388 /* ConcreteCalcView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConcreteCalcView.swift; sourceTree = "<group>"; };
 		760AA521D532102AF50F99C0 /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
@@ -521,15 +552,18 @@
 		79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListSupportViews.swift; sourceTree = "<group>"; };
 		7B12FF8822A30A05B12994A2 /* UnitDisplayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitDisplayTests.swift; sourceTree = "<group>"; };
 		7E1A9D549C76B24D3FD23512 /* QuickNoteMediaPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteMediaPicker.swift; sourceTree = "<group>"; };
+		7E24078D01003BF8BE1CC931 /* CADTextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTextEngine.swift; sourceTree = "<group>"; };
 		7EC4AE541B26144C015CEF3C /* NonNegativeNumberText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NonNegativeNumberText.swift; sourceTree = "<group>"; };
 		7F291723D1A680B9EC07AAD3 /* QuickNoteVideoImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteVideoImport.swift; sourceTree = "<group>"; };
 		7FE0F2A36DA219F6DA3DB6AA /* ProjectDetailOnAppearRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailOnAppearRouter.swift; sourceTree = "<group>"; };
+		801FF7DB70BAFE0EB7E5356A /* CADRenderCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRenderCommand.swift; sourceTree = "<group>"; };
 		807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+HTML.swift"; sourceTree = "<group>"; };
-		815B970CF3CF72EF4CEB9BE1 /* SiteKeeperCADKernelRendererHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADKernelRendererHost.swift; sourceTree = "<group>"; };
 		8166E93656DD9D0549D0D3EB /* ProjectDetailContainer+AssetActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+AssetActions.swift"; sourceTree = "<group>"; };
 		81C9B271A85C9023F79D67CC /* QuotationTemplateLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotationTemplateLibraryView.swift; sourceTree = "<group>"; };
 		825145B4C09AEF7ED185BC66 /* ReceiptOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptOCRService.swift; sourceTree = "<group>"; };
 		830CE2E9C1A7446FE60436E0 /* ReportBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportBuilderTests.swift; sourceTree = "<group>"; };
+		831E094AE1DB5E9D53E5CDC3 /* CADPoCLineImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADPoCLineImportTests.swift; sourceTree = "<group>"; };
+		8329694461139793496FF01B /* SiteKeeperCADEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADEntity.swift; sourceTree = "<group>"; };
 		84032917C65A208CE3CCFAEC /* ProjectDetailBookkeepingSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailBookkeepingSection.swift; sourceTree = "<group>"; };
 		8512918BF7C87CA3AB371FA2 /* CADBlock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADBlock.swift; sourceTree = "<group>"; };
 		85133EBFECA9D509D9FA6C1D /* TaskCancellationRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCancellationRelay.swift; sourceTree = "<group>"; };
@@ -538,6 +572,7 @@
 		8929512A6B81BA48A276C2F9 /* AppUIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUIComponents.swift; sourceTree = "<group>"; };
 		8AED5AF23161E042A741AD59 /* CADViewport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADViewport.swift; sourceTree = "<group>"; };
 		8AF1FCBA4D601788018518A4 /* ProjectDetailImportFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailImportFlowCoordinator.swift; sourceTree = "<group>"; };
+		8B09F7EFFD0A96FD1A53668E /* CADLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLayout.swift; sourceTree = "<group>"; };
 		8BCB7A785DCD3B5FDDF79680 /* ProjectDetailListSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailListSections.swift; sourceTree = "<group>"; };
 		8C155CB1E0074FAC8F655AC4 /* RealtimeSearchSuggestionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeSearchSuggestionViews.swift; sourceTree = "<group>"; };
 		8D8177485D327812FA329566 /* VoltageDropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltageDropView.swift; sourceTree = "<group>"; };
@@ -567,10 +602,11 @@
 		9FD78F7D40405DC8511A91F6 /* ToolRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToolRow.swift; sourceTree = "<group>"; };
 		A14B7A3C4918D2483B8933D7 /* ProjectPackageAndStorageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectPackageAndStorageTests.swift; sourceTree = "<group>"; };
 		A1B3E721193D965E9B8038EE /* ProjectDetailFocusedItemApplier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailFocusedItemApplier.swift; sourceTree = "<group>"; };
+		A2A65EFE4ABEE72FF0E4C61C /* SiteKeeperCADBounds.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADBounds.swift; sourceTree = "<group>"; };
 		A337E0EB7D6CEEA5BDE2598B /* FilteredDeletionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FilteredDeletionTests.swift; sourceTree = "<group>"; };
+		A371824F993B927BD1F3A687 /* CADViewerEngineSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADViewerEngineSupport.swift; sourceTree = "<group>"; };
 		A4363D3D382D70C14F8E9CA2 /* ChecklistTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistTabView.swift; sourceTree = "<group>"; };
 		A4A58364364364D71FC17072 /* ProjectDetailModeSectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailModeSectionsView.swift; sourceTree = "<group>"; };
-		A4A60F6CBD3B088C295908B6 /* CADEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADEntity.swift; sourceTree = "<group>"; };
 		A4C6F8D7B8C7AA23EA37DA44 /* CADDrawingCapability.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADDrawingCapability.swift; sourceTree = "<group>"; };
 		A65AB6F66D1E31FA519F824C /* ConstructionMethodDetailEditorViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructionMethodDetailEditorViews.swift; sourceTree = "<group>"; };
 		A682D1467226751FA2D2F79F /* VisibleIconStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisibleIconStyle.swift; sourceTree = "<group>"; };
@@ -590,21 +626,21 @@
 		B1528BAAF95A38805402DFFC /* CADRegressionSuite.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRegressionSuite.swift; sourceTree = "<group>"; };
 		B1E7309A73434892E581769C /* ProjectDetailContainer+ImportActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+ImportActions.swift"; sourceTree = "<group>"; };
 		B36098099B708466E50D615D /* CalculatorInputParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculatorInputParserTests.swift; sourceTree = "<group>"; };
-		B3701EDA6238E9E6CF008C07 /* CADFallbackViewer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADFallbackViewer.swift; sourceTree = "<group>"; };
 		B3928B4B987F1D88C346E951 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
 		B5CF845B5D40A72E4EB495FD /* ProjectDetailContainer+RoutingActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+RoutingActions.swift"; sourceTree = "<group>"; };
 		B63C546A327F5A41D74E032D /* CADExternalSDKDrawing+Bridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CADExternalSDKDrawing+Bridge.swift"; sourceTree = "<group>"; };
 		BA79110E1F5A0CB6C7E3C4C7 /* EngineeringRecommendationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EngineeringRecommendationTests.swift; sourceTree = "<group>"; };
 		BB59CEBE7ADADAB3DA34B206 /* MaterialPriceSpikeDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialPriceSpikeDetailView.swift; sourceTree = "<group>"; };
+		BC4B22860C8E485A07C2F5FE /* SiteKeeperCADMatrix.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADMatrix.swift; sourceTree = "<group>"; };
 		BC69EC4DED9A191C70CA551C /* ZipArchiveBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ZipArchiveBuilder.swift; sourceTree = "<group>"; };
 		BD1656F9D9CCD32B2FD4B2DB /* ProjectDetailExportOverlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailExportOverlayView.swift; sourceTree = "<group>"; };
 		BD27E55A07E5EFA317299CC5 /* DashboardSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardSupportViews.swift; sourceTree = "<group>"; };
 		BD7AEB6F8FD2CCD32F0F1BBC /* CalculationCoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculationCoreTests.swift; sourceTree = "<group>"; };
-		BF923F1C09D0B83A8DC4CD77 /* CADKernelPreviewHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADKernelPreviewHost.swift; sourceTree = "<group>"; };
 		C0C79A1F094A55D9CA2A1590 /* ProjectDetailContainer+FinanceActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+FinanceActions.swift"; sourceTree = "<group>"; };
 		C165A68F21698CA58E533BED /* ProjectWarehouseRowViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectWarehouseRowViews.swift; sourceTree = "<group>"; };
 		C1DEA49D3C2A851EF033E6B6 /* ClipboardService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipboardService.swift; sourceTree = "<group>"; };
 		C300676B36A45E7D4575BECF /* WidgetData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetData.swift; sourceTree = "<group>"; };
+		C39ECC8B2113176203A396D7 /* CADSpatialIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADSpatialIndex.swift; sourceTree = "<group>"; };
 		C46D8C098152E54F70DDA00E /* ProjectFileSearchIndexService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileSearchIndexService.swift; sourceTree = "<group>"; };
 		C66A02BD4BA7724759F83B3C /* LightingCircuitPlannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingCircuitPlannerView.swift; sourceTree = "<group>"; };
 		C6FC4AF878BC0C9022241EFE /* CADDrawingDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADDrawingDiagnostics.swift; sourceTree = "<group>"; };
@@ -616,9 +652,10 @@
 		CB64BDF37EB439F8D4FF9F39 /* ExternalCADSDKImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExternalCADSDKImportEngine.swift; sourceTree = "<group>"; };
 		CBBB43AA23452BC5D19E0C23 /* ConstructionMethodDraftStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructionMethodDraftStore.swift; sourceTree = "<group>"; };
 		CBC9E61ED42673488789AF31 /* CADTransform.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADTransform.swift; sourceTree = "<group>"; };
+		CC2A4A24E666AA548F445460 /* CADEntity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADEntity.swift; sourceTree = "<group>"; };
 		CC69B939A08709BFEF306083 /* ProjectFinancialMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFinancialMetrics.swift; sourceTree = "<group>"; };
-		CD3B2EA4310966473BAB3BDF /* CADSpatialIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADSpatialIndex.swift; sourceTree = "<group>"; };
 		CD6C99BA8D5B3F03DBF55078 /* CADOverlayEditor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADOverlayEditor.swift; sourceTree = "<group>"; };
+		CDA45A77FF26D7F20C5B9C89 /* CADLODPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLODPolicy.swift; sourceTree = "<group>"; };
 		CDDB2E1BB40FB83D3E3918A5 /* ProjectDetailDrawingHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailDrawingHelper.swift; sourceTree = "<group>"; };
 		CE7F26FFAE58321ADA4A2811 /* ProjectDocumentScannerBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDocumentScannerBridge.swift; sourceTree = "<group>"; };
 		D091D4C56593CCBB543115E5 /* CloudBackupPolicy.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CloudBackupPolicy.swift; sourceTree = "<group>"; };
@@ -626,10 +663,14 @@
 		D21E85AB36B7CB445235DF49 /* LightingCalcView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LightingCalcView.swift; sourceTree = "<group>"; };
 		D328E2BFB846539A1D5581BC /* ContactPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactPickerView.swift; sourceTree = "<group>"; };
 		D72EFBF67240B997CEC61202 /* ProjectContactDatabaseView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectContactDatabaseView.swift; sourceTree = "<group>"; };
+		D82E2283136A15DFFFA95A84 /* CADViewerToolbar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADViewerToolbar.swift; sourceTree = "<group>"; };
+		D99CBC12507525742FEA0EE5 /* LibreDWGNativeImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LibreDWGNativeImportEngine.swift; sourceTree = "<group>"; };
+		D9A462DE85E9B863BCF29121 /* CADLayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADLayer.swift; sourceTree = "<group>"; };
 		D9B07A6B567A6E10060B8B0F /* QuickNoteImportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteImportTests.swift; sourceTree = "<group>"; };
 		D9C014D4D4B4A893B9BFD661 /* ChecklistToolboxComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChecklistToolboxComponents.swift; sourceTree = "<group>"; };
 		DA75CA804E78E5F141EE268A /* PhotoCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCache.swift; sourceTree = "<group>"; };
 		DB26E09C695868B0D9F5D4F0 /* TrayFillView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrayFillView.swift; sourceTree = "<group>"; };
+		DCF37AF289DFD24B610E4460 /* CADViewerContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADViewerContainer.swift; sourceTree = "<group>"; };
 		DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectListFiltersSection.swift; sourceTree = "<group>"; };
 		DDCBC035A5596CCFF407549F /* MaterialListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialListView.swift; sourceTree = "<group>"; };
 		DDEBAA98C89A19F5CD5E5CC1 /* ProjectDetailExportWorkflow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailExportWorkflow.swift; sourceTree = "<group>"; };
@@ -660,6 +701,7 @@
 		F36707F18374E17865432223 /* CADSHXFontMapping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADSHXFontMapping.swift; sourceTree = "<group>"; };
 		F3AD084787DBF24842A6B094 /* SearchableFilter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchableFilter.swift; sourceTree = "<group>"; };
 		F4B9F77270692F5CABB94EE7 /* SystemContactPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SystemContactPicker.swift; sourceTree = "<group>"; };
+		F4CF6CAC42D6E665376720E7 /* CADMetalRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMetalRenderer.swift; sourceTree = "<group>"; };
 		F59F2A0151E06AA7AF3A8FCB /* DWGOpenPipelineTrace.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWGOpenPipelineTrace.swift; sourceTree = "<group>"; };
 		F5CDEDAB1FB1901FFFA144B9 /* ProjectModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectModels.swift; sourceTree = "<group>"; };
 		F5FE553E470FAD208145B486 /* UnitConverterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitConverterView.swift; sourceTree = "<group>"; };
@@ -691,18 +733,6 @@
 				DF1D19FA8ABABCC63B7823BD /* Localizable.strings */,
 			);
 			path = Resources;
-			sourceTree = "<group>";
-		};
-		12CFD4C738358D4B8242420A /* CADKernel */ = {
-			isa = PBXGroup;
-			children = (
-				5529A03FD4F0C85DA3CF4B99 /* CADKernelDiagnostics.swift */,
-				6E210BF3B6BCE2698C765157 /* CADKernelImporting.swift */,
-				BF923F1C09D0B83A8DC4CD77 /* CADKernelPreviewHost.swift */,
-				59558CC771E7E994C1CBC2D2 /* CADKernelTypes.swift */,
-				815B970CF3CF72EF4CEB9BE1 /* SiteKeeperCADKernelRendererHost.swift */,
-			);
-			path = CADKernel;
 			sourceTree = "<group>";
 		};
 		15F366C31DFA2FB9E9A63E8A /* Helpers */ = {
@@ -746,6 +776,20 @@
 			path = Features;
 			sourceTree = "<group>";
 		};
+		2877A4C1B7C0D178BBB7620F /* CAD */ = {
+			isa = PBXGroup;
+			children = (
+				EF681FE9E56DAE501C27C123 /* Core */,
+				DF3B80F6127F3F89FE61D459 /* Diagnostics */,
+				AED882EE8F5223CAFD0EB727 /* Import */,
+				EDDED279FA3D0AD72485E89B /* Render */,
+				56692B257060930190C9DE6C /* Spatial */,
+				EA84A3FB53C76B5FE48CC504 /* Text */,
+				A60C8946E34316D0311E8F50 /* Viewer */,
+			);
+			path = CAD;
+			sourceTree = "<group>";
+		};
 		2F4469A7D025454F1A1D0D26 = {
 			isa = PBXGroup;
 			children = (
@@ -772,14 +816,23 @@
 		480DAAE72BEF430C5D256170 /* Geometry */ = {
 			isa = PBXGroup;
 			children = (
-				4C73EE95047E3F4031C539D3 /* CADBounds.swift */,
-				164B7D8FEB13DE7CDB26581E /* CADMatrix.swift */,
 				422908E7944F11B9948AAFF3 /* CADPath.swift */,
 				17E453112969845E2FF2F663 /* CADPoint.swift */,
 				CBC9E61ED42673488789AF31 /* CADTransform.swift */,
 				C71A5693B24073F30CE68A06 /* CADVector.swift */,
+				A2A65EFE4ABEE72FF0E4C61C /* SiteKeeperCADBounds.swift */,
+				BC4B22860C8E485A07C2F5FE /* SiteKeeperCADMatrix.swift */,
 			);
 			path = Geometry;
+			sourceTree = "<group>";
+		};
+		56692B257060930190C9DE6C /* Spatial */ = {
+			isa = PBXGroup;
+			children = (
+				1FB9B1F6687B0575F50321D0 /* CADQuadTree.swift */,
+				C39ECC8B2113176203A396D7 /* CADSpatialIndex.swift */,
+			);
+			path = Spatial;
 			sourceTree = "<group>";
 		};
 		658C34CCBABDF5045209EF76 /* Viewer */ = {
@@ -796,13 +849,13 @@
 			children = (
 				8512918BF7C87CA3AB371FA2 /* CADBlock.swift */,
 				63B5A2D45F38956D8F64F932 /* CADDatabase.swift */,
-				A4A60F6CBD3B088C295908B6 /* CADEntity.swift */,
 				794CF6D3B9266AD8C446DB53 /* CADFile.swift */,
-				000086570EA2DE17870AF6C1 /* CADLayer.swift */,
-				643E54C9BE78B47924C08626 /* CADLayout.swift */,
 				12405E18C03EDC6AE05AAB28 /* CADOpenResult.swift */,
 				216C8FFC15F9DD53AF92AF9E /* CADTextStyle.swift */,
 				8AED5AF23161E042A741AD59 /* CADViewport.swift */,
+				8329694461139793496FF01B /* SiteKeeperCADEntity.swift */,
+				23E6A99567A3D0E29F4AAEF7 /* SiteKeeperCADLayer.swift */,
+				3136C460A11FB279D143AFA5 /* SiteKeeperCADLayout.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -830,13 +883,13 @@
 			isa = PBXGroup;
 			children = (
 				B63C546A327F5A41D74E032D /* CADExternalSDKDrawing+Bridge.swift */,
-				554384FE7734D5F79D2732C4 /* CADImportEngine.swift */,
 				97555A08343B75DFF5B7EB40 /* DWGGeometryImportEngine.swift */,
 				9141345E99FD02D876A191E5 /* DWGImportEngine.swift */,
 				F08A769E0CBB152A0E36B30F /* DWGSidecarJSONGeometryAdapter.swift */,
-				41AAB0FFF35DFE0722B7DB0D /* DXFImportEngine.swift */,
 				CB64BDF37EB439F8D4FF9F39 /* ExternalCADSDKImportEngine.swift */,
 				4C243BCB3973FBB52B5A961F /* IntermediateJSONImportEngine.swift */,
+				256A856DA2B3BBF50F61A059 /* SiteKeeperCADImportEngine.swift */,
+				2ECB1CDAB38F02D1E1C4125F /* SiteKeeperDXFImportEngine.swift */,
 				07DC7D5638B5CC6FB26B2E6E /* UnsupportedCADImportEngine.swift */,
 				90712668D065400D235D2493 /* DWG */,
 			);
@@ -847,6 +900,8 @@
 			isa = PBXGroup;
 			children = (
 				096A4D2087D014735E5675FC /* BackupImportExportTests.swift */,
+				1B3AB9723C10EDBBC200375D /* CADPoCCleanupTests.swift */,
+				831E094AE1DB5E9D53E5CDC3 /* CADPoCLineImportTests.swift */,
 				BD7AEB6F8FD2CCD32F0F1BBC /* CalculationCoreTests.swift */,
 				B36098099B708466E50D615D /* CalculatorInputParserTests.swift */,
 				FAB0D2ED4E970D9D0BE22EB7 /* CircuitPlanExportTests.swift */,
@@ -865,6 +920,7 @@
 				67AAD921173C1D20D1C32EA1 /* QuoteCalculationsTests.swift */,
 				830CE2E9C1A7446FE60436E0 /* ReportBuilderTests.swift */,
 				2C3226D841448E7C5FE59FBC /* TransferLimitPolicyTests.swift */,
+				46ED2426859CCDB2F7E81B14 /* UndoableDeletionCoordinatorTests.swift */,
 				14FA53FF67E94865E39DCF47 /* UnitConverterTests.swift */,
 				7B12FF8822A30A05B12994A2 /* UnitDisplayTests.swift */,
 				E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */,
@@ -890,14 +946,14 @@
 			isa = PBXGroup;
 			children = (
 				5CEDDFD7BC4749B701E1CEA2 /* CADCanvas2DRenderer.swift */,
-				24CE4B82BE9EE342D527B8E3 /* CADLODPolicy.swift */,
 				3F56607B224A251273DE7A73 /* CADRenderCache.swift */,
-				203A833811E9C3AF295A9792 /* CADRenderCommand.swift */,
 				F086F8AB3D9044C89AE5379A /* CADRenderEngine.swift */,
 				F76A6BD642445157457CE1B8 /* CADRenderFrame.swift */,
 				E78A30F8ED1B90B405B1CD67 /* CADRenderOptions.swift */,
 				6A6A265776C170AED0BB499B /* CADRenderTile.swift */,
-				CD3B2EA4310966473BAB3BDF /* CADSpatialIndex.swift */,
+				03FCFA95CE0EDCC607DCD01B /* SiteKeeperCADLODPolicy.swift */,
+				21AB2E9366B8854A04AB5E94 /* SiteKeeperCADRenderCommand.swift */,
+				6AFB36A8A6FECFA42233DBAE /* SiteKeeperCADSpatialIndex.swift */,
 			);
 			path = Render;
 			sourceTree = "<group>";
@@ -905,13 +961,13 @@
 		891BC5897B08AE5B29D6E699 /* Text */ = {
 			isa = PBXGroup;
 			children = (
-				69623525AE7877BCF489591E /* CADFontResolver.swift */,
 				577D652EAB5A95D3E47B0A3D /* CADMTextParser.swift */,
 				F36707F18374E17865432223 /* CADSHXFontMapping.swift */,
 				5D560AB9A24AF7EE2A88AFC6 /* CADTextDecoder.swift */,
-				1363E20C0FA1B4107C35AF65 /* CADTextEngine.swift */,
 				0073A0CC360109AF8AF9C61F /* CADTextNormalizer.swift */,
 				2E585B6365B058F99DAC2DBE /* CADTextTrace.swift */,
+				47AAB79AE6AF5682ADECA74D /* SiteKeeperCADFontResolver.swift */,
+				29785D312893849AAAC2AAF0 /* SiteKeeperCADTextEngine.swift */,
 			);
 			path = Text;
 			sourceTree = "<group>";
@@ -945,11 +1001,12 @@
 				F7984859CFCBE7202906F23C /* CADRemoteDWGConversionAdapter.swift */,
 				9C8870374B211568F2B454D5 /* CADRendererBootstrap.swift */,
 				1312B319974269FA21A132B7 /* CADRendererProvider.swift */,
-				6E5929F27D1BF3B1E7EAB4D0 /* CADUnsupportedViewerEngine.swift */,
+				A371824F993B927BD1F3A687 /* CADViewerEngineSupport.swift */,
 				C1DEA49D3C2A851EF033E6B6 /* ClipboardService.swift */,
 				D091D4C56593CCBB543115E5 /* CloudBackupPolicy.swift */,
 				19575CC6981FFE2CBA9878F3 /* CloudBackupService.swift */,
 				54CE9C936E4195975DF82B0A /* DataStore.swift */,
+				2ECC49508EBCF1D87A0DE6FD /* DataStoreDeletionPolicy.swift */,
 				40CAC7B297EA2A7E933E48E0 /* DocumentStorage.swift */,
 				0AF6234D3600524CC11D17D1 /* DomainStores.swift */,
 				297634101F9FB00324C59D76 /* ExportFileURLPreparer.swift */,
@@ -972,6 +1029,7 @@
 				04E44847F055E52B9B8E9D5D /* ReportBuilder+PDF.swift */,
 				4E6B7697ECB30029D6A569FD /* ReportBuilderPDFSections.swift */,
 				121682DA41D443B8F5798D21 /* ReportBuilderTypes.swift */,
+				36B250670BE71DEBCCF19F4D /* SampleDataFixture.swift */,
 				597EA8B9DF31FBE377014927 /* SiteKeeperCADKernelAppViewerEngine.swift */,
 				6A66AB89ECEC918F84D3A2F7 /* StorageIssueLog.swift */,
 				99A05742820D2AE76B133AF4 /* WidgetSharedModels.swift */,
@@ -979,6 +1037,15 @@
 				09B078E195120CAB8FC0461B /* ZipArchiveStreamingWriter.swift */,
 			);
 			path = Services;
+			sourceTree = "<group>";
+		};
+		A60C8946E34316D0311E8F50 /* Viewer */ = {
+			isa = PBXGroup;
+			children = (
+				DCF37AF289DFD24B610E4460 /* CADViewerContainer.swift */,
+				D82E2283136A15DFFFA95A84 /* CADViewerToolbar.swift */,
+			);
+			path = Viewer;
 			sourceTree = "<group>";
 		};
 		A848ACC9D34A7AB2FC67E6FC /* 随手记 */ = {
@@ -1023,6 +1090,16 @@
 				00B7F8E0978C1287D39C046A /* SitekeeperUITests.swift */,
 			);
 			path = UITests;
+			sourceTree = "<group>";
+		};
+		AED882EE8F5223CAFD0EB727 /* Import */ = {
+			isa = PBXGroup;
+			children = (
+				2BB3DC368C315D7F5090423F /* CADImportEngine.swift */,
+				2B434A5D19FF73774EB91062 /* DXFImportEngine.swift */,
+				D99CBC12507525742FEA0EE5 /* LibreDWGNativeImportEngine.swift */,
+			);
+			path = Import;
 			sourceTree = "<group>";
 		};
 		B06BC2306F71015424F02A37 /* 我的 */ = {
@@ -1114,6 +1191,14 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
+		DF3B80F6127F3F89FE61D459 /* Diagnostics */ = {
+			isa = PBXGroup;
+			children = (
+				4C548890465502281B177C7C /* CADOpenTrace.swift */,
+			);
+			path = Diagnostics;
+			sourceTree = "<group>";
+		};
 		E38A87072DAA5030B570974B /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -1131,11 +1216,12 @@
 				A8342247C8F4B7248C36D7DD /* CADAnnotationPanel.swift */,
 				A94617C16D84D986A5D1A1FA /* CADCanvasHost.swift */,
 				31DDC6F30C3143E9C416044E /* CADDiagnosticPanel.swift */,
-				B3701EDA6238E9E6CF008C07 /* CADFallbackViewer.swift */,
 				F885A3CA8372AF6B7060ECD7 /* CADMeasurementPanel.swift */,
 				CD6C99BA8D5B3F03DBF55078 /* CADOverlayEditor.swift */,
 				1CC2FD2FD620E8CEC2718637 /* CADPreviewContainer.swift */,
+				3655FF6F66C80F3A842BEA2A /* CADPreviewSupportModels.swift */,
 				1485AEC3B982D9A0FE3AD4EE /* CADTextOptionsPanel.swift */,
+				7007161CEAA6B8F221A7DB7F /* CADViewerRoute.swift */,
 				C7F62A8B730515A843BC20D3 /* DailyLogComposerSections.swift */,
 				EFDEBF7A43640538111CEE0E /* DailyLogSupportViews.swift */,
 				E16B009A5ED41D4A70FBCB92 /* DailyLogView.swift */,
@@ -1225,10 +1311,43 @@
 			path = "计算";
 			sourceTree = "<group>";
 		};
+		EA84A3FB53C76B5FE48CC504 /* Text */ = {
+			isa = PBXGroup;
+			children = (
+				4D1FD9D9EB00E051EC7FE98C /* CADFontResolver.swift */,
+				7E24078D01003BF8BE1CC931 /* CADTextEngine.swift */,
+			);
+			path = Text;
+			sourceTree = "<group>";
+		};
+		EDDED279FA3D0AD72485E89B /* Render */ = {
+			isa = PBXGroup;
+			children = (
+				08B422F182901CAE07736B6D /* CADCanvasView.swift */,
+				CDA45A77FF26D7F20C5B9C89 /* CADLODPolicy.swift */,
+				F4CF6CAC42D6E665376720E7 /* CADMetalRenderer.swift */,
+				801FF7DB70BAFE0EB7E5356A /* CADRenderCommand.swift */,
+				5E925F12DFCBFCDF3D890A6A /* CADRenderPipeline.swift */,
+			);
+			path = Render;
+			sourceTree = "<group>";
+		};
+		EF681FE9E56DAE501C27C123 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				58CEF1A0E701EB5A38C12D01 /* CADBounds.swift */,
+				CC2A4A24E666AA548F445460 /* CADEntity.swift */,
+				D9A462DE85E9B863BCF29121 /* CADLayer.swift */,
+				8B09F7EFFD0A96FD1A53668E /* CADLayout.swift */,
+				0AE00B53A70648454B7EA7E9 /* CADMatrix.swift */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
 		EFA35CE64993FAC4E62BAF1D /* Shared */ = {
 			isa = PBXGroup;
 			children = (
-				12CFD4C738358D4B8242420A /* CADKernel */,
+				2877A4C1B7C0D178BBB7620F /* CAD */,
 				15F366C31DFA2FB9E9A63E8A /* Helpers */,
 				6FA9D72B6821973A5290A74D /* Models */,
 				A367C11C92327E478B980675 /* Services */,
@@ -1294,6 +1413,7 @@
 			buildConfigurationList = 7A7516E08558652486C458D2 /* Build configuration list for PBXNativeTarget "sitekeeper-iOS" */;
 			buildPhases = (
 				C4CD184EFA19749A0CBE1AA2 /* CAD Legacy Bridge Guard */,
+				0A4D1B0604D10882EB511677 /* CAD PoC Cleanup Guard */,
 				18744420708BC75C575D8853 /* Sources */,
 				61ED3944B6C755DFF82D21A7 /* Resources */,
 				E271D515C47589B4A09B4D01 /* Embed Foundation Extensions */,
@@ -1399,6 +1519,25 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		0A4D1B0604D10882EB511677 /* CAD PoC Cleanup Guard */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "CAD PoC Cleanup Guard";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/scripts/release/check_cad_poc_clean.sh\"\n";
+		};
 		C4CD184EFA19749A0CBE1AA2 /* CAD Legacy Bridge Guard */ = {
 			isa = PBXShellScriptBuildPhase;
 			alwaysOutOfDate = 1;
@@ -1445,68 +1584,72 @@
 				FB17AB5AD20E51913A6A2F56 /* CADAnnotationPanel.swift in Sources */,
 				86F7267546DD1D570C41B579 /* CADBlock.swift in Sources */,
 				2785ADA59E63BD7693A2E7BE /* CADBlockResolver.swift in Sources */,
-				EDB8A241986FE56A890D1CAF /* CADBounds.swift in Sources */,
+				94381B6962E707C2B1AB4934 /* CADBounds.swift in Sources */,
 				54BE76D20927B0051A2DF8F1 /* CADCanvas2DRenderer.swift in Sources */,
 				F6C6A41266CB9D7C2FE80F9B /* CADCanvasHost.swift in Sources */,
+				6FAC977D7D5B657AADFF8A8B /* CADCanvasView.swift in Sources */,
 				82BEA3C3FBDFBD6BAA05F7A5 /* CADDatabase.swift in Sources */,
 				B85F9CBA5549C9E8884DE7B4 /* CADDiagnosticPanel.swift in Sources */,
 				3055593B57404D1E97460981 /* CADDimensionExploder.swift in Sources */,
 				EFEB2CF9B94B6329CC96DEB2 /* CADDrawableEntityResolver.swift in Sources */,
 				86900C6DB79232015EEC1168 /* CADDrawingCapability.swift in Sources */,
 				92A973F9CEBAEA64CC67C38D /* CADDrawingDiagnostics.swift in Sources */,
-				541A87D41B3E4ABE0CD43BDE /* CADEntity.swift in Sources */,
+				5C96BE30CFBB865E35B4BEAC /* CADEntity.swift in Sources */,
 				B20B6BDDDEC5281498DFE610 /* CADExternalSDKDrawing+Bridge.swift in Sources */,
-				B73917C2956BF653F8EE95C3 /* CADFallbackViewer.swift in Sources */,
 				5C6436E073E162ED314A41F3 /* CADFile.swift in Sources */,
-				956509DB9668ABE8A97455A7 /* CADFontResolver.swift in Sources */,
+				A05B8CE64AA04A63094E3AA6 /* CADFontResolver.swift in Sources */,
 				D648637B46DDC1F59E23238E /* CADHatchTessellator.swift in Sources */,
-				306D1C11F315EAC9055769A2 /* CADImportEngine.swift in Sources */,
-				F6E24D6E17A46E4A04BDA6A1 /* CADKernelDiagnostics.swift in Sources */,
-				8055B64786A24122DE5C213F /* CADKernelImporting.swift in Sources */,
-				1BD3FCF0A0D36BA27ECEEC3B /* CADKernelPreviewHost.swift in Sources */,
-				3A8D9E5532AACF19EDCFD95A /* CADKernelTypes.swift in Sources */,
-				488A971994E94C7296C195F8 /* CADLODPolicy.swift in Sources */,
-				DB26498722FA3CD0528B64EE /* CADLayer.swift in Sources */,
-				50434966F61E99820D7B39D1 /* CADLayout.swift in Sources */,
+				0512791181B5A74718272AB1 /* CADImportEngine.swift in Sources */,
+				D105BC37853D348CE14089C3 /* CADLODPolicy.swift in Sources */,
+				147D46AD0F82C18DD62C5D86 /* CADLayer.swift in Sources */,
+				2018DDDE0167CE0272544D48 /* CADLayout.swift in Sources */,
 				0568F3D0D3EBE629ECC1CB2F /* CADLayoutResolver.swift in Sources */,
 				B921AF719CFAA67FAAF4C98E /* CADMTextParser.swift in Sources */,
 				F0C90245E9D3E479841B1E7A /* CADMarkupCoordinateMapper.swift in Sources */,
-				3918ECCB271B292F362B9ADC /* CADMatrix.swift in Sources */,
+				E877D359EACEC905C524958D /* CADMatrix.swift in Sources */,
 				35D7DCF5BDFCAA69BAAA68CC /* CADMeasureTool.swift in Sources */,
 				C1614093800FC0635A95B49A /* CADMeasurementPanel.swift in Sources */,
+				53EEDCD466EB02798FD1E8EC /* CADMetalRenderer.swift in Sources */,
 				AA68C2D130525D7D219AF2DA /* CADOpenResult.swift in Sources */,
+				980E055123C78A5682D250FD /* CADOpenTrace.swift in Sources */,
 				DD1F4408C8B53F2EFAAF025E /* CADOverlayEditor.swift in Sources */,
 				5A61805EA663F9181B0288ED /* CADPath.swift in Sources */,
 				1B5C6C119D9772EBD0713EDA /* CADPerformanceTrace.swift in Sources */,
 				45609D0DBA9EE1A14D88C3E0 /* CADPoint.swift in Sources */,
 				57CEFA84DCE35B810694D75D /* CADPreviewContainer.swift in Sources */,
+				B3F479E4F0D86D00B3E72763 /* CADPreviewSupportModels.swift in Sources */,
 				D58AD9E2F0C8579CE9936DB8 /* CADProxyObjectHandler.swift in Sources */,
+				26D1F129362603B91BB2883C /* CADQuadTree.swift in Sources */,
 				9FABF647436374995AE0F1FD /* CADRegressionSuite.swift in Sources */,
 				785B6354FB155978B52DE5BE /* CADRemoteDWGConversionAdapter.swift in Sources */,
 				41F24DD9C23ADBF1754A90C1 /* CADRenderCache.swift in Sources */,
-				644CC838958D78EDB00E862E /* CADRenderCommand.swift in Sources */,
+				6C74EC307CB972612BB61A6E /* CADRenderCommand.swift in Sources */,
 				A0260015336FA77F61D80244 /* CADRenderEngine.swift in Sources */,
 				C81A41789E8B36F67604E1BB /* CADRenderFrame.swift in Sources */,
 				5A92A7A3B300FD82C3C2F12E /* CADRenderOptions.swift in Sources */,
+				EA9DF0FB1BD9077D4DE0CD97 /* CADRenderPipeline.swift in Sources */,
 				3AFFF4B7D060F17120D88A0D /* CADRenderTile.swift in Sources */,
 				2AF840CA9F346F076F3131CD /* CADRendererBootstrap.swift in Sources */,
 				23229396833F8ADEDCA0F918 /* CADRendererProvider.swift in Sources */,
 				6EB67D9D9842D2D83D4B000C /* CADSHXFontMapping.swift in Sources */,
 				06AC7FD3E979D85D1D28EBC9 /* CADSelectionEngine.swift in Sources */,
-				768C4708C11E2079413A574C /* CADSpatialIndex.swift in Sources */,
+				D4BAFABE29883C2AC4C9DF85 /* CADSpatialIndex.swift in Sources */,
 				44CC108D238A540792B0FC22 /* CADSplineTessellator.swift in Sources */,
 				3EB17416FE44FAFCDDC4A7BC /* CADTextDecoder.swift in Sources */,
-				E8F72C66E9A13EE962FB34C3 /* CADTextEngine.swift in Sources */,
+				A1B8853638BF156DDEC8E69D /* CADTextEngine.swift in Sources */,
 				F11B6D110FD59501D5F09C54 /* CADTextNormalizer.swift in Sources */,
 				F81AD0E05DA239A237835648 /* CADTextOptionsPanel.swift in Sources */,
 				AC9D2C6130D5D5820CA0E86C /* CADTextSearchIndex.swift in Sources */,
 				75149C7E388C6FDEC8B6603E /* CADTextStyle.swift in Sources */,
 				6FA30098D98B2681987684C5 /* CADTextTrace.swift in Sources */,
 				EBF4DED1888F9D3A085F66E1 /* CADTransform.swift in Sources */,
-				AB05EBB625172741421F4945 /* CADUnsupportedViewerEngine.swift in Sources */,
 				26CE22B6A2F75927817F3365 /* CADVector.swift in Sources */,
+				6EFCE2D98D39678A3D91351A /* CADViewerContainer.swift in Sources */,
 				74D1E8A8AF03BF85B03830B0 /* CADViewerEngine.swift in Sources */,
+				63591F8FE7EF6FCBBBF93166 /* CADViewerEngineSupport.swift in Sources */,
+				C1F485CF1A25CB64C893B01A /* CADViewerRoute.swift in Sources */,
 				EE8075288AA892E74D701F13 /* CADViewerToolView.swift in Sources */,
+				4848F1C3E9EB3131B8DF3E0A /* CADViewerToolbar.swift in Sources */,
 				1050537543A039139A1076A0 /* CADViewport.swift in Sources */,
 				AC62C3C9E0F467AB034BBA08 /* CADXrefResolver.swift in Sources */,
 				3501644042F6769D1F431244 /* CalculationValidator.swift in Sources */,
@@ -1533,7 +1676,7 @@
 				8F6015C775448030C00115E8 /* DWGImportEngine.swift in Sources */,
 				AB89D80CF013F712799D44B8 /* DWGOpenPipelineTrace.swift in Sources */,
 				2C1933FA85E6651BA8E46C13 /* DWGSidecarJSONGeometryAdapter.swift in Sources */,
-				74CA85F4692311D0F663A10A /* DXFImportEngine.swift in Sources */,
+				C83DF2380C8B5D45FD6789B8 /* DXFImportEngine.swift in Sources */,
 				8A08C85B6C1207413DA5F01D /* DailyLogComposerSections.swift in Sources */,
 				122BBE596EB0BAE9CA0D0B5B /* DailyLogSupportViews.swift in Sources */,
 				984AF17365443FFFBA9EF137 /* DailyLogView.swift in Sources */,
@@ -1545,6 +1688,7 @@
 				D03D03356416466B3349B29E /* DataHealthView.swift in Sources */,
 				75305825E0E90D8C13116FBA /* DataManagementView.swift in Sources */,
 				6ADDB3C7E96AF9526B4B0F94 /* DataStore.swift in Sources */,
+				3247D45C1DB261A9BA7A4191 /* DataStoreDeletionPolicy.swift in Sources */,
 				B90B629DD219AFE2E8E010F8 /* DataValueParser.swift in Sources */,
 				34D921DA76C7F04474E078ED /* DecimalValueObjects.swift in Sources */,
 				477AA69E18BE5214FA62A4F4 /* DocumentStorage.swift in Sources */,
@@ -1563,6 +1707,7 @@
 				CEC5B6DFCA12B2B145DA2D54 /* ImportLimitPolicy.swift in Sources */,
 				B202F7A3B29AB12627D3BF13 /* IntermediateJSONImportEngine.swift in Sources */,
 				BCF179337A85F91A8F7FBF55 /* LaborRecordView.swift in Sources */,
+				6666AFC45AAE2CEF4084127C /* LibreDWGNativeImportEngine.swift in Sources */,
 				6ACE22F2DC641FA58263E4A2 /* LightingCalcView.swift in Sources */,
 				8D01B7594BC0AA1EAB5A31DC /* LightingCircuitPlannerView.swift in Sources */,
 				CED810E4219414097B98A87B /* MaterialCategoryManagementView.swift in Sources */,
@@ -1672,12 +1817,24 @@
 				E16BB697A3C6EF7A475AFA23 /* ReportBuilderPDFSections.swift in Sources */,
 				553FF60A3F81EE9BFDAA1A28 /* ReportBuilderTypes.swift in Sources */,
 				919BD1083ED7A1F4C37084E7 /* RootView.swift in Sources */,
+				70087F2ADDB605A0A156BD13 /* SampleDataFixture.swift in Sources */,
 				ED9522570D587CFA3CD029DC /* SearchableDatabaseView.swift in Sources */,
 				67249F2E77B93CF444AB2A4C /* SearchableFilter.swift in Sources */,
 				5225B45566E4195017AE8B17 /* SettingsView.swift in Sources */,
+				86DED75A16D035170A99A8DC /* SiteKeeperCADBounds.swift in Sources */,
+				C5DB0B1056F7F89C9C6830AB /* SiteKeeperCADEntity.swift in Sources */,
+				AF4FF82700F916B0E17E3E56 /* SiteKeeperCADFontResolver.swift in Sources */,
+				408B60CB332DD1C090C59226 /* SiteKeeperCADImportEngine.swift in Sources */,
 				3F24D19AB38DE16E40AAFDBB /* SiteKeeperCADKernelAppViewerEngine.swift in Sources */,
-				171A6EA5F73FD6B83A0FF567 /* SiteKeeperCADKernelRendererHost.swift in Sources */,
+				140CDAD78DCB5A45A300110A /* SiteKeeperCADLODPolicy.swift in Sources */,
+				A298270CB3394170742BF5ED /* SiteKeeperCADLayer.swift in Sources */,
+				E50F61737132BA59BEC19255 /* SiteKeeperCADLayout.swift in Sources */,
+				FC0760F84406149394A47EA4 /* SiteKeeperCADMatrix.swift in Sources */,
+				06AF8AC2FE60405A43E4E724 /* SiteKeeperCADRenderCommand.swift in Sources */,
+				B990C27534362E2FE4708861 /* SiteKeeperCADSpatialIndex.swift in Sources */,
+				3B18143250BF972740CFA630 /* SiteKeeperCADTextEngine.swift in Sources */,
 				10B5DFE0789BA8E5D006145B /* SiteKeeperCADViewerEngine.swift in Sources */,
+				BA20857CD5AE69517FB32691 /* SiteKeeperDXFImportEngine.swift in Sources */,
 				F12717CDD883E4AF93A4C16B /* SiteTodoView.swift in Sources */,
 				88C19C202C6DE48EABFFA2C1 /* SitekeeperApp.swift in Sources */,
 				049AF3E26BEEA71938C14ADB /* StorageCleanupCenterView.swift in Sources */,
@@ -1719,6 +1876,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				B862B8FBC752EAA9431F027D /* BackupImportExportTests.swift in Sources */,
+				4814D4DD9A1191B506BCBDDD /* CADPoCCleanupTests.swift in Sources */,
+				123F64EBE2716A05A69DED53 /* CADPoCLineImportTests.swift in Sources */,
 				D1A73CA7F3CB569936A62D1D /* CalculationCoreTests.swift in Sources */,
 				79DBF49288EF36F403808CFA /* CalculatorInputParserTests.swift in Sources */,
 				119505A31989DCA9F29723B4 /* CircuitPlanExportTests.swift in Sources */,
@@ -1737,6 +1896,7 @@
 				85BDBE26D43726C24EB4D684 /* QuoteCalculationsTests.swift in Sources */,
 				9BAE1E3FCDD0CBD7B21DB873 /* ReportBuilderTests.swift in Sources */,
 				B4C5AD1F70D57CF3B888537C /* TransferLimitPolicyTests.swift in Sources */,
+				76097DAB6844A2E43BF09AEA /* UndoableDeletionCoordinatorTests.swift in Sources */,
 				55C35FC14AC927565448696B /* UnitConverterTests.swift in Sources */,
 				C84F2349EC274810C90AD9F1 /* UnitDisplayTests.swift in Sources */,
 				CA3ADC0DA41E8279408CABA1 /* WatermarkCameraTests.swift in Sources */,
@@ -1804,7 +1964,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";
@@ -1840,7 +2000,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";

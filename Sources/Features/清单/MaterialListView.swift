@@ -37,6 +37,8 @@ struct MaterialListView: View {
     @State private var isSelecting = false
     @State private var bulkProjectId: UUID?
     @State private var operationMessage: String?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var pendingDeletePlan: PendingMaterialDeletePlan?
     @State private var showDeleteConfirm = false
     @FocusState private var addMaterialFocusedField: AddMaterialField?
@@ -97,8 +99,8 @@ struct MaterialListView: View {
                     let ids = offsets.compactMap { filtered.indices.contains($0) ? filtered[$0].id : nil }
                     requestDeleteMaterials(
                         ids: ids,
-                        message: "确认删除这 \(ids.count) 条材料吗？",
-                        successMessage: "已删除 \(ids.count) 条材料"
+                        message: String(format: String(localized: "确认删除这 %lld 条材料吗？"), Int64(ids.count)),
+                        successMessage: String(format: String(localized: "已删除 %lld 条材料"), Int64(ids.count))
                     )
                 }
             }
@@ -121,8 +123,8 @@ struct MaterialListView: View {
                         Button("删除(\(selection.count))") {
                             requestDeleteMaterials(
                                 ids: Array(selection),
-                                message: "确认删除已选 \(selection.count) 条材料吗？",
-                                successMessage: "已删除 \(selection.count) 条材料",
+                                message: String(format: String(localized: "确认删除已选 %lld 条材料吗？"), Int64(selection.count)),
+                                successMessage: String(format: String(localized: "已删除 %lld 条材料"), Int64(selection.count)),
                                 endSelectionAfterDelete: true
                             )
                         }
@@ -153,7 +155,7 @@ struct MaterialListView: View {
                 selection.removeAll()
                 isSelecting = false
                 store.scheduleSave()
-                operationMessage = "已清空全部材料"
+                operationMessage = String(localized: "已清空全部材料")
             }
             Button("取消", role: .cancel) {}
         }
@@ -240,13 +242,17 @@ struct MaterialListView: View {
             } onDelete: { id in
                 requestDeleteMaterials(
                     ids: [id],
-                    message: "确认删除这条材料记录吗？",
-                    successMessage: "已删除材料"
+                    message: String(localized: "确认删除这条材料记录吗？"),
+                    successMessage: String(localized: "已删除材料")
                 )
             }
         }
         .onAppear(perform: openFocusedMaterialIfNeeded)
         .operationToast(message: $operationMessage)
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
     }
 
     private func materialRow(_ item: MaterialItem) -> some View {
@@ -284,8 +290,8 @@ struct MaterialListView: View {
                 Button {
                     requestDeleteMaterials(
                         ids: [item.id],
-                        message: "确认删除材料「\(item.name)」吗？",
-                        successMessage: "已删除材料"
+                        message: String(format: String(localized: "确认删除材料「%@」吗？"), item.name),
+                        successMessage: String(localized: "已删除材料")
                     )
                 } label: {
                     Image(systemName: "trash").foregroundStyle(.appRisk)
@@ -370,6 +376,15 @@ struct MaterialListView: View {
     }
 
     private func confirmDeleteMaterials(_ plan: PendingMaterialDeletePlan) {
+        let snapshot = store.materialItems
+        let targets = snapshot.filter { plan.ids.contains($0.id) }
+        guard !targets.isEmpty else {
+            pendingDeletePlan = nil
+            return
+        }
+        let selectionSnapshot = selection
+        let isSelectingSnapshot = isSelecting
+
         store.materialItems.removeAll { plan.ids.contains($0.id) }
         selection.subtract(plan.ids)
         if plan.endSelectionAfterDelete {
@@ -378,8 +393,29 @@ struct MaterialListView: View {
         } else if selection.isEmpty {
             isSelecting = false
         }
-        store.scheduleSave()
-        operationMessage = plan.successMessage
+        operationMessage = nil
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: plan.successMessage,
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialItems = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.materialItems,
+                    deletedIDs: plan.ids
+                )
+                selection = selectionSnapshot
+                isSelecting = isSelectingSnapshot
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除材料 %lld 条"), Int64(targets.count)),
+                detail: targets.map(\.name).joined(separator: "、"),
+                source: "MaterialListView"
+            )
+        )
         pendingDeletePlan = nil
     }
 
@@ -395,7 +431,7 @@ struct MaterialListView: View {
         isSelecting = false
         bulkProjectId = nil
         store.scheduleSave()
-        operationMessage = "已批量更新归属项目"
+        operationMessage = String(localized: "已批量更新归属项目")
     }
 
     private func openFocusedMaterialIfNeeded() {
@@ -426,7 +462,7 @@ struct MaterialListView: View {
             )
         )
         store.scheduleSave()
-        operationMessage = "已添加材料"
+        operationMessage = String(localized: "已添加材料")
         newName = ""; newQty = ""; newUnit = ""; newUnitPrice = ""; newProjectId = nil
         newSpecification = ""; newBrand = ""; newSupplier = ""
         newPurchaseStatus = .notPurchased
@@ -448,12 +484,12 @@ struct MaterialListView: View {
         let parsed = NumericInputSupport.parseMaterialTemplateLine(
             line,
             defaultNumber: "1",
-            defaultUnit: String(localized: "个")
+            defaultUnit: String(localized: "材料默认单位")
         )
         newName = parsed.name.isEmpty ? template.name : parsed.name
         newQty = parsed.quantity
         newUnit = parsed.unit
-        operationMessage = "已套用材料模板"
+        operationMessage = String(localized: "已套用材料模板")
     }
 
     private func purchaseStatusColor(_ status: MaterialPurchaseStatus) -> Color {

@@ -15,24 +15,24 @@ struct TileCalcView: View {
     var body: some View {
         Form {
             Section("房间") {
-                LabeledContent("长度 (m)") { TextField("6", text: $rl).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("长度 (m)") { TextField("6", text: $rl.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(rl, min: 0.5, max: 10_000, hint: "请输入 0.5–10000"))
                 CalculatorPresetChips(title: "长度预设", options: ["4", "6", "8", "10"], selection: $rl)
-                LabeledContent("宽度 (m)") { TextField("4", text: $rw).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("宽度 (m)") { TextField("4", text: $rw.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(rw, min: 0.5, max: 10_000, hint: "请输入 0.5–10000"))
                 CalculatorPresetChips(title: "宽度预设", options: ["3", "4", "5", "6"], selection: $rw)
             }
             Section("瓷砖") {
-                LabeledContent("长度 (mm)") { TextField("600", text: $tl).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("长度 (mm)") { TextField("600", text: $tl.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(tl, min: 100, max: 2000, hint: "请输入 100–2000"))
                 CalculatorPresetChips(title: "常用长度", options: ["300", "600", "800"], selection: $tl)
-                LabeledContent("宽度 (mm)") { TextField("600", text: $tw).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("宽度 (mm)") { TextField("600", text: $tw.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(tw, min: 100, max: 2000, hint: "请输入 100–2000"))
                 CalculatorPresetChips(title: "常用宽度", options: ["300", "600", "800"], selection: $tw)
-                LabeledContent("损耗 (%)") { TextField("8", text: $waste).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("损耗 (%)") { TextField("8", text: $waste.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(waste, min: 0, max: 30, hint: "请输入 0–30"))
                 CalculatorPresetChips(title: "损耗预设", options: ["5", "8", "10", "12"], selection: $waste)
-                LabeledContent("每箱片数 (片)") { TextField("4", text: $box).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("每箱片数 (片)") { TextField("4", text: $box.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(box, min: 1, max: 200, hint: "请输入 1–200"))
                 CalculatorPresetChips(title: "每箱片数", options: ["4", "6", "8", "10"], selection: $box)
             }

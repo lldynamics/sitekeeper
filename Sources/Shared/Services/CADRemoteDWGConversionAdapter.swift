@@ -80,7 +80,7 @@ struct CADRemoteDWGConversionAdapter: SiteKeeperCADKernel.CADDWGGeometryAdapter 
         )
         database.setImportMetadata(
             geometryParsed: database.drawableEntityCount > 0 && database.geometryParsed,
-            isDiagnosticOnly: database.drawableEntityCount == 0 || !database.geometryParsed,
+            isMetadataOnly: database.drawableEntityCount == 0 || !database.geometryParsed,
             importSource: database.drawableEntityCount > 0 ? id : database.importSource
         )
         return SiteKeeperCADKernel.CADExternalSDKDrawing(database: database)

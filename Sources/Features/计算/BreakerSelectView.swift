@@ -15,7 +15,7 @@ struct BreakerSelectView: View {
     var body: some View {
         Form {
             Section("负载参数") {
-                LabeledContent("计算电流 (A)") { TextField("例如 32", text: $calcCurrent).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("计算电流 (A)") { TextField("例如 32", text: $calcCurrent.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(calcCurrent, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
                 CalculatorPresetChips(title: "常用电流", options: ["16", "20", "25", "32", "40", "63"], selection: $calcCurrent)
                 Picker("负载类型", selection: $loadTypeRawValue) {

@@ -81,7 +81,7 @@ extension SiteKeeperCADKernel {
                         )
                         database.setImportMetadata(
                             geometryParsed: false,
-                            isDiagnosticOnly: true,
+                            isMetadataOnly: true,
                             importSource: result.source
                         )
                     }
@@ -166,7 +166,7 @@ extension SiteKeeperCADKernel {
             if database.drawableEntityCount > 0 {
                 database.setImportMetadata(
                     geometryParsed: true,
-                    isDiagnosticOnly: false,
+                    isMetadataOnly: false,
                     importSource: sourceID
                 )
             }

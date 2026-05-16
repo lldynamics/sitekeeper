@@ -83,6 +83,8 @@ struct DailyLogView: View {
     @State private var alertMessage = ""
     @State private var showAlert = false
     @State private var photoWallExportTask: Task<Void, Never>?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(
         initialProjectId: UUID? = nil,
@@ -281,6 +283,7 @@ struct DailyLogView: View {
         } message: {
             Text(alertMessage)
         }
+        .operationToast(notice: $operationNotice)
         .onAppear {
             openFocusedLogIfNeeded()
             guard autoOpenComposer, !didAutoOpenComposer else { return }
@@ -291,6 +294,7 @@ struct DailyLogView: View {
         .onDisappear {
             photoWallExportTask?.cancel()
             photoWallExportTask = nil
+            undoableDeletion.flushPendingCommit()
         }
     }
 
@@ -1017,13 +1021,36 @@ struct DailyLogView: View {
     }
 
     private func deleteLogIds(_ ids: [UUID]) {
-        for id in ids {
-            if let log = store.dailyLogs.first(where: { $0.id == id }) {
-                PhotoStorage.delete(fileNames: log.allPhotoFileNames)
-            }
-        }
-        store.removeDailyLogs(ids: Set(ids))
-        store.scheduleSave()
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return }
+
+        let snapshot = store.dailyLogs
+        let targets = snapshot.filter { idSet.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let photoFileNames = targets.flatMap(\.allPhotoFileNames)
+        store.removeDailyLogs(ids: idSet)
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条施工日志"), Int64(targets.count)),
+            commit: {
+                PhotoStorage.delete(fileNames: photoFileNames)
+                store.scheduleSave()
+            },
+            undo: {
+                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.dailyLogs,
+                    deletedIDs: idSet
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除施工日志 %lld 条"), Int64(targets.count)),
+                detail: String(format: String(localized: "关联照片文件 %lld 个"), Int64(photoFileNames.count)),
+                source: "DailyLogView"
+            )
+        )
     }
 
     private func updatePhoto(context: SelectedPhotoContext, note: String, tag: PhotoTag) {
@@ -1040,21 +1067,44 @@ struct DailyLogView: View {
     }
 
     private func deletePhoto(context: SelectedPhotoContext) {
+        let snapshot = store.dailyLogs
         guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
         var log = store.dailyLogs[logIndex]
+        var deletedFileName: String?
         if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
             let fileName = log.photos[index].fileName
-            PhotoStorage.delete(fileName: fileName)
+            deletedFileName = fileName
             log.photos.remove(at: index)
             if log.photoFileName == fileName {
                 log.photoFileName = log.photos.first?.fileName
             }
         } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            PhotoStorage.delete(fileName: legacy)
+            deletedFileName = legacy
             log.photoFileName = nil
         }
+        guard let deletedFileName else { return }
         store.dailyLogs[logIndex] = log
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除日志照片"),
+            commit: {
+                PhotoStorage.delete(fileName: deletedFileName)
+                store.scheduleSave()
+            },
+            undo: {
+                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.dailyLogs,
+                    deletedIDs: Set([context.logId])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除施工日志照片"),
+                detail: deletedFileName,
+                source: "DailyLogView"
+            )
+        )
     }
 
     private func logs(on date: Date) -> [DailyLog] {

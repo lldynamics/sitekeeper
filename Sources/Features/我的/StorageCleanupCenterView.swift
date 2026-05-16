@@ -5,6 +5,7 @@ struct StorageCleanupCenterView: View {
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
+    @AppStorage(UserPreferenceKeys.storageCleanupLargeFileThresholdMB) private var largeFileThresholdMB = StorageCleanupLargeFileThresholdOption.defaultMegabytes
     @State private var cloudBackups: [CloudBackupFile] = []
     @State private var cloudBackupError: String?
     @State private var isRefreshingCloudBackups = false
@@ -16,7 +17,6 @@ struct StorageCleanupCenterView: View {
     @State private var cleanupStatusMessage = ""
 
     private let showsNavigationTitle: Bool
-    private let largeFileThresholdBytes = 5 * 1024 * 1024
     private let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
     private let cadFileExtensions: Set<String> = ["dwg", "dxf"]
 
@@ -36,13 +36,13 @@ struct StorageCleanupCenterView: View {
 
             if let cloudBackupError, !cloudBackupError.isEmpty {
                 Section {
-                    Text("云备份读取失败：\(cloudBackupError)")
+                    Text(String(format: String(localized: "云备份读取失败：%@"), cloudBackupError))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("空间汇总") {
+            Section(String(localized: "空间汇总")) {
                 ForEach(categorySummaries) { summary in
                     HStack(spacing: AppSpacing.tight) {
                         Image(systemName: summary.icon)
@@ -50,7 +50,7 @@ struct StorageCleanupCenterView: View {
                             .frame(width: 18, height: 18)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(summary.title)
-                            Text("\(summary.count) 项")
+                            Text(String(format: String(localized: "%lld 项"), Int64(summary.count)))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -62,25 +62,30 @@ struct StorageCleanupCenterView: View {
             }
 
             Section {
-                HStack {
-                    Label("大文件阈值", systemImage: "externaldrive.fill.badge.exclamationmark")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(QuickNoteAttachmentStorage.formattedFileSize(largeFileThresholdBytes))
+                Picker(selection: $largeFileThresholdMB) {
+                    ForEach(StorageCleanupLargeFileThresholdOption.allCases) { option in
+                        Text(option.displayName)
+                            .tag(option.megabytes)
+                    }
+                } label: {
+                    Label(String(localized: "大文件阈值"), systemImage: "externaldrive.fill.badge.exclamationmark")
                         .foregroundStyle(.secondary)
                 }
+                Text(largeFileRuleSuggestionText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             } header: {
-                Text("大文件列表 (\(largeFileItems.count))")
+                Text(String(format: String(localized: "大文件列表（%lld）"), Int64(largeFileItems.count)))
             } footer: {
-                Text("展示照片、视频、CAD、备份和历史计算中的高占用项。")
+                Text(String(localized: "展示照片、视频、CAD、备份和历史计算中的高占用项。"))
             }
 
             if largeFileItems.isEmpty {
                 Section {
                     ContentUnavailableView(
-                        "暂无大文件",
+                        String(localized: "暂无大文件"),
                         systemImage: "checkmark.seal",
-                        description: Text("当前各类文件都低于阈值。")
+                        description: Text(String(localized: "当前各类文件都低于阈值。"))
                     )
                 }
             } else {
@@ -113,9 +118,9 @@ struct StorageCleanupCenterView: View {
                 }
             }
 
-            Section("按项目清理") {
+            Section(String(localized: "按项目清理")) {
                 if projectUsages.isEmpty {
-                    Text("暂无可清理项目文件。")
+                    Text(String(localized: "暂无可清理项目文件。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(projectUsages) { usage in
@@ -136,14 +141,14 @@ struct StorageCleanupCenterView: View {
                                         .foregroundStyle(.appWarning)
                                 }
                                 HStack(spacing: AppSpacing.tight) {
-                                    Text("照片 \(QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes))")
-                                    Text("视频 \(QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes))")
-                                    Text("CAD \(QuickNoteAttachmentStorage.formattedFileSize(usage.cadBytes))")
-                                    Text("票据 \(QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes))")
+                                    Text(String(format: String(localized: "照片 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes)))
+                                    Text(String(format: String(localized: "视频 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes)))
+                                    Text(String(format: String(localized: "CAD %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.cadBytes)))
+                                    Text(String(format: String(localized: "票据 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes)))
                                 }
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                                Text("备份估算 \(usage.formattedBackupEstimatedBytes)")
+                                Text(String(format: String(localized: "备份估算 %@"), usage.formattedBackupEstimatedBytes))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
@@ -153,7 +158,10 @@ struct StorageCleanupCenterView: View {
                 }
             }
         }
-        .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: "存储清理中心"))
+        .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: String(localized: "存储清理中心")))
+        .onAppear {
+            normalizeLargeFileThresholdPreference()
+        }
         .task {
             await refreshCloudBackups()
             await refreshProjectBackupEstimates()
@@ -162,14 +170,14 @@ struct StorageCleanupCenterView: View {
             await refreshProjectBackupEstimates()
         }
         .alert(
-            "清理项目文件？",
+            String(localized: "清理项目文件？"),
             isPresented: $showCleanupProjectAlert,
             presenting: pendingCleanupProject
         ) { usage in
             Button(pendingCleanupCategory.confirmationButtonTitle, role: .destructive) {
                 cleanupProjectFiles(usage, category: pendingCleanupCategory)
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingCleanupProject = nil
             }
         } message: { usage in
@@ -177,45 +185,58 @@ struct StorageCleanupCenterView: View {
         }
     }
 
+    private var largeFileThresholdBytes: Int {
+        StorageCleanupLargeFileThresholdOption.bytes(for: largeFileThresholdMB)
+    }
+
+    private var largeFileRuleSuggestionText: String {
+        String(
+            format: String(localized: "建议规则：照片≥%@、视频≥%@、票据资料≥%@ 时优先检查。"),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.photo.bytes),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.video.bytes),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.ticket.bytes)
+        )
+    }
+
     private var categorySummaries: [StorageCategorySummary] {
         [
             StorageCategorySummary(
-                title: "照片",
+                title: String(localized: "照片"),
                 icon: "photo.fill",
                 tint: .appWarning,
                 bytes: photoEntries.reduce(0) { $0 + $1.bytes },
                 count: photoEntries.count
             ),
             StorageCategorySummary(
-                title: "视频",
+                title: String(localized: "视频"),
                 icon: "video.fill",
                 tint: .appPhoto,
                 bytes: videoEntries.reduce(0) { $0 + $1.bytes },
                 count: videoEntries.count
             ),
             StorageCategorySummary(
-                title: "CAD 图纸",
+                title: String(localized: "CAD 图纸"),
                 icon: "compass.drawing",
                 tint: .appDoc,
                 bytes: cadEntries.reduce(0) { $0 + $1.bytes },
                 count: cadEntries.count
             ),
             StorageCategorySummary(
-                title: "票据资料",
+                title: String(localized: "票据资料"),
                 icon: "doc.text.fill",
                 tint: .appRisk,
                 bytes: ticketEntries.reduce(0) { $0 + $1.bytes },
                 count: ticketEntries.count
             ),
             StorageCategorySummary(
-                title: "备份（iCloud）",
+                title: String(localized: "备份（iCloud）"),
                 icon: "icloud.and.arrow.up.fill",
                 tint: .appPrimaryAction,
                 bytes: cloudBackups.reduce(0) { $0 + $1.byteSize },
                 count: cloudBackups.count
             ),
             StorageCategorySummary(
-                title: "历史计算",
+                title: String(localized: "历史计算"),
                 icon: "clock.arrow.circlepath",
                 tint: .appSuccess,
                 bytes: historyBytes,
@@ -232,8 +253,8 @@ struct StorageCleanupCenterView: View {
                 StorageLargeFileItem(
                     id: "history-records",
                     category: .history,
-                    title: "历史计算记录",
-                    detail: "\(store.historyRecords.count) 条",
+                    title: String(localized: "历史计算记录"),
+                    detail: String(format: String(localized: "%lld 条"), Int64(store.historyRecords.count)),
                     projectName: nil,
                     bytes: historyBytes
                 )
@@ -264,7 +285,7 @@ struct StorageCleanupCenterView: View {
             guard total > 0 else { return nil }
             return ProjectStorageUsage(
                 projectId: projectId,
-                projectName: project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名项目" : project.name,
+                projectName: project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未命名项目") : project.name,
                 photoBytes: photoBytes,
                 videoBytes: videoBytes,
                 cadBytes: cadBytes,
@@ -303,8 +324,8 @@ struct StorageCleanupCenterView: View {
         for todo in store.siteTodos {
             let projectName = projectName(for: todo.projectId)
             let candidates: [(String?, String)] = [
-                (todo.rectificationBeforePhotoFileName, "整改前"),
-                (todo.rectificationAfterPhotoFileName, "整改后")
+                (todo.rectificationBeforePhotoFileName, String(localized: "整改前")),
+                (todo.rectificationAfterPhotoFileName, String(localized: "整改后"))
             ]
             for (fileName, phase) in candidates {
                 guard let fileName, seen.insert(fileName).inserted else { continue }
@@ -429,9 +450,16 @@ struct StorageCleanupCenterView: View {
         guard let projectId else { return nil }
         if let project = store.projects.first(where: { $0.id == projectId }) {
             let trimmed = project.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "未命名项目" : trimmed
+            return trimmed.isEmpty ? String(localized: "未命名项目") : trimmed
         }
-        return "未知项目"
+        return String(localized: "未知项目")
+    }
+
+    private func normalizeLargeFileThresholdPreference() {
+        let normalized = StorageCleanupLargeFileThresholdOption.normalizedMegabytes(largeFileThresholdMB)
+        if largeFileThresholdMB != normalized {
+            largeFileThresholdMB = normalized
+        }
     }
 
     private func isTicketCategory(_ category: ProjectDocumentCategory) -> Bool {
@@ -460,7 +488,7 @@ struct StorageCleanupCenterView: View {
         if let errorMessage, !errorMessage.isEmpty {
             cloudBackups = []
             cloudBackupError = errorMessage
-            StorageIssueLog.record("存储清理中心读取云备份失败：\(errorMessage)")
+            StorageIssueLog.record(String(format: String(localized: "存储清理中心读取云备份失败：%@"), errorMessage))
         } else {
             cloudBackups = backups
             cloudBackupError = nil
@@ -472,23 +500,24 @@ struct StorageCleanupCenterView: View {
         var lines: [String] = [category.confirmationMessage(projectName: usage.projectName)]
 
         if preview.totalFileCount > 0 {
-            lines.append("预计删除文件 \(preview.totalFileCount) 个：")
+            lines.append(String(format: String(localized: "预计删除文件 %lld 个："), Int64(preview.totalFileCount)))
             for item in preview.fileItems {
-                lines.append("- \(item.title) \(item.count) 个")
+                lines.append(String(format: String(localized: "- %@ %lld 个"), item.title, Int64(item.count)))
             }
         } else {
-            lines.append("预计删除文件 0 个。")
+            lines.append(String(localized: "预计删除文件 0 个。"))
         }
 
         if !preview.recordItems.isEmpty {
-            lines.append("预计影响记录：")
+            lines.append(String(localized: "预计影响记录："))
             for item in preview.recordItems {
-                lines.append("- \(item.title) \(item.count) 条")
+                lines.append(String(format: String(localized: "- %@ %lld 条"), item.title, Int64(item.count)))
             }
         }
 
         if !preview.sampleFileNames.isEmpty {
-            lines.append("示例文件：\(preview.sampleFileNames.prefix(5).joined(separator: "、"))")
+            let sampleSeparator = String(localized: "、")
+            lines.append(String(format: String(localized: "示例文件：%@"), preview.sampleFileNames.prefix(5).joined(separator: sampleSeparator)))
         }
 
         lines.append(backupReminderMessage())
@@ -541,9 +570,9 @@ struct StorageCleanupCenterView: View {
         let deletablePhotoNames = selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
 
         var summary = CleanupImpactSummary()
-        summary.addFile(title: "照片原文件", count: deletablePhotoNames.count)
-        summary.addRecord(title: "日志照片记录", count: logsWithPhotos.count)
-        summary.addRecord(title: "待办整改照片", count: todosWithPhotos.count)
+        summary.addFile(title: String(localized: "照片原文件"), count: deletablePhotoNames.count)
+        summary.addRecord(title: String(localized: "日志照片记录"), count: logsWithPhotos.count)
+        summary.addRecord(title: String(localized: "待办整改照片"), count: todosWithPhotos.count)
         summary.addSampleFileNames(deletablePhotoNames)
         return summary
     }
@@ -601,12 +630,12 @@ struct StorageCleanupCenterView: View {
         }.count
 
         var summary = CleanupImpactSummary()
-        summary.addFile(title: "随手记视频文件", count: deletableAttachmentNames.count)
-        summary.addFile(title: "资料视频文件", count: deletableDocumentNames.count)
-        summary.addRecord(title: "随手记视频记录", count: notesWithVideos.count)
-        summary.addRecord(title: "视频资料记录", count: videoDocumentIDs.count)
-        summary.addRecord(title: "财务关联变更", count: financialLinkedCount)
-        summary.addRecord(title: "仓库关联变更", count: warehouseLinkedCount)
+        summary.addFile(title: String(localized: "随手记视频文件"), count: deletableAttachmentNames.count)
+        summary.addFile(title: String(localized: "资料视频文件"), count: deletableDocumentNames.count)
+        summary.addRecord(title: String(localized: "随手记视频记录"), count: notesWithVideos.count)
+        summary.addRecord(title: String(localized: "视频资料记录"), count: videoDocumentIDs.count)
+        summary.addRecord(title: String(localized: "财务关联变更"), count: financialLinkedCount)
+        summary.addRecord(title: String(localized: "仓库关联变更"), count: warehouseLinkedCount)
         summary.addSampleFileNames(Set(deletableAttachmentNames).union(deletableDocumentNames))
         return summary
     }
@@ -631,8 +660,8 @@ struct StorageCleanupCenterView: View {
         let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNamesAfterCleanup.contains($0) }
 
         var summary = CleanupImpactSummary()
-        summary.addFile(title: "CAD 文件", count: deletableDrawingNames.count)
-        summary.addRecord(title: "CAD 图纸记录", count: drawings.count)
+        summary.addFile(title: String(localized: "CAD 文件"), count: deletableDrawingNames.count)
+        summary.addRecord(title: String(localized: "CAD 图纸记录"), count: drawings.count)
         summary.addSampleFileNames(deletableDrawingNames)
         return summary
     }
@@ -656,17 +685,17 @@ struct StorageCleanupCenterView: View {
         }.count
 
         var summary = CleanupImpactSummary()
-        summary.addFile(title: "票据文件", count: deletableDocumentNames.count)
-        summary.addRecord(title: "票据资料记录", count: removedDocumentIDs.count)
-        summary.addRecord(title: "财务关联变更", count: financialLinkedCount)
-        summary.addRecord(title: "仓库关联变更", count: warehouseLinkedCount)
+        summary.addFile(title: String(localized: "票据文件"), count: deletableDocumentNames.count)
+        summary.addRecord(title: String(localized: "票据资料记录"), count: removedDocumentIDs.count)
+        summary.addRecord(title: String(localized: "财务关联变更"), count: financialLinkedCount)
+        summary.addRecord(title: String(localized: "仓库关联变更"), count: warehouseLinkedCount)
         summary.addSampleFileNames(deletableDocumentNames)
         return summary
     }
 
     private func backupReminderMessage() -> String {
         guard let latestDate = latestBackupDateForReminder else {
-            return "最近备份：未检测到本机或云备份，建议先执行备份后再清理。"
+            return String(localized: "最近备份：未检测到本机或云备份，建议先执行备份后再清理。")
         }
 
         let calendar = Calendar.current
@@ -677,10 +706,10 @@ struct StorageCleanupCenterView: View {
         let reminderDays = max(1, backupHealthReminderDays)
 
         if daysSinceBackup >= reminderDays {
-            return "最近备份：\(formattedDate)（\(daysSinceBackup) 天前），建议先备份后再清理。"
+            return String(format: String(localized: "最近备份：%@（%lld 天前），建议先备份后再清理。"), formattedDate, Int64(daysSinceBackup))
         }
 
-        return "最近备份：\(formattedDate)。"
+        return String(format: String(localized: "最近备份：%@。"), formattedDate)
     }
 
     private var latestBackupDateForReminder: Date? {
@@ -726,7 +755,12 @@ struct StorageCleanupCenterView: View {
                 + cleanupProjectTickets(projectId)
         }
 
-        cleanupStatusMessage = "已清理 \(usage.projectName) 的\(category.resultTitle)：\(deletedCount) 个文件。"
+        cleanupStatusMessage = String(
+            format: String(localized: "已清理 %@ 的%@：%lld 个文件。"),
+            usage.projectName,
+            category.resultTitle,
+            Int64(deletedCount)
+        )
         store.scheduleSave()
         pendingCleanupProject = nil
         OperationAuditLog.record(
@@ -944,6 +978,47 @@ struct StorageCleanupCenterView: View {
     }
 }
 
+private enum StorageCleanupLargeFileThresholdOption: Int, CaseIterable, Identifiable {
+    case mb5 = 5
+    case mb20 = 20
+    case mb50 = 50
+    case mb100 = 100
+
+    static let defaultMegabytes = Self.mb5.rawValue
+
+    var id: Int { rawValue }
+    var megabytes: Int { rawValue }
+    var bytes: Int { rawValue * 1024 * 1024 }
+    var displayName: String { QuickNoteAttachmentStorage.formattedFileSize(bytes) }
+
+    static func bytes(for megabytes: Int) -> Int {
+        normalizedMegabytes(megabytes) * 1024 * 1024
+    }
+
+    static func normalizedMegabytes(_ megabytes: Int) -> Int {
+        allCases.min { lhs, rhs in
+            abs(lhs.rawValue - megabytes) < abs(rhs.rawValue - megabytes)
+        }?.rawValue ?? defaultMegabytes
+    }
+}
+
+private enum StorageCleanupLargeFileRuleSuggestion {
+    case photo
+    case video
+    case ticket
+
+    var bytes: Int {
+        switch self {
+        case .photo:
+            return 5 * 1024 * 1024
+        case .video:
+            return 50 * 1024 * 1024
+        case .ticket:
+            return 20 * 1024 * 1024
+        }
+    }
+}
+
 private struct StorageCategorySummary: Identifiable {
     let id = UUID()
     let title: String
@@ -1000,17 +1075,17 @@ private enum StorageFileCategory {
     var displayName: String {
         switch self {
         case .photo:
-            return "照片"
+            return String(localized: "照片")
         case .video:
-            return "视频"
+            return String(localized: "视频")
         case .cad:
-            return "CAD"
+            return String(localized: "CAD")
         case .ticket:
-            return "票据"
+            return String(localized: "票据")
         case .backup:
-            return "备份"
+            return String(localized: "备份")
         case .history:
-            return "历史计算"
+            return String(localized: "历史计算")
         }
     }
 
@@ -1062,7 +1137,7 @@ private struct ProjectStorageUsage: Identifiable {
     var totalBytes: Int { photoBytes + videoBytes + cadBytes + ticketBytes }
     var formattedTotalBytes: String { QuickNoteAttachmentStorage.formattedFileSize(totalBytes) }
     var formattedBackupEstimatedBytes: String {
-        guard let backupEstimatedBytes else { return "计算中…" }
+        guard let backupEstimatedBytes else { return String(localized: "计算中…") }
         return QuickNoteAttachmentStorage.formattedFileSize(backupEstimatedBytes)
     }
 }
@@ -1142,30 +1217,30 @@ private enum ProjectStorageCleanupCategory: String, Identifiable {
     var displayName: String {
         switch self {
         case .photos:
-            return "照片"
+            return String(localized: "照片")
         case .videos:
-            return "视频"
+            return String(localized: "视频")
         case .cad:
-            return "CAD 图纸"
+            return String(localized: "CAD 图纸")
         case .tickets:
-            return "票据资料"
+            return String(localized: "票据资料")
         case .all:
-            return "全部可清理文件"
+            return String(localized: "全部可清理文件")
         }
     }
 
     var resultTitle: String {
         switch self {
         case .photos:
-            return "照片"
+            return String(localized: "照片")
         case .videos:
-            return "视频"
+            return String(localized: "视频")
         case .cad:
-            return "CAD 图纸"
+            return String(localized: "CAD 图纸")
         case .tickets:
-            return "票据资料"
+            return String(localized: "票据资料")
         case .all:
-            return "项目文件"
+            return String(localized: "项目文件")
         }
     }
 
@@ -1202,24 +1277,24 @@ private enum ProjectStorageCleanupCategory: String, Identifiable {
     var confirmationButtonTitle: String {
         switch self {
         case .all:
-            return "清理全部"
+            return String(localized: "清理全部")
         default:
-            return "清理\(displayName)"
+            return String(format: String(localized: "清理%@"), displayName)
         }
     }
 
     func confirmationMessage(projectName: String) -> String {
         switch self {
         case .photos:
-            return "将清理 \(projectName) 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"
+            return String(format: String(localized: "将清理 %@ 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"), projectName)
         case .videos:
-            return "将清理 \(projectName) 随手记视频和资料中的视频原文件，并断开视频关联。"
+            return String(format: String(localized: "将清理 %@ 随手记视频和资料中的视频原文件，并断开视频关联。"), projectName)
         case .cad:
-            return "将清理 \(projectName) 的 CAD 图纸原文件和图纸索引。"
+            return String(format: String(localized: "将清理 %@ 的 CAD 图纸原文件和图纸索引。"), projectName)
         case .tickets:
-            return "将清理 \(projectName) 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"
+            return String(format: String(localized: "将清理 %@ 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"), projectName)
         case .all:
-            return "将清理 \(projectName) 的照片、视频、CAD 图纸和票据资料原文件，保留其他文本记录。"
+            return String(format: String(localized: "将清理 %@ 的照片、视频、CAD 图纸和票据资料原文件，保留其他文本记录。"), projectName)
         }
     }
 }
@@ -1230,17 +1305,17 @@ private struct ProjectStorageCleanupDetailView: View {
 
     var body: some View {
         List {
-            Section("占用汇总") {
-                usageRow(title: "照片", icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
-                usageRow(title: "视频", icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
-                usageRow(title: "CAD 图纸", icon: "compass.drawing", tint: .appDoc, bytes: usage.cadBytes)
-                usageRow(title: "票据资料", icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
-                usageRow(title: "备份估算", icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
+            Section(String(localized: "占用汇总")) {
+                usageRow(title: String(localized: "照片"), icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
+                usageRow(title: String(localized: "视频"), icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
+                usageRow(title: String(localized: "CAD 图纸"), icon: "compass.drawing", tint: .appDoc, bytes: usage.cadBytes)
+                usageRow(title: String(localized: "票据资料"), icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
+                usageRow(title: String(localized: "备份估算"), icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
             }
 
             Section {
                 HStack {
-                    Text("项目总占用")
+                    Text(String(localized: "项目总占用"))
                     Spacer()
                     Text(usage.formattedTotalBytes)
                         .font(.subheadline.weight(.semibold))
@@ -1253,20 +1328,20 @@ private struct ProjectStorageCleanupDetailView: View {
                 cleanupButton(.cad, bytes: usage.cadBytes)
                 cleanupButton(.tickets, bytes: usage.ticketBytes)
             } header: {
-                Text("按类型清理")
+                Text(String(localized: "按类型清理"))
             } footer: {
-                Text("分项清理只处理对应文件类型，项目文本、金额、日志正文不会删除。")
+                Text(String(localized: "分项清理只处理对应文件类型，项目文本、金额、日志正文不会删除。"))
             }
 
             Section {
                 Button(role: .destructive) {
                     onCleanup(.all)
                 } label: {
-                    Label("清理该项目全部可清理文件", systemImage: "trash")
+                    Label(String(localized: "清理该项目全部可清理文件"), systemImage: "trash")
                 }
                 .disabled(usage.totalBytes == 0)
             } footer: {
-                Text("备份是全局快照，不会按单个项目直接删除；如需释放备份空间，请回到“数据管理 → 备份”处理。")
+                Text(String(localized: "备份是全局快照，不会按单个项目直接删除；如需释放备份空间，请回到“数据管理 → 备份”处理。"))
             }
         }
         .navigationTitle(usage.projectName)
@@ -1282,7 +1357,7 @@ private struct ProjectStorageCleanupDetailView: View {
                 Image(systemName: category.icon)
                     .foregroundStyle(category.tint)
                     .frame(width: 18, height: 18)
-                Text("清理\(category.displayName)")
+                Text(String(format: String(localized: "清理%@"), category.displayName))
                 Spacer()
                 Text(QuickNoteAttachmentStorage.formattedFileSize(bytes))
                     .font(.caption.weight(.semibold))

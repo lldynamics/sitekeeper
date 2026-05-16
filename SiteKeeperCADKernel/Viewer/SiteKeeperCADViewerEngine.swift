@@ -51,11 +51,11 @@ extension SiteKeeperCADKernel {
                     importedDatabase.diagnostics.append(warning)
                     importedDatabase.setImportMetadata(
                         geometryParsed: importedDatabase.geometryParsed,
-                        isDiagnosticOnly: true
+                        isMetadataOnly: true
                     )
                     database = importedDatabase
                     return CADOpenResult(
-                        status: .diagnosticOnly,
+                        status: .metadataOnly,
                         database: importedDatabase,
                         diagnostics: importedDatabase.diagnostics
                     )
@@ -63,7 +63,7 @@ extension SiteKeeperCADKernel {
 
                 importedDatabase.setImportMetadata(
                     geometryParsed: importedDatabase.geometryParsed,
-                    isDiagnosticOnly: false
+                    isMetadataOnly: false
                 )
                 database = importedDatabase
                 return CADOpenResult(

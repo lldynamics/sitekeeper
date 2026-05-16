@@ -25,13 +25,13 @@ enum CloudBackupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .iCloudUnavailable:
-            return "未能访问 iCloud。请确认已登录 Apple ID，并在系统设置中允许本 App 使用 iCloud。"
+            return String(localized: "未能访问 iCloud。请确认已登录 Apple ID，并在系统设置中允许本 App 使用 iCloud。")
         case .cloudFileNotDownloaded:
-            return "云端备份仍在从 iCloud 下载，请稍后再试。"
+            return String(localized: "云端备份仍在从 iCloud 下载，请稍后再试。")
         case .backupNotFound:
-            return "未找到可恢复的 iCloud 备份。"
+            return String(localized: "未找到可恢复的 iCloud 备份。")
         case .invalidBackupFile:
-            return "iCloud 备份文件无效。"
+            return String(localized: "iCloud 备份文件无效。")
         }
     }
 }
@@ -129,7 +129,10 @@ enum CloudBackupService {
             do {
                 try FileManager.default.removeItem(at: file.fileURL)
             } catch {
-                StorageIssueLog.record("云备份历史清理失败：\(file.fileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.record(
+                    "云备份历史清理失败：\(file.fileURL.lastPathComponent)，\(error.localizedDescription)",
+                    category: .cloudBackup
+                )
             }
         }
     }
@@ -139,7 +142,10 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey])
         } catch {
-            StorageIssueLog.record("读取云备份元信息失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            StorageIssueLog.record(
+                "读取云备份元信息失败：\(url.lastPathComponent)，\(error.localizedDescription)",
+                category: .cloudBackup
+            )
             return nil
         }
         guard values.isRegularFile != false else {
@@ -159,7 +165,10 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
         } catch {
-            StorageIssueLog.record("读取云端下载状态失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            StorageIssueLog.record(
+                "读取云端下载状态失败：\(url.lastPathComponent)，\(error.localizedDescription)",
+                category: .cloudBackup
+            )
             values = nil
         }
         if let status = values?.ubiquitousItemDownloadingStatus,
@@ -167,7 +176,10 @@ enum CloudBackupService {
             do {
                 try FileManager.default.startDownloadingUbiquitousItem(at: url)
             } catch {
-                StorageIssueLog.record("触发云备份下载失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.record(
+                    "触发云备份下载失败：\(url.lastPathComponent)，\(error.localizedDescription)",
+                    category: .cloudBackup
+                )
             }
             throw CloudBackupError.cloudFileNotDownloaded
         }

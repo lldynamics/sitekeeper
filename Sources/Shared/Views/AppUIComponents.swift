@@ -452,6 +452,126 @@ struct OperationToastNotice: Identifiable {
     }
 }
 
+struct UndoableDeletionAuditContext {
+    let summary: String
+    var detail: String = ""
+    var source: String = ""
+}
+
+extension UndoableDeletionAuditContext {
+    init(_ context: DataStoreDeletionAuditContext) {
+        self.init(summary: context.summary, detail: context.detail, source: context.source)
+    }
+}
+
+@MainActor
+final class UndoableDeletionCoordinator {
+    private var pendingCommitTask: Task<Void, Never>?
+    private var pendingCommit: (() -> Void)?
+    private let delay: Duration
+
+    init(delay: Duration = .seconds(4)) {
+        self.delay = delay
+    }
+
+    func queue(
+        notice: Binding<OperationToastNotice?>,
+        message: String,
+        undoMessage: String = String(localized: "已撤销删除"),
+        actionTitle: String = String(localized: "撤销"),
+        commit: @escaping () -> Void,
+        undo: @escaping () -> Void,
+        audit: UndoableDeletionAuditContext? = nil
+    ) {
+        flushPendingCommit()
+
+        if let audit {
+            OperationAuditLog.record(
+                action: .delete,
+                outcome: .started,
+                summary: audit.summary,
+                detail: audit.detail,
+                source: audit.source
+            )
+        }
+
+        pendingCommit = {
+            commit()
+            if let audit {
+                OperationAuditLog.record(
+                    action: .delete,
+                    outcome: .succeeded,
+                    summary: audit.summary,
+                    detail: audit.detail,
+                    source: audit.source
+                )
+            }
+        }
+
+        let delay = delay
+        pendingCommitTask = Task { @MainActor [weak self] in
+            guard await DebouncedTask.wait(for: delay) else { return }
+            self?.commitPending()
+        }
+
+        notice.wrappedValue = OperationToastNotice(
+            message: message,
+            actionTitle: actionTitle,
+            action: { [weak self] in
+                self?.cancelPendingCommit()
+                undo()
+                if let audit {
+                    OperationAuditLog.record(
+                        action: .delete,
+                        outcome: .cancelled,
+                        summary: audit.summary,
+                        detail: audit.detail,
+                        source: audit.source
+                    )
+                }
+                notice.wrappedValue = .info(undoMessage)
+            },
+            autoDismissDuration: delay
+        )
+    }
+
+    func flushPendingCommit() {
+        pendingCommitTask?.cancel()
+        pendingCommitTask = nil
+        let commit = pendingCommit
+        pendingCommit = nil
+        commit?()
+    }
+
+    func cancelPendingCommit() {
+        pendingCommitTask?.cancel()
+        pendingCommitTask = nil
+        pendingCommit = nil
+    }
+
+    private func commitPending() {
+        let commit = pendingCommit
+        pendingCommit = nil
+        pendingCommitTask = nil
+        commit?()
+    }
+
+    static func restoringItems<Item: Identifiable>(
+        snapshot: [Item],
+        current: [Item],
+        deletedIDs: Set<Item.ID>
+    ) -> [Item] where Item.ID: Hashable {
+        let snapshotIDs = Set(snapshot.map(\.id))
+        var currentByID = Dictionary(uniqueKeysWithValues: current.map { ($0.id, $0) })
+        for item in snapshot where deletedIDs.contains(item.id) {
+            currentByID[item.id] = item
+        }
+        let newItems = current.filter { !snapshotIDs.contains($0.id) }
+        let restoredSnapshotItems = snapshot.compactMap { currentByID[$0.id] }
+        return newItems + restoredSnapshotItems
+    }
+}
+
 struct OperationToastNoticeModifier: ViewModifier {
     @Binding var notice: OperationToastNotice?
     @State private var hideTask: Task<Void, Never>?

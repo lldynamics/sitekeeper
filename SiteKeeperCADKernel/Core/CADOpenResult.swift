@@ -1,7 +1,7 @@
 extension SiteKeeperCADKernel {
     enum CADOpenStatus: String, Equatable, Codable {
         case rendered
-        case diagnosticOnly
+        case metadataOnly
         case unsupported
         case failed
 
@@ -13,8 +13,8 @@ extension SiteKeeperCADKernel {
                 self = .rendered
             case CADOpenStatus.rendered.rawValue:
                 self = .rendered
-            case CADOpenStatus.diagnosticOnly.rawValue:
-                self = .diagnosticOnly
+            case CADOpenStatus.metadataOnly.rawValue:
+                self = .metadataOnly
             case CADOpenStatus.unsupported.rawValue:
                 self = .unsupported
             default:
@@ -57,11 +57,11 @@ extension SiteKeeperCADKernel {
 
         private static func resolvedStatus(for database: CADDatabase) -> CADOpenStatus {
             if !database.geometryParsed {
-                return database.isDiagnosticOnly || database.entityCount > 0 ? .diagnosticOnly : .unsupported
+                return database.isMetadataOnly || database.entityCount > 0 ? .metadataOnly : .unsupported
             }
             if database.drawableEntityCount == 0 {
-                if database.isDiagnosticOnly || database.placeholderEntityCount > 0 {
-                    return .diagnosticOnly
+                if database.isMetadataOnly || database.placeholderEntityCount > 0 {
+                    return .metadataOnly
                 }
                 return .unsupported
             }

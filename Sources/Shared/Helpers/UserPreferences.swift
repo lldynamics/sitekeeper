@@ -26,6 +26,7 @@ enum UserPreferenceKeys {
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
+    static let storageCleanupLargeFileThresholdMB = "storageCleanup.largeFileThresholdMB"
     static let cloudBackupAutoLastAttemptAt = "cloudBackup.autoLastAttemptAt"
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
@@ -365,7 +366,11 @@ enum AppPolicy {
 
 enum AppFeatureFlags {
     static var allowsSampleDataImport: Bool {
+#if DEBUG
         TransferLimitPolicy.allowsSampleDataImport
+#else
+        false
+#endif
     }
 
     static var showTemplates: Bool {

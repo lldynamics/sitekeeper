@@ -27,8 +27,7 @@ struct LaborRecordView: View {
     @State private var projectFilter: UUID?
     @State private var settlementFilter: Bool? = nil
     @State private var operationNotice: OperationToastNotice?
-    @State private var pendingDeleteCommitTask: Task<Void, Never>?
-    @State private var pendingDeleteCommit: (() -> Void)?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var exportProjectFilter: UUID?
@@ -426,7 +425,9 @@ struct LaborRecordView: View {
 
     private func laborRow(_ r: LaborRecord) -> some View {
         let projectText = r.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
-        let meta = [r.workType, r.teamName, "\(r.workers)人", "\(r.days)天", r.date].filter { !$0.isEmpty }.joined(separator: " · ")
+        let workersText = r.workers.isEmpty ? "" : String(format: String(localized: "%@人"), r.workers)
+        let daysText = r.days.isEmpty ? "" : String(format: String(localized: "%@天"), r.days)
+        let meta = [r.workType, r.teamName, workersText, daysText, r.date].filter { !$0.isEmpty }.joined(separator: " · ")
         return HStack(alignment: .top, spacing: AppSpacing.normal) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(r.isSettled ? Color.appSuccess : Color.appFinance)
@@ -510,43 +511,38 @@ struct LaborRecordView: View {
     }
 
     private func deleteLaborRecordsWithUndo(ids: [UUID]) {
-        guard !ids.isEmpty else { return }
-        flushPendingLaborDeletionIfNeeded()
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return }
 
         let snapshot = store.laborRecords
-        let idSet = Set(ids)
+        let targets = snapshot.filter { idSet.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
         store.laborRecords.removeAll { idSet.contains($0.id) }
-
-        pendingDeleteCommit = {
-            store.scheduleSave()
-        }
-        pendingDeleteCommitTask = Task { @MainActor in
-            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
-            pendingDeleteCommit?()
-            pendingDeleteCommit = nil
-            pendingDeleteCommitTask = nil
-        }
-
-        operationNotice = OperationToastNotice(
-            message: String(format: String(localized: "已删除 %d 条人工记录"), ids.count),
-            actionTitle: String(localized: "撤销"),
-            action: {
-                pendingDeleteCommitTask?.cancel()
-                pendingDeleteCommitTask = nil
-                pendingDeleteCommit = nil
-                store.laborRecords = snapshot
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条人工记录"), Int64(targets.count)),
+            commit: {
                 store.scheduleSave()
-                operationNotice = .info(String(localized: "已撤销删除"))
             },
-            autoDismissDuration: .seconds(4)
+            undo: {
+                store.laborRecords = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.laborRecords,
+                    deletedIDs: idSet
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除人工记录 %lld 条"), Int64(targets.count)),
+                detail: targets.map { [$0.teamName, $0.workType].filter { !$0.isEmpty }.joined(separator: " / ") }.joined(separator: "、"),
+                source: "LaborRecordView"
+            )
         )
     }
 
     private func flushPendingLaborDeletionIfNeeded() {
-        pendingDeleteCommitTask?.cancel()
-        pendingDeleteCommitTask = nil
-        pendingDeleteCommit?()
-        pendingDeleteCommit = nil
+        undoableDeletion.flushPendingCommit()
     }
 
     // MARK: - 导出配置
@@ -610,12 +606,12 @@ struct LaborRecordView: View {
 
     private func performCSVExport() {
         let records = recordsForExport()
-        var rows = ["日期,项目,工种,班组,人数,天数（天）,工价（元/天）,合计（元）,已结算,备注"]
+        var rows = [String(localized: "人工记录CSV表头")]
         rows += records.map { r in
             let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
             return [r.date, project, r.workType, r.teamName, r.workers, r.days, r.unitRate,
                     String(format: "%.2f", ReportBuilder.laborLineTotal(r)),
-                    r.isSettled ? "是" : "否", r.note]
+                    r.isSettled ? String(localized: "是") : String(localized: "否"), r.note]
                 .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
                 .joined(separator: ",")
         }
@@ -641,18 +637,18 @@ struct LaborRecordView: View {
         .settled{color:#2E8B3E;}.unsettled{color:#E5661A;}
         .summary{color:#666;font-size:13px;margin:8px 0;}
         .total{font-weight:bold;color:#E5661A;}</style></head><body>
-        <h3>人工记录报表</h3>
-        <p class="summary">\(records.count)条 · \(totalDays)天 · 合计 ¥\(String(format: "%.2f", totalCost)) · 待结 ¥\(String(format: "%.2f", unsettledCost))</p>
-        <table><tr><th>日期</th><th>项目</th><th>工种</th><th>班组</th><th>人数</th><th>天数</th><th>工价</th><th>合计</th><th>状态</th></tr>
+        <h3>\(String(localized: "人工记录报表"))</h3>
+        <p class="summary">\(String(format: String(localized: "%lld条 · %@天 · 合计 %@ · 待结 %@"), Int64(records.count), totalDays.formatted(.number.precision(.fractionLength(0...1))), ReportBuilder.money(totalCost), ReportBuilder.money(unsettledCost)))</p>
+        <table><tr><th>\(String(localized: "日期"))</th><th>\(String(localized: "项目"))</th><th>\(String(localized: "工种"))</th><th>\(String(localized: "班组"))</th><th>\(String(localized: "人数"))</th><th>\(String(localized: "天数"))</th><th>\(String(localized: "工价"))</th><th>\(String(localized: "合计"))</th><th>\(String(localized: "状态"))</th></tr>
         """
         for r in records {
             let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
             let statusClass = r.isSettled ? "settled" : "unsettled"
-            let status = r.isSettled ? "已结算" : "待结算"
+            let status = r.isSettled ? String(localized: "已结算") : String(localized: "待结算")
             html += "<tr><td>\(r.date)</td><td>\(project)</td><td>\(r.workType)</td><td>\(r.teamName)</td><td>\(r.workers)</td><td>\(r.days)</td><td>\(r.unitRate)</td><td class=\"total\">\(ReportBuilder.money(ReportBuilder.laborLineTotal(r)))</td><td class=\"\(statusClass)\">\(status)</td></tr>"
         }
-        html += "<tr><td colspan=\"8\" style=\"text-align:right;font-weight:bold;\">合计</td><td class=\"total\">\(ReportBuilder.money(totalCost))</td><td></td></tr>"
-        html += "</table><p class=\"summary\">导出时间: \(Formatters.now())</p></body></html>"
+        html += "<tr><td colspan=\"8\" style=\"text-align:right;font-weight:bold;\">\(String(localized: "合计"))</td><td class=\"total\">\(ReportBuilder.money(totalCost))</td></tr>"
+        html += "</table><p class=\"summary\">\(String(format: String(localized: "导出时间: %@"), Formatters.now()))</p></body></html>"
 
         let data = html.data(using: .utf8) ?? Data()
         exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "人工记录表.xls"))

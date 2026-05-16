@@ -17,7 +17,7 @@ struct LightingCalcView: View {
         Form {
             Section("房间参数") {
                 LabeledContent("长度 (m)") {
-                    TextField("6", text: $roomLength)
+                    TextField("6", text: $roomLength.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -25,7 +25,7 @@ struct LightingCalcView: View {
                 CalculatorValidationHint(message: rangeMessage(roomLength, min: 0.5, max: 10_000, hint: "请输入 0.5–10000"))
                 CalculatorPresetChips(title: "长度预设", options: ["4", "6", "8", "10", "12"], selection: $roomLength)
                 LabeledContent("宽度 (m)") {
-                    TextField("4", text: $roomWidth)
+                    TextField("4", text: $roomWidth.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -35,7 +35,7 @@ struct LightingCalcView: View {
             }
             Section("照明要求") {
                 LabeledContent("目标照度 (lux)") {
-                    TextField("300", text: $targetLux)
+                    TextField("300", text: $targetLux.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -55,7 +55,7 @@ struct LightingCalcView: View {
                     }
                 }
                 LabeledContent("单灯光通量 (lm)") {
-                    TextField("2400", text: $lumensPerFixture)
+                    TextField("2400", text: $lumensPerFixture.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -63,7 +63,7 @@ struct LightingCalcView: View {
                 CalculatorValidationHint(message: rangeMessage(lumensPerFixture, min: 100, max: 200_000, hint: "请输入 100–200000"))
                 CalculatorPresetChips(title: "常用光通量", options: ["1200", "1800", "2400", "3200", "4000"], selection: $lumensPerFixture)
                 LabeledContent("利用系数 (0-1)") {
-                    TextField("0.6", text: $utilizationFactor)
+                    TextField("0.6", text: $utilizationFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -71,7 +71,7 @@ struct LightingCalcView: View {
                 CalculatorValidationHint(message: rangeMessage(utilizationFactor, min: 0.1, max: 1, hint: "请输入 0.1–1"))
                 CalculatorPresetChips(title: "利用系数", options: ["0.50", "0.60", "0.70", "0.80"], selection: $utilizationFactor)
                 LabeledContent("维护系数 (0-1)") {
-                    TextField("0.8", text: $maintenanceFactor)
+                    TextField("0.8", text: $maintenanceFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)

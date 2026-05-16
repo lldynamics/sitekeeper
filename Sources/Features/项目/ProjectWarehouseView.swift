@@ -17,15 +17,15 @@ struct ProjectWarehouseOverviewView: View {
 
     var body: some View {
         List {
-            Section("汇总") {
-                LabeledContent("有库存项目", value: "\(projectsWithStockCount)")
-                LabeledContent("库存材料种类", value: "\(allStockLines.count)")
-                LabeledContent("负库存项", value: "\(negativeStockCount)")
+            Section(String(localized: "汇总")) {
+                LabeledContent(String(localized: "有库存项目"), value: "\(projectsWithStockCount)")
+                LabeledContent(String(localized: "库存材料种类"), value: "\(allStockLines.count)")
+                LabeledContent(String(localized: "负库存项"), value: "\(negativeStockCount)")
             }
 
-            Section("项目仓库") {
+            Section(String(localized: "项目仓库")) {
                 if filteredProjects.isEmpty {
-                    ContentUnavailableView("暂无项目", systemImage: "shippingbox")
+                    ContentUnavailableView(String(localized: "暂无项目"), systemImage: "shippingbox")
                 } else {
                     ForEach(filteredProjects) { project in
                         projectRow(project)
@@ -33,9 +33,9 @@ struct ProjectWarehouseOverviewView: View {
                 }
             }
         }
-        .navigationTitle("项目仓库")
+        .navigationTitle(String(localized: "项目仓库"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "搜索项目")
+        .searchable(text: $searchText, prompt: String(localized: "搜索项目"))
         .toolbar {
             Button {
                 showAdd = true
@@ -43,16 +43,16 @@ struct ProjectWarehouseOverviewView: View {
                 Image(systemName: "plus").visibleIconStyle()
             }
             .buttonStyle(.appIcon())
-            .accessibilityLabel("新增出入库记录")
-            .accessibilityHint("打开出入库表单")
+            .accessibilityLabel(String(localized: "新增出入库记录"))
+            .accessibilityHint(String(localized: "打开出入库表单"))
         }
         .sheet(isPresented: $showAdd) {
             ProjectWarehouseMovementSheet(projects: store.projects) { movement, attachments in
                 saveMovement(movement, attachments: attachments)
             }
         }
-        .alert("附件导入失败", isPresented: $showImportError) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "附件导入失败"), isPresented: $showImportError) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(importErrorMessage)
         }
@@ -96,7 +96,7 @@ struct ProjectWarehouseOverviewView: View {
 
     private func showAttachmentFailures(_ failures: [String]) {
         guard !failures.isEmpty else { return }
-        importErrorMessage = "以下附件未能导入：\(failures.joined(separator: "、"))"
+        importErrorMessage = String(format: String(localized: "以下附件未能导入：%@"), failures.joined(separator: String(localized: "、")))
         showImportError = true
     }
 }
@@ -111,8 +111,7 @@ struct ProjectWarehouseView: View {
     @State private var showDeleteMovementConfirm = false
     @State private var pendingDeleteMovementIds: Set<UUID> = []
     @State private var operationNotice: OperationToastNotice?
-    @State private var pendingDeleteCommitTask: Task<Void, Never>?
-    @State private var pendingDeleteCommit: (() -> Void)?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     private var movements: [ProjectWarehouseMovement] {
         store.projectWarehouseMovements
@@ -151,26 +150,26 @@ struct ProjectWarehouseView: View {
                 }
             }
         }
-        .navigationTitle("仓库")
+        .navigationTitle(String(localized: "仓库"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
             ProjectWarehouseMovementSheet(projects: [project], fixedProjectId: project.id) { movement, attachments in
                 saveMovement(movement, attachments: attachments)
             }
         }
-        .alert("附件导入失败", isPresented: $showImportError) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "附件导入失败"), isPresented: $showImportError) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(importErrorMessage)
         }
-        .confirmationDialog("删除出入库流水", isPresented: $showDeleteMovementConfirm, titleVisibility: .visible) {
-            Button("仅删除流水", role: .destructive) {
+        .confirmationDialog(String(localized: "删除出入库流水"), isPresented: $showDeleteMovementConfirm, titleVisibility: .visible) {
+            Button(String(localized: "仅删除流水"), role: .destructive) {
                 deleteMovements(ids: pendingDeleteMovementIds, deleteAttachments: false)
             }
-            Button("同时删除附件", role: .destructive) {
+            Button(String(localized: "同时删除附件"), role: .destructive) {
                 deleteMovements(ids: pendingDeleteMovementIds, deleteAttachments: true)
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingDeleteMovementIds.removeAll()
             }
         } message: {
@@ -188,27 +187,27 @@ struct ProjectWarehouseView: View {
     }
 
     private var warehouseActionSection: some View {
-        Section("仓库操作") {
+        Section(String(localized: "仓库操作")) {
             Button {
                 showAdd = true
             } label: {
-                Label("材料出入库", systemImage: "shippingbox.and.arrow.backward.fill")
+                Label(String(localized: "材料出入库"), systemImage: "shippingbox.and.arrow.backward.fill")
             }
         }
     }
 
     private var stockSummarySection: some View {
-        Section("库存汇总") {
+        Section(String(localized: "库存汇总")) {
             if stockLines.isEmpty {
                 ContentUnavailableView(
-                    "暂无库存",
+                    String(localized: "暂无库存"),
                     systemImage: "shippingbox",
-                    description: Text("记录材料入库、出库或退料后，这里会自动汇总库存。")
+                    description: Text(String(localized: "记录材料入库、出库或退料后，这里会自动汇总库存。"))
                 )
                 Button {
                     showAdd = true
                 } label: {
-                    Label("材料出入库", systemImage: "shippingbox.and.arrow.backward.fill")
+                    Label(String(localized: "材料出入库"), systemImage: "shippingbox.and.arrow.backward.fill")
                 }
                 .buttonStyle(.appProminent())
             } else {
@@ -227,19 +226,19 @@ struct ProjectWarehouseView: View {
                             .foregroundStyle(line.quantity < 0 ? .appRisk : Color.appPrimaryAction)
                     }
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(line.materialName)，库存 \(WarehouseStockCalculator.quantityText(line.quantity))")
+                    .accessibilityLabel(String(format: String(localized: "%@，库存 %@"), line.materialName, WarehouseStockCalculator.quantityText(line.quantity)))
                 }
             }
         }
     }
 
     private var movementFlowSection: some View {
-        Section("出入库流水") {
+        Section(String(localized: "出入库流水")) {
             if movements.isEmpty {
                 ContentUnavailableView(
-                    "暂无出入库记录",
+                    String(localized: "暂无出入库记录"),
                     systemImage: "arrow.left.arrow.right.square",
-                    description: Text("添加入库或出库后可追踪库存流向。")
+                    description: Text(String(localized: "添加入库或出库后可追踪库存流向。"))
                 )
             } else {
                 ForEach(movements) { movement in
@@ -269,6 +268,8 @@ struct ProjectWarehouseView: View {
         let movementSnapshot = store.projectWarehouseMovements
         let documentSnapshot = store.projectDocuments
         let financialSnapshot = store.projectFinancialRecords
+        let deletedCount = movementSnapshot.filter { ids.contains($0.id) }.count
+        guard deletedCount > 0 else { return }
 
         var updatedMovements = movementSnapshot.filter { !ids.contains($0.id) }
         var updatedDocuments = documentSnapshot
@@ -305,36 +306,29 @@ struct ProjectWarehouseView: View {
         store.projectFinancialRecords = updatedFinancialRecords
         pendingDeleteMovementIds.removeAll()
 
-        pendingDeleteCommit = {
-            for fileName in removableFileNames {
-                ProjectDocumentStorage.delete(fileName: fileName)
-            }
-            store.scheduleSave()
-        }
-        pendingDeleteCommitTask = Task { @MainActor in
-            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
-            pendingDeleteCommit?()
-            pendingDeleteCommit = nil
-            pendingDeleteCommitTask = nil
-        }
-
         let message = deleteAttachments
-        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(ids.count))
-        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(ids.count))
-        operationNotice = OperationToastNotice(
+        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(deletedCount))
+        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(deletedCount))
+        undoableDeletion.queue(
+            notice: $operationNotice,
             message: message,
-            actionTitle: String(localized: "撤销"),
-            action: {
-                pendingDeleteCommitTask?.cancel()
-                pendingDeleteCommitTask = nil
-                pendingDeleteCommit = nil
+            commit: {
+                for fileName in removableFileNames {
+                    ProjectDocumentStorage.delete(fileName: fileName)
+                }
+                store.scheduleSave()
+            },
+            undo: {
                 store.projectWarehouseMovements = movementSnapshot
                 store.projectDocuments = documentSnapshot
                 store.projectFinancialRecords = financialSnapshot
                 store.scheduleSave()
-                operationNotice = .info(String(localized: "已撤销删除"))
             },
-            autoDismissDuration: .seconds(4)
+            audit: UndoableDeletionAuditContext(
+                summary: message,
+                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(removableFileNames.count)),
+                source: "ProjectWarehouseView"
+            )
         )
     }
 
@@ -377,14 +371,11 @@ struct ProjectWarehouseView: View {
 
     private func showAttachmentFailures(_ failures: [String]) {
         guard !failures.isEmpty else { return }
-        importErrorMessage = "以下附件未能导入：\(failures.joined(separator: "、"))"
+        importErrorMessage = String(format: String(localized: "以下附件未能导入：%@"), failures.joined(separator: String(localized: "、")))
         showImportError = true
     }
 
     private func flushPendingWarehouseDeletionIfNeeded() {
-        pendingDeleteCommitTask?.cancel()
-        pendingDeleteCommitTask = nil
-        pendingDeleteCommit?()
-        pendingDeleteCommit = nil
+        undoableDeletion.flushPendingCommit()
     }
 }

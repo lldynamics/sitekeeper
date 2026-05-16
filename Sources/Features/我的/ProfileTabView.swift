@@ -134,7 +134,7 @@ struct ProfileTabView: View {
 
             Section("数据安全") {
                 backupStatusCard
-                NavigationLink { DataManagementView(initialTab: "备份") } label: {
+                NavigationLink { DataManagementView(initialRoute: .backup) } label: {
                     HStack(spacing: AppSpacing.tight) {
                         Image(systemName: "externaldrive")
                             .foregroundStyle(Color.appPrimaryAction)
@@ -146,6 +146,7 @@ struct ProfileTabView: View {
                         }
                     }
                 }
+#if DEBUG
                 if AppFeatureFlags.allowsSampleDataImport {
                     Button(role: .destructive) {
                         showSampleImportConfirm = true
@@ -154,16 +155,17 @@ struct ProfileTabView: View {
                             Image(systemName: "sparkles")
                                 .foregroundStyle(Color.appWarning)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("导入示例数据")
-                                Text("覆盖当前本地数据，用演示项目体验完整流程")
+                                Text(String(localized: "导入示例数据"))
+                                Text(String(localized: "覆盖当前本地数据，用演示项目体验完整流程"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         }
                     }
-                    .accessibilityLabel("导入示例数据")
-                    .accessibilityHint("会先确认，确认后覆盖当前本地数据")
+                    .accessibilityLabel(String(localized: "导入示例数据"))
+                    .accessibilityHint(String(localized: "会先确认，确认后覆盖当前本地数据"))
                 }
+#endif
             }
 
             Section("系统") {
@@ -216,19 +218,21 @@ struct ProfileTabView: View {
         .sheet(isPresented: $showUserNameEditor) {
             userNameEditorSheet
         }
-        .alert("导入示例数据？", isPresented: $showSampleImportConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("覆盖并导入", role: .destructive) {
+#if DEBUG
+        .alert(String(localized: "导入示例数据？"), isPresented: $showSampleImportConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "覆盖并导入"), role: .destructive) {
                 store.importSampleData(replacingExisting: true)
                 AppHaptics.success()
             }
         } message: {
             if store.hasAnyBusinessData {
-                Text("将清空当前本地数据并写入示例项目、日志、报价、材料和仓库记录。此操作不可撤销。")
+                Text(String(localized: "将清空当前本地数据并写入示例项目、日志、报价、材料和仓库记录。此操作不可撤销。"))
             } else {
-                Text("将写入示例项目、日志、报价、材料和仓库记录，便于演示功能。")
+                Text(String(localized: "将写入示例项目、日志、报价、材料和仓库记录，便于演示功能。"))
             }
         }
+#endif
     }
 
     private var backupStatusCard: some View {

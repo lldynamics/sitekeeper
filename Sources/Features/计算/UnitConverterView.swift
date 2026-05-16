@@ -55,7 +55,7 @@ struct UnitConverterView: View {
                 }
 
                 LabeledContent("数值") {
-                    TextField("1", text: $inputValue)
+                    TextField("1", text: $inputValue.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)

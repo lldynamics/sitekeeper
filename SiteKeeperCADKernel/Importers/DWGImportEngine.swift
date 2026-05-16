@@ -78,7 +78,7 @@ extension SiteKeeperCADKernel {
             )
             database.setImportMetadata(
                 geometryParsed: false,
-                isDiagnosticOnly: true,
+                isMetadataOnly: true,
                 importSource: id
             )
             database.performanceTrace = CADPerformanceTrace(

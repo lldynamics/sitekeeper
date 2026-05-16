@@ -40,3 +40,8 @@ AppStoreShots/
 
 # Xcode local UI state in workspace user data
 sitekeeper.xcodeproj/project.xcworkspace/xcuserdata/**/UserInterfaceState.xcuserstate
+
+# Android local/build artifacts
+android/.gradle/
+android/local.properties
+android/**/build/

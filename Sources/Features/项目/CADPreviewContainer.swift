@@ -1066,6 +1066,12 @@ struct CADPreviewContainer: View {
         CADDrawingCapability.isCADFile(extension: activeRequest.fileType)
     }
 
+    var isDWGFile: Bool {
+        let declaredType = activeRequest.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let pathExtension = activeRequest.fileURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return declaredType == "dwg" || pathExtension == "dwg"
+    }
+
     var selectedCADViewerMode: CADViewerMode {
         CADViewerMode(rawValue: cadViewerModeRaw) ?? .auto
     }
@@ -1083,7 +1089,8 @@ struct CADPreviewContainer: View {
     }
 
     var shouldUseCADKernelRenderer: Bool {
-        Self.shouldEnterInteractiveCADCanvas(
+        guard !isDWGFile else { return false }
+        return Self.shouldEnterInteractiveCADCanvas(
             isCADFile: isCADFile,
             rendererBound: CADRendererProvider.isRendererBound,
             route: cadOpenRoute
@@ -1538,6 +1545,18 @@ struct CADPreviewContainer: View {
 
     var previewContent: AnyView {
         if isCADFile {
+            if isDWGFile {
+                return AnyView(
+                    CADViewerRoute(
+                        request: activeRequest,
+                        onReportIssue: {
+                            Task { @MainActor in
+                                await exportDiagnosticLog()
+                            }
+                        }
+                    )
+                )
+            }
             if shouldUseCADKernelRenderer,
                let renderer = CADRendererProvider.renderer(
                 for: activeRequest.fileURL,
@@ -1640,7 +1659,7 @@ struct CADPreviewContainer: View {
                 lastRendererPerformance = nil
                 forceFallbackForPerformance = false
                 forceFallbackReason = nil
-                if isCADFile, CADRendererProvider.isRendererBound {
+                if isCADFile, !isDWGFile, CADRendererProvider.isRendererBound {
                     cadOpenRoute = .unsupported(
                         CADOpenResult(
                             drawingId: activeRequest.drawingID,
@@ -1651,7 +1670,16 @@ struct CADPreviewContainer: View {
                     )
                 }
                 Task { @MainActor in
-                    if isCADFile {
+                    if isDWGFile {
+                        cadOpenRoute = .unsupported(
+                            CADOpenResult(
+                                drawingId: activeRequest.drawingID,
+                                openState: .unsupported,
+                                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                                technicalDetails: nil
+                            )
+                        )
+                    } else if isCADFile {
                         await refreshCADOpenRoute()
                     } else {
                         cadOpenRoute = .unsupported(

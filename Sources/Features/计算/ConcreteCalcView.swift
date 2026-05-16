@@ -18,16 +18,16 @@ struct ConcreteCalcView: View {
     var body: some View {
         Form {
             Section("板面尺寸") {
-                LabeledContent("长度 (m)") { TextField("10", text: $length).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("长度 (m)") { TextField("10", text: $length.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(length, min: 0.1, max: 10_000, hint: "请输入 0.1–10000"))
                 CalculatorPresetChips(title: "长度预设", options: ["6", "8", "10", "12", "15"], selection: $length)
-                LabeledContent("宽度 (m)") { TextField("8", text: $width).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("宽度 (m)") { TextField("8", text: $width.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(width, min: 0.1, max: 10_000, hint: "请输入 0.1–10000"))
                 CalculatorPresetChips(title: "宽度预设", options: ["4", "6", "8", "10"], selection: $width)
-                LabeledContent("厚度 (cm)") { TextField("12", text: $thickness).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("厚度 (cm)") { TextField("12", text: $thickness.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(thickness, min: 1, max: 200, hint: "请输入 1–200"))
                 CalculatorPresetChips(title: "厚度预设", options: ["10", "12", "15", "18"], selection: $thickness)
-                LabeledContent("损耗 (%)") { TextField("5", text: $waste).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("损耗 (%)") { TextField("5", text: $waste.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(waste, min: 0, max: 40, hint: "请输入 0–40"))
                 CalculatorPresetChips(title: "损耗预设", options: ["3", "5", "8", "10"], selection: $waste)
                 Picker("标号", selection: $gradeRawValue) {

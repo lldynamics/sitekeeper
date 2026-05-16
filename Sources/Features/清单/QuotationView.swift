@@ -75,8 +75,7 @@ struct QuotationView: View {
     @State private var quoteSignerName = String(localized: "项目负责人")
     @State private var quoteExportFormat: QuotationExportFormat = .pdf
     @State private var operationNotice: OperationToastNotice?
-    @State private var pendingDeleteCommitTask: Task<Void, Never>?
-    @State private var pendingDeleteCommit: (() -> Void)?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @FocusState private var quoteFormFocusedField: QuoteFormField?
     @FocusState private var generateQuoteFocusedField: GenerateQuoteField?
 
@@ -806,43 +805,38 @@ struct QuotationView: View {
     }
 
     private func deleteQuotesWithUndo(ids: [UUID]) {
-        guard !ids.isEmpty else { return }
-        flushPendingQuoteDeletionIfNeeded()
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return }
 
         let snapshot = store.quoteItems
-        let idSet = Set(ids)
+        let targets = snapshot.filter { idSet.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
         store.quoteItems.removeAll { idSet.contains($0.id) }
-
-        pendingDeleteCommit = {
-            store.scheduleSave()
-        }
-        pendingDeleteCommitTask = Task { @MainActor in
-            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
-            pendingDeleteCommit?()
-            pendingDeleteCommit = nil
-            pendingDeleteCommitTask = nil
-        }
-
-        operationNotice = OperationToastNotice(
-            message: String(format: String(localized: "已删除 %lld 条报价"), Int64(ids.count)),
-            actionTitle: String(localized: "撤销"),
-            action: {
-                pendingDeleteCommitTask?.cancel()
-                pendingDeleteCommitTask = nil
-                pendingDeleteCommit = nil
-                store.quoteItems = snapshot
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条报价"), Int64(targets.count)),
+            commit: {
                 store.scheduleSave()
-                operationNotice = .info(String(localized: "已撤销删除"))
             },
-            autoDismissDuration: .seconds(4)
+            undo: {
+                store.quoteItems = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.quoteItems,
+                    deletedIDs: idSet
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除报价 %lld 条"), Int64(targets.count)),
+                detail: targets.map(\.name).joined(separator: "、"),
+                source: "QuotationView"
+            )
         )
     }
 
     private func flushPendingQuoteDeletionIfNeeded() {
-        pendingDeleteCommitTask?.cancel()
-        pendingDeleteCommitTask = nil
-        pendingDeleteCommit?()
-        pendingDeleteCommit = nil
+        undoableDeletion.flushPendingCommit()
     }
 }
 

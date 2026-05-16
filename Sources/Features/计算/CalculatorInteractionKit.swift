@@ -15,9 +15,20 @@ enum CalculatorInputParser {
     }
 
     static func int(_ value: String) -> Int? {
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return nil }
-        return Int(normalized)
+        guard let decimal = DataValueParser.decimalValueIfPresent(
+            from: value,
+            requiresEntireString: true
+        ) else {
+            return nil
+        }
+        let doubleValue = NSDecimalNumber(decimal: decimal).doubleValue
+        guard doubleValue.isFinite,
+              doubleValue.rounded(.towardZero) == doubleValue,
+              doubleValue >= Double(Int.min),
+              doubleValue <= Double(Int.max) else {
+            return nil
+        }
+        return Int(doubleValue)
     }
 }
 

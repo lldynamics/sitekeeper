@@ -19,6 +19,8 @@ struct SiteTodoView: View {
     @State private var editingTodo: SiteTodo?
     @State private var didAutoOpenComposer = false
     @State private var didOpenFocusedTodo = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(
         initialProjectId: UUID? = nil,
@@ -111,6 +113,10 @@ struct SiteTodoView: View {
             autoOpenComposerIfNeeded()
             openFocusedTodoIfNeeded()
         }
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     private var compactTodoLayout: some View {
@@ -215,23 +221,59 @@ struct SiteTodoView: View {
     }
 
     private func deleteTodos(_ offsets: IndexSet) {
-        let ids = offsets.compactMap { filteredTodos.indices.contains($0) ? filteredTodos[$0].id : nil }
-        let targets = store.siteTodos.filter { ids.contains($0.id) }
-        targets.forEach(deleteTodoFiles(_:))
-        store.removeSiteTodos(ids: Set(ids))
-        store.scheduleSave()
+        let ids = Set(offsets.compactMap { filteredTodos.indices.contains($0) ? filteredTodos[$0].id : nil })
+        deleteTodoIds(ids)
     }
 
     private func deleteTodo(_ todo: SiteTodo) {
-        deleteTodoFiles(todo)
-        store.removeSiteTodos(ids: Set([todo.id]))
+        deleteTodoIds(Set([todo.id]))
         editingTodo = nil
-        store.scheduleSave()
     }
 
-    private func deleteTodoFiles(_ todo: SiteTodo) {
-        PhotoStorage.delete(fileName: todo.rectificationBeforePhotoFileName)
-        PhotoStorage.delete(fileName: todo.rectificationAfterPhotoFileName)
+    private func deleteTodoIds(_ ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+
+        let targets = store.siteTodos.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let photoFileNames = targets.flatMap(todoPhotoFileNames(_:))
+        let deletion = store.removeSiteTodos(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除现场待办 %lld 条"), Int64(targets.count)),
+                detail: String(format: String(localized: "关联照片文件 %lld 个"), Int64(photoFileNames.count)),
+                source: "SiteTodoView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup(
+                summary: "siteTodo.photoFiles",
+                fileCount: photoFileNames.count,
+                perform: {
+                    PhotoStorage.delete(fileNames: photoFileNames)
+                }
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条现场待办"), Int64(deletion.deletedCount)),
+            commit: {
+                deletion.performDeferredFileCleanup()
+                store.scheduleSave()
+            },
+            undo: {
+                store.siteTodos = deletion.restoredItems(
+                    current: store.siteTodos,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func todoPhotoFileNames(_ todo: SiteTodo) -> [String] {
+        [todo.rectificationBeforePhotoFileName, todo.rectificationAfterPhotoFileName].compactMap { $0 }
     }
 
     private func projectName(_ id: UUID?) -> String {
@@ -390,6 +432,7 @@ private struct SiteTodoEditSheet: View {
     @State private var beforePhotoImportTask: Task<Void, Never>?
     @State private var afterPhotoImportTask: Task<Void, Never>?
     @State private var initialPhotoImportTask: Task<Void, Never>?
+    @State private var createdDraftPhotoFileNames: Set<String> = []
 
     init(
         todo: SiteTodo?,
@@ -503,8 +546,10 @@ private struct SiteTodoEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("保存") {
+                        let value = updatedTodo
                         didCommit = true
-                        onSave(updatedTodo)
+                        onSave(value)
+                        cleanupPhotoFilesAfterSave(savedTodo: value)
                         dismiss()
                     }
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -514,6 +559,7 @@ private struct SiteTodoEditSheet: View {
                 Button("取消", role: .cancel) {}
                 Button("删除", role: .destructive) {
                     didCommit = true
+                    cleanupCreatedDraftPhotoFiles()
                     if let todo { onDelete?(todo) }
                     dismiss()
                 }
@@ -598,7 +644,7 @@ private struct SiteTodoEditSheet: View {
     @MainActor
     private func saveTodoPhotoData(_ data: Data, kind: TodoPhotoKind) async {
         let suffix = kind == .before ? "before" : "after"
-        let fileName = "todo-\(id.uuidString)-\(suffix).jpg"
+        let fileName = "todo-\(id.uuidString)-\(suffix)-\(UUID().uuidString).jpg"
         let saved: String
         do {
             saved = try PhotoStorage.saveOrThrow(original: data, fileName: fileName)
@@ -607,13 +653,14 @@ private struct SiteTodoEditSheet: View {
             showAlert = true
             return
         }
+        createdDraftPhotoFileNames.insert(saved)
         switch kind {
         case .before:
-            if beforePhotoFileName != saved { PhotoStorage.delete(fileName: beforePhotoFileName) }
+            deleteDraftPhotoIfNeeded(beforePhotoFileName)
             beforePhotoFileName = saved
             beforePhotoItem = nil
         case .after:
-            if afterPhotoFileName != saved { PhotoStorage.delete(fileName: afterPhotoFileName) }
+            deleteDraftPhotoIfNeeded(afterPhotoFileName)
             afterPhotoFileName = saved
             afterPhotoItem = nil
         }
@@ -639,19 +686,45 @@ private struct SiteTodoEditSheet: View {
     }
 
     private func clearBeforePhoto() {
-        PhotoStorage.delete(fileName: beforePhotoFileName)
+        deleteDraftPhotoIfNeeded(beforePhotoFileName)
         beforePhotoFileName = nil
     }
 
     private func clearAfterPhoto() {
-        PhotoStorage.delete(fileName: afterPhotoFileName)
+        deleteDraftPhotoIfNeeded(afterPhotoFileName)
         afterPhotoFileName = nil
     }
 
     private func cleanupNewDraftFilesIfNeeded() {
-        guard todo == nil, !didCommit else { return }
-        PhotoStorage.delete(fileName: beforePhotoFileName)
-        PhotoStorage.delete(fileName: afterPhotoFileName)
+        guard !didCommit else { return }
+        cleanupCreatedDraftPhotoFiles()
+    }
+
+    private func deleteDraftPhotoIfNeeded(_ fileName: String?) {
+        guard let fileName, createdDraftPhotoFileNames.remove(fileName) != nil else { return }
+        PhotoStorage.delete(fileName: fileName)
+    }
+
+    private func cleanupCreatedDraftPhotoFiles() {
+        let fileNames = createdDraftPhotoFileNames
+        createdDraftPhotoFileNames.removeAll()
+        PhotoStorage.delete(fileNames: Array(fileNames))
+    }
+
+    private func cleanupPhotoFilesAfterSave(savedTodo: SiteTodo) {
+        let savedFileNames = Set([
+            savedTodo.rectificationBeforePhotoFileName,
+            savedTodo.rectificationAfterPhotoFileName
+        ].compactMap { $0 })
+        let originalFileNames = Set([
+            todo?.rectificationBeforePhotoFileName,
+            todo?.rectificationAfterPhotoFileName
+        ].compactMap { $0 })
+
+        let removedOriginalFileNames = originalFileNames.subtracting(savedFileNames)
+        let unusedDraftFileNames = createdDraftPhotoFileNames.subtracting(savedFileNames)
+        PhotoStorage.delete(fileNames: Array(removedOriginalFileNames.union(unusedDraftFileNames)))
+        createdDraftPhotoFileNames.removeAll()
     }
 
     private var updatedTodo: SiteTodo {

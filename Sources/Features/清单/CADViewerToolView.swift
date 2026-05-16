@@ -117,20 +117,6 @@ struct CADViewerToolView: View {
                 }
             }
 
-            if isCADKernelReady {
-                Section("内核调试") {
-                    Button {
-                        openKernelFixtureSample()
-                    } label: {
-                        Label("打开 simple_floor_plan.json", systemImage: "wrench.and.screwdriver")
-                    }
-                    .buttonStyle(.plain)
-                    Text("使用 samples/cad/intermediate/simple_floor_plan.json 验证交互式内核渲染。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             if !recentDrawings.isEmpty {
                 Section("最近打开") {
                     ForEach(recentDrawings.prefix(3)) { drawing in
@@ -503,66 +489,6 @@ struct CADViewerToolView: View {
         ids.removeAll { $0 == drawingID }
         ids.insert(drawingID, at: 0)
         recentDrawingIDsRaw = ids.prefix(12).map(\.uuidString).joined(separator: "\n")
-    }
-
-    private func openKernelFixtureSample() {
-        do {
-            let fileURL = try prepareKernelFixtureFile()
-            let request = makeKernelFixtureRequest(fileURL: fileURL)
-            previewRequest = request
-        } catch {
-            operationMessage = "样例图纸加载失败：\(error.localizedDescription)"
-        }
-    }
-
-    private func prepareKernelFixtureFile() throws -> URL {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("samples/cad/intermediate/simple_floor_plan.json")
-        guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-            throw CocoaError(.fileNoSuchFile)
-        }
-
-        let fixtureDirectory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("sitekeeper-cad-kernel-fixtures", isDirectory: true)
-        try FileManager.default.createDirectory(at: fixtureDirectory, withIntermediateDirectories: true)
-
-        let destinationURL = fixtureDirectory.appendingPathComponent("simple_floor_plan.json")
-        if FileManager.default.fileExists(atPath: destinationURL.path) {
-            try FileManager.default.removeItem(at: destinationURL)
-        }
-        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
-        return destinationURL
-    }
-
-    private func makeKernelFixtureRequest(fileURL: URL) -> ProjectCADPreviewRequest {
-        let projectID = selectedProjectID ?? store.projects.first?.id ?? UUID()
-        let drawingID = UUID()
-        let fileSize = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.size] as? NSNumber)?.intValue ?? 0
-
-        return ProjectCADPreviewRequest(
-            projectId: projectID,
-            drawingID: drawingID,
-            fileURL: fileURL,
-            displayName: "simple_floor_plan.json",
-            fileType: "dxf",
-            importedAt: Formatters.now(),
-            fileSizeBytes: fileSize,
-            textEncoding: .auto,
-            textBigFont: .auto,
-            textSchemeSnapshot: .init(),
-            cadViewState: .init(),
-            projectFontMappings: [],
-            overlaySnapshotData: "",
-            onOverlaySnapshotChange: { _, _ in },
-            onViewStateChange: { _, _ in },
-            onTextEncodingChange: { _, _ in },
-            onTextBigFontChange: { _, _ in },
-            onTextSchemeSnapshotChange: { _, _ in },
-            onProjectFontMappingsChange: { _, _ in }
-        )
     }
 
     private func detailText(for drawing: ProjectDrawing, showsProject: Bool) -> String {

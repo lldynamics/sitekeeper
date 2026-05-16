@@ -74,7 +74,7 @@ extension SiteKeeperCADKernel {
                 let hasDrawableGeometry = database.drawableEntityCount > 0
                 database.setImportMetadata(
                     geometryParsed: payload.geometryParsed ?? hasDrawableGeometry,
-                    isDiagnosticOnly: payload.isDiagnosticOnly ?? !hasDrawableGeometry,
+                    isMetadataOnly: payload.isMetadataOnly ?? !hasDrawableGeometry,
                     importSource: payload.importSource ?? id,
                     importWarnings: payload.importWarnings ?? database.importWarnings
                 )
@@ -92,7 +92,7 @@ extension SiteKeeperCADKernel {
         var drawingId: String?
         var importSource: String?
         var geometryParsed: Bool?
-        var isDiagnosticOnly: Bool?
+        var isMetadataOnly: Bool?
         var diagnostics: CADDrawingDiagnostics?
         var performanceTrace: CADPerformanceTrace?
         var textTrace: [CADTextTrace]?
