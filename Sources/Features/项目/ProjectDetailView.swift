@@ -270,7 +270,14 @@ struct ProjectDetailContainer: View {
                 onOpenMode: { mode in
                     openMode(mode, prefersInlineSections: usesInlineDetailLayout(for: proxy.size.width))
                 },
-                onScanDocument: { routeState.presentation = .documentScanSetup },
+                onScanDocument: {
+                    routeState.documentScanCategory = nil
+                    routeState.presentation = .documentScanSetup
+                },
+                onScanDocumentCategory: { category in
+                    routeState.documentScanCategory = category
+                    routeState.presentation = .documentScanSetup
+                },
                 onCaptureDocumentPhoto: {
                     assetState.imagePickerSource = .camera
                     routeState.presentation = .imagePicker
@@ -337,6 +344,7 @@ struct ProjectDetailContainer: View {
             project: project,
             projectId: projectId,
             presentation: $routeState.presentation,
+            documentScanCategory: $routeState.documentScanCategory,
             financialAddSeed: $financeState.financialAddSeed,
             imagePickerSource: $assetState.imagePickerSource,
             deliveryGuideData: deliveryGuideData(snapshot: snapshot),

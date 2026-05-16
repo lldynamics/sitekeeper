@@ -1024,32 +1024,39 @@ struct DailyLogView: View {
         let idSet = Set(ids)
         guard !idSet.isEmpty else { return }
 
-        let snapshot = store.dailyLogs
-        let targets = snapshot.filter { idSet.contains($0.id) }
+        let targets = store.dailyLogs.filter { idSet.contains($0.id) }
         guard !targets.isEmpty else { return }
 
         let photoFileNames = targets.flatMap(\.allPhotoFileNames)
-        store.removeDailyLogs(ids: idSet)
-        undoableDeletion.queue(
-            notice: $operationNotice,
-            message: String(format: String(localized: "已删除 %lld 条施工日志"), Int64(targets.count)),
-            commit: {
-                PhotoStorage.delete(fileNames: photoFileNames)
-                store.scheduleSave()
-            },
-            undo: {
-                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
-                    snapshot: snapshot,
-                    current: store.dailyLogs,
-                    deletedIDs: idSet
-                )
-                store.scheduleSave()
-            },
-            audit: UndoableDeletionAuditContext(
+        let deletion = store.removeDailyLogs(
+            ids: idSet,
+            audit: DataStoreDeletionAuditContext(
                 summary: String(format: String(localized: "删除施工日志 %lld 条"), Int64(targets.count)),
                 detail: String(format: String(localized: "关联照片文件 %lld 个"), Int64(photoFileNames.count)),
                 source: "DailyLogView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.photoFiles(
+                photoFileNames,
+                summary: "dailyLog.photoFiles"
             )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条施工日志"), Int64(deletion.deletedCount)),
+            commit: {
+                deletion.performDeferredFileCleanup()
+                store.scheduleSave()
+            },
+            undo: {
+                store.dailyLogs = deletion.restoredItems(
+                    current: store.dailyLogs,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 
@@ -1084,11 +1091,15 @@ struct DailyLogView: View {
         }
         guard let deletedFileName else { return }
         store.dailyLogs[logIndex] = log
+        let deferredCleanup = DataStoreDeferredFileCleanup.photoFiles(
+            [deletedFileName],
+            summary: "dailyLog.photoFiles.single"
+        )
         undoableDeletion.queue(
             notice: $operationNotice,
             message: String(localized: "已删除日志照片"),
             commit: {
-                PhotoStorage.delete(fileName: deletedFileName)
+                deferredCleanup?.perform()
                 store.scheduleSave()
             },
             undo: {

@@ -85,6 +85,9 @@ struct ProjectFinancialRecordAddSheet: View {
                                 Text(line)
                                     .font(.caption2)
                             }
+                            ReceiptOCRAmountCandidatesView(candidates: ocrPreview.amountCandidates) { candidate in
+                                applyOCRAmountCandidate(candidate)
+                            }
                         }
                     }
                 }
@@ -257,7 +260,9 @@ struct ProjectFinancialRecordAddSheet: View {
 
     @MainActor
     private func applyOCRResult(_ result: ReceiptOCRResult) {
-        if let amountText = result.amount, !amountText.isEmpty {
+        if result.amountCandidates.isEmpty,
+           let amountText = result.amount,
+           !amountText.isEmpty {
             amount = NumericInputSupport.sanitize(amountText, kind: .amount)
         }
         if let party = result.counterparty, !party.isEmpty {
@@ -270,6 +275,12 @@ struct ProjectFinancialRecordAddSheet: View {
            let recognizedDate = Formatters.date.date(from: dateText) {
             date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
         }
+    }
+
+    @MainActor
+    private func applyOCRAmountCandidate(_ candidate: ReceiptOCRAmountCandidate) {
+        amount = NumericInputSupport.sanitize(candidate.amount, kind: .amount)
+        AppHaptics.success()
     }
 }
 
@@ -380,6 +391,9 @@ struct ProjectFinancialRecordEditSheet: View {
                             ForEach(ProjectFinancialReceiptOCRSupport.summaryLines(from: ocrPreview), id: \.self) { line in
                                 Text(line)
                                     .font(.caption2)
+                            }
+                            ReceiptOCRAmountCandidatesView(candidates: ocrPreview.amountCandidates) { candidate in
+                                applyOCRAmountCandidate(candidate)
                             }
                         }
                     }
@@ -603,7 +617,9 @@ struct ProjectFinancialRecordEditSheet: View {
 
     @MainActor
     private func applyOCRResult(_ result: ReceiptOCRResult) {
-        if let amountText = result.amount, !amountText.isEmpty {
+        if result.amountCandidates.isEmpty,
+           let amountText = result.amount,
+           !amountText.isEmpty {
             amount = NumericInputSupport.sanitize(amountText, kind: .amount)
         }
         if let party = result.counterparty, !party.isEmpty {
@@ -615,6 +631,50 @@ struct ProjectFinancialRecordEditSheet: View {
         if let dateText = result.date,
            let recognizedDate = Formatters.date.date(from: dateText) {
             date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
+        }
+    }
+
+    @MainActor
+    private func applyOCRAmountCandidate(_ candidate: ReceiptOCRAmountCandidate) {
+        amount = NumericInputSupport.sanitize(candidate.amount, kind: .amount)
+        AppHaptics.success()
+    }
+}
+
+private struct ReceiptOCRAmountCandidatesView: View {
+    let candidates: [ReceiptOCRAmountCandidate]
+    let onApply: (ReceiptOCRAmountCandidate) -> Void
+
+    var body: some View {
+        if !candidates.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(format: String(localized: "识别到 %lld 个金额候选，请点选确认："), Int64(candidates.count)))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                ForEach(candidates) { candidate in
+                    HStack(alignment: .top, spacing: 6) {
+                        Button {
+                            onApply(candidate)
+                        } label: {
+                            Text(String(format: String(localized: "回填金额：%@"), candidate.amount))
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Text(
+                            String(
+                                format: String(localized: "置信度：%lld%%"),
+                                Int64(candidate.confidencePercent)
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                    Text(candidate.sourceLine)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
         }
     }
 }

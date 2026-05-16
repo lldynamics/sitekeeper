@@ -2,11 +2,13 @@ import SwiftUI
 
 struct ProjectDocumentsView: View {
     let documents: [ProjectDocument]
+    let requiredCategories: [ProjectDocumentCategory]
     let financialRecords: [ProjectFinancialRecord]
     let constructionMethods: [ConstructionMethod]
     let icon: (ProjectDocumentCategory) -> String
     let onOpen: (ProjectDocument) -> Void
     let onLink: (UUID, UUID) -> Void
+    let onScanCategory: (ProjectDocumentCategory) -> Void
     @State private var categoryFilter: DocumentCategoryFilter = .all
     @State private var relationFilter: DocumentRelationFilter = .all
     @State private var useDateRange = false
@@ -43,8 +45,17 @@ struct ProjectDocumentsView: View {
         }
     }
 
+    private var checklistSnapshot: DocumentArchiveChecklistSnapshot {
+        DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: requiredCategories
+        )
+    }
+
     var body: some View {
         Group {
+            checklistSection
+
             if !documents.isEmpty || hasActiveFilters {
                 Section {
                     Button {
@@ -130,6 +141,13 @@ struct ProjectDocumentsView: View {
                                     Text(document.createdAt)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
+                                    let registerLine = documentRegisterSummary(for: document)
+                                    if !registerLine.isEmpty {
+                                        Text(registerLine)
+                                            .font(.caption2)
+                                            .foregroundStyle(.secondary)
+                                            .lineLimit(2)
+                                    }
                                     let linkedTitles = linkedMethodTitles(for: document)
                                     if !linkedTitles.isEmpty {
                                         Text("工艺: \(linkedTitles.joined(separator: "、"))")
@@ -176,6 +194,84 @@ struct ProjectDocumentsView: View {
     }
 
     @State private var showFilterSheet = false
+
+    private var checklistSection: some View {
+        let snapshot = checklistSnapshot
+        return Section(String(localized: "资料清单")) {
+            VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                HStack(alignment: .firstTextBaseline) {
+                    Label(
+                        String(format: String(localized: "覆盖 %lld/%lld 类"), Int64(snapshot.coveredCount), Int64(snapshot.requiredCount)),
+                        systemImage: "checklist"
+                    )
+                    .font(.callout.weight(.semibold))
+                    Spacer()
+                    Text(snapshot.statusLine)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(snapshot.hasAttention ? Color.appWarning : Color.appSuccess)
+                }
+                ProgressView(
+                    value: Double(snapshot.coveredCount),
+                    total: Double(max(snapshot.requiredCount, 1))
+                )
+                HStack(spacing: AppSpacing.normal) {
+                    Text(String(format: String(localized: "缺项 %lld"), Int64(snapshot.missingCount)))
+                    Text(String(format: String(localized: "待处理 %lld"), Int64(snapshot.actionCount)))
+                    Text(String(format: String(localized: "已归档 %lld"), Int64(snapshot.archivedDocumentCount)))
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                if snapshot.legacyDocumentCount > 0 {
+                    Text(String(format: String(localized: "旧类资料 %lld 份待细分"), Int64(snapshot.legacyDocumentCount)))
+                        .font(.caption2)
+                        .foregroundStyle(Color.appWarning)
+                }
+            }
+
+            ForEach(snapshot.items) { item in
+                HStack(spacing: AppSpacing.tight) {
+                    Button {
+                        categoryFilter = DocumentCategoryFilter(category: item.category)
+                    } label: {
+                        checklistRow(item)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+
+                    Button {
+                        onScanCategory(item.category)
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.title3)
+                            .foregroundStyle(Color.appPrimaryAction)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(String(format: String(localized: "补录%@"), item.category.displayName))
+                }
+            }
+        }
+    }
+
+    private func checklistRow(_ item: DocumentArchiveChecklistItem) -> some View {
+        HStack(alignment: .top, spacing: AppSpacing.normal) {
+            Image(systemName: item.systemImage)
+                .font(.callout)
+                .foregroundStyle(item.tint)
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(item.category.displayName)
+                    .font(.callout.weight(.medium))
+                    .foregroundStyle(.primary)
+                Text(item.detailText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(item.statusText)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(item.tint)
+        }
+    }
 
     @ViewBuilder
     private var filterForm: some View {
@@ -249,6 +345,17 @@ struct ProjectDocumentsView: View {
         return document.linkedConstructionMethodIDs.compactMap { lookup[$0] }
     }
 
+    private func documentRegisterSummary(for document: ProjectDocument) -> String {
+        [
+            document.submissionStatus.displayName,
+            document.formedAt.isEmpty ? nil : String(format: String(localized: "形成 %@"), document.formedAt),
+            document.responsiblePerson.isEmpty ? nil : String(format: String(localized: "责任人 %@"), document.responsiblePerson),
+            document.workSection.isEmpty ? nil : document.workSection
+        ]
+        .compactMap { $0 }
+        .joined(separator: " · ")
+    }
+
     private func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -258,23 +365,90 @@ struct ProjectDocumentsView: View {
 
 }
 
+extension DocumentArchiveChecklistItem {
+    var tint: Color {
+        if isMissing || returnedCount > 0 { return .appWarning }
+        if actionCount > 0 { return .appPrimaryAction }
+        return .appSuccess
+    }
+}
+
 private enum DocumentCategoryFilter: String, CaseIterable {
     case all = "全部"
+    case constructionArchive = "全部施工资料"
+    case constructionTechnical = "施工技术"
+    case constructionMaterial = "施工物资"
+    case constructionSurvey = "施工测量"
+    case constructionRecord = "施工记录"
+    case constructionTest = "施工试验"
+    case constructionManagement = "施工管理"
+    case processAcceptance = "过程验收"
+    case completionAcceptance = "竣工验收"
+    case businessArchive = "商务/财务"
     case invoice = "发票"
     case receipt = "收据"
-    case construction = "施工资料"
+    case legacyConstruction = "施工资料"
 
     var displayName: String { rawValue }
+
+    init(category: ProjectDocumentCategory) {
+        switch category {
+        case .constructionTechnical:
+            self = .constructionTechnical
+        case .constructionMaterial:
+            self = .constructionMaterial
+        case .constructionSurvey:
+            self = .constructionSurvey
+        case .constructionRecord:
+            self = .constructionRecord
+        case .constructionTest:
+            self = .constructionTest
+        case .constructionManagement:
+            self = .constructionManagement
+        case .processAcceptance:
+            self = .processAcceptance
+        case .completionAcceptance:
+            self = .completionAcceptance
+        case .invoice:
+            self = .invoice
+        case .receipt:
+            self = .receipt
+        case .construction:
+            self = .legacyConstruction
+        case .paymentRequest, .contract, .acceptance, .other:
+            self = .all
+        }
+    }
 
     func matches(_ document: ProjectDocument) -> Bool {
         switch self {
         case .all:
             return true
+        case .constructionArchive:
+            return document.category.isConstructionArchive
+        case .constructionTechnical:
+            return document.category == .constructionTechnical
+        case .constructionMaterial:
+            return document.category == .constructionMaterial
+        case .constructionSurvey:
+            return document.category == .constructionSurvey
+        case .constructionRecord:
+            return document.category == .constructionRecord
+        case .constructionTest:
+            return document.category == .constructionTest
+        case .constructionManagement:
+            return document.category == .constructionManagement
+        case .processAcceptance:
+            return document.category == .processAcceptance
+        case .completionAcceptance:
+            return document.category == .completionAcceptance
+        case .businessArchive:
+            return document.category.isBusinessArchive
         case .invoice:
             return document.category == .invoice
         case .receipt:
             return document.category == .receipt
-        case .construction:
+        case .legacyConstruction:
             return document.category == .construction
         }
     }

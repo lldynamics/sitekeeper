@@ -19,13 +19,23 @@ enum ExportFileURLPreparer {
             do {
                 try FileManager.default.removeItem(at: parent)
             } catch {
-                StorageIssueLog.record("导出临时目录清理失败：\(parent.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "export.cleanup_directory_failed",
+                    category: .fileStorage,
+                    details: ["directory": parent.lastPathComponent],
+                    error: error
+                )
             }
         } else if FileManager.default.fileExists(atPath: fileURL.path) {
             do {
                 try FileManager.default.removeItem(at: fileURL)
             } catch {
-                StorageIssueLog.record("导出临时文件清理失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "export.cleanup_file_failed",
+                    category: .fileStorage,
+                    details: ["file": fileURL.lastPathComponent],
+                    error: error
+                )
             }
         }
     }

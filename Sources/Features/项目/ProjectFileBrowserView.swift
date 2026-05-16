@@ -344,9 +344,9 @@ struct ProjectFileBrowserView: View {
                 if normalizedQuery.isEmpty {
                     Section("建议下一步") {
                         ContentUnavailableView(
-                            "暂无全局文件",
+                            "暂无项目资料",
                             systemImage: "folder",
-                            description: Text("先新建项目并补充日志、图纸或票据，这里会自动聚合显示。")
+                            description: Text("先新建项目并补充日志、图纸、票据或随手记附件，这里会自动聚合显示。")
                         )
                         NavigationLink {
                             ProjectListView(autoOpenComposerToken: 1)
@@ -382,9 +382,9 @@ struct ProjectFileBrowserView: View {
                 }
             }
         }
-        .navigationTitle("全局文件检索")
+        .navigationTitle("项目资料")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "搜索全部项目或文件")
+        .searchable(text: $searchText, prompt: "搜索项目或资料文件")
     }
 
     private var splitBrowserLayout: some View {
@@ -450,8 +450,8 @@ struct ProjectFileBrowserView: View {
                     }
                 }
             }
-            .navigationTitle("全局文件检索")
-            .searchable(text: $searchText, prompt: "搜索全部项目或文件")
+            .navigationTitle("项目资料")
+            .searchable(text: $searchText, prompt: "搜索项目或资料文件")
         } content: {
             List {
                 if let selectedProject {
@@ -516,7 +516,7 @@ struct ProjectFileBrowserView: View {
                     ContentUnavailableView(
                         "请选择项目",
                         systemImage: "building.2.crop.circle",
-                        description: Text("左侧是全局项目列表；选择后查看该项目文件。")
+                        description: Text("左侧是项目列表；选择后查看该项目资料。")
                     )
                 }
             }

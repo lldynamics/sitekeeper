@@ -16,11 +16,7 @@ xcuserdata/
 *.xcuserstate
 
 # Swift Package Manager
-Packages/*
-!Packages/LibreDWGBridge/
-!Packages/LibreDWGBridge/**
-Packages/LibreDWGBridge/.build/
-Packages/LibreDWGBridge/.swiftpm/
+Packages/
 Package.resolved
 
 # Local Python environments
@@ -28,6 +24,7 @@ Package.resolved
 
 # macOS
 .DS_Store
+.vscode/
 
 # Local CAD sample corpus (keep binaries local only)
 samples/cad/**/*.dwg

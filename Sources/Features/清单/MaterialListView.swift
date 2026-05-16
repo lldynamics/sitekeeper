@@ -151,11 +151,7 @@ struct MaterialListView: View {
         }
         .confirmationDialog("清空全部材料？", isPresented: $showClearAll, titleVisibility: .visible) {
             Button("清空", role: .destructive) {
-                store.materialItems.removeAll()
-                selection.removeAll()
-                isSelecting = false
-                store.scheduleSave()
-                operationMessage = String(localized: "已清空全部材料")
+                clearAllMaterials()
             }
             Button("取消", role: .cancel) {}
         }
@@ -376,17 +372,29 @@ struct MaterialListView: View {
     }
 
     private func confirmDeleteMaterials(_ plan: PendingMaterialDeletePlan) {
-        let snapshot = store.materialItems
-        let targets = snapshot.filter { plan.ids.contains($0.id) }
+        let targets = store.materialItems.filter { plan.ids.contains($0.id) }
         guard !targets.isEmpty else {
             pendingDeletePlan = nil
             return
         }
+        let deletion = store.removeMaterialItems(
+            ids: plan.ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除材料"),
+                detail: materialDeletionDetail(targets),
+                source: "MaterialListView"
+            )
+        )
+        guard !deletion.isEmpty else {
+            pendingDeletePlan = nil
+            return
+        }
+
+        let removedIDs = deletion.removedIDs(\.id)
         let selectionSnapshot = selection
         let isSelectingSnapshot = isSelecting
 
-        store.materialItems.removeAll { plan.ids.contains($0.id) }
-        selection.subtract(plan.ids)
+        selection.subtract(removedIDs)
         if plan.endSelectionAfterDelete {
             selection.removeAll()
             isSelecting = false
@@ -401,22 +409,59 @@ struct MaterialListView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialItems = UndoableDeletionCoordinator.restoringItems(
-                    snapshot: snapshot,
+                store.materialItems = deletion.restoredItems(
                     current: store.materialItems,
-                    deletedIDs: plan.ids
+                    id: \.id
                 )
                 selection = selectionSnapshot
                 isSelecting = isSelectingSnapshot
                 store.scheduleSave()
             },
-            audit: UndoableDeletionAuditContext(
-                summary: String(format: String(localized: "删除材料 %lld 条"), Int64(targets.count)),
-                detail: targets.map(\.name).joined(separator: "、"),
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+        pendingDeletePlan = nil
+    }
+
+    private func clearAllMaterials() {
+        let ids = Set(store.materialItems.map(\.id))
+        guard !ids.isEmpty else { return }
+        let deletion = store.removeMaterialItems(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "清空全部材料"),
+                detail: String(format: String(localized: "已删除 %lld 条材料"), Int64(ids.count)),
                 source: "MaterialListView"
             )
         )
-        pendingDeletePlan = nil
+        guard !deletion.isEmpty else { return }
+
+        let selectionSnapshot = selection
+        let isSelectingSnapshot = isSelecting
+        selection.removeAll()
+        isSelecting = false
+        operationMessage = nil
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已清空全部材料"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialItems = deletion.restoredItems(
+                    current: store.materialItems,
+                    id: \.id
+                )
+                selection = selectionSnapshot
+                isSelecting = isSelectingSnapshot
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func materialDeletionDetail(_ items: [MaterialItem]) -> String {
+        ListFormatter.localizedString(byJoining: items.map(\.name))
     }
 
     private func applyBulkProject() {

@@ -69,6 +69,8 @@ struct CADRendererPerformanceSnapshot: Equatable {
     let visibleLayerCount: Int
     let simplifiedMode: Bool
     let renderCommandCount: Int
+    let textCommandCount: Int
+    let textOverlayCount: Int
     let renderMs: Double
     let firstFrameMs: Double
 
@@ -80,6 +82,8 @@ struct CADRendererPerformanceSnapshot: Equatable {
         visibleLayerCount: Int,
         simplifiedMode: Bool,
         renderCommandCount: Int? = nil,
+        textCommandCount: Int = 0,
+        textOverlayCount: Int = 0,
         renderMs: Double? = nil,
         firstFrameMs: Double? = nil
     ) {
@@ -90,6 +94,8 @@ struct CADRendererPerformanceSnapshot: Equatable {
         self.visibleLayerCount = visibleLayerCount
         self.simplifiedMode = simplifiedMode
         self.renderCommandCount = renderCommandCount ?? drawCallCount
+        self.textCommandCount = textCommandCount
+        self.textOverlayCount = textOverlayCount
         self.renderMs = renderMs ?? frameTimeMilliseconds
         self.firstFrameMs = firstFrameMs ?? frameTimeMilliseconds
     }
@@ -106,6 +112,7 @@ struct CADRendererCallbacks {
     var onSnapPointsChange: ([CADRendererSnapPointPayload]) -> Void = { _ in }
     var onTextAutoDetectionChange: (CADTextAutoDetectionResult) -> Void = { _ in }
     var onOpenQualityChange: (CADOpenQualitySnapshot) -> Void = { _ in }
+    var onOpenTraceChange: (CADPoC.CADOpenTrace) -> Void = { _ in }
     var onPerformanceSample: (CADRendererPerformanceSnapshot) -> Void = { _ in }
     var onFallbackRecommendation: (String) -> Void = { _ in }
 }

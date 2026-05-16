@@ -3,6 +3,7 @@ import Foundation
 extension SiteKeeperCADKernel {
     enum CADEntityKind: String, Equatable, Codable, CaseIterable {
         case line
+        case point
         case polyline
         case lwPolyline
         case circle
@@ -45,6 +46,11 @@ extension SiteKeeperCADKernel {
         var textStyleId: String
         var height: Double
         var rotationRadians: Double
+        var widthFactor: Double?
+        var boxWidth: Double?
+        var boxHeight: Double?
+        var horizontalAlignmentCode: Int?
+        var verticalAlignmentCode: Int?
 
         init(
             rawText: String,
@@ -62,7 +68,12 @@ extension SiteKeeperCADKernel {
             insertionPoint: CADPoint,
             textStyleId: String = CADTextStyle.default.id,
             height: Double = 2.5,
-            rotationRadians: Double = 0
+            rotationRadians: Double = 0,
+            widthFactor: Double? = nil,
+            boxWidth: Double? = nil,
+            boxHeight: Double? = nil,
+            horizontalAlignmentCode: Int? = nil,
+            verticalAlignmentCode: Int? = nil
         ) {
             self.rawText = rawText
             self.decodedText = decodedText ?? rawText
@@ -80,6 +91,11 @@ extension SiteKeeperCADKernel {
             self.textStyleId = textStyleId
             self.height = height
             self.rotationRadians = rotationRadians
+            self.widthFactor = widthFactor
+            self.boxWidth = boxWidth
+            self.boxHeight = boxHeight
+            self.horizontalAlignmentCode = horizontalAlignmentCode
+            self.verticalAlignmentCode = verticalAlignmentCode
         }
 
         var styleID: String {
@@ -190,7 +206,7 @@ extension SiteKeeperCADKernel {
         var isRenderable: Bool {
             guard visibility == .visible else { return false }
             switch type {
-            case .line, .polyline, .lwPolyline, .circle, .arc, .ellipse, .spline, .text, .mtext, .insert, .attrib, .hatch, .dimension, .image, .table, .blockReference:
+            case .line, .point, .polyline, .lwPolyline, .circle, .arc, .ellipse, .spline, .text, .mtext, .insert, .attrib, .hatch, .dimension, .image, .table, .blockReference:
                 return path != nil || text != nil || blockName != nil
             case .xref, .proxy, .unsupported:
                 return false

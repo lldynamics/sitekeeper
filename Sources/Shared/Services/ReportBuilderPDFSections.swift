@@ -6,25 +6,26 @@ enum ReportBuilderPDFSections {
         options: ExportContentOptions,
         lines: inout [String]
     ) {
+        let currencyDisplayMode = options.currencyDisplayMode
         if options.includeMaterials {
             lines.append(String(localized: "材料清单"))
             lines += snapshot.materialItems.map {
-                "- \($0.name)  \($0.quantity) \($0.unit)  单价\(ReportBuilder.money(ReportBuilder.number($0.unitPrice)))  金额\(ReportBuilder.money(ReportBuilder.materialLineTotal($0)))"
+                "- \($0.name)  \($0.quantity) \($0.unit)  单价\(ReportBuilder.money(ReportBuilder.number($0.unitPrice), currencyDisplayMode: currencyDisplayMode))  金额\(ReportBuilder.money(ReportBuilder.materialLineTotal($0), currencyDisplayMode: currencyDisplayMode))"
             }
             lines.append("")
         }
         if options.includeQuotes {
             let total = snapshot.quoteItems.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
-            lines.append("\(String(localized: "报价明细"))  合计 \(ReportBuilder.money(total))")
+            lines.append("\(String(localized: "报价明细"))  合计 \(ReportBuilder.money(total, currencyDisplayMode: currencyDisplayMode))")
             lines += snapshot.quoteItems.map {
-                "- \($0.name)  \($0.quantity)\($0.unit)  \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0)))"
+                "- \($0.name)  \($0.quantity)\($0.unit)  \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0), currencyDisplayMode: currencyDisplayMode))"
             }
             lines.append("")
         }
         if options.includeLabor {
             lines.append(String(localized: "人工记录"))
             lines += snapshot.laborRecords.map {
-                "- \($0.date)  \($0.workers)人 × \($0.hours)h  单价\(ReportBuilder.money(ReportBuilder.number($0.unitRate)))  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))  \($0.note)"
+                "- \($0.date)  \($0.workers)人 × \($0.hours)h  单价\(ReportBuilder.money(ReportBuilder.number($0.unitRate), currencyDisplayMode: currencyDisplayMode))  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0), currencyDisplayMode: currencyDisplayMode))  \($0.note)"
             }
             lines.append("")
         }
@@ -51,14 +52,28 @@ enum ReportBuilderPDFSections {
             lines.append(String(localized: "项目财务流水"))
             lines += snapshot.projectFinancialRecords.sorted(by: { $0.date > $1.date }).map {
                 let reminder = $0.hasDueReminder ? "  到期\($0.dueDate) \($0.normalizedReminderStatus.displayName)" : ""
-                return "- \($0.date) [\($0.direction.displayName)] [\($0.category.displayName)] [\($0.normalizedStatus.displayName)]\(reminder) \(ReportBuilder.money(ReportBuilder.number($0.amount)))  \($0.counterparty)  票据\($0.linkedDocumentIds.count)份"
+                return "- \($0.date) [\($0.direction.displayName)] [\($0.category.displayName)] [\($0.normalizedStatus.displayName)]\(reminder) \(ReportBuilder.money(ReportBuilder.number($0.amount), currencyDisplayMode: currencyDisplayMode))  \($0.counterparty)  票据\($0.linkedDocumentIds.count)份"
             }
         }
         if options.includeProjectDocuments {
+            let checklistRows = ReportBuilder.projectDocumentChecklistExportRows(snapshot: snapshot)
+            let missingCount = checklistRows.filter { $0.item.isMissing }.count
+            let actionCount = checklistRows.reduce(0) { $0 + $1.item.actionCount }
+            let archivedDocumentCount = checklistRows.reduce(0) { $0 + $1.item.archivedCount }
+            lines.append("")
+            lines.append(String(localized: "施工资料清单"))
+            lines.append(String(format: String(localized: "模板项 %lld 类 · 缺项 %lld · 待处理 %lld · 已归档 %lld"), Int64(checklistRows.count), Int64(missingCount), Int64(actionCount), Int64(archivedDocumentCount)))
+            lines += checklistRows.map {
+                let projectName = $0.projectName.isEmpty ? "" : "\($0.projectName)  "
+                return "- [\($0.item.statusText)] \(projectName)\($0.item.category.displayName)  \($0.item.detailText)"
+            }
             lines.append("")
             lines.append(String(localized: "项目票据与资料"))
             lines += snapshot.projectDocuments.sorted(by: { $0.createdAt > $1.createdAt }).map {
-                "- \($0.createdAt) [\($0.category.displayName)] \($0.title)  \($0.pageCount)页  \(ReportBuilder.money(ReportBuilder.number($0.amount)))"
+                let register = [$0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+                return "- \($0.createdAt) [\($0.category.displayName)] \($0.title)  \($0.pageCount)页  \(ReportBuilder.money(ReportBuilder.number($0.amount), currencyDisplayMode: currencyDisplayMode))  \(register)"
             }
         }
         if options.includeProjectContacts && !snapshot.projectContacts.isEmpty {
@@ -89,6 +104,11 @@ enum ReportBuilderPDFSections {
             lines += snapshot.lightingCircuitPlans.map {
                 "- \($0.name) [\($0.supplyType.displayName)] \($0.voltage)V  \($0.loads.count)个负荷"
             }
+        }
+        if options.includeOperationAuditLogs && !options.operationAuditEntries.isEmpty {
+            lines.append("")
+            lines.append(String(localized: "操作审计日志"))
+            lines += options.operationAuditEntries.map(ReportBuilder.operationAuditPDFLine)
         }
     }
 }

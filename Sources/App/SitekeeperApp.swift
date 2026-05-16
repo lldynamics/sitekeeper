@@ -71,10 +71,28 @@ private enum UITestLaunchConfig {
             }
         }
 
-        PhotoStorage.delete(fileNames: PhotoStorage.allStoredFileNames())
-        DrawingStorage.delete(fileNames: DrawingStorage.allStoredFileNames())
-        ProjectDocumentStorage.delete(fileNames: ProjectDocumentStorage.allStoredFileNames())
-        QuickNoteAttachmentStorage.delete(fileNames: QuickNoteAttachmentStorage.allStoredFileNames())
+        DataStoreDeferredFileCleanup.combined(
+            summary: "uiTest.resetLocalState",
+            cleanups: [
+                DataStoreDeferredFileCleanup.photoFiles(
+                    PhotoStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.photos"
+                ),
+                DataStoreDeferredFileCleanup.drawingFiles(
+                    DrawingStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.drawings"
+                ),
+                DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    ProjectDocumentStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.projectDocuments"
+                ),
+                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                    QuickNoteAttachmentStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.quickNoteAttachments"
+                )
+            ]
+        )
+        .perform()
         StorageIssueLog.clear()
         defaults.synchronize()
     }

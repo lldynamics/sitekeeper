@@ -54,6 +54,22 @@ enum ProjectDetailFinanceDocumentHelper {
             return "doc.text.fill"
         case .construction:
             return "hammer.fill"
+        case .constructionTechnical:
+            return "doc.text.magnifyingglass"
+        case .constructionMaterial:
+            return "shippingbox.fill"
+        case .constructionSurvey:
+            return "ruler.fill"
+        case .constructionRecord:
+            return "book.pages.fill"
+        case .constructionTest:
+            return "testtube.2"
+        case .constructionManagement:
+            return "person.2.badge.gearshape.fill"
+        case .processAcceptance:
+            return "checklist.checked"
+        case .completionAcceptance:
+            return "checkmark.seal.fill"
         case .invoice:
             return "doc.richtext.fill"
         case .receipt:

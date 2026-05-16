@@ -9,26 +9,71 @@ struct ConcreteCalcView: View {
     @AppStorage(UserPreferenceKeys.Calculator.concreteGrade) private var gradeRawValue = ConcreteGrade.c25.rawValue
     @State private var result = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
 
     private var grade: ConcreteGrade {
         StringEnumFallback.value(gradeRawValue, default: ConcreteGrade.c25)
     }
 
+    private var lengthValidation: NumericInputFieldValidation {
+        InputValidator.validateField(
+            length,
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 0.1,
+            max: 10_000,
+            rangeMessage: calculatorLoc("请输入 0.1–10000")
+        )
+    }
+
+    private var widthValidation: NumericInputFieldValidation {
+        InputValidator.validateField(
+            width,
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 0.1,
+            max: 10_000,
+            rangeMessage: calculatorLoc("请输入 0.1–10000")
+        )
+    }
+
+    private var thicknessValidation: NumericInputFieldValidation {
+        InputValidator.validateField(
+            thickness,
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 1,
+            max: 200,
+            rangeMessage: calculatorLoc("请输入 1–200")
+        )
+    }
+
+    private var wasteValidation: NumericInputFieldValidation {
+        InputValidator.validateField(
+            waste,
+            kind: .quantity,
+            requirement: .requiredNonNegative,
+            min: 0,
+            max: 40,
+            rangeMessage: calculatorLoc("请输入 0–40")
+        )
+    }
+
     var body: some View {
         Form {
             Section("板面尺寸") {
                 LabeledContent("长度 (m)") { TextField("10", text: $length.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(length, min: 0.1, max: 10_000, hint: "请输入 0.1–10000"))
+                NumericInputFieldValidationHint(validation: lengthValidation, showWhenEmpty: didAttemptSubmit)
                 CalculatorPresetChips(title: "长度预设", options: ["6", "8", "10", "12", "15"], selection: $length)
                 LabeledContent("宽度 (m)") { TextField("8", text: $width.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(width, min: 0.1, max: 10_000, hint: "请输入 0.1–10000"))
+                NumericInputFieldValidationHint(validation: widthValidation, showWhenEmpty: didAttemptSubmit)
                 CalculatorPresetChips(title: "宽度预设", options: ["4", "6", "8", "10"], selection: $width)
                 LabeledContent("厚度 (cm)") { TextField("12", text: $thickness.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(thickness, min: 1, max: 200, hint: "请输入 1–200"))
+                NumericInputFieldValidationHint(validation: thicknessValidation, showWhenEmpty: didAttemptSubmit)
                 CalculatorPresetChips(title: "厚度预设", options: ["10", "12", "15", "18"], selection: $thickness)
                 LabeledContent("损耗 (%)") { TextField("5", text: $waste.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(waste, min: 0, max: 40, hint: "请输入 0–40"))
+                NumericInputFieldValidationHint(validation: wasteValidation, showWhenEmpty: didAttemptSubmit)
                 CalculatorPresetChips(title: "损耗预设", options: ["3", "5", "8", "10"], selection: $waste)
                 Picker("标号", selection: $gradeRawValue) {
                     ForEach(ConcreteGrade.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
@@ -37,6 +82,7 @@ struct ConcreteCalcView: View {
             Section {
                 Button("估算") {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     calc()
                 }
                 .frame(maxWidth: .infinity)
@@ -60,11 +106,12 @@ struct ConcreteCalcView: View {
     }
 
     private func calc() {
-        guard let l = CalculatorInputParser.double(length), l > 0,
-              let w = CalculatorInputParser.double(width), w > 0,
-              let t = CalculatorInputParser.double(thickness), t > 0,
-              let ws = CalculatorInputParser.double(waste), ws >= 0 else {
-            presentError("请输入有效数值")
+        guard let l = lengthValidation.doubleValue,
+              let w = widthValidation.doubleValue,
+              let t = thicknessValidation.doubleValue,
+              let ws = wasteValidation.doubleValue else {
+            result = ""
+            resultModel = nil
             return
         }
         let net = l * w * t / 100
@@ -103,18 +150,6 @@ struct ConcreteCalcView: View {
             input: "\(length)×\(width)m, \(thickness)cm, \(grade.displayName)",
             result: r
         )
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
-    }
-
-    private func presentError(_ message: String) {
-        result = message
-        resultModel = .error(message)
     }
 }
 

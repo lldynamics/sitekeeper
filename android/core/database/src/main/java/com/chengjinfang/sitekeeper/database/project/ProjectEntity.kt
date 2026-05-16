@@ -32,10 +32,14 @@ data class ProjectSummary(
     val contractAmount: String,
     val paidAmount: String,
     val paymentStatus: String,
+    val latestActivityDate: String = "",
     val dailyLogCount: Int = 0,
     val openTodoCount: Int = 0,
     val financialRecordCount: Int = 0,
-    val materialItemCount: Int = 0
+    val materialItemCount: Int = 0,
+    val overdueTodoCount: Int = 0,
+    val dueIncomeCount: Int = 0,
+    val unarrivedMaterialCount: Int = 0
 )
 
 fun Project.toEntity(): ProjectEntity =
@@ -57,10 +61,14 @@ fun Project.toEntity(): ProjectEntity =
     )
 
 fun ProjectEntity.toSummary(
+    latestActivityDate: String = "",
     dailyLogCount: Int = 0,
     openTodoCount: Int = 0,
     financialRecordCount: Int = 0,
-    materialItemCount: Int = 0
+    materialItemCount: Int = 0,
+    overdueTodoCount: Int = 0,
+    dueIncomeCount: Int = 0,
+    unarrivedMaterialCount: Int = 0
 ): ProjectSummary =
     ProjectSummary(
         id = id,
@@ -72,8 +80,12 @@ fun ProjectEntity.toSummary(
         contractAmount = contractAmount,
         paidAmount = paidAmount,
         paymentStatus = paymentStatus,
+        latestActivityDate = latestActivityDate,
         dailyLogCount = dailyLogCount,
         openTodoCount = openTodoCount,
         financialRecordCount = financialRecordCount,
-        materialItemCount = materialItemCount
+        materialItemCount = materialItemCount,
+        overdueTodoCount = overdueTodoCount,
+        dueIncomeCount = dueIncomeCount,
+        unarrivedMaterialCount = unarrivedMaterialCount
     )

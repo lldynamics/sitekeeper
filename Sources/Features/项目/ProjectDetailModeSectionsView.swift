@@ -51,6 +51,7 @@ struct ProjectDetailModeSectionsView: View {
     let onOpenTodoFilter: () -> Void
     let onOpenTimelineItem: (ProjectTimelineItem) -> Void
     let onScanDocument: () -> Void
+    let onScanDocumentCategory: (ProjectDocumentCategory) -> Void
     let onCaptureDocumentPhoto: () -> Void
     let onEditMaterial: (MaterialItem) -> Void
     let onEditQuote: (QuoteItem) -> Void
@@ -126,7 +127,11 @@ struct ProjectDetailModeSectionsView: View {
     }
 
     private var overviewSections: some View {
-        ProjectOverviewView(
+        let documentArchiveChecklist = DocumentArchiveChecklistSnapshot(
+            documents: relatedDocuments,
+            requiredCategories: project.requiredDocumentCategories
+        )
+        return ProjectOverviewView(
             project: project,
             businessSummary: overviewBusinessSummary,
             paidAmount: paidAmount,
@@ -142,6 +147,10 @@ struct ProjectDetailModeSectionsView: View {
             contactCount: relatedContacts.count,
             financialCount: relatedFinancialRecords.count,
             documentCount: relatedDocuments.count,
+            documentMissingCategoryCount: documentArchiveChecklist.missingCount,
+            documentActionCount: documentArchiveChecklist.actionCount,
+            documentReturnedCount: documentArchiveChecklist.returnedDocumentCount,
+            documentArchivedCount: documentArchiveChecklist.archivedDocumentCount,
             recentLogs: relatedLogs,
             progressTasks: relatedProgress,
             todos: relatedTodos.filter { !$0.isDone },
@@ -327,11 +336,13 @@ struct ProjectDetailModeSectionsView: View {
             )
             ProjectDocumentsView(
                 documents: relatedDocuments,
+                requiredCategories: project.requiredDocumentCategories,
                 financialRecords: relatedFinancialRecords,
                 constructionMethods: constructionMethods,
                 icon: ProjectDetailFinanceDocumentHelper.documentIcon(_:),
                 onOpen: onOpenDocument,
-                onLink: onLinkDocumentToFinancialRecord
+                onLink: onLinkDocumentToFinancialRecord,
+                onScanCategory: onScanDocumentCategory
             )
         }
     }

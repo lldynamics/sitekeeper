@@ -24,6 +24,174 @@ enum ReportBuilder {
         "[\(loc(key))]"
     }
 
+    /// 机器可读导出段名保持稳定英文 key，避免语言切换影响后续解析。
+    static func csvMachineSection(_ key: String) -> String {
+        "[\(key)]"
+    }
+
+    private enum ProjectPackageSchema {
+        static let version = "1"
+        static let type = "project_delivery_package"
+        static let readmeFileName = "README.txt"
+        static let deliveryDirectory = "00-delivery"
+        static let documentDirectory = "01-documents"
+        static let drawingDirectory = "02-drawings"
+        static let photoDirectory = "03-site-photos"
+        static let quickNoteDirectory = "04-quick-notes"
+        static let contactDirectory = "05-contacts"
+        static let checklistFileName = "delivery_checklist.txt"
+        static let documentChecklistFileName = "document_checklist.tsv"
+        static let quickNotesFileName = "quick_notes.tsv"
+        static let contactsFileName = "contacts.tsv"
+
+        static func pdfFileName(folder: String) -> String {
+            "\(folder)_project_delivery_package.pdf"
+        }
+    }
+
+    private enum ProjectDeliveryPackageHealthCheck: String, CaseIterable {
+        case receipts
+        case drawings
+        case todos
+        case backup
+        case originals
+
+        var displayName: String {
+            switch self {
+            case .receipts:
+                return ReportBuilder.loc("缺票据")
+            case .drawings:
+                return ReportBuilder.loc("缺图纸")
+            case .todos:
+                return ReportBuilder.loc("未完成待办")
+            case .backup:
+                return ReportBuilder.loc("未备份")
+            case .originals:
+                return ReportBuilder.loc("资料缺原件")
+            }
+        }
+    }
+
+    private struct ProjectDeliveryPackageBackupState {
+        let latestBackupDate: Date?
+        let reminderDays: Int
+        let referenceDate: Date
+
+        static func current(referenceDate: Date = Date()) -> ProjectDeliveryPackageBackupState {
+            let reminderDaysRaw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
+            let reminderDays = max(1, reminderDaysRaw == 0 ? 7 : reminderDaysRaw)
+            let localBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
+            let cloudBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+            let localBackupDate = localBackupRaw > 0 ? Date(timeIntervalSince1970: localBackupRaw) : nil
+            let cloudBackupDate = cloudBackupRaw > 0 ? Date(timeIntervalSince1970: cloudBackupRaw) : nil
+            let latestBackupDate: Date? = {
+                switch (localBackupDate, cloudBackupDate) {
+                case let (lhs?, rhs?):
+                    return max(lhs, rhs)
+                case let (lhs?, nil):
+                    return lhs
+                case let (nil, rhs?):
+                    return rhs
+                case (nil, nil):
+                    return nil
+                }
+            }()
+
+            return ProjectDeliveryPackageBackupState(
+                latestBackupDate: latestBackupDate,
+                reminderDays: reminderDays,
+                referenceDate: referenceDate
+            )
+        }
+
+        var isFresh: Bool {
+            guard latestBackupDate != nil else { return false }
+            return daysSinceLatestBackup < reminderDays
+        }
+
+        var daysSinceLatestBackup: Int {
+            guard let latestBackupDate else { return Int.max }
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: latestBackupDate)
+            let end = calendar.startOfDay(for: referenceDate)
+            return max(calendar.dateComponents([.day], from: start, to: end).day ?? 0, 0)
+        }
+
+        var detail: String {
+            guard let latestBackupDate else {
+                return ReportBuilder.loc("尚未记录成功备份")
+            }
+            if daysSinceLatestBackup == 0 {
+                return ReportBuilder.locFormat("今天已备份，提醒阈值 %lld 天", Int64(reminderDays))
+            }
+            return ReportBuilder.locFormat(
+                "最近备份 %@，已过 %lld 天",
+                Formatters.dateTime.string(from: latestBackupDate),
+                Int64(daysSinceLatestBackup)
+            )
+        }
+
+        var latestBackupExportValue: String {
+            latestBackupDate.map { Formatters.dateTime.string(from: $0) } ?? ""
+        }
+    }
+
+    private struct ProjectDeliveryPackageHealthReport {
+        let missingReceiptCount: Int
+        let drawingCount: Int
+        let openTodoCount: Int
+        let backupState: ProjectDeliveryPackageBackupState
+        let missingOriginalEntries: [String]
+
+        var failedChecks: [ProjectDeliveryPackageHealthCheck] {
+            ProjectDeliveryPackageHealthCheck.allCases.filter { !isPassed($0) }
+        }
+
+        var score: Int {
+            max(0, 100 - failedChecks.count * 20)
+        }
+
+        var isDeliverable: Bool {
+            failedChecks.isEmpty
+        }
+
+        var machineVerdict: String {
+            isDeliverable ? "deliverable" : "not_deliverable"
+        }
+
+        var verdictDisplayName: String {
+            isDeliverable ? ReportBuilder.loc("可交付") : ReportBuilder.loc("不可交付")
+        }
+
+        var failedCheckKeys: String {
+            failedChecks.map(\.rawValue).joined(separator: ",")
+        }
+
+        var failedCheckDisplayText: String {
+            guard !failedChecks.isEmpty else { return ReportBuilder.loc("全部通过") }
+            return failedChecks.map(\.displayName).joined(separator: ReportBuilder.loc("、"))
+        }
+
+        func isPassed(_ check: ProjectDeliveryPackageHealthCheck) -> Bool {
+            switch check {
+            case .receipts:
+                return missingReceiptCount == 0
+            case .drawings:
+                return drawingCount > 0
+            case .todos:
+                return openTodoCount == 0
+            case .backup:
+                return backupState.isFresh
+            case .originals:
+                return missingOriginalEntries.isEmpty
+            }
+        }
+    }
+
+    static func projectPackageArchiveFileName(projectName: String) -> String {
+        "\(safeZipName(projectName, fallback: "untitled_project"))_project_delivery_package.zip"
+    }
+
     /// 常用状态值
     static var locYes: String { loc("是") }
     static var locNo: String { loc("否") }
@@ -368,6 +536,10 @@ enum ReportBuilder {
             let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
             return !(linkedByRecord || linkedByDocument)
         }
+        let documentChecklist = DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: project.requiredDocumentCategories
+        )
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
         let photosCount = logs.reduce(0) { $0 + $1.photoAttachments.count }
 
@@ -391,6 +563,7 @@ enum ReportBuilder {
         lines.append(locFormat("施工日志: %lld 条  现场照片: %lld 张  进度平均: %lld%%", Int64(logs.count), Int64(photosCount), Int64(progress * 100)))
         lines.append(locFormat("材料: %lld 条  预结算: %lld 条  人工: %lld 条  仓库流水: %lld 条", Int64(materials.count), Int64(quotes.count), Int64(labor.count), Int64(warehouseMovements.count)))
         lines.append(locFormat("票据/资料: %lld 份  图纸: %lld 份  联系人: %lld 位  随手记: %lld 条", Int64(documents.count), Int64(drawings.count), Int64(contacts.count), Int64(quickNotes.count)))
+        lines.append(locFormat("施工资料清单: 覆盖 %lld/%lld 类  缺项 %lld 类  待处理 %lld 份", Int64(documentChecklist.coveredCount), Int64(documentChecklist.requiredCount), Int64(documentChecklist.missingCount), Int64(documentChecklist.actionCount)))
         lines.append("")
         lines.append(loc("四、归档前待处理"))
         if openTodos.isEmpty && overdueTasks.isEmpty && dueReminders.isEmpty && missingReceipts.isEmpty {
@@ -440,6 +613,18 @@ enum ReportBuilder {
         let laborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
         let totalLaborHours = labor.reduce(0) { $0 + laborHours($1) }
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
+        let deliveryHealth = projectDeliveryHealthReport(
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        let documentChecklist = DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: project.requiredDocumentCategories
+        )
 
         let page = CGRect(x: 0, y: 0, width: 595, height: 842)
         let renderer = UIGraphicsPDFRenderer(bounds: page)
@@ -466,6 +651,11 @@ enum ReportBuilder {
             y = drawPDFText(locFormat("%@ 项目交付包", project.name), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 24), alignment: .center) + 12
             _ = drawPDFText(locFormat("生成时间: %@", Formatters.now()), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12), alignment: .center)
             y = 220
+            y = drawPDFText(locFormat("交付健康: %lld/100  %@", Int64(deliveryHealth.score), deliveryHealth.verdictDisplayName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 13))
+            if !deliveryHealth.isDeliverable {
+                y = drawPDFText(locFormat("待处理: %@", deliveryHealth.failedCheckDisplayText), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            }
+            y += 6
             y = drawPDFText(locFormat("项目地址: %@", project.location.isEmpty ? locNotFilled : project.location), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("客户: %@  电话: %@", project.customerName.isEmpty ? locNotFilled : project.customerName, project.customerPhone.isEmpty ? "-" : project.customerPhone), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("负责人: %@", project.managerName.isEmpty ? locNotFilled : project.managerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
@@ -484,15 +674,17 @@ enum ReportBuilder {
                 loc("3. 报价表"),
                 loc("4. 日志表"),
                 loc("5. 项目财务流水"),
-                loc("6. 票据索引"),
-                loc("7. 联系人与随手记"),
-                loc("8. 照片页"),
-                loc("9. 签字页")
+                loc("6. 施工资料清单"),
+                loc("7. 票据索引"),
+                loc("8. 联系人与随手记"),
+                loc("9. 照片页"),
+                loc("10. 签字页")
             ]
             for item in tocItems {
                 tocY = drawPDFText(item, at: CGPoint(x: margin, y: tocY + 6), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             }
-            _ = drawPDFText(locFormat("附: 材料 %lld 条 · 人工 %lld 条 · 待办 %lld 条 · 图纸 %lld 份", Int64(materials.count), Int64(labor.count), Int64(todos.count), Int64(drawings.count)), at: CGPoint(x: margin, y: tocY + 16), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            tocY = drawPDFText(locFormat("附: 材料 %lld 条 · 人工 %lld 条 · 待办 %lld 条 · 图纸 %lld 份", Int64(materials.count), Int64(labor.count), Int64(todos.count), Int64(drawings.count)), at: CGPoint(x: margin, y: tocY + 16), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            _ = drawPDFText(locFormat("交付健康: %lld/100  %@", Int64(deliveryHealth.score), deliveryHealth.verdictDisplayName), at: CGPoint(x: margin, y: tocY + 6), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
 
             // 3. 报价表
             let quoteColumns: [(title: String, width: CGFloat)] = [
@@ -592,18 +784,57 @@ enum ReportBuilder {
                 }
             }
 
-            // 6. 票据索引与附件页
+            // 6. 施工资料清单
+            context.beginPage()
+            var checklistY: CGFloat = 48
+            checklistY = drawPDFText(loc("施工资料清单"), at: CGPoint(x: margin, y: checklistY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+            checklistY = drawPDFText(
+                locFormat(
+                    "覆盖 %lld/%lld 类 · 缺项 %lld · 待处理 %lld · 已归档 %lld",
+                    Int64(documentChecklist.coveredCount),
+                    Int64(documentChecklist.requiredCount),
+                    Int64(documentChecklist.missingCount),
+                    Int64(documentChecklist.actionCount),
+                    Int64(documentChecklist.archivedDocumentCount)
+                ),
+                at: CGPoint(x: margin, y: checklistY + 4),
+                maxWidth: maxWidth,
+                font: UIFont.systemFont(ofSize: 11)
+            )
+            let checklistColumns: [(title: String, width: CGFloat)] = [
+                (loc("类别"), 92), (loc("状态"), 58), (loc("资料数"), 48), (loc("待处理"), 52), (loc("退回"), 44), (loc("已归档"), 52), (loc("说明"), 168)
+            ]
+            checklistY = drawPDFTableHeader(columns: checklistColumns, startX: margin, y: checklistY + 8, height: 24)
+            for item in documentChecklist.items {
+                checklistY = drawPDFTableRow(
+                    values: [
+                        item.category.displayName,
+                        item.statusText,
+                        "\(item.documentCount)",
+                        "\(item.actionCount)",
+                        "\(item.returnedCount)",
+                        "\(item.archivedCount)",
+                        item.detailText
+                    ],
+                    columns: checklistColumns,
+                    startX: margin,
+                    y: checklistY,
+                    height: 24
+                )
+            }
+
+            // 7. 票据索引与附件页
             let docColumns: [(title: String, width: CGFloat)] = [
-                (loc("名称"), 170), (loc("类型"), 84), (loc("页数"), 48), (loc("金额"), 72), (loc("时间"), 106), (loc("备注"), 79)
+                (loc("名称"), 142), (loc("类型"), 78), (loc("状态"), 62), (loc("责任人"), 62), (loc("形成日期"), 82), (loc("归档编号"), 88)
             ]
             var docRows = documents.sorted(by: { $0.createdAt > $1.createdAt }).map { doc in
                 [
                     doc.title,
                     doc.category.displayName,
-                    "\(doc.pageCount)",
-                    money(number(doc.amount)),
-                    doc.createdAt,
-                    doc.note
+                    doc.submissionStatus.displayName,
+                    doc.responsiblePerson,
+                    doc.formedAt.isEmpty ? doc.createdAt : doc.formedAt,
+                    doc.archiveNumber
                 ]
             }
             if docRows.isEmpty {
@@ -626,7 +857,7 @@ enum ReportBuilder {
                 context.beginPage()
                 var y: CGFloat = 48
                 y = drawPDFText(loc("票据附件页"), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
-                _ = drawPDFText(locFormat("本交付包包含 %lld 份票据/资料索引，原始文件已随 ZIP 打包，可在“%@”目录查看。", Int64(documents.count), loc("01-票据原件")), at: CGPoint(x: margin, y: y + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+                _ = drawPDFText(locFormat("本交付包包含 %lld 份票据/资料索引，原始文件已随 ZIP 打包，可在“%@”目录查看。", Int64(documents.count), ProjectPackageSchema.documentDirectory), at: CGPoint(x: margin, y: y + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
             }
 
             // 7. 联系人与随手记
@@ -751,15 +982,27 @@ enum ReportBuilder {
             }
         }
 
-        let folder = safeZipName(project.name)
-        let deliveryDirectory = loc("00-交付包")
-        let documentDirectory = loc("01-票据原件")
-        let drawingDirectory = loc("02-图纸原件")
-        let photoDirectory = loc("03-现场照片原件")
-        let quickNoteDirectory = loc("04-随手记")
-        let contactDirectory = loc("05-联系人")
-        let pdfName = locFormat("%@_项目交付包.pdf", folder)
-        let checklistFileName = loc("交付前检查清单.txt")
+        let folder = safeZipName(project.name, fallback: "untitled_project")
+        let deliveryDirectory = ProjectPackageSchema.deliveryDirectory
+        let documentDirectory = ProjectPackageSchema.documentDirectory
+        let drawingDirectory = ProjectPackageSchema.drawingDirectory
+        let photoDirectory = ProjectPackageSchema.photoDirectory
+        let quickNoteDirectory = ProjectPackageSchema.quickNoteDirectory
+        let contactDirectory = ProjectPackageSchema.contactDirectory
+        let pdfName = ProjectPackageSchema.pdfFileName(folder: folder)
+        let checklistFileName = ProjectPackageSchema.checklistFileName
+        let deliveryHealth = projectDeliveryHealthReport(
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        let documentChecklist = DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: project.requiredDocumentCategories
+        )
         var stagedRawBytes = 0
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -771,23 +1014,42 @@ enum ReportBuilder {
         reportProgress(loc("写入交付包 PDF"))
 
         let readme = [
-            loc("项目交付包"),
-            locFormat("项目: %@", project.name),
-            locFormat("导出时间: %@", Formatters.now()),
-            loc("内容:"),
-            locFormat("1. %@/%@", deliveryDirectory, pdfName),
-            locFormat("2. %@/%@", deliveryDirectory, checklistFileName),
-            locFormat("3. %@/ (票据/资料原始文件)", documentDirectory),
-            locFormat("4. %@/ (图纸原始文件，含 PDF/DWG/DXF)", drawingDirectory),
-            locFormat("5. %@/ (日志和整改照片文件)", photoDirectory),
-            locFormat("6. %@/ (清单和原始附件)", quickNoteDirectory),
-            locFormat("7. %@/ (联系人清单)", contactDirectory)
+            tsv(["schema_version", ProjectPackageSchema.version]),
+            tsv(["package_type", ProjectPackageSchema.type]),
+            tsv(["project_name", project.name]),
+            tsv(["exported_at", Formatters.now()]),
+            tsv(["delivery_health_score", "\(deliveryHealth.score)"]),
+            tsv(["delivery_health_verdict", deliveryHealth.machineVerdict]),
+            tsv(["delivery_health_failed_checks", deliveryHealth.failedCheckKeys]),
+            tsv(["delivery_health_missing_receipts", "\(deliveryHealth.missingReceiptCount)"]),
+            tsv(["delivery_health_drawing_count", "\(deliveryHealth.drawingCount)"]),
+            tsv(["delivery_health_open_todos", "\(deliveryHealth.openTodoCount)"]),
+            tsv(["delivery_health_backup_fresh", deliveryHealth.backupState.isFresh ? "true" : "false"]),
+            tsv(["delivery_health_latest_backup_at", deliveryHealth.backupState.latestBackupExportValue]),
+            tsv(["delivery_health_missing_originals", "\(deliveryHealth.missingOriginalEntries.count)"]),
+            tsv(["document_checklist_required_categories", "\(documentChecklist.requiredCount)"]),
+            tsv(["document_checklist_covered_categories", "\(documentChecklist.coveredCount)"]),
+            tsv(["document_checklist_missing_categories", "\(documentChecklist.missingCount)"]),
+            tsv(["document_checklist_action_count", "\(documentChecklist.actionCount)"]),
+            tsv(["document_checklist_returned_count", "\(documentChecklist.returnedDocumentCount)"]),
+            tsv(["document_checklist_archived_count", "\(documentChecklist.archivedDocumentCount)"]),
+            "",
+            "[contents]",
+            tsv(["path", "kind", "display_name"]),
+            tsv(["\(deliveryDirectory)/\(pdfName)", "project_delivery_pdf", loc("项目交付包 PDF")]),
+            tsv(["\(deliveryDirectory)/\(checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", "document_checklist", loc("施工资料清单")]),
+            tsv(["\(documentDirectory)/", "source_documents", loc("票据/资料原始文件")]),
+            tsv(["\(drawingDirectory)/", "source_drawings", loc("图纸原始文件")]),
+            tsv(["\(photoDirectory)/", "source_site_photos", loc("日志和整改照片文件")]),
+            tsv(["\(quickNoteDirectory)/", "quick_notes", loc("随手记清单和原始附件")]),
+            tsv(["\(contactDirectory)/", "contacts", loc("联系人清单")])
         ].joined(separator: "\n")
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
             zip: &zip,
             data: Data(readme.utf8),
-            path: "\(folder)/README.txt",
+            path: "\(folder)/\(ProjectPackageSchema.readmeFileName)",
             stagedRawBytes: &stagedRawBytes
         )
         reportProgress(loc("写入说明文件"))
@@ -798,7 +1060,9 @@ enum ReportBuilder {
             drawings: drawings,
             contacts: contacts,
             financialRecords: financialRecords,
-            documents: documents
+            documents: documents,
+            todos: todos,
+            quickNotes: quickNotes
         )
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -808,6 +1072,15 @@ enum ReportBuilder {
             stagedRawBytes: &stagedRawBytes
         )
         reportProgress(loc("写入交付检查清单"))
+
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(projectDocumentChecklistTSVText(documentChecklist).utf8),
+            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress(loc("写入施工资料清单"))
 
         for document in documents {
             try failIfCancelled()
@@ -873,15 +1146,16 @@ enum ReportBuilder {
         }
 
         if !quickNotes.isEmpty {
+            let header = tsv(["created_at", "content", "attachment_summary"])
             let lines = quickNotes.sorted(by: { $0.createdAt > $1.createdAt }).map { note in
                 let content = QuickNoteText.displayContent(for: note)
                 let attachmentText = QuickNoteText.attachmentSummary(note.attachments)
-                return "\(note.createdAt)\t\(content)\t\(attachmentText)"
+                return tsv([note.createdAt, content, attachmentText])
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
-                data: Data(lines.joined(separator: "\n").utf8),
-                path: "\(folder)/\(quickNoteDirectory)/\(loc("随手记清单.tsv"))",
+                data: Data(([header] + lines).joined(separator: "\n").utf8),
+                path: "\(folder)/\(quickNoteDirectory)/\(ProjectPackageSchema.quickNotesFileName)",
                 stagedRawBytes: &stagedRawBytes
             )
             reportProgress(loc("写入随手记清单"))
@@ -895,8 +1169,8 @@ enum ReportBuilder {
                         reportProgress(locFormat("检查随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
                         continue
                     }
-                    let title = safeZipName(note.title.isEmpty ? loc("随手记") : note.title)
-                    let kind = safeZipName(attachment.attachmentKind.title)
+                    let title = safeZipName(note.title, fallback: "quick_note")
+                    let kind = attachment.attachmentKind.rawValue
                     let created = safeZipName(note.createdAt)
                     try addStoredFileToProjectPackageZip(
                         zip: &zip,
@@ -911,14 +1185,14 @@ enum ReportBuilder {
         }
 
         if !contacts.isEmpty {
-            let header = loc(["姓名", "角色", "公司/班组", "电话", "备注"]).joined(separator: "\t")
+            let header = tsv(["name", "role", "company", "phone", "note"])
             let rows = contacts.sorted { $0.name < $1.name }.map {
-                "\($0.name)\t\($0.roleDisplayName)\t\($0.company)\t\($0.phone)\t\($0.note)"
+                tsv([$0.name, $0.roleDisplayName, $0.company, $0.phone, $0.note])
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
                 data: Data(([header] + rows).joined(separator: "\n").utf8),
-                path: "\(folder)/\(contactDirectory)/\(loc("联系人清单.tsv"))",
+                path: "\(folder)/\(contactDirectory)/\(ProjectPackageSchema.contactsFileName)",
                 stagedRawBytes: &stagedRawBytes
             )
             reportProgress(loc("写入联系人清单"))
@@ -935,16 +1209,20 @@ enum ReportBuilder {
         drawings: [ProjectDrawing],
         contacts: [ProjectContact],
         financialRecords: [ProjectFinancialRecord],
-        documents: [ProjectDocument]
+        documents: [ProjectDocument],
+        todos: [SiteTodo],
+        quickNotes: [QuickNote]
     ) -> String {
         let logExpectation = projectDeliveryLogExpectation(project: project, logs: logs)
         let drawingsWithoutCurrent = projectDrawingGroupsWithoutCurrentVersion(drawings)
-        let missingReceipts = financialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
-            let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByRecord || linkedByDocument)
-        }
+        let missingReceipts = projectFinancialRecordsMissingReceipts(
+            financialRecords: financialRecords,
+            documents: documents
+        )
+        let documentChecklist = DocumentArchiveChecklistSnapshot(
+            documents: documents,
+            requiredCategories: project.requiredDocumentCategories
+        )
         let unsettledRecords = financialRecords.filter { record in
             record.normalizedStatus == .active
                 && !record.dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -952,23 +1230,44 @@ enum ReportBuilder {
         let unsettledAmount = unsettledRecords
             .reduce(MoneyValue.zero) { $0 + $1.amountValue }
             .doubleValue
-        let warningCount = [
+        let deliveryHealth = projectDeliveryHealthReport(
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes
+        )
+        let advisoryWarningCount = [
             !logExpectation.missingDates.isEmpty,
-            drawings.isEmpty || !drawingsWithoutCurrent.isEmpty,
+            !drawingsWithoutCurrent.isEmpty,
             contacts.isEmpty,
-            !missingReceipts.isEmpty,
-            !unsettledRecords.isEmpty
+            !unsettledRecords.isEmpty,
+            documentChecklist.hasAttention
         ].filter { $0 }.count
 
         var lines: [String] = [
             loc("交付前检查清单"),
             locFormat("项目: %@", project.name),
             locFormat("生成时间: %@", Formatters.now()),
-            locFormat("检查结论: %@", warningCount == 0 ? loc("通过") : locFormat("待处理 %lld 项", Int64(warningCount))),
+            locFormat("检查结论: %@", deliveryHealth.verdictDisplayName),
+            locFormat("交付健康分: %lld/100", Int64(deliveryHealth.score)),
+            locFormat("未通过项: %@", deliveryHealth.failedCheckDisplayText),
+            advisoryWarningCount == 0 ? loc("建议检查: 无") : locFormat("建议检查: %lld 项", Int64(advisoryWarningCount)),
+            "",
+            loc("核心交付健康"),
+            locFormat("   - 缺票据: %lld 笔", Int64(deliveryHealth.missingReceiptCount)),
+            locFormat("   - 图纸: %lld 份", Int64(deliveryHealth.drawingCount)),
+            locFormat("   - 未完成待办: %lld 项", Int64(deliveryHealth.openTodoCount)),
+            locFormat("   - 备份状态: %@", deliveryHealth.backupState.detail),
+            locFormat("   - 缺失原件: %lld 项", Int64(deliveryHealth.missingOriginalEntries.count)),
             "",
             loc("1. 施工日志"),
             locFormat("   - 已记录: %lld 条", Int64(logs.count))
         ]
+        if !deliveryHealth.missingOriginalEntries.isEmpty {
+            lines.append(locFormat("   - 缺失原件示例: %@", deliveryHealth.missingOriginalEntries.prefix(10).joined(separator: loc("、"))))
+        }
 
         if logExpectation.expectedCount > 0 {
             lines.append(locFormat("   - 应覆盖施工日: %lld 天", Int64(logExpectation.expectedCount)))
@@ -1007,14 +1306,27 @@ enum ReportBuilder {
 
         lines += [
             "",
-            loc("4. 联系人"),
+            loc("4. 施工资料清单"),
+            locFormat("   - 覆盖: %lld/%lld 类", Int64(documentChecklist.coveredCount), Int64(documentChecklist.requiredCount)),
+            locFormat("   - 缺项: %lld 类", Int64(documentChecklist.missingCount)),
+            locFormat("   - 待处理: %lld 份", Int64(documentChecklist.actionCount)),
+            locFormat("   - 退回修改: %lld 份", Int64(documentChecklist.returnedDocumentCount)),
+            locFormat("   - 已归档: %lld 份", Int64(documentChecklist.archivedDocumentCount))
+        ]
+        lines += documentChecklist.items.map {
+            "   - \($0.category.displayName): \($0.statusText) · \($0.detailText)"
+        }
+
+        lines += [
+            "",
+            loc("5. 联系人"),
             locFormat("   - 联系人数量: %lld 位", Int64(contacts.count)),
             contacts.isEmpty ? loc("   - 结果: 缺少项目联系人") : loc("   - 结果: 已维护联系人")
         ]
 
         lines += [
             "",
-            loc("5. 未结清账目"),
+            loc("6. 未结清账目"),
             locFormat("   - 未结清笔数: %lld 笔", Int64(unsettledRecords.count)),
             locFormat("   - 未结清金额: %@", money(unsettledAmount)),
             unsettledRecords.isEmpty ? loc("   - 结果: 无未结清账目") : loc("   - 结果: 仍有未结清账目，建议交付前确认")
@@ -1025,6 +1337,69 @@ enum ReportBuilder {
             loc("说明: 该清单由交付包导出时自动生成，供完工交付前核对使用。")
         ]
         return lines.joined(separator: "\n")
+    }
+
+    private static func projectDeliveryHealthReport(
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument],
+        drawings: [ProjectDrawing],
+        todos: [SiteTodo],
+        logs: [DailyLog],
+        quickNotes: [QuickNote]
+    ) -> ProjectDeliveryPackageHealthReport {
+        ProjectDeliveryPackageHealthReport(
+            missingReceiptCount: projectFinancialRecordsMissingReceipts(
+                financialRecords: financialRecords,
+                documents: documents
+            ).count,
+            drawingCount: drawings.count,
+            openTodoCount: todos.filter { !$0.isDone }.count,
+            backupState: .current(),
+            missingOriginalEntries: projectPackageMissingOriginalEntries(
+                documents: documents,
+                drawings: drawings,
+                logs: logs,
+                quickNotes: quickNotes
+            )
+        )
+    }
+
+    private static func projectFinancialRecordsMissingReceipts(
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument]
+    ) -> [ProjectFinancialRecord] {
+        financialRecords.filter { record in
+            guard record.requiresAttachment else { return false }
+            let linkedByRecord = !record.linkedDocumentIds.isEmpty
+            let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
+            return !(linkedByRecord || linkedByDocument)
+        }
+    }
+
+    private static func projectPackageMissingOriginalEntries(
+        documents: [ProjectDocument],
+        drawings: [ProjectDrawing],
+        logs: [DailyLog],
+        quickNotes: [QuickNote]
+    ) -> [String] {
+        var entries: [String] = []
+        entries += documents.compactMap { document in
+            ProjectDocumentStorage.exists(fileName: document.fileName) ? nil : locFormat("资料 %@", document.title)
+        }
+        entries += drawings.compactMap { drawing in
+            DrawingStorage.exists(fileName: drawing.fileName) ? nil : locFormat("图纸 %@", drawing.name)
+        }
+        for log in logs {
+            for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
+                entries.append(locFormat("照片 %@ %@", log.date, photo.tag.displayName))
+            }
+        }
+        for note in quickNotes {
+            for attachment in note.attachments where !QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
+                entries.append(locFormat("随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
+            }
+        }
+        return entries
     }
 
     private static func projectDeliveryLogExpectation(project: Project, logs: [DailyLog]) -> (expectedCount: Int, missingDates: [String]) {
@@ -1176,15 +1551,82 @@ enum ReportBuilder {
         return (line + tax - discount).doubleValue
     }
 
-    static func money(_ value: Double) -> String {
-        "¥" + String(format: "%.2f", value)
+    static func amountRaw(_ value: Double) -> String {
+        Formatters.money(value)
     }
 
-    private static func safeZipName(_ raw: String) -> String {
+    static func amountDisplay(
+        _ value: Double,
+        currencyDisplayMode: ExportCurrencyDisplayMode = .defaultMode
+    ) -> String {
+        currencyDisplayMode.format(value)
+    }
+
+    static func money(_ value: Double) -> String {
+        amountDisplay(value)
+    }
+
+    static func money(
+        _ value: Double,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> String {
+        amountDisplay(value, currencyDisplayMode: currencyDisplayMode)
+    }
+
+    static func amountDisplay(
+        rawText: String,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> String {
+        guard let decimal = DataValueParser.decimalValueIfPresent(from: rawText) else {
+            return rawText
+        }
+        return amountDisplay(
+            NSDecimalNumber(decimal: decimal).doubleValue,
+            currencyDisplayMode: currencyDisplayMode
+        )
+    }
+
+    private static func safeZipName(_ raw: String, fallback: String = "untitled") -> String {
         let invalid = CharacterSet(charactersIn: "\\/:*?\"<>|")
         let cleaned = raw.components(separatedBy: invalid).joined(separator: "_")
         let compact = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        return compact.isEmpty ? loc("未命名项目") : compact
+        return compact.isEmpty ? fallback : compact
+    }
+
+    private static func tsv(_ values: [String]) -> String {
+        values.map(tsvField).joined(separator: "\t")
+    }
+
+    private static func tsvField(_ raw: String) -> String {
+        raw
+            .replacingOccurrences(of: "\r\n", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
+    }
+
+    private static func projectDocumentChecklistTSVText(_ checklist: DocumentArchiveChecklistSnapshot) -> String {
+        let header = tsv([
+            "category_key",
+            "category_display",
+            "status",
+            "document_count",
+            "action_count",
+            "returned_count",
+            "archived_count"
+        ])
+        let rows = checklist.items.map { item in
+            tsv([
+                item.category.exportKey,
+                item.category.displayName,
+                item.statusText,
+                "\(item.documentCount)",
+                "\(item.actionCount)",
+                "\(item.returnedCount)",
+                "\(item.archivedCount)"
+            ])
+        }
+        return ([header] + rows).joined(separator: "\n")
     }
 
     private static func estimatedProjectPackageStepCount(
@@ -1194,7 +1636,7 @@ enum ReportBuilder {
         quickNotes: [QuickNote],
         contacts: [ProjectContact]
     ) -> Int {
-        var total = 3 // PDF + README + delivery checklist
+        var total = 4 // PDF + README + delivery checklist + document checklist
         total += documents.count
         total += drawings.count
         total += logs.reduce(0) { $0 + $1.photoAttachments.count }

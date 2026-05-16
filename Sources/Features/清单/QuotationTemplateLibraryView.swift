@@ -22,7 +22,11 @@ struct QuotationTemplateLibraryView: View {
     var body: some View {
         List {
             if templates.isEmpty {
-                ContentUnavailableView("暂无报价模板", systemImage: "doc.text.fill", description: Text("沉淀常用报价项目和单价，后续可快速套用。"))
+                ContentUnavailableView(
+                    String(localized: "暂无报价模板"),
+                    systemImage: "doc.text.fill",
+                    description: Text(String(localized: "沉淀常用报价项目和单价，后续可快速套用。"))
+                )
             } else {
                 ForEach(templates) { template in
                     Button { editingTemplate = template } label: {
@@ -42,16 +46,16 @@ struct QuotationTemplateLibraryView: View {
                 .onDelete(perform: deleteTemplates)
             }
         }
-        .navigationTitle("报价模板库")
+        .navigationTitle(String(localized: "报价模板库"))
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
-            prompt: "搜索模板名称或内容"
+            prompt: Text(String(localized: "搜索模板名称或内容"))
         )
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel("添加报价模板")
+                    .accessibilityLabel(String(localized: "添加报价模板"))
             }
         }
         .onAppear(perform: openFocusedTemplateIfNeeded)
@@ -92,26 +96,30 @@ struct QuotationTemplateLibraryView: View {
         let targets = snapshot.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
 
-        store.removeTemplates(ids: ids)
+        let deletion = store.removeTemplates(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除报价模板 %lld 个"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "QuotationTemplateLibraryView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
         undoableDeletion.queue(
             notice: $operationNotice,
-            message: String(format: String(localized: "已删除 %lld 个报价模板"), Int64(targets.count)),
+            message: String(format: String(localized: "已删除 %lld 个报价模板"), Int64(deletion.deletedCount)),
             commit: {
                 store.scheduleSave()
             },
             undo: {
-                store.templates = UndoableDeletionCoordinator.restoringItems(
-                    snapshot: snapshot,
+                store.templates = deletion.restoredItems(
                     current: store.templates,
-                    deletedIDs: ids
+                    id: \.id
                 )
                 store.scheduleSave()
             },
-            audit: UndoableDeletionAuditContext(
-                summary: String(format: String(localized: "删除报价模板 %lld 个"), Int64(targets.count)),
-                detail: targets.map(\.name).joined(separator: "、"),
-                source: "QuotationTemplateLibraryView"
-            )
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 
@@ -147,37 +155,37 @@ private struct QuoteTemplateEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("模板") {
-                    TextField("名称", text: $name)
-                    TextField("报价内容", text: $content, axis: .vertical)
+                Section(String(localized: "模板")) {
+                    TextField(String(localized: "名称"), text: $name)
+                    TextField(String(localized: "报价内容"), text: $content, axis: .vertical)
                         .lineLimit(8...16)
                 }
-                Section("格式参考") {
-                    Text("一行一个项目，例如：\n布线 ¥45/m\n插座安装 ¥25/个")
+                Section(String(localized: "格式参考")) {
+                    Text(String(localized: "一行一个项目，例如：\n布线 ¥45/m\n插座安装 ¥25/个"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if template != nil {
                     Section {
-                        Button("删除报价模板", role: .destructive) { showDeleteConfirm = true }
+                        Button(String(localized: "删除报价模板"), role: .destructive) { showDeleteConfirm = true }
                     }
                 }
             }
-            .navigationTitle(template == nil ? "新增报价模板" : "编辑报价模板")
+            .navigationTitle(template == nil ? String(localized: "新增报价模板") : String(localized: "编辑报价模板"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(updatedTemplate)
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("删除这个报价模板？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这个报价模板？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     if let target = template { onDelete?(target) }
                     dismiss()
                 }

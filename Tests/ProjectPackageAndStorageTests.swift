@@ -38,6 +38,51 @@ struct ProjectPackageAndStorageTests {
         #expect(issues.contains(where: { $0.contains("随手记附件 补充资料") }))
     }
 
+    @Test func projectDeliveryHealthSummarizesDeliverabilityBlockers() throws {
+        let referenceDate = try #require(Formatters.dateTime.date(from: "2026-05-16 12:00"))
+        let backupState = ProjectDeliveryBackupState(
+            latestBackupDate: nil,
+            reminderDays: 7,
+            referenceDate: referenceDate
+        )
+
+        let health = ProjectDeliveryHealth(
+            missingReceiptCount: 2,
+            drawingCount: 0,
+            openTodoCount: 3,
+            backupState: backupState,
+            missingOriginalCount: 1
+        )
+
+        #expect(health.score == 0)
+        #expect(!health.isDeliverable)
+        #expect(health.failedIssues == ProjectDeliveryHealth.Issue.allCases)
+        #expect(health.summary.contains("缺票据"))
+        #expect(health.summary.contains("未备份"))
+    }
+
+    @Test func projectDeliveryHealthPassesWhenCoreDeliveryChecksPass() throws {
+        let referenceDate = try #require(Formatters.dateTime.date(from: "2026-05-16 12:00"))
+        let latestBackup = try #require(Formatters.dateTime.date(from: "2026-05-15 09:00"))
+        let backupState = ProjectDeliveryBackupState(
+            latestBackupDate: latestBackup,
+            reminderDays: 7,
+            referenceDate: referenceDate
+        )
+
+        let health = ProjectDeliveryHealth(
+            missingReceiptCount: 0,
+            drawingCount: 2,
+            openTodoCount: 0,
+            backupState: backupState,
+            missingOriginalCount: 0
+        )
+
+        #expect(health.score == 100)
+        #expect(health.isDeliverable)
+        #expect(health.failedIssues.isEmpty)
+    }
+
     @Test func photoStorageThrowsForInvalidImageData() {
         do {
             _ = try PhotoStorage.saveOrThrow(original: Data([0x00, 0x11]), fileName: "invalid-\(UUID().uuidString).jpg")
@@ -96,6 +141,68 @@ struct ProjectPackageAndStorageTests {
 
         #expect(estimated == expected)
         #expect(estimated > 0)
+    }
+
+    @Test func projectPackageManifestUsesStableMachineKeys() throws {
+        let defaults = UserDefaults.standard
+        let backupKeys = [
+            UserPreferenceKeys.localBackupLastSuccessAt,
+            UserPreferenceKeys.cloudBackupLastSuccessAt,
+            UserPreferenceKeys.backupHealthReminderDays
+        ]
+        let previousBackupValues = backupKeys.map { ($0, defaults.object(forKey: $0)) }
+        defer {
+            for (key, value) in previousBackupValues {
+                if let value {
+                    defaults.set(value, forKey: key)
+                } else {
+                    defaults.removeObject(forKey: key)
+                }
+            }
+        }
+        defaults.set(Date().timeIntervalSince1970, forKey: UserPreferenceKeys.localBackupLastSuccessAt)
+        defaults.removeObject(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        defaults.set(7, forKey: UserPreferenceKeys.backupHealthReminderDays)
+
+        let project = Project(name: "项目交付测试", location: "工地", status: .active)
+        let archiveURL = try ReportBuilder.makeProjectPackageZIP(
+            project: project,
+            materials: [],
+            quotes: [],
+            labor: [],
+            logs: [],
+            tasks: [],
+            todos: []
+        )
+        defer { try? FileManager.default.removeItem(at: archiveURL) }
+
+        let entries = try SimpleZipArchiveReader.read(Data(contentsOf: archiveURL))
+        let folder = "项目交付测试"
+        let readmeEntry = try #require(entries.first { $0.path == "\(folder)/README.txt" })
+        let readmeText = try #require(String(data: readmeEntry.data, encoding: .utf8))
+
+        #expect(readmeText.contains("schema_version\t1"))
+        #expect(readmeText.contains("package_type\tproject_delivery_package"))
+        #expect(readmeText.contains("delivery_health_score\t80"))
+        #expect(readmeText.contains("delivery_health_verdict\tnot_deliverable"))
+        #expect(readmeText.contains("delivery_health_failed_checks\tdrawings"))
+        #expect(readmeText.contains("delivery_health_backup_fresh\ttrue"))
+        #expect(readmeText.contains("[contents]"))
+        #expect(readmeText.contains("path\tkind\tdisplay_name"))
+        #expect(readmeText.contains("00-delivery/\(folder)_project_delivery_package.pdf\tproject_delivery_pdf\t"))
+        #expect(readmeText.contains("00-delivery/delivery_checklist.txt\tdelivery_checklist\t"))
+        #expect(readmeText.contains("00-delivery/document_checklist.tsv\tdocument_checklist\t"))
+        #expect(readmeText.contains("document_checklist_missing_categories\t8"))
+        let checklistEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/delivery_checklist.txt" })
+        let checklistText = try #require(String(data: checklistEntry.data, encoding: .utf8))
+        #expect(checklistText.contains("检查结论: 不可交付"))
+        #expect(checklistText.contains("交付健康分: 80/100"))
+        #expect(checklistText.contains("未通过项: 缺图纸"))
+        #expect(checklistText.contains("4. 施工资料清单"))
+        let documentChecklistEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/document_checklist.tsv" })
+        let documentChecklistText = try #require(String(data: documentChecklistEntry.data, encoding: .utf8))
+        #expect(documentChecklistText.contains("category_key\tcategory_display\tstatus\tdocument_count\taction_count\treturned_count\tarchived_count"))
+        #expect(documentChecklistText.contains("construction_technical"))
     }
 
     @Test func warehouseMovementLinkedDocumentsAreBackwardCompatible() throws {

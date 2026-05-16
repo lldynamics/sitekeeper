@@ -190,15 +190,19 @@ struct QuickNoteEditSheet: View {
         attachments.removeAll { $0.id == attachment.id }
         if temporaryFileNames.contains(attachment.fileName) {
             temporaryFileNames.remove(attachment.fileName)
-            QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
+            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                [attachment.fileName],
+                summary: "quickNoteEditor.removeTemporaryAttachment"
+            )?.perform()
         }
     }
 
     private func cleanupTemporaryAttachmentsIfNeeded() {
         guard !didCommit else { return }
-        for fileName in temporaryFileNames {
-            QuickNoteAttachmentStorage.delete(fileName: fileName)
-        }
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            Array(temporaryFileNames),
+            summary: "quickNoteEditor.cleanupTemporaryAttachments"
+        )?.perform()
         temporaryFileNames.removeAll()
     }
 
@@ -239,7 +243,10 @@ struct QuickNoteEditSheet: View {
 
     private func buildDailyLogSeedPhotos() async -> [DailyLogSeedPhoto] {
         let candidates = Array(attachments.prefix(6))
-        let seedNote = String(localized: "来源: 随手记\n记录时间: \(note.createdAt)")
+        let seedNote = String(
+            format: String(localized: "来源: 随手记\n记录时间: %@"),
+            note.createdAt
+        )
         let capturedAt = Formatters.dateTime.date(from: note.createdAt)
         var seedPhotos: [DailyLogSeedPhoto] = []
         for attachment in candidates where [.photo, .drawing].contains(attachment.attachmentKind) {
@@ -280,7 +287,7 @@ struct QuickNoteEditSheet: View {
                 store.projectDocuments.append(ProjectDocument(
                     projectId: projectId,
                     title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
-                    category: .construction,
+                    category: .constructionRecord,
                     fileName: fileName,
                     fileType: "pdf",
                     pageCount: 1,

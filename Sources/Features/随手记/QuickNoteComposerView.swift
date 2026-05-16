@@ -200,7 +200,10 @@ struct QuickNoteComposerView: View {
 
     private func removeAttachment(_ attachment: QuickNoteAttachment) {
         attachments.removeAll { $0.id == attachment.id }
-        QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            [attachment.fileName],
+            summary: "quickNoteComposer.removeAttachment"
+        )?.perform()
         onAttachmentRemoved(attachment)
     }
 

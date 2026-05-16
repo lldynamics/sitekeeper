@@ -546,9 +546,11 @@ struct ProjectDrawingSectionView: View {
                         .foregroundStyle(.secondary)
                     if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
                         let status = previewStatus(for: drawing)
-                        Text(status.text)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        if let statusText = status.text {
+                            Text(statusText)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        }
                         Text("文字：\(drawing.textEncoding.displayName) / \(drawing.textBigFont.displayName)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
@@ -613,18 +615,18 @@ struct ProjectDrawingSectionView: View {
         }
     }
 
-    private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
+    private func previewStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
             let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
-            return (ready ? "CAD 在线查看可用" : "在线查看未接入", ready)
+            return (ready ? "CAD 本机查看可用" : nil, ready)
         }
         if fileType == "pdf" {
             return ("PDF 附件", true)
         }
         if fileType == "dwg" {
             let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
-            return (ready ? "DWG 诊断查看" : "在线查看未接入", false)
+            return (ready ? "DWG 本机查看" : nil, ready)
         }
         return ("文件独立打开", true)
     }

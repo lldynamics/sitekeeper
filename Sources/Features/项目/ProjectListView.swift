@@ -20,8 +20,11 @@ struct ProjectListView: View {
     @State private var newMaterialCost = ""
     @State private var newLaborCost = ""
     @State private var newPaymentStatus: PaymentStatus = .unpaid
+    @State private var newRequiredDocumentCategories = Set(ProjectDocumentCategory.defaultConstructionArchiveRequirements)
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var statusFilter: ProjectStatus? = nil
     @State private var overviewFilter: ProjectOverviewFilter? = nil
     @State private var sortOption: ProjectSortOption = .recentUpdate
@@ -142,6 +145,7 @@ struct ProjectListView: View {
                 materialCost: $newMaterialCost,
                 laborCost: $newLaborCost,
                 paymentStatus: $newPaymentStatus,
+                requiredDocumentCategories: $newRequiredDocumentCategories,
                 focusedField: $newProjectFocusedField,
                 canCreate: canCreateProject,
                 onCancel: {
@@ -180,6 +184,10 @@ struct ProjectListView: View {
         .onChange(of: shouldUseSplitNavigation) { _, _ in
             syncSelectedProjectIfNeeded()
         }
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     private var compactProjectLayout: some View {
@@ -220,7 +228,7 @@ struct ProjectListView: View {
                 Image(systemName: "folder").visibleIconStyle()
             }
             .buttonStyle(.appIcon())
-            .accessibilityLabel(String(localized: "全局文件检索"))
+            .accessibilityLabel(String(localized: "项目资料"))
             .accessibilityIdentifier("project-file-browser-entry")
             Button {
                 showAdd = true
@@ -424,20 +432,38 @@ struct ProjectListView: View {
             let projectName = projectToDelete?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             let normalizedName = projectName.isEmpty ? String(localized: "项目") : projectName
             let relationCount = relatedCount
-            OperationAuditLog.record(
-                action: .delete,
-                outcome: .started,
-                summary: String(localized: "删除项目及全部关联数据"),
-                detail: "\(normalizedName) · related=\(relationCount)",
-                source: "ProjectListView"
-            )
-            store.deleteProject(pid)
-            OperationAuditLog.record(
-                action: .delete,
-                outcome: .succeeded,
-                summary: String(localized: "删除项目及全部关联数据"),
-                detail: "\(normalizedName) · related=\(relationCount)",
-                source: "ProjectListView"
+            let deletion = store.removeProjectCascade(pid)
+            guard !deletion.isEmpty else {
+                projectToDelete = nil
+                return
+            }
+
+            projectToDelete = nil
+            syncSelectedProjectIfNeeded()
+            undoableDeletion.queue(
+                notice: $operationNotice,
+                message: String(format: String(localized: "已删除项目 %@"), normalizedName),
+                commit: {
+                    deletion.performDeferredFileCleanup()
+                    store.scheduleSave()
+                },
+                undo: {
+                    store.restoreProjectCascade(deletion)
+                    if shouldUseSplitNavigation {
+                        selectedProjectId = pid
+                    }
+                    store.scheduleSave()
+                },
+                audit: UndoableDeletionAuditContext(
+                    summary: String(localized: "删除项目及全部关联数据"),
+                    detail: [
+                        "\(normalizedName)",
+                        "related=\(relationCount)",
+                        "records=\(deletion.deletedRecordCount)",
+                        "files=\(deletion.deferredFileCleanup?.fileCount ?? 0)"
+                    ].joined(separator: " · "),
+                    source: "ProjectListView"
+                )
             )
         }
     }
@@ -465,7 +491,10 @@ struct ProjectListView: View {
             paidAmount: NumericInputSupport.normalizedStorageText(newPaidAmount, kind: .amount),
             paymentStatus: newPaymentStatus,
             materialCost: NumericInputSupport.normalizedStorageText(newMaterialCost, kind: .amount),
-            laborCost: NumericInputSupport.normalizedStorageText(newLaborCost, kind: .amount)
+            laborCost: NumericInputSupport.normalizedStorageText(newLaborCost, kind: .amount),
+            requiredDocumentCategories: ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+                Array(newRequiredDocumentCategories)
+            )
         ))
         store.scheduleSave()
         clearProject()
@@ -481,12 +510,14 @@ struct ProjectListView: View {
         newMaterialCost = ""
         newLaborCost = ""
         newPaymentStatus = .unpaid
+        newRequiredDocumentCategories = Set(ProjectDocumentCategory.defaultConstructionArchiveRequirements)
         newStartDate = Date()
         newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
     }
 
     private var canCreateProject: Bool {
         !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !newRequiredDocumentCategories.isEmpty &&
         InputValidator.validate(newContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
         InputValidator.validate(newPaidAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
         InputValidator.validate(newMaterialCost, kind: .amount, requirement: .optionalNonNegative).isValid &&

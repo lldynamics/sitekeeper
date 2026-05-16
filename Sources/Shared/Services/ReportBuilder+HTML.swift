@@ -3,6 +3,7 @@ import Foundation
 extension ReportBuilder {
     static func makeExcelHTML(snapshot: BackupSnapshot, options: ExportContentOptions) -> Data {
         var body = "<html><head><meta charset=\"utf-8\"></head><body>"
+        let currencyDisplayMode = options.currencyDisplayMode
         func table(_ title: String, headers: [String], rows: [[String]]) {
             body += "<h2>\(escapeHTML(title))</h2><table border=\"1\" cellspacing=\"0\" cellpadding=\"4\"><tr>"
             body += headers.map { "<th>\(escapeHTML($0))</th>" }.joined()
@@ -14,17 +15,17 @@ extension ReportBuilder {
         }
         if options.includeMaterials {
             table(loc("材料清单"), headers: ["名称", "数量", "单位", "单价", "规格", "品牌", "供应商", "采购状态", "进场日期", "金额"], rows: snapshot.materialItems.map {
-                [$0.name, $0.quantity, $0.unit, $0.unitPrice, $0.specification, $0.brand, $0.supplier, $0.purchaseStatus.displayName, $0.arrivalDate, money(materialLineTotal($0))]
+                [$0.name, $0.quantity, $0.unit, $0.unitPrice, $0.specification, $0.brand, $0.supplier, $0.purchaseStatus.displayName, $0.arrivalDate, money(materialLineTotal($0), currencyDisplayMode: currencyDisplayMode)]
             })
         }
         if options.includeQuotes {
             table(loc("报价明细"), headers: ["名称", "单价", "数量", "单位", "版本", "状态", "确认日期", "合同金额", "金额", "备注"], rows: snapshot.quoteItems.map {
-                [$0.name, $0.unitPrice, $0.quantity, $0.unit, $0.versionName, $0.status.displayName, $0.customerConfirmedDate, $0.contractAmount, money(quoteLineTotal($0)), $0.notes]
+                [$0.name, $0.unitPrice, $0.quantity, $0.unit, $0.versionName, $0.status.displayName, $0.customerConfirmedDate, amountDisplay(rawText: $0.contractAmount, currencyDisplayMode: currencyDisplayMode), money(quoteLineTotal($0), currencyDisplayMode: currencyDisplayMode), $0.notes]
             })
         }
         if options.includeLabor {
             table(loc("人工记录"), headers: ["日期", "人数", "工时", "单价", "工种", "班组", "结算", "金额", "备注"], rows: snapshot.laborRecords.map {
-                [$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? locYes : locNo, money(laborLineTotal($0)), $0.note]
+                [$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? locYes : locNo, money(laborLineTotal($0), currencyDisplayMode: currencyDisplayMode), $0.note]
             })
         }
         if options.includeDailyLogs {
@@ -44,12 +45,16 @@ extension ReportBuilder {
         }
         if options.includeProjectFinance {
             table(loc("项目财务流水"), headers: ["日期", "收支", "分类", "状态", "到期日", "提醒状态", "金额", "对方单位", "票号", "关联票据数", "备注", "项目ID"], rows: snapshot.projectFinancialRecords.map {
-                [$0.date, $0.direction.displayName, $0.category.displayName, $0.normalizedStatus.displayName, $0.dueDate, $0.normalizedReminderStatus.displayName, $0.amount, $0.counterparty, $0.invoiceNumber, "\($0.linkedDocumentIds.count)", $0.note, $0.projectId.uuidString]
+                [$0.date, $0.direction.displayName, $0.category.displayName, $0.normalizedStatus.displayName, $0.dueDate, $0.normalizedReminderStatus.displayName, amountDisplay(rawText: $0.amount, currencyDisplayMode: currencyDisplayMode), $0.counterparty, $0.invoiceNumber, "\($0.linkedDocumentIds.count)", $0.note, $0.projectId.uuidString]
             })
         }
         if options.includeProjectDocuments {
-            table(loc("项目票据与资料"), headers: ["名称", "类型", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"], rows: snapshot.projectDocuments.map {
-                [$0.title, $0.category.displayName, "\($0.pageCount)", $0.amount, $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString]
+            let checklistRows = projectDocumentChecklistExportRows(snapshot: snapshot)
+            table(loc("施工资料清单"), headers: ["项目", "类别", "状态", "资料数", "待处理", "退回", "已归档"], rows: checklistRows.map {
+                [$0.projectName, $0.item.category.displayName, $0.item.statusText, "\($0.item.documentCount)", "\($0.item.actionCount)", "\($0.item.returnedCount)", "\($0.item.archivedCount)"]
+            })
+            table(loc("项目票据与资料"), headers: ["名称", "类型", "报验状态", "责任人", "形成日期", "归档编号", "分部/工序", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"], rows: snapshot.projectDocuments.map {
+                [$0.title, $0.category.displayName, $0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection, "\($0.pageCount)", amountDisplay(rawText: $0.amount, currencyDisplayMode: currencyDisplayMode), $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString]
             })
         }
         if options.includeProjectContacts {
@@ -76,6 +81,13 @@ extension ReportBuilder {
             table(loc("照明回路"), headers: ["方案名称", "供电类型", "电压", "功率因数", "需用系数", "断路器裕量", "线径裕量", "铜导线", "负荷数", "更新时间", "项目ID"], rows: snapshot.lightingCircuitPlans.map {
                 [$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? locYes : locNo, "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]
             })
+        }
+        if options.includeOperationAuditLogs {
+            table(
+                loc("操作审计日志"),
+                headers: operationAuditDisplayHeaders(),
+                rows: options.operationAuditEntries.map(operationAuditDisplayRow)
+            )
         }
         body += "</body></html>"
         return Data(body.utf8)

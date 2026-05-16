@@ -23,16 +23,18 @@ enum UserPreferenceKeys {
     static let cloudBackupIncludeAttachments = "cloudBackup.includeAttachments"
     static let cloudBackupAutoInterval = "cloudBackup.autoInterval"
     static let cloudBackupAutoRequiresWiFi = "cloudBackup.autoRequiresWiFi"
+    static let cloudBackupRetentionCount = "cloudBackup.retentionCount"
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
     static let storageCleanupLargeFileThresholdMB = "storageCleanup.largeFileThresholdMB"
+    static let storageCleanupTrashRetentionDays = "storageCleanup.trashRetentionDays"
+    static let exportCurrencyDisplayMode = "export.currencyDisplayMode"
     static let cloudBackupAutoLastAttemptAt = "cloudBackup.autoLastAttemptAt"
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
     static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
-    static let cadDWGConversionServiceURL = "cad.dwgConversion.serviceURL"
     static let showTemplates = "feature.showTemplates"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
     static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
@@ -357,6 +359,14 @@ enum AppBrand {
 
     static var exportFilePrefix: String {
         displayName
+    }
+
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+    }
+
+    static var appBuild: String {
+        Bundle.main.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "0"
     }
 }
 

@@ -26,6 +26,54 @@ private enum BackupSection: CaseIterable {
     }
 }
 
+private enum BackupImportStage: String {
+    case copyingSourceFile = "copying_source_file"
+    case readingPreview = "reading_preview"
+    case readingMetadata = "reading_metadata"
+    case stagingFiles = "staging_files"
+    case applyingMetadata = "applying_metadata"
+    case committingFiles = "committing_files"
+    case cleaningOverwrittenFiles = "cleaning_overwritten_files"
+
+    var displayName: String {
+        switch self {
+        case .copyingSourceFile:
+            return String(localized: "复制备份文件")
+        case .readingPreview:
+            return String(localized: "读取备份预览")
+        case .readingMetadata:
+            return String(localized: "读取数据索引")
+        case .stagingFiles:
+            return String(localized: "暂存原文件")
+        case .applyingMetadata:
+            return String(localized: "应用数据索引")
+        case .committingFiles:
+            return String(localized: "提交原文件")
+        case .cleaningOverwrittenFiles:
+            return String(localized: "清理旧文件")
+        }
+    }
+
+    func failureSummary(error: Error) -> String {
+        String(
+            format: String(localized: "导入失败（%@）：%@"),
+            displayName,
+            error.localizedDescription
+        )
+    }
+
+    func auditDetail(fileName: String? = nil, extra: String? = nil) -> String {
+        var parts = ["stage=\(rawValue)", "stageName=\(displayName)"]
+        if let fileName, !fileName.isEmpty {
+            parts.append("file=\(fileName)")
+        }
+        if let extra, !extra.isEmpty {
+            parts.append(extra)
+        }
+        return parts.joined(separator: ", ")
+    }
+}
+
 struct BackupView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -38,6 +86,7 @@ struct BackupView: View {
     @AppStorage(UserPreferenceKeys.cloudBackupIncludeAttachments) private var cloudIncludeAttachments = true
     @AppStorage(UserPreferenceKeys.cloudBackupAutoInterval) private var cloudAutoIntervalRawValue = CloudBackupAutoInterval.disabled.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupAutoRequiresWiFi) private var cloudAutoBackupRequiresWiFi = false
+    @AppStorage(UserPreferenceKeys.cloudBackupRetentionCount) private var cloudBackupRetentionCount = CloudBackupRetentionCountOption.defaultValue
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupAutoLastStatus) private var cloudAutoLastStatus = ""
@@ -189,6 +238,7 @@ struct BackupView: View {
             cloudIncludeAttachments: $cloudIncludeAttachments,
             cloudAutoIntervalRawValue: $cloudAutoIntervalRawValue,
             cloudAutoBackupRequiresWiFi: $cloudAutoBackupRequiresWiFi,
+            cloudBackupRetentionCount: $cloudBackupRetentionCount,
             isBusy: isBusy,
             isRefreshingCloudBackups: cloudState.isRefreshingCloudBackups,
             cloudBackups: cloudState.cloudBackups,
@@ -576,6 +626,20 @@ struct BackupView: View {
         )
     }
 
+    @MainActor
+    private func enrichImportPreviewWithLocalImpact(_ preview: BackupImportPreview) -> BackupImportPreview {
+        let existingSnapshot = store.makeSnapshot(includePhotoFiles: false)
+        return BackupImportPreview(
+            snapshot: preview.snapshot,
+            manifest: preview.manifest,
+            incomingFiles: preview.incomingFiles,
+            overwrittenLocalFiles: BackupImportCoordinator.overwrittenLocalFiles(
+                previous: existingSnapshot,
+                imported: preview.snapshot
+            )
+        )
+    }
+
     private func startPreviewImport(from selectedURL: URL) {
         clearStatus()
         OperationAuditLog.record(
@@ -589,11 +653,13 @@ struct BackupView: View {
             let copiedURL = try BackupImportCoordinator.copySelectedBackupToSandbox(selectedURL)
             startPreviewImportFromPreparedFile(copiedURL)
         } catch {
-            setStatus(error.localizedDescription)
+            let stage = BackupImportStage.copyingSourceFile
+            setStatus(stage.failureSummary(error: error))
             OperationAuditLog.record(
                 action: .import,
                 outcome: .failed,
-                summary: String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription),
+                summary: stage.failureSummary(error: error),
+                detail: stage.auditDetail(fileName: selectedURL.lastPathComponent),
                 source: "BackupView"
             )
             cleanupPendingImportFileIfNeeded()
@@ -636,27 +702,36 @@ struct BackupView: View {
                             action: .import,
                             outcome: .cancelled,
                             summary: String(localized: "取消导入"),
+                            detail: BackupImportStage.readingPreview.auditDetail(fileName: copiedURL.lastPathComponent),
                             source: "BackupView"
                         )
                     }
                     return
                 }
+                let enrichedPreview = await MainActor.run {
+                    enrichImportPreviewWithLocalImpact(preview)
+                }
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
-                    pendingImportPreview = preview
+                    pendingImportPreview = enrichedPreview
                     showPreview = true
                     let detail = [
-                        "photo=\(preview.photoFileCount)",
-                        "drawing=\(preview.drawingFileCount)",
-                        "document=\(preview.documentFileCount)",
-                        "attachment=\(preview.quickNoteAttachmentFileCount)"
+                        "incoming=\(enrichedPreview.incomingFiles.totalCount)",
+                        "outgoing=\(enrichedPreview.overwrittenLocalFiles.totalCount)",
+                        "photo=\(enrichedPreview.photoFileCount)",
+                        "drawing=\(enrichedPreview.drawingFileCount)",
+                        "document=\(enrichedPreview.documentFileCount)",
+                        "attachment=\(enrichedPreview.quickNoteAttachmentFileCount)"
                     ].joined(separator: ", ")
                     OperationAuditLog.record(
                         action: .import,
                         outcome: .succeeded,
                         summary: String(localized: "正在读取备份预览"),
-                        detail: detail,
+                        detail: BackupImportStage.readingPreview.auditDetail(
+                            fileName: copiedURL.lastPathComponent,
+                            extra: detail
+                        ),
                         source: "BackupView"
                     )
                 }
@@ -668,6 +743,7 @@ struct BackupView: View {
                             action: .import,
                             outcome: .cancelled,
                             summary: String(localized: "取消导入"),
+                            detail: BackupImportStage.readingPreview.auditDetail(fileName: copiedURL.lastPathComponent),
                             source: "BackupView"
                         )
                     }
@@ -676,11 +752,13 @@ struct BackupView: View {
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
-                    setStatus(String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription))
+                    let stage = BackupImportStage.readingPreview
+                    setStatus(stage.failureSummary(error: error))
                     OperationAuditLog.record(
                         action: .import,
                         outcome: .failed,
-                        summary: String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription),
+                        summary: stage.failureSummary(error: error),
+                        detail: stage.auditDetail(fileName: copiedURL.lastPathComponent),
                         source: "BackupView"
                     )
                     cleanupPendingImportFileIfNeeded()
@@ -720,6 +798,8 @@ struct BackupView: View {
         )
 
         importTask = Task {
+            var failureStage = BackupImportStage.readingMetadata
+            var failureDetail = ""
             do {
                 let snapshot: BackupSnapshot
                 if let metadataSnapshot {
@@ -750,25 +830,34 @@ struct BackupView: View {
                             action: .import,
                             outcome: .cancelled,
                             summary: String(localized: "已取消导入，当前数据未变更。"),
+                            detail: failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent),
                             source: "BackupView"
                         )
                     }
                     return
                 }
 
-                let existingSnapshot = await MainActor.run {
-                    store.makeSnapshot(includePhotoFiles: false)
+                let (existingSnapshot, selectedImportMode) = await MainActor.run {
+                    (store.makeSnapshot(includePhotoFiles: false), importMode)
                 }
+                let overwrittenLocalFiles = selectedImportMode == .overwrite
+                    ? BackupImportCoordinator.overwrittenLocalFiles(previous: existingSnapshot, imported: snapshot)
+                    : BackupFileImpactSummary()
 
+                failureStage = .stagingFiles
+                failureDetail = failureStage.auditDetail(
+                    fileName: pendingImportFileURL.lastPathComponent,
+                    extra: selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"
+                )
                 await MainActor.run {
                     importProgressTitle = String(localized: "正在恢复原文件")
                     importProgress = BackupImportProgress(completedBytes: 0, totalBytes: sourceSize, currentItem: String(localized: "准备恢复"))
                 }
 
                 let relay = TaskCancellationRelay()
-                let restoredCounts = try await withTaskCancellationHandler {
+                let restoreTransaction = try await withTaskCancellationHandler {
                     try await Task.detached(priority: .userInitiated) {
-                        try BackupArchiveService.restoreEmbeddedFiles(
+                        try BackupArchiveService.prepareEmbeddedFileRestore(
                             from: pendingImportFileURL,
                             progress: { progress in
                                 Task { @MainActor in
@@ -781,11 +870,52 @@ struct BackupView: View {
                 } onCancel: {
                     relay.cancel()
                 }
+                guard !Task.isCancelled else {
+                    restoreTransaction.cancel()
+                    throw BackupArchiveError.cancelled
+                }
 
+                failureStage = .applyingMetadata
+                failureDetail = failureStage.auditDetail(
+                    fileName: pendingImportFileURL.lastPathComponent,
+                    extra: selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"
+                )
                 await MainActor.run {
                     importProgressTitle = String(localized: "正在应用数据索引")
-                    BackupImportCoordinator.applyImportMetadata(snapshot: snapshot, mode: importMode, store: store)
-                    if importMode == .overwrite {
+                    BackupImportCoordinator.applyImportMetadata(snapshot: snapshot, mode: selectedImportMode, store: store)
+                }
+
+                failureStage = .committingFiles
+                failureDetail = failureStage.auditDetail(
+                    fileName: pendingImportFileURL.lastPathComponent,
+                    extra: "restore=\(restoreTransaction.counts.totalCount)"
+                )
+                await MainActor.run {
+                    importProgressTitle = String(localized: "正在提交原文件")
+                    importProgress = BackupImportProgress(completedBytes: sourceSize, totalBytes: max(sourceSize, 1), currentItem: String(localized: "提交原文件"))
+                }
+
+                let restoredCounts: BackupEmbeddedRestoreCounts
+                do {
+                    restoredCounts = try await Task.detached(priority: .userInitiated) {
+                        try restoreTransaction.commit()
+                    }.value
+                } catch {
+                    restoreTransaction.cancel()
+                    await MainActor.run {
+                        BackupImportCoordinator.applyImportMetadata(snapshot: existingSnapshot, mode: .overwrite, store: store)
+                        store.save(includePhotoFiles: false)
+                    }
+                    throw error
+                }
+
+                failureStage = .cleaningOverwrittenFiles
+                failureDetail = failureStage.auditDetail(
+                    fileName: pendingImportFileURL.lastPathComponent,
+                    extra: "remove=\(overwrittenLocalFiles.totalCount)"
+                )
+                await MainActor.run {
+                    if selectedImportMode == .overwrite {
                         BackupImportCoordinator.cleanupOverwrittenFiles(previous: existingSnapshot, imported: snapshot)
                     }
                     isImportingBackup = false
@@ -804,7 +934,10 @@ struct BackupView: View {
                         action: .import,
                         outcome: .succeeded,
                         summary: String(localized: "导入完成"),
-                        detail: "\(importMode == .overwrite ? String(localized: "覆盖导入") : String(localized: "合并导入")) · restore=\(restoredCounts.totalCount)",
+                        detail: BackupImportStage.cleaningOverwrittenFiles.auditDetail(
+                            fileName: pendingImportFileURL.lastPathComponent,
+                            extra: "\(selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"), restore=\(restoredCounts.totalCount), remove=\(overwrittenLocalFiles.totalCount)"
+                        ),
                         source: "BackupView"
                     )
                     cleanupPendingImportFileIfNeeded()
@@ -817,6 +950,7 @@ struct BackupView: View {
                             action: .import,
                             outcome: .cancelled,
                             summary: String(localized: "已取消导入，当前数据未变更。"),
+                            detail: failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent),
                             source: "BackupView"
                         )
                     }
@@ -825,11 +959,14 @@ struct BackupView: View {
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
-                    setStatus(String(format: String(localized: "导入失败：%@"), error.localizedDescription))
+                    setStatus(failureStage.failureSummary(error: error))
                     OperationAuditLog.record(
                         action: .import,
                         outcome: .failed,
-                        summary: String(format: String(localized: "导入失败：%@"), error.localizedDescription),
+                        summary: failureStage.failureSummary(error: error),
+                        detail: failureDetail.isEmpty
+                            ? failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent)
+                            : failureDetail,
                         source: "BackupView"
                     )
                 }
@@ -1139,10 +1276,19 @@ struct BackupView: View {
         pendingImportFileURL = tempURL
         pendingImportPreview = BackupImportPreview(
             snapshot: snapshot,
-            photoFileCount: 0,
-            drawingFileCount: 0,
-            documentFileCount: 0,
-            quickNoteAttachmentFileCount: 0
+            manifest: BackupArchiveManifest(
+                schemaVersion: snapshot.schemaVersion,
+                appVersion: snapshot.appVersion,
+                appBuild: snapshot.appBuild,
+                appName: AppBrand.displayName,
+                exportedAt: snapshot.backupCreatedAt,
+                metadataPath: BackupArchiveService.metadataPath
+            ),
+            incomingFiles: BackupFileImpactSummary(),
+            overwrittenLocalFiles: BackupImportCoordinator.overwrittenLocalFiles(
+                previous: store.makeSnapshot(includePhotoFiles: false),
+                imported: snapshot
+            )
         )
         // UI 测试快捷入口默认使用覆盖模式，便于稳定验证覆盖导入确认流程。
         importMode = .overwrite
@@ -1247,6 +1393,7 @@ struct BackupView: View {
         if CloudBackupAutoInterval(rawValue: cloudAutoIntervalRawValue) == nil {
             cloudAutoIntervalRawValue = CloudBackupAutoInterval.disabled.rawValue
         }
+        cloudBackupRetentionCount = CloudBackupRetentionCountOption.normalized(cloudBackupRetentionCount)
         if !cloudIncludeProjectRecords {
             cloudIncludeProjectFilesAndNotes = false
             cloudIncludeAttachments = false

@@ -224,9 +224,11 @@ struct CADViewerToolView: View {
                         .lineLimit(2)
                     if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
                         let status = previewStatus(for: drawing)
-                        Text(status.text)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        if let statusText = status.text {
+                            Text(statusText)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        }
                     }
                 }
                 Spacer(minLength: AppSpacing.tight)
@@ -356,8 +358,14 @@ struct CADViewerToolView: View {
             versioned.isCurrentVersion = resolved.isCurrentVersion
 
             if let replacement = resolved.replacement {
-                DrawingStorage.delete(fileName: replacement.fileName)
-                store.projectDrawings.removeAll { $0.id == replacement.id }
+                store.removeProjectDrawings(
+                    ids: Set([replacement.id]),
+                    deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
+                        [replacement.fileName],
+                        summary: "cadViewer.importReplacement"
+                    ),
+                    recordsAuditImmediately: true
+                )
                 currentDrawings.removeAll { $0.id == replacement.id }
                 replacedCount += 1
             }
@@ -540,16 +548,16 @@ struct CADViewerToolView: View {
         }
     }
 
-    private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
+    private func previewStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
-            return isCADKernelReady ? ("CAD 在线查看可用", true) : ("在线查看未接入", false)
+            return isCADKernelReady ? ("CAD 本机查看可用", true) : (nil, false)
         }
         if fileType == "pdf" {
             return ("PDF 附件", true)
         }
         if fileType == "dwg" {
-            return isCADKernelReady ? ("DWG 诊断查看", false) : ("在线查看未接入", false)
+            return isCADKernelReady ? ("DWG 本机查看", true) : (nil, false)
         }
         return ("文件独立打开", true)
     }

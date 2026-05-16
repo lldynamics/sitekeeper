@@ -10,6 +10,8 @@ struct MaterialPriceDatabaseView: View {
     @State private var showAdd = false
     @State private var editingEntry: MaterialPriceEntry?
     @State private var didOpenFocusedEntry = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedEntryId: UUID? = nil) {
         self.focusedEntryId = focusedEntryId
@@ -53,7 +55,11 @@ struct MaterialPriceDatabaseView: View {
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
                 title: String(localized: "删除材料价格？"),
-                itemNoun: String(localized: "材料价格记录")
+                itemNoun: String(localized: "材料价格记录"),
+                singularMessage: String(localized: "删除后可在提示中撤销。"),
+                pluralMessage: { count, noun in
+                    String(format: String(localized: "将删除 %lld 条%@，可在提示中撤销。"), Int64(count), noun)
+                }
             ),
             onDeleteConfirmed: deleteEntries,
             rowContent: { entry in
@@ -88,18 +94,48 @@ struct MaterialPriceDatabaseView: View {
                 upsertMaterialPriceEntry(updated)
                 editingEntry = nil
             } onDelete: { target in
-                store.materialPriceEntries.removeAll { $0.id == target.id }
-                store.scheduleSave()
+                deleteEntries([target])
                 editingEntry = nil
             }
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
     private func deleteEntries(_ items: [MaterialPriceEntry]) {
         let ids = Set(items.map(\.id))
         guard !ids.isEmpty else { return }
-        store.materialPriceEntries.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+
+        let targets = store.materialPriceEntries.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeMaterialPriceEntries(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除材料价格 %lld 条"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "MaterialPriceDatabaseView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条材料价格"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialPriceEntries = deletion.restoredItems(
+                    current: store.materialPriceEntries,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
     }
 
     private func importCommonMaterials() {

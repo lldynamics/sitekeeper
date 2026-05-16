@@ -184,6 +184,9 @@ struct ProfileTabView: View {
                 NavigationLink { PrivacyPolicyView() } label: {
                     Label("隐私政策", systemImage: "hand.raised.fill")
                 }
+                NavigationLink { OpenSourceLicensesView() } label: {
+                    Label(String(localized: "开源许可"), systemImage: "curlybraces.square")
+                }
                 NavigationLink { FeedbackView() } label: {
                     Label("意见反馈", systemImage: "envelope.fill")
                 }
@@ -439,5 +442,38 @@ struct ProfileTabView: View {
             fileCount += 1
         }
         return (totalBytes, fileCount)
+    }
+}
+
+private struct OpenSourceLicensesView: View {
+    private let gplURL = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!
+
+    var body: some View {
+        List {
+            Section(String(localized: "内置开源组件")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("LibreDWG")
+                        .font(.headline)
+                    Text(String(localized: "用于在本机读取 DWG 图纸几何并交给 CAD 查看器渲染。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent(String(localized: "许可证"), value: String(localized: "GNU GPLv3 或更新版本"))
+                LabeledContent(String(localized: "源码"), value: String(localized: "随发布提供对应源码包"))
+            }
+
+            Section(String(localized: "用户权利")) {
+                Text(String(localized: "本发布包含 GPL 覆盖的软件。你可以按照 GPL 复制、分发和修改该组件及其对应源码；该组件按许可证原样提供，不提供担保。"))
+                    .font(.callout)
+            }
+
+            Section(String(localized: "源码获取")) {
+                Text(String(format: String(localized: "对应源码包会随发布提供；也可以通过 %@ 请求获取。"), AppContact.supportEmail))
+                    .font(.callout)
+                Link(String(localized: "查看 GNU GPLv3 完整文本"), destination: gplURL)
+            }
+        }
+        .navigationTitle(String(localized: "开源许可"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

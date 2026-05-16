@@ -11,6 +11,8 @@ struct QuickNoteView: View {
     @State private var editingNote: QuickNote?
     @State private var previewAttachment: QuickNoteAttachment?
     @State private var showClearComposerConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var didOpenFocusedNote = false
     @State private var didRestoreDraft = false
     @AppStorage("quickNoteDraftContent") private var storedDraftContent = ""
@@ -52,8 +54,8 @@ struct QuickNoteView: View {
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
         .background(Color(.systemGroupedBackground))
-        .navigationTitle("随手记")
-        .searchable(text: $searchText, prompt: "搜索随手记")
+        .navigationTitle(String(localized: "随手记"))
+        .searchable(text: $searchText, prompt: String(localized: "搜索随手记"))
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: draftContent) { _, _ in saveDraftState() }
         .onChange(of: draftProjectId) { _, _ in saveDraftState() }
@@ -70,19 +72,23 @@ struct QuickNoteView: View {
         .sheet(item: $previewAttachment) { attachment in
             QuickNoteAttachmentPreview(attachment: attachment)
         }
-        .confirmationDialog("清空当前草稿？", isPresented: $showClearComposerConfirm, titleVisibility: .visible) {
-            Button("清空草稿", role: .destructive) {
+        .confirmationDialog(String(localized: "清空当前草稿？"), isPresented: $showClearComposerConfirm, titleVisibility: .visible) {
+            Button(String(localized: "清空草稿"), role: .destructive) {
                 clearComposerDraft(deleteFiles: true)
             }
-            Button("取消", role: .cancel) {}
+            Button(String(localized: "取消"), role: .cancel) {}
         } message: {
-            Text("将清空文字、附件和关联工程。")
+            Text(String(localized: "将清空文字、附件和关联工程。"))
         }
         .onAppear {
             restoreDraftIfNeeded()
             openFocusedNoteIfNeeded()
         }
-        .onDisappear(perform: saveDraftState)
+        .onDisappear {
+            saveDraftState()
+            undoableDeletion.flushPendingCommit()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     private var messageComposer: some View {
@@ -119,14 +125,13 @@ struct QuickNoteView: View {
     private func publishDraft() {
         let content = draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !draftAttachments.isEmpty else { return }
-        store.quickNotes.insert(
+        store.insertQuickNoteAtTop(
             QuickNote(
                 title: QuickNoteText.title(from: content, attachments: draftAttachments),
                 content: content,
                 projectId: draftProjectId,
                 attachments: draftAttachments
-            ),
-            at: 0
+            )
         )
         draftContent = ""
         draftAttachments = []
@@ -137,18 +142,110 @@ struct QuickNoteView: View {
     private func saveEditedNote(original: QuickNote, updated: QuickNote) {
         let updatedFileNames = Set(updated.attachments.map(\.fileName))
         let removedAttachments = original.attachments.filter { !updatedFileNames.contains($0.fileName) }
-        QuickNoteAttachmentStorage.delete(attachments: removedAttachments)
         if let index = store.quickNotes.firstIndex(where: { $0.id == updated.id }) {
+            let restoreSnapshot = store.quickNotes.map { note in
+                guard note.id == updated.id else { return note }
+                var restore = updated
+                restore.attachments = uniqueAttachments(original.attachments + updated.attachments)
+                return restore
+            }
             store.quickNotes[index] = updated
             store.scheduleSave()
+            queueAttachmentRemovalUndo(
+                removedAttachments,
+                restoreSnapshot: restoreSnapshot,
+                noteId: updated.id
+            )
         }
     }
 
     private func deleteNotes(_ notes: [QuickNote]) {
         let ids = Set(notes.map(\.id))
-        QuickNoteAttachmentStorage.delete(attachments: notes.flatMap(\.attachments))
-        store.quickNotes.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+        guard !ids.isEmpty else { return }
+
+        let requestedByID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let restoreSnapshot = store.quickNotes.map { note in
+            requestedByID[note.id] ?? note
+        }
+        let targets = restoreSnapshot.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let attachments = uniqueAttachments(
+            targets.flatMap(\.attachments) + notes.flatMap(\.attachments)
+        )
+        let deletion = store.removeQuickNotes(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除随手记 %lld 条"), Int64(targets.count)),
+                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(attachments.count)),
+                source: "QuickNoteView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.quickNoteAttachments(
+                attachments,
+                summary: "quickNote.attachments"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条随手记"), Int64(deletion.deletedCount)),
+            commit: {
+                deletion.performDeferredFileCleanup()
+                store.scheduleSave()
+            },
+            undo: {
+                store.quickNotes = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: restoreSnapshot,
+                    current: store.quickNotes,
+                    deletedIDs: ids
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func uniqueAttachments(_ attachments: [QuickNoteAttachment]) -> [QuickNoteAttachment] {
+        var seen = Set<String>()
+        return attachments.filter { attachment in
+            guard !attachment.fileName.isEmpty else { return false }
+            return seen.insert(attachment.fileName).inserted
+        }
+    }
+
+    private func queueAttachmentRemovalUndo(
+        _ attachments: [QuickNoteAttachment],
+        restoreSnapshot: [QuickNote],
+        noteId: UUID
+    ) {
+        let dedupedAttachments = uniqueAttachments(attachments)
+        guard !dedupedAttachments.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已移除 %lld 个随手记附件"), Int64(dedupedAttachments.count)),
+            commit: {
+                DataStoreDeferredFileCleanup.quickNoteAttachments(
+                    dedupedAttachments,
+                    summary: "quickNote.removeAttachments"
+                )?.perform()
+                store.scheduleSave()
+            },
+            undo: {
+                store.quickNotes = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: restoreSnapshot,
+                    current: store.quickNotes,
+                    deletedIDs: Set([noteId])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除随手记附件 %lld 个"), Int64(dedupedAttachments.count)),
+                detail: dedupedAttachments.map(\.displayName).joined(separator: "、"),
+                source: "QuickNoteView"
+            )
+        )
     }
 
     private func openFocusedNoteIfNeeded() {
@@ -200,7 +297,10 @@ struct QuickNoteView: View {
 
     private func clearComposerDraft(deleteFiles: Bool) {
         if deleteFiles {
-            QuickNoteAttachmentStorage.delete(attachments: draftAttachments)
+            DataStoreDeferredFileCleanup.quickNoteAttachments(
+                draftAttachments,
+                summary: "quickNote.clearDraftAttachments"
+            )?.perform()
         }
         draftContent = ""
         draftProjectId = nil

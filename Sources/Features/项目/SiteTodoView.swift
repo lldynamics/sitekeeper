@@ -244,12 +244,9 @@ struct SiteTodoView: View {
                 detail: String(format: String(localized: "关联照片文件 %lld 个"), Int64(photoFileNames.count)),
                 source: "SiteTodoView"
             ),
-            deferredFileCleanup: DataStoreDeferredFileCleanup(
-                summary: "siteTodo.photoFiles",
-                fileCount: photoFileNames.count,
-                perform: {
-                    PhotoStorage.delete(fileNames: photoFileNames)
-                }
+            deferredFileCleanup: DataStoreDeferredFileCleanup.photoFiles(
+                photoFileNames,
+                summary: "siteTodo.photoFiles"
             )
         )
         guard !deletion.isEmpty else { return }
@@ -702,13 +699,19 @@ private struct SiteTodoEditSheet: View {
 
     private func deleteDraftPhotoIfNeeded(_ fileName: String?) {
         guard let fileName, createdDraftPhotoFileNames.remove(fileName) != nil else { return }
-        PhotoStorage.delete(fileName: fileName)
+        DataStoreDeferredFileCleanup.photoFiles(
+            [fileName],
+            summary: "siteTodo.draftPhoto"
+        )?.perform()
     }
 
     private func cleanupCreatedDraftPhotoFiles() {
         let fileNames = createdDraftPhotoFileNames
         createdDraftPhotoFileNames.removeAll()
-        PhotoStorage.delete(fileNames: Array(fileNames))
+        DataStoreDeferredFileCleanup.photoFiles(
+            Array(fileNames),
+            summary: "siteTodo.createdDraftPhotos"
+        )?.perform()
     }
 
     private func cleanupPhotoFilesAfterSave(savedTodo: SiteTodo) {
@@ -723,7 +726,10 @@ private struct SiteTodoEditSheet: View {
 
         let removedOriginalFileNames = originalFileNames.subtracting(savedFileNames)
         let unusedDraftFileNames = createdDraftPhotoFileNames.subtracting(savedFileNames)
-        PhotoStorage.delete(fileNames: Array(removedOriginalFileNames.union(unusedDraftFileNames)))
+        DataStoreDeferredFileCleanup.photoFiles(
+            Array(removedOriginalFileNames.union(unusedDraftFileNames)),
+            summary: "siteTodo.saveCleanup"
+        )?.perform()
         createdDraftPhotoFileNames.removeAll()
     }
 

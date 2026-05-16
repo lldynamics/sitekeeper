@@ -3,11 +3,32 @@ import Foundation
 
 /// 照片独立文件存储，模型只存文件名
 enum PhotoStorage {
+    private static func logIssue(
+        _ event: String,
+        fileName: String? = nil,
+        error: Error? = nil,
+        details: [String: String] = [:]
+    ) {
+        var payload = details
+        if let fileName, !fileName.isEmpty {
+            payload["file"] = fileName
+        }
+        StorageIssueLog.recordEvent(
+            "photo.\(event)",
+            category: .fileStorage,
+            details: payload,
+            error: error
+        )
+    }
+
     private static var baseDirectory: URL {
         if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
             return dir
         }
-        StorageIssueLog.record("无法访问应用文档目录，照片目录已回退到临时目录")
+        logIssue(
+            "base_directory_unavailable",
+            details: ["fallback": "temporary-directory"]
+        )
         return FileManager.default.temporaryDirectory
     }
 
@@ -30,7 +51,7 @@ enum PhotoStorage {
         do {
             return try saveOrThrow(original: original, fileName: fileName)
         } catch {
-            StorageIssueLog.record("照片保存失败：\(fileName)，\(error.localizedDescription)")
+            logIssue("save_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -54,14 +75,14 @@ enum PhotoStorage {
                 do {
                     try fm.removeItem(at: fileURL(for: fileName))
                 } catch {
-                    StorageIssueLog.record("照片写入回滚失败：\(fileName)，\(error.localizedDescription)")
+                    logIssue("rollback_original_delete_failed", fileName: fileName, error: error)
                 }
             }
             if fm.fileExists(atPath: thumbnailFileURL(for: fileName).path) {
                 do {
                     try fm.removeItem(at: thumbnailFileURL(for: fileName))
                 } catch {
-                    StorageIssueLog.record("照片缩略图写入回滚失败：\(fileName)，\(error.localizedDescription)")
+                    logIssue("rollback_thumbnail_delete_failed", fileName: fileName, error: error)
                 }
             }
             throw FileStorageError.writeFailed(fileName)
@@ -107,13 +128,18 @@ enum PhotoStorage {
         photoDir.appendingPathComponent(fileName)
     }
 
+    /// 缩略图文件 URL（供清理回收站成对隔离/恢复）。
+    static func thumbnailStorageURL(for fileName: String) -> URL {
+        thumbnailFileURL(for: fileName)
+    }
+
     /// 删除照片文件
     static func delete(fileName: String?) {
         guard let name = fileName else { return }
         do {
             try deleteOrThrow(fileName: name)
         } catch {
-            StorageIssueLog.record("照片删除失败：\(name)，\(error.localizedDescription)")
+            logIssue("delete_failed", fileName: name, error: error)
         }
         PhotoCache.shared.invalidate(fileName: name)
     }
@@ -145,7 +171,7 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return nil
         } catch {
-            StorageIssueLog.record("照片读取失败：\(fileName)，\(error.localizedDescription)")
+            logIssue("read_failed", fileName: fileName, error: error)
             return nil
         }
     }
@@ -158,7 +184,7 @@ enum PhotoStorage {
             } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
                 return nil
             } catch {
-                StorageIssueLog.record("照片读取失败：\(fileName)，\(error.localizedDescription)")
+                logIssue("read_failed", fileName: fileName, error: error)
                 return nil
             }
         }.value
@@ -176,7 +202,7 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return 0
         } catch {
-            StorageIssueLog.record("照片文件体积读取失败：\(fileName)，\(error.localizedDescription)")
+            logIssue("file_size_failed", fileName: fileName, error: error)
             return 0
         }
     }
@@ -185,7 +211,7 @@ enum PhotoStorage {
         do {
             try restoreOrThrow(files)
         } catch {
-            StorageIssueLog.record("照片恢复失败：\(error.localizedDescription)")
+            logIssue("restore_failed", error: error)
         }
     }
 
@@ -237,7 +263,7 @@ enum PhotoStorage {
             try thumbData.write(to: thumbnailFileURL(for: fileName), options: .atomic)
             PhotoCache.shared.invalidate(fileName: fileName)
         } catch {
-            StorageIssueLog.record("照片缩略图生成失败：\(fileName)，\(error.localizedDescription)")
+            logIssue("thumbnail_generate_failed", fileName: fileName, error: error)
         }
     }
 
@@ -250,7 +276,7 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             // ignore missing directory
         } catch {
-            StorageIssueLog.record("照片目录读取失败：\(photoDir.lastPathComponent)，\(error.localizedDescription)")
+            logIssue("directory_list_failed", fileName: photoDir.lastPathComponent, error: error)
         }
         do {
             let files = try manager.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
@@ -258,7 +284,7 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             // ignore missing directory
         } catch {
-            StorageIssueLog.record("照片缩略图目录读取失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
+            logIssue("thumbnail_directory_list_failed", fileName: thumbnailDir.lastPathComponent, error: error)
         }
         return names.sorted()
     }
@@ -273,7 +299,7 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return 0
         } catch {
-            StorageIssueLog.record("缩略图缓存体积统计失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
+            logIssue("thumbnail_cache_usage_failed", fileName: thumbnailDir.lastPathComponent, error: error)
             return 0
         }
         return files.reduce(0) { total, url in
@@ -283,7 +309,7 @@ enum PhotoStorage {
             } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
                 return total
             } catch {
-                StorageIssueLog.record("缩略图文件体积读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                logIssue("thumbnail_file_size_failed", fileName: url.lastPathComponent, error: error)
                 return total
             }
         }
@@ -296,14 +322,14 @@ enum PhotoStorage {
         } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
             return
         } catch {
-            StorageIssueLog.record("缩略图缓存目录读取失败：\(thumbnailDir.lastPathComponent)，\(error.localizedDescription)")
+            logIssue("thumbnail_cache_directory_list_failed", fileName: thumbnailDir.lastPathComponent, error: error)
             return
         }
         for url in files {
             do {
                 try FileManager.default.removeItem(at: url)
             } catch {
-                StorageIssueLog.record("缩略图缓存清理失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                logIssue("thumbnail_cache_cleanup_failed", fileName: url.lastPathComponent, error: error)
             }
         }
         PhotoCache.shared.clear()

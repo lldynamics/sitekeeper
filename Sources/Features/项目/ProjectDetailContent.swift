@@ -38,6 +38,7 @@ struct ProjectDetailContent: View {
     let onImportDrawing: () -> Void
     let onOpenMode: (ProjectDetailMode) -> Void
     let onScanDocument: () -> Void
+    let onScanDocumentCategory: (ProjectDocumentCategory) -> Void
     let onCaptureDocumentPhoto: () -> Void
     let onEditMaterial: (MaterialItem) -> Void
     let onEditQuote: (QuoteItem) -> Void
@@ -107,6 +108,23 @@ struct ProjectDetailContent: View {
 
     private func projectHeader(showsStatus: Bool) -> some View {
         let project = snapshot.project
+        let missingOriginalEntries = ProjectDetailImportExportActions.missingProjectPackageFiles(
+            documents: snapshot.relatedDocuments,
+            drawings: snapshot.relatedDrawings,
+            logs: snapshot.relatedLogs,
+            quickNotes: snapshot.relatedQuickNotes
+        )
+        let deliveryHealth = ProjectDeliveryHealth(
+            missingReceiptCount: snapshot.missingReceiptCount,
+            drawingCount: snapshot.relatedDrawings.count,
+            openTodoCount: snapshot.openTodoCount,
+            backupState: ProjectDeliveryBackupState.current(),
+            missingOriginalCount: missingOriginalEntries.count
+        )
+        let documentArchiveChecklist = DocumentArchiveChecklistSnapshot(
+            documents: snapshot.relatedDocuments,
+            requiredCategories: project.requiredDocumentCategories
+        )
         let paidAmountValue = ProjectDetailMetrics.paidAmount(
             project: project,
             relatedFinancialRecords: snapshot.relatedFinancialRecords
@@ -119,12 +137,21 @@ struct ProjectDetailContent: View {
             quoteValue: ReportBuilder.money(snapshot.quoteTotal),
             todoValue: "\(snapshot.openTodoCount)",
             unpaidAmount: unpaidAmountValue,
-            riskStrip: ProjectDetailRiskStripView(
-                overdueCount: snapshot.overdueProgressCount + snapshot.overdueTodoCount,
-                unpaidAmount: unpaidAmountValue,
-                unpricedQuoteCount: snapshot.unpricedQuoteCount,
-                hasTodayLog: snapshot.hasTodayLog
-            ),
+            riskStrip: VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                ProjectDeliveryHealthSummaryRow(
+                    health: deliveryHealth,
+                    action: onExportDeliveryPackage
+                )
+                ProjectDetailRiskStripView(
+                    overdueCount: snapshot.overdueProgressCount + snapshot.overdueTodoCount,
+                    unpaidAmount: unpaidAmountValue,
+                    unpricedQuoteCount: snapshot.unpricedQuoteCount,
+                    hasTodayLog: snapshot.hasTodayLog,
+                    missingDocumentCategoryCount: documentArchiveChecklist.missingCount,
+                    documentActionCount: documentArchiveChecklist.actionCount,
+                    legacyDocumentCount: documentArchiveChecklist.legacyDocumentCount
+                )
+            },
             customerLine: (!project.customerName.isEmpty || !project.customerPhone.isEmpty)
                 ? "客户: \(project.customerName) \(project.customerPhone)"
                 : nil,
@@ -223,6 +250,7 @@ struct ProjectDetailContent: View {
                 onOpenMode(item.targetMode)
             },
             onScanDocument: onScanDocument,
+            onScanDocumentCategory: onScanDocumentCategory,
             onCaptureDocumentPhoto: onCaptureDocumentPhoto,
             onEditMaterial: onEditMaterial,
             onEditQuote: onEditQuote,

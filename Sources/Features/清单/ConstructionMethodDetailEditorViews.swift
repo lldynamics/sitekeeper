@@ -828,7 +828,10 @@ struct ConstructionMethodEditSheet: View {
                     persistDraftImmediately()
                 } else {
                     ConstructionMethodEditDraftStore.clear(methodID: method?.id, scopeID: draftScopeID)
-                    QuickNoteAttachmentStorage.delete(fileNames: Array(sessionAddedFileNames))
+                    DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                        Array(sessionAddedFileNames),
+                        summary: "constructionMethodEditor.sessionAddedFiles"
+                    )?.perform()
                 }
             }
             .onChange(of: draftAutosaveFingerprint) { _, _ in
@@ -1329,7 +1332,10 @@ struct ConstructionMethodEditSheet: View {
     private func removeAttachment(_ attachment: QuickNoteAttachment) {
         attachments.removeAll { $0.id == attachment.id }
         if sessionAddedFileNames.contains(attachment.fileName) {
-            QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
+            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                [attachment.fileName],
+                summary: "constructionMethodEditor.removeAttachment"
+            )?.perform()
             sessionAddedFileNames.remove(attachment.fileName)
         }
     }
@@ -1337,7 +1343,10 @@ struct ConstructionMethodEditSheet: View {
     private func removeTutorialAttachment(_ attachment: QuickNoteAttachment) {
         tutorialAttachments.removeAll { $0.id == attachment.id }
         if sessionAddedFileNames.contains(attachment.fileName) {
-            QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
+            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                [attachment.fileName],
+                summary: "constructionMethodEditor.removeTutorialAttachment"
+            )?.perform()
             sessionAddedFileNames.remove(attachment.fileName)
         }
     }

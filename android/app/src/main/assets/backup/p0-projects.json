@@ -52,7 +52,9 @@
       "qualityIssue": "",
       "rectification": "",
       "confirmer": "王工",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-cable-tray-install"
+      ],
       "projectId": "project-001"
     },
     {
@@ -68,7 +70,9 @@
       "qualityIssue": "",
       "rectification": "",
       "confirmer": "李工",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-cable-tray-install"
+      ],
       "projectId": "project-001"
     },
     {
@@ -84,7 +88,9 @@
       "qualityIssue": "",
       "rectification": "",
       "confirmer": "陈工",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-distribution-box"
+      ],
       "projectId": "project-002"
     }
   ],
@@ -101,7 +107,9 @@
       "isDone": false,
       "completedAt": null,
       "note": "重点看转角位置",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-cable-tray-install"
+      ],
       "projectId": "project-001"
     },
     {
@@ -116,7 +124,9 @@
       "isDone": false,
       "completedAt": null,
       "note": "与土建班组确认材料堆放区",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-hidden-acceptance"
+      ],
       "projectId": "project-001"
     },
     {
@@ -131,8 +141,79 @@
       "isDone": false,
       "completedAt": null,
       "note": "拍照后再封存旧线编号",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "method-hidden-acceptance"
+      ],
       "projectId": "project-002"
+    }
+  ],
+  "progressTasks": [
+    {
+      "id": "progress-001",
+      "projectId": "project-001",
+      "title": "桥架安装",
+      "startDate": "2026-05-10",
+      "dueDate": "2026-05-20",
+      "completion": 0.65,
+      "note": "二层完成"
+    },
+    {
+      "id": "progress-002",
+      "projectId": "project-001",
+      "title": "三层布线",
+      "startDate": "2026-05-17",
+      "dueDate": "2026-05-28",
+      "completion": 0.15,
+      "note": "等待施工面交接"
+    },
+    {
+      "id": "progress-003",
+      "projectId": "project-002",
+      "title": "旧线拆除",
+      "startDate": "2026-05-17",
+      "dueDate": "2026-05-22",
+      "completion": 0.0,
+      "note": "拆除前需拍照留档"
+    }
+  ],
+  "projectDrawings": [
+    {
+      "id": "drawing-001",
+      "projectId": "project-001",
+      "name": "二层电气平面图",
+      "fileName": "drawing-001.pdf",
+      "fileType": "pdf",
+      "version": "V1",
+      "isCurrentVersion": true,
+      "relatedLogDate": "2026-05-16",
+      "issueStatus": "无问题",
+      "issueNote": "",
+      "textEncoding": "auto",
+      "textBigFont": "auto",
+      "textSchemeSnapshot": {},
+      "cadViewState": {},
+      "importedAt": "2026-05-16 09:10",
+      "note": "现场先按 PDF 查看",
+      "cadOverlaySnapshotData": ""
+    },
+    {
+      "id": "drawing-002",
+      "projectId": "project-002",
+      "name": "配电箱改造示意",
+      "fileName": "panel-ref-002.jpg",
+      "fileType": "jpg",
+      "version": "V1",
+      "isCurrentVersion": true,
+      "relatedLogDate": "2026-05-16",
+      "issueStatus": "待复核",
+      "issueNote": "现场拆线前确认回路编号",
+      "textEncoding": "auto",
+      "textBigFont": "auto",
+      "textSchemeSnapshot": {},
+      "cadViewState": {},
+      "importedAt": "2026-05-16 10:20",
+      "note": "图片资料",
+      "cadOverlaySnapshotData": ""
     }
   ],
   "projectFinancialRecords": [
@@ -221,6 +302,98 @@
       "purchaseStatus": "已进场",
       "arrivalDate": "2026-05-16",
       "projectId": "project-002"
+    }
+  ],
+  "quoteItems": [
+    {
+      "id": "quote-001",
+      "name": "桥架安装",
+      "unitPrice": "68",
+      "quantity": "80",
+      "unit": "米",
+      "notes": "含辅材",
+      "taxRate": "0",
+      "discountRate": "0",
+      "versionName": "V1",
+      "status": "已确认",
+      "customerConfirmedDate": "2026-05-15",
+      "contractAmount": "5440",
+      "projectId": "project-001"
+    },
+    {
+      "id": "quote-002",
+      "name": "配电箱改造",
+      "unitPrice": "8600",
+      "quantity": "1",
+      "unit": "项",
+      "notes": "不含新增回路材料",
+      "taxRate": "0",
+      "discountRate": "0",
+      "versionName": "V1",
+      "status": "草稿",
+      "customerConfirmedDate": "",
+      "contractAmount": "8600",
+      "projectId": "project-002"
+    }
+  ],
+  "laborRecords": [
+    {
+      "id": "labor-001",
+      "date": "2026-05-16",
+      "workers": "8",
+      "hours": "1",
+      "unitRate": "320",
+      "workType": "电工",
+      "teamName": "李工班组",
+      "isSettled": false,
+      "note": "桥架安装",
+      "projectId": "project-001"
+    },
+    {
+      "id": "labor-002",
+      "date": "2026-05-16",
+      "workers": "5",
+      "hours": "0.5",
+      "unitRate": "300",
+      "workType": "电工",
+      "teamName": "王工班组",
+      "isSettled": false,
+      "note": "旧线标识和配电箱定位",
+      "projectId": "project-002"
+    }
+  ],
+  "projectWarehouseMovements": [
+    {
+      "id": "warehouse-001",
+      "projectId": "project-001",
+      "date": "2026-05-16",
+      "movementType": "入库",
+      "materialName": "热镀锌桥架",
+      "specification": "200x100",
+      "unit": "米",
+      "quantity": "80",
+      "counterparty": "城东建材",
+      "handler": "张工",
+      "note": "首批进场",
+      "linkedDocumentIds": [
+        "document-001"
+      ],
+      "createdAt": "2026-05-16T09:00:00+0800"
+    },
+    {
+      "id": "warehouse-002",
+      "projectId": "project-001",
+      "date": "2026-05-16",
+      "movementType": "出库",
+      "materialName": "热镀锌桥架",
+      "specification": "200x100",
+      "unit": "米",
+      "quantity": "35",
+      "counterparty": "李工班组",
+      "handler": "张工",
+      "note": "二层桥架安装领用",
+      "linkedDocumentIds": [],
+      "createdAt": "2026-05-16T14:00:00+0800"
     }
   ]
 }

@@ -15,6 +15,7 @@ struct Project: Identifiable, Codable {
     var paymentStatus: PaymentStatus
     @NonNegativeNumberText var materialCost: String
     @NonNegativeNumberText var laborCost: String
+    var requiredDocumentCategories: [ProjectDocumentCategory]
     var cadFontMappings: [CADProjectFontMapping]
 
     init(
@@ -32,6 +33,7 @@ struct Project: Identifiable, Codable {
         paymentStatus: PaymentStatus = .unpaid,
         materialCost: String = "",
         laborCost: String = "",
+        requiredDocumentCategories: [ProjectDocumentCategory] = ProjectDocumentCategory.defaultConstructionArchiveRequirements,
         cadFontMappings: [CADProjectFontMapping] = []
     ) {
         self.id = id
@@ -48,12 +50,13 @@ struct Project: Identifiable, Codable {
         self.paymentStatus = paymentStatus
         self.materialCost = materialCost
         self.laborCost = laborCost
+        self.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(requiredDocumentCategories)
         self.cadFontMappings = cadFontMappings
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, location, status, customerName, customerPhone, startDate, expectedEndDate
-        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, cadFontMappings
+        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, requiredDocumentCategories, cadFontMappings
     }
 
     init(from decoder: Decoder) throws {
@@ -72,6 +75,9 @@ struct Project: Identifiable, Codable {
         paymentStatus = try container.decodeStringEnum(PaymentStatus.self, forKey: .paymentStatus, default: .unpaid)
         materialCost = try container.decodeIfPresent(String.self, forKey: .materialCost) ?? ""
         laborCost = try container.decodeIfPresent(String.self, forKey: .laborCost) ?? ""
+        requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+            try container.decodeIfPresent([ProjectDocumentCategory].self, forKey: .requiredDocumentCategories) ?? []
+        )
         cadFontMappings = try container.decodeIfPresent([CADProjectFontMapping].self, forKey: .cadFontMappings) ?? []
     }
 
@@ -91,6 +97,7 @@ struct Project: Identifiable, Codable {
         try container.encode(paymentStatus.rawValue, forKey: .paymentStatus)
         try container.encode(materialCost, forKey: .materialCost)
         try container.encode(laborCost, forKey: .laborCost)
+        try container.encode(requiredDocumentCategories.map(\.rawValue), forKey: .requiredDocumentCategories)
         try container.encode(cadFontMappings, forKey: .cadFontMappings)
     }
 }

@@ -93,6 +93,8 @@ struct CADFallbackIssueMarker: Identifiable, Codable, Equatable {
     var title: String
     var note: String
     var photoFileName: String?
+    var layerName: String?
+    var measurementSummary: String?
     var colorHex: String?
     var createdAt: String
 }

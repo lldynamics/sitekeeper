@@ -1,5 +1,237 @@
 import SwiftUI
 
+struct ProjectDeliveryBackupState: Equatable {
+    let latestBackupDate: Date?
+    let reminderDays: Int
+    let referenceDate: Date
+
+    static func current(referenceDate: Date = Date()) -> ProjectDeliveryBackupState {
+        let reminderDaysRaw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
+        let reminderDays = max(1, reminderDaysRaw == 0 ? 7 : reminderDaysRaw)
+        let localBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
+        let cloudBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        let localBackupDate = localBackupRaw > 0 ? Date(timeIntervalSince1970: localBackupRaw) : nil
+        let cloudBackupDate = cloudBackupRaw > 0 ? Date(timeIntervalSince1970: cloudBackupRaw) : nil
+        let latestBackupDate: Date? = {
+            switch (localBackupDate, cloudBackupDate) {
+            case let (lhs?, rhs?):
+                return max(lhs, rhs)
+            case let (lhs?, nil):
+                return lhs
+            case let (nil, rhs?):
+                return rhs
+            case (nil, nil):
+                return nil
+            }
+        }()
+        return ProjectDeliveryBackupState(
+            latestBackupDate: latestBackupDate,
+            reminderDays: reminderDays,
+            referenceDate: referenceDate
+        )
+    }
+
+    var isFresh: Bool {
+        guard latestBackupDate != nil else { return false }
+        return daysSinceLatestBackup < reminderDays
+    }
+
+    var daysSinceLatestBackup: Int {
+        guard let latestBackupDate else { return Int.max }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: latestBackupDate)
+        let end = calendar.startOfDay(for: referenceDate)
+        return max(calendar.dateComponents([.day], from: start, to: end).day ?? 0, 0)
+    }
+
+    var detail: String {
+        guard let latestBackupDate else {
+            return String(localized: "尚未记录成功备份")
+        }
+        if daysSinceLatestBackup == 0 {
+            return String(format: String(localized: "今天已备份，提醒阈值 %lld 天"), Int64(reminderDays))
+        }
+        return String(
+            format: String(localized: "最近备份 %@，已过 %lld 天"),
+            Formatters.dateTime.string(from: latestBackupDate),
+            Int64(daysSinceLatestBackup)
+        )
+    }
+}
+
+struct ProjectDeliveryHealth: Equatable {
+    enum Issue: String, CaseIterable, Identifiable {
+        case missingReceipts
+        case missingDrawings
+        case openTodos
+        case backupOverdue
+        case missingOriginals
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .missingReceipts:
+                return String(localized: "缺票据")
+            case .missingDrawings:
+                return String(localized: "缺图纸")
+            case .openTodos:
+                return String(localized: "未完成待办")
+            case .backupOverdue:
+                return String(localized: "未备份")
+            case .missingOriginals:
+                return String(localized: "资料缺原件")
+            }
+        }
+
+        var passedTitle: String {
+            switch self {
+            case .missingReceipts:
+                return String(localized: "票据已补齐")
+            case .missingDrawings:
+                return String(localized: "图纸已上传")
+            case .openTodos:
+                return String(localized: "待办已清空")
+            case .backupOverdue:
+                return String(localized: "备份有效")
+            case .missingOriginals:
+                return String(localized: "原件齐全")
+            }
+        }
+
+        var icon: String {
+            switch self {
+            case .missingReceipts:
+                return "receipt.fill"
+            case .missingDrawings:
+                return "square.on.square.squareshape.controlhandles"
+            case .openTodos:
+                return "checklist"
+            case .backupOverdue:
+                return "externaldrive.badge.icloud"
+            case .missingOriginals:
+                return "doc.badge.exclamationmark"
+            }
+        }
+
+        var repairMode: ProjectDetailMode? {
+            switch self {
+            case .missingReceipts:
+                return .finance
+            case .missingDrawings, .missingOriginals:
+                return .assets
+            case .openTodos:
+                return .records
+            case .backupOverdue:
+                return nil
+            }
+        }
+    }
+
+    let missingReceiptCount: Int
+    let drawingCount: Int
+    let openTodoCount: Int
+    let backupState: ProjectDeliveryBackupState
+    let missingOriginalCount: Int
+
+    var failedIssues: [Issue] {
+        Issue.allCases.filter { !isPassed($0) }
+    }
+
+    var score: Int {
+        max(0, 100 - failedIssues.count * 20)
+    }
+
+    var isDeliverable: Bool {
+        failedIssues.isEmpty
+    }
+
+    var verdictTitle: String {
+        isDeliverable ? String(localized: "可交付") : String(localized: "不可交付")
+    }
+
+    var summary: String {
+        if isDeliverable {
+            return String(localized: "票据、图纸、待办、备份和原件检查均已通过。")
+        }
+        let titles = failedIssues.map(\.title).joined(separator: "、")
+        return String(format: String(localized: "需处理：%@"), titles)
+    }
+
+    func isPassed(_ issue: Issue) -> Bool {
+        switch issue {
+        case .missingReceipts:
+            return missingReceiptCount == 0
+        case .missingDrawings:
+            return drawingCount > 0
+        case .openTodos:
+            return openTodoCount == 0
+        case .backupOverdue:
+            return backupState.isFresh
+        case .missingOriginals:
+            return missingOriginalCount == 0
+        }
+    }
+
+    func detail(for issue: Issue) -> String {
+        switch issue {
+        case .missingReceipts:
+            return missingReceiptCount == 0
+                ? String(localized: "需要留票的账目均已关联票据。")
+                : String(format: String(localized: "还有 %lld 笔账目缺票据。"), Int64(missingReceiptCount))
+        case .missingDrawings:
+            return drawingCount > 0
+                ? String(format: String(localized: "已上传 %lld 份图纸。"), Int64(drawingCount))
+                : String(localized: "项目还没有图纸文件。")
+        case .openTodos:
+            return openTodoCount == 0
+                ? String(localized: "没有未完成待办。")
+                : String(format: String(localized: "还有 %lld 条现场待办未完成。"), Int64(openTodoCount))
+        case .backupOverdue:
+            return backupState.detail
+        case .missingOriginals:
+            return missingOriginalCount == 0
+                ? String(localized: "交付包引用的本机原件均可找到。")
+                : String(format: String(localized: "检测到 %lld 个资料原件缺失。"), Int64(missingOriginalCount))
+        }
+    }
+}
+
+struct ProjectDeliveryHealthSummaryRow: View {
+    let health: ProjectDeliveryHealth
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(alignment: .center, spacing: AppSpacing.tight) {
+                Image(systemName: health.isDeliverable ? "checkmark.seal.fill" : "xmark.seal.fill")
+                    .foregroundStyle(health.isDeliverable ? Color.appSuccess : Color.appRisk)
+                    .font(.caption.weight(.semibold))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(String(format: String(localized: "交付健康分 %lld · %@"), Int64(health.score), health.verdictTitle))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(health.summary)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, AppSpacing.normal)
+            .padding(.vertical, 8)
+            .background(
+                health.isDeliverable ? Color.appSuccessSurfaceSubtle : Color.appRiskSurface,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct ProjectDeliveryGuideData {
     let projectName: String
     let logCount: Int
@@ -13,8 +245,20 @@ struct ProjectDeliveryGuideData {
     let missingReceiptCount: Int
     let unsettledFinancialCount: Int
     let unsettledFinancialAmount: Double
+    let openTodoCount: Int
+    let backupState: ProjectDeliveryBackupState
     let missingOriginalEntries: [String]
     let estimatedPackageBytes: Int
+
+    var deliveryHealth: ProjectDeliveryHealth {
+        ProjectDeliveryHealth(
+            missingReceiptCount: missingReceiptCount,
+            drawingCount: drawingCount,
+            openTodoCount: openTodoCount,
+            backupState: backupState,
+            missingOriginalCount: missingOriginalEntries.count
+        )
+    }
 
     var drawingWithoutCurrentCount: Int {
         drawingGroupsWithoutCurrent.count
@@ -31,20 +275,20 @@ struct ProjectDeliveryGuideData {
             || contactCount == 0
             || missingReceiptCount > 0
             || unsettledFinancialCount > 0
+            || !deliveryHealth.isDeliverable
     }
 
     var deliveryWarningCount: Int {
-        [
+        deliveryHealth.failedIssues.count + [
             missingLogDateCount > 0,
-            drawingCount == 0 || drawingWithoutCurrentCount > 0,
+            drawingCount > 0 && drawingWithoutCurrentCount > 0,
             contactCount == 0,
-            missingReceiptCount > 0,
             unsettledFinancialCount > 0
         ].filter { $0 }.count
     }
 
     var isReadyForDelivery: Bool {
-        !hasDeliveryChecklistWarning && !hasBlockingMissingOriginals
+        deliveryHealth.isDeliverable && !hasDeliveryChecklistWarning && !hasBlockingMissingOriginals
     }
 }
 
@@ -58,6 +302,12 @@ struct ProjectDeliveryGuideView: View {
             List {
                 Section {
                     readinessCard
+                }
+
+                Section(String(localized: "交付健康分")) {
+                    ForEach(ProjectDeliveryHealth.Issue.allCases) { issue in
+                        healthRow(issue)
+                    }
                 }
 
                 Section(String(localized: "交付检查")) {
@@ -76,6 +326,15 @@ struct ProjectDeliveryGuideView: View {
                         status: data.missingReceiptCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.finance)
+                    }
+                    guideRow(
+                        title: String(localized: "未完成待办"),
+                        detail: data.openTodoCount == 0
+                            ? String(localized: "没有未完成待办")
+                            : String(format: String(localized: "还有 %lld 条待办未完成"), Int64(data.openTodoCount)),
+                        status: data.openTodoCount == 0 ? .ok : .warning
+                    ) {
+                        onOpenMode(.records)
                     }
                     guideRow(
                         title: String(localized: "图纸当前版检查"),
@@ -109,6 +368,12 @@ struct ProjectDeliveryGuideView: View {
                     ) {
                         onOpenMode(.assets)
                     }
+                    guideRow(
+                        title: String(localized: "最近备份"),
+                        detail: data.backupState.detail,
+                        status: data.backupState.isFresh ? .ok : .warning,
+                        fixAction: nil
+                    )
                 }
 
                 if data.hasDeliveryChecklistWarning {
@@ -182,15 +447,19 @@ struct ProjectDeliveryGuideView: View {
         HStack(alignment: .top, spacing: AppSpacing.normal) {
             Image(systemName: data.isReadyForDelivery ? "checkmark.seal.fill" : "checklist.unchecked")
                 .font(.title2.weight(.semibold))
-                .foregroundStyle(data.isReadyForDelivery ? Color.appSuccess : Color.appPrimaryAction)
+                .foregroundStyle(data.deliveryHealth.isDeliverable ? Color.appSuccess : Color.appRisk)
                 .frame(width: 34)
             VStack(alignment: .leading, spacing: 4) {
                 Text(
-                    data.isReadyForDelivery
-                        ? String(localized: "交付准备完成")
-                        : String(format: String(localized: "完工前还有 %lld 项需要处理"), Int64(data.deliveryWarningCount))
+                    String(
+                        format: String(localized: "交付健康分 %lld · %@"),
+                        Int64(data.deliveryHealth.score),
+                        data.deliveryHealth.verdictTitle
+                    )
                 )
                     .font(.headline)
+                ProgressView(value: Double(data.deliveryHealth.score), total: 100)
+                    .tint(data.deliveryHealth.isDeliverable ? Color.appSuccess : Color.appRisk)
                 Text(readinessDetail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -200,13 +469,16 @@ struct ProjectDeliveryGuideView: View {
     }
 
     private var readinessDetail: String {
-        if data.isReadyForDelivery {
-            return String(localized: "日志、票据、图纸当前版、联系人和未结清账目检查均已通过。")
+        if data.deliveryHealth.isDeliverable {
+            if data.isReadyForDelivery {
+                return String(localized: "票据、图纸、待办、备份和原件检查均已通过，可执行最终交付。")
+            }
+            return String(
+                format: String(localized: "核心交付项已通过，另有 %lld 项建议检查。"),
+                Int64(data.deliveryWarningCount)
+            )
         }
-        if data.hasBlockingMissingOriginals {
-            return String(localized: "检测到缺失原件，需补齐后才能导出最终 ZIP。")
-        }
-        return String(localized: "下方每项都可以直接跳转处理，处理完成后再回来导出交付包。")
+        return data.deliveryHealth.summary
     }
 
     private var logCoverageDetail: String {
@@ -254,13 +526,13 @@ struct ProjectDeliveryGuideView: View {
     }
 
     private var exportButtonTitle: String {
-        data.hasDeliveryChecklistWarning
+        data.hasDeliveryChecklistWarning || !data.deliveryHealth.isDeliverable
             ? String(localized: "检查后导出交付包 ZIP")
             : String(localized: "一键导出交付包 ZIP")
     }
 
     @ViewBuilder
-    private func guideRow(title: String, detail: String, status: GuideStatus, fixAction: @escaping () -> Void) -> some View {
+    private func guideRow(title: String, detail: String, status: GuideStatus, fixAction: (() -> Void)? = nil) -> some View {
         HStack(spacing: AppSpacing.tight) {
             Image(systemName: status.icon)
                 .foregroundStyle(status.color)
@@ -273,9 +545,33 @@ struct ProjectDeliveryGuideView: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            if status != .ok {
+            if status != .ok, let fixAction {
                 Button(String(localized: "去处理")) {
                     fixAction()
+                }
+                .font(.caption.weight(.semibold))
+            }
+        }
+    }
+
+    private func healthRow(_ issue: ProjectDeliveryHealth.Issue) -> some View {
+        let isPassed = data.deliveryHealth.isPassed(issue)
+        return HStack(spacing: AppSpacing.tight) {
+            Image(systemName: issue.icon)
+                .foregroundStyle(isPassed ? Color.appSuccess : Color.appRisk)
+                .font(.caption.weight(.semibold))
+                .frame(width: 20)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(isPassed ? issue.passedTitle : issue.title)
+                    .font(.callout.weight(.semibold))
+                Text(data.deliveryHealth.detail(for: issue))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !isPassed, let mode = issue.repairMode {
+                Button(String(localized: "去处理")) {
+                    onOpenMode(mode)
                 }
                 .font(.caption.weight(.semibold))
             }

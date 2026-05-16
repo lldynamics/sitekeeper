@@ -44,6 +44,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
     let project: Project
     let projectId: UUID
     @Binding var presentation: ProjectDetailPresentation?
+    @Binding var documentScanCategory: ProjectDocumentCategory?
     @Binding var financialAddSeed: ProjectFinancialRecord?
     @Binding var imagePickerSource: UIImagePickerController.SourceType
 
@@ -62,6 +63,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
         content
             .sheet(item: $presentation, onDismiss: {
                 financialAddSeed = nil
+                documentScanCategory = nil
             }) { presentation in
                 switch presentation {
                 case .quickAdd(let sheet):
@@ -100,7 +102,11 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         financialAddSeed = nil
                     }
                 case .documentScanSetup:
-                    ProjectDocumentScanSetupSheet(projectId: projectId, constructionMethods: constructionMethods) { target in
+                    ProjectDocumentScanSetupSheet(
+                        projectId: projectId,
+                        constructionMethods: constructionMethods,
+                        initialCategory: documentScanCategory ?? .constructionRecord
+                    ) { target in
                         onCreateScanTarget(target)
                     }
                 case .imagePicker:
@@ -267,6 +273,7 @@ extension View {
         project: Project,
         projectId: UUID,
         presentation: Binding<ProjectDetailPresentation?>,
+        documentScanCategory: Binding<ProjectDocumentCategory?>,
         financialAddSeed: Binding<ProjectFinancialRecord?>,
         imagePickerSource: Binding<UIImagePickerController.SourceType>,
         deliveryGuideData: ProjectDeliveryGuideData,
@@ -285,6 +292,7 @@ extension View {
                 project: project,
                 projectId: projectId,
                 presentation: presentation,
+                documentScanCategory: documentScanCategory,
                 financialAddSeed: financialAddSeed,
                 imagePickerSource: imagePickerSource,
                 deliveryGuideData: deliveryGuideData,

@@ -16,6 +16,10 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     let contactCount: Int
     let financialCount: Int
     let documentCount: Int
+    let documentMissingCategoryCount: Int
+    let documentActionCount: Int
+    let documentReturnedCount: Int
+    let documentArchivedCount: Int
     let recentLogs: [DailyLog]
     let progressTasks: [ProgressTask]
     let todos: [SiteTodo]
@@ -50,8 +54,9 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                         tint: .appDoc,
                         metrics: [
                             .init(title: "资料", value: "\(documentCount) 份"),
-                            .init(title: "联系人", value: "\(contactCount) 人"),
-                            .init(title: "记账附件", value: "\(missingReceiptCount) 缺票", color: missingReceiptCount > 0 ? .appFinance : .secondary)
+                            .init(title: "缺项", value: "\(documentMissingCategoryCount) 类", color: documentMissingCategoryCount > 0 ? .appWarning : .secondary),
+                            .init(title: "待处理", value: "\(documentActionCount) 份", color: documentActionCount > 0 ? .appPrimaryAction : .secondary),
+                            .init(title: "已归档", value: "\(documentArchivedCount) 份", color: documentArchivedCount > 0 ? .appSuccess : .secondary)
                         ],
                         action: onOpenAssets
                     )
@@ -174,10 +179,32 @@ struct ProjectOverviewView<LogRowContent: View>: View {
         if missingReceiptCount > 0 {
             suggestions.append(.init(title: "补齐票据资料", subtitle: "\(missingReceiptCount) 笔账目缺票", systemImage: "doc.badge.plus", tint: .appDoc, action: .assets))
         }
+        if documentMissingCategoryCount > 0 || documentReturnedCount > 0 {
+            suggestions.append(.init(
+                title: "补齐施工资料",
+                subtitle: documentArchiveSuggestionSubtitle,
+                systemImage: "folder.badge.plus",
+                tint: .appWarning,
+                action: .assets
+            ))
+        }
         if progressTasks.isEmpty {
             suggestions.append(.init(title: "添加进度任务", subtitle: "用项目看板跟踪节点", systemImage: "checklist.checked", tint: .appWarning, action: .records))
         }
         return Array(suggestions.prefix(4))
+    }
+
+    private var documentArchiveSuggestionSubtitle: String {
+        switch (documentMissingCategoryCount, documentReturnedCount) {
+        case let (missing, returned) where missing > 0 && returned > 0:
+            return "\(missing) 类缺项 · \(returned) 份退回"
+        case let (missing, _) where missing > 0:
+            return "\(missing) 类施工资料缺项"
+        case let (_, returned) where returned > 0:
+            return "\(returned) 份资料退回修改"
+        default:
+            return "施工资料需要检查"
+        }
     }
 
     private var paymentStatus: PaymentStatus {
@@ -189,7 +216,12 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     }
 
     private var hasActiveRisk: Bool {
-        overdueCount > 0 || missingReceiptCount > 0 || !hasTodayLog || unpaidAmount > 0
+        overdueCount > 0 ||
+            missingReceiptCount > 0 ||
+            documentMissingCategoryCount > 0 ||
+            documentReturnedCount > 0 ||
+            !hasTodayLog ||
+            unpaidAmount > 0
     }
 
     private func riskCardAction() {
@@ -203,6 +235,10 @@ struct ProjectOverviewView<LogRowContent: View>: View {
         }
         if !hasTodayLog {
             onOpenLogs()
+            return
+        }
+        if documentMissingCategoryCount > 0 || documentReturnedCount > 0 {
+            onOpenAssets()
             return
         }
         if overdueCount > 0 {

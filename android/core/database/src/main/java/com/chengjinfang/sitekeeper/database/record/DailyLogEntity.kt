@@ -3,7 +3,9 @@ package com.chengjinfang.sitekeeper.database.record
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.chengjinfang.sitekeeper.model.backup.BackupSnapshotJson
 import com.chengjinfang.sitekeeper.model.backup.DailyLog
+import com.chengjinfang.sitekeeper.model.backup.LogPhoto
 
 @Entity(
     tableName = "daily_logs",
@@ -18,7 +20,10 @@ data class DailyLogEntity(
     val workers: String,
     val safety: String,
     val materials: String,
-    val tomorrowPlan: String
+    val tomorrowPlan: String,
+    val photoFileName: String?,
+    val photosJson: String,
+    val linkedConstructionMethodIdsJson: String
 )
 
 data class DailyLogSummary(
@@ -29,8 +34,13 @@ data class DailyLogSummary(
     val workers: String,
     val safety: String,
     val materials: String,
-    val tomorrowPlan: String
-)
+    val tomorrowPlan: String,
+    val photoFileNames: List<String>,
+    val linkedConstructionMethodIds: List<String>
+) {
+    val photoCount: Int
+        get() = photoFileNames.size
+}
 
 fun DailyLog.toEntity(): DailyLogEntity =
     DailyLogEntity(
@@ -42,7 +52,10 @@ fun DailyLog.toEntity(): DailyLogEntity =
         workers = workers,
         safety = safety,
         materials = materials,
-        tomorrowPlan = tomorrowPlan
+        tomorrowPlan = tomorrowPlan,
+        photoFileName = photoFileName,
+        photosJson = BackupSnapshotJson.encodeLogPhotos(photos),
+        linkedConstructionMethodIdsJson = BackupSnapshotJson.encodeStringList(linkedConstructionMethodIDs)
     )
 
 fun DailyLogEntity.toSummary(): DailyLogSummary =
@@ -54,5 +67,31 @@ fun DailyLogEntity.toSummary(): DailyLogSummary =
         workers = workers,
         safety = safety,
         materials = materials,
-        tomorrowPlan = tomorrowPlan
+        tomorrowPlan = tomorrowPlan,
+        photoFileNames = mergedDailyLogPhotoFileNames(
+            legacyPhotoFileName = photoFileName,
+            photos = BackupSnapshotJson.decodeLogPhotos(photosJson)
+        ),
+        linkedConstructionMethodIds = BackupSnapshotJson.decodeStringList(linkedConstructionMethodIdsJson)
     )
+
+fun DailyLogEntity.toBackupLogPhotos(): List<LogPhoto> =
+    BackupSnapshotJson.decodeLogPhotos(photosJson)
+
+fun mergedDailyLogPhotoFileNames(
+    legacyPhotoFileName: String?,
+    photos: List<LogPhoto>
+): List<String> =
+    buildList {
+        legacyPhotoFileName
+            ?.takeIf { it.isNotBlank() }
+            ?.let { add(it) }
+        photos
+            .map { it.fileName }
+            .filter(String::isNotBlank)
+            .forEach { fileName ->
+                if (fileName !in this) {
+                    add(fileName)
+                }
+            }
+    }

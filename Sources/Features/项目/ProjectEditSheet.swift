@@ -14,6 +14,7 @@ struct ProjectEditSheet: View {
     @State private var expectedEndDate: String
     @State private var contractAmount: String
     @State private var paymentStatus: PaymentStatus
+    @State private var requiredDocumentCategories: Set<ProjectDocumentCategory>
     @FocusState private var isInputFocused: Bool
 
     init(project: Project, onSave: @escaping (Project) -> Void) {
@@ -28,6 +29,7 @@ struct ProjectEditSheet: View {
         _expectedEndDate = State(initialValue: project.expectedEndDate)
         _contractAmount = State(initialValue: project.contractAmount)
         _paymentStatus = State(initialValue: project.paymentStatus)
+        _requiredDocumentCategories = State(initialValue: Set(project.requiredDocumentCategories))
     }
 
     var body: some View {
@@ -49,6 +51,7 @@ struct ProjectEditSheet: View {
                         .keyboardType(.phonePad)
                         .focused($isInputFocused)
                 }
+                ProjectDocumentChecklistTemplateSection(selectedCategories: $requiredDocumentCategories)
                 Section(String(localized: "工期")) {
                     TextField(String(localized: "开工日期(yyyy-MM-dd)"), text: $startDate)
                         .focused($isInputFocused)
@@ -94,10 +97,16 @@ struct ProjectEditSheet: View {
                         updated.expectedEndDate = expectedEndDate
                         updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.paymentStatus = paymentStatus
+                        updated.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+                            Array(requiredDocumentCategories)
+                        )
                         onSave(updated)
                         dismiss()
                     }
-                    .disabled(!InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid)
+                    .disabled(
+                        requiredDocumentCategories.isEmpty ||
+                        !InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+                    )
                 }
                 KeyboardDismissToolbar {
                     isInputFocused = false

@@ -42,6 +42,24 @@ enum CloudBackupService {
     private static let backupFilePrefix = "sitekeeper-cloud-backup"
     private static let backupFileExtension = "zip"
 
+    private static func recordIssue(
+        _ event: String,
+        fileURL: URL? = nil,
+        details: [String: String] = [:],
+        error: Error? = nil
+    ) {
+        var payload = details
+        if let fileURL {
+            payload["file"] = fileURL.lastPathComponent
+        }
+        StorageIssueLog.recordEvent(
+            event,
+            category: .cloudBackup,
+            details: payload,
+            error: error
+        )
+    }
+
     static func containerRootURL() -> URL? {
         FileManager.default.url(forUbiquityContainerIdentifier: containerIdentifier)
     }
@@ -129,9 +147,11 @@ enum CloudBackupService {
             do {
                 try FileManager.default.removeItem(at: file.fileURL)
             } catch {
-                StorageIssueLog.record(
-                    "云备份历史清理失败：\(file.fileURL.lastPathComponent)，\(error.localizedDescription)",
-                    category: .cloudBackup
+                recordIssue(
+                    "cloud_backup.retention_prune_failed",
+                    fileURL: file.fileURL,
+                    details: ["retentionCount": String(retainedCount)],
+                    error: error
                 )
             }
         }
@@ -142,10 +162,7 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey])
         } catch {
-            StorageIssueLog.record(
-                "读取云备份元信息失败：\(url.lastPathComponent)，\(error.localizedDescription)",
-                category: .cloudBackup
-            )
+            recordIssue("cloud_backup.metadata_read_failed", fileURL: url, error: error)
             return nil
         }
         guard values.isRegularFile != false else {
@@ -165,10 +182,7 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
         } catch {
-            StorageIssueLog.record(
-                "读取云端下载状态失败：\(url.lastPathComponent)，\(error.localizedDescription)",
-                category: .cloudBackup
-            )
+            recordIssue("cloud_backup.download_status_read_failed", fileURL: url, error: error)
             values = nil
         }
         if let status = values?.ubiquitousItemDownloadingStatus,
@@ -176,10 +190,7 @@ enum CloudBackupService {
             do {
                 try FileManager.default.startDownloadingUbiquitousItem(at: url)
             } catch {
-                StorageIssueLog.record(
-                    "触发云备份下载失败：\(url.lastPathComponent)，\(error.localizedDescription)",
-                    category: .cloudBackup
-                )
+                recordIssue("cloud_backup.download_start_failed", fileURL: url, error: error)
             }
             throw CloudBackupError.cloudFileNotDownloaded
         }

@@ -97,7 +97,10 @@ final class QuickNoteAudioRecorder {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
 
         if let fileName {
-            QuickNoteAttachmentStorage.delete(fileName: fileName)
+            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                [fileName],
+                summary: "quickNoteAudioRecorder.cancelRecording"
+            )?.perform()
         }
     }
 
@@ -113,7 +116,10 @@ final class QuickNoteAudioRecorder {
     }
 
     private func cleanupFailedRecording(fileName: String) {
-        QuickNoteAttachmentStorage.delete(fileName: fileName)
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            [fileName],
+            summary: "quickNoteAudioRecorder.failedRecording"
+        )?.perform()
     }
 
     private func requestPermission() async -> Bool {

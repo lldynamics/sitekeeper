@@ -4,87 +4,553 @@ extension ReportBuilder {
     static func makeCSV(snapshot: BackupSnapshot, options: ExportContentOptions) -> Data {
         var rows: [String] = []
         if options.includeMaterials {
-            rows.append(csvSection("材料清单"))
-            rows.append(csv(["名称", "数量", "单位", "单价", "规格", "品牌", "供应商", "采购状态", "进场日期", "金额", "项目ID"]))
-            rows += snapshot.materialItems.map { csv([$0.name, $0.quantity, $0.unit, $0.unitPrice, $0.specification, $0.brand, $0.supplier, $0.purchaseStatus.displayName, $0.arrivalDate, money(materialLineTotal($0)), $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("material_items"))
+            rows.append(csv(["name", "quantity", "unit", "unit_price", "specification", "brand", "supplier", "purchase_status_key", "purchase_status_display", "arrival_date", "amount_raw", "amount_display", "project_id"]))
+            rows += snapshot.materialItems.map { item in
+                let lineTotal = materialAmountColumns(item, currencyDisplayMode: options.currencyDisplayMode)
+                return csv([
+                    item.name,
+                    item.quantity,
+                    item.unit,
+                    item.unitPrice,
+                    item.specification,
+                    item.brand,
+                    item.supplier,
+                    item.purchaseStatus.exportKey,
+                    item.purchaseStatus.displayName,
+                    item.arrivalDate,
+                    lineTotal.raw,
+                    lineTotal.display,
+                    item.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeQuotes {
-            rows.append(csvSection("报价明细"))
-            rows.append(csv(["名称", "单价", "数量", "单位", "税率", "折扣", "版本", "状态", "客户确认日期", "合同金额", "备注", "项目ID"]))
-            rows += snapshot.quoteItems.map { csv([$0.name, $0.unitPrice, $0.quantity, $0.unit, $0.taxRate, $0.discountRate, $0.versionName, $0.status.displayName, $0.customerConfirmedDate, $0.contractAmount, $0.notes, $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("quote_items"))
+            rows.append(csv(["name", "unit_price", "quantity", "unit", "tax_rate", "discount_rate", "version", "status_key", "status_display", "customer_confirmed_date", "contract_amount_raw", "contract_amount_display", "notes", "project_id"]))
+            rows += snapshot.quoteItems.map { item in
+                let contractAmount = parsedAmountColumns(item.contractAmount, currencyDisplayMode: options.currencyDisplayMode)
+                return csv([
+                    item.name,
+                    item.unitPrice,
+                    item.quantity,
+                    item.unit,
+                    item.taxRate,
+                    item.discountRate,
+                    item.versionName,
+                    item.status.exportKey,
+                    item.status.displayName,
+                    item.customerConfirmedDate,
+                    contractAmount.raw,
+                    contractAmount.display,
+                    item.notes,
+                    item.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeLabor {
-            rows.append(csvSection("人工记录"))
-            rows.append(csv(["日期", "人数", "工时", "单价", "工种", "班组", "是否结算", "金额", "备注", "项目ID"]))
-            rows += snapshot.laborRecords.map { csv([$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? locYes : locNo, money(laborLineTotal($0)), $0.note, $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("labor_records"))
+            rows.append(csv(["date", "workers", "hours", "unit_rate", "work_type", "team_name", "is_settled", "amount_raw", "amount_display", "note", "project_id"]))
+            rows += snapshot.laborRecords.map { record in
+                let lineTotal = laborAmountColumns(record, currencyDisplayMode: options.currencyDisplayMode)
+                return csv([
+                    record.date,
+                    record.workers,
+                    record.hours,
+                    record.unitRate,
+                    record.workType,
+                    record.teamName,
+                    machineBool(record.isSettled),
+                    lineTotal.raw,
+                    lineTotal.display,
+                    record.note,
+                    record.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeDailyLogs {
-            rows.append(csvSection("施工日志"))
-            rows.append(csv(["日期", "天气", "人数", "内容", "安全事项", "材料进场", "明日计划", "质量问题", "整改记录", "确认人", "照片数", "项目ID"]))
-            rows += snapshot.dailyLogs.map { csv([$0.date, $0.weather, $0.workers, $0.content, $0.safety, $0.materials, $0.tomorrowPlan, $0.qualityIssue, $0.rectification, $0.confirmer, "\($0.photoAttachments.count)", $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("daily_logs"))
+            rows.append(csv(["date", "weather", "workers", "content", "safety", "materials", "tomorrow_plan", "quality_issue", "rectification", "confirmer", "photo_count", "project_id"]))
+            rows += snapshot.dailyLogs.map { log in
+                csv([
+                    log.date,
+                    log.weather,
+                    log.workers,
+                    log.content,
+                    log.safety,
+                    log.materials,
+                    log.tomorrowPlan,
+                    log.qualityIssue,
+                    log.rectification,
+                    log.confirmer,
+                    "\(log.photoAttachments.count)",
+                    log.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeProgress {
-            rows.append(csvSection("进度任务"))
-            rows.append(csv(["任务", "开始", "截止", "完成率", "备注", "项目ID"]))
-            rows += snapshot.progressTasks.map { csv([$0.title, $0.startDate, $0.dueDate, "\(Int($0.clampedCompletion * 100))%", $0.note, $0.projectId.uuidString]) }
+            rows.append(csvMachineSection("progress_tasks"))
+            rows.append(csv(["title", "start_date", "due_date", "completion_percent", "note", "project_id"]))
+            rows += snapshot.progressTasks.map { task in
+                csv([
+                    task.title,
+                    task.startDate,
+                    task.dueDate,
+                    String(format: "%.0f", task.clampedCompletion * 100),
+                    task.note,
+                    task.projectId.uuidString
+                ])
+            }
             rows.append("")
         }
         if options.includeTodos {
-            rows.append(csvSection("现场待办"))
-            rows.append(csv(["事项", "负责人", "日期", "优先级", "问题类型", "状态", "完成时间", "整改前照片", "整改后照片", "备注", "项目ID"]))
-            rows += snapshot.siteTodos.map { csv([$0.title, $0.owner, $0.dueDate, $0.priority.displayName, $0.issueType.displayName, $0.isDone ? locDone : $0.isOverdue ? locOverdue : locPending, $0.completedAt ?? "", $0.rectificationBeforePhotoFileName ?? "", $0.rectificationAfterPhotoFileName ?? "", $0.note, $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("site_todos"))
+            rows.append(csv(["title", "owner", "due_date", "priority_key", "priority_display", "issue_type_key", "issue_type_display", "status_key", "status_display", "completed_at", "rectification_before_photo", "rectification_after_photo", "note", "project_id"]))
+            rows += snapshot.siteTodos.map { todo in
+                csv([
+                    todo.title,
+                    todo.owner,
+                    todo.dueDate,
+                    todo.priority.exportKey,
+                    todo.priority.displayName,
+                    todo.issueType.exportKey,
+                    todo.issueType.displayName,
+                    siteTodoStatusKey(todo),
+                    siteTodoStatusDisplay(todo),
+                    todo.completedAt ?? "",
+                    todo.rectificationBeforePhotoFileName ?? "",
+                    todo.rectificationAfterPhotoFileName ?? "",
+                    todo.note,
+                    todo.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeProjectFinance {
-            rows.append(csvSection("项目财务流水"))
-            rows.append(csv(["日期", "收支", "分类", "状态", "到期日", "提醒状态", "金额", "对方单位", "票号", "关联票据数量", "备注", "项目ID"]))
-            rows += snapshot.projectFinancialRecords.map {
-                csv([$0.date, $0.direction.displayName, $0.category.displayName, $0.normalizedStatus.displayName, $0.dueDate, $0.normalizedReminderStatus.displayName, $0.amount, $0.counterparty, $0.invoiceNumber, "\($0.linkedDocumentIds.count)", $0.note, $0.projectId.uuidString])
+            rows.append(csvMachineSection("project_financial_records"))
+            rows.append(csv(["date", "direction_key", "direction_display", "category_key", "category_display", "status_key", "status_display", "due_date", "reminder_status_key", "reminder_status_display", "amount_raw", "amount_display", "counterparty", "invoice_number", "linked_document_count", "note", "project_id"]))
+            rows += snapshot.projectFinancialRecords.map { record in
+                let amount = parsedAmountColumns(record.amount, currencyDisplayMode: options.currencyDisplayMode)
+                return csv([
+                    record.date,
+                    record.direction.exportKey,
+                    record.direction.displayName,
+                    record.category.exportKey,
+                    record.category.displayName,
+                    record.normalizedStatus.exportKey,
+                    record.normalizedStatus.displayName,
+                    record.dueDate,
+                    record.normalizedReminderStatus.exportKey,
+                    record.normalizedReminderStatus.displayName,
+                    amount.raw,
+                    amount.display,
+                    record.counterparty,
+                    record.invoiceNumber,
+                    "\(record.linkedDocumentIds.count)",
+                    record.note,
+                    record.projectId.uuidString
+                ])
             }
             rows.append("")
         }
         if options.includeProjectDocuments {
-            rows.append(csvSection("项目票据与资料"))
-            rows.append(csv(["名称", "类型", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"]))
-            rows += snapshot.projectDocuments.map {
-                csv([$0.title, $0.category.displayName, "\($0.pageCount)", $0.amount, $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString])
+            let checklistRows = projectDocumentChecklistExportRows(snapshot: snapshot)
+            rows.append(csvMachineSection("project_document_checklist"))
+            rows.append(csv(["project_id", "project_name", "category_key", "category_display", "status", "document_count", "action_count", "returned_count", "archived_count"]))
+            rows += checklistRows.map { row in
+                let item = row.item
+                return csv([
+                    row.projectID?.uuidString ?? "",
+                    row.projectName,
+                    item.category.exportKey,
+                    item.category.displayName,
+                    item.statusText,
+                    "\(item.documentCount)",
+                    "\(item.actionCount)",
+                    "\(item.returnedCount)",
+                    "\(item.archivedCount)"
+                ])
+            }
+            rows.append("")
+
+            rows.append(csvMachineSection("project_documents"))
+            rows.append(csv(["title", "category_key", "category_display", "submission_status", "responsible_person", "formed_at", "archive_number", "work_section", "page_count", "amount_raw", "amount_display", "created_at", "linked_financial_record_id", "file_name", "note", "project_id"]))
+            rows += snapshot.projectDocuments.map { document in
+                let amount = parsedAmountColumns(document.amount, currencyDisplayMode: options.currencyDisplayMode)
+                return csv([
+                    document.title,
+                    document.category.exportKey,
+                    document.category.displayName,
+                    document.submissionStatus.displayName,
+                    document.responsiblePerson,
+                    document.formedAt,
+                    document.archiveNumber,
+                    document.workSection,
+                    "\(document.pageCount)",
+                    amount.raw,
+                    amount.display,
+                    document.createdAt,
+                    document.linkedFinancialRecordId?.uuidString ?? "",
+                    document.fileName,
+                    document.note,
+                    document.projectId.uuidString
+                ])
             }
             rows.append("")
         }
         if options.includeProjectContacts {
-            rows.append(csvSection("项目联系人"))
-            rows.append(csv(["姓名", "角色", "电话", "公司", "备注", "项目ID"]))
-            rows += snapshot.projectContacts.map { csv([$0.name, $0.roleDisplayName, $0.phone, $0.company, $0.note, $0.projectId.uuidString]) }
+            rows.append(csvMachineSection("project_contacts"))
+            rows.append(csv(["name", "role_key", "role_display", "phone", "company", "note", "project_id"]))
+            rows += snapshot.projectContacts.map { contact in
+                csv([
+                    contact.name,
+                    contact.normalizedRole.exportKey,
+                    contact.roleDisplayName,
+                    contact.phone,
+                    contact.company,
+                    contact.note,
+                    contact.projectId.uuidString
+                ])
+            }
             rows.append("")
         }
         if options.includeProjectDrawings {
-            rows.append(csvSection("图纸索引"))
-            rows.append(csv(["名称", "类型", "版本", "文件名", "问题状态", "问题备注", "导入时间", "关联日志日期", "备注", "项目ID"]))
-            rows += snapshot.projectDrawings.map { csv([$0.name, $0.fileType, $0.version, $0.fileName, $0.issueStatus.displayName, $0.issueNote, $0.importedAt, $0.relatedLogDate, $0.note, $0.projectId.uuidString]) }
+            rows.append(csvMachineSection("project_drawings"))
+            rows.append(csv(["name", "file_type", "version", "file_name", "issue_status_key", "issue_status_display", "issue_note", "imported_at", "related_log_date", "note", "project_id"]))
+            rows += snapshot.projectDrawings.map { drawing in
+                csv([
+                    drawing.name,
+                    drawing.fileType,
+                    drawing.version,
+                    drawing.fileName,
+                    drawing.issueStatus.exportKey,
+                    drawing.issueStatus.displayName,
+                    drawing.issueNote,
+                    drawing.importedAt,
+                    drawing.relatedLogDate,
+                    drawing.note,
+                    drawing.projectId.uuidString
+                ])
+            }
             rows.append("")
         }
         if options.includeWarehouseMovements {
-            rows.append(csvSection("仓库流水"))
-            rows.append(csv(["日期", "类型", "材料名称", "规格", "单位", "数量", "对方单位", "操作人", "备注", "关联单据数", "项目ID"]))
-            rows += snapshot.projectWarehouseMovements.map { csv([$0.date, $0.normalizedMovementType.displayName, $0.materialName, $0.specification, $0.unit, $0.quantity, $0.counterparty, $0.handler, $0.note, "\($0.linkedDocumentIds.count)", $0.projectId.uuidString]) }
+            rows.append(csvMachineSection("warehouse_movements"))
+            rows.append(csv(["date", "movement_type_key", "movement_type_display", "material_name", "specification", "unit", "quantity", "counterparty", "handler", "note", "linked_document_count", "project_id"]))
+            rows += snapshot.projectWarehouseMovements.map { movement in
+                csv([
+                    movement.date,
+                    movement.normalizedMovementType.exportKey,
+                    movement.normalizedMovementType.displayName,
+                    movement.materialName,
+                    movement.specification,
+                    movement.unit,
+                    movement.quantity,
+                    movement.counterparty,
+                    movement.handler,
+                    movement.note,
+                    "\(movement.linkedDocumentIds.count)",
+                    movement.projectId.uuidString
+                ])
+            }
             rows.append("")
         }
         if options.includeQuickNotes {
-            rows.append(csvSection("随手记"))
-            rows.append(csv(["标题", "内容", "创建时间", "更新时间", "附件数", "项目ID"]))
-            rows += snapshot.quickNotes.map { csv([$0.title, $0.content, $0.createdAt, $0.updatedAt, "\($0.attachments.count)", $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("quick_notes"))
+            rows.append(csv(["title", "content", "created_at", "updated_at", "attachment_count", "project_id"]))
+            rows += snapshot.quickNotes.map { note in
+                csv([
+                    note.title,
+                    note.content,
+                    note.createdAt,
+                    note.updatedAt,
+                    "\(note.attachments.count)",
+                    note.projectId?.uuidString ?? ""
+                ])
+            }
             rows.append("")
         }
         if options.includeLightingCircuits {
-            rows.append(csvSection("照明回路"))
-            rows.append(csv(["方案名称", "供电类型", "电压", "功率因数", "需用系数", "断路器裕量", "线径裕量", "铜导线", "负荷数", "更新时间", "项目ID"]))
-            rows += snapshot.lightingCircuitPlans.map { csv([$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? locYes : locNo, "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]) }
+            rows.append(csvMachineSection("lighting_circuit_plans"))
+            rows.append(csv(["plan_name", "supply_type_key", "supply_type_display", "voltage", "power_factor", "demand_factor", "breaker_factor", "wire_factor", "is_copper", "load_count", "updated_at", "project_id"]))
+            rows += snapshot.lightingCircuitPlans.map { plan in
+                csv([
+                    plan.name,
+                    plan.supplyType.exportKey,
+                    plan.supplyType.displayName,
+                    plan.voltage,
+                    plan.powerFactor,
+                    plan.demandFactor,
+                    plan.breakerFactor,
+                    plan.wireFactor,
+                    machineBool(plan.isCopper),
+                    "\(plan.loads.count)",
+                    plan.updatedAt,
+                    plan.projectId?.uuidString ?? ""
+                ])
+            }
+            rows.append("")
+        }
+        if options.includeOperationAuditLogs {
+            rows.append(csvMachineSection("operation_audit_log"))
+            rows.append(csv(["timestamp", "action_key", "action_display", "outcome_key", "outcome_display", "summary", "detail", "source", "id"]))
+            rows += options.operationAuditEntries.map { entry in
+                csv([
+                    Formatters.dateTime.string(from: Date(timeIntervalSince1970: entry.timestamp)),
+                    entry.action.rawValue,
+                    operationAuditActionDisplayName(entry.action),
+                    entry.outcome.rawValue,
+                    operationAuditOutcomeDisplayName(entry.outcome),
+                    entry.summary,
+                    entry.detail,
+                    entry.source,
+                    entry.id.uuidString
+                ])
+            }
             rows.append("")
         }
         return Data(rows.joined(separator: "\n").utf8)
+    }
+
+    private static func machineBool(_ value: Bool) -> String {
+        value ? "true" : "false"
+    }
+
+    private static func siteTodoStatusKey(_ todo: SiteTodo) -> String {
+        if todo.isDone { return "done" }
+        if todo.isOverdue { return "overdue" }
+        return "pending"
+    }
+
+    private static func siteTodoStatusDisplay(_ todo: SiteTodo) -> String {
+        if todo.isDone { return locDone }
+        if todo.isOverdue { return locOverdue }
+        return locPending
+    }
+
+    private static func materialAmountColumns(
+        _ item: MaterialItem,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> (raw: String, display: String) {
+        amountColumns(materialLineTotal(item), currencyDisplayMode: currencyDisplayMode)
+    }
+
+    private static func laborAmountColumns(
+        _ record: LaborRecord,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> (raw: String, display: String) {
+        amountColumns(laborLineTotal(record), currencyDisplayMode: currencyDisplayMode)
+    }
+
+    private static func amountColumns(
+        _ value: Double,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> (raw: String, display: String) {
+        let raw = amountRaw(value)
+        return (raw, amountDisplay(value, currencyDisplayMode: currencyDisplayMode))
+    }
+
+    private static func parsedAmountColumns(
+        _ rawText: String,
+        currencyDisplayMode: ExportCurrencyDisplayMode
+    ) -> (raw: String, display: String) {
+        guard let decimal = DataValueParser.decimalValueIfPresent(from: rawText) else {
+            return ("", "")
+        }
+        return amountColumns(
+            NSDecimalNumber(decimal: decimal).doubleValue,
+            currencyDisplayMode: currencyDisplayMode
+        )
+    }
+
+    static func projectDocumentChecklistExportRows(snapshot: BackupSnapshot) -> [ProjectDocumentChecklistExportRow] {
+        let documentsByProjectID = Dictionary(grouping: snapshot.projectDocuments, by: \.projectId)
+        if !snapshot.projects.isEmpty {
+            return snapshot.projects.flatMap { project in
+                let checklist = DocumentArchiveChecklistSnapshot(
+                    documents: documentsByProjectID[project.id] ?? [],
+                    requiredCategories: project.requiredDocumentCategories
+                )
+                return checklist.items.map { item in
+                    ProjectDocumentChecklistExportRow(
+                        projectID: project.id,
+                        projectName: project.name,
+                        item: item
+                    )
+                }
+            }
+        }
+
+        let checklist = DocumentArchiveChecklistSnapshot(documents: snapshot.projectDocuments)
+        return checklist.items.map { item in
+            ProjectDocumentChecklistExportRow(
+                projectID: nil,
+                projectName: "",
+                item: item
+            )
+        }
+    }
+}
+
+struct ProjectDocumentChecklistExportRow {
+    let projectID: UUID?
+    let projectName: String
+    let item: DocumentArchiveChecklistItem
+}
+
+private extension MaterialPurchaseStatus {
+    var exportKey: String {
+        switch self {
+        case .notPurchased: "not_purchased"
+        case .purchased: "purchased"
+        case .arrived: "arrived"
+        case .used: "used"
+        }
+    }
+}
+
+private extension QuoteStatus {
+    var exportKey: String {
+        switch self {
+        case .draft: "draft"
+        case .sent: "sent"
+        case .confirmed: "confirmed"
+        }
+    }
+}
+
+private extension ProjectFinancialDirection {
+    var exportKey: String {
+        switch self {
+        case .income: "income"
+        case .expense: "expense"
+        }
+    }
+}
+
+private extension ProjectFinancialCategory {
+    var exportKey: String {
+        switch self {
+        case .collection: "collection"
+        case .refund: "refund"
+        case .reimbursement: "reimbursement"
+        case .material: "material"
+        case .labor: "labor"
+        case .invoice: "invoice"
+        case .receipt: "receipt"
+        case .paymentRequest: "payment_request"
+        case .other: "other"
+        }
+    }
+}
+
+private extension ProjectFinancialStatus {
+    var exportKey: String {
+        switch self {
+        case .active: "active"
+        case .draft: "draft"
+        case .archived: "archived"
+        }
+    }
+}
+
+private extension ProjectFinancialReminderStatus {
+    var exportKey: String {
+        switch self {
+        case .none: "none"
+        case .pending: "pending"
+        case .reminded: "reminded"
+        case .done: "done"
+        }
+    }
+}
+
+extension ProjectDocumentCategory {
+    var exportKey: String {
+        switch self {
+        case .paymentRequest: "payment_request"
+        case .construction: "construction"
+        case .constructionTechnical: "construction_technical"
+        case .constructionMaterial: "construction_material"
+        case .constructionSurvey: "construction_survey"
+        case .constructionRecord: "construction_record"
+        case .constructionTest: "construction_test"
+        case .constructionManagement: "construction_management"
+        case .processAcceptance: "process_acceptance"
+        case .completionAcceptance: "completion_acceptance"
+        case .invoice: "invoice"
+        case .receipt: "receipt"
+        case .contract: "contract"
+        case .acceptance: "acceptance"
+        case .other: "other"
+        }
+    }
+}
+
+private extension ProjectContactRole {
+    var exportKey: String {
+        switch self {
+        case .owner: "owner"
+        case .customer: "customer"
+        case .supervisor: "supervisor"
+        case .supplier: "supplier"
+        case .team: "team"
+        case .other: "other"
+        }
+    }
+}
+
+private extension DrawingIssueStatus {
+    var exportKey: String {
+        switch self {
+        case .none: "none"
+        case .open: "open"
+        case .inProgress: "in_progress"
+        case .closed: "closed"
+        }
+    }
+}
+
+private extension TodoPriority {
+    var exportKey: String {
+        switch self {
+        case .high: "high"
+        case .medium: "medium"
+        case .low: "low"
+        }
+    }
+}
+
+private extension TodoIssueType {
+    var exportKey: String {
+        switch self {
+        case .safety: "safety"
+        case .quality: "quality"
+        case .material: "material"
+        case .schedule: "schedule"
+        case .general: "general"
+        }
+    }
+}
+
+private extension WarehouseMovementType {
+    var exportKey: String {
+        switch self {
+        case .inbound: "inbound"
+        case .outbound: "outbound"
+        }
+    }
+}
+
+private extension CircuitSupplyType {
+    var exportKey: String {
+        switch self {
+        case .singlePhase: "single_phase"
+        case .threePhase: "three_phase"
+        }
     }
 }

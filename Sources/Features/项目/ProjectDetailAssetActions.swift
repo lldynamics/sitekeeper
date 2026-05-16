@@ -108,8 +108,20 @@ enum ProjectDetailAssetActions {
     }
 
     static func deleteDrawing(_ drawing: ProjectDrawing, store: DataStore) {
-        DrawingStorage.delete(fileName: drawing.fileName)
-        store.removeProjectDrawings(ids: Set([drawing.id]))
+        let deletion = store.removeProjectDrawings(
+            ids: Set([drawing.id]),
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除项目图纸"),
+                detail: drawing.fileName,
+                source: "ProjectDetailView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
+                [drawing.fileName],
+                summary: "projectDetail.drawings"
+            ),
+            recordsAuditImmediately: true
+        )
+        guard !deletion.isEmpty else { return }
         store.scheduleSave()
     }
 

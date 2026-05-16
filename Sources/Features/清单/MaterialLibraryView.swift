@@ -27,6 +27,8 @@ struct MaterialLibraryView: View {
     @State private var pendingDeleteTarget: PendingMaterialDeleteTarget?
     @State private var showDeleteConfirm = false
     @State private var operationMessage: String?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var batchState = MaterialLibraryBatchSelectionState()
     @FocusState private var appendMaterialFocusedField: AppendMaterialField?
     @AppStorage("recentMaterialSearches") private var recentSearchKeywordsRaw = ""
@@ -333,8 +335,7 @@ struct MaterialLibraryView: View {
                 upsertMaterialPriceEntry(updated)
                 priceEditorContext = nil
             } onDelete: { target in
-                store.materialPriceEntries.removeAll { $0.id == target.id }
-                store.scheduleSave()
+                deleteMaterialPriceEntryWithUndo(target)
                 priceEditorContext = nil
             }
         }
@@ -413,6 +414,10 @@ struct MaterialLibraryView: View {
             Text(deleteConfirmMessage)
         }
         .operationToast(message: $operationMessage)
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
         .safeAreaInset(edge: .bottom) {
             if batchState.isBatchSelectionMode {
                 batchAppendActionBar
@@ -1229,10 +1234,42 @@ struct MaterialLibraryView: View {
     }
 
     private func deleteUserMaterial(_ item: UserMaterial) {
-        store.userMaterials.removeAll { $0.id == item.id }
-        store.deletedUserMaterials.insert(item, at: 0)
+        let deletion = store.removeUserMaterials(
+            ids: Set([item.id]),
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除自定义材料"),
+                detail: materialDisplayName(item),
+                source: "MaterialLibraryView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        let deletedIDs = deletion.removedIDs(\.id)
+        store.deletedUserMaterials.removeAll { deletedIDs.contains($0.id) }
+        store.deletedUserMaterials.insert(contentsOf: deletion.removed, at: 0)
         if store.deletedUserMaterials.count > 50 { store.deletedUserMaterials = Array(store.deletedUserMaterials.prefix(50)) }
-        store.scheduleSave()
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除自定义材料「%@」"), materialDisplayName(item)),
+            undoMessage: String(localized: "已恢复自定义材料"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.userMaterials = deletion.restoredItems(
+                    current: store.userMaterials,
+                    id: \.id
+                )
+                store.deletedUserMaterials.removeAll { deletedIDs.contains($0.id) }
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func materialDisplayName(_ item: UserMaterial) -> String {
+        item.specification.isEmpty ? item.name : "\(item.name) \(item.specification)"
     }
 
     private func materialKey(_ item: CommonMaterial) -> String {
@@ -1296,6 +1333,37 @@ struct MaterialLibraryView: View {
         }
         store.materialPriceEntries.insert(entry, at: 0)
         store.scheduleSave()
+    }
+
+    private func deleteMaterialPriceEntryWithUndo(_ entry: MaterialPriceEntry) {
+        let targets = store.materialPriceEntries.filter { $0.id == entry.id }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeMaterialPriceEntries(
+            ids: Set([entry.id]),
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除材料价格 %lld 条"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "MaterialLibraryView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条材料价格"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialPriceEntries = deletion.restoredItems(
+                    current: store.materialPriceEntries,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
     }
 }
 

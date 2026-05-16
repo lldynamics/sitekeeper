@@ -8,6 +8,7 @@ struct BackupCloudSectionView: View {
     @Binding var cloudIncludeAttachments: Bool
     @Binding var cloudAutoIntervalRawValue: String
     @Binding var cloudAutoBackupRequiresWiFi: Bool
+    @Binding var cloudBackupRetentionCount: Int
 
     let isBusy: Bool
     let isRefreshingCloudBackups: Bool
@@ -74,6 +75,17 @@ struct BackupCloudSectionView: View {
                     Text(interval.title).tag(interval.rawValue)
                 }
             }
+
+            Picker(String(localized: "云端保留数量"), selection: $cloudBackupRetentionCount) {
+                ForEach(CloudBackupRetentionCountOption.allCases) { option in
+                    Text(option.title)
+                        .tag(option.rawValue)
+                }
+            }
+            .disabled(isBusy)
+            Text(String(localized: "超过保留数量后，会自动删除最旧的 iCloud 备份。"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
 
             if cloudAutoInterval != .disabled {
                 Toggle(String(localized: "仅在 Wi‑Fi 下自动备份"), isOn: $cloudAutoBackupRequiresWiFi)

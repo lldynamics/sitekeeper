@@ -7,6 +7,8 @@ struct TemplateView: View {
     @State private var newCategory: TemplateCategory = .quotation
     @State private var newContent = ""
     @State private var applyTarget: ProjectTemplate?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     var body: some View {
         List {
@@ -42,10 +44,8 @@ struct TemplateView: View {
                         }
                     }
                     .onDelete { idx in
-                        let ids = idx.compactMap { i in items.indices.contains(i) ? items[i].id : nil }
-                        store.templates.removeAll { ids.contains($0.id) }
-                        store.scheduleSave()
-                        AppHaptics.success()
+                        let ids = Set(idx.compactMap { i in items.indices.contains(i) ? items[i].id : nil })
+                        deleteTemplateIds(ids, source: "TemplateView")
                     }
                 }
             }
@@ -59,6 +59,10 @@ struct TemplateView: View {
         }
         .sheet(item: $applyTarget) { tpl in
             ApplyTemplateSheet(template: tpl)
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
         .sheet(isPresented: $showAdd) {
             NavigationStack {
@@ -84,6 +88,38 @@ struct TemplateView: View {
                 }
             }
         }
+    }
+
+    private func deleteTemplateIds(_ ids: Set<UUID>, source: String) {
+        guard !ids.isEmpty else { return }
+        let targets = store.templates.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeTemplates(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除模板 %lld 个"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: source
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 个模板"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.templates = deletion.restoredItems(
+                    current: store.templates,
+                    id: \.id
+                )
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
     }
 }
 
