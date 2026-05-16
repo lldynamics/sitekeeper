@@ -54,7 +54,7 @@ extension SiteKeeperCADKernel {
         var entityCount: Int
         var drawableEntityCount: Int
         var placeholderEntityCount: Int
-        var isDiagnosticOnly: Bool
+        var isMetadataOnly: Bool
         var importSource: String
         var importWarnings: [String]
         var performanceTrace: CADPerformanceTrace
@@ -80,7 +80,7 @@ extension SiteKeeperCADKernel {
             case entityCount
             case drawableEntityCount
             case placeholderEntityCount
-            case isDiagnosticOnly
+            case isMetadataOnly
             case importSource
             case importWarnings
             case performanceTrace
@@ -105,7 +105,7 @@ extension SiteKeeperCADKernel {
             entityCount: Int? = nil,
             drawableEntityCount: Int? = nil,
             placeholderEntityCount: Int? = nil,
-            isDiagnosticOnly: Bool? = nil,
+            isMetadataOnly: Bool? = nil,
             importSource: String = "unknown",
             importWarnings: [String] = [],
             performanceTrace: CADPerformanceTrace = CADPerformanceTrace(),
@@ -127,7 +127,7 @@ extension SiteKeeperCADKernel {
             self.entityCount = 0
             self.drawableEntityCount = 0
             self.placeholderEntityCount = 0
-            self.isDiagnosticOnly = false
+            self.isMetadataOnly = false
             self.importSource = importSource
             self.importWarnings = importWarnings
             self.performanceTrace = performanceTrace
@@ -138,7 +138,7 @@ extension SiteKeeperCADKernel {
                 entityCount: entityCount,
                 drawableEntityCount: drawableEntityCount,
                 placeholderEntityCount: placeholderEntityCount,
-                isDiagnosticOnly: isDiagnosticOnly,
+                isMetadataOnly: isMetadataOnly,
                 importWarnings: importWarnings
             )
         }
@@ -166,7 +166,7 @@ extension SiteKeeperCADKernel {
             let entityCount = try container.decodeIfPresent(Int.self, forKey: .entityCount)
             let drawableEntityCount = try container.decodeIfPresent(Int.self, forKey: .drawableEntityCount)
             let placeholderEntityCount = try container.decodeIfPresent(Int.self, forKey: .placeholderEntityCount)
-            let isDiagnosticOnly = try container.decodeIfPresent(Bool.self, forKey: .isDiagnosticOnly)
+            let isMetadataOnly = try container.decodeIfPresent(Bool.self, forKey: .isMetadataOnly)
             let importSource = try container.decodeIfPresent(String.self, forKey: .importSource) ?? "unknown"
             let importWarnings = try container.decodeIfPresent([String].self, forKey: .importWarnings) ?? []
             let performanceTrace = try container.decodeIfPresent(CADPerformanceTrace.self, forKey: .performanceTrace)
@@ -191,7 +191,7 @@ extension SiteKeeperCADKernel {
                 entityCount: entityCount,
                 drawableEntityCount: drawableEntityCount,
                 placeholderEntityCount: placeholderEntityCount,
-                isDiagnosticOnly: isDiagnosticOnly,
+                isMetadataOnly: isMetadataOnly,
                 importSource: importSource,
                 importWarnings: importWarnings,
                 performanceTrace: performanceTrace,
@@ -217,7 +217,7 @@ extension SiteKeeperCADKernel {
             try container.encode(entityCount, forKey: .entityCount)
             try container.encode(drawableEntityCount, forKey: .drawableEntityCount)
             try container.encode(placeholderEntityCount, forKey: .placeholderEntityCount)
-            try container.encode(isDiagnosticOnly, forKey: .isDiagnosticOnly)
+            try container.encode(isMetadataOnly, forKey: .isMetadataOnly)
             try container.encode(importSource, forKey: .importSource)
             try container.encode(importWarnings, forKey: .importWarnings)
             try container.encode(performanceTrace, forKey: .performanceTrace)
@@ -261,14 +261,14 @@ extension SiteKeeperCADKernel {
                 entityCount: nil,
                 drawableEntityCount: nil,
                 placeholderEntityCount: nil,
-                isDiagnosticOnly: nil,
+                isMetadataOnly: nil,
                 importWarnings: importWarnings
             )
         }
 
         mutating func setImportMetadata(
             geometryParsed: Bool? = nil,
-            isDiagnosticOnly: Bool? = nil,
+            isMetadataOnly: Bool? = nil,
             importSource: String? = nil,
             importWarnings: [String]? = nil
         ) {
@@ -280,7 +280,7 @@ extension SiteKeeperCADKernel {
                 entityCount: nil,
                 drawableEntityCount: nil,
                 placeholderEntityCount: nil,
-                isDiagnosticOnly: isDiagnosticOnly,
+                isMetadataOnly: isMetadataOnly,
                 importWarnings: importWarnings ?? self.importWarnings
             )
         }
@@ -304,7 +304,7 @@ extension SiteKeeperCADKernel {
             entityCount: Int?,
             drawableEntityCount: Int?,
             placeholderEntityCount: Int?,
-            isDiagnosticOnly: Bool?,
+            isMetadataOnly: Bool?,
             importWarnings: [String]
         ) {
             let computedEntityCount = entities.count
@@ -314,14 +314,14 @@ extension SiteKeeperCADKernel {
             let computedPlaceholderCount = entities.filter(Self.isPlaceholderEntity).count
             let inferredGeometryParsed = entities.contains { !Self.isPlaceholderEntity($0) && $0.kind != .unsupported }
             let resolvedGeometryParsed = geometryParsed ?? inferredGeometryParsed
-            let resolvedDiagnosticOnly = isDiagnosticOnly
+            let resolvedMetadataOnly = isMetadataOnly
                 ?? (!resolvedGeometryParsed || (computedDrawableCount == 0 && computedPlaceholderCount > 0))
 
             self.geometryParsed = resolvedGeometryParsed
             self.entityCount = entityCount ?? computedEntityCount
             self.drawableEntityCount = drawableEntityCount ?? computedDrawableCount
             self.placeholderEntityCount = placeholderEntityCount ?? computedPlaceholderCount
-            self.isDiagnosticOnly = resolvedDiagnosticOnly
+            self.isMetadataOnly = resolvedMetadataOnly
             self.importWarnings = Self.mergeImportWarnings(
                 explicit: importWarnings,
                 diagnostics: diagnostics

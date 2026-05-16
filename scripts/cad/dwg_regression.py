@@ -2,8 +2,8 @@
 """Validate the local DWG regression manifest without the removed legacy parser.
 
 This compatibility entrypoint intentionally no longer builds or runs the old C
-probe. Use scripts/cad/cad_regression.py for SiteKeeperCADKernel diagnostics and
-render regression output.
+probe. Use Deprecated/CAD/RegressionTools/cad_regression.py for deprecated
+SiteKeeperCADKernel diagnostics output.
 """
 
 from __future__ import annotations
@@ -17,7 +17,7 @@ from typing import Any
 
 
 VALID_STATUSES = {"needed", "ready", "blocked"}
-DEFAULT_MANIFEST = Path("Regression/DWG/manifest.json")
+DEFAULT_MANIFEST = Path("Deprecated/CAD/RegressionTools/DWG/manifest.json")
 
 
 @dataclass
@@ -202,7 +202,7 @@ def validate_manifest(manifest_path: Path, strict: bool) -> tuple[dict[str, Any]
         "findings": [finding.__dict__ for finding in findings],
         "parser": {
             "status": "removed",
-            "message": "Legacy parser probe has been removed. Run scripts/cad/cad_regression.py instead.",
+            "message": "Legacy parser probe has been removed. Run Deprecated/CAD/RegressionTools/cad_regression.py instead.",
         },
     }
     return report, findings
@@ -215,7 +215,7 @@ def print_summary(report: dict[str, Any], findings: list[Finding]) -> None:
         "Status: "
         + ", ".join(f"{key}={value}" for key, value in status_counts.items())
     )
-    print("Parser: removed; use scripts/cad/cad_regression.py")
+    print("Parser: removed; use Deprecated/CAD/RegressionTools/cad_regression.py")
     errors = [finding for finding in findings if finding.level == "error"]
     warnings = [finding for finding in findings if finding.level == "warning"]
     print(f"Findings: errors={len(errors)}, warnings={len(warnings)}")

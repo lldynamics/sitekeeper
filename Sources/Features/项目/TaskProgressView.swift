@@ -14,7 +14,8 @@ struct TaskProgressView: View {
     @State private var mode: ProgressDisplayMode = .timeline
     @State private var projectFilter: UUID?
     @State private var statusFilter: ProgressStatusFilter = .all
-    @State private var operationMessage: String?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(initialProjectId: UUID? = nil) {
         self.initialProjectId = initialProjectId
@@ -65,32 +66,35 @@ struct TaskProgressView: View {
                 compactProgressLayout
             }
         }
-        .navigationTitle("施工进度")
+        .navigationTitle(String(localized: "施工进度"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
             addTaskForm
         }
-        .operationToast(message: $operationMessage)
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
     }
 
     private var compactProgressLayout: some View {
         List {
             Section {
                 ProjectContextStrip(
-                    title: "当前工程",
+                    title: String(localized: "当前工程"),
                     projects: store.projects,
                     selectedProjectId: $projectFilter,
-                    emptyText: "全部项目"
+                    emptyText: String(localized: "全部项目")
                 )
-                Picker("视图", selection: $mode) {
+                Picker(String(localized: "视图"), selection: $mode) {
                     ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
                         Text(mode.displayName).tag(mode)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("项目", selection: $projectFilter) {
-                    Text("全部项目").tag(nil as UUID?)
+                Picker(String(localized: "项目"), selection: $projectFilter) {
+                    Text(String(localized: "全部项目")).tag(nil as UUID?)
                     ForEach(store.projects) { project in
                         Text(project.name).tag(project.id as UUID?)
                     }
@@ -103,11 +107,15 @@ struct TaskProgressView: View {
             }
 
             if visibleTasks.isEmpty {
-                ContentUnavailableView("暂无进度任务", systemImage: "calendar.badge.plus", description: Text("添加任务后可按项目跟踪节点、完成率和延期情况"))
+                ContentUnavailableView(
+                    String(localized: "暂无进度任务"),
+                    systemImage: "calendar.badge.plus",
+                    description: Text(String(localized: "添加任务后可按项目跟踪节点、完成率和延期情况"))
+                )
                 Button {
                     showAdd = true
                 } label: {
-                    Label("新建进度任务", systemImage: "plus.circle.fill")
+                    Label(String(localized: "新建进度任务"), systemImage: "plus.circle.fill")
                 }
                 .buttonStyle(.appProminent())
             } else if mode == .timeline {
@@ -123,7 +131,7 @@ struct TaskProgressView: View {
                         .visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("新建进度任务")
+                .accessibilityLabel(String(localized: "新建进度任务"))
             }
         }
     }
@@ -131,14 +139,14 @@ struct TaskProgressView: View {
     private var splitProgressLayout: some View {
         NavigationSplitView {
             List {
-                Section("筛选") {
+                Section(String(localized: "筛选")) {
                     ProjectContextStrip(
-                        title: "当前工程",
+                        title: String(localized: "当前工程"),
                         projects: store.projects,
                         selectedProjectId: $projectFilter,
-                        emptyText: "全部项目"
+                        emptyText: String(localized: "全部项目")
                     )
-                    Picker("视图", selection: $mode) {
+                    Picker(String(localized: "视图"), selection: $mode) {
                         ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
                             Text(mode.displayName).tag(mode)
                         }
@@ -150,20 +158,24 @@ struct TaskProgressView: View {
                         title: { $0.displayName }
                     )
                 }
-                Section("快捷操作") {
+                Section(String(localized: "快捷操作")) {
                     Button {
                         showAdd = true
                     } label: {
-                        Label("新建进度任务", systemImage: "plus.circle.fill")
+                        Label(String(localized: "新建进度任务"), systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.appProminent())
                 }
             }
-            .navigationTitle("进度筛选")
+            .navigationTitle(String(localized: "进度筛选"))
         } detail: {
             List {
                 if visibleTasks.isEmpty {
-                    ContentUnavailableView("暂无进度任务", systemImage: "calendar.badge.plus", description: Text("添加任务后可按项目跟踪节点、完成率和延期情况"))
+                    ContentUnavailableView(
+                        String(localized: "暂无进度任务"),
+                        systemImage: "calendar.badge.plus",
+                        description: Text(String(localized: "添加任务后可按项目跟踪节点、完成率和延期情况"))
+                    )
                 } else if mode == .timeline {
                     timelineContent
                 } else {
@@ -276,7 +288,7 @@ struct TaskProgressView: View {
     }
 
     private func statusLabel(_ task: ProgressTask) -> some View {
-        let text = task.clampedCompletion >= 1 ? "完成" : isOverdue(task) ? "延期" : "\(Int(task.clampedCompletion * 100))%"
+        let text = task.clampedCompletion >= 1 ? String(localized: "完成") : isOverdue(task) ? String(localized: "延期") : "\(Int(task.clampedCompletion * 100))%"
         return Text(text)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(taskColor(task))
@@ -288,36 +300,36 @@ struct TaskProgressView: View {
     private var addTaskForm: some View {
         NavigationStack {
             Form {
-                Section("任务") {
-                    TextField("任务名称", text: $newTitle)
-                    Picker("所属项目", selection: $newProjectId) {
-                        Text("选择项目").tag(nil as UUID?)
+                Section(String(localized: "任务")) {
+                    TextField(String(localized: "任务名称"), text: $newTitle)
+                    Picker(String(localized: "所属项目"), selection: $newProjectId) {
+                        Text(String(localized: "选择项目")).tag(nil as UUID?)
                         ForEach(store.projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
                 }
-                Section("日期") {
-                    DatePicker("开始", selection: $newStartDate, displayedComponents: .date)
-                    DatePicker("截止", selection: $newDueDate, displayedComponents: .date)
+                Section(String(localized: "日期")) {
+                    DatePicker(String(localized: "开始"), selection: $newStartDate, displayedComponents: .date)
+                    DatePicker(String(localized: "截止"), selection: $newDueDate, displayedComponents: .date)
                 }
-                Section("完成率") {
+                Section(String(localized: "完成率")) {
                     Slider(value: $newCompletion, in: 0...1, step: 0.05)
-                    LabeledContent("当前", value: "\(Int(newCompletion * 100))%")
+                    LabeledContent(String(localized: "当前"), value: "\(Int(newCompletion * 100))%")
                 }
-                Section("备注") {
-                    TextField("备注", text: $newNote, axis: .vertical)
+                Section(String(localized: "备注")) {
+                    TextField(String(localized: "备注"), text: $newNote, axis: .vertical)
                         .lineLimit(2...4)
                 }
             }
-            .navigationTitle("添加进度任务")
+            .navigationTitle(String(localized: "添加进度任务"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showAdd = false }
+                    Button(String(localized: "取消")) { showAdd = false }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         addTask()
                         showAdd = false
                     }
@@ -358,7 +370,7 @@ struct TaskProgressView: View {
             note: newNote
         ))
         store.scheduleSave()
-        operationMessage = "已新增进度任务"
+        operationNotice = .info(String(localized: "已新增进度任务"))
         newTitle = ""
         newProjectId = nil
         newCompletion = 0
@@ -368,10 +380,44 @@ struct TaskProgressView: View {
     }
 
     private func delete(tasks: [ProgressTask], offsets: IndexSet) {
-        let ids = offsets.compactMap { tasks.indices.contains($0) ? tasks[$0].id : nil }
-        store.removeProgressTasks(ids: Set(ids))
-        store.scheduleSave()
-        operationMessage = "已删除 \(ids.count) 条任务"
+        let ids = Set(offsets.compactMap { tasks.indices.contains($0) ? tasks[$0].id : nil })
+        guard !ids.isEmpty else { return }
+
+        undoableDeletion.flushPendingCommit()
+        let snapshot = store.progressTasks
+        let targets = snapshot.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        store.removeProgressTasks(ids: ids)
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条任务"), Int64(targets.count)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.progressTasks = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.progressTasks,
+                    deletedIDs: ids
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除施工进度任务 %lld 条"), Int64(targets.count)),
+                detail: targets.map(progressAuditDetail(_:)).joined(separator: "、"),
+                source: "TaskProgressView"
+            )
+        )
+    }
+
+    private func progressAuditDetail(_ task: ProgressTask) -> String {
+        let projectName = store.projects.first(where: { $0.id == task.projectId })?.name
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return [projectName, task.title, task.dueDate]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 
     private func isOverdue(_ task: ProgressTask) -> Bool {
@@ -414,8 +460,8 @@ private enum ProgressDisplayMode: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .timeline: "时间轴"
-        case .list: "列表"
+        case .timeline: String(localized: "时间轴")
+        case .list: String(localized: "列表")
         }
     }
 }
@@ -428,10 +474,10 @@ private enum ProgressStatusFilter: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .all: "全部"
-        case .thisWeek: "本周"
-        case .overdue: "逾期"
-        case .done: "已完成"
+        case .all: String(localized: "全部")
+        case .thisWeek: String(localized: "本周")
+        case .overdue: String(localized: "逾期")
+        case .done: String(localized: "已完成")
         }
     }
 }

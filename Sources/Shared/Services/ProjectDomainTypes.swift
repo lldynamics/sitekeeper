@@ -685,7 +685,16 @@ enum TemplateCategory: String, CaseIterable, Codable {
     case dailyLog = "日志模板"
     case material = "材料模板"
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .quotation:
+            return String(localized: "报价模板")
+        case .dailyLog:
+            return String(localized: "日志模板")
+        case .material:
+            return String(localized: "材料模板")
+        }
+    }
 }
 
 enum DrawingIssueStatus: String, CaseIterable, Codable {

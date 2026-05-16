@@ -14,10 +14,10 @@ struct TrayFillView: View {
     var body: some View {
         Form {
             Section("桥架尺寸 (mm)") {
-                LabeledContent("宽 (mm)") { TextField("200", text: $trayW).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("宽 (mm)") { TextField("200", text: $trayW.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(trayW, min: 50, max: 10_000, hint: "请输入 50–10000"))
                 CalculatorPresetChips(title: "常用宽度", options: ["100", "150", "200", "300", "400", "600"], selection: $trayW)
-                LabeledContent("高 (mm)") { TextField("100", text: $trayH).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("高 (mm)") { TextField("100", text: $trayH.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(trayH, min: 30, max: 2000, hint: "请输入 30–2000"))
                 CalculatorPresetChips(title: "常用高度", options: ["50", "75", "100", "150", "200"], selection: $trayH)
             }
@@ -53,8 +53,8 @@ struct TrayFillView: View {
             }
         }
         .alert("添加电缆", isPresented: $showAdd) {
-            TextField("外径 (mm)", text: $newDia).keyboardType(.decimalPad).focused($isInputFocused)
-            TextField("根数 (根)", text: $newCount).keyboardType(.numberPad).focused($isInputFocused)
+            TextField("外径 (mm)", text: $newDia.numericInput(.quantity)).keyboardType(.decimalPad).focused($isInputFocused)
+            TextField("根数 (根)", text: $newCount.numericInput(.quantity)).keyboardType(.numberPad).focused($isInputFocused)
             Button("取消", role: .cancel) { newDia = ""; newCount = "" }
             Button("添加") {
                 if let d = CalculatorInputParser.double(newDia),

@@ -25,7 +25,7 @@ struct VoltageDropView: View {
         Form {
             Section("线路参数") {
                 LabeledContent("电流 (A)") {
-                    TextField("例如 20", text: $current)
+                    TextField("例如 20", text: $current.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -33,7 +33,7 @@ struct VoltageDropView: View {
                 CalculatorValidationHint(message: rangeMessage(current, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
                 CalculatorPresetChips(title: "常用电流", options: ["10", "16", "20", "32", "50", "63"], selection: $current)
                 LabeledContent("长度 (m)") {
-                    TextField("例如 100", text: $length)
+                    TextField("例如 100", text: $length.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -46,7 +46,7 @@ struct VoltageDropView: View {
                     Text("铝").tag(WireMaterial.aluminum.rawValue)
                 }
                 LabeledContent("截面积 (mm²)") {
-                    TextField("2.5", text: $section)
+                    TextField("2.5", text: $section.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -67,7 +67,7 @@ struct VoltageDropView: View {
                     }
                 }
                 LabeledContent("额定电压 (V)") {
-                    TextField("220", text: $voltage)
+                    TextField("220", text: $voltage.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)

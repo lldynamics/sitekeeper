@@ -56,8 +56,7 @@ struct ProjectDetailContainer: View {
     @State var financeState = ProjectDetailFinanceState()
     @State var assetState = ProjectDetailAssetState()
     @State var operationNotice: OperationToastNotice?
-    @State var pendingDeleteCommitTask: Task<Void, Never>?
-    @State var pendingDeleteCommit: (() -> Void)?
+    @State var undoableDeletion = UndoableDeletionCoordinator()
 
     @State var didAutoOpenFinancialAdd = false
     @State var didAutoOpenDocumentScanSetup = false

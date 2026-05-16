@@ -45,16 +45,16 @@ struct ProjectWarehouseMovementSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("出入库") {
+                Section(String(localized: "出入库")) {
                     if fixedProjectId == nil {
-                        Picker("项目", selection: $projectId) {
+                        Picker(String(localized: "项目"), selection: $projectId) {
                             ForEach(projects) { project in
                                 Text(project.name).tag(project.id as UUID?)
                             }
                         }
                     }
-                    DatePicker("日期", selection: $date, displayedComponents: .date)
-                    Picker("类型", selection: $movementType) {
+                    DatePicker(String(localized: "日期"), selection: $date, displayedComponents: .date)
+                    Picker(String(localized: "类型"), selection: $movementType) {
                         ForEach(WarehouseMovementType.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
@@ -62,8 +62,8 @@ struct ProjectWarehouseMovementSheet: View {
                     .pickerStyle(.segmented)
                 }
 
-                Section("材料") {
-                    TextField("材料名称", text: $materialName)
+                Section(String(localized: "材料")) {
+                    TextField(String(localized: "材料名称"), text: $materialName)
                     if !materialSuggestions.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
                             Text(materialSuggestionTitle)
@@ -77,23 +77,23 @@ struct ProjectWarehouseMovementSheet: View {
                         }
                         .padding(.vertical, 4)
                     }
-                    TextField("规格/型号", text: $specification)
-                    TextField("单位", text: $unit)
-                    TextField("数量", text: $quantity)
+                    TextField(String(localized: "规格/型号"), text: $specification)
+                    TextField(String(localized: "单位"), text: $unit)
+                    TextField(String(localized: "数量"), text: $quantity)
                         .keyboardType(.decimalPad)
                         .focused($movementFocusedField, equals: .quantity)
                 }
 
-                Section("备注") {
-                    TextField(movementType == .inbound ? "供应商/来源" : "领用班组/去向", text: $counterparty)
-                    TextField("经手人", text: $handler)
-                    TextField("备注", text: $note, axis: .vertical)
+                Section(String(localized: "备注")) {
+                    TextField(movementType == .inbound ? String(localized: "供应商/来源") : String(localized: "领用班组/去向"), text: $counterparty)
+                    TextField(String(localized: "经手人"), text: $handler)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
 
-                Section("附件") {
+                Section(String(localized: "附件")) {
                     if attachments.isEmpty {
-                        Text("可上传现场照片、签收视频、送货单 PDF、CAD 或其他文件。")
+                        Text(String(localized: "可上传现场照片、签收视频、送货单 PDF、CAD 或其他文件。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -104,26 +104,26 @@ struct ProjectWarehouseMovementSheet: View {
                         }
                     }
                     PhotosPicker(selection: $mediaImport.selectedItems, maxSelectionCount: 6, matching: .any(of: [.images, .videos])) {
-                        Label("从相册选择照片/视频", systemImage: "photo.on.rectangle")
+                        Label(String(localized: "从相册选择照片/视频"), systemImage: "photo.on.rectangle")
                     }
                     Button {
                         showFileImporter = true
                     } label: {
-                        Label("从文件导入附件", systemImage: "paperclip")
+                        Label(String(localized: "从文件导入附件"), systemImage: "paperclip")
                     }
-                    Text("选择文件时会预先检查单文件大小，超限文件会立即提示并跳过。")
+                    Text(String(localized: "选择文件时会预先检查单文件大小，超限文件会立即提示并跳过。"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
                         Button {
                             mediaImport.showImagePicker = true
                         } label: {
-                            Label("拍照添加", systemImage: "camera.fill")
+                            Label(String(localized: "拍照添加"), systemImage: "camera.fill")
                         }
                     }
                     if mediaImport.isImporting {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(mediaImport.status.isEmpty ? "正在导入媒体..." : mediaImport.status)
+                            Text(mediaImport.status.isEmpty ? String(localized: "正在导入媒体...") : mediaImport.status)
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             ProgressView(value: mediaImport.progressValue)
@@ -132,7 +132,7 @@ struct ProjectWarehouseMovementSheet: View {
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 Spacer()
-                                Button("取消导入", role: .destructive) {
+                                Button(String(localized: "取消导入"), role: .destructive) {
                                     mediaImport.cancelImport()
                                 }
                                 .font(.caption.weight(.semibold))
@@ -142,14 +142,14 @@ struct ProjectWarehouseMovementSheet: View {
                     }
                 }
             }
-            .navigationTitle(movementType.rawValue)
+            .navigationTitle(movementType.displayName)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         guard let projectId else { return }
                         onSave(ProjectWarehouseMovement(
                             projectId: projectId,
@@ -184,7 +184,7 @@ struct ProjectWarehouseMovementSheet: View {
         }
         .sheet(isPresented: $mediaImport.showImagePicker) {
             ImagePickerView(sourceType: .camera) { image in
-                attachments.append(ProjectWarehouseAttachmentDraft(image: image, title: "拍照附件"))
+                attachments.append(ProjectWarehouseAttachmentDraft(image: image, title: String(localized: "拍照附件")))
             }
         }
         .onChange(of: mediaImport.selectedItems) { _, items in
@@ -193,13 +193,13 @@ struct ProjectWarehouseMovementSheet: View {
                 attachments.append(contentsOf: imported)
             }
         }
-        .alert("媒体导入失败", isPresented: $mediaImport.showError) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "媒体导入失败"), isPresented: $mediaImport.showError) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(mediaImport.errorMessage)
         }
-        .alert("部分附件未添加", isPresented: $showFileImportWarning) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "部分附件未添加"), isPresented: $showFileImportWarning) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(fileImportWarningMessage)
         }
@@ -216,7 +216,7 @@ struct ProjectWarehouseMovementSheet: View {
     }
 
     private var materialSuggestionTitle: String {
-        materialName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "常用材料" : "匹配材料"
+        materialName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "常用材料") : String(localized: "匹配材料")
     }
 
     private var materialSuggestions: [ProjectWarehouseMaterialSuggestion] {
@@ -244,7 +244,7 @@ struct ProjectWarehouseMovementSheet: View {
                 try ProjectWarehouseAttachmentImporter.validateFileURLForImport(url)
                 accepted.append(ProjectWarehouseAttachmentDraft(fileURL: url))
             } catch {
-                let reason = (error as? LocalizedError)?.errorDescription ?? "无法读取或文件过大"
+                let reason = (error as? LocalizedError)?.errorDescription ?? String(localized: "无法读取或文件过大")
                 rejected.append("\(url.lastPathComponent)（\(reason)）")
             }
         }
@@ -262,9 +262,9 @@ struct ProjectWarehouseMovementSheet: View {
         let preview = rejected.prefix(3)
         let lines = preview.joined(separator: "\n")
         if rejected.count > preview.count {
-            return "以下文件未添加：\n\(lines)\n等共 \(rejected.count) 个。"
+            return String(format: String(localized: "以下文件未添加：\n%@\n等共 %lld 个。"), lines, Int64(rejected.count))
         }
-        return "以下文件未添加：\n\(lines)"
+        return String(format: String(localized: "以下文件未添加：\n%@"), lines)
     }
 
 }
@@ -322,7 +322,7 @@ private struct ProjectWarehouseMaterialSuggestion: Identifiable {
                 name: movement.materialName,
                 specification: movement.specification,
                 unit: movement.unit,
-                source: "仓库",
+                source: String(localized: "仓库"),
                 sourceRank: 0,
                 count: 1,
                 projectMatched: movement.projectId == projectId
@@ -334,7 +334,7 @@ private struct ProjectWarehouseMaterialSuggestion: Identifiable {
                 name: item.name,
                 specification: item.specification,
                 unit: item.unit,
-                source: "材料",
+                source: String(localized: "材料"),
                 sourceRank: 1,
                 count: 1,
                 projectMatched: item.projectId == projectId
@@ -346,7 +346,7 @@ private struct ProjectWarehouseMaterialSuggestion: Identifiable {
                 name: entry.name,
                 specification: entry.specification,
                 unit: entry.unit,
-                source: "材料库",
+                source: String(localized: "材料库"),
                 sourceRank: 2,
                 count: 0,
                 projectMatched: false
@@ -358,7 +358,7 @@ private struct ProjectWarehouseMaterialSuggestion: Identifiable {
                 name: material.name,
                 specification: material.specification,
                 unit: material.unit,
-                source: "预置材料",
+                source: String(localized: "预置材料"),
                 sourceRank: 3,
                 count: 0,
                 projectMatched: false
@@ -446,16 +446,16 @@ private struct ProjectWarehouseMaterialSuggestionRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(suggestion.name)，\(suggestion.detailText.isEmpty ? sourceText : suggestion.detailText)")
-        .accessibilityHint("双击填充材料信息")
+        .accessibilityLabel(String(format: String(localized: "%@，%@"), suggestion.name, suggestion.detailText.isEmpty ? sourceText : suggestion.detailText))
+        .accessibilityHint(String(localized: "双击填充材料信息"))
     }
 
     private var sourceText: String {
         if suggestion.projectMatched {
-            return suggestion.source == "仓库" ? "本项目常用" : "本项目"
+            return suggestion.source == String(localized: "仓库") ? String(localized: "本项目常用") : String(localized: "本项目")
         }
         if suggestion.usageCount > 1 {
-            return "\(suggestion.source) \(suggestion.usageCount)"
+            return String(format: String(localized: "%@ %lld"), suggestion.source, Int64(suggestion.usageCount))
         }
         return suggestion.source
     }

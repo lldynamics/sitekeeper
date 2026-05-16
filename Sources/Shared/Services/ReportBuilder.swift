@@ -10,6 +10,10 @@ enum ReportBuilder {
         String(localized: String.LocalizationValue(stringLiteral: key))
     }
 
+    static func locFormat(_ key: String, _ arguments: CVarArg...) -> String {
+        String(format: loc(key), arguments: arguments)
+    }
+
     /// 本地化字符串数组
     static func loc(_ keys: [String]) -> [String] {
         keys.map { loc($0) }
@@ -26,39 +30,60 @@ enum ReportBuilder {
     static var locDone: String { loc("完成") }
     static var locOverdue: String { loc("延期") }
     static var locPending: String { loc("待办") }
+    static var locNotFilled: String { loc("未填写") }
 
     static func makeLightingCircuitPlansPDF(projectName: String, plans: [LightingCircuitPlan]) -> Data {
-        var lines: [String] = ["\(projectName)-照明回路方案", "生成时间: \(Formatters.now())", ""]
+        var lines: [String] = [
+            locFormat("%@-照明回路方案", projectName),
+            locFormat("生成时间: %@", Formatters.now()),
+            ""
+        ]
         guard !plans.isEmpty else {
-            lines.append("暂无回路方案")
+            lines.append(loc("暂无回路方案"))
             return pdfData(lines: lines)
         }
 
         for plan in plans.sorted(by: { $0.updatedAt > $1.updatedAt }) {
-            lines.append("方案: \(plan.name)")
-            lines.append("更新时间: \(plan.updatedAt)")
+            lines.append(locFormat("方案: %@", plan.name))
+            lines.append(locFormat("更新时间: %@", plan.updatedAt))
 
             guard let evaluation = evaluateLightingPlan(plan) else {
-                lines.append("参数无效，无法计算")
+                lines.append(loc("参数无效，无法计算"))
                 lines.append("")
                 continue
             }
 
-            lines.append("供电: \(plan.supplyType.displayName)  \(Int(evaluation.voltage))V")
-            lines.append("功率因数: \(fmt(evaluation.powerFactor))  需用系数: \(fmt(evaluation.demandFactor))")
-            lines.append("回路明细:")
+            lines.append(locFormat("供电: %@  %lldV", plan.supplyType.displayName, Int64(evaluation.voltage)))
+            lines.append(locFormat("功率因数: %@  需用系数: %@", fmt(evaluation.powerFactor), fmt(evaluation.demandFactor)))
+            lines.append(loc("回路明细:"))
             for row in evaluation.rows {
-                let phaseText = row.phaseName.isEmpty ? "" : "  相别\(row.phaseName)"
+                let phaseText = row.phaseName.isEmpty ? "" : locFormat("  相别%@", row.phaseName)
                 lines.append(
-                    "- \(row.name): 装机\(fmt(row.installedPowerKW))kW, 计算\(fmt(row.demandPowerKW))kW, " +
-                    "I=\(fmt(row.currentA))A, 空开\(row.breakerA)A, 线径\(row.wireSectionText)\(phaseText)"
+                    locFormat(
+                        "- %@: 装机%@kW, 计算%@kW, I=%@A, 空开%lldA, 线径%@%@",
+                        row.name,
+                        fmt(row.installedPowerKW),
+                        fmt(row.demandPowerKW),
+                        fmt(row.currentA),
+                        Int64(row.breakerA),
+                        row.wireSectionText,
+                        phaseText
+                    )
                 )
             }
 
-            lines.append("汇总: 回路数 \(evaluation.rows.count), 总装机 \(fmt(evaluation.totalInstalledPowerKW))kW, 总计算 \(fmt(evaluation.totalDemandPowerKW))kW, 电流合计 \(fmt(evaluation.totalCurrentA))A")
+            lines.append(
+                locFormat(
+                    "汇总: 回路数 %lld, 总装机 %@kW, 总计算 %@kW, 电流合计 %@A",
+                    Int64(evaluation.rows.count),
+                    fmt(evaluation.totalInstalledPowerKW),
+                    fmt(evaluation.totalDemandPowerKW),
+                    fmt(evaluation.totalCurrentA)
+                )
+            )
             if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent, totals.count >= 3 {
-                lines.append("A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A")
-                lines.append("三相不平衡: \(fmt(imbalance))%")
+                lines.append(locFormat("A/B/C相电流: %@ / %@ / %@ A", fmt(totals[0]), fmt(totals[1]), fmt(totals[2])))
+                lines.append(locFormat("三相不平衡: %@%%", fmt(imbalance)))
             }
             lines.append("")
         }
@@ -67,25 +92,25 @@ enum ReportBuilder {
 
     static func makeLightingCircuitPlansExcelHTML(projectName: String, plans: [LightingCircuitPlan]) -> Data {
         var body = "<html><head><meta charset=\"utf-8\"></head><body>"
-        body += "<h1>\(escapeHTML(projectName))-照明回路方案</h1>"
-        body += "<p>生成时间: \(escapeHTML(Formatters.now()))</p>"
+        body += "<h1>\(escapeHTML(locFormat("%@-照明回路方案", projectName)))</h1>"
+        body += "<p>\(escapeHTML(locFormat("生成时间: %@", Formatters.now())))</p>"
 
         if plans.isEmpty {
-            body += "<p>暂无回路方案</p></body></html>"
+            body += "<p>\(escapeHTML(loc("暂无回路方案")))</p></body></html>"
             return Data(body.utf8)
         }
 
         for plan in plans.sorted(by: { $0.updatedAt > $1.updatedAt }) {
             body += "<h2>\(escapeHTML(plan.name))</h2>"
-            body += "<p>更新时间: \(escapeHTML(plan.updatedAt))</p>"
+            body += "<p>\(escapeHTML(locFormat("更新时间: %@", plan.updatedAt)))</p>"
 
             guard let evaluation = evaluateLightingPlan(plan) else {
-                body += "<p>参数无效，无法计算</p>"
+                body += "<p>\(escapeHTML(loc("参数无效，无法计算")))</p>"
                 continue
             }
 
             body += "<table border=\"1\" cellspacing=\"0\" cellpadding=\"4\">"
-            body += "<tr><th>回路名称</th><th>装机(kW)</th><th>计算(kW)</th><th>电流(A)</th><th>断路器(A)</th><th>线径(mm²)</th><th>相别</th></tr>"
+            body += "<tr><th>\(escapeHTML(loc("回路名称")))</th><th>\(escapeHTML(loc("装机(kW)")))</th><th>\(escapeHTML(loc("计算(kW)")))</th><th>\(escapeHTML(loc("电流(A)")))</th><th>\(escapeHTML(loc("断路器(A)")))</th><th>\(escapeHTML(loc("线径(mm²)")))</th><th>\(escapeHTML(loc("相别")))</th></tr>"
             for row in evaluation.rows {
                 body += "<tr>"
                 body += "<td>\(escapeHTML(row.name))</td>"
@@ -98,9 +123,9 @@ enum ReportBuilder {
                 body += "</tr>"
             }
             body += "</table>"
-            body += "<p>汇总: 回路数 \(evaluation.rows.count), 总装机 \(fmt(evaluation.totalInstalledPowerKW))kW, 总计算 \(fmt(evaluation.totalDemandPowerKW))kW, 电流合计 \(fmt(evaluation.totalCurrentA))A</p>"
+            body += "<p>\(escapeHTML(locFormat("汇总: 回路数 %lld, 总装机 %@kW, 总计算 %@kW, 电流合计 %@A", Int64(evaluation.rows.count), fmt(evaluation.totalInstalledPowerKW), fmt(evaluation.totalDemandPowerKW), fmt(evaluation.totalCurrentA))))</p>"
             if let totals = evaluation.phaseTotals, let imbalance = evaluation.imbalancePercent, totals.count >= 3 {
-                body += "<p>A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A, 三相不平衡: \(fmt(imbalance))%</p>"
+                body += "<p>\(escapeHTML(locFormat("A/B/C相电流: %@ / %@ / %@ A, 三相不平衡: %@%%", fmt(totals[0]), fmt(totals[1]), fmt(totals[2]), fmt(imbalance))))</p>"
             }
         }
         body += "</body></html>"
@@ -116,18 +141,18 @@ enum ReportBuilder {
         let validUntil = Formatters.date.string(
             from: Calendar.current.date(byAdding: .day, value: validityDays, to: Date()) ?? Date()
         )
-        let projectAddress = resolvedSingleProjectAddress(items: items, projects: projects) ?? "未填写"
+        let projectAddress = resolvedSingleProjectAddress(items: items, projects: projects) ?? locNotFilled
         let companyName = UserPreferences.string(UserPreferenceKeys.companyName, default: "").trimmingCharacters(in: .whitespacesAndNewlines)
         let companyPhone = UserPreferences.string(UserPreferenceKeys.companyPhone, default: "").trimmingCharacters(in: .whitespacesAndNewlines)
         let companyAddress = UserPreferences.string(UserPreferenceKeys.companyAddress, default: "").trimmingCharacters(in: .whitespacesAndNewlines)
         let meta = QuotationDocumentMeta(
-            companyName: companyName.isEmpty ? "未填写" : companyName,
-            companyPhone: companyPhone.isEmpty ? "未填写" : companyPhone,
-            companyAddress: companyAddress.isEmpty ? "未填写" : companyAddress,
-            customerName: "未填写",
+            companyName: companyName.isEmpty ? locNotFilled : companyName,
+            companyPhone: companyPhone.isEmpty ? locNotFilled : companyPhone,
+            companyAddress: companyAddress.isEmpty ? locNotFilled : companyAddress,
+            customerName: locNotFilled,
             projectAddress: projectAddress,
             validUntil: validUntil,
-            signerName: "项目负责人"
+            signerName: loc("项目负责人")
         )
         return makeQuotationPDF(title: title, items: items, projects: projects, meta: meta)
     }
@@ -194,11 +219,11 @@ enum ReportBuilder {
             }
 
             y += 12
-            y = drawPDFText("小计: \(money(subtotal.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText("税额: \(money(tax.doubleValue))    折扣: -\(money(discount.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText("合计: \(money(total.doubleValue))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
+            y = drawPDFText(locFormat("小计: %@", money(subtotal.doubleValue)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText(locFormat("税额: %@    折扣: -%@", money(tax.doubleValue), money(discount.doubleValue)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText(locFormat("合计: %@", money(total.doubleValue)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
 
-            _ = drawPDFText("签字确认: \(meta.signerName)____________________", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            _ = drawPDFText(locFormat("签字确认: %@____________________", meta.signerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
         }
     }
 
@@ -236,20 +261,20 @@ enum ReportBuilder {
 
         html += "<h2>\(escapeHTML(title))</h2>"
         html += "<p class=\"meta\">\(escapeHTML(meta.companyName)) · \(escapeHTML(meta.companyPhone)) · \(escapeHTML(meta.companyAddress))</p>"
-        html += "<p class=\"meta\">客户名称: \(escapeHTML(meta.customerName))</p>"
-        html += "<p class=\"meta\">项目名称: \(escapeHTML(projectName))</p>"
-        html += "<p class=\"meta\">项目地址: \(escapeHTML(meta.projectAddress))</p>"
-        html += "<p class=\"meta\">报价日期: \(escapeHTML(Formatters.date.string(from: Date())))，有效期至: \(escapeHTML(meta.validUntil))</p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("客户名称: %@", meta.customerName)))</p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("项目名称: %@", projectName)))</p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("项目地址: %@", meta.projectAddress)))</p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("报价日期: %@，有效期至: %@", Formatters.date.string(from: Date()), meta.validUntil)))</p>"
 
         html += """
         <table>
         <tr>
-            <th>项目</th><th>单位</th><th>数量</th><th>单价</th><th>税率</th><th>折扣</th><th>金额</th><th>版本</th><th>状态</th><th>备注</th>
+            <th>\(escapeHTML(loc("项目")))</th><th>\(escapeHTML(loc("单位")))</th><th>\(escapeHTML(loc("数量")))</th><th>\(escapeHTML(loc("单价")))</th><th>\(escapeHTML(loc("税率")))</th><th>\(escapeHTML(loc("折扣")))</th><th>\(escapeHTML(loc("金额")))</th><th>\(escapeHTML(loc("版本")))</th><th>\(escapeHTML(loc("状态")))</th><th>\(escapeHTML(loc("备注")))</th>
         </tr>
         """
 
         if items.isEmpty {
-            html += "<tr><td colspan=\"10\">暂无明细</td></tr>"
+            html += "<tr><td colspan=\"10\">\(escapeHTML(loc("暂无明细")))</td></tr>"
         } else {
             for item in items {
                 html += "<tr>"
@@ -268,11 +293,11 @@ enum ReportBuilder {
         }
 
         html += "</table>"
-        html += "<p class=\"summary\">小计: \(escapeHTML(money(subtotal.doubleValue)))</p>"
-        html += "<p class=\"summary\">税额: \(escapeHTML(money(tax.doubleValue)))，折扣: -\(escapeHTML(money(discount.doubleValue)))</p>"
-        html += "<p class=\"summary\"><strong>合计: \(escapeHTML(money(total.doubleValue)))</strong></p>"
-        html += "<p class=\"meta\">签字确认: \(escapeHTML(meta.signerName))</p>"
-        html += "<p class=\"meta\">导出时间: \(escapeHTML(Formatters.now()))</p>"
+        html += "<p class=\"summary\">\(escapeHTML(locFormat("小计: %@", money(subtotal.doubleValue))))</p>"
+        html += "<p class=\"summary\">\(escapeHTML(locFormat("税额: %@，折扣: -%@", money(tax.doubleValue), money(discount.doubleValue))))</p>"
+        html += "<p class=\"summary\"><strong>\(escapeHTML(locFormat("合计: %@", money(total.doubleValue))))</strong></p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("签字确认: %@", meta.signerName)))</p>"
+        html += "<p class=\"meta\">\(escapeHTML(locFormat("导出时间: %@", Formatters.now())))</p>"
         html += "</body></html>"
 
         return Data(html.utf8)
@@ -347,45 +372,45 @@ enum ReportBuilder {
         let photosCount = logs.reduce(0) { $0 + $1.photoAttachments.count }
 
         var lines: [String] = []
-        lines.append("\(project.name) 项目归档报告")
-        lines.append("生成时间: \(Formatters.now())")
+        lines.append(locFormat("%@ 项目归档报告", project.name))
+        lines.append(locFormat("生成时间: %@", Formatters.now()))
         lines.append("")
-        lines.append("一、项目概况")
-        lines.append("地址: \(project.location.isEmpty ? "未填写" : project.location)")
-        lines.append("客户: \(project.customerName.isEmpty ? "未填写" : project.customerName)  电话: \(project.customerPhone.isEmpty ? "-" : project.customerPhone)")
-        lines.append("负责人: \(project.managerName.isEmpty ? "未填写" : project.managerName)")
-        lines.append("状态: \(project.status.displayName)  工期: \(project.startDate.isEmpty ? "-" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "-" : project.expectedEndDate)")
+        lines.append(loc("一、项目概况"))
+        lines.append(locFormat("地址: %@", project.location.isEmpty ? locNotFilled : project.location))
+        lines.append(locFormat("客户: %@  电话: %@", project.customerName.isEmpty ? locNotFilled : project.customerName, project.customerPhone.isEmpty ? "-" : project.customerPhone))
+        lines.append(locFormat("负责人: %@", project.managerName.isEmpty ? locNotFilled : project.managerName))
+        lines.append(locFormat("状态: %@  工期: %@ 至 %@", project.status.displayName, project.startDate.isEmpty ? "-" : project.startDate, project.expectedEndDate.isEmpty ? "-" : project.expectedEndDate))
         lines.append("")
-        lines.append("二、经营汇总")
-        lines.append("合同金额: \(money(contract))  已收: \(money(paid))  未收: \(money(max(contract - paid, 0)))")
-        lines.append("报价合计: \(money(quoteTotal))  材料成本: \(money(materialCost))  人工成本: \(money(laborCost))")
-        lines.append("记账收入: \(money(income))  记账支出: \(money(expense))  账面结余: \(money(income - expense))")
-        lines.append("毛利估算: \(money(contract - materialCost - laborCost))")
+        lines.append(loc("二、经营汇总"))
+        lines.append(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(max(contract - paid, 0))))
+        lines.append(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)))
+        lines.append(locFormat("记账收入: %@  记账支出: %@  账面结余: %@", money(income), money(expense), money(income - expense)))
+        lines.append(locFormat("毛利估算: %@", money(contract - materialCost - laborCost)))
         lines.append("")
-        lines.append("三、资料完整度")
-        lines.append("施工日志: \(logs.count) 条  现场照片: \(photosCount) 张  进度平均: \(Int(progress * 100))%")
-        lines.append("材料: \(materials.count) 条  预结算: \(quotes.count) 条  人工: \(labor.count) 条  仓库流水: \(warehouseMovements.count) 条")
-        lines.append("票据/资料: \(documents.count) 份  图纸: \(drawings.count) 份  联系人: \(contacts.count) 位  随手记: \(quickNotes.count) 条")
+        lines.append(loc("三、资料完整度"))
+        lines.append(locFormat("施工日志: %lld 条  现场照片: %lld 张  进度平均: %lld%%", Int64(logs.count), Int64(photosCount), Int64(progress * 100)))
+        lines.append(locFormat("材料: %lld 条  预结算: %lld 条  人工: %lld 条  仓库流水: %lld 条", Int64(materials.count), Int64(quotes.count), Int64(labor.count), Int64(warehouseMovements.count)))
+        lines.append(locFormat("票据/资料: %lld 份  图纸: %lld 份  联系人: %lld 位  随手记: %lld 条", Int64(documents.count), Int64(drawings.count), Int64(contacts.count), Int64(quickNotes.count)))
         lines.append("")
-        lines.append("四、归档前待处理")
+        lines.append(loc("四、归档前待处理"))
         if openTodos.isEmpty && overdueTasks.isEmpty && dueReminders.isEmpty && missingReceipts.isEmpty {
-            lines.append("无未完成待办、逾期进度、到期提醒或缺票账目。")
+            lines.append(loc("无未完成待办、逾期进度、到期提醒或缺票账目。"))
         } else {
-            lines.append("未完成待办: \(openTodos.count) 项，其中逾期 \(overdueTodos.count) 项")
-            lines.append("逾期进度: \(overdueTasks.count) 项")
-            lines.append("应收/应付提醒: \(dueReminders.count) 笔")
-            lines.append("缺票账目: \(missingReceipts.count) 笔")
+            lines.append(locFormat("未完成待办: %lld 项，其中逾期 %lld 项", Int64(openTodos.count), Int64(overdueTodos.count)))
+            lines.append(locFormat("逾期进度: %lld 项", Int64(overdueTasks.count)))
+            lines.append(locFormat("应收/应付提醒: %lld 笔", Int64(dueReminders.count)))
+            lines.append(locFormat("缺票账目: %lld 笔", Int64(missingReceipts.count)))
         }
         if !dueReminders.isEmpty {
             lines.append("")
-            lines.append("五、应收/应付提醒")
+            lines.append(loc("五、应收/应付提醒"))
             lines += dueReminders.sorted(by: { $0.dueDate < $1.dueDate }).prefix(12).map {
                 "- \($0.dueDate)  \($0.normalizedDirection.displayName) \(money(number($0.amount)))  \($0.counterparty)  \($0.normalizedReminderStatus.displayName)"
             }
         }
         if !openTodos.isEmpty {
             lines.append("")
-            lines.append("六、未完成待办")
+            lines.append(loc("六、未完成待办"))
             lines += openTodos.sorted(by: { $0.dueDate < $1.dueDate }).prefix(12).map {
                 "- \($0.dueDate)  \($0.title)  \($0.owner)"
             }
@@ -438,40 +463,40 @@ enum ReportBuilder {
             // 1. 封面
             context.beginPage()
             var y: CGFloat = 90
-            y = drawPDFText("\(project.name) 项目交付包", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 24), alignment: .center) + 12
-            _ = drawPDFText("生成时间: \(Formatters.now())", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12), alignment: .center)
+            y = drawPDFText(locFormat("%@ 项目交付包", project.name), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 24), alignment: .center) + 12
+            _ = drawPDFText(locFormat("生成时间: %@", Formatters.now()), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12), alignment: .center)
             y = 220
-            y = drawPDFText("项目地址: \(project.location)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText("客户: \(project.customerName.isEmpty ? "未填写" : project.customerName)  电话: \(project.customerPhone.isEmpty ? "-" : project.customerPhone)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText("负责人: \(project.managerName.isEmpty ? "未填写" : project.managerName)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText("工期: \(project.startDate.isEmpty ? "未填写" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "未填写" : project.expectedEndDate)", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText("合同金额: \(money(contract))  已收: \(money(paid))  未收: \(money(max(contract - paid, 0)))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText("报价合计: \(money(quoteTotal))  材料成本: \(money(materialCost))  人工成本: \(money(laborCost))", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            _ = drawPDFText("毛利估算: \(money(contract - materialCost - laborCost))  工时: \(fmt(totalLaborHours))  进度: \(Int(progress * 100))%", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("项目地址: %@", project.location.isEmpty ? locNotFilled : project.location), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("客户: %@  电话: %@", project.customerName.isEmpty ? locNotFilled : project.customerName, project.customerPhone.isEmpty ? "-" : project.customerPhone), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("负责人: %@", project.managerName.isEmpty ? locNotFilled : project.managerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("工期: %@ 至 %@", project.startDate.isEmpty ? locNotFilled : project.startDate, project.expectedEndDate.isEmpty ? locNotFilled : project.expectedEndDate), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(max(contract - paid, 0))), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            _ = drawPDFText(locFormat("毛利估算: %@  工时: %@  进度: %lld%%", money(contract - materialCost - laborCost), fmt(totalLaborHours), Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
 
             // 2. 目录
             context.beginPage()
             var tocY: CGFloat = 90
-            tocY = drawPDFText("目录", at: CGPoint(x: margin, y: tocY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 20))
+            tocY = drawPDFText(loc("目录"), at: CGPoint(x: margin, y: tocY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 20))
             let tocItems = [
-                "1. 项目封面",
-                "2. 目录",
-                "3. 报价表",
-                "4. 日志表",
-                "5. 项目财务流水",
-                "6. 票据索引",
-                "7. 联系人与随手记",
-                "8. 照片页",
-                "9. 签字页"
+                loc("1. 项目封面"),
+                loc("2. 目录"),
+                loc("3. 报价表"),
+                loc("4. 日志表"),
+                loc("5. 项目财务流水"),
+                loc("6. 票据索引"),
+                loc("7. 联系人与随手记"),
+                loc("8. 照片页"),
+                loc("9. 签字页")
             ]
             for item in tocItems {
                 tocY = drawPDFText(item, at: CGPoint(x: margin, y: tocY + 6), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             }
-            _ = drawPDFText("附: 材料 \(materials.count) 条 · 人工 \(labor.count) 条 · 待办 \(todos.count) 条 · 图纸 \(drawings.count) 份", at: CGPoint(x: margin, y: tocY + 16), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            _ = drawPDFText(locFormat("附: 材料 %lld 条 · 人工 %lld 条 · 待办 %lld 条 · 图纸 %lld 份", Int64(materials.count), Int64(labor.count), Int64(todos.count), Int64(drawings.count)), at: CGPoint(x: margin, y: tocY + 16), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
 
             // 3. 报价表
             let quoteColumns: [(title: String, width: CGFloat)] = [
-                ("项目", 140), ("版本", 44), ("状态", 48), ("数量", 44), ("单价", 62), ("金额", 74), ("确认日期", 74), ("备注", 73)
+                (loc("项目"), 140), (loc("版本"), 44), (loc("状态"), 48), (loc("数量"), 44), (loc("单价"), 62), (loc("金额"), 74), (loc("确认日期"), 74), (loc("备注"), 73)
             ]
             var quoteRows = quotes.map { item in
                 [
@@ -486,13 +511,13 @@ enum ReportBuilder {
                 ]
             }
             if quoteRows.isEmpty {
-                quoteRows = [["暂无报价", "-", "-", "-", "-", "-", "-", "-"]]
+                quoteRows = [[loc("暂无报价"), "-", "-", "-", "-", "-", "-", "-"]]
             }
             var quoteIndex = 0
             while quoteIndex < quoteRows.count {
                 context.beginPage()
                 var tableY: CGFloat = 48
-                tableY = drawPDFText("报价表", at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+                tableY = drawPDFText(loc("报价表"), at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
                 tableY = drawPDFTableHeader(columns: quoteColumns, startX: margin, y: tableY + 6, height: 24)
                 while quoteIndex < quoteRows.count {
                     if tableY > page.height - 64 { break }
@@ -500,13 +525,13 @@ enum ReportBuilder {
                     quoteIndex += 1
                 }
                 if quoteIndex == quoteRows.count {
-                    _ = drawPDFText("报价合计: \(money(quoteTotal))", at: CGPoint(x: margin, y: tableY + 12), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 12))
+                    _ = drawPDFText(locFormat("报价合计: %@", money(quoteTotal)), at: CGPoint(x: margin, y: tableY + 12), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 12))
                 }
             }
 
             // 4. 日志表
             let logColumns: [(title: String, width: CGFloat)] = [
-                ("日期", 72), ("天气", 44), ("人数", 44), ("施工内容", 248), ("照片数", 44), ("确认人", 74)
+                (loc("日期"), 72), (loc("天气"), 44), (loc("人数"), 44), (loc("施工内容"), 248), (loc("照片数"), 44), (loc("确认人"), 74)
             ]
             var logRows = logs.sorted(by: { $0.date > $1.date }).map { log in
                 [
@@ -519,13 +544,13 @@ enum ReportBuilder {
                 ]
             }
             if logRows.isEmpty {
-                logRows = [["暂无日志", "-", "-", "-", "-", "-"]]
+                logRows = [[loc("暂无日志"), "-", "-", "-", "-", "-"]]
             }
             var logIndex = 0
             while logIndex < logRows.count {
                 context.beginPage()
                 var tableY: CGFloat = 48
-                tableY = drawPDFText("日志表", at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+                tableY = drawPDFText(loc("日志表"), at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
                 tableY = drawPDFTableHeader(columns: logColumns, startX: margin, y: tableY + 6, height: 24)
                 while logIndex < logRows.count {
                     if tableY > page.height - 64 { break }
@@ -536,7 +561,7 @@ enum ReportBuilder {
 
             // 5. 项目财务流水
             let financeColumns: [(title: String, width: CGFloat)] = [
-                ("日期", 76), ("收支", 40), ("分类", 52), ("状态", 48), ("金额", 68), ("对方", 96), ("票号", 82), ("票据", 40), ("备注", 83)
+                (loc("日期"), 76), (loc("收支"), 40), (loc("分类"), 52), (loc("状态"), 48), (loc("金额"), 68), (loc("对方"), 96), (loc("票号"), 82), (loc("票据"), 40), (loc("备注"), 83)
             ]
             var financeRows = financialRecords.sorted(by: { $0.date > $1.date }).map { row in
                 [
@@ -552,13 +577,13 @@ enum ReportBuilder {
                 ]
             }
             if financeRows.isEmpty {
-                financeRows = [["暂无财务记录", "-", "-", "-", "-", "-", "-", "-", "-"]]
+                financeRows = [[loc("暂无财务记录"), "-", "-", "-", "-", "-", "-", "-", "-"]]
             }
             var financeIndex = 0
             while financeIndex < financeRows.count {
                 context.beginPage()
                 var tableY: CGFloat = 48
-                tableY = drawPDFText("项目财务流水", at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+                tableY = drawPDFText(loc("项目财务流水"), at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
                 tableY = drawPDFTableHeader(columns: financeColumns, startX: margin, y: tableY + 6, height: 24)
                 while financeIndex < financeRows.count {
                     if tableY > page.height - 64 { break }
@@ -569,7 +594,7 @@ enum ReportBuilder {
 
             // 6. 票据索引与附件页
             let docColumns: [(title: String, width: CGFloat)] = [
-                ("名称", 170), ("类型", 84), ("页数", 48), ("金额", 72), ("时间", 106), ("备注", 79)
+                (loc("名称"), 170), (loc("类型"), 84), (loc("页数"), 48), (loc("金额"), 72), (loc("时间"), 106), (loc("备注"), 79)
             ]
             var docRows = documents.sorted(by: { $0.createdAt > $1.createdAt }).map { doc in
                 [
@@ -582,13 +607,13 @@ enum ReportBuilder {
                 ]
             }
             if docRows.isEmpty {
-                docRows = [["暂无票据资料", "-", "-", "-", "-", "-"]]
+                docRows = [[loc("暂无票据资料"), "-", "-", "-", "-", "-"]]
             }
             var docIndex = 0
             while docIndex < docRows.count {
                 context.beginPage()
                 var tableY: CGFloat = 48
-                tableY = drawPDFText("票据索引", at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+                tableY = drawPDFText(loc("票据索引"), at: CGPoint(x: margin, y: tableY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
                 tableY = drawPDFTableHeader(columns: docColumns, startX: margin, y: tableY + 6, height: 24)
                 while docIndex < docRows.count {
                     if tableY > page.height - 64 { break }
@@ -600,25 +625,25 @@ enum ReportBuilder {
             if !documents.isEmpty {
                 context.beginPage()
                 var y: CGFloat = 48
-                y = drawPDFText("票据附件页", at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
-                _ = drawPDFText("本交付包包含 \(documents.count) 份票据/资料索引，原始文件已随 ZIP 打包，可在“01-票据原件”目录查看。", at: CGPoint(x: margin, y: y + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+                y = drawPDFText(loc("票据附件页"), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+                _ = drawPDFText(locFormat("本交付包包含 %lld 份票据/资料索引，原始文件已随 ZIP 打包，可在“%@”目录查看。", Int64(documents.count), loc("01-票据原件")), at: CGPoint(x: margin, y: y + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
             }
 
             // 7. 联系人与随手记
             context.beginPage()
             var contactY: CGFloat = 48
-            contactY = drawPDFText("联系人", at: CGPoint(x: margin, y: contactY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+            contactY = drawPDFText(loc("联系人"), at: CGPoint(x: margin, y: contactY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
             if contacts.isEmpty {
-                contactY = drawPDFText("暂无联系人", at: CGPoint(x: margin, y: contactY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+                contactY = drawPDFText(loc("暂无联系人"), at: CGPoint(x: margin, y: contactY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
             } else {
                 for contact in contacts.prefix(18) {
                     let line = "\(contact.name)  \(contact.roleDisplayName)  \(contact.company)  \(contact.phone)"
                     contactY = drawPDFText(line, at: CGPoint(x: margin, y: contactY + 6), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
                 }
             }
-            contactY = drawPDFText("随手记", at: CGPoint(x: margin, y: contactY + 20), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
+            contactY = drawPDFText(loc("随手记"), at: CGPoint(x: margin, y: contactY + 20), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 17))
             if quickNotes.isEmpty {
-                _ = drawPDFText("暂无随手记", at: CGPoint(x: margin, y: contactY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+                _ = drawPDFText(loc("暂无随手记"), at: CGPoint(x: margin, y: contactY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
             } else {
                 var noteY = contactY
                 for note in quickNotes.sorted(by: { $0.createdAt > $1.createdAt }).prefix(14) {
@@ -628,14 +653,14 @@ enum ReportBuilder {
                     }
                     let content = QuickNoteText.displayContent(for: note)
                     let attachmentText = QuickNoteText.attachmentSummary(note.attachments)
-                    let line = "\(note.createdAt)  \(content)\(attachmentText.isEmpty ? "" : "  附件: \(attachmentText)")"
+                    let line = "\(note.createdAt)  \(content)\(attachmentText.isEmpty ? "" : locFormat("  附件: %@", attachmentText))"
                     noteY = drawPDFText(line, at: CGPoint(x: margin, y: noteY + 8), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
                 }
             }
 
             // 8. 照片页
             drawPhotoWallPages(
-                title: "\(project.name)-照片页",
+                title: locFormat("%@-照片页", project.name),
                 items: photoItems,
                 context: context,
                 page: page,
@@ -645,12 +670,12 @@ enum ReportBuilder {
             // 9. 签字页
             context.beginPage()
             var signY: CGFloat = 120
-            signY = drawPDFText("签字确认页", at: CGPoint(x: margin, y: signY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 20), alignment: .center) + 28
-            signY = drawPDFText("项目名称: \(project.name)", at: CGPoint(x: margin, y: signY), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            signY = drawPDFText("客户确认: ____________________", at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            signY = drawPDFText("项目负责人: ____________________", at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            signY = drawPDFText("监理/验收: ____________________", at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            _ = drawPDFText("日期: ____________________", at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            signY = drawPDFText(loc("签字确认页"), at: CGPoint(x: margin, y: signY), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 20), alignment: .center) + 28
+            signY = drawPDFText(locFormat("项目名称: %@", project.name), at: CGPoint(x: margin, y: signY), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            signY = drawPDFText(loc("客户确认: ____________________"), at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            signY = drawPDFText(loc("项目负责人: ____________________"), at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            signY = drawPDFText(loc("监理/验收: ____________________"), at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            _ = drawPDFText(loc("日期: ____________________"), at: CGPoint(x: margin, y: signY + 26), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
         }
     }
 
@@ -714,42 +739,49 @@ enum ReportBuilder {
                 do {
                     try zip.close()
                 } catch {
-                    StorageIssueLog.record("项目交付包 ZIP 关闭失败：\(packageURL.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.record(locFormat("项目交付包 ZIP 关闭失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
                 }
                 do {
                     try FileManager.default.removeItem(at: packageURL)
                 } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
                     // ignore missing temporary file
                 } catch {
-                    StorageIssueLog.record("项目交付包临时文件清理失败：\(packageURL.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.record(locFormat("项目交付包临时文件清理失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
                 }
             }
         }
 
         let folder = safeZipName(project.name)
-        let pdfName = "\(folder)_项目交付包.pdf"
+        let deliveryDirectory = loc("00-交付包")
+        let documentDirectory = loc("01-票据原件")
+        let drawingDirectory = loc("02-图纸原件")
+        let photoDirectory = loc("03-现场照片原件")
+        let quickNoteDirectory = loc("04-随手记")
+        let contactDirectory = loc("05-联系人")
+        let pdfName = locFormat("%@_项目交付包.pdf", folder)
+        let checklistFileName = loc("交付前检查清单.txt")
         var stagedRawBytes = 0
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
             zip: &zip,
             data: packagePDF,
-            path: "\(folder)/00-交付包/\(pdfName)",
+            path: "\(folder)/\(deliveryDirectory)/\(pdfName)",
             stagedRawBytes: &stagedRawBytes
         )
-        reportProgress("写入交付包 PDF")
+        reportProgress(loc("写入交付包 PDF"))
 
         let readme = [
-            "项目交付包",
-            "项目: \(project.name)",
-            "导出时间: \(Formatters.now())",
-            "内容:",
-            "1. 00-交付包/\(pdfName)",
-            "2. 00-交付包/交付前检查清单.txt",
-            "3. 01-票据原件/ (票据/资料原始文件)",
-            "4. 02-图纸原件/ (图纸原始文件，含 PDF/DWG/DXF)",
-            "5. 03-现场照片原件/ (日志和整改照片文件)",
-            "6. 04-随手记/ (清单和原始附件)",
-            "7. 05-联系人/ (联系人清单)"
+            loc("项目交付包"),
+            locFormat("项目: %@", project.name),
+            locFormat("导出时间: %@", Formatters.now()),
+            loc("内容:"),
+            locFormat("1. %@/%@", deliveryDirectory, pdfName),
+            locFormat("2. %@/%@", deliveryDirectory, checklistFileName),
+            locFormat("3. %@/ (票据/资料原始文件)", documentDirectory),
+            locFormat("4. %@/ (图纸原始文件，含 PDF/DWG/DXF)", drawingDirectory),
+            locFormat("5. %@/ (日志和整改照片文件)", photoDirectory),
+            locFormat("6. %@/ (清单和原始附件)", quickNoteDirectory),
+            locFormat("7. %@/ (联系人清单)", contactDirectory)
         ].joined(separator: "\n")
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -758,7 +790,7 @@ enum ReportBuilder {
             path: "\(folder)/README.txt",
             stagedRawBytes: &stagedRawBytes
         )
-        reportProgress("写入说明文件")
+        reportProgress(loc("写入说明文件"))
 
         let checklist = projectDeliveryChecklistText(
             project: project,
@@ -772,18 +804,18 @@ enum ReportBuilder {
         try addGeneratedFileToProjectPackageZip(
             zip: &zip,
             data: Data(checklist.utf8),
-            path: "\(folder)/00-交付包/交付前检查清单.txt",
+            path: "\(folder)/\(deliveryDirectory)/\(checklistFileName)",
             stagedRawBytes: &stagedRawBytes
         )
-        reportProgress("写入交付检查清单")
+        reportProgress(loc("写入交付检查清单"))
 
         for document in documents {
             try failIfCancelled()
             let fileBytes = ProjectDocumentStorage.fileSize(for: document.fileName)
             let sourceURL = ProjectDocumentStorage.fileURL(for: document.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                StorageIssueLog.record("项目交付包缺少票据原件：\(document.fileName)")
-                reportProgress("检查票据 \(document.title)")
+                StorageIssueLog.record(locFormat("项目交付包缺少票据原件：%@", document.fileName))
+                reportProgress(locFormat("检查票据 %@", document.title))
                 continue
             }
             let title = safeZipName(document.title)
@@ -792,10 +824,10 @@ enum ReportBuilder {
                 zip: &zip,
                 sourceFileURL: sourceURL,
                 fileBytes: fileBytes,
-                path: "\(folder)/01-票据原件/\(title)-\(fileName)",
+                path: "\(folder)/\(documentDirectory)/\(title)-\(fileName)",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress("打包票据 \(document.title)")
+            reportProgress(locFormat("打包票据 %@", document.title))
         }
 
         for drawing in drawings {
@@ -803,8 +835,8 @@ enum ReportBuilder {
             let fileBytes = DrawingStorage.fileSize(for: drawing.fileName)
             let sourceURL = DrawingStorage.fileURL(for: drawing.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                StorageIssueLog.record("项目交付包缺少图纸原件：\(drawing.fileName)")
-                reportProgress("检查图纸 \(drawing.name)")
+                StorageIssueLog.record(locFormat("项目交付包缺少图纸原件：%@", drawing.fileName))
+                reportProgress(locFormat("检查图纸 %@", drawing.name))
                 continue
             }
             let name = safeZipName(drawing.name)
@@ -812,10 +844,10 @@ enum ReportBuilder {
                 zip: &zip,
                 sourceFileURL: sourceURL,
                 fileBytes: fileBytes,
-                path: "\(folder)/02-图纸原件/\(name)-\(drawing.fileName)",
+                path: "\(folder)/\(drawingDirectory)/\(name)-\(drawing.fileName)",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress("打包图纸 \(drawing.name)")
+            reportProgress(locFormat("打包图纸 %@", drawing.name))
         }
 
         for log in logs {
@@ -824,8 +856,8 @@ enum ReportBuilder {
                 let fileBytes = PhotoStorage.fileSize(for: photo.fileName)
                 let sourceURL = PhotoStorage.fileURL(for: photo.fileName)
                 guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                    StorageIssueLog.record("项目交付包缺少现场照片原件：\(photo.fileName)")
-                    reportProgress("检查照片 \(log.date) \(photo.tag.displayName)")
+                    StorageIssueLog.record(locFormat("项目交付包缺少现场照片原件：%@", photo.fileName))
+                    reportProgress(locFormat("检查照片 %@ %@", log.date, photo.tag.displayName))
                     continue
                 }
                 let tag = safeZipName(photo.tag.displayName)
@@ -833,10 +865,10 @@ enum ReportBuilder {
                     zip: &zip,
                     sourceFileURL: sourceURL,
                     fileBytes: fileBytes,
-                    path: "\(folder)/03-现场照片原件/\(log.date)-\(tag)-\(photo.fileName)",
+                    path: "\(folder)/\(photoDirectory)/\(log.date)-\(tag)-\(photo.fileName)",
                     stagedRawBytes: &stagedRawBytes
                 )
-                reportProgress("打包照片 \(log.date) \(photo.tag.displayName)")
+                reportProgress(locFormat("打包照片 %@ %@", log.date, photo.tag.displayName))
             }
         }
 
@@ -849,47 +881,47 @@ enum ReportBuilder {
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
                 data: Data(lines.joined(separator: "\n").utf8),
-                path: "\(folder)/04-随手记/随手记清单.tsv",
+                path: "\(folder)/\(quickNoteDirectory)/\(loc("随手记清单.tsv"))",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress("写入随手记清单")
+            reportProgress(loc("写入随手记清单"))
             for note in quickNotes {
                 for attachment in note.attachments {
                     try failIfCancelled()
                     let fileBytes = QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
                     let sourceURL = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
                     guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                        StorageIssueLog.record("项目交付包缺少随手记附件原件：\(attachment.fileName)")
-                        reportProgress("检查随手记附件 \(note.title.isEmpty ? note.createdAt : note.title)")
+                        StorageIssueLog.record(locFormat("项目交付包缺少随手记附件原件：%@", attachment.fileName))
+                        reportProgress(locFormat("检查随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
                         continue
                     }
-                    let title = safeZipName(note.title.isEmpty ? "随手记" : note.title)
+                    let title = safeZipName(note.title.isEmpty ? loc("随手记") : note.title)
                     let kind = safeZipName(attachment.attachmentKind.title)
                     let created = safeZipName(note.createdAt)
                     try addStoredFileToProjectPackageZip(
                         zip: &zip,
                         sourceFileURL: sourceURL,
                         fileBytes: fileBytes,
-                        path: "\(folder)/04-随手记/\(kind)/\(created)-\(title)-\(attachment.fileName)",
+                        path: "\(folder)/\(quickNoteDirectory)/\(kind)/\(created)-\(title)-\(attachment.fileName)",
                         stagedRawBytes: &stagedRawBytes
                     )
-                    reportProgress("打包随手记附件 \(note.title.isEmpty ? note.createdAt : note.title)")
+                    reportProgress(locFormat("打包随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
                 }
             }
         }
 
         if !contacts.isEmpty {
-            let header = "姓名\t角色\t公司/班组\t电话\t备注"
+            let header = loc(["姓名", "角色", "公司/班组", "电话", "备注"]).joined(separator: "\t")
             let rows = contacts.sorted { $0.name < $1.name }.map {
                 "\($0.name)\t\($0.roleDisplayName)\t\($0.company)\t\($0.phone)\t\($0.note)"
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
                 data: Data(([header] + rows).joined(separator: "\n").utf8),
-                path: "\(folder)/05-联系人/联系人清单.tsv",
+                path: "\(folder)/\(contactDirectory)/\(loc("联系人清单.tsv"))",
                 stagedRawBytes: &stagedRawBytes
             )
-            reportProgress("写入联系人清单")
+            reportProgress(loc("写入联系人清单"))
         }
 
         let finishedURL = try zip.finish()
@@ -921,76 +953,76 @@ enum ReportBuilder {
             .reduce(MoneyValue.zero) { $0 + $1.amountValue }
             .doubleValue
         let warningCount = [
-            logExpectation.missingDates.isEmpty ? nil : "缺日志",
-            drawings.isEmpty || !drawingsWithoutCurrent.isEmpty ? "图纸当前版异常" : nil,
-            contacts.isEmpty ? "联系人缺失" : nil,
-            missingReceipts.isEmpty ? nil : "缺票",
-            unsettledRecords.isEmpty ? nil : "未结清"
-        ].compactMap { $0 }.count
+            !logExpectation.missingDates.isEmpty,
+            drawings.isEmpty || !drawingsWithoutCurrent.isEmpty,
+            contacts.isEmpty,
+            !missingReceipts.isEmpty,
+            !unsettledRecords.isEmpty
+        ].filter { $0 }.count
 
         var lines: [String] = [
-            "交付前检查清单",
-            "项目: \(project.name)",
-            "生成时间: \(Formatters.now())",
-            "检查结论: \(warningCount == 0 ? "通过" : "待处理 \(warningCount) 项")",
+            loc("交付前检查清单"),
+            locFormat("项目: %@", project.name),
+            locFormat("生成时间: %@", Formatters.now()),
+            locFormat("检查结论: %@", warningCount == 0 ? loc("通过") : locFormat("待处理 %lld 项", Int64(warningCount))),
             "",
-            "1. 施工日志",
-            "   - 已记录: \(logs.count) 条"
+            loc("1. 施工日志"),
+            locFormat("   - 已记录: %lld 条", Int64(logs.count))
         ]
 
         if logExpectation.expectedCount > 0 {
-            lines.append("   - 应覆盖施工日: \(logExpectation.expectedCount) 天")
+            lines.append(locFormat("   - 应覆盖施工日: %lld 天", Int64(logExpectation.expectedCount)))
             if logExpectation.missingDates.isEmpty {
-                lines.append("   - 结果: 已覆盖")
+                lines.append(loc("   - 结果: 已覆盖"))
             } else {
-                lines.append("   - 结果: 缺 \(logExpectation.missingDates.count) 天")
-                lines.append("   - 缺失日期: \(logExpectation.missingDates.prefix(20).joined(separator: "、"))")
+                lines.append(locFormat("   - 结果: 缺 %lld 天", Int64(logExpectation.missingDates.count)))
+                lines.append(locFormat("   - 缺失日期: %@", logExpectation.missingDates.prefix(20).joined(separator: loc("、"))))
             }
         } else if logs.isEmpty {
-            lines.append("   - 结果: 未设置开工日期，且未记录施工日志")
+            lines.append(loc("   - 结果: 未设置开工日期，且未记录施工日志"))
         } else {
-            lines.append("   - 结果: 未设置完整工期，按现有日志交付")
+            lines.append(loc("   - 结果: 未设置完整工期，按现有日志交付"))
         }
 
         lines += [
             "",
-            "2. 图纸当前版",
-            "   - 图纸数量: \(drawings.count) 份"
+            loc("2. 图纸当前版"),
+            locFormat("   - 图纸数量: %lld 份", Int64(drawings.count))
         ]
         if drawings.isEmpty {
-            lines.append("   - 结果: 未上传图纸")
+            lines.append(loc("   - 结果: 未上传图纸"))
         } else if drawingsWithoutCurrent.isEmpty {
-            lines.append("   - 结果: 所有图纸组均有当前版")
+            lines.append(loc("   - 结果: 所有图纸组均有当前版"))
         } else {
-            lines.append("   - 结果: \(drawingsWithoutCurrent.count) 组图纸未标记当前版")
-            lines.append("   - 图纸组: \(drawingsWithoutCurrent.prefix(20).joined(separator: "、"))")
+            lines.append(locFormat("   - 结果: %lld 组图纸未标记当前版", Int64(drawingsWithoutCurrent.count)))
+            lines.append(locFormat("   - 图纸组: %@", drawingsWithoutCurrent.prefix(20).joined(separator: loc("、"))))
         }
 
         lines += [
             "",
-            "3. 缺票检查",
-            "   - 需票据账目: \(financialRecords.filter(\.requiresAttachment).count) 笔",
-            missingReceipts.isEmpty ? "   - 结果: 全部已关联票据/资料" : "   - 结果: 还有 \(missingReceipts.count) 笔缺票"
+            loc("3. 缺票检查"),
+            locFormat("   - 需票据账目: %lld 笔", Int64(financialRecords.filter(\.requiresAttachment).count)),
+            missingReceipts.isEmpty ? loc("   - 结果: 全部已关联票据/资料") : locFormat("   - 结果: 还有 %lld 笔缺票", Int64(missingReceipts.count))
         ]
 
         lines += [
             "",
-            "4. 联系人",
-            "   - 联系人数量: \(contacts.count) 位",
-            contacts.isEmpty ? "   - 结果: 缺少项目联系人" : "   - 结果: 已维护联系人"
+            loc("4. 联系人"),
+            locFormat("   - 联系人数量: %lld 位", Int64(contacts.count)),
+            contacts.isEmpty ? loc("   - 结果: 缺少项目联系人") : loc("   - 结果: 已维护联系人")
         ]
 
         lines += [
             "",
-            "5. 未结清账目",
-            "   - 未结清笔数: \(unsettledRecords.count) 笔",
-            "   - 未结清金额: \(money(unsettledAmount))",
-            unsettledRecords.isEmpty ? "   - 结果: 无未结清账目" : "   - 结果: 仍有未结清账目，建议交付前确认"
+            loc("5. 未结清账目"),
+            locFormat("   - 未结清笔数: %lld 笔", Int64(unsettledRecords.count)),
+            locFormat("   - 未结清金额: %@", money(unsettledAmount)),
+            unsettledRecords.isEmpty ? loc("   - 结果: 无未结清账目") : loc("   - 结果: 仍有未结清账目，建议交付前确认")
         ]
 
         lines += [
             "",
-            "说明: 该清单由交付包导出时自动生成，供完工交付前核对使用。"
+            loc("说明: 该清单由交付包导出时自动生成，供完工交付前核对使用。")
         ]
         return lines.joined(separator: "\n")
     }
@@ -1067,7 +1099,7 @@ enum ReportBuilder {
         do {
             try zip.addFile(path: path, data: data)
         } catch {
-            StorageIssueLog.record("项目交付包写入生成文件失败：\(path)，\(error.localizedDescription)")
+            StorageIssueLog.record(locFormat("项目交付包写入生成文件失败：%@，%@", path, error.localizedDescription))
             throw error
         }
         stagedRawBytes += data.count
@@ -1084,7 +1116,7 @@ enum ReportBuilder {
         do {
             try zip.addFile(path: path, sourceFileURL: sourceFileURL)
         } catch {
-            StorageIssueLog.record("项目交付包写入原件失败：\(sourceFileURL.lastPathComponent) -> \(path)，\(error.localizedDescription)")
+            StorageIssueLog.record(locFormat("项目交付包写入原件失败：%@ -> %@，%@", sourceFileURL.lastPathComponent, path, error.localizedDescription))
             throw error
         }
         stagedRawBytes += resolvedFileBytes
@@ -1152,7 +1184,7 @@ enum ReportBuilder {
         let invalid = CharacterSet(charactersIn: "\\/:*?\"<>|")
         let cleaned = raw.components(separatedBy: invalid).joined(separator: "_")
         let compact = cleaned.trimmingCharacters(in: .whitespacesAndNewlines)
-        return compact.isEmpty ? "未命名项目" : compact
+        return compact.isEmpty ? loc("未命名项目") : compact
     }
 
     private static func estimatedProjectPackageStepCount(
@@ -1199,9 +1231,9 @@ enum ReportBuilder {
             context.beginPage()
             let maxWidth = page.width - margin * 2
             _ = drawPDFText(title, at: CGPoint(x: margin, y: 32), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 18), alignment: .center)
-            _ = drawPDFText("生成时间: \(Formatters.now())", at: CGPoint(x: margin, y: 58), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 10), alignment: .center)
+            _ = drawPDFText(locFormat("生成时间: %@", Formatters.now()), at: CGPoint(x: margin, y: 58), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 10), alignment: .center)
             if sortedItems.isEmpty {
-                _ = drawPDFText("暂无照片", at: CGPoint(x: margin, y: 120), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13), alignment: .center)
+                _ = drawPDFText(loc("暂无照片"), at: CGPoint(x: margin, y: 120), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13), alignment: .center)
                 break
             }
 
@@ -1222,8 +1254,8 @@ enum ReportBuilder {
                     }
                     let titleText = "\(item.date) · \(item.projectName)"
                     _ = drawPDFText(titleText, at: CGPoint(x: x + 8, y: y + 160), maxWidth: cardWidth - 16, font: UIFont.systemFont(ofSize: 10))
-                    _ = drawPDFText("标签: \(item.tag)", at: CGPoint(x: x + 8, y: y + 176), maxWidth: cardWidth - 16, font: UIFont.systemFont(ofSize: 10))
-                    _ = drawPDFText(item.note.isEmpty ? "备注: -" : "备注: \(item.note)", at: CGPoint(x: x + 8, y: y + 192), maxWidth: cardWidth - 16, font: UIFont.systemFont(ofSize: 10))
+                    _ = drawPDFText(locFormat("标签: %@", item.tag), at: CGPoint(x: x + 8, y: y + 176), maxWidth: cardWidth - 16, font: UIFont.systemFont(ofSize: 10))
+                    _ = drawPDFText(item.note.isEmpty ? loc("备注: -") : locFormat("备注: %@", item.note), at: CGPoint(x: x + 8, y: y + 192), maxWidth: cardWidth - 16, font: UIFont.systemFont(ofSize: 10))
                     index += 1
                 }
             }
@@ -1278,9 +1310,9 @@ enum ReportBuilder {
         let names = Set(items.compactMap { item in
             item.projectId.flatMap { pid in projects.first(where: { $0.id == pid })?.name }
         })
-        if names.isEmpty { return "未指定" }
-        if names.count == 1 { return names.first ?? "未指定" }
-        return "多个项目"
+        if names.isEmpty { return loc("未指定") }
+        if names.count == 1 { return names.first ?? loc("未指定") }
+        return loc("多个项目")
     }
 
     private static func resolvedSingleProjectAddress(items: [QuoteItem], projects: [Project]) -> String? {
@@ -1397,12 +1429,12 @@ enum ReportBuilder {
             let breaker = EngineeringCalculations.recommendedBreaker(current: current, safetyFactor: breakerFactor)
             let section = EngineeringCalculations.recommendedWireSectionByAmpacity(current: current, isCopper: plan.isCopper, safetyFactor: wireFactor)
             return LightingPlanRow(
-                name: load.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名回路" : load.name,
+                name: load.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? loc("未命名回路") : load.name,
                 installedPowerKW: installedPower,
                 demandPowerKW: demandPower,
                 currentA: current,
                 breakerA: breaker,
-                wireSectionText: section.map { fmtSection($0) } ?? "超规格"
+                wireSectionText: section.map { fmtSection($0) } ?? loc("超规格")
             )
         }
 
@@ -1447,7 +1479,10 @@ enum ReportBuilder {
                     context.beginPage()
                     y = 36
                 }
-                let font = line.isEmpty ? UIFont.systemFont(ofSize: 6) : UIFont.systemFont(ofSize: line.hasSuffix("明细") || line.hasSuffix("记录") || line.hasSuffix("任务") || line.hasSuffix("清单") ? 15 : 11, weight: line.hasSuffix("明细") || line.hasSuffix("记录") || line.hasSuffix("任务") || line.hasSuffix("清单") ? .semibold : .regular)
+                let isHeading = isReportLineHeading(line)
+                let font = line.isEmpty
+                    ? UIFont.systemFont(ofSize: 6)
+                    : UIFont.systemFont(ofSize: isHeading ? 15 : 11, weight: isHeading ? .semibold : .regular)
                 let paragraph = NSMutableParagraphStyle()
                 paragraph.lineBreakMode = .byWordWrapping
                 let attr = NSAttributedString(string: line, attributes: [.font: font, .paragraphStyle: paragraph])
@@ -1456,6 +1491,15 @@ enum ReportBuilder {
                 y += max(16, ceil(rect.height) + 6)
             }
         }
+    }
+
+    private static func isReportLineHeading(_ line: String) -> Bool {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, !trimmed.hasPrefix("-"), !trimmed.hasPrefix("   -") else { return false }
+        if trimmed.count > 36 { return false }
+        if trimmed.contains(":") { return false }
+        if trimmed.rangeOfCharacter(from: .decimalDigits) == nil { return true }
+        return trimmed.hasPrefix("1.") || trimmed.hasPrefix("2.") || trimmed.hasPrefix("3.") || trimmed.hasPrefix("4.") || trimmed.hasPrefix("5.")
     }
 }
 

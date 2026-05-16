@@ -15,9 +15,9 @@ struct TemplateView: View {
                     let items = store.templates.filter { $0.category == cat }
                     if items.isEmpty {
                         ContentUnavailableView(
-                            "还没有\(cat.displayName)",
+                            String(format: String(localized: "还没有%@"), cat.displayName),
                             systemImage: cat.emptyStateIcon,
-                            description: Text("点击右上角 + 创建第一个模板")
+                            description: Text(String(localized: "点击右上角 + 创建第一个模板"))
                         )
                     }
                     ForEach(items) { tpl in
@@ -37,7 +37,7 @@ struct TemplateView: View {
                         }
                         .padding(.vertical, 2)
                         .swipeActions(edge: .leading) {
-                            Button { applyTarget = tpl } label: { Label("应用", systemImage: "arrow.turn.down.right") }
+                            Button { applyTarget = tpl } label: { Label(String(localized: "应用"), systemImage: "arrow.turn.down.right") }
                                 .tint(.appPrimaryAction)
                         }
                     }
@@ -50,11 +50,11 @@ struct TemplateView: View {
                 }
             }
         }
-        .navigationTitle("模板管理")
+        .navigationTitle(String(localized: "模板管理"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel("新建模板")
+                    .accessibilityLabel(String(localized: "新建模板"))
             }
         }
         .sheet(item: $applyTarget) { tpl in
@@ -63,17 +63,17 @@ struct TemplateView: View {
         .sheet(isPresented: $showAdd) {
             NavigationStack {
                 Form {
-                    TextField("模板名称", text: $newName)
-                    Picker("类型", selection: $newCategory) {
+                    TextField(String(localized: "模板名称"), text: $newName)
+                    Picker(String(localized: "类型"), selection: $newCategory) {
                         ForEach(TemplateCategory.allCases, id: \.self) { Text($0.displayName).tag($0) }
                     }
                     TextEditor(text: $newContent).frame(minHeight: 150)
                 }
-                .navigationTitle("新建模板").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(String(localized: "新建模板")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { showAdd = false } }
+                    ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showAdd = false } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") {
+                        Button(String(localized: "保存")) {
                             guard !newName.isEmpty else { return }
                             store.templates.append(ProjectTemplate(name: newName, category: newCategory, content: newContent))
                             store.scheduleSave()
@@ -150,25 +150,25 @@ struct ApplyTemplateSheet: View {
                 Int64(quotationParseResult.items.count)
             )
         case .dailyLog:
-            return "将新增 1 条日志记录。"
+            return String(localized: "将新增 1 条日志记录。")
         }
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("模板内容") {
+                Section(String(localized: "模板内容")) {
                     Text(template.content).font(.callout)
                 }
-                Section("归属项目") {
-                    Picker("选择工程", selection: $selectedProjectId) {
-                        Text("无归属").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "选择工程"), selection: $selectedProjectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
                 }
                 previewSection
                 Section {
-                    Button("预览无误，确认应用") {
+                    Button(String(localized: "预览无误，确认应用")) {
                         showApplyConfirm = true
                     }
                     .frame(maxWidth: .infinity)
@@ -176,12 +176,12 @@ struct ApplyTemplateSheet: View {
                     .disabled(!canApplyTemplate)
                 }
             }
-            .navigationTitle("应用: \(template.name)").navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } } }
+            .navigationTitle(String(format: String(localized: "应用：%@"), template.name)).navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } } }
         }
-        .alert("确认应用模板？", isPresented: $showApplyConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("确认应用") {
+        .alert(String(localized: "确认应用模板？"), isPresented: $showApplyConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "确认应用")) {
                 apply()
             }
         } message: {
@@ -193,10 +193,13 @@ struct ApplyTemplateSheet: View {
     private var previewSection: some View {
         switch template.category {
         case .material:
-            Section("解析预览") {
-                LabeledContent("可导入材料", value: "\(materialParseResult.items.count) 条")
+            Section(String(localized: "解析预览")) {
+                LabeledContent(
+                    String(localized: "可导入材料"),
+                    value: String(format: String(localized: "%lld 条"), Int64(materialParseResult.items.count))
+                )
                 if materialParseResult.items.isEmpty {
-                    Text("未识别到可导入材料，请按“名称 × 数量单位”格式填写。")
+                    Text(String(localized: "未识别到可导入材料，请按“名称 × 数量单位”格式填写。"))
                         .font(.caption)
                         .foregroundStyle(.appWarning)
                 } else {
@@ -205,13 +208,13 @@ struct ApplyTemplateSheet: View {
                             .font(.caption)
                     }
                     if materialParseResult.items.count > 6 {
-                        Text("仅预览前 6 条")
+                        Text(String(localized: "仅预览前 6 条"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 if !materialParseResult.rejectedLines.isEmpty {
-                    Text("以下行未识别，不会导入：")
+                    Text(String(localized: "以下行未识别，不会导入："))
                         .font(.caption)
                         .foregroundStyle(.appWarning)
                     ForEach(Array(materialParseResult.rejectedLines.prefix(3)), id: \.self) { line in
@@ -222,10 +225,13 @@ struct ApplyTemplateSheet: View {
                 }
             }
         case .quotation:
-            Section("解析预览") {
-                LabeledContent("可导入报价", value: "\(quotationParseResult.items.count) 条")
+            Section(String(localized: "解析预览")) {
+                LabeledContent(
+                    String(localized: "可导入报价"),
+                    value: String(format: String(localized: "%lld 条"), Int64(quotationParseResult.items.count))
+                )
                 if quotationParseResult.items.isEmpty {
-                    Text("未识别到可导入报价，请按“名称 ¥ 单价”格式填写。")
+                    Text(String(localized: "未识别到可导入报价，请按“名称 ¥ 单价”格式填写。"))
                         .font(.caption)
                         .foregroundStyle(.appWarning)
                 } else {
@@ -234,13 +240,13 @@ struct ApplyTemplateSheet: View {
                             .font(.caption)
                     }
                     if quotationParseResult.items.count > 6 {
-                        Text("仅预览前 6 条")
+                        Text(String(localized: "仅预览前 6 条"))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
                 }
                 if !quotationParseResult.rejectedLines.isEmpty {
-                    Text("以下行未识别，不会导入：")
+                    Text(String(localized: "以下行未识别，不会导入："))
                         .font(.caption)
                         .foregroundStyle(.appWarning)
                     ForEach(Array(quotationParseResult.rejectedLines.prefix(3)), id: \.self) { line in
@@ -251,8 +257,8 @@ struct ApplyTemplateSheet: View {
                 }
             }
         case .dailyLog:
-            Section("解析预览") {
-                Text("将以当前日期新增 1 条日志，内容为模板全文。")
+            Section(String(localized: "解析预览")) {
+                Text(String(localized: "将以当前日期新增 1 条日志，内容为模板全文。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -279,8 +285,8 @@ struct ApplyTemplateSheet: View {
                         name: item.name,
                         unitPrice: item.unitPrice,
                         quantity: "1",
-                        unit: "项",
-                        notes: "模板导入",
+                        unit: String(localized: "项"),
+                        notes: String(localized: "模板导入"),
                         taxRate: "0",
                         discountRate: "0",
                         projectId: selectedProjectId
@@ -288,7 +294,7 @@ struct ApplyTemplateSheet: View {
                 )
             }
         case .dailyLog:
-            store.dailyLogs.insert(DailyLog(date: Formatters.date.string(from: Date()), weather: "晴", content: template.content, workers: "", photoFileName: nil, projectId: selectedProjectId), at: 0)
+            store.dailyLogs.insert(DailyLog(date: Formatters.date.string(from: Date()), weather: String(localized: "晴"), content: template.content, workers: "", photoFileName: nil, projectId: selectedProjectId), at: 0)
         }
         store.scheduleSave()
         AppHaptics.success()
@@ -297,35 +303,26 @@ struct ApplyTemplateSheet: View {
 
     private func parseMaterialTemplate() -> MaterialTemplateParseResult {
         var result = MaterialTemplateParseResult()
-        let separators: Set<Character> = ["×", "x", "X", "*", "＊"]
 
         for rawLine in template.content.split(whereSeparator: \.isNewline) {
             let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
 
-            guard let splitIndex = line.firstIndex(where: { separators.contains($0) }) else {
-                result.rejectedLines.append(line)
-                continue
-            }
-
-            let name = String(line[..<splitIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let valuePart = String(line[line.index(after: splitIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let parsed = NumericInputSupport.splitNumberAndUnit(
-                in: valuePart,
-                kind: .quantity,
-                defaultNumber: "1",
-                defaultUnit: "个"
+            let parsed = NumericInputSupport.parseMaterialTemplateLine(
+                line,
+                defaultNumber: "",
+                defaultUnit: String(localized: "材料默认单位")
             )
 
-            guard !name.isEmpty else {
+            guard !parsed.name.isEmpty, !parsed.quantity.isEmpty else {
                 result.rejectedLines.append(line)
                 continue
             }
 
             result.items.append(
                 ParsedMaterialTemplateItem(
-                    name: name,
-                    quantity: parsed.number,
+                    name: parsed.name,
+                    quantity: parsed.quantity,
                     unit: parsed.unit
                 )
             )
@@ -336,27 +333,19 @@ struct ApplyTemplateSheet: View {
 
     private func parseQuotationTemplate() -> QuotationTemplateParseResult {
         var result = QuotationTemplateParseResult()
-        let separators: Set<Character> = ["¥", "￥"]
 
         for rawLine in template.content.split(whereSeparator: \.isNewline) {
             let line = String(rawLine).trimmingCharacters(in: .whitespacesAndNewlines)
             guard !line.isEmpty else { continue }
 
-            guard let splitIndex = line.firstIndex(where: { separators.contains($0) }) else {
+            let parsed = NumericInputSupport.parseQuotationTemplateLine(line, defaultPrice: "")
+
+            guard !parsed.name.isEmpty, !parsed.price.isEmpty else {
                 result.rejectedLines.append(line)
                 continue
             }
 
-            let name = String(line[..<splitIndex]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let valuePart = String(line[line.index(after: splitIndex)...]).trimmingCharacters(in: .whitespacesAndNewlines)
-            let price = NumericInputSupport.firstNumberString(in: valuePart, kind: .amount)
-
-            guard !name.isEmpty, !price.isEmpty else {
-                result.rejectedLines.append(line)
-                continue
-            }
-
-            result.items.append(ParsedQuotationTemplateItem(name: name, unitPrice: price))
+            result.items.append(ParsedQuotationTemplateItem(name: parsed.name, unitPrice: parsed.price))
         }
 
         return result

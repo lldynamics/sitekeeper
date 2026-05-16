@@ -366,7 +366,7 @@ extension DashboardView {
                 color: isDisplayedBackupReminderOverdue ? .appRisk : .appSuccess,
                 hasRisk: isDisplayedBackupReminderOverdue,
                 priority: 850,
-                destination: .dataManagement(initialTab: "备份"),
+                destination: .dataManagement(initialRoute: .backup),
                 quickActions: backupReminderRiskActions
             ),
             DashboardRiskPin(

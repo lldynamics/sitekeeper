@@ -13,16 +13,16 @@ struct RebarCalcView: View {
     var body: some View {
         Form {
             Section("钢筋规格") {
-                LabeledContent("直径 (mm)") { TextField("12", text: $dia).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("直径 (mm)") { TextField("12", text: $dia.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(dia, min: 4, max: 80, hint: "请输入 4–80"))
                 CalculatorPresetChips(title: "常用直径", options: ["6", "8", "10", "12", "14", "16", "20"], selection: $dia)
-                LabeledContent("每根长 (m)") { TextField("9", text: $len).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("每根长 (m)") { TextField("9", text: $len.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(len, min: 0.5, max: 100, hint: "请输入 0.5–100"))
                 CalculatorPresetChips(title: "常用长度", options: ["6", "9", "12"], selection: $len)
-                LabeledContent("根数 (根)") { TextField("30", text: $qty).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("根数 (根)") { TextField("30", text: $qty.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(qty, min: 1, max: 100_000, hint: "请输入 1–100000"))
                 CalculatorPresetChips(title: "常用根数", options: ["10", "20", "30", "50", "100"], selection: $qty)
-                LabeledContent("单价 (元/kg)") { TextField("选填", text: $price).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("单价 (元/kg)") { TextField("选填", text: $price.numericInput(.amount)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: optionalRangeMessage(price, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
             }
             Section {

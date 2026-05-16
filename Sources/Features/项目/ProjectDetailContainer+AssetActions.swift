@@ -15,21 +15,45 @@ extension ProjectDetailContainer {
     }
 
     func deleteProjectPhoto(context: ProjectPhotoContext) {
+        flushPendingProjectDeletionIfNeeded()
+        let snapshot = store.dailyLogs
         guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
         var log = projectStore.dailyLogs[logIndex]
+        var deletedFileName: String?
         if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
             let fileName = log.photos[index].fileName
-            PhotoStorage.delete(fileName: fileName)
+            deletedFileName = fileName
             log.photos.remove(at: index)
             if log.photoFileName == fileName {
                 log.photoFileName = log.photos.first?.fileName
             }
         } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            PhotoStorage.delete(fileName: legacy)
+            deletedFileName = legacy
             log.photoFileName = nil
         }
+        guard let deletedFileName else { return }
         store.dailyLogs[logIndex] = log
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除项目照片"),
+            commit: {
+                PhotoStorage.delete(fileName: deletedFileName)
+                store.scheduleSave()
+            },
+            undo: {
+                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.dailyLogs,
+                    deletedIDs: Set([context.logId])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除项目照片"),
+                detail: projectDetailAuditDetail([deletedFileName]),
+                source: "ProjectDetailView"
+            )
+        )
     }
 
     func deleteDocument(_ document: ProjectDocument) {

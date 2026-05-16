@@ -12,13 +12,13 @@ struct ConduitFillView: View {
     var body: some View {
         Form {
             Section("参数") {
-                LabeledContent("线管内径 (mm)") { TextField("16", text: $conduitInnerDia).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("线管内径 (mm)") { TextField("16", text: $conduitInnerDia.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(conduitInnerDia, min: 6, max: 10_000, hint: "请输入 6–10000"))
                 CalculatorPresetChips(title: "常用管径", options: ["16", "20", "25", "32", "40", "50"], selection: $conduitInnerDia)
-                LabeledContent("单根导线外径 (mm)") { TextField("2.5", text: $wireDia).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("单根导线外径 (mm)") { TextField("2.5", text: $wireDia.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: rangeMessage(wireDia, min: 0.5, max: 100, hint: "请输入 0.5–100"))
                 CalculatorPresetChips(title: "常用线径", options: ["2.5", "4", "6", "10", "16"], selection: $wireDia)
-                LabeledContent("导线根数 (根)") { TextField("3", text: $wireCount).keyboardType(.numberPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
+                LabeledContent("导线根数 (根)") { TextField("3", text: $wireCount.numericInput(.quantity)).keyboardType(.numberPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
                 CalculatorValidationHint(message: countMessage(wireCount, min: 1, max: 500, hint: "请输入 1–500"))
                 CalculatorPresetChips(title: "常用根数", options: ["2", "3", "4", "6", "8", "12"], selection: $wireCount)
             }

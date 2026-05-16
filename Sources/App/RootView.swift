@@ -90,7 +90,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $showOnboardingBackupImport) {
             NavigationStack {
-                DataManagementView(initialTab: "导入恢复")
+                DataManagementView(initialRoute: .restore)
             }
         }
         .sheet(item: $widgetDeepLinkDestination) { destination in
@@ -265,7 +265,7 @@ struct RootView: View {
         case .missingReceipt:
             ProjectListView(initialOverviewFilter: .missingReceipt)
         case .backupOverdue:
-            DataManagementView(initialTab: "备份")
+            DataManagementView(initialRoute: .backup)
         case .priceSpike:
             MaterialPriceSpikeDetailView()
         case .project(let projectId):
@@ -424,12 +424,18 @@ private struct FirstLaunchOnboardingView: View {
                         actionRow(title: "导入备份", subtitle: "从 ZIP 恢复已有项目数据", icon: "square.and.arrow.down.fill")
                     }
                     .buttonStyle(.bordered)
+#if DEBUG
                     if allowsSampleDataImport {
                         Button(action: onLoadSample) {
-                            actionRow(title: "查看示例", subtitle: "导入演示数据体验完整功能", icon: "sparkles")
+                            actionRow(
+                                title: String(localized: "查看示例"),
+                                subtitle: String(localized: "导入演示数据体验完整功能"),
+                                icon: "sparkles"
+                            )
                         }
                         .buttonStyle(.bordered)
                     }
+#endif
                 }
                 .buttonBorderShape(.roundedRectangle)
                 Spacer()

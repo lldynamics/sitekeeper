@@ -15,8 +15,31 @@ extension ProjectDetailContainer {
     }
 
     func deleteMaterial(id: UUID) {
+        flushPendingProjectDeletionIfNeeded()
+        let snapshot = store.materialItems
+        guard let target = snapshot.first(where: { $0.id == id }) else { return }
+
         store.removeMaterialItems(ids: Set([id]))
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除材料"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.materialItems = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.materialItems,
+                    deletedIDs: Set([id])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除项目材料 1 条"),
+                detail: projectDetailAuditDetail([target.name]),
+                source: "ProjectDetailView"
+            )
+        )
     }
 
     func saveQuote(_ updated: QuoteItem) {
@@ -27,8 +50,31 @@ extension ProjectDetailContainer {
     }
 
     func deleteQuote(id: UUID) {
+        flushPendingProjectDeletionIfNeeded()
+        let snapshot = store.quoteItems
+        guard let target = snapshot.first(where: { $0.id == id }) else { return }
+
         store.removeQuoteItems(ids: Set([id]))
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除报价"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.quoteItems = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.quoteItems,
+                    deletedIDs: Set([id])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除项目报价 1 条"),
+                detail: projectDetailAuditDetail([target.name, target.versionName]),
+                source: "ProjectDetailView"
+            )
+        )
     }
 
     func saveLabor(_ updated: LaborRecord) {
@@ -39,8 +85,31 @@ extension ProjectDetailContainer {
     }
 
     func deleteLabor(_ target: LaborRecord) {
+        flushPendingProjectDeletionIfNeeded()
+        let snapshot = store.laborRecords
+        guard snapshot.contains(where: { $0.id == target.id }) else { return }
+
         store.removeLaborRecords(ids: Set([target.id]))
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除人工记录"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.laborRecords = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.laborRecords,
+                    deletedIDs: Set([target.id])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除项目人工记录 1 条"),
+                detail: projectDetailAuditDetail([target.date, target.teamName, target.workType]),
+                source: "ProjectDetailView"
+            )
+        )
     }
 
     func saveProgress(_ updated: ProgressTask) {
@@ -51,8 +120,31 @@ extension ProjectDetailContainer {
     }
 
     func deleteProgress(id: UUID) {
+        flushPendingProjectDeletionIfNeeded()
+        let snapshot = store.progressTasks
+        guard let target = snapshot.first(where: { $0.id == id }) else { return }
+
         store.removeProgressTasks(ids: Set([id]))
-        store.scheduleSave()
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(localized: "已删除进度任务"),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.progressTasks = UndoableDeletionCoordinator.restoringItems(
+                    snapshot: snapshot,
+                    current: store.progressTasks,
+                    deletedIDs: Set([id])
+                )
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(localized: "删除项目进度任务 1 条"),
+                detail: projectDetailAuditDetail([target.title, target.dueDate]),
+                source: "ProjectDetailView"
+            )
+        )
     }
 
     func saveFinancialRecord(_ updated: ProjectFinancialRecord) {
@@ -199,10 +291,20 @@ extension ProjectDetailContainer {
     }
 
     func flushPendingProjectDeletionIfNeeded() {
-        pendingDeleteCommitTask?.cancel()
-        pendingDeleteCommitTask = nil
-        pendingDeleteCommit?()
-        pendingDeleteCommit = nil
+        undoableDeletion.flushPendingCommit()
+    }
+
+    func projectDetailAuditDetail(_ parts: [String]) -> String {
+        ([projectDetailAuditProjectName] + parts)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    var projectDetailAuditProjectName: String {
+        let projectName = projectStore.projects.first(where: { $0.id == projectId })?.name
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return projectName.isEmpty ? String(localized: "未命名项目") : projectName
     }
 
     private func queueUndoableProjectDeletion(
@@ -210,33 +312,26 @@ extension ProjectDetailContainer {
         snapshot: ProjectDeletionUndoSnapshot,
         removableDocumentFileNames: [String]
     ) {
-        pendingDeleteCommit = {
-            for fileName in removableDocumentFileNames {
-                ProjectDocumentStorage.delete(fileName: fileName)
-            }
-            store.scheduleSave()
-        }
-        pendingDeleteCommitTask = Task { @MainActor in
-            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
-            pendingDeleteCommit?()
-            pendingDeleteCommit = nil
-            pendingDeleteCommitTask = nil
-        }
-
-        operationNotice = OperationToastNotice(
+        undoableDeletion.queue(
+            notice: $operationNotice,
             message: message,
-            actionTitle: String(localized: "撤销"),
-            action: {
-                pendingDeleteCommitTask?.cancel()
-                pendingDeleteCommitTask = nil
-                pendingDeleteCommit = nil
+            commit: {
+                for fileName in removableDocumentFileNames {
+                    ProjectDocumentStorage.delete(fileName: fileName)
+                }
+                store.scheduleSave()
+            },
+            undo: {
                 store.projectDocuments = snapshot.projectDocuments
                 store.projectFinancialRecords = snapshot.projectFinancialRecords
                 store.projectWarehouseMovements = snapshot.projectWarehouseMovements
                 store.scheduleSave()
-                operationNotice = .info(String(localized: "已撤销删除"))
             },
-            autoDismissDuration: .seconds(4)
+            audit: UndoableDeletionAuditContext(
+                summary: message,
+                detail: String(format: String(localized: "关联票据文件 %lld 个"), Int64(removableDocumentFileNames.count)),
+                source: "ProjectDetailView"
+            )
         )
     }
 

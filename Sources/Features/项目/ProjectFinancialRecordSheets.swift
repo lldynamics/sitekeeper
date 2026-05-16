@@ -72,7 +72,7 @@ struct ProjectFinancialRecordAddSheet: View {
                     .disabled(isRecognizingReceipt)
 
                     if isRecognizingReceipt {
-                        ProgressView("识别中…")
+                        ProgressView(String(localized: "识别中…"))
                             .font(.caption)
                     }
 
@@ -135,7 +135,7 @@ struct ProjectFinancialRecordAddSheet: View {
                     Toggle(String(localized: "保存后立即扫描票据（可选）"), isOn: $scanAfterSave)
                 }
             }
-            .navigationTitle("项目记账")
+            .navigationTitle(String(localized: "项目记账"))
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
@@ -181,7 +181,7 @@ struct ProjectFinancialRecordAddSheet: View {
             ) { result in
                 handleOCRImportResult(result)
             }
-            .alert("票据识别失败", isPresented: $showOCRError) {
+            .alert(String(localized: "票据识别失败"), isPresented: $showOCRError) {
                 Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(ocrErrorMessage)
@@ -223,7 +223,7 @@ struct ProjectFinancialRecordAddSheet: View {
             }
             startOCR(for: url)
         case .failure(let error):
-            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            ocrErrorMessage = String(format: String(localized: "打开票据失败：%@"), error.localizedDescription)
             showOCRError = true
             AppHaptics.error()
         }
@@ -247,7 +247,7 @@ struct ProjectFinancialRecordAddSheet: View {
                 return
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                StorageIssueLog.record(String(format: String(localized: "票据 OCR 识别失败：%@，%@"), url.lastPathComponent, message))
                 ocrErrorMessage = message
                 showOCRError = true
                 AppHaptics.error()
@@ -359,8 +359,8 @@ struct ProjectFinancialRecordEditSheet: View {
                         } label: {
                             Label(
                                 linkedOCRCandidates.isEmpty
-                                ? "已关联票据暂不支持识别（仅图片/PDF）"
-                                : "从已关联票据一键回填（\(linkedOCRCandidates.count)）",
+                                ? String(localized: "已关联票据暂不支持识别（仅图片/PDF）")
+                                : String(format: String(localized: "从已关联票据一键回填（%lld）"), Int64(linkedOCRCandidates.count)),
                                 systemImage: "doc.text.viewfinder"
                             )
                         }
@@ -368,7 +368,7 @@ struct ProjectFinancialRecordEditSheet: View {
                     }
 
                     if isRecognizingReceipt {
-                        ProgressView("识别中…")
+                        ProgressView(String(localized: "识别中…"))
                             .font(.caption)
                     }
 
@@ -441,7 +441,7 @@ struct ProjectFinancialRecordEditSheet: View {
                     }
                 }
             }
-            .navigationTitle("编辑账目")
+            .navigationTitle(String(localized: "编辑账目"))
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
@@ -462,7 +462,7 @@ struct ProjectFinancialRecordEditSheet: View {
                     isInputFocused = false
                 }
             }
-            .alert("删除这条账目？", isPresented: $showDeleteConfirm) {
+            .alert(String(localized: "删除这条账目？"), isPresented: $showDeleteConfirm) {
                 Button(String(localized: "取消"), role: .cancel) {}
                 Button(String(localized: "删除"), role: .destructive) {
                     onDelete(record)
@@ -476,7 +476,7 @@ struct ProjectFinancialRecordEditSheet: View {
             ) { result in
                 handleOCRImportResult(result)
             }
-            .alert("票据识别失败", isPresented: $showOCRError) {
+            .alert(String(localized: "票据识别失败"), isPresented: $showOCRError) {
                 Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(ocrErrorMessage)
@@ -516,7 +516,7 @@ struct ProjectFinancialRecordEditSheet: View {
             }
             startOCR(for: url)
         case .failure(let error):
-            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            ocrErrorMessage = String(format: String(localized: "打开票据失败：%@"), error.localizedDescription)
             showOCRError = true
             AppHaptics.error()
         }
@@ -540,7 +540,7 @@ struct ProjectFinancialRecordEditSheet: View {
                 return
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                StorageIssueLog.record(String(format: String(localized: "票据 OCR 识别失败：%@，%@"), url.lastPathComponent, message))
                 ocrErrorMessage = message
                 showOCRError = true
                 AppHaptics.error()
@@ -552,7 +552,7 @@ struct ProjectFinancialRecordEditSheet: View {
     private func startOCRFromLinkedDocuments() {
         let candidates = linkedOCRCandidates
         guard !candidates.isEmpty else {
-            ocrErrorMessage = "已关联票据暂不支持识别，请使用图片或 PDF。"
+            ocrErrorMessage = String(localized: "已关联票据暂不支持识别，请使用图片或 PDF。")
             showOCRError = true
             AppHaptics.warning()
             return
@@ -578,16 +578,23 @@ struct ProjectFinancialRecordEditSheet: View {
                     return
                 } catch {
                     let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    StorageIssueLog.record("关联票据 OCR 识别失败：\(document.fileName)，\(message)")
+                    StorageIssueLog.record(String(format: String(localized: "关联票据 OCR 识别失败：%@，%@"), document.fileName, message))
                     if firstFailureMessage == nil {
                         firstFailureMessage = message
                     }
                 }
             }
             if let firstFailureMessage {
-                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段（\(firstFailureMessage)）。"
+                ocrErrorMessage = String(
+                    format: String(localized: "已尝试 %lld 份关联票据，仍未提取到可回填字段（%@）。"),
+                    Int64(candidates.count),
+                    firstFailureMessage
+                )
             } else {
-                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段。"
+                ocrErrorMessage = String(
+                    format: String(localized: "已尝试 %lld 份关联票据，仍未提取到可回填字段。"),
+                    Int64(candidates.count)
+                )
             }
             showOCRError = true
             AppHaptics.error()
@@ -628,19 +635,19 @@ private enum ProjectFinancialReceiptOCRSupport {
     static func summaryLines(from result: ReceiptOCRResult) -> [String] {
         var lines: [String] = []
         if let amount = result.amount, !amount.isEmpty {
-            lines.append("金额：\(amount)")
+            lines.append(String(format: String(localized: "金额：%@"), amount))
         }
         if let date = result.date, !date.isEmpty {
-            lines.append("日期：\(date)")
+            lines.append(String(format: String(localized: "日期：%@"), date))
         }
         if let counterparty = result.counterparty, !counterparty.isEmpty {
-            lines.append("单位：\(counterparty)")
+            lines.append(String(format: String(localized: "单位：%@"), counterparty))
         }
         if let invoice = result.invoiceNumber, !invoice.isEmpty {
-            lines.append("票号：\(invoice)")
+            lines.append(String(format: String(localized: "票号：%@"), invoice))
         }
         if lines.isEmpty {
-            lines.append("未提取到结构化字段，可手动补录。")
+            lines.append(String(localized: "未提取到结构化字段，可手动补录。"))
         }
         return lines
     }
@@ -723,7 +730,10 @@ struct ProjectFinancialAttachmentSheet: View {
             List {
                 if !selectedDocuments.isEmpty {
                     Section(String(localized: "选中操作")) {
-                        LabeledContent("已选附件", value: "\(selectedDocuments.count) 份")
+                        LabeledContent(
+                            String(localized: "已选附件"),
+                            value: String(format: String(localized: "%lld 份"), Int64(selectedDocuments.count))
+                        )
                         Button {
                             if let firstDoc = selectedDocuments.first { previewURL = ProjectDocumentStorage.fileURL(for: firstDoc.fileName) }
                         } label: {
@@ -750,7 +760,7 @@ struct ProjectFinancialAttachmentSheet: View {
                 Section(String(format: String(localized: "已关联附件 (%d)"), linkedDocuments.count)) {
                     if linkedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无附件",
+                            String(localized: "暂无附件"),
                             systemImage: "paperclip",
                             description: Text(String(localized: "可拍照、扫描或关联已有项目资料。"))
                         )
@@ -768,7 +778,7 @@ struct ProjectFinancialAttachmentSheet: View {
                             ProjectFinancialAttachmentRow(
                                 document: document,
                                 isSelected: selectedLinkedDocumentIds.contains(document.id),
-                                trailingTitle: "移除",
+                                trailingTitle: String(localized: "移除"),
                                 onToggleSelection: { toggleLinked(document.id) },
                                 onAction: { onDetach(document) }
                             )
@@ -797,7 +807,7 @@ struct ProjectFinancialAttachmentSheet: View {
                 Section(String(localized: "缺票自动匹配")) {
                     if autoMatchedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无匹配建议",
+                            String(localized: "暂无匹配建议"),
                             systemImage: "wand.and.stars",
                             description: Text(String(localized: "建议先在资料里补录金额、日期或单位名称，再回来一键关联。"))
                         )
@@ -835,7 +845,7 @@ struct ProjectFinancialAttachmentSheet: View {
                 Section(String(localized: "关联已有资料")) {
                     if unlinkedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无可关联资料",
+                            String(localized: "暂无可关联资料"),
                             systemImage: "doc.badge.plus",
                             description: Text(String(localized: "导入项目资料后可在这里关联到当前流水。"))
                         )
@@ -853,8 +863,8 @@ struct ProjectFinancialAttachmentSheet: View {
                             ProjectFinancialAttachmentRow(
                                 document: document,
                                 isSelected: selectedUnlinkedDocumentIds.contains(document.id),
-                                trailingTitle: "关联",
-                                warning: document.linkedFinancialRecordId != nil && document.linkedFinancialRecordId != record.id ? "已关联其他账目，点击后将重新关联" : nil,
+                                trailingTitle: String(localized: "关联"),
+                                warning: document.linkedFinancialRecordId != nil && document.linkedFinancialRecordId != record.id ? String(localized: "已关联其他账目，点击后将重新关联") : nil,
                                 onToggleSelection: { toggleUnlinked(document.id) },
                                 onAction: { onAttach(document) }
                             )
@@ -862,7 +872,7 @@ struct ProjectFinancialAttachmentSheet: View {
                     }
                 }
             }
-            .navigationTitle("票据附件管理")
+            .navigationTitle(String(localized: "票据附件管理"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -881,7 +891,7 @@ struct ProjectFinancialAttachmentSheet: View {
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePickerView(sourceType: imagePickerSource) { image in
-                onImportImage(image, "来源: 拍照")
+                onImportImage(image, String(localized: "来源: 拍照"))
             }
         }
         .quickLookPreview($previewURL)
@@ -902,7 +912,7 @@ struct ProjectFinancialAttachmentSheet: View {
         }
         await MainActor.run {
             if let image = UIImage(data: data) {
-                onImportImage(image, "来源: 相册")
+                onImportImage(image, String(localized: "来源: 相册"))
             }
             selectedPhotoItem = nil
         }
@@ -960,9 +970,9 @@ private struct ProjectFinancialAttachmentRow: View {
     }
 
     private var metaText: String {
-        let fileType = document.fileType.isEmpty ? "附件" : document.fileType.uppercased()
-        let pageText = document.fileType.lowercased() == "pdf" ? " · \(document.pageCount) 页" : ""
-        return "\(document.category.displayName) · \(fileType)\(pageText) · \(document.createdAt)"
+        let fileType = document.fileType.isEmpty ? String(localized: "附件") : document.fileType.uppercased()
+        let pageText = document.fileType.lowercased() == "pdf" ? String(format: String(localized: " · %lld 页"), Int64(document.pageCount)) : ""
+        return String(format: String(localized: "%@ · %@%@ · %@"), document.category.displayName, fileType, pageText, document.createdAt)
     }
 }
 

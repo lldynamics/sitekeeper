@@ -18,6 +18,10 @@ targets:
         script: |
           "${SRCROOT}/scripts/release/check_no_legacy_cad_bridge.sh"
         basedOnDependencyAnalysis: false
+      - name: CAD PoC Cleanup Guard
+        script: |
+          "${SRCROOT}/scripts/release/check_cad_poc_clean.sh"
+        basedOnDependencyAnalysis: false
     dependencies:
       - target: sitekeeperWidgetExtension
         embed: true
@@ -76,10 +80,6 @@ targets:
     platform: iOS
     sources:
       - path: Tests
-        excludes:
-          - CADKernelTests.swift
-          - CADViewerEngineDeintegrationTests.swift
-          - SiteKeeperCADKernelTests.swift
     dependencies:
       - target: sitekeeper-iOS
     settings:

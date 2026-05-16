@@ -41,7 +41,7 @@ enum ProjectWarehouseVideoTransferError: LocalizedError {
     var userMessage: String {
         switch self {
         case .tooLarge(let size):
-            return ImportLimitPolicy.genericTooLargeMessage(itemName: "视频", size: size, limit: ProjectWarehouseVideoTransfer.maxVideoBytes)
+            return ImportLimitPolicy.genericTooLargeMessage(itemName: String(localized: "视频"), size: size, limit: ProjectWarehouseVideoTransfer.maxVideoBytes)
         }
     }
 }
@@ -52,7 +52,7 @@ enum ProjectWarehouseAttachmentImportError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .tooLarge(_, let size, let limit):
-            return ImportLimitPolicy.genericTooLargeMessage(itemName: "文件", size: size, limit: limit)
+            return ImportLimitPolicy.genericTooLargeMessage(itemName: String(localized: "文件"), size: size, limit: limit)
         }
     }
 }
@@ -70,7 +70,7 @@ struct ProjectWarehouseAttachmentDraft: Identifiable {
         case data(Data)
     }
 
-    init(fileURL: URL, title: String? = nil, note: String = "来源: 文件导入", cleanupAfterImport: Bool = false) {
+    init(fileURL: URL, title: String? = nil, note: String = String(localized: "来源: 文件导入"), cleanupAfterImport: Bool = false) {
         let ext = fileURL.pathExtension.lowercased()
         let preferredTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         self.title = preferredTitle.isEmpty ? fileURL.lastPathComponent : preferredTitle
@@ -82,7 +82,7 @@ struct ProjectWarehouseAttachmentDraft: Identifiable {
     init(image: UIImage, title: String) {
         self.title = title
         self.fileExtension = "jpg"
-        self.note = "来源: 拍照"
+        self.note = String(localized: "来源: 拍照")
         self.payload = .image(image)
     }
 
@@ -90,7 +90,7 @@ struct ProjectWarehouseAttachmentDraft: Identifiable {
         let ext = fileExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         self.title = title
         self.fileExtension = ext.isEmpty ? "dat" : ext
-        self.note = "来源: 相册媒体"
+        self.note = String(localized: "来源: 相册媒体")
         self.payload = .data(data)
     }
 
@@ -129,19 +129,19 @@ struct ProjectWarehouseMovementDetailView: View {
 
     var body: some View {
         List {
-            Section("出入库") {
-                LabeledContent("类型", value: movementType.rawValue)
-                LabeledContent("日期", value: movement.date)
-                LabeledContent("材料", value: movement.materialName)
+            Section(String(localized: "出入库")) {
+                LabeledContent(String(localized: "类型"), value: movementType.displayName)
+                LabeledContent(String(localized: "日期"), value: movement.date)
+                LabeledContent(String(localized: "材料"), value: movement.materialName)
                 if !movement.specification.isEmpty {
-                    LabeledContent("规格", value: movement.specification)
+                    LabeledContent(String(localized: "规格"), value: movement.specification)
                 }
-                LabeledContent("数量", value: "\(movement.quantity) \(movement.unit)")
+                LabeledContent(String(localized: "数量"), value: "\(movement.quantity) \(movement.unit)")
                 if !movement.counterparty.isEmpty {
-                    LabeledContent(movementType == .inbound ? "供应商/来源" : "领用班组/去向", value: movement.counterparty)
+                    LabeledContent(movementType == .inbound ? String(localized: "供应商/来源") : String(localized: "领用班组/去向"), value: movement.counterparty)
                 }
                 if !movement.handler.isEmpty {
-                    LabeledContent("经手人", value: movement.handler)
+                    LabeledContent(String(localized: "经手人"), value: movement.handler)
                 }
                 if !movement.note.isEmpty {
                     Text(movement.note)
@@ -149,9 +149,9 @@ struct ProjectWarehouseMovementDetailView: View {
                 }
             }
 
-            Section("附件") {
+            Section(String(localized: "附件")) {
                 if documents.isEmpty {
-                    Text("暂无附件")
+                    Text(String(localized: "暂无附件"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(documents) { document in
@@ -162,7 +162,7 @@ struct ProjectWarehouseMovementDetailView: View {
                 }
             }
         }
-        .navigationTitle("出入库详情")
+        .navigationTitle(String(localized: "出入库详情"))
         .navigationBarTitleDisplayMode(.inline)
         .quickLookPreview($previewURL)
     }
@@ -224,7 +224,7 @@ enum ProjectWarehouseAttachmentImporter {
         do {
             try FileManager.default.removeItem(at: url)
         } catch {
-            StorageIssueLog.record("仓库临时媒体清理失败：\(url.lastPathComponent)")
+            StorageIssueLog.record(String(format: String(localized: "仓库临时媒体清理失败：%@"), url.lastPathComponent))
         }
     }
 
@@ -299,7 +299,7 @@ enum ProjectWarehouseAttachmentImporter {
            !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(attachment.title)（\(description)）"
         }
-        return "\(attachment.title)（导入失败）"
+        return String(format: String(localized: "%@（导入失败）"), attachment.title)
     }
 
     private static func makeDocument(
@@ -311,9 +311,9 @@ enum ProjectWarehouseAttachmentImporter {
         note: String
     ) -> ProjectDocument {
         let movementTitle = [movement.normalizedMovementType.displayName, movement.materialName].filter { !$0.isEmpty }.joined(separator: "-")
-        let documentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "\(movementTitle)-附件" : title
+        let documentTitle = title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(format: String(localized: "%@-附件"), movementTitle) : title
         let detailNote = [
-            "仓库\(movement.normalizedMovementType.displayName)",
+            String(format: String(localized: "仓库%@"), movement.normalizedMovementType.displayName),
             movement.date,
             movement.materialName,
             movement.specification,

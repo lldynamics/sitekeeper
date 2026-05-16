@@ -636,6 +636,13 @@ struct DataHealthView: View {
                 } label: {
                     Label(l("导出健康报告"), systemImage: "square.and.arrow.up")
                 }
+                if !operationAuditEntries.isEmpty {
+                    Button {
+                        exportOperationAuditLog()
+                    } label: {
+                        Label(l("导出操作审计日志 CSV"), systemImage: "doc.text")
+                    }
+                }
                 if !storageIssues.isEmpty {
                     Button(role: .destructive) {
                         StorageIssueLog.clear()
@@ -1076,6 +1083,39 @@ struct DataHealthView: View {
             data: Data(lines.joined(separator: "\n").utf8),
             contentType: .plainText,
             defaultFilename: l("数据健康报告.txt")
+        )
+        showExporter = true
+    }
+
+    private func exportOperationAuditLog() {
+        let headers = [
+            l("时间"),
+            l("操作"),
+            l("结果"),
+            l("摘要"),
+            l("详情"),
+            l("来源"),
+            "ID"
+        ]
+        let rows = operationAuditEntries.map { entry in
+            ReportBuilder.csv([
+                Formatters.dateTime.string(from: Date(timeIntervalSince1970: entry.timestamp)),
+                operationAuditActionLabel(entry.action),
+                operationAuditOutcomeLabel(entry.outcome),
+                entry.summary,
+                entry.detail,
+                entry.source,
+                entry.id.uuidString
+            ])
+        }
+        let lines = [
+            ReportBuilder.csv(headers)
+        ] + rows
+
+        exportPayload = ExportPayload(
+            data: Data(lines.joined(separator: "\n").utf8),
+            contentType: .commaSeparatedText,
+            defaultFilename: l("操作审计日志.csv")
         )
         showExporter = true
     }

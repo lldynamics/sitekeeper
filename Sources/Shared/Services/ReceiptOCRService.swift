@@ -27,11 +27,11 @@ enum ReceiptOCRServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFile:
-            return "仅支持图片或 PDF 票据识别。"
+            return String(localized: "仅支持图片或 PDF 票据识别。")
         case .recognizeFailed:
-            return "未能识别票据文字，请换一张更清晰的图片。"
+            return String(localized: "未能识别票据文字，请换一张更清晰的图片。")
         case .noStructuredResult:
-            return "已识别到文字，但未提取到金额/日期/单位等关键字段。"
+            return String(localized: "已识别到文字，但未提取到金额/日期/单位等关键字段。")
         }
     }
 }

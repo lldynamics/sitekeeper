@@ -105,31 +105,31 @@ struct LightingCircuitPlannerView: View {
                     persistInputs()
                 }
                 LabeledContent("电压 (V)") {
-                    TextField("220 / 380", text: $voltage)
+                    TextField("220 / 380", text: $voltage.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
                 LabeledContent("功率因数 (0-1)") {
-                    TextField("0.90", text: $powerFactor)
+                    TextField("0.90", text: $powerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
                 LabeledContent("需用系数 (0-1)") {
-                    TextField("0.90", text: $demandFactor)
+                    TextField("0.90", text: $demandFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
                 LabeledContent("断路器裕量 (倍)") {
-                    TextField("1.25", text: $breakerFactor)
+                    TextField("1.25", text: $breakerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
                 LabeledContent("线径裕量 (倍)") {
-                    TextField("1.15", text: $wireFactor)
+                    TextField("1.15", text: $wireFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -139,13 +139,13 @@ struct LightingCircuitPlannerView: View {
 
             Section("预警阈值") {
                 LabeledContent("总开关容量 (A)") {
-                    TextField("100", text: $mainBreakerLimitA)
+                    TextField("100", text: $mainBreakerLimitA.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
                 LabeledContent("三相不平衡阈值 (%)") {
-                    TextField("15", text: $imbalanceLimitPercent)
+                    TextField("15", text: $imbalanceLimitPercent.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
@@ -158,7 +158,7 @@ struct LightingCircuitPlannerView: View {
                         TextField("回路名称", text: $row.name)
                             .focused($isInputFocused)
                         LabeledContent("装机功率 (kW)") {
-                            TextField("0", text: $row.powerKW)
+                            TextField("0", text: $row.powerKW.numericInput(.quantity))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .focused($isInputFocused)
@@ -246,14 +246,14 @@ struct LightingCircuitPlannerView: View {
     }
 
     private func evaluate() {
-        let v = DataValueParser.double(from: voltage)
-        let pf = DataValueParser.double(from: powerFactor)
-        let demand = DataValueParser.double(from: demandFactor)
-        let bFactor = DataValueParser.double(from: breakerFactor)
-        let wFactor = DataValueParser.double(from: wireFactor)
-        let mainBreakerLimit = DataValueParser.double(from: mainBreakerLimitA)
-        let imbalanceLimit = DataValueParser.double(from: imbalanceLimitPercent)
-        guard v > 0,
+        guard let v = CalculatorInputParser.double(voltage),
+              let pf = CalculatorInputParser.double(powerFactor),
+              let demand = CalculatorInputParser.double(demandFactor),
+              let bFactor = CalculatorInputParser.double(breakerFactor),
+              let wFactor = CalculatorInputParser.double(wireFactor),
+              let mainBreakerLimit = CalculatorInputParser.double(mainBreakerLimitA),
+              let imbalanceLimit = CalculatorInputParser.double(imbalanceLimitPercent),
+              v > 0,
               pf > 0, pf <= 1,
               demand > 0,
               bFactor > 0,
@@ -266,8 +266,8 @@ struct LightingCircuitPlannerView: View {
 
         var rowValidationError: String?
         let validRows = rows.compactMap { row -> CircuitEvalRow? in
-            let power = DataValueParser.double(from: row.powerKW)
-            guard power > 0 else { return nil }
+            guard let power = CalculatorInputParser.double(row.powerKW),
+                  power > 0 else { return nil }
             let demandPower = power * demand
             let current: Double
             switch EngineeringCalculations.circuitCurrentValidated(
