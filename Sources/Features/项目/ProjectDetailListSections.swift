@@ -463,7 +463,7 @@ struct ProjectDrawingSectionView: View {
                 ProjectInlineEmptyState(
                     "还没有图纸",
                     systemImage: "doc.viewfinder",
-                    detail: "支持 DWG、DXF 看图，PDF 作为图纸附件打开。"
+                    detail: "可上传 DWG、DXF、PDF；当前版本可下载原图查看。"
                 )
                 Button(action: onImportDrawing) {
                     Label("导图纸", systemImage: "doc.viewfinder.fill")
@@ -616,19 +616,15 @@ struct ProjectDrawingSectionView: View {
     private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
-            return ("DXF 直览", true)
+            let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
+            return (ready ? "CAD 在线查看可用" : "在线查看未接入", ready)
         }
         if fileType == "pdf" {
             return ("PDF 附件", true)
         }
         if fileType == "dwg" {
-            if !CADDrawingCapability.isLibreDWGRendererAvailable() {
-                return ("DWG Lite 未接入", false)
-            }
-            if !CADRendererProvider.isLibreDWGRendererBound {
-                return ("DWG Lite 未绑定", false)
-            }
-            return ("DWG Lite 本地直览", true)
+            let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
+            return (ready ? "DWG 诊断查看" : "在线查看未接入", false)
         }
         return ("文件独立打开", true)
     }

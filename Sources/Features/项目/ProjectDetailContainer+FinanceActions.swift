@@ -1,5 +1,11 @@
 import SwiftUI
 
+private struct ProjectDeletionUndoSnapshot {
+    let projectDocuments: [ProjectDocument]
+    let projectFinancialRecords: [ProjectFinancialRecord]
+    let projectWarehouseMovements: [ProjectWarehouseMovement]
+}
+
 extension ProjectDetailContainer {
     func saveMaterial(_ updated: MaterialItem) {
         if let index = financeStore.materialItems.firstIndex(where: { $0.id == updated.id }) {
@@ -74,10 +80,63 @@ extension ProjectDetailContainer {
         let ids = financeState.pendingDeleteFinancialRecordIDs
         financeState.pendingDeleteFinancialRecordIDs.removeAll()
         guard !ids.isEmpty else { return }
-        ProjectDetailFinanceDocumentActions.deleteFinancialRecords(
-            ids: ids,
-            deleteLinkedDocuments: deleteLinkedDocuments,
-            store: store
+
+        flushPendingProjectDeletionIfNeeded()
+
+        let documentSnapshot = store.projectDocuments
+        let financialSnapshot = store.projectFinancialRecords
+        let warehouseSnapshot = store.projectWarehouseMovements
+        var updatedDocuments = documentSnapshot
+        var updatedFinancialRecords = financialSnapshot
+        var updatedWarehouseMovements = warehouseSnapshot
+        var removableFileNames: [String] = []
+
+        let recordsToDelete = financialSnapshot.filter { ids.contains($0.id) }
+        let linkedDocumentIds = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
+        let linkedByRecordFieldIds: Set<UUID> = Set(
+            documentSnapshot.compactMap { document in
+                guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
+                return document.id
+            }
+        )
+        let targetDocumentIds = linkedDocumentIds.union(linkedByRecordFieldIds)
+
+        if deleteLinkedDocuments {
+            if !targetDocumentIds.isEmpty {
+                removableFileNames = updatedDocuments
+                    .filter { targetDocumentIds.contains($0.id) }
+                    .map(\.fileName)
+                updatedDocuments.removeAll { targetDocumentIds.contains($0.id) }
+                for index in updatedFinancialRecords.indices {
+                    updatedFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                }
+                for index in updatedWarehouseMovements.indices {
+                    updatedWarehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                }
+            }
+        } else if !targetDocumentIds.isEmpty {
+            for index in updatedDocuments.indices where targetDocumentIds.contains(updatedDocuments[index].id) {
+                updatedDocuments[index].linkedFinancialRecordId = nil
+            }
+        }
+        updatedFinancialRecords.removeAll { ids.contains($0.id) }
+
+        store.projectDocuments = updatedDocuments
+        store.projectFinancialRecords = updatedFinancialRecords
+        store.projectWarehouseMovements = updatedWarehouseMovements
+
+        let undoSnapshot = ProjectDeletionUndoSnapshot(
+            projectDocuments: documentSnapshot,
+            projectFinancialRecords: financialSnapshot,
+            projectWarehouseMovements: warehouseSnapshot
+        )
+        let message = deleteLinkedDocuments
+            ? String(format: String(localized: "已删除 %lld 条账目（含票据）"), Int64(ids.count))
+            : String(format: String(localized: "已删除 %lld 条账目"), Int64(ids.count))
+        queueUndoableProjectDeletion(
+            message: message,
+            snapshot: undoSnapshot,
+            removableDocumentFileNames: removableFileNames
         )
     }
 
@@ -102,6 +161,83 @@ extension ProjectDetailContainer {
             store.projectFinancialRecords[targetRecordIndex].linkedDocumentIds.append(documentID)
         }
         store.scheduleSave()
+    }
+
+    func deleteProjectDocumentWithUndo(_ document: ProjectDocument) {
+        flushPendingProjectDeletionIfNeeded()
+
+        let documentSnapshot = store.projectDocuments
+        let financialSnapshot = store.projectFinancialRecords
+        let warehouseSnapshot = store.projectWarehouseMovements
+        let documentID = document.id
+
+        var updatedDocuments = documentSnapshot
+        var updatedFinancialRecords = financialSnapshot
+        var updatedWarehouseMovements = warehouseSnapshot
+
+        updatedDocuments.removeAll { $0.id == documentID }
+        for index in updatedFinancialRecords.indices {
+            updatedFinancialRecords[index].linkedDocumentIds.removeAll { $0 == documentID }
+        }
+        for index in updatedWarehouseMovements.indices {
+            updatedWarehouseMovements[index].linkedDocumentIds.removeAll { $0 == documentID }
+        }
+
+        store.projectDocuments = updatedDocuments
+        store.projectFinancialRecords = updatedFinancialRecords
+        store.projectWarehouseMovements = updatedWarehouseMovements
+
+        queueUndoableProjectDeletion(
+            message: String(localized: "已删除票据资料"),
+            snapshot: ProjectDeletionUndoSnapshot(
+                projectDocuments: documentSnapshot,
+                projectFinancialRecords: financialSnapshot,
+                projectWarehouseMovements: warehouseSnapshot
+            ),
+            removableDocumentFileNames: [document.fileName]
+        )
+    }
+
+    func flushPendingProjectDeletionIfNeeded() {
+        pendingDeleteCommitTask?.cancel()
+        pendingDeleteCommitTask = nil
+        pendingDeleteCommit?()
+        pendingDeleteCommit = nil
+    }
+
+    private func queueUndoableProjectDeletion(
+        message: String,
+        snapshot: ProjectDeletionUndoSnapshot,
+        removableDocumentFileNames: [String]
+    ) {
+        pendingDeleteCommit = {
+            for fileName in removableDocumentFileNames {
+                ProjectDocumentStorage.delete(fileName: fileName)
+            }
+            store.scheduleSave()
+        }
+        pendingDeleteCommitTask = Task { @MainActor in
+            guard await DebouncedTask.wait(for: .seconds(4)) else { return }
+            pendingDeleteCommit?()
+            pendingDeleteCommit = nil
+            pendingDeleteCommitTask = nil
+        }
+
+        operationNotice = OperationToastNotice(
+            message: message,
+            actionTitle: String(localized: "撤销"),
+            action: {
+                pendingDeleteCommitTask?.cancel()
+                pendingDeleteCommitTask = nil
+                pendingDeleteCommit = nil
+                store.projectDocuments = snapshot.projectDocuments
+                store.projectFinancialRecords = snapshot.projectFinancialRecords
+                store.projectWarehouseMovements = snapshot.projectWarehouseMovements
+                store.scheduleSave()
+                operationNotice = .info(String(localized: "已撤销删除"))
+            },
+            autoDismissDuration: .seconds(4)
+        )
     }
 
     @ViewBuilder

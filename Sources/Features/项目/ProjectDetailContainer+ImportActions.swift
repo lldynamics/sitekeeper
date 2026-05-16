@@ -158,6 +158,8 @@ extension ProjectDetailContainer {
                 fileURL: url,
                 displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
                 fileType: drawing.fileType,
+                importedAt: drawing.importedAt,
+                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
                 textEncoding: drawing.textEncoding,
                 textBigFont: drawing.textBigFont,
                 textSchemeSnapshot: drawing.textSchemeSnapshot,

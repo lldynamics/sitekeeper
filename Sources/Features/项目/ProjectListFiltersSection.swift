@@ -49,7 +49,13 @@ struct ProjectListFiltersSection: View {
             if overviewFilter != nil {
                 HStack(spacing: AppSpacing.tight) {
                     if let overviewFilter {
-                        Label(String(localized: "概况筛选：\(overviewFilter.displayName)"), systemImage: "scope")
+                        Label(
+                            String(
+                                format: String(localized: "概况筛选：%@"),
+                                overviewFilter.displayName
+                            ),
+                            systemImage: "scope"
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

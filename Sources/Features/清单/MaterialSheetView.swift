@@ -172,8 +172,8 @@ struct MaterialSheetView: View {
                         Spacer()
                         VStack(spacing: 8) {
                             Image(systemName: "doc.text").font(.system(size: 36)).foregroundStyle(.secondary)
-                            Text("材料单为空").foregroundStyle(.secondary)
-                            Text("在上方搜索材料库添加").font(.caption).foregroundStyle(.tertiary)
+                            Text(String(localized: "材料单为空")).foregroundStyle(.secondary)
+                            Text(String(localized: "在上方搜索材料库添加")).font(.caption).foregroundStyle(.tertiary)
                         }.padding(.vertical, 20)
                         Spacer()
                     }
@@ -186,18 +186,22 @@ struct MaterialSheetView: View {
                 }
             } header: {
                 HStack {
-                    Text("当前材料单")
+                    Text(String(localized: "当前材料单"))
                     Spacer()
-                    if !sheetItems.isEmpty { Text("\(sheetItems.count) 项").font(.caption).foregroundStyle(.secondary) }
+                    if !sheetItems.isEmpty {
+                        Text(String(format: String(localized: "%d 项"), sheetItems.count))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             // Export header info
             if !sheetItems.isEmpty {
-                Section("导出表头信息") {
-                    TextField("项目名称", text: $exportProjectName)
-                    TextField("编制人", text: $exportPreparer)
-                    Text("导出日期: \(Formatters.date.string(from: Date()))")
+                Section(String(localized: "导出表头信息")) {
+                    TextField(String(localized: "项目名称"), text: $exportProjectName)
+                    TextField(String(localized: "编制人"), text: $exportPreparer)
+                    Text(String(format: String(localized: "导出日期: %@"), Formatters.date.string(from: Date())))
                         .font(.caption).foregroundStyle(.secondary)
                 }
             }
@@ -214,11 +218,11 @@ struct MaterialSheetView: View {
 
             // Export actions
             if !sheetItems.isEmpty {
-                Section("导出与操作") {
-                    Button { exportAsPDF() } label: { Label("导出 PDF", systemImage: "doc.richtext.fill") }.disabled(isExporting)
-                    Button { exportAsCSV() } label: { Label("导出 CSV", systemImage: "tablecells.fill") }.disabled(isExporting)
-                    Button { exportAsImage() } label: { Label("导出图片", systemImage: "photo") }.disabled(isExporting)
-                    Button(role: .destructive) { showClearConfirm = true } label: { Label("清空材料单", systemImage: "trash") }
+                Section(String(localized: "导出与操作")) {
+                    Button { exportAsPDF() } label: { Label(String(localized: "导出 PDF"), systemImage: "doc.richtext.fill") }.disabled(isExporting)
+                    Button { exportAsCSV() } label: { Label(String(localized: "导出 CSV"), systemImage: "tablecells.fill") }.disabled(isExporting)
+                    Button { exportAsImage() } label: { Label(String(localized: "导出图片"), systemImage: "photo") }.disabled(isExporting)
+                    Button(role: .destructive) { showClearConfirm = true } label: { Label(String(localized: "清空材料单"), systemImage: "trash") }
                 }
             }
         }
@@ -228,17 +232,17 @@ struct MaterialSheetView: View {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
                         Button(action: exportAsPDF) {
-                            Label("导出 PDF", systemImage: "doc.richtext.fill")
+                            Label(String(localized: "导出 PDF"), systemImage: "doc.richtext.fill")
                         }
                         Button(action: exportAsCSV) {
-                            Label("导出 CSV", systemImage: "tablecells.fill")
+                            Label(String(localized: "导出 CSV"), systemImage: "tablecells.fill")
                         }
                         Button(action: exportAsImage) {
-                            Label("导出图片", systemImage: "photo")
+                            Label(String(localized: "导出图片"), systemImage: "photo")
                         }
                         Divider()
                         Button(action: saveSheetToMaterialListAndClear) {
-                            Label("保存到材料清单", systemImage: "shippingbox.fill")
+                            Label(String(localized: "保存到材料清单"), systemImage: "shippingbox.fill")
                         }
                     } label: {
                         if isExporting { ProgressView().controlSize(.small) }
@@ -252,12 +256,12 @@ struct MaterialSheetView: View {
         }
         .confirmationDialog("导出方式", isPresented: $showExportChoice) {
             if let url = exportFileURL {
-                Button { showExporter = true } label: { Label("保存到文件", systemImage: "folder") }
-                ShareLink(item: url) { Label("分享", systemImage: "square.and.arrow.up") }
+                Button { showExporter = true } label: { Label(String(localized: "保存到文件"), systemImage: "folder") }
+                ShareLink(item: url) { Label(String(localized: "分享"), systemImage: "square.and.arrow.up") }
             }
-            Button("关闭", role: .cancel) { cleanupExportFileIfNeeded() }
+            Button(String(localized: "关闭"), role: .cancel) { cleanupExportFileIfNeeded() }
         } message: {
-            Text("选择保存位置或分享给其他人")
+            Text(String(localized: "选择保存位置或分享给其他人"))
         }
         .sheet(isPresented: $showExporter) {
             if let exportFileURL {
@@ -273,18 +277,20 @@ struct MaterialSheetView: View {
         .sheet(isPresented: $showCreateDraftSheet) { createDraftSheet }
         .sheet(isPresented: $showRenameDraftSheet) { renameDraftSheet }
         .alert("清空材料单？", isPresented: $showClearConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("清空", role: .destructive) { sheetItems.removeAll() }
-        } message: { Text("当前材料单中的 \(sheetItems.count) 项材料将被移除。") }
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "清空"), role: .destructive) { sheetItems.removeAll() }
+        } message: {
+            Text(String(format: String(localized: "当前材料单中的 %d 项材料将被移除。"), sheetItems.count))
+        }
         .confirmationDialog("删除材料项", isPresented: $showDeleteItemConfirm, titleVisibility: .visible) {
-            Button("删除", role: .destructive) {
+            Button(String(localized: "删除"), role: .destructive) {
                 confirmDeleteSheetItems()
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingDeleteSheetItemIDs.removeAll()
             }
         } message: {
-            Text("确认删除 \(pendingDeleteSheetItemIDs.count) 项材料吗？")
+            Text(String(format: String(localized: "确认删除 %d 项材料吗？"), pendingDeleteSheetItemIDs.count))
         }
         .onAppear {
             ensureDraftSelection()
@@ -307,34 +313,34 @@ struct MaterialSheetView: View {
     }
 
     private var exportColumnToggleSection: some View {
-        Section("导出列设置") {
-            Toggle("估价", isOn: $exportOptions.showPrice)
-            Toggle("人工费", isOn: $exportOptions.showLabor)
-            Toggle("使用部位", isOn: $exportOptions.showLocation)
-            Toggle("供应商", isOn: $exportOptions.showSupplier)
-            Toggle("备注", isOn: $exportOptions.showNote)
+        Section(String(localized: "导出列设置")) {
+            Toggle(String(localized: "估价"), isOn: $exportOptions.showPrice)
+            Toggle(String(localized: "人工费"), isOn: $exportOptions.showLabor)
+            Toggle(String(localized: "使用部位"), isOn: $exportOptions.showLocation)
+            Toggle(String(localized: "供应商"), isOn: $exportOptions.showSupplier)
+            Toggle(String(localized: "备注"), isOn: $exportOptions.showNote)
         }
     }
 
     private var summarySection: some View {
-        Section("合计") {
+        Section(String(localized: "合计")) {
             if totalEstimateValue.isPositive {
                 HStack {
-                    Text("材料估价").font(.callout)
+                    Text(String(localized: "材料估价")).font(.callout)
                     Spacer()
                     Text(totalEstimateText).font(.body.weight(.semibold)).foregroundStyle(Color.appPrimaryAction)
                 }
             }
             if totalLaborValue.isPositive {
                 HStack {
-                    Text("人工费").font(.callout)
+                    Text(String(localized: "人工费")).font(.callout)
                     Spacer()
                     Text(totalLaborText).font(.body.weight(.semibold)).foregroundStyle(Color.appSuccess)
                 }
             }
             if totalEstimateValue.isPositive, totalLaborValue.isPositive {
                 HStack {
-                    Text("总计").font(.body.weight(.bold))
+                    Text(String(localized: "总计")).font(.body.weight(.bold))
                     Spacer()
                     Text(grandTotalText).font(.title3.weight(.bold)).foregroundStyle(Color.appPrimaryAction)
                 }
@@ -343,25 +349,25 @@ struct MaterialSheetView: View {
     }
 
     private var draftSelectorSection: some View {
-        Section("材料单草稿") {
+        Section(String(localized: "材料单草稿")) {
             if activeMaterialSheetDrafts.isEmpty {
                 ContentUnavailableView(
                     "暂无材料单",
                     systemImage: "doc.badge.plus",
-                    description: Text("可从材料库点击 + 直接创建，或先在这里新建一个。")
+                    description: Text(String(localized: "可从材料库点击 + 直接创建，或先在这里新建一个。"))
                 )
                 Button {
                     prepareCreateDraftSheet()
                 } label: {
-                    Label("新建材料单", systemImage: "plus.circle.fill")
+                    Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                 }
                 Button {
                     focusMaterialSearch()
                 } label: {
-                    Label("添加材料", systemImage: "magnifyingglass")
+                    Label(String(localized: "添加材料"), systemImage: "magnifyingglass")
                 }
             } else {
-                Picker("当前材料单", selection: $selectedDraftID) {
+                Picker(String(localized: "当前材料单"), selection: $selectedDraftID) {
                     ForEach(activeMaterialSheetDrafts) { draft in
                         Text(draftDisplayName(draft)).tag(draft.id as UUID?)
                     }
@@ -372,7 +378,7 @@ struct MaterialSheetView: View {
                     let updatedAt = selectedDraft.updatedAt
                     let count = selectedDraft.items.count
                     let projectName = selectedDraft.projectId.flatMap(projectName(for:)) ?? "无归属项目"
-                    Text("\(projectName) · \(count) 项 · 更新于 \(updatedAt)")
+                    Text(String(format: String(localized: "%@ · %d 项 · 更新于 %@"), projectName, count, updatedAt))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -380,38 +386,38 @@ struct MaterialSheetView: View {
                         Button {
                             prepareRenameDraftSheet()
                         } label: {
-                            Label("重命名当前材料单", systemImage: "pencil")
+                            Label(String(localized: "重命名当前材料单"), systemImage: "pencil")
                         }
                         Button(role: .destructive) {
                             archiveSelectedDraft()
                         } label: {
-                            Label("归档当前材料单", systemImage: "archivebox")
+                            Label(String(localized: "归档当前材料单"), systemImage: "archivebox")
                         }
                     } label: {
-                        Label("管理当前材料单", systemImage: "ellipsis.circle")
+                        Label(String(localized: "管理当前材料单"), systemImage: "ellipsis.circle")
                     }
                 }
 
                 Button {
                     prepareCreateDraftSheet()
                 } label: {
-                    Label("新建材料单", systemImage: "plus")
+                    Label(String(localized: "新建材料单"), systemImage: "plus")
                 }
                 Button {
                     focusMaterialSearch()
                 } label: {
-                    Label("添加材料", systemImage: "magnifyingglass")
+                    Label(String(localized: "添加材料"), systemImage: "magnifyingglass")
                 }
             }
         }
     }
 
     private var materialSearchSection: some View {
-        Section("添加材料") {
+        Section(String(localized: "添加材料")) {
             HStack {
                 Image(systemName: "magnifyingglass")
                     .foregroundStyle(.secondary)
-                TextField("搜索材料库", text: $searchText)
+                TextField(String(localized: "搜索材料库"), text: $searchText)
                     .submitLabel(.search)
                     .focused($isMaterialSearchFocused)
             }
@@ -420,7 +426,7 @@ struct MaterialSheetView: View {
                     ContentUnavailableView(
                         "材料库没有匹配项",
                         systemImage: "shippingbox",
-                        description: Text("请先到材料库新增自定义材料，再加入材料单。")
+                        description: Text(String(localized: "请先到材料库新增自定义材料，再加入材料单。"))
                     )
                 }
                 ForEach(priceSuggestions) { librarySearchRow(entry: $0) }
@@ -432,10 +438,10 @@ struct MaterialSheetView: View {
     private var createDraftSheet: some View {
         NavigationStack {
             Form {
-                Section("基本信息") {
-                    TextField("材料单名称", text: $draftTitleInput)
-                    Picker("归属项目", selection: $draftProjectIdInput) {
-                        Text("无归属").tag(nil as UUID?)
+                Section(String(localized: "基本信息")) {
+                    TextField(String(localized: "材料单名称"), text: $draftTitleInput)
+                    Picker(String(localized: "归属项目"), selection: $draftProjectIdInput) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
@@ -446,12 +452,12 @@ struct MaterialSheetView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         showCreateDraftSheet = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("创建") {
+                    Button(String(localized: "创建")) {
                         createDraftAndSelect(title: draftTitleInput, projectId: draftProjectIdInput)
                         showCreateDraftSheet = false
                     }
@@ -463,20 +469,20 @@ struct MaterialSheetView: View {
     private var renameDraftSheet: some View {
         NavigationStack {
             Form {
-                Section("材料单名称") {
-                    TextField("材料单名称", text: $renameDraftTitleInput)
+                Section(String(localized: "材料单名称")) {
+                    TextField(String(localized: "材料单名称"), text: $renameDraftTitleInput)
                 }
             }
             .navigationTitle("重命名材料单")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         showRenameDraftSheet = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         renameSelectedDraft(to: renameDraftTitleInput)
                         showRenameDraftSheet = false
                     }
@@ -677,25 +683,25 @@ struct MaterialSheetView: View {
                 VStack(spacing: 8) {
                     // Price + Labor row
                     HStack(spacing: 10) {
-                        TextField("估价 ¥", text: item.unitPrice).keyboardType(.decimalPad)
+                        TextField(String(localized: "估价 ¥"), text: item.unitPrice).keyboardType(.decimalPad)
                             .frame(width: 100).textFieldStyle(.roundedBorder).font(.callout)
                         autoFillButton(for: item)
-                        TextField("人工费 ¥", text: item.laborCost).keyboardType(.decimalPad)
+                        TextField(String(localized: "人工费 ¥"), text: item.laborCost).keyboardType(.decimalPad)
                             .frame(width: 100).textFieldStyle(.roundedBorder).font(.callout)
                         Spacer()
                     }
 
                     // Supplier + Location
                     HStack(spacing: 10) {
-                        TextField("供应商", text: item.supplier)
+                        TextField(String(localized: "供应商"), text: item.supplier)
                             .textFieldStyle(.roundedBorder).font(.callout)
-                        TextField("使用部位", text: item.usageLocation)
+                        TextField(String(localized: "使用部位"), text: item.usageLocation)
                             .textFieldStyle(.roundedBorder).font(.callout)
                     }
 
                     // Note
                     HStack(spacing: 10) {
-                        TextField("备注", text: item.note)
+                        TextField(String(localized: "备注"), text: item.note)
                             .textFieldStyle(.roundedBorder).font(.callout)
                     }
 
@@ -707,7 +713,7 @@ struct MaterialSheetView: View {
                                 .font(.caption)
                         }
                         .buttonStyle(.bordered).controlSize(.small)
-                        .accessibilityLabel("\(item.wrappedValue.name)添加或更换照片")
+                        .accessibilityLabel(String(format: String(localized: "%@添加或更换照片"), item.wrappedValue.name))
 
                         if item.wrappedValue.hasAttachment {
                             Text(item.wrappedValue.attachmentFileName ?? "附件")
@@ -719,7 +725,7 @@ struct MaterialSheetView: View {
                                 Image(systemName: "xmark.circle.fill").font(.caption).foregroundStyle(.secondary)
                             }
                             .buttonStyle(.borderless)
-                            .accessibilityLabel("移除\(item.wrappedValue.name)照片")
+                            .accessibilityLabel(String(format: String(localized: "移除%@照片"), item.wrappedValue.name))
                         }
                         Spacer()
                     }
@@ -730,10 +736,10 @@ struct MaterialSheetView: View {
                         Button(role: .destructive) {
                             requestDeleteSheetItems(ids: [item.wrappedValue.id])
                         } label: {
-                            Label("删除此项", systemImage: "trash").font(.caption)
+                            Label(String(localized: "删除此项"), systemImage: "trash").font(.caption)
                         }
                         .buttonStyle(.borderless)
-                        .accessibilityLabel("删除\(item.wrappedValue.name)")
+                        .accessibilityLabel(String(format: String(localized: "删除%@"), item.wrappedValue.name))
                     }
                 }
             }
@@ -805,7 +811,7 @@ struct MaterialSheetView: View {
                 HStack(spacing: 4) {
                     if !entry.referencePrice.isEmpty { Text("¥\(entry.referencePrice)").font(.caption).foregroundStyle(Color.appPrimaryAction) }
                     Text(entry.unit).font(.caption).foregroundStyle(.secondary)
-                    Text("材料库").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(String(localized: "材料库")).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 2).background(.quaternary, in: Capsule())
                 }
                 Image(systemName: "plus.circle.fill").foregroundStyle(Color.appPrimaryAction).font(.title3)
@@ -826,7 +832,7 @@ struct MaterialSheetView: View {
                 Spacer()
                 HStack(spacing: 4) {
                     Text(material.unit).font(.caption).foregroundStyle(.secondary)
-                    Text("预置材料").font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                    Text(String(localized: "预置材料")).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
                         .padding(.horizontal, 6).padding(.vertical, 2).background(.quaternary, in: Capsule())
                 }
                 Image(systemName: "plus.circle.fill").foregroundStyle(Color.appPrimaryAction).font(.title3)

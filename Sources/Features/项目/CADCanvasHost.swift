@@ -184,7 +184,10 @@ extension CADPreviewContainer {
 
     var isAnnotationWorkflowActive: Bool {
         tool == .annotation ||
-            tool == .note
+            tool == .cloud ||
+            tool == .arrow ||
+            tool == .note ||
+            tool == .issueMarker
     }
 
     @ViewBuilder
@@ -363,9 +366,24 @@ extension CADPreviewContainer {
             Label(String(localized: "手绘批注"), systemImage: "highlighter")
         }
         Button {
+            selectOverlayTool(.cloud)
+        } label: {
+            Label(String(localized: "云线"), systemImage: "cloud")
+        }
+        Button {
+            selectOverlayTool(.arrow)
+        } label: {
+            Label(String(localized: "箭头"), systemImage: "arrow.up.right")
+        }
+        Button {
             selectOverlayTool(.note)
         } label: {
             Label(String(localized: "文字批注"), systemImage: "text.bubble")
+        }
+        Button {
+            selectOverlayTool(.issueMarker)
+        } label: {
+            Label(String(localized: "拍照问题点"), systemImage: "camera.viewfinder")
         }
     }
 
@@ -376,12 +394,14 @@ extension CADPreviewContainer {
         } label: {
             Label(String(localized: "分享原 CAD 文件"), systemImage: "square.and.arrow.up")
         }
-        if shouldUseLibreDWGRenderer {
+        if shouldUseCADKernelRenderer {
             Button {
                 saveCurrentViewState(showConfirmation: true)
             } label: {
                 Label(String(localized: "保存当前视图状态"), systemImage: "bookmark")
             }
+        }
+        if shouldUseCADKernelRenderer {
             Button {
                 showTextEncodingDialog = true
             } label: {

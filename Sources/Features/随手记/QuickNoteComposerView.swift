@@ -10,7 +10,6 @@ struct QuickNoteComposerView: View {
     let onPreview: (QuickNoteAttachment) -> Void
     var onAttachmentAdded: (QuickNoteAttachment) -> Void = { _ in }
     var onAttachmentRemoved: (QuickNoteAttachment) -> Void = { _ in }
-    var onDraftCleared: ([QuickNoteAttachment]) -> Void = { _ in }
     var onDiscardDraftRequest: () -> Void = {}
     @FocusState private var isContentFocused: Bool
 
@@ -25,83 +24,172 @@ struct QuickNoteComposerView: View {
     @ViewBuilder
     var body: some View {
         if mode == .compact {
-            VStack(alignment: .leading, spacing: 10) {
-                Label("快速随手记", systemImage: "square.and.pencil")
-                    .font(.headline)
-                composerContent
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 8).fill(.ultraThinMaterial))
+            compactComposerContent
         } else {
             Section {
-                composerContent
+                fullComposerContent
             }
         }
     }
 
-    private var composerContent: some View {
-        VStack(alignment: .leading, spacing: mode == .compact ? 8 : 12) {
+    private var compactComposerContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !attachments.isEmpty {
+                QuickNoteAttachmentStrip(
+                    attachments: attachments,
+                    onPreview: onPreview,
+                    onRemove: removeAttachment(_:)
+                )
+                .padding(.horizontal, 12)
+            }
+
+            compactActionTools
+
+            HStack(alignment: .bottom, spacing: 8) {
                 TextField(mode.placeholder, text: $content, axis: .vertical)
                     .focused($isContentFocused)
-                    .lineLimit(mode == .compact ? 3...6 : 5...12)
+                    .lineLimit(1...4)
                     .textFieldStyle(.plain)
-                    .padding(10)
-                    .frame(minHeight: mode == .compact ? 78 : 128, alignment: .topLeading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+                    .frame(minHeight: 40, alignment: .center)
+                    .background(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color(.secondarySystemGroupedBackground))
+                    )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10)
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                     )
+                    .accessibilityLabel("随手记消息输入框")
 
-                if !attachments.isEmpty {
-                    QuickNoteAttachmentStrip(
-                        attachments: attachments,
-                        onPreview: onPreview,
-                        onRemove: removeAttachment(_:)
-                    )
+                Button {
+                    onPublish()
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.system(size: 32, weight: .semibold))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(canPublish ? Color.appPrimaryAction : Color(uiColor: .tertiaryLabel))
+                        .frame(width: 36, height: 40)
                 }
+                .buttonStyle(.plain)
+                .disabled(!canPublish)
+                .accessibilityLabel("发送随手记")
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
+        }
+        .padding(.top, 8)
+        .background(.bar)
+        .overlay(alignment: .top) {
+            Divider()
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完成") { isContentFocused = false }
+            }
+        }
+    }
 
-                QuickNoteAttachmentPickerBar(
-                    projectName: projectName(projectId),
-                    mode: mode == .compact ? .compact : .full
-                ) { attachment in
-                    attachments.append(attachment)
-                    onAttachmentAdded(attachment)
+    private var compactActionTools: some View {
+        let selectedProjectName = projectName(projectId)
+
+        return HStack(alignment: .top, spacing: 8) {
+            Menu {
+                Picker("关联工程", selection: $projectId) {
+                    Text("不关联工程").tag(nil as UUID?)
+                    ForEach(projects) { project in
+                        Text(project.name).tag(project.id as UUID?)
+                    }
                 }
+            } label: {
+                Label(selectedProjectName.isEmpty ? "不关联工程" : selectedProjectName, systemImage: projectId == nil ? "building.2" : "building.2.fill")
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .frame(maxWidth: 140, alignment: .leading)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+            .tint(projectId == nil ? .secondary : .appPrimaryAction)
+            .accessibilityLabel(projectId == nil ? "选择关联工程" : "已关联工程 \(selectedProjectName)")
 
-                HStack(spacing: 10) {
-                    Picker("工程", selection: $projectId) {
-                        Text("不关联工程").tag(nil as UUID?)
-                        ForEach(projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
+            QuickNoteAttachmentPickerBar(
+                projectName: selectedProjectName,
+                mode: .compact
+            ) { attachment in
+                attachments.append(attachment)
+                onAttachmentAdded(attachment)
+            }
+            .fixedSize(horizontal: true, vertical: false)
+
+            if canPublish {
+                Button {
+                    onDiscardDraftRequest()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityLabel("清空草稿")
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private var fullComposerContent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            TextField(mode.placeholder, text: $content, axis: .vertical)
+                .focused($isContentFocused)
+                .lineLimit(5...12)
+                .textFieldStyle(.plain)
+                .padding(10)
+                .frame(minHeight: 128, alignment: .topLeading)
+                .background(RoundedRectangle(cornerRadius: 10).fill(Color(.secondarySystemBackground)))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
+                )
+
+            if !attachments.isEmpty {
+                QuickNoteAttachmentStrip(
+                    attachments: attachments,
+                    onPreview: onPreview,
+                    onRemove: removeAttachment(_:)
+                )
+            }
+
+            QuickNoteAttachmentPickerBar(
+                projectName: projectName(projectId),
+                mode: .full
+            ) { attachment in
+                attachments.append(attachment)
+                onAttachmentAdded(attachment)
+            }
+
+            HStack(spacing: 10) {
+                Picker("工程", selection: $projectId) {
+                    Text("不关联工程").tag(nil as UUID?)
+                    ForEach(projects) { project in
+                        Text(project.name).tag(project.id as UUID?)
                     }
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                    if mode == .compact {
-                        if canPublish {
-                            Button("清空") { clearDraft(deleteFiles: true) }
-                                .buttonStyle(.bordered)
-                                .controlSize(.small)
-                        }
-
-                        Button(mode.publishTitle) {
-                            onPublish()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
-                        .disabled(!canPublish)
-                    } else if canPublish {
-                        Button("放弃草稿", role: .destructive) {
-                            onDiscardDraftRequest()
-                        }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                if canPublish {
+                    Button("放弃草稿", role: .destructive) {
+                        onDiscardDraftRequest()
                     }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
-            .padding(.vertical, mode == .compact ? 2 : 4)
+        }
+            .padding(.vertical, 4)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -114,16 +202,6 @@ struct QuickNoteComposerView: View {
         attachments.removeAll { $0.id == attachment.id }
         QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
         onAttachmentRemoved(attachment)
-    }
-
-    private func clearDraft(deleteFiles: Bool) {
-        let removed = attachments
-        if deleteFiles {
-            QuickNoteAttachmentStorage.delete(attachments: attachments)
-        }
-        content = ""
-        attachments = []
-        onDraftCleared(removed)
     }
 
     private func projectName(_ id: UUID?) -> String {
@@ -139,16 +217,9 @@ enum QuickNoteComposerMode {
     var placeholder: String {
         switch self {
         case .full:
-            return "像发动态一样，记录现场情况、客户交代或临时想法"
+            return "记录现场情况、客户交代或临时想法"
         case .compact:
-            return "随手记几句，或直接加媒体/附件"
-        }
-    }
-
-    var publishTitle: String {
-        switch self {
-        case .full: return "发布"
-        case .compact: return "记下"
+            return "发消息记录现场情况"
         }
     }
 }

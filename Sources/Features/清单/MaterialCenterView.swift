@@ -1,9 +1,20 @@
 import SwiftUI
 
 enum MaterialCenterTab: String, CaseIterable, Hashable {
-    case warehouse = "仓库"
-    case sheet = "材料单"
-    case library = "材料库"
+    case warehouse
+    case sheet
+    case library
+
+    var displayName: String {
+        switch self {
+        case .warehouse:
+            return String(localized: "仓库")
+        case .sheet:
+            return String(localized: "材料单")
+        case .library:
+            return String(localized: "材料库")
+        }
+    }
 }
 
 struct MaterialCenterView: View {
@@ -15,9 +26,9 @@ struct MaterialCenterView: View {
 
     var body: some View {
         VStack(spacing: AppSpacing.normal) {
-            Picker("材料中心", selection: $selectedTab) {
+            Picker(String(localized: "材料中心"), selection: $selectedTab) {
                 ForEach(MaterialCenterTab.allCases, id: \.self) { tab in
-                    Text(tab.rawValue).tag(tab)
+                    Text(tab.displayName).tag(tab)
                 }
             }
             .pickerStyle(.segmented)
@@ -36,7 +47,7 @@ struct MaterialCenterView: View {
             }
             .id(selectedTab)
         }
-        .navigationTitle("材料中心")
+        .navigationTitle(String(localized: "材料中心"))
         .navigationBarTitleDisplayMode(.inline)
     }
 }

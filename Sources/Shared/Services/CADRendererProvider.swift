@@ -47,55 +47,106 @@ struct CADTextAutoDetectionResult {
     let summary: String
 }
 
+struct CADOpenQualitySnapshot: Equatable {
+    let level: String
+    let title: String
+    let summary: String
+    let primaryAction: String
+    let detailLines: [String]
+    let allowsMarkup: Bool
+    let supportsSearch: Bool
+
+    var isReady: Bool {
+        level == "ready"
+    }
+}
+
+struct CADRendererPerformanceSnapshot: Equatable {
+    let entityCountInViewport: Int
+    let drawCallCount: Int
+    let frameTimeMilliseconds: Double
+    let skippedEntityCount: Int
+    let visibleLayerCount: Int
+    let simplifiedMode: Bool
+    let renderCommandCount: Int
+    let renderMs: Double
+    let firstFrameMs: Double
+
+    init(
+        entityCountInViewport: Int,
+        drawCallCount: Int,
+        frameTimeMilliseconds: Double,
+        skippedEntityCount: Int,
+        visibleLayerCount: Int,
+        simplifiedMode: Bool,
+        renderCommandCount: Int? = nil,
+        renderMs: Double? = nil,
+        firstFrameMs: Double? = nil
+    ) {
+        self.entityCountInViewport = entityCountInViewport
+        self.drawCallCount = drawCallCount
+        self.frameTimeMilliseconds = frameTimeMilliseconds
+        self.skippedEntityCount = skippedEntityCount
+        self.visibleLayerCount = visibleLayerCount
+        self.simplifiedMode = simplifiedMode
+        self.renderCommandCount = renderCommandCount ?? drawCallCount
+        self.renderMs = renderMs ?? frameTimeMilliseconds
+        self.firstFrameMs = firstFrameMs ?? frameTimeMilliseconds
+    }
+
+    var visibleEntityCount: Int {
+        entityCountInViewport
+    }
+}
+
 struct CADRendererCallbacks {
     var onCanvasTransformChange: (CADRendererCanvasTransform) -> Void = { _ in }
     var onViewStateChange: (CADRendererViewState) -> Void = { _ in }
     var onTextRepairPresetRequest: (Int32?, Int32?) -> Void = { _, _ in }
     var onSnapPointsChange: ([CADRendererSnapPointPayload]) -> Void = { _ in }
     var onTextAutoDetectionChange: (CADTextAutoDetectionResult) -> Void = { _ in }
+    var onOpenQualityChange: (CADOpenQualitySnapshot) -> Void = { _ in }
+    var onPerformanceSample: (CADRendererPerformanceSnapshot) -> Void = { _ in }
+    var onFallbackRecommendation: (String) -> Void = { _ in }
 }
 
 @MainActor
 enum CADRendererProvider {
-    typealias LibreDWGRendererBuilder = (URL, Int32?, Int32?, CADRendererViewState?, [CADRendererFontMapping], CADRendererCallbacks) -> AnyView
-    typealias LibreDWGTextAutoDetector = (URL, [CADRendererFontMapping]) async throws -> CADTextAutoDetectionResult
-    typealias LibreDWGDiagnosticReporter = (URL, Int32?, Int32?) async throws -> String
+    typealias RendererBuilder = (URL, Int32?, Int32?, CADRendererViewState?, [CADRendererFontMapping], CADRendererCallbacks) -> AnyView
+    typealias TextAutoDetector = (URL, [CADRendererFontMapping]) async throws -> CADTextAutoDetectionResult
+    typealias DiagnosticReporter = (URL, Int32?, Int32?) async throws -> String
 
-    private static var libreDWGRendererBuilder: LibreDWGRendererBuilder?
-    private static var libreDWGTextAutoDetector: LibreDWGTextAutoDetector?
-    private static var libreDWGDiagnosticReporter: LibreDWGDiagnosticReporter?
-    private static var didAttemptAutoConfigure = false
+    private static var rendererBuilder: RendererBuilder?
+    private static var textAutoDetector: TextAutoDetector?
+    private static var diagnosticReporter: DiagnosticReporter?
 
-    private static func ensureConfiguredIfNeeded() {
-        guard libreDWGRendererBuilder == nil, !didAttemptAutoConfigure else { return }
-        didAttemptAutoConfigure = true
-        CADRendererBootstrap.configure()
+    static var isRendererBound: Bool {
+        rendererBuilder != nil
     }
 
-    static var isLibreDWGRendererBound: Bool {
-        ensureConfiguredIfNeeded()
-        return libreDWGRendererBuilder != nil
+    static var isCADRendererBound: Bool {
+        isRendererBound
     }
 
-    static func registerLibreDWGRenderer(_ builder: @escaping LibreDWGRendererBuilder) {
-        libreDWGRendererBuilder = builder
+    static func registerRenderer(_ builder: @escaping RendererBuilder) {
+        rendererBuilder = builder
     }
 
-    static func registerLibreDWGTextAutoDetector(_ detector: @escaping LibreDWGTextAutoDetector) {
-        libreDWGTextAutoDetector = detector
+    static func registerTextAutoDetector(_ detector: @escaping TextAutoDetector) {
+        textAutoDetector = detector
     }
 
-    static func registerLibreDWGDiagnosticReporter(_ reporter: @escaping LibreDWGDiagnosticReporter) {
-        libreDWGDiagnosticReporter = reporter
+    static func registerDiagnosticReporter(_ reporter: @escaping DiagnosticReporter) {
+        diagnosticReporter = reporter
     }
 
-    static func clearLibreDWGRenderer() {
-        libreDWGRendererBuilder = nil
-        libreDWGTextAutoDetector = nil
-        libreDWGDiagnosticReporter = nil
+    static func clearRenderer() {
+        rendererBuilder = nil
+        textAutoDetector = nil
+        diagnosticReporter = nil
     }
 
-    static func libreDWGRenderer(
+    static func renderer(
         for fileURL: URL,
         preferredTextCodePage: Int32?,
         preferredTextBigFont: Int32?,
@@ -103,26 +154,41 @@ enum CADRendererProvider {
         fontMappings: [CADRendererFontMapping] = [],
         callbacks: CADRendererCallbacks = CADRendererCallbacks()
     ) -> AnyView? {
-        ensureConfiguredIfNeeded()
-        return libreDWGRendererBuilder?(fileURL, preferredTextCodePage, preferredTextBigFont, initialViewState, fontMappings, callbacks)
+        rendererBuilder?(fileURL, preferredTextCodePage, preferredTextBigFont, initialViewState, fontMappings, callbacks)
     }
 
-    static func detectLibreDWGTextOptions(
+    static func cadRenderer(
+        for fileURL: URL,
+        preferredTextCodePage: Int32?,
+        preferredTextBigFont: Int32?,
+        initialViewState: CADRendererViewState? = nil,
+        fontMappings: [CADRendererFontMapping] = [],
+        callbacks: CADRendererCallbacks = CADRendererCallbacks()
+    ) -> AnyView? {
+        renderer(
+            for: fileURL,
+            preferredTextCodePage: preferredTextCodePage,
+            preferredTextBigFont: preferredTextBigFont,
+            initialViewState: initialViewState,
+            fontMappings: fontMappings,
+            callbacks: callbacks
+        )
+    }
+
+    static func detectTextOptions(
         for fileURL: URL,
         fontMappings: [CADRendererFontMapping] = []
     ) async throws -> CADTextAutoDetectionResult? {
-        ensureConfiguredIfNeeded()
-        guard let libreDWGTextAutoDetector else { return nil }
-        return try await libreDWGTextAutoDetector(fileURL, fontMappings)
+        guard let textAutoDetector else { return nil }
+        return try await textAutoDetector(fileURL, fontMappings)
     }
 
-    static func makeLibreDWGDiagnosticReport(
+    static func makeDiagnosticReport(
         for fileURL: URL,
         preferredTextCodePage: Int32?,
         preferredTextBigFont: Int32?
     ) async throws -> String? {
-        ensureConfiguredIfNeeded()
-        guard let libreDWGDiagnosticReporter else { return nil }
-        return try await libreDWGDiagnosticReporter(fileURL, preferredTextCodePage, preferredTextBigFont)
+        guard let diagnosticReporter else { return nil }
+        return try await diagnosticReporter(fileURL, preferredTextCodePage, preferredTextBigFont)
     }
 }

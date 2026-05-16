@@ -91,8 +91,8 @@ enum TransferLimitPolicy {
         }
     }
 
-    static func allowsSampleDataImport(for _: TransferLimitProfile) -> Bool {
-        true
+    static func allowsSampleDataImport(for profile: TransferLimitProfile) -> Bool {
+        profile != .production
     }
 
     static func formattedBytes(_ bytes: Int) -> String {

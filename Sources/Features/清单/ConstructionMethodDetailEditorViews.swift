@@ -4,29 +4,29 @@ import UIKit
 import AVFoundation
 
 private func constructionMethodShareText(_ method: ConstructionMethod) -> String {
-    let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名工艺" : method.title
-    let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未分类" : method.trade
-    let steps = method.procedureSteps.isEmpty ? "暂无" : method.procedureSteps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
-    let quality = method.qualityChecklist.isEmpty ? "暂无" : method.qualityChecklist.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
-    let safety = method.safetyChecklist.isEmpty ? "暂无" : method.safetyChecklist.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
-    let tutorial = method.tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "暂无" : method.tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines)
+    let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未命名工艺") : method.title
+    let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未分类") : method.trade
+    let steps = method.procedureSteps.isEmpty ? String(localized: "暂无") : method.procedureSteps.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+    let quality = method.qualityChecklist.isEmpty ? String(localized: "暂无") : method.qualityChecklist.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+    let safety = method.safetyChecklist.isEmpty ? String(localized: "暂无") : method.safetyChecklist.enumerated().map { "\($0.offset + 1). \($0.element)" }.joined(separator: "\n")
+    let tutorial = method.tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "暂无") : method.tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines)
     return """
     \(title)
-    专业：\(trade)
-    版本：\(method.versionName.isEmpty ? "V1" : method.versionName)
-    状态：\(method.publishStatus.displayName)
-    更新：\(method.updatedAt)
+    \(String(format: String(localized: "专业：%@"), trade))
+    \(String(format: String(localized: "版本：%@"), method.versionName.isEmpty ? "V1" : method.versionName))
+    \(String(format: String(localized: "状态：%@"), method.publishStatus.displayName))
+    \(String(format: String(localized: "更新：%@"), method.updatedAt))
 
-    施工步骤：
+    \(String(localized: "施工步骤："))
     \(steps)
 
-    质量检查项：
+    \(String(localized: "质量检查项："))
     \(quality)
 
-    安全注意项：
+    \(String(localized: "安全注意项："))
     \(safety)
 
-    完整教程：
+    \(String(localized: "完整教程："))
     \(tutorial)
     """
 }
@@ -54,14 +54,14 @@ struct ConstructionMethodDetailInlineView: View {
                     .toolbar {
                         ToolbarItemGroup(placement: .topBarTrailing) {
                             ShareLink(item: constructionMethodShareText(method)) {
-                                Label("分享", systemImage: "square.and.arrow.up")
+                                Label(String(localized: "分享"), systemImage: "square.and.arrow.up")
                             }
-                            Button("编辑") { editingMethod = method }
-                            Button("删除", role: .destructive) { showDeleteConfirm = true }
+                            Button(String(localized: "编辑")) { editingMethod = method }
+                            Button(String(localized: "删除"), role: .destructive) { showDeleteConfirm = true }
                         }
                     }
             } else {
-                ContentUnavailableView("工艺不存在", systemImage: "exclamationmark.triangle")
+                ContentUnavailableView(String(localized: "工艺不存在"), systemImage: "exclamationmark.triangle")
             }
         }
         .sheet(item: $editingMethod) { method in
@@ -76,15 +76,15 @@ struct ConstructionMethodDetailInlineView: View {
         .sheet(item: $previewAttachment) { attachment in
             QuickNoteAttachmentPreview(attachment: attachment)
         }
-        .alert("删除这条施工工艺？", isPresented: $showDeleteConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("删除", role: .destructive) {
+        .alert(String(localized: "删除这条施工工艺？"), isPresented: $showDeleteConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "删除"), role: .destructive) {
                 if let method {
                     onDelete(method)
                 }
             }
         } message: {
-            Text("删除后不可撤销。")
+            Text(String(localized: "删除后不可撤销。"))
         }
     }
 }
@@ -111,7 +111,7 @@ struct ConstructionMethodDetailView: View {
                 if let method {
                     ConstructionMethodDetailContent(method: method, onPreviewAttachment: { previewAttachment = $0 })
                 } else {
-                        ContentUnavailableView("工艺不存在", systemImage: "exclamationmark.triangle")
+                        ContentUnavailableView(String(localized: "工艺不存在"), systemImage: "exclamationmark.triangle")
                         .task(id: method?.id) {
                             guard method == nil else { return }
                             guard await DebouncedTask.wait(for: .milliseconds(200)) else { return }
@@ -119,22 +119,22 @@ struct ConstructionMethodDetailView: View {
                         }
                 }
             }
-            .navigationTitle("施工工艺")
+            .navigationTitle(String(localized: "施工工艺"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "关闭")) { dismiss() }
                 }
                 if let method {
                     ToolbarItemGroup(placement: .topBarTrailing) {
                         ShareLink(item: constructionMethodShareText(method)) {
-                            Label("分享", systemImage: "square.and.arrow.up")
+                            Label(String(localized: "分享"), systemImage: "square.and.arrow.up")
                         }
-                        Button("编辑") {
+                        Button(String(localized: "编辑")) {
                             onEdit(method)
                             editingMethod = method
                         }
-                        Button("删除", role: .destructive) {
+                        Button(String(localized: "删除"), role: .destructive) {
                             showDeleteConfirm = true
                         }
                     }
@@ -153,16 +153,16 @@ struct ConstructionMethodDetailView: View {
             .sheet(item: $previewAttachment) { attachment in
                 QuickNoteAttachmentPreview(attachment: attachment)
             }
-            .alert("删除这条施工工艺？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条施工工艺？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     if let method {
                         onDelete(method)
                         dismiss()
                     }
                 }
             } message: {
-                Text("删除后不可撤销。")
+                Text(String(localized: "删除后不可撤销。"))
             }
         }
     }
@@ -180,17 +180,17 @@ private struct ConstructionMethodDetailContent: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(method.title.isEmpty ? "未命名工艺" : method.title)
+                    Text(method.title.isEmpty ? String(localized: "未命名工艺") : method.title)
                         .font(.title3.weight(.semibold))
                     HStack(spacing: 10) {
-                        Label(method.trade.isEmpty ? "未分类" : method.trade, systemImage: "tag")
+                        Label(method.trade.isEmpty ? String(localized: "未分类") : method.trade, systemImage: "tag")
                         Label(method.versionName.isEmpty ? "V1" : method.versionName, systemImage: "number")
                         Label(method.publishStatus.displayName, systemImage: method.publishStatus == .published ? "checkmark.seal.fill" : "doc.badge.clock")
-                        Label("更新于 \(method.updatedAt)", systemImage: "clock")
+                        Label(String(format: String(localized: "更新于 %@"), method.updatedAt), systemImage: "clock")
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    Toggle("仅看未完成", isOn: $showOnlyPendingItems)
+                    Toggle(String(localized: "仅看未完成"), isOn: $showOnlyPendingItems)
                         .toggleStyle(.switch)
                         .font(.callout)
                 }
@@ -198,21 +198,21 @@ private struct ConstructionMethodDetailContent: View {
                     referenceAction = action
                 }
                 ConstructionMethodDetailBlock(
-                    title: "施工步骤",
+                    title: String(localized: "施工步骤"),
                     systemImage: "list.number",
                     lines: method.procedureSteps,
                     isCheckable: true,
                     showOnlyPendingItems: showOnlyPendingItems
                 )
                 ConstructionMethodDetailBlock(
-                    title: "质量标准",
+                    title: String(localized: "质量标准"),
                     systemImage: "checkmark.seal",
                     lines: method.qualityChecklist,
                     isCheckable: true,
                     showOnlyPendingItems: showOnlyPendingItems
                 )
                 ConstructionMethodDetailBlock(
-                    title: "安全注意",
+                    title: String(localized: "安全注意"),
                     systemImage: "shield.lefthalf.filled",
                     lines: method.safetyChecklist,
                     isCheckable: true,
@@ -243,7 +243,7 @@ private struct ConstructionMethodDetailContent: View {
         case .todo:
             store.siteTodos.insert(
                 SiteTodo(
-                    title: "按工艺检查：\(methodDisplayTitle(method))",
+                    title: String(format: String(localized: "按工艺检查：%@"), methodDisplayTitle(method)),
                     dueDate: Formatters.date.string(from: Date()),
                     priority: .medium,
                     issueType: .quality,
@@ -253,16 +253,16 @@ private struct ConstructionMethodDetailContent: View {
                 ),
                 at: 0
             )
-            operationMessage = "已生成现场待办"
+            operationMessage = String(localized: "已生成现场待办")
         case .dailyLog:
             store.dailyLogs.insert(
                 DailyLog(
                     date: Formatters.date.string(from: Date()),
                     weather: autoWeatherNow(),
-                    content: "引用施工工艺：\(methodDisplayTitle(method))\n\n\(constructionMethodReferenceText(method))",
+                    content: String(format: String(localized: "引用施工工艺：%@\n\n%@"), methodDisplayTitle(method), constructionMethodReferenceText(method)),
                     workers: "0",
                     safety: method.safetyChecklist.joined(separator: "\n"),
-                    tomorrowPlan: "按《\(methodDisplayTitle(method))》复核现场执行情况",
+                    tomorrowPlan: String(format: String(localized: "按《%@》复核现场执行情况"), methodDisplayTitle(method)),
                     qualityIssue: "",
                     rectification: "",
                     linkedConstructionMethodIDs: [method.id],
@@ -270,21 +270,21 @@ private struct ConstructionMethodDetailContent: View {
                 ),
                 at: 0
             )
-            operationMessage = "已生成施工日志"
+            operationMessage = String(localized: "已生成施工日志")
         case .rectification:
             store.siteTodos.insert(
                 SiteTodo(
-                    title: "整改复核：\(methodDisplayTitle(method))",
+                    title: String(format: String(localized: "整改复核：%@"), methodDisplayTitle(method)),
                     dueDate: Formatters.date.string(from: Date()),
                     priority: .high,
                     issueType: .quality,
-                    note: "整改依据：\n\(constructionMethodReferenceText(method))",
+                    note: String(format: String(localized: "整改依据：\n%@"), constructionMethodReferenceText(method)),
                     linkedConstructionMethodIDs: [method.id],
                     projectId: projectId
                 ),
                 at: 0
             )
-            operationMessage = "已生成整改待办"
+            operationMessage = String(localized: "已生成整改待办")
         }
         store.scheduleSave()
         AppHaptics.success()
@@ -301,22 +301,22 @@ private enum ConstructionMethodReferenceAction: String, CaseIterable, Identifiab
     var title: String {
         switch self {
         case .todo:
-            return "生成待办"
+            return String(localized: "生成待办")
         case .dailyLog:
-            return "写入日志"
+            return String(localized: "写入日志")
         case .rectification:
-            return "生成整改"
+            return String(localized: "生成整改")
         }
     }
 
     var detail: String {
         switch self {
         case .todo:
-            return "用于现场检查、复核或安排执行"
+            return String(localized: "用于现场检查、复核或安排执行")
         case .dailyLog:
-            return "把工艺依据写入今天的施工日志"
+            return String(localized: "把工艺依据写入今天的施工日志")
         case .rectification:
-            return "生成质量整改待办并关联该工艺"
+            return String(localized: "生成质量整改待办并关联该工艺")
         }
     }
 
@@ -348,9 +348,9 @@ private struct ConstructionMethodReferenceBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            Label("引用到现场", systemImage: "link.badge.plus")
+            Label(String(localized: "引用到现场"), systemImage: "link.badge.plus")
                 .font(.headline)
-            Text("把这条工艺直接变成待办、日志或整改依据。")
+            Text(String(localized: "把这条工艺直接变成待办、日志或整改依据。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: AppSpacing.tight) {
@@ -399,20 +399,20 @@ private struct ConstructionMethodReferenceSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("工艺") {
-                    LabeledContent("名称", value: methodDisplayTitle(method))
-                    LabeledContent("专业", value: method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未分类" : method.trade)
-                    LabeledContent("动作", value: action.title)
+                Section(String(localized: "工艺")) {
+                    LabeledContent(String(localized: "名称"), value: methodDisplayTitle(method))
+                    LabeledContent(String(localized: "专业"), value: method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未分类") : method.trade)
+                    LabeledContent(String(localized: "动作"), value: action.title)
                 }
-                Section("归属项目") {
-                    Picker("项目", selection: $selectedProjectId) {
-                        Text("不关联项目").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "项目"), selection: $selectedProjectId) {
+                        Text(String(localized: "不关联项目")).tag(nil as UUID?)
                         ForEach(sortedProjects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
                 }
-                Section("将写入") {
+                Section(String(localized: "将写入")) {
                     Text(action.detail)
                         .font(.callout)
                     Text(constructionMethodReferenceText(method))
@@ -425,10 +425,10 @@ private struct ConstructionMethodReferenceSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("生成") {
+                    Button(String(localized: "生成")) {
                         onSave(action, selectedProjectId)
                         dismiss()
                     }
@@ -440,28 +440,28 @@ private struct ConstructionMethodReferenceSheet: View {
 
 private func methodDisplayTitle(_ method: ConstructionMethod) -> String {
     let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
-    return title.isEmpty ? "未命名工艺" : title
+    return title.isEmpty ? String(localized: "未命名工艺") : title
 }
 
 private func constructionMethodReferenceText(_ method: ConstructionMethod) -> String {
     var sections: [String] = []
     let title = methodDisplayTitle(method)
     let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
-    sections.append("工艺：\(title)")
+    sections.append(String(format: String(localized: "工艺：%@"), title))
     if !trade.isEmpty {
-        sections.append("专业：\(trade)")
+        sections.append(String(format: String(localized: "专业：%@"), trade))
     }
     if !method.versionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-        sections.append("版本：\(method.versionName)")
+        sections.append(String(format: String(localized: "版本：%@"), method.versionName))
     }
     if !method.procedureSteps.isEmpty {
-        sections.append("施工步骤：\n\(numberedLines(method.procedureSteps))")
+        sections.append(String(format: String(localized: "施工步骤：\n%@"), numberedLines(method.procedureSteps)))
     }
     if !method.qualityChecklist.isEmpty {
-        sections.append("质量要点：\n\(numberedLines(method.qualityChecklist))")
+        sections.append(String(format: String(localized: "质量要点：\n%@"), numberedLines(method.qualityChecklist)))
     }
     if !method.safetyChecklist.isEmpty {
-        sections.append("安全注意：\n\(numberedLines(method.safetyChecklist))")
+        sections.append(String(format: String(localized: "安全注意：\n%@"), numberedLines(method.safetyChecklist)))
     }
     return sections.joined(separator: "\n\n")
 }
@@ -493,10 +493,10 @@ private struct ConstructionMethodTutorialBlock: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Label("完整教程", systemImage: "doc.text")
+            Label(String(localized: "完整教程"), systemImage: "doc.text")
                 .font(.headline)
             if normalizedBody.isEmpty {
-                Text("未填写完整教程。可在编辑页补充从准备到验收的全流程说明。")
+                Text(String(localized: "未填写完整教程。可在编辑页补充从准备到验收的全流程说明。"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -610,13 +610,13 @@ private struct ConstructionMethodDetailBlock: View {
                     Text("\(completedCount)/\(sanitizedLines.count)")
                         .font(.caption2.monospacedDigit())
                         .foregroundStyle(.secondary)
-                    Button("重置") { checkedIndexes.removeAll() }
+                    Button(String(localized: "重置")) { checkedIndexes.removeAll() }
                         .font(.caption2)
                         .buttonStyle(.plain)
                 }
             }
             if sanitizedLines.isEmpty {
-                Text("未填写")
+                Text(String(localized: "未填写"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             } else {
@@ -627,13 +627,13 @@ private struct ConstructionMethodDetailBlock: View {
                         }
                         if showOnlyPendingItems {
                             if !completedIndexes.isEmpty {
-                                Text("已隐藏 \(completedIndexes.count) 项已完成内容")
+                                Text(String(format: String(localized: "已隐藏 %lld 项已完成内容"), Int64(completedIndexes.count)))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                         } else {
                             if !completedIndexes.isEmpty {
-                                DisclosureGroup("已完成 \(completedIndexes.count) 项", isExpanded: $showCompletedItems) {
+                                DisclosureGroup(String(format: String(localized: "已完成 %lld 项"), Int64(completedIndexes.count)), isExpanded: $showCompletedItems) {
                                     VStack(alignment: .leading, spacing: 6) {
                                         ForEach(completedIndexes, id: \.self) { index in
                                             checkableLineRow(index: index, line: sanitizedLines[index], isChecked: true)
@@ -813,7 +813,7 @@ struct ConstructionMethodEditSheet: View {
                 tutorialSections
                 qualitySections
             }
-            .navigationTitle(method == nil ? "新增施工工艺" : "编辑施工工艺")
+            .navigationTitle(method == nil ? String(localized: "新增施工工艺") : String(localized: "编辑施工工艺"))
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 restoreDraftIfNeeded()
@@ -862,7 +862,7 @@ struct ConstructionMethodEditSheet: View {
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         draftSaveTask?.cancel()
                         if hasDraftContent {
                             persistDraftImmediately()
@@ -880,7 +880,7 @@ struct ConstructionMethodEditSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         draftSaveTask?.cancel()
                         didSave = true
                         onSave(updatedMethod)
@@ -890,17 +890,17 @@ struct ConstructionMethodEditSheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("删除这条施工工艺？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条施工工艺？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     draftSaveTask?.cancel()
                     ConstructionMethodEditDraftStore.clear(methodID: method?.id, scopeID: draftScopeID)
                     if let target = method { onDelete?(target) }
                     dismiss()
                 }
             }
-            .alert("无法添加媒体", isPresented: $showAlert) {
-                Button("知道了", role: .cancel) {}
+            .alert(String(localized: "无法添加媒体"), isPresented: $showAlert) {
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(alertMessage)
             }
@@ -909,21 +909,21 @@ struct ConstructionMethodEditSheet: View {
 
     private var stepTemplates: [String] {
         [
-            "现场交底",
-            "材料进场验收",
-            "放线定位",
-            "分步施工",
-            "隐蔽验收",
-            "成品保护"
+            String(localized: "现场交底"),
+            String(localized: "材料进场验收"),
+            String(localized: "放线定位"),
+            String(localized: "分步施工"),
+            String(localized: "隐蔽验收"),
+            String(localized: "成品保护")
         ]
     }
 
     private var basicInfoSection: some View {
-        Section("工艺信息") {
-            TextField("标题", text: $title)
-            TextField("专业/工种", text: $trade)
-            TextField("版本号", text: $versionName)
-            Picker("发布状态", selection: $publishStatus) {
+        Section(String(localized: "工艺信息")) {
+            TextField(String(localized: "标题"), text: $title)
+            TextField(String(localized: "专业/工种"), text: $trade)
+            TextField(String(localized: "版本号"), text: $versionName)
+            Picker(String(localized: "发布状态"), selection: $publishStatus) {
                 ForEach(ConstructionMethod.PublishStatus.allCases, id: \.self) { item in
                     Text(item.displayName).tag(item)
                 }
@@ -933,21 +933,21 @@ struct ConstructionMethodEditSheet: View {
 
     private var processSections: some View {
         Group {
-            Section("施工步骤") {
+            Section(String(localized: "施工步骤")) {
                 if procedureSteps.isEmpty {
-                    Text("暂无步骤，先新增一条。")
+                    Text(String(localized: "暂无步骤，先新增一条。"))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(procedureSteps.indices, id: \.self) { index in
                     procedureStepRow(index)
                 }
                 addItemRow(
-                    placeholder: "新增步骤",
+                    placeholder: String(localized: "新增步骤"),
                     text: $newProcedureStep,
                     onAdd: appendProcedureStep
                 )
             }
-            Section("常用步骤模板") {
+            Section(String(localized: "常用步骤模板")) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {
                         ForEach(stepTemplates, id: \.self) { template in
@@ -977,30 +977,30 @@ struct ConstructionMethodEditSheet: View {
 
     private var qualitySections: some View {
         Group {
-            Section("质量检查项") {
+            Section(String(localized: "质量检查项")) {
                 if qualityChecklist.isEmpty {
-                    Text("暂无质量检查项。")
+                    Text(String(localized: "暂无质量检查项。"))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(qualityChecklist.indices, id: \.self) { index in
                     qualityItemRow(index)
                 }
                 addItemRow(
-                    placeholder: "新增质量检查项",
+                    placeholder: String(localized: "新增质量检查项"),
                     text: $newQualityItem,
                     onAdd: appendQualityItem
                 )
             }
-            Section("安全注意项") {
+            Section(String(localized: "安全注意项")) {
                 if safetyChecklist.isEmpty {
-                    Text("暂无安全注意项。")
+                    Text(String(localized: "暂无安全注意项。"))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(safetyChecklist.indices, id: \.self) { index in
                     safetyItemRow(index)
                 }
                 addItemRow(
-                    placeholder: "新增安全注意项",
+                    placeholder: String(localized: "新增安全注意项"),
                     text: $newSafetyItem,
                     onAdd: appendSafetyItem
                 )
@@ -1103,7 +1103,7 @@ struct ConstructionMethodEditSheet: View {
         let canMoveUp = index > 0
         let canMoveDown = index < procedureSteps.count - 1
         checklistRow(
-            title: "步骤 \(index + 1)",
+            title: String(format: String(localized: "步骤 %lld"), Int64(index + 1)),
             text: binding(for: $procedureSteps, index: index),
             canMoveUp: canMoveUp,
             canMoveDown: canMoveDown,
@@ -1118,7 +1118,7 @@ struct ConstructionMethodEditSheet: View {
         let canMoveUp = index > 0
         let canMoveDown = index < qualityChecklist.count - 1
         checklistRow(
-            title: "检查项 \(index + 1)",
+            title: String(format: String(localized: "检查项 %lld"), Int64(index + 1)),
             text: binding(for: $qualityChecklist, index: index),
             canMoveUp: canMoveUp,
             canMoveDown: canMoveDown,
@@ -1133,7 +1133,7 @@ struct ConstructionMethodEditSheet: View {
         let canMoveUp = index > 0
         let canMoveDown = index < safetyChecklist.count - 1
         checklistRow(
-            title: "注意项 \(index + 1)",
+            title: String(format: String(localized: "注意项 %lld"), Int64(index + 1)),
             text: binding(for: $safetyChecklist, index: index),
             canMoveUp: canMoveUp,
             canMoveDown: canMoveDown,
@@ -1157,7 +1157,7 @@ struct ConstructionMethodEditSheet: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             HStack(spacing: 8) {
-                TextField("输入内容", text: text, axis: .vertical)
+                TextField(String(localized: "输入内容"), text: text, axis: .vertical)
                 Button(action: onMoveUp) {
                     Image(systemName: "arrow.up")
                 }
@@ -1262,12 +1262,12 @@ struct ConstructionMethodEditSheet: View {
 
     private func openCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showError("当前设备不可用相机。")
+            showError(String(localized: "当前设备不可用相机。"))
             return
         }
         Task { @MainActor in
             guard await requestCameraAccessIfNeeded() else {
-                showError("未获得相机权限，无法拍摄。")
+                showError(String(localized: "未获得相机权限，无法拍摄。"))
                 return
             }
             showCamera = true
@@ -1276,12 +1276,12 @@ struct ConstructionMethodEditSheet: View {
 
     private func openTutorialCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showError("当前设备不可用相机。")
+            showError(String(localized: "当前设备不可用相机。"))
             return
         }
         Task { @MainActor in
             guard await requestCameraAccessIfNeeded() else {
-                showError("未获得相机权限，无法拍摄。")
+                showError(String(localized: "未获得相机权限，无法拍摄。"))
                 return
             }
             showTutorialCamera = true
@@ -1312,7 +1312,7 @@ struct ConstructionMethodEditSheet: View {
             attachments.append(QuickNoteAttachment(kind: .photo, fileName: fileName))
             sessionAddedFileNames.insert(fileName)
         } catch {
-            showError("图片保存失败：\(error.localizedDescription)")
+            showError(String(format: String(localized: "图片保存失败：%@"), error.localizedDescription))
         }
     }
 
@@ -1322,7 +1322,7 @@ struct ConstructionMethodEditSheet: View {
             tutorialAttachments.append(QuickNoteAttachment(kind: .photo, fileName: fileName))
             sessionAddedFileNames.insert(fileName)
         } catch {
-            showError("教程图片保存失败：\(error.localizedDescription)")
+            showError(String(format: String(localized: "教程图片保存失败：%@"), error.localizedDescription))
         }
     }
 
@@ -1392,10 +1392,10 @@ struct ConstructionMethodEditSheet: View {
             switch target {
             case .general:
                 isImportingMedia = true
-                mediaImportMessage = "正在导入媒体..."
+                mediaImportMessage = String(localized: "正在导入媒体...")
             case .tutorial:
                 isImportingTutorialMedia = true
-                tutorialMediaImportMessage = "正在导入教程媒体..."
+                tutorialMediaImportMessage = String(localized: "正在导入教程媒体...")
             }
         }
         defer {
@@ -1418,14 +1418,14 @@ struct ConstructionMethodEditSheet: View {
                 await MainActor.run {
                     switch target {
                     case .general:
-                        mediaImportMessage = "检查视频大小和时长..."
+                        mediaImportMessage = String(localized: "检查视频大小和时长...")
                     case .tutorial:
-                        tutorialMediaImportMessage = "检查视频大小和时长..."
+                        tutorialMediaImportMessage = String(localized: "检查视频大小和时长...")
                     }
                 }
                 do {
                     guard let transfer = try await item.loadTransferable(type: QuickNoteVideoTransfer.self) else {
-                        await MainActor.run { showError("视频导入失败。") }
+                        await MainActor.run { showError(String(localized: "视频导入失败。")) }
                         continue
                     }
                     await MainActor.run {
@@ -1447,14 +1447,14 @@ struct ConstructionMethodEditSheet: View {
                 } catch let error as QuickNoteVideoTransferError {
                     await MainActor.run { showError(error.userMessage) }
                 } catch {
-                    await MainActor.run { showError("视频导入失败。") }
+                    await MainActor.run { showError(String(localized: "视频导入失败。")) }
                 }
                 continue
             }
 
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
-                await MainActor.run { showError("有一项图片导入失败。") }
+                await MainActor.run { showError(String(localized: "有一项图片导入失败。")) }
                 continue
             }
             await MainActor.run {

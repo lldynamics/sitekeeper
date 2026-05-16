@@ -98,12 +98,11 @@ final class SitekeeperUITests: XCTestCase {
         app.tabBars.buttons["随手记"].tap()
 
         XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
-        app.buttons["发布"].tap()
-
-        XCTAssertTrue(app.navigationBars["发布随手记"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["媒体"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["附件"].exists)
-        app.buttons["关闭"].tap()
+        XCTAssertTrue(app.buttons["发送随手记"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["从相册添加媒体"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["拍照添加"].exists)
+        XCTAssertTrue(app.buttons["录制语音"].exists)
+        XCTAssertTrue(app.buttons["导入文件附件"].exists)
     }
 
     func testFirstLaunchOnboardingCanOpenProjectComposer() {
@@ -123,12 +122,12 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true)
         app.tabBars.buttons["项目"].tap()
 
-        let browserButton = app.buttons["项目文件浏览"]
+        let browserButton = app.buttons["project-file-browser-entry"]
         XCTAssertTrue(browserButton.waitForExistence(timeout: 5))
         browserButton.tap()
 
-        XCTAssertTrue(app.navigationBars["项目文件"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["暂无项目文件"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["全局文件检索"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["暂无全局文件"].waitForExistence(timeout: 5))
     }
 
     func testClearLocalDataFlowRequiresConfirmationPhrase() {
@@ -216,11 +215,11 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "03-dashboard")
 
         app.tabBars.buttons["项目"].tap()
-        XCTAssertTrue(app.buttons["项目文件浏览"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["project-file-browser-entry"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "04-project-home")
 
-        app.buttons["项目文件浏览"].tap()
-        XCTAssertTrue(app.navigationBars["项目文件"].waitForExistence(timeout: 5))
+        app.buttons["project-file-browser-entry"].tap()
+        XCTAssertTrue(app.navigationBars["全局文件检索"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "05-project-files")
         app.navigationBars.buttons.firstMatch.tap()
 

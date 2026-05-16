@@ -323,7 +323,10 @@ struct ProjectFileBrowserView: View {
                             ProjectFileMicroGuideRow(
                                 icon: "exclamationmark.triangle.fill",
                                 color: .appRisk,
-                                title: String(localized: "发现 \(missingResultCount) 个缺失文件"),
+                                title: String(
+                                    format: String(localized: "发现 %lld 个缺失文件"),
+                                    Int64(missingResultCount)
+                                ),
                                 detail: "建议回到项目详情重新导入图纸或资料，避免交付时缺件。"
                             )
                             NavigationLink {

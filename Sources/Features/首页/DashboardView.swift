@@ -264,7 +264,7 @@ struct DashboardView: View {
                     .foregroundStyle(.primary)
                 Spacer()
                 if activeProjects.count > dashboardProjectDisplayLimit {
-                    Text(String(localized: "共 \(activeProjects.count) 个"))
+                    Text(String(format: String(localized: "共 %lld 个"), Int64(activeProjects.count)))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -281,7 +281,7 @@ struct DashboardView: View {
                             showDashboardProjectPicker = true
                         } label: {
                             DashboardProjectChip(
-                                title: String(localized: "更多 \(hiddenDashboardProjectCount)"),
+                                title: String(format: String(localized: "更多 %lld"), Int64(hiddenDashboardProjectCount)),
                                 subtitle: String(localized: "查看全部"),
                                 isSelected: false,
                                 color: .appDoc
@@ -433,7 +433,7 @@ struct DashboardView: View {
             destination: .projectList()
         ) {
             ProjectBusinessCardsView(summary: dashboardBusinessSummary)
-            Text(String(localized: "已关注 \(activeProjects.count) 个工程"))
+            Text(String(format: String(localized: "已关注 %lld 个工程"), Int64(activeProjects.count)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

@@ -5,11 +5,13 @@ import UIKit
 
 enum CalculatorInputParser {
     static func double(_ value: String) -> Double? {
-        let normalized = value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        guard !normalized.isEmpty else { return nil }
-        return Double(normalized)
+        guard let decimal = DataValueParser.decimalValueIfPresent(
+            from: value,
+            requiresEntireString: true
+        ) else {
+            return nil
+        }
+        return NSDecimalNumber(decimal: decimal).doubleValue
     }
 
     static func int(_ value: String) -> Int? {

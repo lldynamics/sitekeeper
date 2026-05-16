@@ -3,7 +3,6 @@ import SwiftUI
 struct QuickNoteTimelineView: View {
     let notes: [QuickNote]
     let projects: [Project]
-    let onCreate: () -> Void
     let onEdit: (QuickNote) -> Void
     let onConvert: (QuickNote) -> Void
     let onDelete: ([QuickNote]) -> Void
@@ -50,38 +49,39 @@ struct QuickNoteTimelineView: View {
     var body: some View {
         if notes.isEmpty {
             Section {
-                VStack(spacing: 10) {
-                    ContentUnavailableView("暂无记录", systemImage: "square.and.pencil", description: Text("随手记，现场第一手信息。"))
-                    Button(action: onCreate) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.pencil")
-                                .symbolRenderingMode(.monochrome)
-                            Text("立即发布一条")
-                        }
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(.white)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.appWarning)
-                }
+                ContentUnavailableView("还没有消息", systemImage: "bubble.left.and.text.bubble.right", description: Text("从底部输入框发送现场记录。"))
+                    .padding(.vertical, 48)
             }
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
         } else {
             ForEach(dayGroups) { group in
-                Section(group.title) {
+                Section {
                     ForEach(group.notes) { note in
                         QuickNoteTimelineRow(
                             note: note,
                             projectName: projectName(note.projectId),
+                            onEdit: { onEdit(note) },
                             onConvert: { onConvert(note) },
+                            onDelete: { onDelete([note]) },
                             onPreview: onPreview
                         )
-                        .contentShape(Rectangle())
-                        .onTapGesture { onEdit(note) }
+                        .listRowInsets(EdgeInsets(top: 6, leading: 12, bottom: 6, trailing: 12))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
                     }
-                    .onDelete { offsets in
-                        let selected = offsets.compactMap { group.notes.indices.contains($0) ? group.notes[$0] : nil }
-                        onDelete(selected)
+                } header: {
+                    HStack {
+                        Spacer()
+                        Text(group.title)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(Color(.tertiarySystemGroupedBackground), in: Capsule())
+                        Spacer()
                     }
+                    .textCase(nil)
                 }
             }
         }
@@ -98,80 +98,166 @@ struct QuickNoteTimelineView: View {
 private struct QuickNoteTimelineRow: View {
     let note: QuickNote
     let projectName: String
+    let onEdit: () -> Void
     let onConvert: () -> Void
+    let onDelete: () -> Void
     let onPreview: (QuickNoteAttachment) -> Void
-    @State private var showConvertConfirm = false
+    @State private var expandedAudioAttachmentId: UUID? = nil
 
     private var hasProject: Bool { !projectName.isEmpty }
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+
+    private var timeText: String {
+        guard let date = Formatters.parseDateOrDateTime(note.createdAt) else {
+            return note.createdAt
+        }
+        return Self.timeFormatter.string(from: date)
+    }
 
     var body: some View {
-        HStack(alignment: .top, spacing: AppSpacing.normal) {
-            // 左边框颜色条
-            RoundedRectangle(cornerRadius: 2)
-                .fill(hasProject ? Color.appPrimaryAction : Color.appMutedSurface)
-                .frame(width: 4)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Text(QuickNoteText.displayContent(for: note))
-                    .font(.body)
-                    .foregroundStyle(.primary)
-                    .lineLimit(5)
-
-                if !note.attachments.isEmpty {
-                    QuickNoteAttachmentStrip(
-                        attachments: note.attachments,
-                        showsRemoveButton: false,
-                        onPreview: onPreview,
-                        onRemove: { _ in }
-                    )
-                }
-
-                HStack(spacing: 8) {
-                    Text(note.createdAt)
-                        .font(.caption2)
-                    if hasProject {
-                        Text(projectName)
-                            .font(.caption2)
-                            .foregroundStyle(.appPrimaryAction)
-                    }
-                    if !note.attachments.isEmpty {
-                        Text(QuickNoteText.attachmentSummary(note.attachments))
-                            .font(.caption2)
-                    }
-                    Spacer(minLength: 8)
-                    Button {
-                        showConvertConfirm = true
-                    } label: {
-                        Label("转为", systemImage: "arrow.triangle.branch")
-                            .labelStyle(.titleAndIcon)
-                    }
-                    .font(.caption.weight(.semibold))
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .accessibilityLabel("转换记录")
-                    .accessibilityHint("双击选择转换类型")
-                    .confirmationDialog("转换为？", isPresented: $showConvertConfirm, titleVisibility: .visible) {
-                        Button("转为施工日志") { onConvert() }
-                        Button("转为待办") { onConvert() }
-                        Button("转为项目资料") { onConvert() }
-                        Button("取消", role: .cancel) {}
-                    } message: {
-                        Text("可将这条随手记的内容转到指定功能页面继续编辑。")
-                    }
-                }
-                .foregroundStyle(.secondary)
+        VStack(alignment: .trailing, spacing: 5) {
+            HStack(alignment: .bottom, spacing: 8) {
+                Spacer(minLength: 36)
+                messageBubble
+            }
+            metaLine
+        }
+        .frame(maxWidth: .infinity, alignment: .trailing)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onEdit)
+        .swipeActions(edge: .leading, allowsFullSwipe: false) {
+            Button {
+                onConvert()
+            } label: {
+                Label("转为", systemImage: "arrow.triangle.branch")
+            }
+            .tint(.appWarning)
+        }
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("删除", systemImage: "trash")
+            }
+            Button {
+                onEdit()
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            .tint(.appPrimaryAction)
+        }
+        .contextMenu {
+            Button {
+                onEdit()
+            } label: {
+                Label("编辑", systemImage: "pencil")
+            }
+            Button {
+                onConvert()
+            } label: {
+                Label("转为记录", systemImage: "arrow.triangle.branch")
+            }
+            Button(role: .destructive) {
+                onDelete()
+            } label: {
+                Label("删除", systemImage: "trash")
             }
         }
-        .padding(.vertical, 4)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityHint("双击编辑这条随手记")
     }
 
+    private var messageBubble: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(QuickNoteText.displayContent(for: note))
+                .font(.body)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !note.attachments.isEmpty {
+                QuickNoteAttachmentStrip(
+                    attachments: note.attachments,
+                    showsRemoveButton: false,
+                    onPreview: handleAttachmentTap(_:),
+                    onRemove: { _ in }
+                )
+            }
+
+            if let expandedAudioAttachment {
+                QuickNoteInlineAudioAttachmentPlayer(attachment: expandedAudioAttachment) {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        expandedAudioAttachmentId = nil
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 560, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(hasProject ? Color.appPrimarySurfaceSubtle : Color(.secondarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(hasProject ? Color.appPrimaryAction.opacity(0.16) : Color.appStrokeSeparator, lineWidth: 0.5)
+        )
+    }
+
+    private var metaLine: some View {
+        HStack(spacing: 6) {
+            if hasProject {
+                Label(projectName, systemImage: "building.2")
+                    .labelStyle(.titleAndIcon)
+                    .lineLimit(1)
+            }
+            if !note.attachments.isEmpty {
+                Text(QuickNoteText.attachmentSummary(note.attachments))
+                    .lineLimit(1)
+            }
+            Text(timeText)
+            Button {
+                onConvert()
+            } label: {
+                Image(systemName: "arrow.triangle.branch")
+                    .font(.caption2.weight(.semibold))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("转为记录")
+            .accessibilityHint("双击打开转换和编辑面板")
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: 560, alignment: .trailing)
+    }
+
+    private var expandedAudioAttachment: QuickNoteAttachment? {
+        guard let expandedAudioAttachmentId else { return nil }
+        return note.attachments.first {
+            $0.id == expandedAudioAttachmentId && $0.attachmentKind == .audio
+        }
+    }
+
+    private func handleAttachmentTap(_ attachment: QuickNoteAttachment) {
+        guard attachment.attachmentKind == .audio else {
+            onPreview(attachment)
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.18)) {
+            expandedAudioAttachmentId = expandedAudioAttachmentId == attachment.id ? nil : attachment.id
+        }
+    }
+
     private var accessibilityLabelText: String {
         var parts: [String] = [QuickNoteText.displayContent(for: note)]
         if !projectName.isEmpty { parts.append("工程 \(projectName)") }
-        parts.append("时间 \(note.createdAt)")
+        parts.append("时间 \(timeText)")
         if !note.attachments.isEmpty {
             parts.append(QuickNoteText.attachmentSummary(note.attachments))
         }

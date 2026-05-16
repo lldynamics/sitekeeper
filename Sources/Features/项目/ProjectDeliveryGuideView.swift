@@ -70,7 +70,9 @@ struct ProjectDeliveryGuideView: View {
                     }
                     guideRow(
                         title: String(localized: "缺票检查"),
-                        detail: data.missingReceiptCount == 0 ? String(localized: "全部已关联") : String(localized: "还有 \(data.missingReceiptCount) 条待关联"),
+                        detail: data.missingReceiptCount == 0
+                            ? String(localized: "全部已关联")
+                            : String(format: String(localized: "还有 %lld 条待关联"), Int64(data.missingReceiptCount)),
                         status: data.missingReceiptCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.finance)
@@ -84,7 +86,9 @@ struct ProjectDeliveryGuideView: View {
                     }
                     guideRow(
                         title: String(localized: "联系人缺失检查"),
-                        detail: data.contactCount > 0 ? String(localized: "已维护 \(data.contactCount) 位") : String(localized: "还没有联系人"),
+                        detail: data.contactCount > 0
+                            ? String(format: String(localized: "已维护 %lld 位"), Int64(data.contactCount))
+                            : String(localized: "还没有联系人"),
                         status: data.contactCount > 0 ? .ok : .warning
                     ) {
                         onOpenMode(.assets)
@@ -98,7 +102,9 @@ struct ProjectDeliveryGuideView: View {
                     }
                     guideRow(
                         title: String(localized: "原件完整性"),
-                        detail: data.hasBlockingMissingOriginals ? String(localized: "检测到 \(data.missingOriginalEntries.count) 个缺失原件") : String(localized: "未发现缺失原件"),
+                        detail: data.hasBlockingMissingOriginals
+                            ? String(format: String(localized: "检测到 %lld 个缺失原件"), Int64(data.missingOriginalEntries.count))
+                            : String(localized: "未发现缺失原件"),
                         status: data.hasBlockingMissingOriginals ? .error : .ok
                     ) {
                         onOpenMode(.assets)
@@ -126,7 +132,12 @@ struct ProjectDeliveryGuideView: View {
                             }
                         }
                         if data.missingOriginalEntries.count > 20 {
-                            Text(String(localized: "还有 \(data.missingOriginalEntries.count - 20) 项未显示"))
+                            Text(
+                                String(
+                                    format: String(localized: "还有 %lld 项未显示"),
+                                    Int64(data.missingOriginalEntries.count - 20)
+                                )
+                            )
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -174,7 +185,11 @@ struct ProjectDeliveryGuideView: View {
                 .foregroundStyle(data.isReadyForDelivery ? Color.appSuccess : Color.appPrimaryAction)
                 .frame(width: 34)
             VStack(alignment: .leading, spacing: 4) {
-                Text(data.isReadyForDelivery ? String(localized: "交付准备完成") : String(localized: "完工前还有 \(data.deliveryWarningCount) 项需要处理"))
+                Text(
+                    data.isReadyForDelivery
+                        ? String(localized: "交付准备完成")
+                        : String(format: String(localized: "完工前还有 %lld 项需要处理"), Int64(data.deliveryWarningCount))
+                )
                     .font(.headline)
                 Text(readinessDetail)
                     .font(.caption)
@@ -197,18 +212,28 @@ struct ProjectDeliveryGuideView: View {
     private var logCoverageDetail: String {
         if data.missingLogDateCount == 0 {
             if data.expectedLogDateCount > 0 {
-                return String(localized: "已覆盖 \(data.expectedLogDateCount) 个施工日，共 \(data.logCount) 条日志")
+                return String(
+                    format: String(localized: "已覆盖 %lld 个施工日，共 %lld 条日志"),
+                    Int64(data.expectedLogDateCount),
+                    Int64(data.logCount)
+                )
             }
-            return data.logCount > 0 ? String(localized: "已记录 \(data.logCount) 条") : String(localized: "未设置工期，暂无缺日志日期")
+            return data.logCount > 0
+                ? String(format: String(localized: "已记录 %lld 条"), Int64(data.logCount))
+                : String(localized: "未设置工期，暂无缺日志日期")
         }
         if data.expectedLogDateCount == 0 {
             return String(localized: "未记录施工日志")
         }
         let sample = data.missingLogDateSamples.joined(separator: "、")
         if sample.isEmpty {
-            return String(localized: "缺 \(data.missingLogDateCount) 个施工日")
+            return String(format: String(localized: "缺 %lld 个施工日"), Int64(data.missingLogDateCount))
         }
-        return String(localized: "缺 \(data.missingLogDateCount) 个施工日：\(sample)")
+        return String(
+            format: String(localized: "缺 %lld 个施工日：%@"),
+            Int64(data.missingLogDateCount),
+            sample
+        )
     }
 
     private var unsettledFinancialDetail: String {
@@ -216,9 +241,16 @@ struct ProjectDeliveryGuideView: View {
             return String(localized: "没有未结清账目")
         }
         if data.unsettledFinancialAmount > 0 {
-            return String(localized: "还有 \(data.unsettledFinancialCount) 笔，合计 \(ReportBuilder.money(data.unsettledFinancialAmount))")
+            return String(
+                format: String(localized: "还有 %lld 笔，合计 %@"),
+                Int64(data.unsettledFinancialCount),
+                ReportBuilder.money(data.unsettledFinancialAmount)
+            )
         }
-        return String(localized: "还有 \(data.unsettledFinancialCount) 笔未结清")
+        return String(
+            format: String(localized: "还有 %lld 笔未结清"),
+            Int64(data.unsettledFinancialCount)
+        )
     }
 
     private var exportButtonTitle: String {
@@ -257,11 +289,18 @@ struct ProjectDeliveryGuideView: View {
         if data.drawingWithoutCurrentCount > 0 {
             let sample = data.drawingGroupsWithoutCurrent.prefix(3).joined(separator: "、")
             if sample.isEmpty {
-                return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版")
+                return String(
+                    format: String(localized: "%lld 组图纸未标记当前版"),
+                    Int64(data.drawingWithoutCurrentCount)
+                )
             }
-            return String(localized: "\(data.drawingWithoutCurrentCount) 组图纸未标记当前版：\(sample)")
+            return String(
+                format: String(localized: "%lld 组图纸未标记当前版：%@"),
+                Int64(data.drawingWithoutCurrentCount),
+                sample
+            )
         }
-        return String(localized: "已上传 \(data.drawingCount) 份，均有当前版")
+        return String(format: String(localized: "已上传 %lld 份，均有当前版"), Int64(data.drawingCount))
     }
 
     private var drawingCurrentVersionStatus: GuideStatus {

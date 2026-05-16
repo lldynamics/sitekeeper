@@ -440,9 +440,79 @@ struct OperationToastModifier: ViewModifier {
     }
 }
 
+struct OperationToastNotice: Identifiable {
+    let id = UUID()
+    let message: String
+    var actionTitle: String?
+    var action: (() -> Void)?
+    var autoDismissDuration: Duration = .milliseconds(1_600)
+
+    static func info(_ message: String) -> OperationToastNotice {
+        OperationToastNotice(message: message)
+    }
+}
+
+struct OperationToastNoticeModifier: ViewModifier {
+    @Binding var notice: OperationToastNotice?
+    @State private var hideTask: Task<Void, Never>?
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .top) {
+                if let notice {
+                    HStack(spacing: 10) {
+                        Text(notice.message)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+
+                        if let actionTitle = notice.actionTitle {
+                            Button(actionTitle) {
+                                let action = notice.action
+                                hideTask?.cancel()
+                                withAnimation(.easeOut(duration: 0.2)) {
+                                    self.notice = nil
+                                }
+                                action?()
+                            }
+                            .font(.caption.weight(.bold))
+                            .buttonStyle(.plain)
+                            .foregroundStyle(Color.appWarning)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().fill(Color.black.opacity(0.78))
+                    )
+                    .padding(.top, 8)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .onChange(of: notice?.id) { _, newID in
+                hideTask?.cancel()
+                guard newID != nil else { return }
+                AppHaptics.success()
+                let duration = notice?.autoDismissDuration ?? .milliseconds(1_600)
+                hideTask = Task { @MainActor in
+                    guard await DebouncedTask.wait(for: duration) else { return }
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        notice = nil
+                    }
+                }
+            }
+            .animation(.easeOut(duration: 0.2), value: notice?.id)
+    }
+}
+
 extension View {
     func operationToast(message: Binding<String?>) -> some View {
         modifier(OperationToastModifier(message: message))
+    }
+
+    func operationToast(notice: Binding<OperationToastNotice?>) -> some View {
+        modifier(OperationToastNoticeModifier(notice: notice))
     }
 }
 

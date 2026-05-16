@@ -178,7 +178,10 @@ struct ProjectFileListView: View {
                         ProjectFileMicroGuideRow(
                             icon: "exclamationmark.triangle.fill",
                             color: .appRisk,
-                            title: String(localized: "本分类有 \(missingItemCount) 个文件缺失"),
+                            title: String(
+                                format: String(localized: "本分类有 %lld 个文件缺失"),
+                                Int64(missingItemCount)
+                            ),
                             detail: "建议尽快补齐，避免预览、分享或导出时失败。"
                         )
                         NavigationLink {

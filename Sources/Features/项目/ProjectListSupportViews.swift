@@ -12,29 +12,38 @@ enum ProjectOverviewFilter: String {
     var displayName: String {
         switch self {
         case .active:
-            return "进行中"
+            return String(localized: "进行中")
         case .overdue:
-            return "延期"
+            return String(localized: "延期")
         case .todo:
-            return "待办"
+            return String(localized: "待办")
         case .missingReceipt:
-            return "缺票"
+            return String(localized: "缺票")
         case .financialDue:
-            return "应收付"
+            return String(localized: "应收付")
         case .missingTodayLog:
-            return "未写日志"
+            return String(localized: "未写日志")
         case .priceSpike:
-            return "价格异动"
+            return String(localized: "价格异动")
         }
     }
 }
 
 enum ProjectSortOption: String, CaseIterable {
-    case recentUpdate = "最近更新"
-    case expectedEnd = "预计完工"
-    case unpaidAmount = "未收款"
+    case recentUpdate
+    case expectedEnd
+    case unpaidAmount
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .recentUpdate:
+            return String(localized: "最近更新")
+        case .expectedEnd:
+            return String(localized: "预计完工")
+        case .unpaidAmount:
+            return String(localized: "未收款")
+        }
+    }
 }
 
 struct ProjectRiskBadge {
@@ -58,13 +67,13 @@ struct ProjectRowContent: View {
     private var detailParts: [String] {
         var parts: [String] = []
         if unpaidAmount > 0 {
-            parts.append("未收 \(ReportBuilder.money(unpaidAmount))")
+            parts.append(String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)))
         }
         if !project.expectedEndDate.isEmpty {
-            parts.append("完工 \(project.expectedEndDate)")
+            parts.append(String(format: String(localized: "完工 %@"), project.expectedEndDate))
         }
         if !project.managerName.isEmpty {
-            parts.append("负责人 \(project.managerName)")
+            parts.append(String(format: String(localized: "负责人 %@"), project.managerName))
         }
         if parts.isEmpty, !project.location.isEmpty {
             parts.append(project.location)
@@ -126,9 +135,11 @@ struct ProjectRowContent: View {
         var parts = [project.name, project.status.displayName]
         if !project.location.isEmpty { parts.append(project.location) }
         if !project.customerName.isEmpty { parts.append(project.customerName) }
-        if unpaidAmount > 0 { parts.append("未收 \(ReportBuilder.money(unpaidAmount))") }
+        if unpaidAmount > 0 {
+            parts.append(String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)))
+        }
         if !badges.isEmpty {
-            parts.append("风险 \(badges.prefix(3).map(\.title).joined(separator: "，"))")
+            parts.append(String(format: String(localized: "风险 %@"), badges.prefix(3).map(\.title).joined(separator: "，")))
         }
         return parts.joined(separator: "，")
     }

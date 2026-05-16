@@ -2,12 +2,21 @@ import SwiftUI
 import Foundation
 import UniformTypeIdentifiers
 
-private enum BackupSection: String, CaseIterable {
-    case local = "本地备份"
-    case cloud = "iCloud 云备份"
-    case overview = "备份概览"
+private enum BackupSection: CaseIterable {
+    case local
+    case cloud
+    case overview
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .local:
+            return String(localized: "本地备份")
+        case .cloud:
+            return String(localized: "iCloud 云备份")
+        case .overview:
+            return String(localized: "备份概览")
+        }
+    }
     var systemImage: String {
         switch self {
         case .local: "externaldrive"
@@ -47,10 +56,10 @@ struct BackupView: View {
     @State private var exportTask: Task<Void, Never>?
     @State private var importTask: Task<Void, Never>?
     @State private var isExportingArchive = false
-    @State private var exportProgress = BackupArchiveProgress(completedSteps: 0, totalSteps: 1, currentItem: "准备导出")
+    @State private var exportProgress = BackupArchiveProgress(completedSteps: 0, totalSteps: 1, currentItem: String(localized: "准备导出"))
     @State private var isImportingBackup = false
-    @State private var importProgress = BackupImportProgress(completedBytes: 0, totalBytes: 1, currentItem: "准备导入")
-    @State private var importProgressTitle = "正在读取备份"
+    @State private var importProgress = BackupImportProgress(completedBytes: 0, totalBytes: 1, currentItem: String(localized: "准备导入"))
+    @State private var importProgressTitle = String(localized: "正在读取备份")
     @State private var lastExportSucceeded = false
     @State private var lastImportSucceeded = false
     @State private var estimateState = BackupEstimateState()
@@ -58,8 +67,8 @@ struct BackupView: View {
     @State private var selectedBackupSection: BackupSection = .local
     private let autoOpenImporter: Bool
     private let showsNavigationTitle: Bool
-    private let cloudBackupScopeHint = "可按业务模块选择备份范围。关闭“原文件附件”可显著减小体积。"
-    private let cloudCellularTrafficHint = "提示：在蜂窝网络下手动或自动备份 iCloud 会消耗移动数据流量，建议大包资料优先在 Wi‑Fi 下操作。"
+    private let cloudBackupScopeHint = String(localized: "可按业务模块选择备份范围。关闭“原文件附件”可显著减小体积。")
+    private let cloudCellularTrafficHint = String(localized: "提示：在蜂窝网络下手动或自动备份 iCloud 会消耗移动数据流量，建议大包资料优先在 Wi‑Fi 下操作。")
 
     init(autoOpenImporter: Bool = false, showsNavigationTitle: Bool = true) {
         self.autoOpenImporter = autoOpenImporter
@@ -167,8 +176,8 @@ struct BackupView: View {
 
     private var cloudAutoNetworkHint: String {
         cloudAutoBackupRequiresWiFi
-            ? "已限制为仅 Wi‑Fi 自动备份。"
-            : "当前允许在蜂窝网络下自动备份，可能消耗移动数据流量。"
+            ? String(localized: "已限制为仅 Wi‑Fi 自动备份。")
+            : String(localized: "当前允许在蜂窝网络下自动备份，可能消耗移动数据流量。")
     }
 
     private var cloudBackupSection: some View {
@@ -251,7 +260,7 @@ struct BackupView: View {
             if let exportFileURL {
                 FileURLDocumentExporter(fileURL: exportFileURL) { result in
                     if case .success = result {
-                        setStatus(exportSummary.isEmpty ? "导出成功" : exportSummary)
+                        setStatus(exportSummary.isEmpty ? String(localized: "导出成功") : exportSummary)
                         localBackupLastSuccessAt = Date().timeIntervalSince1970
                         hasCompletedBackupExportTask = true
                         lastExportSucceeded = true
@@ -261,7 +270,7 @@ struct BackupView: View {
                     cleanupExportArchiveIfNeeded()
                 }
             } else {
-                ProgressView("正在准备导出文件...")
+                ProgressView(String(localized: "正在准备导出文件..."))
                     .padding()
             }
         }
@@ -270,7 +279,13 @@ struct BackupView: View {
             case .success(let url):
                 startPreviewImport(from: url)
             case .failure(let error):
-                setStatus("未能读取所选文件：\(error.localizedDescription)")
+                setStatus(String(format: String(localized: "未能读取所选文件：%@"), error.localizedDescription))
+                OperationAuditLog.record(
+                    action: .import,
+                    outcome: .failed,
+                    summary: String(format: String(localized: "未能读取所选文件：%@"), error.localizedDescription),
+                    source: "BackupView"
+                )
             }
         }
         .sheet(isPresented: $showPreview) {
@@ -278,24 +293,24 @@ struct BackupView: View {
                 importPreview(preview: preview)
             } else {
                 NavigationStack {
-                    ProgressView("正在加载预览...")
+                    ProgressView(String(localized: "正在加载预览..."))
                         .padding()
                 }
             }
         }
-        .alert("确认覆盖导入？", isPresented: $showUITestOverwriteImportConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("覆盖导入", role: .destructive) {}
+        .alert(String(localized: "确认覆盖导入？"), isPresented: $showUITestOverwriteImportConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "覆盖导入"), role: .destructive) {}
         } message: {
-            Text("覆盖会删除当前本机数据，请先导出备份。")
+            Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
         }
-        .alert("从 iCloud 恢复备份？", isPresented: $cloudState.showCloudRestoreConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("读取备份") {
+        .alert(String(localized: "从 iCloud 恢复备份？"), isPresented: $cloudState.showCloudRestoreConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "读取备份")) {
                 restorePendingCloudBackup()
             }
         } message: {
-            Text("将先读取云端备份预览，确认后可选择合并或覆盖当前本机数据。")
+            Text(String(localized: "将先读取云端备份预览，确认后可选择合并或覆盖当前本机数据。"))
         }
         .onAppear {
             normalizeCloudBackupSettings()
@@ -319,7 +334,7 @@ struct BackupView: View {
         Group {
             if showsNavigationTitle {
                 backupSurface
-                    .navigationTitle("数据备份")
+                    .navigationTitle(String(localized: "数据备份"))
             } else {
                 backupSurface
             }
@@ -332,10 +347,10 @@ struct BackupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("数据备份", systemImage: "arrow.triangle.2.circlepath.icloud")
+                    Label(String(localized: "数据备份"), systemImage: "arrow.triangle.2.circlepath.icloud")
                         .font(.headline)
 
-                    Text("导出、导入与 iCloud 同步")
+                    Text(String(localized: "导出、导入与 iCloud 同步"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -344,7 +359,7 @@ struct BackupView: View {
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("导航")
+                    Text(String(localized: "导航"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ForEach(BackupSection.allCases, id: \.self) { section in
@@ -375,14 +390,14 @@ struct BackupView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("快捷操作")
+                    Text(String(localized: "快捷操作"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 
                     Button {
                         exportBackupZIP()
                     } label: {
-                        Label("导出备份 ZIP", systemImage: "archivebox")
+                        Label(String(localized: "导出备份 ZIP"), systemImage: "archivebox")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -392,7 +407,7 @@ struct BackupView: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label("导入备份 ZIP", systemImage: "square.and.arrow.down")
+                        Label(String(localized: "导入备份 ZIP"), systemImage: "square.and.arrow.down")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -401,7 +416,7 @@ struct BackupView: View {
                     Button {
                         uploadBackupToICloud()
                     } label: {
-                        Label("备份到 iCloud", systemImage: "icloud.and.arrow.up")
+                        Label(String(localized: "备份到 iCloud"), systemImage: "icloud.and.arrow.up")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -479,18 +494,18 @@ struct BackupView: View {
     @ViewBuilder
     private var backupMicroGuideSection: some View {
         if shouldShowMicroGuides {
-            Section("建议下一步") {
+            Section(String(localized: "建议下一步")) {
                 if estimateState.backupEstimate.missingFiles.count > 0 {
                     BackupMicroGuideRow(
                         icon: "exclamationmark.triangle.fill",
                         color: .appWarning,
-                        title: String(localized: "检测到 \(estimateState.backupEstimate.missingFiles.count) 个原文件缺失"),
-                        detail: "建议先到项目文件页抽查缺件，再导出正式备份。"
+                        title: String(format: String(localized: "检测到 %d 个原文件缺失"), estimateState.backupEstimate.missingFiles.count),
+                        detail: String(localized: "建议先到项目文件页抽查缺件，再导出正式备份。")
                     )
                     NavigationLink {
                         ProjectFileBrowserView()
                     } label: {
-                        Label("去项目文件排查", systemImage: "arrow.right.circle.fill")
+                        Label(String(localized: "去项目文件排查"), systemImage: "arrow.right.circle.fill")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -499,13 +514,13 @@ struct BackupView: View {
                     BackupMicroGuideRow(
                         icon: "checkmark.seal.fill",
                         color: .appSuccess,
-                        title: "备份已导出，建议立即做一次导入预览",
-                        detail: "提前验证恢复链路，换机或误删时更稳。"
+                        title: String(localized: "备份已导出，建议立即做一次导入预览"),
+                        detail: String(localized: "提前验证恢复链路，换机或误删时更稳。")
                     )
                     Button {
                         showImporter = true
                     } label: {
-                        Label("马上验证导入", systemImage: "arrow.down.doc.fill")
+                        Label(String(localized: "马上验证导入"), systemImage: "arrow.down.doc.fill")
                     }
                     .buttonStyle(.appProminent(tint: .appWarning))
                 }
@@ -514,13 +529,13 @@ struct BackupView: View {
                     BackupMicroGuideRow(
                         icon: "doc.text.magnifyingglass",
                         color: .appPrimaryAction,
-                        title: "导入完成，建议抽查关键资料",
-                        detail: "优先核对最近图纸、票据和随手记附件是否完整。"
+                        title: String(localized: "导入完成，建议抽查关键资料"),
+                        detail: String(localized: "优先核对最近图纸、票据和随手记附件是否完整。")
                     )
                     NavigationLink {
                         ProjectFileBrowserView()
                     } label: {
-                        Label("去抽查文件", systemImage: "arrow.right.circle.fill")
+                        Label(String(localized: "去抽查文件"), systemImage: "arrow.right.circle.fill")
                     }
                     .buttonStyle(.bordered)
                 }
@@ -550,6 +565,12 @@ struct BackupView: View {
             onApplyImport: startApplyingImport,
             onCancel: {
                 showPreview = false
+                OperationAuditLog.record(
+                    action: .import,
+                    outcome: .cancelled,
+                    summary: String(localized: "取消导入"),
+                    source: "BackupView"
+                )
                 cleanupPendingImportFileIfNeeded()
             }
         )
@@ -557,11 +578,24 @@ struct BackupView: View {
 
     private func startPreviewImport(from selectedURL: URL) {
         clearStatus()
+        OperationAuditLog.record(
+            action: .import,
+            outcome: .started,
+            summary: String(localized: "正在读取备份预览"),
+            detail: selectedURL.lastPathComponent,
+            source: "BackupView"
+        )
         do {
             let copiedURL = try BackupImportCoordinator.copySelectedBackupToSandbox(selectedURL)
             startPreviewImportFromPreparedFile(copiedURL)
         } catch {
             setStatus(error.localizedDescription)
+            OperationAuditLog.record(
+                action: .import,
+                outcome: .failed,
+                summary: String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription),
+                source: "BackupView"
+            )
             cleanupPendingImportFileIfNeeded()
         }
     }
@@ -573,9 +607,9 @@ struct BackupView: View {
         isOverwriteImportArmed = false
 
         beginImportTask(
-            title: "正在读取备份预览",
+            title: String(localized: "正在读取备份预览"),
             totalBytes: Int64(max(QuickNoteAttachmentStorage.fileSize(at: copiedURL), 1)),
-            currentItem: "准备读取"
+            currentItem: String(localized: "准备读取")
         )
         importTask = Task {
             do {
@@ -598,6 +632,12 @@ struct BackupView: View {
                 guard !Task.isCancelled else {
                     await MainActor.run {
                         finalizeImportTask(cleanupPendingFile: true)
+                        OperationAuditLog.record(
+                            action: .import,
+                            outcome: .cancelled,
+                            summary: String(localized: "取消导入"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
@@ -606,18 +646,43 @@ struct BackupView: View {
                     importTask = nil
                     pendingImportPreview = preview
                     showPreview = true
+                    let detail = [
+                        "photo=\(preview.photoFileCount)",
+                        "drawing=\(preview.drawingFileCount)",
+                        "document=\(preview.documentFileCount)",
+                        "attachment=\(preview.quickNoteAttachmentFileCount)"
+                    ].joined(separator: ", ")
+                    OperationAuditLog.record(
+                        action: .import,
+                        outcome: .succeeded,
+                        summary: String(localized: "正在读取备份预览"),
+                        detail: detail,
+                        source: "BackupView"
+                    )
                 }
             } catch {
                 guard !Task.isCancelled else {
                     await MainActor.run {
                         finalizeImportTask(cleanupPendingFile: true)
+                        OperationAuditLog.record(
+                            action: .import,
+                            outcome: .cancelled,
+                            summary: String(localized: "取消导入"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
-                    setStatus("文件格式不正确：\(error.localizedDescription)")
+                    setStatus(String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription))
+                    OperationAuditLog.record(
+                        action: .import,
+                        outcome: .failed,
+                        summary: String(format: String(localized: "文件格式不正确：%@"), error.localizedDescription),
+                        source: "BackupView"
+                    )
                     cleanupPendingImportFileIfNeeded()
                 }
             }
@@ -626,19 +691,32 @@ struct BackupView: View {
 
     private func startApplyingImport() {
         guard let pendingImportFileURL else {
-            setStatus("备份源文件已失效，请重新选择导入文件。")
+            setStatus(String(localized: "备份源文件已失效，请重新选择导入文件。"))
             showPreview = false
+            OperationAuditLog.record(
+                action: .import,
+                outcome: .failed,
+                summary: String(localized: "备份源文件已失效，请重新选择导入文件。"),
+                source: "BackupView"
+            )
             return
         }
         isOverwriteImportArmed = false
+        OperationAuditLog.record(
+            action: .import,
+            outcome: .started,
+            summary: importMode == .overwrite ? String(localized: "覆盖导入") : String(localized: "合并导入"),
+            detail: pendingImportFileURL.lastPathComponent,
+            source: "BackupView"
+        )
 
         let metadataSnapshot = pendingImportPreview?.snapshot
         let sourceSize = Int64(max(QuickNoteAttachmentStorage.fileSize(at: pendingImportFileURL), 1))
 
         beginImportTask(
-            title: "正在应用数据索引",
+            title: String(localized: "正在应用数据索引"),
             totalBytes: sourceSize,
-            currentItem: "准备导入"
+            currentItem: String(localized: "准备导入")
         )
 
         importTask = Task {
@@ -667,7 +745,13 @@ struct BackupView: View {
                 }
                 guard !Task.isCancelled else {
                     await MainActor.run {
-                        finalizeImportTask(status: "已取消导入，当前数据未变更。", cleanupPendingFile: true, closePreview: true)
+                        finalizeImportTask(status: String(localized: "已取消导入，当前数据未变更。"), cleanupPendingFile: true, closePreview: true)
+                        OperationAuditLog.record(
+                            action: .import,
+                            outcome: .cancelled,
+                            summary: String(localized: "已取消导入，当前数据未变更。"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
@@ -677,8 +761,8 @@ struct BackupView: View {
                 }
 
                 await MainActor.run {
-                    importProgressTitle = "正在恢复原文件"
-                    importProgress = BackupImportProgress(completedBytes: 0, totalBytes: sourceSize, currentItem: "准备恢复")
+                    importProgressTitle = String(localized: "正在恢复原文件")
+                    importProgress = BackupImportProgress(completedBytes: 0, totalBytes: sourceSize, currentItem: String(localized: "准备恢复"))
                 }
 
                 let relay = TaskCancellationRelay()
@@ -699,7 +783,7 @@ struct BackupView: View {
                 }
 
                 await MainActor.run {
-                    importProgressTitle = "正在应用数据索引"
+                    importProgressTitle = String(localized: "正在应用数据索引")
                     BackupImportCoordinator.applyImportMetadata(snapshot: snapshot, mode: importMode, store: store)
                     if importMode == .overwrite {
                         BackupImportCoordinator.cleanupOverwrittenFiles(previous: existingSnapshot, imported: snapshot)
@@ -712,23 +796,42 @@ struct BackupView: View {
                     lastExportSucceeded = false
                     hasSeenBackupGuide = true
                     if restoredCounts.totalCount > 0 {
-                        setStatus("导入完成（恢复 \(restoredCounts.totalCount) 个原文件）")
+                        setStatus(String(format: String(localized: "导入完成（恢复 %d 个原文件）"), restoredCounts.totalCount))
                     } else {
-                        setStatus("导入完成")
+                        setStatus(String(localized: "导入完成"))
                     }
+                    OperationAuditLog.record(
+                        action: .import,
+                        outcome: .succeeded,
+                        summary: String(localized: "导入完成"),
+                        detail: "\(importMode == .overwrite ? String(localized: "覆盖导入") : String(localized: "合并导入")) · restore=\(restoredCounts.totalCount)",
+                        source: "BackupView"
+                    )
                     cleanupPendingImportFileIfNeeded()
                 }
             } catch {
                 guard !Task.isCancelled else {
                     await MainActor.run {
-                        finalizeImportTask(status: "已取消导入，当前数据未变更。", cleanupPendingFile: true, closePreview: true)
+                        finalizeImportTask(status: String(localized: "已取消导入，当前数据未变更。"), cleanupPendingFile: true, closePreview: true)
+                        OperationAuditLog.record(
+                            action: .import,
+                            outcome: .cancelled,
+                            summary: String(localized: "已取消导入，当前数据未变更。"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
                 await MainActor.run {
                     isImportingBackup = false
                     importTask = nil
-                    setStatus("导入失败：\(error.localizedDescription)")
+                    setStatus(String(format: String(localized: "导入失败：%@"), error.localizedDescription))
+                    OperationAuditLog.record(
+                        action: .import,
+                        outcome: .failed,
+                        summary: String(format: String(localized: "导入失败：%@"), error.localizedDescription),
+                        source: "BackupView"
+                    )
                 }
             }
         }
@@ -738,7 +841,7 @@ struct BackupView: View {
         cleanupExportArchiveIfNeeded()
         lastExportSucceeded = false
         clearStatus()
-        beginExportTask(currentItem: "准备导出")
+        beginExportTask(currentItem: String(localized: "准备导出"))
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
         exportTask = Task {
             do {
@@ -761,18 +864,18 @@ struct BackupView: View {
             } catch {
                 if Task.isCancelled {
                     await MainActor.run {
-                        finalizeExportTask(status: "已取消导出", cleanupExportFile: true)
+                        finalizeExportTask(status: String(localized: "已取消导出"), cleanupExportFile: true)
                     }
                     return
                 }
                 if let archiveError = error as? BackupArchiveError, case .cancelled = archiveError {
                     await MainActor.run {
-                        finalizeExportTask(status: "已取消导出", cleanupExportFile: true)
+                        finalizeExportTask(status: String(localized: "已取消导出"), cleanupExportFile: true)
                     }
                     return
                 }
                 await MainActor.run {
-                    finalizeExportTask(status: "备份生成失败：\(error.localizedDescription)")
+                    finalizeExportTask(status: String(format: String(localized: "备份生成失败：%@"), error.localizedDescription))
                 }
             }
         }
@@ -804,8 +907,8 @@ struct BackupView: View {
     private func applyCloudBackupsRefreshSuccess(files: [CloudBackupFile], force: Bool) {
         cloudState.cloudBackups = files
         if files.isEmpty && force {
-            setCloudStatus("iCloud 中还没有备份。")
-        } else if !files.isEmpty && cloudState.cloudStatusMessage.contains("没有备份") {
+            setCloudStatus(String(localized: "iCloud 中还没有备份。"))
+        } else if !files.isEmpty && cloudState.cloudStatusMessage.contains(String(localized: "没有备份")) {
             clearCloudStatus()
         }
         cloudState.isRefreshingCloudBackups = false
@@ -815,7 +918,7 @@ struct BackupView: View {
     @MainActor
     private func applyCloudBackupsRefreshFailure(error: Error) {
         cloudState.cloudBackups = []
-        setCloudStatus("iCloud 读取失败：\(error.localizedDescription)")
+        setCloudStatus(String(format: String(localized: "iCloud 读取失败：%@"), error.localizedDescription))
         cloudState.isRefreshingCloudBackups = false
         cloudState.cloudBackupTask = nil
     }
@@ -828,7 +931,7 @@ struct BackupView: View {
             setCloudStatus(CloudBackupContentError.noSelection.localizedDescription)
             return
         }
-        beginCloudUploadTask(currentItem: "准备生成云备份")
+        beginCloudUploadTask(currentItem: String(localized: "准备生成云备份"))
         let snapshot = store.makeCloudBackupSnapshot(options: options)
 
         cloudState.cloudBackupTask = Task {
@@ -844,14 +947,18 @@ struct BackupView: View {
 
                 guard !Task.isCancelled else {
                     await MainActor.run {
-                        finalizeCloudBackupTask(status: "已取消 iCloud 备份")
+                        finalizeCloudBackupTask(status: String(localized: "已取消 iCloud 备份"))
                     }
                     return
                 }
 
                 await MainActor.run {
                     cloudState.cloudBackups = result.allBackups
-                    setCloudStatus("已备份到 iCloud：\(result.savedFile.formattedSize)，\(result.savedFile.formattedModifiedAt)。")
+                    setCloudStatus(String(
+                        format: String(localized: "已备份到 iCloud：%@，%@。"),
+                        result.savedFile.formattedSize,
+                        result.savedFile.formattedModifiedAt
+                    ))
                     cloudLastSuccessAt = result.savedFile.modifiedAt.timeIntervalSince1970
                     hasCompletedBackupExportTask = true
                     hasSeenBackupGuide = true
@@ -860,12 +967,12 @@ struct BackupView: View {
             } catch {
                 guard !Task.isCancelled else {
                     await MainActor.run {
-                        finalizeCloudBackupTask(status: "已取消 iCloud 备份")
+                        finalizeCloudBackupTask(status: String(localized: "已取消 iCloud 备份"))
                     }
                     return
                 }
                 await MainActor.run {
-                    finalizeCloudBackupTask(status: "iCloud 备份失败：\(error.localizedDescription)")
+                    finalizeCloudBackupTask(status: String(format: String(localized: "iCloud 备份失败：%@"), error.localizedDescription))
                 }
             }
         }
@@ -874,15 +981,28 @@ struct BackupView: View {
     private func restorePendingCloudBackup() {
         guard let file = cloudState.pendingCloudRestore else {
             setCloudStatus(CloudBackupError.backupNotFound.localizedDescription)
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .failed,
+                summary: CloudBackupError.backupNotFound.localizedDescription,
+                source: "BackupView"
+            )
             return
         }
         cloudState.pendingCloudRestore = nil
         importMode = .merge
         clearAllStatusMessages()
+        OperationAuditLog.record(
+            action: .restore,
+            outcome: .started,
+            summary: String(localized: "正在读取 iCloud 备份"),
+            detail: "\(file.fileName) · \(file.formattedSize)",
+            source: "BackupView"
+        )
         beginImportTask(
-            title: "正在读取 iCloud 备份",
+            title: String(localized: "正在读取 iCloud 备份"),
             totalBytes: Int64(max(file.byteSize, 1)),
-            currentItem: "准备读取"
+            currentItem: String(localized: "准备读取")
         )
 
         importTask = Task {
@@ -891,22 +1011,47 @@ struct BackupView: View {
                 guard !Task.isCancelled else {
                     await MainActor.run {
                         finalizeImportTask(cleanupPendingFile: true)
+                        OperationAuditLog.record(
+                            action: .restore,
+                            outcome: .cancelled,
+                            summary: String(localized: "已取消读取 iCloud 备份"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
                 await MainActor.run {
                     finalizeImportTask()
                     startPreviewImportFromPreparedFile(copiedURL)
+                    OperationAuditLog.record(
+                        action: .restore,
+                        outcome: .succeeded,
+                        summary: String(localized: "正在读取 iCloud 备份"),
+                        detail: copiedURL.lastPathComponent,
+                        source: "BackupView"
+                    )
                 }
             } catch {
                 guard !Task.isCancelled else {
                     await MainActor.run {
-                        finalizeImportTask(status: "已取消读取 iCloud 备份", cleanupPendingFile: true)
+                        finalizeImportTask(status: String(localized: "已取消读取 iCloud 备份"), cleanupPendingFile: true)
+                        OperationAuditLog.record(
+                            action: .restore,
+                            outcome: .cancelled,
+                            summary: String(localized: "已取消读取 iCloud 备份"),
+                            source: "BackupView"
+                        )
                     }
                     return
                 }
                 await MainActor.run {
-                    finalizeImportTask(status: "iCloud 备份读取失败：\(error.localizedDescription)", cleanupPendingFile: true)
+                    finalizeImportTask(status: String(format: String(localized: "iCloud 备份读取失败：%@"), error.localizedDescription), cleanupPendingFile: true)
+                    OperationAuditLog.record(
+                        action: .restore,
+                        outcome: .failed,
+                        summary: String(format: String(localized: "iCloud 备份读取失败：%@"), error.localizedDescription),
+                        source: "BackupView"
+                    )
                 }
             }
         }
@@ -982,7 +1127,11 @@ struct BackupView: View {
             let data = try JSONEncoder().encode(snapshot)
             try data.write(to: tempURL, options: .atomic)
         } catch {
-            StorageIssueLog.record("UI 测试预览备份写入失败：\(tempURL.lastPathComponent)，\(error.localizedDescription)")
+            StorageIssueLog.record(String(
+                format: String(localized: "UI 测试预览备份写入失败：%@，%@"),
+                tempURL.lastPathComponent,
+                error.localizedDescription
+            ))
             return
         }
 
@@ -1006,17 +1155,17 @@ struct BackupView: View {
 
     private var exportProgressCard: some View {
         BackupTaskProgressCard(
-            title: cloudState.isUploadingCloudBackup ? "正在生成 iCloud 备份" : "正在生成备份 ZIP",
+            title: cloudState.isUploadingCloudBackup ? String(localized: "正在生成 iCloud 备份") : String(localized: "正在生成备份 ZIP"),
             subtitle: exportProgress.currentItem,
             progressValue: exportProgress.fractionCompleted,
             detail: "\(exportProgress.completedSteps)/\(max(exportProgress.totalSteps, 1))",
-            cancelTitle: cloudState.isUploadingCloudBackup ? "取消云备份" : "取消导出",
+            cancelTitle: cloudState.isUploadingCloudBackup ? String(localized: "取消云备份") : String(localized: "取消导出"),
             onCancel: {
                 AppHaptics.warning()
                 exportProgress = BackupArchiveProgress(
                     completedSteps: exportProgress.completedSteps,
                     totalSteps: max(exportProgress.totalSteps, 1),
-                    currentItem: "正在取消..."
+                    currentItem: String(localized: "正在取消...")
                 )
                 if cloudState.isUploadingCloudBackup {
                     cloudState.cloudBackupTask?.cancel()
@@ -1033,13 +1182,13 @@ struct BackupView: View {
             subtitle: importProgress.currentItem,
             progressValue: importProgress.fractionCompleted,
             detail: "\(formattedFileSize(Int(importProgress.completedBytes)))/\(formattedFileSize(Int(importProgress.totalBytes)))",
-            cancelTitle: "取消导入",
+            cancelTitle: String(localized: "取消导入"),
             onCancel: {
                 AppHaptics.warning()
                 importProgress = BackupImportProgress(
                     completedBytes: importProgress.completedBytes,
                     totalBytes: max(importProgress.totalBytes, 1),
-                    currentItem: "正在取消..."
+                    currentItem: String(localized: "正在取消...")
                 )
                 importTask?.cancel()
             }
@@ -1058,7 +1207,11 @@ struct BackupView: View {
             do {
                 try FileManager.default.removeItem(at: pendingImportFileURL)
             } catch {
-                StorageIssueLog.record("导入临时文件清理失败：\(pendingImportFileURL.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.record(String(
+                    format: String(localized: "导入临时文件清理失败：%@，%@"),
+                    pendingImportFileURL.lastPathComponent,
+                    error.localizedDescription
+                ))
             }
         }
         self.pendingImportFileURL = nil
@@ -1128,17 +1281,17 @@ struct BackupView: View {
     private func emitStatusHaptic(_ message: String) {
         let normalized = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return }
-        if normalized.contains("失败")
-            || normalized.contains("错误")
-            || normalized.contains("未能")
-            || normalized.contains("失效")
-            || normalized.contains("不正确") {
+        if normalized.contains(String(localized: "失败"))
+            || normalized.contains(String(localized: "错误"))
+            || normalized.contains(String(localized: "未能"))
+            || normalized.contains(String(localized: "失效"))
+            || normalized.contains(String(localized: "不正确")) {
             AppHaptics.error()
             return
         }
-        if normalized.contains("取消")
-            || normalized.contains("警告")
-            || normalized.contains("提示") {
+        if normalized.contains(String(localized: "取消"))
+            || normalized.contains(String(localized: "警告"))
+            || normalized.contains(String(localized: "提示")) {
             AppHaptics.warning()
             return
         }

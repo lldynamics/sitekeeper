@@ -436,19 +436,23 @@ struct MaterialListView: View {
     private var canAddMaterial: Bool {
         !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !newUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        InputValidator.nonNegativeNumber(newQty) &&
-        (newUnitPrice.isEmpty || InputValidator.nonNegativeNumber(newUnitPrice))
+        InputValidator.validate(newQty, kind: .quantity, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(newUnitPrice, kind: .amount, requirement: .optionalNonNegative).isValid
     }
 
     private func applyMaterialTemplate(_ template: ProjectTemplate) {
-        guard let line = template.content.split(separator: "\n").first else { return }
-        let parts = line.split(separator: "×").map { $0.trimmingCharacters(in: .whitespaces) }
-        newName = parts.first ?? template.name
-        let qtyPart = parts.count > 1 ? parts[1] : "1"
-        newQty = qtyPart.filter { "0123456789.".contains($0) }
-        newUnit = qtyPart.filter { !"0123456789.".contains($0) && $0 != " " }
-        if newQty.isEmpty { newQty = "1" }
-        if newUnit.isEmpty { newUnit = "个" }
+        guard let line = template.content
+            .split(separator: "\n")
+            .map({ String($0).trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) else { return }
+        let parsed = NumericInputSupport.parseMaterialTemplateLine(
+            line,
+            defaultNumber: "1",
+            defaultUnit: String(localized: "个")
+        )
+        newName = parsed.name.isEmpty ? template.name : parsed.name
+        newQty = parsed.quantity
+        newUnit = parsed.unit
         operationMessage = "已套用材料模板"
     }
 

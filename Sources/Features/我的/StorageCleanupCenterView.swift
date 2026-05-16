@@ -2,6 +2,9 @@ import SwiftUI
 
 struct StorageCleanupCenterView: View {
     @Environment(DataStore.self) private var store
+    @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
+    @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
+    @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
     @State private var cloudBackups: [CloudBackupFile] = []
     @State private var cloudBackupError: String?
     @State private var isRefreshingCloudBackups = false
@@ -170,7 +173,7 @@ struct StorageCleanupCenterView: View {
                 pendingCleanupProject = nil
             }
         } message: { usage in
-            Text(pendingCleanupCategory.confirmationMessage(projectName: usage.projectName))
+            Text(cleanupConfirmationMessage(for: usage, category: pendingCleanupCategory))
         }
     }
 
@@ -464,8 +467,246 @@ struct StorageCleanupCenterView: View {
         }
     }
 
+    private func cleanupConfirmationMessage(for usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) -> String {
+        let preview = cleanupPreview(for: usage.projectId, category: category)
+        var lines: [String] = [category.confirmationMessage(projectName: usage.projectName)]
+
+        if preview.totalFileCount > 0 {
+            lines.append("预计删除文件 \(preview.totalFileCount) 个：")
+            for item in preview.fileItems {
+                lines.append("- \(item.title) \(item.count) 个")
+            }
+        } else {
+            lines.append("预计删除文件 0 个。")
+        }
+
+        if !preview.recordItems.isEmpty {
+            lines.append("预计影响记录：")
+            for item in preview.recordItems {
+                lines.append("- \(item.title) \(item.count) 条")
+            }
+        }
+
+        if !preview.sampleFileNames.isEmpty {
+            lines.append("示例文件：\(preview.sampleFileNames.prefix(5).joined(separator: "、"))")
+        }
+
+        lines.append(backupReminderMessage())
+        return lines.joined(separator: "\n")
+    }
+
+    private func cleanupPreview(for projectId: UUID, category: ProjectStorageCleanupCategory) -> CleanupImpactSummary {
+        switch category {
+        case .photos:
+            return photoCleanupPreview(projectId: projectId)
+        case .videos:
+            return videoCleanupPreview(projectId: projectId)
+        case .cad:
+            return cadCleanupPreview(projectId: projectId)
+        case .tickets:
+            return ticketCleanupPreview(projectId: projectId)
+        case .all:
+            var summary = CleanupImpactSummary()
+            summary.merge(photoCleanupPreview(projectId: projectId))
+            summary.merge(videoCleanupPreview(projectId: projectId))
+            summary.merge(cadCleanupPreview(projectId: projectId))
+            summary.merge(ticketCleanupPreview(projectId: projectId))
+            return summary
+        }
+    }
+
+    private func photoCleanupPreview(projectId: UUID) -> CleanupImpactSummary {
+        let projectLogs = store.dailyLogs.filter { $0.projectId == projectId }
+        let projectTodos = store.siteTodos.filter { $0.projectId == projectId }
+        let logsWithPhotos = projectLogs.filter { !$0.allPhotoFileNames.isEmpty }
+        let todosWithPhotos = projectTodos.filter {
+            $0.rectificationBeforePhotoFileName != nil || $0.rectificationAfterPhotoFileName != nil
+        }
+
+        var selectedPhotoNames = Set<String>()
+        for log in projectLogs {
+            selectedPhotoNames.formUnion(log.allPhotoFileNames)
+        }
+        for todo in projectTodos {
+            if let before = todo.rectificationBeforePhotoFileName {
+                selectedPhotoNames.insert(before)
+            }
+            if let after = todo.rectificationAfterPhotoFileName {
+                selectedPhotoNames.insert(after)
+            }
+        }
+        let remainingLogs = store.dailyLogs.filter { $0.projectId != projectId }
+        let remainingTodos = store.siteTodos.filter { $0.projectId != projectId }
+        let remainingPhotoNames = PhotoStorage.referencedFileNames(logs: remainingLogs, todos: remainingTodos)
+        let deletablePhotoNames = selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
+
+        var summary = CleanupImpactSummary()
+        summary.addFile(title: "照片原文件", count: deletablePhotoNames.count)
+        summary.addRecord(title: "日志照片记录", count: logsWithPhotos.count)
+        summary.addRecord(title: "待办整改照片", count: todosWithPhotos.count)
+        summary.addSampleFileNames(deletablePhotoNames)
+        return summary
+    }
+
+    private func videoCleanupPreview(projectId: UUID) -> CleanupImpactSummary {
+        let projectNotes = store.quickNotes.filter { $0.projectId == projectId }
+        let notesWithVideos = projectNotes.filter { note in
+            note.attachments.contains { $0.attachmentKind == .video }
+        }
+
+        var selectedAttachmentNames = Set<String>()
+        for note in projectNotes {
+            let names = note.attachments
+                .filter { $0.attachmentKind == .video }
+                .map(\.fileName)
+            selectedAttachmentNames.formUnion(names)
+        }
+
+        let videoDocuments = store.projectDocuments
+            .filter { $0.projectId == projectId }
+            .filter { document in
+                let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return videoFileExtensions.contains(ext) && !isTicketCategory(document.category)
+            }
+        let videoDocumentIDs = Set(videoDocuments.map(\.id))
+        let videoDocumentFileNames = Set(videoDocuments.map(\.fileName))
+
+        let notesAfterCleanup = store.quickNotes.map { note -> QuickNote in
+            guard note.projectId == projectId else { return note }
+            var value = note
+            value.attachments.removeAll { $0.attachmentKind == .video }
+            return value
+        }
+
+        let extraMethodAttachments = store.constructionMethods.flatMap(\.attachments)
+            + store.constructionMethods.flatMap(\.tutorialAttachments)
+        let remainingAttachmentNames = QuickNoteAttachmentStorage.referencedFileNames(
+            for: notesAfterCleanup,
+            extraAttachments: extraMethodAttachments
+        )
+        let deletableAttachmentNames = selectedAttachmentNames.filter { !remainingAttachmentNames.contains($0) }
+
+        let remainingDocumentNamesAfterCleanup = Set(
+            store.projectDocuments
+                .filter { !videoDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+        let deletableDocumentNames = videoDocumentFileNames.filter { !remainingDocumentNamesAfterCleanup.contains($0) }
+
+        let financialLinkedCount = store.projectFinancialRecords.filter { record in
+            record.linkedDocumentIds.contains(where: videoDocumentIDs.contains)
+        }.count
+        let warehouseLinkedCount = store.projectWarehouseMovements.filter { movement in
+            movement.linkedDocumentIds.contains(where: videoDocumentIDs.contains)
+        }.count
+
+        var summary = CleanupImpactSummary()
+        summary.addFile(title: "随手记视频文件", count: deletableAttachmentNames.count)
+        summary.addFile(title: "资料视频文件", count: deletableDocumentNames.count)
+        summary.addRecord(title: "随手记视频记录", count: notesWithVideos.count)
+        summary.addRecord(title: "视频资料记录", count: videoDocumentIDs.count)
+        summary.addRecord(title: "财务关联变更", count: financialLinkedCount)
+        summary.addRecord(title: "仓库关联变更", count: warehouseLinkedCount)
+        summary.addSampleFileNames(Set(deletableAttachmentNames).union(deletableDocumentNames))
+        return summary
+    }
+
+    private func cadCleanupPreview(projectId: UUID) -> CleanupImpactSummary {
+        let drawings = store.projectDrawings
+            .filter { $0.projectId == projectId }
+            .filter { drawing in
+                let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                return cadFileExtensions.contains(ext)
+            }
+        let drawingFileNames = Set(drawings.map(\.fileName))
+        let remainingDrawingNamesAfterCleanup = Set(
+            store.projectDrawings
+                .filter { drawing in
+                    let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+                    let shouldRemove = drawing.projectId == projectId && cadFileExtensions.contains(ext)
+                    return !shouldRemove
+                }
+                .map(\.fileName)
+        )
+        let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNamesAfterCleanup.contains($0) }
+
+        var summary = CleanupImpactSummary()
+        summary.addFile(title: "CAD 文件", count: deletableDrawingNames.count)
+        summary.addRecord(title: "CAD 图纸记录", count: drawings.count)
+        summary.addSampleFileNames(deletableDrawingNames)
+        return summary
+    }
+
+    private func ticketCleanupPreview(projectId: UUID) -> CleanupImpactSummary {
+        let ticketDocuments = store.projectDocuments.filter { $0.projectId == projectId && isTicketCategory($0.category) }
+        let removedDocumentIDs = Set(ticketDocuments.map(\.id))
+        let documentFileNames = Set(ticketDocuments.map(\.fileName))
+        let remainingDocumentNamesAfterCleanup = Set(
+            store.projectDocuments
+                .filter { !removedDocumentIDs.contains($0.id) }
+                .map(\.fileName)
+        )
+        let deletableDocumentNames = documentFileNames.filter { !remainingDocumentNamesAfterCleanup.contains($0) }
+
+        let financialLinkedCount = store.projectFinancialRecords.filter { record in
+            record.linkedDocumentIds.contains(where: removedDocumentIDs.contains)
+        }.count
+        let warehouseLinkedCount = store.projectWarehouseMovements.filter { movement in
+            movement.linkedDocumentIds.contains(where: removedDocumentIDs.contains)
+        }.count
+
+        var summary = CleanupImpactSummary()
+        summary.addFile(title: "票据文件", count: deletableDocumentNames.count)
+        summary.addRecord(title: "票据资料记录", count: removedDocumentIDs.count)
+        summary.addRecord(title: "财务关联变更", count: financialLinkedCount)
+        summary.addRecord(title: "仓库关联变更", count: warehouseLinkedCount)
+        summary.addSampleFileNames(deletableDocumentNames)
+        return summary
+    }
+
+    private func backupReminderMessage() -> String {
+        guard let latestDate = latestBackupDateForReminder else {
+            return "最近备份：未检测到本机或云备份，建议先执行备份后再清理。"
+        }
+
+        let calendar = Calendar.current
+        let latestDay = calendar.startOfDay(for: latestDate)
+        let today = calendar.startOfDay(for: Date())
+        let daysSinceBackup = max(calendar.dateComponents([.day], from: latestDay, to: today).day ?? 0, 0)
+        let formattedDate = Formatters.dateTime.string(from: latestDate)
+        let reminderDays = max(1, backupHealthReminderDays)
+
+        if daysSinceBackup >= reminderDays {
+            return "最近备份：\(formattedDate)（\(daysSinceBackup) 天前），建议先备份后再清理。"
+        }
+
+        return "最近备份：\(formattedDate)。"
+    }
+
+    private var latestBackupDateForReminder: Date? {
+        var candidates: [Date] = []
+        if localBackupLastSuccessAt > 0 {
+            candidates.append(Date(timeIntervalSince1970: localBackupLastSuccessAt))
+        }
+        if cloudBackupLastSuccessAt > 0 {
+            candidates.append(Date(timeIntervalSince1970: cloudBackupLastSuccessAt))
+        }
+        if let latestCloudBackup = cloudBackups.first?.modifiedAt {
+            candidates.append(latestCloudBackup)
+        }
+        return candidates.max()
+    }
+
     private func cleanupProjectFiles(_ usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) {
         let projectId = usage.projectId
+        let auditDetail = "\(usage.projectName) · \(category.displayName)"
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: String(localized: "按项目清理"),
+            detail: auditDetail,
+            source: "StorageCleanupCenterView"
+        )
         let deletedCount: Int
 
         switch category {
@@ -488,6 +729,13 @@ struct StorageCleanupCenterView: View {
         cleanupStatusMessage = "已清理 \(usage.projectName) 的\(category.resultTitle)：\(deletedCount) 个文件。"
         store.scheduleSave()
         pendingCleanupProject = nil
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .succeeded,
+            summary: String(localized: "按项目清理"),
+            detail: "\(auditDetail) · deleted=\(deletedCount)",
+            source: "StorageCleanupCenterView"
+        )
     }
 
     @discardableResult
@@ -816,6 +1064,69 @@ private struct ProjectStorageUsage: Identifiable {
     var formattedBackupEstimatedBytes: String {
         guard let backupEstimatedBytes else { return "计算中…" }
         return QuickNoteAttachmentStorage.formattedFileSize(backupEstimatedBytes)
+    }
+}
+
+private struct CleanupImpactSummary {
+    struct Item {
+        let title: String
+        let count: Int
+    }
+
+    private var fileCountMap: [String: Int] = [:]
+    private var recordCountMap: [String: Int] = [:]
+    private var sampleFileNameSet: Set<String> = []
+
+    mutating func addFile(title: String, count: Int) {
+        guard count > 0 else { return }
+        fileCountMap[title, default: 0] += count
+    }
+
+    mutating func addRecord(title: String, count: Int) {
+        guard count > 0 else { return }
+        recordCountMap[title, default: 0] += count
+    }
+
+    mutating func addSampleFileNames<S: Sequence>(_ names: S) where S.Element == String {
+        for name in names where !name.isEmpty {
+            sampleFileNameSet.insert(name)
+        }
+    }
+
+    mutating func merge(_ other: CleanupImpactSummary) {
+        for (title, count) in other.fileCountMap {
+            fileCountMap[title, default: 0] += count
+        }
+        for (title, count) in other.recordCountMap {
+            recordCountMap[title, default: 0] += count
+        }
+        sampleFileNameSet.formUnion(other.sampleFileNameSet)
+    }
+
+    var totalFileCount: Int {
+        fileCountMap.values.reduce(0, +)
+    }
+
+    var fileItems: [Item] {
+        fileCountMap.map { Item(title: $0.key, count: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count { return lhs.count > rhs.count }
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    var recordItems: [Item] {
+        recordCountMap.map { Item(title: $0.key, count: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count { return lhs.count > rhs.count }
+                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
+            }
+    }
+
+    var sampleFileNames: [String] {
+        sampleFileNameSet.sorted { lhs, rhs in
+            lhs.localizedStandardCompare(rhs) == .orderedAscending
+        }
     }
 }
 

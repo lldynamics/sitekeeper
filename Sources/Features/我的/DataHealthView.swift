@@ -8,10 +8,19 @@ struct DataHealthView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var storageIssuesVersion = UUID()
+    @State private var operationAuditVersion = UUID()
     private let showsNavigationTitle: Bool
 
     init(showsNavigationTitle: Bool = true) {
         self.showsNavigationTitle = showsNavigationTitle
+    }
+
+    private func l(_ key: String) -> String {
+        NSLocalizedString(key, tableName: "Localizable", bundle: .main, value: key, comment: "")
+    }
+
+    private func lf(_ key: String, _ args: CVarArg...) -> String {
+        String(format: l(key), arguments: args)
     }
 
     private var projectIdSet: Set<UUID> {
@@ -88,6 +97,11 @@ struct DataHealthView: View {
     private var storageIssues: [String] {
         _ = storageIssuesVersion
         return StorageIssueLog.entries()
+    }
+
+    private var operationAuditEntries: [OperationAuditEntry] {
+        _ = operationAuditVersion
+        return OperationAuditLog.entries()
     }
 
     private var widgetHealth: WidgetDataHealthSnapshot {
@@ -190,11 +204,11 @@ struct DataHealthView: View {
                 issues.append(
                     DataHealthIssue(
                         id: "missing-log-photo-\(log.id.uuidString)-legacy-\(fileName)",
-                        title: "日志照片缺失",
+                        title: l("日志照片缺失"),
                         detail: issueDetail([projectName(log.projectId), log.date, fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
-                        actionTitle: "打开日志",
+                        actionTitle: l("打开日志"),
                         route: .dailyLog(projectId: log.projectId, logId: log.id)
                     )
                 )
@@ -203,11 +217,11 @@ struct DataHealthView: View {
                 issues.append(
                     DataHealthIssue(
                         id: "missing-log-photo-\(log.id.uuidString)-\(photo.id.uuidString)",
-                        title: "日志照片缺失",
+                        title: l("日志照片缺失"),
                         detail: issueDetail([projectName(log.projectId), log.date, photo.tag.displayName, photo.fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
-                        actionTitle: "打开日志",
+                        actionTitle: l("打开日志"),
                         route: .dailyLog(projectId: log.projectId, logId: log.id)
                     )
                 )
@@ -219,11 +233,11 @@ struct DataHealthView: View {
                 issues.append(
                     DataHealthIssue(
                         id: "missing-todo-photo-\(todo.id.uuidString)-before-\(fileName)",
-                        title: "待办整改前照片缺失",
-                        detail: issueDetail([projectName(todo.projectId), todo.title, "整改前", fileName]),
+                        title: l("待办整改前照片缺失"),
+                        detail: issueDetail([projectName(todo.projectId), todo.title, l("整改前"), fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
-                        actionTitle: "打开待办",
+                        actionTitle: l("打开待办"),
                         route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
                     )
                 )
@@ -233,11 +247,11 @@ struct DataHealthView: View {
                 issues.append(
                     DataHealthIssue(
                         id: "missing-todo-photo-\(todo.id.uuidString)-after-\(fileName)",
-                        title: "待办整改后照片缺失",
-                        detail: issueDetail([projectName(todo.projectId), todo.title, "整改后", fileName]),
+                        title: l("待办整改后照片缺失"),
+                        detail: issueDetail([projectName(todo.projectId), todo.title, l("整改后"), fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
-                        actionTitle: "打开待办",
+                        actionTitle: l("打开待办"),
                         route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
                     )
                 )
@@ -253,11 +267,11 @@ struct DataHealthView: View {
             .map { document in
                 DataHealthIssue(
                     id: "missing-document-\(document.id.uuidString)",
-                    title: "项目资料原文件缺失",
+                    title: l("项目资料原文件缺失"),
                     detail: issueDetail([projectName(document.projectId), document.title, document.fileName]),
                     systemImage: "doc.badge.exclamationmark",
                     color: .appRisk,
-                    actionTitle: "打开资料",
+                    actionTitle: l("打开资料"),
                     route: .document(projectId: document.projectId, documentId: document.id)
                 )
             }
@@ -270,11 +284,11 @@ struct DataHealthView: View {
                 .map { attachment in
                     DataHealthIssue(
                         id: "missing-quicknote-attachment-\(note.id.uuidString)-\(attachment.id.uuidString)",
-                        title: "随手记附件缺失",
+                        title: l("随手记附件缺失"),
                         detail: issueDetail([note.title.isEmpty ? note.createdAt : note.title, attachment.displayName]),
                         systemImage: "paperclip.badge.ellipsis",
                         color: .appRisk,
-                        actionTitle: "打开随手记",
+                        actionTitle: l("打开随手记"),
                         route: .quickNote(noteId: note.id)
                     )
                 }
@@ -283,19 +297,19 @@ struct DataHealthView: View {
     }
 
     private var orphanPhotoFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanPhotoFiles, title: "孤立照片文件", systemImage: "photo.stack", color: .appWarning)
+        fileOnlyIssues(orphanPhotoFiles, title: l("孤立照片文件"), systemImage: "photo.stack", color: .appWarning)
     }
 
     private var orphanDrawingFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDrawingFiles, title: "孤立图纸文件", systemImage: "doc.viewfinder", color: .appWarning)
+        fileOnlyIssues(orphanDrawingFiles, title: l("孤立图纸文件"), systemImage: "doc.viewfinder", color: .appWarning)
     }
 
     private var orphanDocumentFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDocumentFiles, title: "孤立票据文件", systemImage: "doc.richtext", color: .appWarning)
+        fileOnlyIssues(orphanDocumentFiles, title: l("孤立票据文件"), systemImage: "doc.richtext", color: .appWarning)
     }
 
     private var orphanQuickNoteAttachmentIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: "孤立随手记附件", systemImage: "paperclip", color: .appWarning)
+        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: l("孤立随手记附件"), systemImage: "paperclip", color: .appWarning)
     }
 
     private var orphanAttachmentMappingIssues: [DataHealthIssue] {
@@ -305,11 +319,11 @@ struct DataHealthView: View {
                 guard !docIdSet.contains(docId) else { return nil }
                 return DataHealthIssue(
                     id: "orphan-financial-attachment-\(record.id.uuidString)-\(docId.uuidString)",
-                    title: "账目附件映射悬空",
-                    detail: issueDetail([projectName(record.projectId), record.date, record.category.displayName, "缺失票据ID \(shortId(docId))"]),
+                    title: l("账目附件映射悬空"),
+                    detail: issueDetail([projectName(record.projectId), record.date, record.category.displayName, lf("缺失票据ID %@", shortId(docId))]),
                     systemImage: "receipt.badge.exclamationmark",
                     color: .appWarning,
-                    actionTitle: "打开账目",
+                    actionTitle: l("打开账目"),
                     route: .financialRecord(projectId: record.projectId, recordId: record.id)
                 )
             }
@@ -321,14 +335,14 @@ struct DataHealthView: View {
         return store.projectWarehouseMovements.flatMap { movement in
             movement.linkedDocumentIds.compactMap { docId in
                 guard !docIdSet.contains(docId) else { return nil }
-                let material = movement.materialName.isEmpty ? "未命名材料" : movement.materialName
+                let material = movement.materialName.isEmpty ? l("未命名材料") : movement.materialName
                 return DataHealthIssue(
                     id: "orphan-warehouse-attachment-\(movement.id.uuidString)-\(docId.uuidString)",
-                    title: "仓库附件映射悬空",
-                    detail: issueDetail([projectName(movement.projectId), movement.date, material, "缺失附件ID \(shortId(docId))"]),
+                    title: l("仓库附件映射悬空"),
+                    detail: issueDetail([projectName(movement.projectId), movement.date, material, lf("缺失附件ID %@", shortId(docId))]),
                     systemImage: "shippingbox.and.arrow.backward",
                     color: .appWarning,
-                    actionTitle: "打开仓库",
+                    actionTitle: l("打开仓库"),
                     route: .warehouseProject(projectId: movement.projectId)
                 )
             }
@@ -342,11 +356,11 @@ struct DataHealthView: View {
                   !recordIdSet.contains(linkedId) else { return nil }
             return DataHealthIssue(
                 id: "dangling-document-link-\(document.id.uuidString)",
-                title: "资料关联账目缺失",
-                detail: issueDetail([projectName(document.projectId), document.title, "缺失账目ID \(shortId(linkedId))"]),
+                title: l("资料关联账目缺失"),
+                detail: issueDetail([projectName(document.projectId), document.title, lf("缺失账目ID %@", shortId(linkedId))]),
                 systemImage: "link.badge.plus",
                 color: .appWarning,
-                actionTitle: "打开资料",
+                actionTitle: l("打开资料"),
                 route: .document(projectId: document.projectId, documentId: document.id)
             )
         }
@@ -358,8 +372,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-material-project-\(item.id.uuidString)",
-                title: "材料项目关联无效",
-                detail: issueDetail([item.name, "原项目ID \(shortId(id))"]),
+                title: l("材料项目关联无效"),
+                detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "shippingbox",
                 route: .material(materialId: item.id)
             )
@@ -368,8 +382,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-quote-project-\(item.id.uuidString)",
-                title: "报价项目关联无效",
-                detail: issueDetail([item.name, "原项目ID \(shortId(id))"]),
+                title: l("报价项目关联无效"),
+                detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "doc.text",
                 route: .quote(quoteId: item.id)
             )
@@ -378,8 +392,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-labor-project-\(item.id.uuidString)",
-                title: "人工项目关联无效",
-                detail: issueDetail([item.date, item.workType, "原项目ID \(shortId(id))"]),
+                title: l("人工项目关联无效"),
+                detail: issueDetail([item.date, item.workType, lf("原项目ID %@", shortId(id))]),
                 systemImage: "person.2",
                 route: .labor(laborId: item.id)
             )
@@ -388,8 +402,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-log-project-\(item.id.uuidString)",
-                title: "日志项目关联无效",
-                detail: issueDetail([item.date, "原项目ID \(shortId(id))"]),
+                title: l("日志项目关联无效"),
+                detail: issueDetail([item.date, lf("原项目ID %@", shortId(id))]),
                 systemImage: "book.pages",
                 route: .dailyLog(projectId: nil, logId: item.id)
             )
@@ -398,8 +412,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-todo-project-\(item.id.uuidString)",
-                title: "待办项目关联无效",
-                detail: issueDetail([item.title, "原项目ID \(shortId(id))"]),
+                title: l("待办项目关联无效"),
+                detail: issueDetail([item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "checklist",
                 route: .siteTodo(projectId: nil, todoId: item.id)
             )
@@ -408,8 +422,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-quicknote-project-\(item.id.uuidString)",
-                title: "随手记项目关联无效",
-                detail: issueDetail([item.title.isEmpty ? item.createdAt : item.title, "原项目ID \(shortId(id))"]),
+                title: l("随手记项目关联无效"),
+                detail: issueDetail([item.title.isEmpty ? item.createdAt : item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "square.and.pencil",
                 route: .quickNote(noteId: item.id)
             )
@@ -418,8 +432,8 @@ struct DataHealthView: View {
             guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
             return invalidProjectIssue(
                 id: "invalid-circuit-project-\(item.id.uuidString)",
-                title: "照明回路项目关联无效",
-                detail: issueDetail([item.name, "原项目ID \(shortId(id))"]),
+                title: l("照明回路项目关联无效"),
+                detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "bolt.square",
                 route: nil as DataHealthIssueRoute?
             )
@@ -433,8 +447,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-progress-project-\(item.id.uuidString)",
-                title: "进度项目关联无效",
-                detail: issueDetail([item.title, "原项目ID \(shortId(item.projectId))"]),
+                title: l("进度项目关联无效"),
+                detail: issueDetail([item.title, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "calendar.badge.exclamationmark"
             )
         }
@@ -442,8 +456,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-drawing-project-\(item.id.uuidString)",
-                title: "图纸项目关联无效",
-                detail: issueDetail([item.name, "原项目ID \(shortId(item.projectId))"]),
+                title: l("图纸项目关联无效"),
+                detail: issueDetail([item.name, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "doc.viewfinder"
             )
         }
@@ -451,8 +465,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-contact-project-\(item.id.uuidString)",
-                title: "联系人项目关联无效",
-                detail: issueDetail([item.name, "原项目ID \(shortId(item.projectId))"]),
+                title: l("联系人项目关联无效"),
+                detail: issueDetail([item.name, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "person.crop.rectangle.stack",
                 route: .contact(contactId: item.id)
             )
@@ -461,8 +475,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-financial-project-\(item.id.uuidString)",
-                title: "财务项目关联无效",
-                detail: issueDetail([item.date, item.category.displayName, "原项目ID \(shortId(item.projectId))"]),
+                title: l("财务项目关联无效"),
+                detail: issueDetail([item.date, item.category.displayName, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "receipt"
             )
         }
@@ -470,8 +484,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-document-project-\(item.id.uuidString)",
-                title: "资料项目关联无效",
-                detail: issueDetail([item.title, "原项目ID \(shortId(item.projectId))"]),
+                title: l("资料项目关联无效"),
+                detail: issueDetail([item.title, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "doc.richtext"
             )
         }
@@ -479,8 +493,8 @@ struct DataHealthView: View {
             guard !projectIdSet.contains(item.projectId) else { return nil }
             return manualInvalidProjectIssue(
                 id: "invalid-warehouse-project-\(item.id.uuidString)",
-                title: "仓库项目关联无效",
-                detail: issueDetail([item.date, item.materialName, "原项目ID \(shortId(item.projectId))"]),
+                title: l("仓库项目关联无效"),
+                detail: issueDetail([item.date, item.materialName, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "shippingbox"
             )
         }
@@ -491,10 +505,32 @@ struct DataHealthView: View {
         storageIssues.enumerated().map { offset, text in
             DataHealthIssue(
                 id: "storage-issue-\(offset)-\(text.hashValue)",
-                title: "存储错误记录",
+                title: l("存储错误记录"),
                 detail: text,
                 systemImage: "externaldrive.badge.exclamationmark",
                 color: .appRisk,
+                actionTitle: nil,
+                route: nil
+            )
+        }
+    }
+
+    private var operationAuditRows: [DataHealthIssue] {
+        operationAuditEntries.enumerated().map { offset, entry in
+            let timestamp = Formatters.dateTime.string(from: Date(timeIntervalSince1970: entry.timestamp))
+            var detailParts = [timestamp, entry.summary]
+            if !entry.detail.isEmpty {
+                detailParts.append(entry.detail)
+            }
+            if !entry.source.isEmpty {
+                detailParts.append(entry.source)
+            }
+            return DataHealthIssue(
+                id: "operation-audit-\(offset)-\(entry.id.uuidString)",
+                title: "\(operationAuditActionLabel(entry.action)) · \(operationAuditOutcomeLabel(entry.outcome))",
+                detail: issueDetail(detailParts),
+                systemImage: operationAuditSystemImage(entry.action),
+                color: operationAuditColor(entry.outcome),
                 actionTitle: nil,
                 route: nil
             )
@@ -535,119 +571,129 @@ struct DataHealthView: View {
 
     var body: some View {
         List {
-            Section("健康概览") {
-                LabeledContent("问题总数", value: "\(totalIssues)")
-                LabeledContent("缺失照片", value: "\(missingPhotoFiles.count)")
-                LabeledContent("缺失票据文件", value: "\(missingDocumentFiles.count)")
-                LabeledContent("缺失随手记附件", value: "\(missingQuickNoteAttachmentFiles.count)")
-                LabeledContent("孤立照片文件", value: "\(orphanPhotoFiles.count)")
-                LabeledContent("孤立图纸文件", value: "\(orphanDrawingFiles.count)")
-                LabeledContent("孤立票据文件", value: "\(orphanDocumentFiles.count)")
-                LabeledContent("孤立随手记附件", value: "\(orphanQuickNoteAttachmentFiles.count)")
-                LabeledContent("孤立附件映射", value: "\(orphanAttachmentMappings.count)")
-                LabeledContent("仓库悬空附件映射", value: "\(orphanWarehouseAttachmentMappings.count)")
-                LabeledContent("资料悬空关联", value: "\(danglingDocumentLinks.count)")
-                LabeledContent("无效项目关联", value: "\(invalidProjectRefs.count)")
-                LabeledContent("可自动修复项目关联", value: "\(autoFixableInvalidProjectRefs.count)")
-                LabeledContent("需手动处理项目关联", value: "\(manualInvalidProjectRefs.count)")
-                LabeledContent("存储错误记录", value: "\(storageIssues.count)")
+            Section(l("健康概览")) {
+                LabeledContent(l("问题总数"), value: "\(totalIssues)")
+                LabeledContent(l("缺失照片"), value: "\(missingPhotoFiles.count)")
+                LabeledContent(l("缺失票据文件"), value: "\(missingDocumentFiles.count)")
+                LabeledContent(l("缺失随手记附件"), value: "\(missingQuickNoteAttachmentFiles.count)")
+                LabeledContent(l("孤立照片文件"), value: "\(orphanPhotoFiles.count)")
+                LabeledContent(l("孤立图纸文件"), value: "\(orphanDrawingFiles.count)")
+                LabeledContent(l("孤立票据文件"), value: "\(orphanDocumentFiles.count)")
+                LabeledContent(l("孤立随手记附件"), value: "\(orphanQuickNoteAttachmentFiles.count)")
+                LabeledContent(l("孤立附件映射"), value: "\(orphanAttachmentMappings.count)")
+                LabeledContent(l("仓库悬空附件映射"), value: "\(orphanWarehouseAttachmentMappings.count)")
+                LabeledContent(l("资料悬空关联"), value: "\(danglingDocumentLinks.count)")
+                LabeledContent(l("无效项目关联"), value: "\(invalidProjectRefs.count)")
+                LabeledContent(l("可自动修复项目关联"), value: "\(autoFixableInvalidProjectRefs.count)")
+                LabeledContent(l("需手动处理项目关联"), value: "\(manualInvalidProjectRefs.count)")
+                LabeledContent(l("存储错误记录"), value: "\(storageIssues.count)")
+                LabeledContent(l("操作审计日志"), value: "\(operationAuditEntries.count)")
             }
 
-            Section("存储空间") {
-                LabeledContent("照片", value: QuickNoteAttachmentStorage.formattedFileSize(photoStorageBytes))
-                LabeledContent("资料（票据/图纸/附件）", value: QuickNoteAttachmentStorage.formattedFileSize(projectAssetBytes))
-                LabeledContent("备份（iCloud）", value: QuickNoteAttachmentStorage.formattedFileSize(cloudBackupBytes))
-                LabeledContent("历史计算", value: "\(store.historyRecords.count) 条 · \(QuickNoteAttachmentStorage.formattedFileSize(historyRecordBytes))")
-                LabeledContent("缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
-                LabeledContent("合计", value: QuickNoteAttachmentStorage.formattedFileSize(totalStorageBytes))
+            Section(l("存储空间")) {
+                LabeledContent(l("照片"), value: QuickNoteAttachmentStorage.formattedFileSize(photoStorageBytes))
+                LabeledContent(l("资料（票据/图纸/附件）"), value: QuickNoteAttachmentStorage.formattedFileSize(projectAssetBytes))
+                LabeledContent(l("备份（iCloud）"), value: QuickNoteAttachmentStorage.formattedFileSize(cloudBackupBytes))
+                LabeledContent(l("历史计算"), value: "\(store.historyRecords.count) 条 · \(QuickNoteAttachmentStorage.formattedFileSize(historyRecordBytes))")
+                LabeledContent(l("缩略图缓存"), value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
+                LabeledContent(l("合计"), value: QuickNoteAttachmentStorage.formattedFileSize(totalStorageBytes))
             }
 
-            Section("Widget 与缓存") {
-                LabeledContent("App Group 可读", value: widgetHealth.appGroupReadable ? "是" : "否")
-                LabeledContent("Widget 项目数", value: "\(widgetHealth.projectCount)")
-                LabeledContent("Widget 待办数", value: "\(widgetHealth.pendingTodos)")
+            Section(l("Widget 与缓存")) {
+                LabeledContent(l("App Group 可读"), value: widgetHealth.appGroupReadable ? l("是") : l("否"))
+                LabeledContent(l("Widget 项目数"), value: "\(widgetHealth.projectCount)")
+                LabeledContent(l("Widget 待办数"), value: "\(widgetHealth.pendingTodos)")
                 LabeledContent(
-                    "Widget 最近同步",
-                    value: widgetHealth.lastUpdatedAt.map { Formatters.dateTime.string(from: $0) } ?? "暂无"
+                    l("Widget 最近同步"),
+                    value: widgetHealth.lastUpdatedAt.map { Formatters.dateTime.string(from: $0) } ?? l("暂无")
                 )
-                LabeledContent("照片缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(photoThumbnailCacheBytes))
-                LabeledContent("附件缩略图缓存", value: QuickNoteAttachmentStorage.formattedFileSize(quickNoteThumbnailCacheBytes))
-                LabeledContent("缩略图缓存合计", value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
+                LabeledContent(l("照片缩略图缓存"), value: QuickNoteAttachmentStorage.formattedFileSize(photoThumbnailCacheBytes))
+                LabeledContent(l("附件缩略图缓存"), value: QuickNoteAttachmentStorage.formattedFileSize(quickNoteThumbnailCacheBytes))
+                LabeledContent(l("缩略图缓存合计"), value: QuickNoteAttachmentStorage.formattedFileSize(mediaThumbnailCacheBytes))
                 Button(role: .destructive) {
                     clearMediaThumbnailCaches()
                 } label: {
-                    Label("清理缩略图缓存", systemImage: "trash")
+                    Label(l("清理缩略图缓存"), systemImage: "trash")
                 }
                 .disabled(mediaThumbnailCacheBytes == 0)
             }
 
-            Section("处理") {
+            Section(l("处理")) {
                 Button {
                     showReferenceFixConfirm = true
                 } label: {
-                    Label("修复引用与关联（不删原件）", systemImage: "wrench.and.screwdriver")
+                    Label(l("修复引用与关联（不删原件）"), systemImage: "wrench.and.screwdriver")
                 }
                 .disabled(referenceIssueCount == 0)
                 Button(role: .destructive) {
                     showOrphanFileCleanupConfirm = true
                 } label: {
-                    Label("清理孤立原文件", systemImage: "trash")
+                    Label(l("清理孤立原文件"), systemImage: "trash")
                 }
                 .disabled(orphanFileIssueCount == 0)
                 Button {
                     exportHealthReport()
                 } label: {
-                    Label("导出健康报告", systemImage: "square.and.arrow.up")
+                    Label(l("导出健康报告"), systemImage: "square.and.arrow.up")
                 }
                 if !storageIssues.isEmpty {
                     Button(role: .destructive) {
                         StorageIssueLog.clear()
                         storageIssuesVersion = UUID()
                     } label: {
-                        Label("清空存储错误记录", systemImage: "trash")
+                        Label(l("清空存储错误记录"), systemImage: "trash")
+                    }
+                }
+                if !operationAuditEntries.isEmpty {
+                    Button(role: .destructive) {
+                        OperationAuditLog.clear()
+                        operationAuditVersion = UUID()
+                    } label: {
+                        Label(l("清空操作审计日志"), systemImage: "trash")
                     }
                 }
             }
 
-            issueSection(title: "缺失照片文件", items: missingPhotoFileIssues)
-            issueSection(title: "缺失票据文件", items: missingDocumentFileIssues)
-            issueSection(title: "缺失随手记附件", items: missingQuickNoteAttachmentIssues)
-            issueSection(title: "孤立照片文件", items: orphanPhotoFileIssues)
-            issueSection(title: "孤立图纸文件", items: orphanDrawingFileIssues)
-            issueSection(title: "孤立票据文件", items: orphanDocumentFileIssues)
-            issueSection(title: "孤立随手记附件", items: orphanQuickNoteAttachmentIssues)
-            issueSection(title: "孤立附件映射", items: orphanAttachmentMappingIssues)
-            issueSection(title: "仓库悬空附件映射", items: orphanWarehouseAttachmentMappingIssues)
-            issueSection(title: "资料悬空关联", items: danglingDocumentLinkIssues)
-            issueSection(title: "无效项目关联（可自动修复）", items: autoFixableInvalidProjectRefIssues)
-            issueSection(title: "无效项目关联（需手动处理）", items: manualInvalidProjectRefIssues)
-            issueSection(title: "存储错误记录", items: storageIssueRows)
+            issueSection(title: l("缺失照片文件"), items: missingPhotoFileIssues)
+            issueSection(title: l("缺失票据文件"), items: missingDocumentFileIssues)
+            issueSection(title: l("缺失随手记附件"), items: missingQuickNoteAttachmentIssues)
+            issueSection(title: l("孤立照片文件"), items: orphanPhotoFileIssues)
+            issueSection(title: l("孤立图纸文件"), items: orphanDrawingFileIssues)
+            issueSection(title: l("孤立票据文件"), items: orphanDocumentFileIssues)
+            issueSection(title: l("孤立随手记附件"), items: orphanQuickNoteAttachmentIssues)
+            issueSection(title: l("孤立附件映射"), items: orphanAttachmentMappingIssues)
+            issueSection(title: l("仓库悬空附件映射"), items: orphanWarehouseAttachmentMappingIssues)
+            issueSection(title: l("资料悬空关联"), items: danglingDocumentLinkIssues)
+            issueSection(title: l("无效项目关联（可自动修复）"), items: autoFixableInvalidProjectRefIssues)
+            issueSection(title: l("无效项目关联（需手动处理）"), items: manualInvalidProjectRefIssues)
+            issueSection(title: l("存储错误记录"), items: storageIssueRows)
+            issueSection(title: l("操作审计日志"), items: operationAuditRows)
         }
         .modifier(OptionalInlineTitleModifier(
             isEnabled: showsNavigationTitle,
-            title: "数据健康检查"
+            title: l("数据健康检查")
         ))
-        .alert("修复引用与关联？", isPresented: $showReferenceFixConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("修复", role: .destructive) {
+        .alert(l("修复引用与关联？"), isPresented: $showReferenceFixConfirm) {
+            Button(l("取消"), role: .cancel) {}
+            Button(l("修复"), role: .destructive) {
                 repairReferenceIssues()
             }
         } message: {
-            Text("将修复缺失引用、财务/仓库悬空附件映射、资料悬空关联和可置空的无效项目关联，不会删除任何照片、图纸、票据或随手记原文件。无法自动修复的项目关联会保留在“需手动处理项目关联”列表。")
+            Text(l("将修复缺失引用、财务/仓库悬空附件映射、资料悬空关联和可置空的无效项目关联，不会删除任何照片、图纸、票据或随手记原文件。无法自动修复的项目关联会保留在“需手动处理项目关联”列表。"))
         }
-        .alert("清理孤立原文件？", isPresented: $showOrphanFileCleanupConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("清理", role: .destructive) {
+        .alert(l("清理孤立原文件？"), isPresented: $showOrphanFileCleanupConfirm) {
+            Button(l("取消"), role: .cancel) {}
+            Button(l("清理"), role: .destructive) {
                 cleanupOrphanFiles()
             }
         } message: {
-            Text("将删除未被任何记录引用的照片、图纸、票据和随手记附件。请先确认这些原件无需保留。")
+            Text(l("将删除未被任何记录引用的照片、图纸、票据和随手记附件。请先确认这些原件无需保留。"))
         }
         .fileExporter(
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .plainText,
-            defaultFilename: exportPayload?.defaultFilename ?? "数据健康报告.txt"
+            defaultFilename: exportPayload?.defaultFilename ?? l("数据健康报告.txt")
         ) { _ in }
     }
 
@@ -655,14 +701,14 @@ struct DataHealthView: View {
     private func issueSection(title: String, items: [DataHealthIssue]) -> some View {
         Section("\(title) (\(items.count))") {
             if items.isEmpty {
-                Text("未发现问题")
+                Text(l("未发现问题"))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(Array(items.prefix(50))) { item in
                     issueRow(item)
                 }
                 if items.count > 50 {
-                    Text("仅显示前 50 条")
+                    Text(l("仅显示前 50 条"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -697,7 +743,7 @@ struct DataHealthView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
                 if let actionTitle = item.actionTitle {
-                    Text(canNavigate ? actionTitle : "\(actionTitle)（目标不可用）")
+                    Text(canNavigate ? actionTitle : lf("%@（目标不可用）", actionTitle))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(canNavigate ? .appWarning : .secondary)
                 }
@@ -735,7 +781,7 @@ struct DataHealthView: View {
             if let project = store.projects.first(where: { $0.id == projectId }) {
                 ProjectWarehouseView(project: project)
             } else {
-                ContentUnavailableView("项目不存在", systemImage: "questionmark.folder")
+                ContentUnavailableView(l("项目不存在"), systemImage: "questionmark.folder")
             }
         }
     }
@@ -767,7 +813,7 @@ struct DataHealthView: View {
             detail: detail,
             systemImage: systemImage,
             color: .appWarning,
-            actionTitle: "打开记录",
+            actionTitle: l("打开记录"),
             route: route
         )
     }
@@ -785,14 +831,14 @@ struct DataHealthView: View {
             detail: detail,
             systemImage: systemImage,
             color: .appWarning,
-            actionTitle: route == nil ? "需手动处理" : "打开记录",
+            actionTitle: route == nil ? l("需手动处理") : l("打开记录"),
             route: route
         )
     }
 
     private func projectName(_ id: UUID?) -> String {
         guard let id else { return "" }
-        return store.projects.first(where: { $0.id == id })?.name ?? "项目ID \(shortId(id))"
+        return store.projects.first(where: { $0.id == id })?.name ?? lf("项目ID %@", shortId(id))
     }
 
     private func issueDetail(_ parts: [String]) -> String {
@@ -806,7 +852,71 @@ struct DataHealthView: View {
         String(id.uuidString.prefix(8))
     }
 
+    private func operationAuditActionLabel(_ action: OperationAuditEntry.Action) -> String {
+        switch action {
+        case .import:
+            return l("导入")
+        case .restore:
+            return l("恢复")
+        case .cleanup:
+            return l("清理")
+        case .repair:
+            return l("修复")
+        case .delete:
+            return l("删除")
+        }
+    }
+
+    private func operationAuditOutcomeLabel(_ outcome: OperationAuditEntry.Outcome) -> String {
+        switch outcome {
+        case .started:
+            return l("开始")
+        case .succeeded:
+            return l("完成")
+        case .failed:
+            return l("失败")
+        case .cancelled:
+            return l("取消")
+        }
+    }
+
+    private func operationAuditSystemImage(_ action: OperationAuditEntry.Action) -> String {
+        switch action {
+        case .import:
+            return "square.and.arrow.down"
+        case .restore:
+            return "arrow.uturn.backward.circle"
+        case .cleanup:
+            return "trash"
+        case .repair:
+            return "wrench.and.screwdriver"
+        case .delete:
+            return "trash.slash"
+        }
+    }
+
+    private func operationAuditColor(_ outcome: OperationAuditEntry.Outcome) -> Color {
+        switch outcome {
+        case .started:
+            return .appPrimaryAction
+        case .succeeded:
+            return .appSuccess
+        case .failed:
+            return .appRisk
+        case .cancelled:
+            return .appWarning
+        }
+    }
+
     private func repairReferenceIssues() {
+        let beforeCount = referenceIssueCount
+        OperationAuditLog.record(
+            action: .repair,
+            outcome: .started,
+            summary: l("修复引用与关联（不删原件）"),
+            detail: String(format: l("%d 项"), beforeCount),
+            source: "DataHealthView"
+        )
         for index in store.dailyLogs.indices {
             if let fileName = store.dailyLogs[index].photoFileName,
                !PhotoStorage.exists(fileName: fileName) {
@@ -881,6 +991,16 @@ struct DataHealthView: View {
         }
 
         store.scheduleSave()
+        let afterCount = referenceIssueCount
+        let fixedCount = max(beforeCount - afterCount, 0)
+        OperationAuditLog.record(
+            action: .repair,
+            outcome: .succeeded,
+            summary: l("修复"),
+            detail: "\(String(format: l("%d 项"), fixedCount)) → \(String(format: l("%d 项"), afterCount))",
+            source: "DataHealthView"
+        )
+        operationAuditVersion = UUID()
     }
 
     private func clearMediaThumbnailCaches() {
@@ -890,11 +1010,29 @@ struct DataHealthView: View {
     }
 
     private func cleanupOrphanFiles() {
+        let beforeCount = orphanFileIssueCount
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: l("清理孤立原文件"),
+            detail: String(format: l("%d 项"), beforeCount),
+            source: "DataHealthView"
+        )
         PhotoStorage.delete(fileNames: orphanPhotoFiles)
         DrawingStorage.delete(fileNames: orphanDrawingFiles)
         ProjectDocumentStorage.delete(fileNames: orphanDocumentFiles)
         QuickNoteAttachmentStorage.delete(fileNames: orphanQuickNoteAttachmentFiles)
         store.scheduleSave()
+        let afterCount = orphanFileIssueCount
+        let cleanedCount = max(beforeCount - afterCount, 0)
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .succeeded,
+            summary: l("清理"),
+            detail: "\(String(format: l("%d 项"), cleanedCount)) → \(String(format: l("%d 项"), afterCount))",
+            source: "DataHealthView"
+        )
+        operationAuditVersion = UUID()
     }
 
     private func invalidOptionalProjectId(_ id: UUID?, validProjectIds: Set<UUID>) -> Bool {
@@ -904,30 +1042,31 @@ struct DataHealthView: View {
 
     private func exportHealthReport() {
         let sections: [(String, [String])] = [
-            ("缺失照片文件", missingPhotoFileIssues.map(\.exportText)),
-            ("缺失票据文件", missingDocumentFileIssues.map(\.exportText)),
-            ("缺失随手记附件", missingQuickNoteAttachmentIssues.map(\.exportText)),
-            ("孤立照片文件", orphanPhotoFileIssues.map(\.exportText)),
-            ("孤立图纸文件", orphanDrawingFileIssues.map(\.exportText)),
-            ("孤立票据文件", orphanDocumentFileIssues.map(\.exportText)),
-            ("孤立随手记附件", orphanQuickNoteAttachmentIssues.map(\.exportText)),
-            ("孤立附件映射", orphanAttachmentMappingIssues.map(\.exportText)),
-            ("仓库悬空附件映射", orphanWarehouseAttachmentMappingIssues.map(\.exportText)),
-            ("资料悬空关联", danglingDocumentLinkIssues.map(\.exportText)),
-            ("无效项目关联（可自动修复）", autoFixableInvalidProjectRefIssues.map(\.exportText)),
-            ("无效项目关联（需手动处理）", manualInvalidProjectRefIssues.map(\.exportText)),
-            ("存储错误记录", storageIssueRows.map(\.exportText))
+            (l("缺失照片文件"), missingPhotoFileIssues.map(\.exportText)),
+            (l("缺失票据文件"), missingDocumentFileIssues.map(\.exportText)),
+            (l("缺失随手记附件"), missingQuickNoteAttachmentIssues.map(\.exportText)),
+            (l("孤立照片文件"), orphanPhotoFileIssues.map(\.exportText)),
+            (l("孤立图纸文件"), orphanDrawingFileIssues.map(\.exportText)),
+            (l("孤立票据文件"), orphanDocumentFileIssues.map(\.exportText)),
+            (l("孤立随手记附件"), orphanQuickNoteAttachmentIssues.map(\.exportText)),
+            (l("孤立附件映射"), orphanAttachmentMappingIssues.map(\.exportText)),
+            (l("仓库悬空附件映射"), orphanWarehouseAttachmentMappingIssues.map(\.exportText)),
+            (l("资料悬空关联"), danglingDocumentLinkIssues.map(\.exportText)),
+            (l("无效项目关联（可自动修复）"), autoFixableInvalidProjectRefIssues.map(\.exportText)),
+            (l("无效项目关联（需手动处理）"), manualInvalidProjectRefIssues.map(\.exportText)),
+            (l("存储错误记录"), storageIssueRows.map(\.exportText)),
+            (l("操作审计日志"), operationAuditRows.map(\.exportText))
         ]
         var lines = [
-            "\(AppBrand.displayName) 数据健康报告",
-            "生成时间: \(Formatters.now())",
-            "问题总数: \(totalIssues)",
+            lf("%@ 数据健康报告", AppBrand.displayName),
+            lf("生成时间: %@", Formatters.now()),
+            lf("问题总数: %d", totalIssues),
             ""
         ]
         for (title, items) in sections {
             lines.append("[\(title)] \(items.count)")
             if items.isEmpty {
-                lines.append("未发现问题")
+                lines.append(l("未发现问题"))
             } else {
                 lines.append(contentsOf: items)
             }
@@ -936,7 +1075,7 @@ struct DataHealthView: View {
         exportPayload = ExportPayload(
             data: Data(lines.joined(separator: "\n").utf8),
             contentType: .plainText,
-            defaultFilename: "数据健康报告.txt"
+            defaultFilename: l("数据健康报告.txt")
         )
         showExporter = true
     }

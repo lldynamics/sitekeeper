@@ -136,7 +136,7 @@ struct TodayMiniAction: View {
         })
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityHint(String(localized: "打开\(title)功能"))
+        .accessibilityHint(String(format: String(localized: "打开%@功能"), title))
         .contextMenu {
             ForEach(quickActions) { action in
                 NavigationLink {

@@ -55,6 +55,9 @@ struct ProjectDetailContainer: View {
     @State var routeState: ProjectDetailRouteState
     @State var financeState = ProjectDetailFinanceState()
     @State var assetState = ProjectDetailAssetState()
+    @State var operationNotice: OperationToastNotice?
+    @State var pendingDeleteCommitTask: Task<Void, Never>?
+    @State var pendingDeleteCommit: (() -> Void)?
 
     @State var didAutoOpenFinancialAdd = false
     @State var didAutoOpenDocumentScanSetup = false
@@ -116,9 +119,16 @@ struct ProjectDetailContainer: View {
         }
         let preview = names.prefix(3).joined(separator: "、")
         if names.count > 3 {
-            return String(localized: "检测到同名图纸：\(preview) 等 \(names.count) 项，请选择导入策略。")
+            return String(
+                format: String(localized: "检测到同名图纸：%@ 等 %lld 项，请选择导入策略。"),
+                preview,
+                Int64(names.count)
+            )
         }
-        return String(localized: "检测到同名图纸：\(preview)，请选择导入策略。")
+        return String(
+            format: String(localized: "检测到同名图纸：%@，请选择导入策略。"),
+            preview
+        )
     }
 
     private var editingMaterialBinding: Binding<MaterialItem?> {
@@ -462,6 +472,7 @@ struct ProjectDetailContainer: View {
         }
         .onDisappear {
             exportState.cancelExportTask()
+            flushPendingProjectDeletionIfNeeded()
         }
         .navigationDestination(isPresented: $showTodoFilterView) {
             SiteTodoView(initialProjectId: projectId)
@@ -504,6 +515,7 @@ struct ProjectDetailContainer: View {
                 }
             }
         }
+        .operationToast(notice: $operationNotice)
     }
 
 }

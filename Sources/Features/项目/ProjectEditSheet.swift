@@ -56,9 +56,17 @@ struct ProjectEditSheet: View {
                         .focused($isInputFocused)
                 }
                 Section(String(localized: "合同")) {
-                    TextField(String(localized: "合同金额（元）"), text: $contractAmount)
+                    TextField(String(localized: "合同金额（元）"), text: $contractAmount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                         .focused($isInputFocused)
+                    NumericInputValidationHint(
+                        validation: InputValidator.validate(
+                            contractAmount,
+                            kind: .amount,
+                            requirement: .optionalNonNegative
+                        ),
+                        alignment: .leading
+                    )
                     Picker(String(localized: "收款状态"), selection: $paymentStatus) {
                         ForEach(PaymentStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
@@ -84,12 +92,12 @@ struct ProjectEditSheet: View {
                         updated.managerName = managerName
                         updated.startDate = startDate
                         updated.expectedEndDate = expectedEndDate
-                        updated.contractAmount = contractAmount
+                        updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.paymentStatus = paymentStatus
                         onSave(updated)
                         dismiss()
                     }
-                    .disabled(!contractAmount.isEmpty && !InputValidator.nonNegativeNumber(contractAmount))
+                    .disabled(!InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid)
                 }
                 KeyboardDismissToolbar {
                     isInputFocused = false

@@ -43,6 +43,8 @@ extension CADPreviewContainer {
                         let note = CADTextNote(
                             text: text,
                             point: CADPoint(point),
+                            layoutId: SiteKeeperCADKernel.CADLayout.modelSpace.id,
+                            worldPoint: CADPoint(point),
                             createdAt: Formatters.now(),
                             colorHex: selectedNoteOverlayColorHex()
                         )
@@ -103,7 +105,7 @@ extension CADPreviewContainer {
 
         for stroke in snapshot.strokes {
             rows.append([
-                String(localized: "批注线"),
+                stroke.kind == .cloud ? String(localized: "云线") : String(localized: "批注线"),
                 "",
                 "\(stroke.points.count) \(String(localized: "点"))",
                 "",
@@ -113,6 +115,21 @@ extension CADPreviewContainer {
                 strokeColorHex(stroke),
                 coordinateListText(stroke.points.map(\.cgPoint)),
                 ""
+            ])
+        }
+
+        for arrow in snapshot.arrowAnnotations {
+            rows.append([
+                String(localized: "箭头"),
+                "",
+                String(localized: "箭头批注"),
+                "",
+                "",
+                String(localized: "图纸批注"),
+                strokeLayerName(arrow),
+                arrowColorHex(arrow),
+                coordinateListText([arrow.start.cgPoint, arrow.end.cgPoint]),
+                arrow.createdAt
             ])
         }
 
@@ -172,6 +189,21 @@ extension CADPreviewContainer {
                 "",
                 "",
                 coordinateText(marker.point.cgPoint),
+                marker.createdAt
+            ])
+        }
+
+        for marker in snapshot.issueMarkers {
+            rows.append([
+                String(localized: "问题点"),
+                marker.title,
+                marker.photoFileName == nil ? marker.note : "\(marker.note) \(String(localized: "照片"))：\(marker.photoFileName ?? "")",
+                "1",
+                String(localized: "个"),
+                String(localized: "兼容预览"),
+                "",
+                issueMarkerColorHex(marker),
+                coordinateText(marker.normalizedPoint.cgPoint),
                 marker.createdAt
             ])
         }
