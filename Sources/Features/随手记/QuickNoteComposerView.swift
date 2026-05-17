@@ -61,7 +61,7 @@ struct QuickNoteComposerView: View {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
                             .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                     )
-                    .accessibilityLabel("随手记消息输入框")
+                    .accessibilityLabel(String(localized: "quick_note_composer_input_accessibility_label"))
 
                 Button {
                     onPublish()
@@ -74,7 +74,7 @@ struct QuickNoteComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(!canPublish)
-                .accessibilityLabel("发送随手记")
+                .accessibilityLabel(String(localized: "quick_note_composer_send_accessibility_label"))
             }
             .padding(.horizontal, 12)
             .padding(.bottom, 8)
@@ -87,7 +87,7 @@ struct QuickNoteComposerView: View {
         .toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("完成") { isContentFocused = false }
+                Button(String(localized: "quick_note_composer_done_button")) { isContentFocused = false }
             }
         }
     }
@@ -97,14 +97,14 @@ struct QuickNoteComposerView: View {
 
         return HStack(alignment: .top, spacing: 8) {
             Menu {
-                Picker("关联工程", selection: $projectId) {
-                    Text("不关联工程").tag(nil as UUID?)
+                Picker(String(localized: "quick_note_composer_link_project_picker_title"), selection: $projectId) {
+                    Text(String(localized: "quick_note_composer_no_project_option")).tag(nil as UUID?)
                     ForEach(projects) { project in
                         Text(project.name).tag(project.id as UUID?)
                     }
                 }
             } label: {
-                Label(selectedProjectName.isEmpty ? "不关联工程" : selectedProjectName, systemImage: projectId == nil ? "building.2" : "building.2.fill")
+                Label(selectedProjectName.isEmpty ? String(localized: "quick_note_composer_no_project_option") : selectedProjectName, systemImage: projectId == nil ? "building.2" : "building.2.fill")
                     .font(.caption.weight(.semibold))
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -113,7 +113,14 @@ struct QuickNoteComposerView: View {
             .buttonStyle(.bordered)
             .controlSize(.small)
             .tint(projectId == nil ? .secondary : .appPrimaryAction)
-            .accessibilityLabel(projectId == nil ? "选择关联工程" : "已关联工程 \(selectedProjectName)")
+            .accessibilityLabel(
+                projectId == nil
+                ? String(localized: "quick_note_composer_pick_project_accessibility_label")
+                : String(
+                    format: String(localized: "quick_note_composer_linked_project_accessibility_label"),
+                    selectedProjectName
+                )
+            )
 
             QuickNoteAttachmentPickerBar(
                 projectName: selectedProjectName,
@@ -132,7 +139,7 @@ struct QuickNoteComposerView: View {
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
-                .accessibilityLabel("清空草稿")
+                .accessibilityLabel(String(localized: "quick_note_composer_clear_draft_accessibility_label"))
             }
 
             Spacer(minLength: 0)
@@ -171,8 +178,8 @@ struct QuickNoteComposerView: View {
             }
 
             HStack(spacing: 10) {
-                Picker("工程", selection: $projectId) {
-                    Text("不关联工程").tag(nil as UUID?)
+                Picker(String(localized: "quick_note_composer_project_picker_title"), selection: $projectId) {
+                    Text(String(localized: "quick_note_composer_no_project_option")).tag(nil as UUID?)
                     ForEach(projects) { project in
                         Text(project.name).tag(project.id as UUID?)
                     }
@@ -181,7 +188,7 @@ struct QuickNoteComposerView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
                 if canPublish {
-                    Button("放弃草稿", role: .destructive) {
+                    Button(String(localized: "quick_note_composer_discard_draft_button"), role: .destructive) {
                         onDiscardDraftRequest()
                     }
                     .buttonStyle(.bordered)
@@ -193,7 +200,7 @@ struct QuickNoteComposerView: View {
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("完成") { isContentFocused = false }
+                    Button(String(localized: "quick_note_composer_done_button")) { isContentFocused = false }
                 }
             }
     }
@@ -220,9 +227,9 @@ enum QuickNoteComposerMode {
     var placeholder: String {
         switch self {
         case .full:
-            return "记录现场情况、客户交代或临时想法"
+            return String(localized: "quick_note_composer_full_placeholder")
         case .compact:
-            return "发消息记录现场情况"
+            return String(localized: "quick_note_composer_compact_placeholder")
         }
     }
 }

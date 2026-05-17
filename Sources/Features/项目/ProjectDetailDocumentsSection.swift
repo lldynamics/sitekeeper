@@ -96,7 +96,7 @@ struct ProjectDocumentsView: View {
                         showFilterSheet = true
                     } label: {
                         HStack {
-                            Label("筛选", systemImage: "line.3.horizontal.decrease.circle")
+                            Label(String(localized: "筛选"), systemImage: "line.3.horizontal.decrease.circle")
                             Spacer()
                             Text(filterSummary)
                                 .font(.caption)
@@ -105,7 +105,7 @@ struct ProjectDocumentsView: View {
                         }
                     }
                     if hasActiveFilters {
-                        Button("清除筛选") {
+                        Button(String(localized: "清除筛选")) {
                             resetFilters()
                         }
                         .font(.caption.weight(.semibold))
@@ -113,17 +113,17 @@ struct ProjectDocumentsView: View {
                 }
             }
 
-            Section("资料 (\(filteredDocuments.count))") {
+            Section(String(format: String(localized: "资料 (%lld)"), Int64(filteredDocuments.count))) {
                 if filteredDocuments.isEmpty {
                     ProjectInlineEmptyState(
-                        documents.isEmpty ? "还没有资料" : "没有匹配资料",
+                        documents.isEmpty ? String(localized: "还没有资料") : String(localized: "没有匹配资料"),
                         systemImage: "doc.viewfinder",
-                        detail: documents.isEmpty ? "扫描票据或导入资料后可关联账目。" : "调整筛选条件后再看。"
+                        detail: documents.isEmpty ? String(localized: "扫描票据或导入资料后可关联账目。") : String(localized: "调整筛选条件后再看。")
                     )
                 } else {
                     if !suggestedMatches.isEmpty {
                         VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                            Label("缺票自动匹配建议", systemImage: "wand.and.stars")
+                            Label(String(localized: "缺票自动匹配建议"), systemImage: "wand.and.stars")
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(Color.appWarning)
                             ForEach(suggestedMatches) { match in
@@ -132,15 +132,15 @@ struct ProjectDocumentsView: View {
                                         Text(match.document.title)
                                             .font(.caption.weight(.semibold))
                                             .lineLimit(1)
-                                        Text("\(match.record.date) · \(match.record.counterparty.isEmpty ? "未填写单位" : match.record.counterparty)")
+                                        Text("\(match.record.date) · \(match.record.counterparty.isEmpty ? String(localized: "未填写单位") : match.record.counterparty)")
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
-                                        Text("建议关联 \(ReportBuilder.money(match.record.amountValue.doubleValue))")
+                                        Text(String(format: String(localized: "建议关联 %@"), ReportBuilder.money(match.record.amountValue.doubleValue)))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                     }
                                     Spacer()
-                                    Button("关联") {
+                                    Button(String(localized: "关联")) {
                                         onLink(match.document.id, match.record.id)
                                     }
                                     .buttonStyle(.appProminent())
@@ -165,7 +165,7 @@ struct ProjectDocumentsView: View {
                                     Text(document.title).font(.callout.weight(.medium)).foregroundStyle(.primary)
                                     HStack(spacing: AppSpacing.tight) {
                                         Text(document.category.displayName)
-                                        Text("\(document.pageCount) 页")
+                                        Text(String(format: String(localized: "%lld 页"), Int64(document.pageCount)))
                                         if document.amountValue.isPositive {
                                             Text(ReportBuilder.money(document.amountValue.doubleValue))
                                         }
@@ -184,7 +184,7 @@ struct ProjectDocumentsView: View {
                                     }
                                     let linkedTitles = linkedMethodTitles(for: document)
                                     if !linkedTitles.isEmpty {
-                                        Text("工艺: \(linkedTitles.joined(separator: "、"))")
+                                        Text(String(format: String(localized: "工艺: %@"), linkedTitles.joined(separator: "、")))
                                             .font(.caption2)
                                             .foregroundStyle(.secondary)
                                             .lineLimit(2)
@@ -206,16 +206,16 @@ struct ProjectDocumentsView: View {
                 Form {
                     filterForm
                 }
-                .navigationTitle("资料筛选")
+                .navigationTitle(String(localized: "资料筛选"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("重置") {
+                        Button(String(localized: "重置")) {
                             resetFilters()
                         }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("完成") {
+                        Button(String(localized: "完成")) {
                             showFilterSheet = false
                         }
                     }
@@ -474,33 +474,33 @@ struct ProjectDocumentsView: View {
 
     @ViewBuilder
     private var filterForm: some View {
-        Section("类型") {
-            Picker("资料类型", selection: $categoryFilter) {
+        Section(String(localized: "类型")) {
+            Picker(String(localized: "资料类型"), selection: $categoryFilter) {
                 ForEach(DocumentCategoryFilter.allCases, id: \.self) { item in
                     Text(item.displayName).tag(item)
                 }
             }
-            Picker("关联状态", selection: $relationFilter) {
+            Picker(String(localized: "关联状态"), selection: $relationFilter) {
                 ForEach(DocumentRelationFilter.allCases, id: \.self) { item in
                     Text(item.displayName).tag(item)
                 }
             }
         }
-        Section("日期") {
-            Toggle("限定日期范围", isOn: $useDateRange)
+        Section(String(localized: "日期")) {
+            Toggle(String(localized: "限定日期范围"), isOn: $useDateRange)
             if useDateRange {
-                DatePicker("开始", selection: $startDate, displayedComponents: .date)
-                DatePicker("结束", selection: $endDate, displayedComponents: .date)
+                DatePicker(String(localized: "开始"), selection: $startDate, displayedComponents: .date)
+                DatePicker(String(localized: "结束"), selection: $endDate, displayedComponents: .date)
             }
         }
-        Section("金额") {
-            LabeledContent("最小金额") {
+        Section(String(localized: "金额")) {
+            LabeledContent(String(localized: "最小金额")) {
                 TextField("0", text: $minAmount)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
-            LabeledContent("最大金额") {
-                TextField("不限", text: $maxAmount)
+            LabeledContent(String(localized: "最大金额")) {
+                TextField(String(localized: "不限"), text: $maxAmount)
                     .keyboardType(.decimalPad)
                     .multilineTextAlignment(.trailing)
             }
@@ -512,12 +512,12 @@ struct ProjectDocumentsView: View {
     }
 
     private var filterSummary: String {
-        guard hasActiveFilters else { return "全部资料" }
+        guard hasActiveFilters else { return String(localized: "全部资料") }
         var parts: [String] = []
         if categoryFilter != .all { parts.append(categoryFilter.displayName) }
         if relationFilter != .all { parts.append(relationFilter.displayName) }
-        if useDateRange { parts.append("日期") }
-        if !minAmount.isEmpty || !maxAmount.isEmpty { parts.append("金额") }
+        if useDateRange { parts.append(String(localized: "日期")) }
+        if !minAmount.isEmpty || !maxAmount.isEmpty { parts.append(String(localized: "金额")) }
         return parts.joined(separator: " · ")
     }
 
@@ -575,7 +575,7 @@ struct ProjectDocumentsView: View {
     private func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
-        let displayTitle = title.isEmpty ? "未命名工艺" : title
+        let displayTitle = title.isEmpty ? String(localized: "未命名工艺") : title
         return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
     }
 
@@ -678,26 +678,65 @@ extension DocumentArchiveChecklistItem {
 }
 
 private enum DocumentCategoryFilter: String, CaseIterable {
-    case all = "全部"
-    case constructionArchive = "全部施工资料"
-    case constructionTechnical = "施工技术"
-    case constructionMaterial = "施工物资"
-    case constructionSurvey = "施工测量"
-    case constructionRecord = "施工记录"
-    case constructionTest = "施工试验"
-    case constructionManagement = "施工管理"
-    case processAcceptance = "过程验收"
-    case completionAcceptance = "竣工验收"
-    case businessArchive = "商务/财务"
-    case paymentRequest = "请款资料"
-    case contract = "合同"
-    case invoice = "发票"
-    case receipt = "收据"
-    case legacyConstruction = "施工资料"
-    case acceptance = "验收资料"
-    case other = "其他资料"
+    case all
+    case constructionArchive
+    case constructionTechnical
+    case constructionMaterial
+    case constructionSurvey
+    case constructionRecord
+    case constructionTest
+    case constructionManagement
+    case processAcceptance
+    case completionAcceptance
+    case businessArchive
+    case paymentRequest
+    case contract
+    case invoice
+    case receipt
+    case legacyConstruction
+    case acceptance
+    case other
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .constructionArchive:
+            return String(localized: "全部施工资料")
+        case .constructionTechnical:
+            return String(localized: "施工技术")
+        case .constructionMaterial:
+            return String(localized: "施工物资")
+        case .constructionSurvey:
+            return String(localized: "施工测量")
+        case .constructionRecord:
+            return String(localized: "施工记录")
+        case .constructionTest:
+            return String(localized: "施工试验")
+        case .constructionManagement:
+            return String(localized: "施工管理")
+        case .processAcceptance:
+            return String(localized: "过程验收")
+        case .completionAcceptance:
+            return String(localized: "竣工验收")
+        case .businessArchive:
+            return String(localized: "商务/财务")
+        case .paymentRequest:
+            return String(localized: "请款资料")
+        case .contract:
+            return String(localized: "合同")
+        case .invoice:
+            return String(localized: "发票")
+        case .receipt:
+            return String(localized: "收据")
+        case .legacyConstruction:
+            return String(localized: "施工资料")
+        case .acceptance:
+            return String(localized: "验收资料")
+        case .other:
+            return String(localized: "其他资料")
+        }
+    }
 
     init(category: ProjectDocumentCategory) {
         switch category {
@@ -777,11 +816,20 @@ private enum DocumentCategoryFilter: String, CaseIterable {
 }
 
 private enum DocumentRelationFilter: String, CaseIterable {
-    case all = "全部"
-    case linked = "已关联账目"
-    case unlinked = "未关联账目"
+    case all
+    case linked
+    case unlinked
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .linked:
+            return String(localized: "已关联账目")
+        case .unlinked:
+            return String(localized: "未关联账目")
+        }
+    }
 
     func matches(_ document: ProjectDocument) -> Bool {
         switch self {

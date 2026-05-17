@@ -11,8 +11,13 @@ extension SiteKeeperCADKernel {
         func decode(rawText: String, textStyle: CADTextStyle? = nil) -> CADDecodedText {
             var warnings: [String] = []
             let unicodeDecoded = decodeUnicodeEscapes(in: rawText, warnings: &warnings)
-            let mifDecoded = decodeMIFBigFontEscapeSequences(
+            let cifDecoded = decodeCIFBigFontEscapeSequences(
                 in: unicodeDecoded,
+                textStyle: textStyle,
+                warnings: &warnings
+            )
+            let mifDecoded = decodeMIFBigFontEscapeSequences(
+                in: cifDecoded,
                 textStyle: textStyle,
                 warnings: &warnings
             )
@@ -21,13 +26,20 @@ extension SiteKeeperCADKernel {
                 textStyle: textStyle,
                 warnings: &warnings
             )
-            let decoded = repairMojibakeIfNeeded(shxHexDecoded, textStyle: textStyle, warnings: &warnings)
+            let bareSHXHexDecoded = decodeBareSHXBigFontHexRuns(
+                in: shxHexDecoded,
+                textStyle: textStyle,
+                warnings: &warnings
+            )
+            let decoded = repairMojibakeIfNeeded(bareSHXHexDecoded, textStyle: textStyle, warnings: &warnings)
             let method: String
             if decoded == rawText {
                 method = "rawString"
-            } else if mifDecoded != unicodeDecoded {
+            } else if mifDecoded != cifDecoded {
                 method = "mifEscape"
-            } else if shxHexDecoded != mifDecoded {
+            } else if cifDecoded != unicodeDecoded {
+                method = "cifEscape"
+            } else if shxHexDecoded != mifDecoded || bareSHXHexDecoded != shxHexDecoded {
                 method = "shxBigFontHex"
             } else if unicodeDecoded != rawText {
                 method = "unicodeEscape"
@@ -60,6 +72,37 @@ extension SiteKeeperCADKernel {
                     continue
                 }
                 output.replaceSubrange(fullRange, with: String(Character(scalar)))
+            }
+            return output
+        }
+
+        private func decodeCIFBigFontEscapeSequences(
+            in value: String,
+            textStyle: CADTextStyle?,
+            warnings: inout [String]
+        ) -> String {
+            let pattern = #"\\[Cc]([0-9A-Fa-f]{4,8});?(?![0-9A-Fa-f])"#
+            guard let regex = try? NSRegularExpression(pattern: pattern) else {
+                return value
+            }
+
+            var output = value
+            let matches = regex.matches(in: value, range: NSRange(value.startIndex..., in: value))
+            for match in matches.reversed() {
+                guard
+                    let fullRange = Range(match.range(at: 0), in: output),
+                    let hexRange = Range(match.range(at: 1), in: output)
+                else {
+                    continue
+                }
+
+                let hex = String(output[hexRange])
+                guard let decoded = decodeCIFHex(hex, textStyle: textStyle, warnings: &warnings) else {
+                    warnings.appendOnce("CAD_TEXT_INVALID_CIF_ESCAPE")
+                    continue
+                }
+                warnings.appendOnce("CAD_TEXT_BIGFONT_CIF_DECODED")
+                output.replaceSubrange(fullRange, with: decoded)
             }
             return output
         }
@@ -129,6 +172,75 @@ extension SiteKeeperCADKernel {
             return output
         }
 
+        private func decodeCIFHex(
+            _ hex: String,
+            textStyle: CADTextStyle?,
+            warnings: inout [String]
+        ) -> String? {
+            if let scalarValue = UInt32(hex, radix: 16),
+               let scalar = UnicodeScalar(scalarValue),
+               String(scalar).containsCJKScalars {
+                warnings.appendOnce("CAD_TEXT_BIGFONT_CIF_UNICODE_DECODED")
+                return String(Character(scalar))
+            }
+
+            guard hex.count.isMultiple(of: 2),
+                  hexContainsNonASCIIByte(hex),
+                  let decoded = decodeHexByteCandidate(hex, textStyle: textStyle),
+                  decoded.text.containsCJKScalars else {
+                return nil
+            }
+            warnings.appendOnce("CAD_TEXT_BIGFONT_CIF_\(decoded.encodingName)_DECODED")
+            return decoded.text
+        }
+
+        private func decodeBareSHXBigFontHexRuns(
+            in value: String,
+            textStyle: CADTextStyle?,
+            warnings: inout [String]
+        ) -> String {
+            guard textStyle?.usesSHXOrBigFont == true,
+                  !value.containsCJKScalars,
+                  let regex = try? NSRegularExpression(
+                    pattern: #"(?:\\([0-9A-Fa-f]{4,128})(?![A-Za-z0-9])|(?<![A-Za-z0-9])([0-9A-Fa-f]{4,128})(?![A-Za-z0-9]))"#
+                  ) else {
+                return value
+            }
+
+            var output = value
+            let matches = regex.matches(in: value, range: NSRange(value.startIndex..., in: value))
+            for match in matches.reversed() {
+                guard
+                    let fullRange = Range(match.range(at: 0), in: output),
+                    let hexRange = Range(hexRange(for: match), in: output)
+                else {
+                    continue
+                }
+
+                let hex = String(output[hexRange])
+                guard hex.count.isMultiple(of: 2),
+                      hexContainsNonASCIIByte(hex),
+                      let decoded = decodeHexByteCandidate(hex, textStyle: textStyle),
+                      decoded.text.containsCJKScalars else {
+                    continue
+                }
+
+                warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BARE_HEX_DECODED")
+                warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BARE_\(decoded.encodingName)_DECODED")
+                output.replaceSubrange(fullRange, with: decoded.text)
+            }
+
+            return output
+        }
+
+        private func hexRange(for match: NSTextCheckingResult) -> NSRange {
+            let escapedRange = match.range(at: 1)
+            if escapedRange.location != NSNotFound {
+                return escapedRange
+            }
+            return match.range(at: 2)
+        }
+
         private func repairMojibakeIfNeeded(
             _ value: String,
             textStyle: CADTextStyle?,
@@ -157,6 +269,12 @@ extension SiteKeeperCADKernel {
             warningPrefix: String
         ) -> String? {
             guard hex.count.isMultiple(of: 2) else { return nil }
+            guard let decoded = decodeHexByteCandidate(hex, textStyle: textStyle) else { return nil }
+            warnings.appendOnce("\(warningPrefix)_\(decoded.encodingName)_DECODED")
+            return decoded.text
+        }
+
+        private func decodeHexByteCandidate(_ hex: String, textStyle: CADTextStyle?) -> CADByteDecodedText? {
             var bytes: [UInt8] = []
             bytes.reserveCapacity(hex.count / 2)
             var index = hex.startIndex
@@ -166,9 +284,19 @@ extension SiteKeeperCADKernel {
                 bytes.append(byte)
                 index = next
             }
-            guard let decoded = decodeTextBytes(Data(bytes), textStyle: textStyle) else { return nil }
-            warnings.appendOnce("\(warningPrefix)_\(decoded.encodingName)_DECODED")
-            return decoded.text
+            return decodeTextBytes(Data(bytes), textStyle: textStyle)
+        }
+
+        private func hexContainsNonASCIIByte(_ hex: String) -> Bool {
+            var index = hex.startIndex
+            while index < hex.endIndex {
+                let next = hex.index(index, offsetBy: 2)
+                if let byte = UInt8(hex[index..<next], radix: 16), byte >= 0x80 {
+                    return true
+                }
+                index = next
+            }
+            return false
         }
 
         private func decodeTextBytes(_ data: Data, textStyle: CADTextStyle?) -> CADByteDecodedText? {
@@ -258,7 +386,16 @@ private extension SiteKeeperCADKernel.CADTextStyle {
                     || value.contains("bigfont")
                     || value.contains("hztxt")
                     || value.contains("hzfs")
+                    || value.contains("hzdx")
+                    || value.contains("hzst")
+                    || value.contains("gbhz")
                     || value.contains("gbcbig")
+                    || value.contains("gbk")
+                    || value.contains("gb2312")
+                    || value.contains("gb18030")
+                    || value.contains("chineses")
+                    || value.contains("chineset")
+                    || value.contains("tssd")
             }
     }
 

@@ -1201,6 +1201,12 @@ extension CADPoC {
                 return "Unicode CJK text skipped the SHX pseudo-glyph path and used a runtime font."
             case "CAD_TEXT_SHX_MAPPED_TO_SYSTEM_FONT":
                 return "An SHX font was mapped to a runtime system font for display."
+            case "CAD_TEXT_BIGFONT_CIF_DECODED":
+                return "CAD BigFont CIF text escapes were decoded for display."
+            case "CAD_TEXT_BIGFONT_CIF_UNICODE_DECODED":
+                return "CAD BigFont CIF Unicode text escapes were decoded for display."
+            case "CAD_TEXT_INVALID_CIF_ESCAPE":
+                return "CAD BigFont CIF text escapes could not be decoded."
             case "CAD_TEXT_FONT_FALLBACK_USED":
                 return "CAD text used a fallback runtime font."
             case "CAD_TEXT_SELECTED_FONT_UNAVAILABLE":
@@ -1318,10 +1324,10 @@ private enum DXFBasic2DParser {
                 index += 1
             }
 
-            let record: EntityRecord?
+            let parsedRecords: [EntityRecord]
             if type == "POLYLINE" {
                 let vertexPairs = consumePolylineVertices(from: entityPairs, index: &index)
-                record = makePolyline(from: recordPairs, vertexPairs: vertexPairs)
+                parsedRecords = makePolyline(from: recordPairs, vertexPairs: vertexPairs).map { [$0] } ?? []
             } else if type == "INSERT" || type == "MINSERT" {
                 if var insert = makeInsert(type: type, from: recordPairs) {
                     insert.attachedAttributes = consumeInsertAttributes(
@@ -1329,17 +1335,19 @@ private enum DXFBasic2DParser {
                         index: &index,
                         textStylesByID: textStylesByID
                     )
-                    record = insert
+                    parsedRecords = [insert]
                 } else {
-                    record = nil
+                    parsedRecords = []
                 }
             } else {
-                record = makeEntity(type: type, pairs: recordPairs, textStylesByID: textStylesByID)
+                parsedRecords = makeEntities(type: type, pairs: recordPairs, textStylesByID: textStylesByID)
             }
-            guard var record else { continue }
-            record.lineType = lineType(from: recordPairs) ?? record.lineType
-            record.layoutID = layoutID(from: recordPairs) ?? record.layoutID
-            records.append(record)
+            for parsedRecord in parsedRecords {
+                var record = parsedRecord
+                record.lineType = lineType(from: recordPairs) ?? record.lineType
+                record.layoutID = layoutID(from: recordPairs) ?? record.layoutID
+                records.append(record)
+            }
         }
         return records
     }
@@ -1643,6 +1651,20 @@ private enum DXFBasic2DParser {
         return layouts.isEmpty ? [.modelSpace] : layouts
     }
 
+    private static func makeEntities(
+        type: String,
+        pairs: [Pair],
+        textStylesByID: [String: Kernel.CADTextStyle]
+    ) -> [EntityRecord] {
+        if type == "TABLE" {
+            return makeTableCellTexts(from: pairs, textStylesByID: textStylesByID)
+        }
+        guard let record = makeEntity(type: type, pairs: pairs, textStylesByID: textStylesByID) else {
+            return []
+        }
+        return [record]
+    }
+
     private static func makeEntity(
         type: String,
         pairs: [Pair],
@@ -1674,7 +1696,7 @@ private enum DXFBasic2DParser {
             record = makeInsert(type: type, from: pairs)
         case "HATCH":
             record = makeHatch(from: pairs)
-        case "LEADER", "MLEADER":
+        case "LEADER", "MLEADER", "MULTILEADER":
             record = makeLeader(type: type, from: pairs)
         case "MLINE":
             record = makeMLine(from: pairs)
@@ -2427,6 +2449,9 @@ private enum DXFBasic2DParser {
     private static func makeLeader(type: String, from pairs: [Pair]) -> EntityRecord? {
         let vertices = orderedPoints(in: pairs, xCode: 10, yCode: 20)
         guard vertices.count >= 2 else {
+            if let textRecord = makeLeaderTextOnly(type: type, from: pairs) {
+                return textRecord
+            }
             return unsupportedRecord(
                 type: type,
                 pairs: pairs,
@@ -2435,13 +2460,16 @@ private enum DXFBasic2DParser {
             )
         }
         let path = makePath(from: vertices, closed: false)
+        let text = leaderTextRun(type: type, pairs: pairs, fallbackPoint: vertices.last ?? path.bounds.center)
+        let bounds = text.map { path.bounds.union(textBounds(for: $0, insertion: $0.insertionPoint, height: $0.height)) }
+            ?? path.bounds
         return EntityRecord(
-            kind: .polyline,
+            kind: text == nil ? .polyline : .dimension,
             layerID: layerID(from: pairs),
             handle: firstString(code: 5, in: pairs),
             path: path,
-            text: nil,
-            bounds: path.bounds,
+            text: text,
+            bounds: bounds,
             colorARGB: colorARGB(from: pairs, defaultACI: nil),
             lineWeight: lineWeight(from: pairs),
             visibility: visibility(from: pairs),
@@ -2449,12 +2477,175 @@ private enum DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_LEADER_DEGRADED_TO_POLYLINE",
-                    message: "\(type) imported as a polyline.",
+                    code: text == nil
+                        ? "CAD_POC_LEADER_DEGRADED_TO_POLYLINE"
+                        : "CAD_POC_LEADER_TEXT_SIMPLIFIED",
+                    message: text == nil
+                        ? "\(type) imported as a polyline."
+                        : "\(type) imported as leader geometry with simplified annotation text.",
                     detail: firstString(code: 5, in: pairs)
                 )
             ]
         )
+    }
+
+    private static func makeLeaderTextOnly(type: String, from pairs: [Pair]) -> EntityRecord? {
+        guard let text = leaderTextRun(type: type, pairs: pairs, fallbackPoint: point(in: pairs, xCode: 10, yCode: 20) ?? .zero) else {
+            return nil
+        }
+        let bounds = textBounds(for: text, insertion: text.insertionPoint, height: text.height)
+        return EntityRecord(
+            kind: .mtext,
+            layerID: layerID(from: pairs),
+            handle: firstString(code: 5, in: pairs),
+            path: nil,
+            text: text,
+            bounds: bounds,
+            colorARGB: colorARGB(from: pairs, defaultACI: nil),
+            lineWeight: lineWeight(from: pairs),
+            visibility: visibility(from: pairs),
+            sourceType: type,
+            diagnostics: [
+                Kernel.CADDrawingDiagnostics.Entry(
+                    severity: .warning,
+                    code: "CAD_POC_LEADER_TEXT_WITHOUT_GEOMETRY",
+                    message: "\(type) annotation text was imported, but leader geometry could not be resolved.",
+                    detail: firstString(code: 5, in: pairs)
+                )
+            ]
+        )
+    }
+
+    private static func leaderTextRun(
+        type: String,
+        pairs: [Pair],
+        fallbackPoint: Kernel.CADPoint
+    ) -> Kernel.CADTextRun? {
+        let rawText = joinedText(from: pairs, acceptedCodes: Set([1, 3, 302, 304]))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawText.isEmpty else { return nil }
+
+        let insertion = point(in: pairs, xCode: 12, yCode: 22)
+            ?? point(in: pairs, xCode: 11, yCode: 21)
+            ?? fallbackPoint
+        let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
+        let style = Kernel.CADTextStyle(id: styleName, name: styleName)
+        let height = positiveOrNil(firstDouble(code: 40, in: pairs))
+            ?? positiveOrNil(firstDouble(code: 140, in: pairs))
+            ?? 2.5
+        let boxWidth = positiveOrNil(firstDouble(code: 41, in: pairs))
+        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
+        return Kernel.CADTextEngine().makeTextRun(
+            rawText: rawText,
+            insertionPoint: insertion,
+            style: style,
+            height: height,
+            rotationRadians: rotation,
+            widthFactor: style.widthFactor,
+            boxWidth: boxWidth,
+            horizontalAlignmentCode: firstInt(code: 71, in: pairs),
+            verticalAlignmentCode: firstInt(code: 72, in: pairs)
+        )
+    }
+
+    private static func makeTableCellTexts(
+        from pairs: [Pair],
+        textStylesByID: [String: Kernel.CADTextStyle]
+    ) -> [EntityRecord] {
+        let cellTexts = tableCellTextValues(from: pairs)
+        guard !cellTexts.isEmpty else {
+            return [
+                unsupportedRecord(
+                    type: "TABLE",
+                    pairs: pairs,
+                    code: "CAD_POC_TABLE_TEXT_UNRESOLVED",
+                    reason: "TABLE cell text cannot be resolved by the CAD Metal PoC."
+                )
+            ]
+        }
+
+        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
+        let columnCount = max(firstInt(code: 90, in: pairs) ?? Int(ceil(sqrt(Double(cellTexts.count)))), 1)
+        let rowCount = max(firstInt(code: 91, in: pairs) ?? Int(ceil(Double(cellTexts.count) / Double(columnCount))), 1)
+        let widths = allDoubles(code: 142, in: pairs)
+        let heights = allDoubles(code: 141, in: pairs)
+        let defaultWidth = positiveOrNil(firstDouble(code: 41, in: pairs)) ?? 20
+        let defaultHeight = positiveOrNil(firstDouble(code: 40, in: pairs)) ?? 8
+        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
+        let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
+        let style = textStylesByID[styleName] ?? Kernel.CADTextStyle(id: styleName, name: styleName)
+        let handle = firstString(code: 5, in: pairs)
+        let layer = layerID(from: pairs)
+        let color = colorARGB(from: pairs, defaultACI: nil)
+        let lineWeight = lineWeight(from: pairs)
+        let visibility = visibility(from: pairs)
+
+        var records: [EntityRecord] = []
+        records.reserveCapacity(cellTexts.count)
+        for (index, rawText) in cellTexts.enumerated() {
+            let row = min(index / columnCount, max(rowCount - 1, 0))
+            let column = index % columnCount
+            let cellWidth = positiveOrNil(widths[safe: column]) ?? defaultWidth
+            let cellHeight = positiveOrNil(heights[safe: row]) ?? defaultHeight
+            let xOffset = cumulative(widths, through: column, fallback: defaultWidth) + cellWidth * 0.08
+            let yOffset = -cumulative(heights, through: row, fallback: defaultHeight) - cellHeight * 0.55
+            let insertionPoint = Kernel.CADPoint(
+                x: insertion.x + xOffset * cos(rotation) - yOffset * sin(rotation),
+                y: insertion.y + xOffset * sin(rotation) + yOffset * cos(rotation)
+            )
+            let textHeight = max(cellHeight * 0.45, style.fixedHeight ?? 2.5)
+            let text = Kernel.CADTextEngine().makeTextRun(
+                rawText: rawText,
+                insertionPoint: insertionPoint,
+                style: style,
+                height: textHeight,
+                rotationRadians: rotation,
+                widthFactor: style.widthFactor,
+                boxWidth: cellWidth,
+                boxHeight: cellHeight,
+                horizontalAlignmentCode: firstInt(code: 170, in: pairs),
+                verticalAlignmentCode: firstInt(code: 170, in: pairs)
+            )
+            let bounds = textBounds(for: text, insertion: insertionPoint, height: textHeight)
+            records.append(
+                EntityRecord(
+                    kind: .mtext,
+                    layerID: layer,
+                    handle: handle.map { "\($0)-cell-\(index)" },
+                    path: nil,
+                    text: text,
+                    bounds: bounds,
+                    colorARGB: color,
+                    lineWeight: lineWeight,
+                    visibility: visibility,
+                    sourceType: "TABLE",
+                    diagnostics: [
+                        Kernel.CADDrawingDiagnostics.Entry(
+                            severity: .info,
+                            code: "CAD_POC_TABLE_CELL_TEXT_SIMPLIFIED",
+                            message: "TABLE cell text imported as positioned MTEXT for the CAD Metal PoC.",
+                            detail: handle
+                        )
+                    ]
+                )
+            )
+        }
+        return records
+    }
+
+    private static func tableCellTextValues(from pairs: [Pair]) -> [String] {
+        let acceptedCodes = Set([1, 3, 302, 304])
+        return pairs
+            .filter { acceptedCodes.contains($0.code) }
+            .map { $0.value.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private static func cumulative(_ values: [Double], through index: Int, fallback: Double) -> Double {
+        guard index > 0 else { return 0 }
+        return (0..<index).reduce(0) { partial, current in
+            partial + (positiveOrNil(values[safe: current]) ?? fallback)
+        }
     }
 
     private static func makeMLine(from pairs: [Pair]) -> EntityRecord? {
@@ -3282,6 +3473,13 @@ private enum DXFBasic2DParser {
         return Double(value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
+    private static func allDoubles(code: Int, in pairs: [Pair]) -> [Double] {
+        pairs.compactMap { pair in
+            guard pair.code == code else { return nil }
+            return Double(pair.value.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+    }
+
     private static func positiveOrNil(_ value: Double?) -> Double? {
         guard let value, value > 0 else { return nil }
         return value
@@ -3447,9 +3645,14 @@ private actor CADImportResultCache {
             let data = try JSONEncoder().encode(result)
             try data.write(to: url, options: [.atomic])
         } catch {
-            #if DEBUG
-            print("CADImportResultCache store failed: \(error)")
-            #endif
+            CADPoC.CADDiagnosticLog.recordEncoded(
+                category: "cad.importCache",
+                message: "CAD import result cache store failed.",
+                payload: [
+                    "cachePath": url.path,
+                    "error": error.localizedDescription
+                ]
+            )
         }
     }
 
@@ -3562,5 +3765,12 @@ private extension String {
             hash &*= 0x100000001b3
         }
         return String(format: "%016llx", hash)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard index >= 0, index < count else { return nil }
+        return self[index]
     }
 }

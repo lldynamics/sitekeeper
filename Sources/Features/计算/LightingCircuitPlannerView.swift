@@ -30,7 +30,7 @@ struct LightingCircuitPlannerView: View {
     @State private var imbalanceLimitPercent: String = "15"
     @State private var isCopper: Bool = true
 
-    @State private var rows: [LightingCircuitLoad] = [LightingCircuitLoad(name: "照明回路 1", powerKW: "3.0")]
+    @State private var rows: [LightingCircuitLoad] = [LightingCircuitLoad(name: String(localized: "lighting_planner_default_circuit_name"), powerKW: "3.0")]
     @State private var resultText = ""
     @State private var resultModel: CalculationResult?
     @State private var exportFormat: CircuitPlanExportFormat = .pdf
@@ -46,9 +46,9 @@ struct LightingCircuitPlannerView: View {
 
     var body: some View {
         Form {
-            Section("方案归档") {
-                Picker("所属项目", selection: $selectedProjectId) {
-                    Text("通用（不绑定项目）").tag(Optional<UUID>.none)
+            Section(String(localized: "lighting_planner_plan_archive_section")) {
+                Picker(String(localized: "lighting_planner_project_picker"), selection: $selectedProjectId) {
+                    Text(String(localized: "lighting_planner_generic_unbound_project")).tag(Optional<UUID>.none)
                     ForEach(store.projects) { project in
                         Text(project.name).tag(Optional(project.id))
                     }
@@ -60,40 +60,40 @@ struct LightingCircuitPlannerView: View {
                     }
                 }
 
-                LabeledContent("方案名称") {
-                    TextField("例如：3层公共照明", text: $planName)
+                LabeledContent(String(localized: "lighting_planner_plan_name_label")) {
+                    TextField(String(localized: "lighting_planner_plan_name_placeholder"), text: $planName)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
 
-                Picker("已保存方案", selection: $selectedPlanId) {
-                    Text("未选择").tag(Optional<UUID>.none)
+                Picker(String(localized: "lighting_planner_saved_plan_picker"), selection: $selectedPlanId) {
+                    Text(String(localized: "lighting_planner_unselected_option")).tag(Optional<UUID>.none)
                     ForEach(availablePlans) { plan in
                         Text(plan.name).tag(Optional(plan.id))
                     }
                 }
 
-                Button("载入已选方案") { loadSelectedPlan() }
+                Button(String(localized: "lighting_planner_load_selected_plan_button")) { loadSelectedPlan() }
                     .disabled(selectedPlan == nil)
-                Button("覆盖保存到已选方案") { savePlan(overwrite: true) }
+                Button(String(localized: "lighting_planner_overwrite_selected_plan_button")) { savePlan(overwrite: true) }
                     .disabled(selectedPlan == nil)
-                Button("另存为新方案") { savePlan(overwrite: false) }
-                Button("删除已选方案", role: .destructive) { deleteSelectedPlan() }
+                Button(String(localized: "lighting_planner_save_as_new_plan_button")) { savePlan(overwrite: false) }
+                Button(String(localized: "lighting_planner_delete_selected_plan_button"), role: .destructive) { deleteSelectedPlan() }
                     .disabled(selectedPlan == nil)
 
-                Picker("导出格式", selection: $exportFormat) {
+                Picker(String(localized: "lighting_planner_export_format_picker"), selection: $exportFormat) {
                     ForEach(CircuitPlanExportFormat.allCases, id: \.self) { format in
                         Text(format.displayName).tag(format)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Button("导出当前项目方案") { exportCurrentProjectPlans() }
+                Button(String(localized: "lighting_planner_export_current_project_button")) { exportCurrentProjectPlans() }
                     .disabled(currentProject == nil || currentProjectPlans.isEmpty)
             }
 
-            Section("供电参数") {
-                Picker("供电类型", selection: $supplyType) {
+            Section(String(localized: "lighting_planner_supply_params_section")) {
+                Picker(String(localized: "lighting_planner_supply_type_picker"), selection: $supplyType) {
                     ForEach(CircuitSupplyType.allCases, id: \.self) { type in
                         Text(type.displayName).tag(type)
                     }
@@ -104,47 +104,47 @@ struct LightingCircuitPlannerView: View {
                     }
                     persistInputs()
                 }
-                LabeledContent("电压 (V)") {
-                    TextField("220 / 380", text: $voltage.numericInput(.quantity))
+                LabeledContent(String(localized: "lighting_planner_voltage_label")) {
+                    TextField(String(localized: "lighting_planner_voltage_placeholder"), text: $voltage.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                LabeledContent("功率因数 (0-1)") {
+                LabeledContent(String(localized: "lighting_planner_power_factor_label")) {
                     TextField("0.90", text: $powerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                LabeledContent("需用系数 (0-1)") {
+                LabeledContent(String(localized: "lighting_planner_demand_factor_label")) {
                     TextField("0.90", text: $demandFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                LabeledContent("断路器裕量 (倍)") {
+                LabeledContent(String(localized: "lighting_planner_breaker_factor_label")) {
                     TextField("1.25", text: $breakerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                LabeledContent("线径裕量 (倍)") {
+                LabeledContent(String(localized: "lighting_planner_wire_factor_label")) {
                     TextField("1.15", text: $wireFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                Toggle("铜导线", isOn: $isCopper)
+                Toggle(String(localized: "lighting_planner_copper_wire_toggle"), isOn: $isCopper)
             }
 
-            Section("预警阈值") {
-                LabeledContent("总开关容量 (A)") {
+            Section(String(localized: "lighting_planner_warning_threshold_section")) {
+                LabeledContent(String(localized: "lighting_planner_main_breaker_limit_label")) {
                     TextField("100", text: $mainBreakerLimitA.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                LabeledContent("三相不平衡阈值 (%)") {
+                LabeledContent(String(localized: "lighting_planner_imbalance_limit_label")) {
                     TextField("15", text: $imbalanceLimitPercent.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
@@ -152,19 +152,19 @@ struct LightingCircuitPlannerView: View {
                 }
             }
 
-            Section("回路负荷") {
+            Section(String(localized: "lighting_planner_circuit_load_section")) {
                 ForEach($rows) { $row in
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("回路名称", text: $row.name)
+                        TextField(String(localized: "lighting_planner_circuit_name_field"), text: $row.name)
                             .focused($isInputFocused)
-                        LabeledContent("装机功率 (kW)") {
+                        LabeledContent(String(localized: "lighting_planner_installed_power_label")) {
                             TextField("0", text: $row.powerKW.numericInput(.quantity))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .focused($isInputFocused)
                         }
                         if rows.count > 1 {
-                            Button("删除回路", role: .destructive) {
+                            Button(String(localized: "lighting_planner_delete_circuit_button"), role: .destructive) {
                                 rows.removeAll { $0.id == row.id }
                             }
                             .font(.caption)
@@ -173,14 +173,19 @@ struct LightingCircuitPlannerView: View {
                     .padding(.vertical, 2)
                 }
                 Button {
-                    rows.append(LightingCircuitLoad(name: "照明回路 \(rows.count + 1)", powerKW: ""))
+                    rows.append(
+                        LightingCircuitLoad(
+                            name: String(format: String(localized: "lighting_planner_circuit_name_increment_format"), rows.count + 1),
+                            powerKW: ""
+                        )
+                    )
                 } label: {
-                    Label("新增回路", systemImage: "plus.circle.fill")
+                    Label(String(localized: "lighting_planner_add_circuit_button"), systemImage: "plus.circle.fill")
                 }
             }
 
             Section {
-                Button("生成回路表") {
+                Button(String(localized: "lighting_planner_generate_button")) {
                     isInputFocused = false
                     evaluate()
                 }
@@ -189,15 +194,15 @@ struct LightingCircuitPlannerView: View {
             }
 
             if let resultModel {
-                Section("计算结果") {
+                Section(String(localized: "lighting_planner_result_section")) {
                     CalculatorResultCard(
-                        title: "照明回路评估",
+                        title: String(localized: "lighting_planner_result_title"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("照明回路表")
+        .navigationTitle(String(localized: "lighting_planner_nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
@@ -219,7 +224,7 @@ struct LightingCircuitPlannerView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .data,
-            defaultFilename: exportPayload?.defaultFilename ?? "照明回路方案导出"
+            defaultFilename: exportPayload?.defaultFilename ?? String(localized: "lighting_planner_export_default_filename")
         ) { _ in }
     }
 
@@ -260,7 +265,7 @@ struct LightingCircuitPlannerView: View {
               wFactor > 0,
               mainBreakerLimit > 0,
               imbalanceLimit > 0 else {
-            presentError("请输入有效参数")
+            presentError(String(localized: "lighting_planner_invalid_input_error"))
             return
         }
 
@@ -280,15 +285,19 @@ struct LightingCircuitPlannerView: View {
                 current = value
             case .failure(let error):
                 if rowValidationError == nil {
-                    let displayName = row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名回路" : row.name
-                    rowValidationError = "\(displayName)：\(error.userMessage)"
+                    let displayName = row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "lighting_planner_unnamed_circuit") : row.name
+                    rowValidationError = String(
+                        format: String(localized: "lighting_planner_row_validation_error_format"),
+                        displayName,
+                        error.userMessage
+                    )
                 }
                 return nil
             }
             let breaker = EngineeringCalculations.recommendedBreaker(current: current, safetyFactor: bFactor)
             let wire = EngineeringCalculations.recommendedWireSectionByAmpacity(current: current, isCopper: isCopper, safetyFactor: wFactor)
             return CircuitEvalRow(
-                name: row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名回路" : row.name,
+                name: row.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "lighting_planner_unnamed_circuit") : row.name,
                 installedPowerKW: power,
                 demandPowerKW: demandPower,
                 currentA: current,
@@ -303,16 +312,30 @@ struct LightingCircuitPlannerView: View {
         }
 
         guard !validRows.isEmpty else {
-            presentError("请至少填写一个回路的有效功率")
+            presentError(String(localized: "lighting_planner_no_valid_circuit_power_error"))
             return
         }
 
         var lines: [String] = []
-        lines.append("供电: \(supplyType.displayName)  \(Int(v))V")
-        lines.append("功率因数: \(String(format: "%.2f", pf))  需用系数: \(String(format: "%.2f", demand))")
-        lines.append("断路器裕量: \(String(format: "%.2f", bFactor))  线径裕量: \(String(format: "%.2f", wFactor))")
+        lines.append(
+            String(format: String(localized: "lighting_planner_supply_line_format"), supplyType.displayName, Int(v))
+        )
+        lines.append(
+            String(
+                format: String(localized: "lighting_planner_pf_demand_line_format"),
+                String(format: "%.2f", pf),
+                String(format: "%.2f", demand)
+            )
+        )
+        lines.append(
+            String(
+                format: String(localized: "lighting_planner_breaker_wire_factor_line_format"),
+                String(format: "%.2f", bFactor),
+                String(format: "%.2f", wFactor)
+            )
+        )
         lines.append("")
-        lines.append("回路明细:")
+        lines.append(String(localized: "lighting_planner_circuit_detail_header"))
 
         let phaseAssignments: [Int]
         if supplyType == .threePhase {
@@ -323,10 +346,20 @@ struct LightingCircuitPlannerView: View {
         }
 
         for (index, row) in validRows.enumerated() {
-            let phaseLabel = supplyType == .threePhase ? "  相别\(phaseName(phaseAssignments[index]))" : ""
+            let phaseLabel = supplyType == .threePhase
+                ? String(format: String(localized: "lighting_planner_phase_label_format"), phaseName(phaseAssignments[index]))
+                : ""
             lines.append(
-                "- \(row.name): 装机\(fmt(row.installedPowerKW))kW, 计算\(fmt(row.demandPowerKW))kW, " +
-                "I=\(fmt(row.currentA))A, 空开\(row.breakerA)A, 线径\(row.wireSection.map { fmtSection($0) + "mm²" } ?? "超规格")\(phaseLabel)"
+                String(
+                    format: String(localized: "lighting_planner_row_line_format"),
+                    row.name,
+                    fmt(row.installedPowerKW),
+                    fmt(row.demandPowerKW),
+                    fmt(row.currentA),
+                    row.breakerA,
+                    row.wireSection.map { fmtSection($0) + "mm²" } ?? String(localized: "lighting_planner_wire_over_spec"),
+                    phaseLabel
+                )
             )
         }
 
@@ -335,11 +368,11 @@ struct LightingCircuitPlannerView: View {
         let totalCurrent = validRows.reduce(0) { $0 + $1.currentA }
 
         lines.append("")
-        lines.append("汇总:")
-        lines.append("- 回路数: \(validRows.count)")
-        lines.append("- 总装机功率: \(fmt(totalInstalled)) kW")
-        lines.append("- 总计算功率: \(fmt(totalDemand)) kW")
-        lines.append("- 电流合计: \(fmt(totalCurrent)) A")
+        lines.append(String(localized: "lighting_planner_summary_header"))
+        lines.append(String(format: String(localized: "lighting_planner_summary_circuit_count_format"), validRows.count))
+        lines.append(String(format: String(localized: "lighting_planner_summary_total_installed_format"), fmt(totalInstalled)))
+        lines.append(String(format: String(localized: "lighting_planner_summary_total_demand_format"), fmt(totalDemand)))
+        lines.append(String(format: String(localized: "lighting_planner_summary_total_current_format"), fmt(totalCurrent)))
 
         var warnings: [String] = []
         var currentForMainBreaker = totalCurrent
@@ -349,71 +382,110 @@ struct LightingCircuitPlannerView: View {
             let totals = EngineeringCalculations.phaseTotals(currents: validRows.map(\.currentA), assignments: phaseAssignments)
             let imbalance = EngineeringCalculations.threePhaseImbalancePercent(phaseTotals: totals)
             currentForMainBreaker = totals.max() ?? totalCurrent
-            if totals.count >= 3 { lines.append("- A/B/C相电流: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A") }
-            lines.append("- 三相不平衡: \(fmt(imbalance))%")
+            if totals.count >= 3 {
+                lines.append(
+                    String(
+                        format: String(localized: "lighting_planner_summary_abc_current_format"),
+                        fmt(totals[0]),
+                        fmt(totals[1]),
+                        fmt(totals[2])
+                    )
+                )
+            }
+            lines.append(String(format: String(localized: "lighting_planner_summary_imbalance_format"), fmt(imbalance)))
             phaseSummary = totals.count >= 3
-                ? "A/B/C相: \(fmt(totals[0])) / \(fmt(totals[1])) / \(fmt(totals[2])) A"
+                ? String(
+                    format: String(localized: "lighting_planner_phase_summary_format"),
+                    fmt(totals[0]),
+                    fmt(totals[1]),
+                    fmt(totals[2])
+                )
                 : nil
             if imbalance > imbalanceLimit {
-                warnings.append("三相不平衡 \(fmt(imbalance))% 超过阈值 \(fmt(imbalanceLimit))%")
+                warnings.append(
+                    String(
+                        format: String(localized: "lighting_planner_imbalance_warning_format"),
+                        fmt(imbalance),
+                        fmt(imbalanceLimit)
+                    )
+                )
             }
         }
 
         if currentForMainBreaker > mainBreakerLimit {
-            warnings.append("计算电流 \(fmt(currentForMainBreaker))A 超过总开关容量 \(fmt(mainBreakerLimit))A")
+            warnings.append(
+                String(
+                    format: String(localized: "lighting_planner_main_breaker_warning_format"),
+                    fmt(currentForMainBreaker),
+                    fmt(mainBreakerLimit)
+                )
+            )
         }
         let mainBreakerRecommend = EngineeringCalculations.recommendedBreaker(current: currentForMainBreaker, safetyFactor: bFactor)
-        lines.append("- 主开关建议: \(mainBreakerRecommend)A（按断路器裕量）")
+        lines.append(String(format: String(localized: "lighting_planner_main_breaker_recommend_format"), mainBreakerRecommend))
 
         lines.append("")
         if warnings.isEmpty {
-            lines.append("预警: 未触发超限")
+            lines.append(String(localized: "lighting_planner_no_warning_line"))
         } else {
-            lines.append("预警:")
+            lines.append(String(localized: "lighting_planner_warning_header"))
             lines += warnings.map { "- \($0)" }
         }
 
         var summaryItems: [CalculationResult.ResultItem] = [
-            CalculationResult.item("供电", "\(supplyType.displayName) \(Int(v))V"),
-            CalculationResult.item("回路数", "\(validRows.count)"),
-            CalculationResult.item("总装机功率", "\(fmt(totalInstalled)) kW"),
-            CalculationResult.item("总计算功率", "\(fmt(totalDemand)) kW"),
-            CalculationResult.item("电流合计", "\(fmt(totalCurrent)) A"),
-            CalculationResult.item("主开关建议", "\(mainBreakerRecommend)A", status: warnings.isEmpty ? .pass : .warning),
+            CalculationResult.item(String(localized: "lighting_planner_item_supply"), "\(supplyType.displayName) \(Int(v))V"),
+            CalculationResult.item(String(localized: "lighting_planner_item_circuit_count"), "\(validRows.count)"),
+            CalculationResult.item(String(localized: "lighting_planner_item_total_installed"), "\(fmt(totalInstalled)) kW"),
+            CalculationResult.item(String(localized: "lighting_planner_item_total_demand"), "\(fmt(totalDemand)) kW"),
+            CalculationResult.item(String(localized: "lighting_planner_item_total_current"), "\(fmt(totalCurrent)) A"),
+            CalculationResult.item(String(localized: "lighting_planner_item_main_breaker"), "\(mainBreakerRecommend)A", status: warnings.isEmpty ? .pass : .warning),
         ]
         if let phaseSummary {
-            summaryItems.append(CalculationResult.item("三相分配", phaseSummary))
+            summaryItems.append(CalculationResult.item(String(localized: "lighting_planner_item_three_phase_distribution"), phaseSummary))
         }
         if warnings.isEmpty {
-            summaryItems.append(CalculationResult.item("预警状态", "未触发超限", status: .pass))
+            summaryItems.append(
+                CalculationResult.item(
+                    String(localized: "lighting_planner_item_warning_status"),
+                    String(localized: "lighting_planner_item_no_warning"),
+                    status: .pass
+                )
+            )
         } else {
             for warning in warnings {
-                summaryItems.append(CalculationResult.item("预警", warning, status: .warning))
+                summaryItems.append(CalculationResult.item(String(localized: "lighting_planner_item_warning"), warning, status: .warning))
             }
         }
 
         let rowItems = validRows.map { row -> CalculationResult.ResultItem in
-            let wireText = row.wireSection.map { "\(fmtSection($0))mm²" } ?? "超规格"
+            let wireText = row.wireSection.map { "\(fmtSection($0))mm²" } ?? String(localized: "lighting_planner_wire_over_spec")
             let status: CalculationResult.ResultStatus = row.wireSection == nil ? .warning : .normal
             return CalculationResult.item(
                 row.name,
-                "I=\(fmt(row.currentA))A / 空开\(row.breakerA)A / 线径\(wireText)",
+                String(
+                    format: String(localized: "lighting_planner_row_item_detail_format"),
+                    fmt(row.currentA),
+                    row.breakerA,
+                    wireText
+                ),
                 status: status
             )
         }
         resultModel = CalculationResult(
-            headline: warnings.isEmpty ? "未触发预警" : "\(warnings.count) 项预警",
-            formula: "单回路电流 I=P(kW)×1000÷(U×功率因数)，总电流为各回路电流求和",
+            headline: warnings.isEmpty
+                ? String(localized: "lighting_planner_headline_no_warning")
+                : String(format: String(localized: "lighting_planner_headline_warning_count_format"), warnings.count),
+            formula: String(localized: "lighting_planner_formula"),
             sections: [
-                .init(title: "汇总", items: summaryItems),
-                .init(title: "回路明细", items: rowItems),
+                .init(title: String(localized: "lighting_planner_section_summary"), items: summaryItems),
+                .init(title: String(localized: "lighting_planner_section_circuit_detail"), items: rowItems),
             ]
         )
         resultText = lines.joined(separator: "\n")
         store.appendCalculationHistory(
-            tool: "照明回路表",
-            input: "\(validRows.count)回路, \(Int(v))V",
-            result: "总电流 \(fmt(totalCurrent))A"
+            tool: String(localized: "lighting_planner_nav_title"),
+            input: String(format: String(localized: "lighting_planner_history_input_format"), validRows.count, Int(v)),
+            result: String(format: String(localized: "lighting_planner_history_result_format"), fmt(totalCurrent))
         )
     }
 
@@ -426,13 +498,13 @@ struct LightingCircuitPlannerView: View {
             exportPayload = ExportPayload(
                 data: ReportBuilder.makeLightingCircuitPlansPDF(projectName: project.name, plans: plans),
                 contentType: .pdf,
-                defaultFilename: "\(project.name)_照明回路方案.pdf"
+                defaultFilename: String(format: String(localized: "lighting_planner_export_pdf_filename_format"), project.name)
             )
         case .excel:
             exportPayload = ExportPayload(
                 data: ReportBuilder.makeLightingCircuitPlansExcelHTML(projectName: project.name, plans: plans),
                 contentType: .excelHTML,
-                defaultFilename: "\(project.name)_照明回路方案.xls"
+                defaultFilename: String(format: String(localized: "lighting_planner_export_excel_filename_format"), project.name)
             )
         }
         showExporter = true
@@ -449,7 +521,7 @@ struct LightingCircuitPlannerView: View {
         breakerFactor = plan.breakerFactor
         wireFactor = plan.wireFactor
         isCopper = plan.isCopper
-        rows = plan.loads.isEmpty ? [LightingCircuitLoad(name: "照明回路 1", powerKW: "")] : plan.loads
+        rows = plan.loads.isEmpty ? [LightingCircuitLoad(name: String(localized: "lighting_planner_default_circuit_name"), powerKW: "")] : plan.loads
         resultText = ""
         resultModel = nil
         persistInputs()
@@ -461,7 +533,7 @@ struct LightingCircuitPlannerView: View {
         let normalizedRows = rows.map { load in
             LightingCircuitLoad(
                 id: load.id,
-                name: load.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名回路" : load.name,
+                name: load.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "lighting_planner_unnamed_circuit") : load.name,
                 powerKW: load.powerKW
             )
         }
@@ -515,9 +587,9 @@ struct LightingCircuitPlannerView: View {
     private var defaultPlanName: String {
         if let pid = selectedProjectId,
            let project = store.projects.first(where: { $0.id == pid }) {
-            return "\(project.name)-照明回路"
+            return String(format: String(localized: "lighting_planner_default_plan_name_project_format"), project.name)
         }
-        return "通用照明回路"
+        return String(localized: "lighting_planner_default_plan_name_generic")
     }
 
     private func fmt(_ value: Double) -> String {
@@ -564,7 +636,12 @@ struct LightingCircuitPlannerView: View {
                     rows = decodedRows
                 }
             } catch {
-                StorageIssueLog.record("照明回路规划草稿解析失败：\(error.localizedDescription)")
+                StorageIssueLog.record(
+                    String(
+                        format: String(localized: "lighting_planner_draft_decode_failed_format"),
+                        error.localizedDescription
+                    )
+                )
             }
         }
 
@@ -588,10 +665,15 @@ struct LightingCircuitPlannerView: View {
             if let encodedRows = String(data: data, encoding: .utf8) {
                 savedRowsJSON = encodedRows
             } else {
-                StorageIssueLog.record("照明回路规划草稿编码后 UTF8 转换失败")
+                StorageIssueLog.record(String(localized: "lighting_planner_draft_utf8_convert_failed"))
             }
         } catch {
-            StorageIssueLog.record("照明回路规划草稿编码失败：\(error.localizedDescription)")
+            StorageIssueLog.record(
+                String(
+                    format: String(localized: "lighting_planner_draft_encode_failed_format"),
+                    error.localizedDescription
+                )
+            )
         }
     }
 

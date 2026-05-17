@@ -97,6 +97,33 @@ struct CADPoCCleanupTests {
         #expect(CADDrawingCapability.isCADFile(extension: drawing.fileType))
     }
 
+    @Test func cadDiagnosticEventsUseStructuredRuntimeLogInsteadOfPrint() throws {
+        CADPoC.CADDiagnosticLog.removeAllForTesting()
+        CADPoC.CADDiagnosticLog.recordEncoded(
+            category: "cad.test",
+            message: "structured diagnostic event",
+            payload: ["stage": "render", "state": "captured"]
+        )
+
+        let entry = try #require(CADPoC.CADDiagnosticLog.recentEntries(limit: 1).first)
+        #expect(entry.category == "cad.test")
+        #expect(entry.message == "structured diagnostic event")
+        #expect(entry.payloadJSON?.contains("\"stage\":\"render\"") == true)
+
+        let root = try Self.repositoryRoot()
+        let productionDiagnosticSources = [
+            "Sources/Shared/CAD/Import/LibreDWGNativeImportEngine.swift",
+            "Sources/Shared/CAD/Render/CADCanvasView.swift",
+            "Sources/Shared/CAD/Render/CADMetalRenderer.swift"
+        ]
+        for sourcePath in productionDiagnosticSources {
+            let source = try Self.sourceText(root, sourcePath)
+            #expect(source.contains("print(") == false)
+            #expect(source.contains("debugPrint(") == false)
+            #expect(source.contains("NSLog(") == false)
+        }
+    }
+
     @Test func cadCoreRendererAndImportMinimumPathRemainUsable() async throws {
         let file = SiteKeeperCADKernel.CADFile(
             url: URL(fileURLWithPath: "/tmp/cad-poc.json"),

@@ -14,7 +14,7 @@ struct ProfileTabView: View {
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @State private var languageSwitchFeedback = ""
-    @State private var localStorageUsageText = "正在统计..."
+    @State private var localStorageUsageText = String(localized: "正在统计...")
     @State private var localStorageFileCount = 0
     @State private var isRefreshingStorageUsage = false
     @State private var lastStorageSampleAt: Date?
@@ -35,7 +35,7 @@ struct ProfileTabView: View {
 
     private var displayUserName: String {
         let value = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "未设置用户名" : value
+        return value.isEmpty ? String(localized: "未设置用户名") : value
     }
 
     private var avatarUIImage: UIImage? {
@@ -48,15 +48,15 @@ struct ProfileTabView: View {
     }
 
     private var backupStatusText: String {
-        guard cloudBackupLastSuccessAt > 0 else { return "尚未记录云备份成功" }
+        guard cloudBackupLastSuccessAt > 0 else { return String(localized: "尚未记录云备份成功") }
         let date = Date(timeIntervalSince1970: cloudBackupLastSuccessAt)
-        return "最近云备份：\(Formatters.dateTime.string(from: date))"
+        return String(format: String(localized: "最近云备份：%@"), Formatters.dateTime.string(from: date))
     }
 
     private var storageCaptionText: String {
-        var parts = ["\(localStorageFileCount) 个文件"]
+        var parts = [String(format: String(localized: "%@ 个文件"), "\(localStorageFileCount)")]
         if let lastStorageSampleAt {
-            parts.append("更新于 \(Formatters.dateTime.string(from: lastStorageSampleAt))")
+            parts.append(String(format: String(localized: "更新于 %@"), Formatters.dateTime.string(from: lastStorageSampleAt)))
         }
         return parts.joined(separator: " · ")
     }
@@ -91,7 +91,7 @@ struct ProfileTabView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("编辑用户名")
+                        .accessibilityLabel(String(localized: "编辑用户名"))
                         Text("\(AppBrand.displayName) · v\(appVersion)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -100,25 +100,25 @@ struct ProfileTabView: View {
                 .padding(.vertical, 8)
             }
 
-            Section("快捷设置") {
-                Toggle("公制单位", isOn: $useMetric)
-                Toggle("自动保存记录", isOn: $autoSaveEnabled)
+            Section(String(localized: "快捷设置")) {
+                Toggle(String(localized: "公制单位"), isOn: $useMetric)
+                Toggle(String(localized: "自动保存记录"), isOn: $autoSaveEnabled)
 
-                Picker("配色", selection: $appTheme) {
+                Picker(String(localized: "配色"), selection: $appTheme) {
                     ForEach(AppTheme.allCases, id: \.rawValue) { theme in
                         Text(theme.displayName).tag(theme.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
 
-                Picker("主题", selection: $appearanceMode) {
+                Picker(String(localized: "主题"), selection: $appearanceMode) {
                     ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
                         Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("语言", selection: $languageCode) {
+                Picker(String(localized: "语言"), selection: $languageCode) {
                     ForEach(AppLanguage.allCases, id: \.rawValue) { lang in
                         Text(LocalizedStringKey(lang.displayName)).tag(lang.rawValue)
                     }
@@ -132,20 +132,21 @@ struct ProfileTabView: View {
                 }
             }
 
-            Section("数据安全") {
+            Section(String(localized: "数据安全")) {
                 backupStatusCard
                 NavigationLink { DataManagementView(initialRoute: .backup) } label: {
                     HStack(spacing: AppSpacing.tight) {
                         Image(systemName: "externaldrive")
                             .foregroundStyle(Color.appPrimaryAction)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("数据管理")
-                            Text("导出、备份、导入恢复、体检与清理")
+                            Text(String(localized: "数据管理"))
+                            Text(String(localized: "导出、备份、导入恢复、体检与清理"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
+                .accessibilityIdentifier("profile-data-management-link")
 #if DEBUG
                 if AppFeatureFlags.allowsSampleDataImport {
                     Button(role: .destructive) {
@@ -168,31 +169,32 @@ struct ProfileTabView: View {
 #endif
             }
 
-            Section("系统") {
+            Section(String(localized: "系统")) {
                 NavigationLink { SettingsView() } label: {
-                    Label("更多设置", systemImage: "gear")
+                    Label(String(localized: "更多设置"), systemImage: "gear")
                 }
+                .accessibilityIdentifier("profile-settings-link")
             }
 
-            Section("关于") {
+            Section(String(localized: "关于")) {
                 HStack {
-                    Label("当前版本", systemImage: "info.circle")
+                    Label(String(localized: "当前版本"), systemImage: "info.circle")
                     Spacer()
                     Text("v\(appVersion)")
                         .foregroundStyle(.secondary)
                 }
                 NavigationLink { PrivacyPolicyView() } label: {
-                    Label("隐私政策", systemImage: "hand.raised.fill")
+                    Label(String(localized: "隐私政策"), systemImage: "hand.raised.fill")
                 }
                 NavigationLink { OpenSourceLicensesView() } label: {
                     Label(String(localized: "开源许可"), systemImage: "curlybraces.square")
                 }
                 NavigationLink { FeedbackView() } label: {
-                    Label("意见反馈", systemImage: "envelope.fill")
+                    Label(String(localized: "意见反馈"), systemImage: "envelope.fill")
                 }
             }
         }
-        .navigationTitle("我的")
+        .navigationTitle(String(localized: "我的"))
         .task {
             guard !hasLoadedStorageUsage else { return }
             hasLoadedStorageUsage = true
@@ -248,13 +250,13 @@ struct ProfileTabView: View {
                     .padding(.top, 1)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("备份与存储")
+                    Text(String(localized: "备份与存储"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Text(backupStatusText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("本机占用：\(localStorageUsageText)")
+                    Text(String(format: String(localized: "本机占用：%@"), localStorageUsageText))
                         .font(.caption)
                         .foregroundStyle(.primary)
                     Text(storageCaptionText)
@@ -325,13 +327,13 @@ struct ProfileTabView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("修改头像")
+        .accessibilityLabel(String(localized: "修改头像"))
         .contextMenu {
             if hasCustomAvatar {
                 Button(role: .destructive) {
                     userAvatarData = Data()
                 } label: {
-                    Label("恢复默认头像", systemImage: "arrow.counterclockwise")
+                    Label(String(localized: "恢复默认头像"), systemImage: "arrow.counterclockwise")
                 }
             }
         }
@@ -340,25 +342,25 @@ struct ProfileTabView: View {
     private var userNameEditorSheet: some View {
         NavigationStack {
             Form {
-                Section("用户名") {
-                    TextField("请输入用户名", text: $userNameDraft)
+                Section(String(localized: "用户名")) {
+                    TextField(String(localized: "请输入用户名"), text: $userNameDraft)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    Text("留空将显示“未设置用户名”。")
+                    Text(String(localized: "留空将显示“未设置用户名”。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("编辑用户名")
+            .navigationTitle(String(localized: "编辑用户名"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         showUserNameEditor = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         userName = userNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         showUserNameEditor = false
                     }
@@ -399,7 +401,7 @@ struct ProfileTabView: View {
         }.value
 
         guard let snapshot else {
-            localStorageUsageText = "读取失败"
+            localStorageUsageText = String(localized: "读取失败")
             localStorageFileCount = 0
             lastStorageSampleAt = nil
             return

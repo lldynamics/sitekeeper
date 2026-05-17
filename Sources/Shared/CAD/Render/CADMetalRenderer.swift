@@ -528,7 +528,7 @@ extension CADPoC {
                 if case let .hatch(path, style) = command,
                    !featureOptions.rendersHatches {
                     let points = path.points
-                    return points.count >= 2
+                    return featureOptions.rendersHatchBoundaries && points.count >= 2
                         ? [.polyline(points, closed: path.isClosed, style: style)]
                         : []
                 }
@@ -548,7 +548,10 @@ extension CADPoC {
             zoomScale: Double
         ) -> FrameRenderPlan {
             let budget = renderBudget(for: interactionPhase, visibleEntityCount: visibleEntities.count)
-            let pipeline = CADRenderPipeline(lodPolicy: lodPolicy(for: interactionPhase))
+            let pipeline = CADRenderPipeline(
+                lodPolicy: lodPolicy(for: interactionPhase),
+                featureOptions: featureOptions
+            )
             guard interactionPhase == .stable,
                   visibleEntities.count > progressiveVisibleEntityThreshold
             else {
@@ -577,8 +580,9 @@ extension CADPoC {
             }
 
             var state = progressiveRenderState ?? ProgressiveRenderState(key: key)
+            let renderEntities = progressivePrioritizedEntities(visibleEntities)
             let renderStart = Date()
-            if !state.completed, state.nextEntityOffset < visibleEntities.count {
+            if !state.completed, state.nextEntityOffset < renderEntities.count {
                 let remainingCommandCapacity = max(progressiveCommandCacheLimit - state.commands.count, 0)
                 if remainingCommandCapacity == 0 {
                     state.completed = true
@@ -586,9 +590,9 @@ extension CADPoC {
                 } else {
                     let batchEnd = min(
                         state.nextEntityOffset + progressiveEntityBatchSize,
-                        visibleEntities.count
+                        renderEntities.count
                     )
-                    let batch = Array(visibleEntities[state.nextEntityOffset..<batchEnd])
+                    let batch = Array(renderEntities[state.nextEntityOffset..<batchEnd])
                     let batchBudget = Kernel.CADRenderBudget(
                         maxRenderCommands: min(remainingCommandCapacity, budget.maxRenderCommands),
                         maxFrameTimeMilliseconds: min(budget.maxFrameTimeMilliseconds, 24)
@@ -612,7 +616,7 @@ extension CADPoC {
                 }
             }
 
-            if state.nextEntityOffset >= visibleEntities.count {
+            if state.nextEntityOffset >= renderEntities.count {
                 state.completed = true
             }
 
@@ -622,7 +626,7 @@ extension CADPoC {
             }
             progressiveRenderState = state
 
-            let skippedEntityCount = max(visibleEntities.count - min(state.nextEntityOffset, visibleEntities.count), 0)
+            let skippedEntityCount = max(renderEntities.count - min(state.nextEntityOffset, renderEntities.count), 0)
             let renderMs = Date().timeIntervalSince(renderStart) * 1000
             let commands = state.commands
             let trace = Kernel.CADPerformanceTrace(
@@ -643,6 +647,33 @@ extension CADPoC {
                 output: CADPoC.CADRenderPipeline.Output(commands: commands, performance: trace),
                 needsContinuation: needsContinuation
             )
+        }
+
+        private func progressivePrioritizedEntities(_ visibleEntities: [Kernel.CADEntity]) -> [Kernel.CADEntity] {
+            guard featureOptions.rendersTextOverlays else { return visibleEntities }
+            var textEntities: [Kernel.CADEntity] = []
+            var otherEntities: [Kernel.CADEntity] = []
+            textEntities.reserveCapacity(min(visibleEntities.count, 256))
+            otherEntities.reserveCapacity(visibleEntities.count)
+            for entity in visibleEntities {
+                if shouldPrioritizeTextForProgressiveRender(entity) {
+                    textEntities.append(entity)
+                } else {
+                    otherEntities.append(entity)
+                }
+            }
+            return textEntities + otherEntities
+        }
+
+        private func shouldPrioritizeTextForProgressiveRender(_ entity: Kernel.CADEntity) -> Bool {
+            switch entity.kind {
+            case .text, .mtext, .attrib:
+                return entity.text != nil
+            case .dimension:
+                return entity.text != nil
+            default:
+                return false
+            }
         }
 
         private func progressiveKey(
@@ -726,11 +757,12 @@ extension CADPoC {
         }
 
         private func logFrameTrace(_ trace: Kernel.CADPerformanceTrace) {
-            #if DEBUG
-            guard let data = try? JSONEncoder().encode(trace),
-                  let json = String(data: data, encoding: .utf8) else { return }
-            print("CADFrameTrace \(json)")
-            #endif
+            CADPoC.CADDiagnosticLog.recordEncoded(
+                category: "cad.frameTrace",
+                message: "CAD renderer frame trace captured.",
+                payload: trace,
+                coalescingKey: "cad.frameTrace.latest"
+            )
         }
 
         private func publishCanvasState(
@@ -798,7 +830,10 @@ extension CADPoC {
             let snapEntities = visibleEntities.count > snapVisibleEntityLimit
                 ? Array(visibleEntities.prefix(snapVisibleEntityLimit))
                 : visibleEntities
-            let payloads = Self.makeSnapPointPayloads(for: snapEntities)
+            let payloads = Self.makeSnapPointPayloads(
+                for: snapEntities,
+                maxIntersectionCount: featureOptions.publishesSnapIntersections ? 4_000 : 0
+            )
             guard payloads != lastPublishedSnapPoints else { return }
             lastPublishedSnapPoints = payloads
             callbacks.onSnapPointsChange(payloads)
@@ -1735,8 +1770,13 @@ private extension CADPoC.CADMetalRenderer {
             viewSize: viewSize
         )
         let color = rgbaVector(fromARGB: style.colorARGB)
-        let screenWidth = screenLineWidth(for: style.lineWidth, contentScale: contentScale)
-        let pattern = lineTypePattern(for: style.lineType, screenLineWidth: screenWidth)
+        let screenWidth = screenLineWidth(
+            for: featureOptions.rendersLineWeights ? style.lineWidth : 0.25,
+            contentScale: contentScale
+        )
+        let pattern = featureOptions.rendersLineTypes
+            ? lineTypePattern(for: style.lineType, screenLineWidth: screenWidth)
+            : []
 
         if pattern.isEmpty {
             vertices.append(contentsOf: makeScreenSegmentVertices(
@@ -2889,6 +2929,7 @@ private struct CADTextAtlasTextureCache {
 extension CADPoC.CADMetalRenderer {
     struct CADTextAtlasSnapshot {
         var textCount: Int
+        var skippedTextCount: Int
         var uniqueTextureCount: Int
         var vertexCount: Int
         var atlasSize: CGSize
@@ -2980,6 +3021,7 @@ extension CADPoC.CADMetalRenderer {
         }
         return CADTextAtlasSnapshot(
             textCount: plan.textCount,
+            skippedTextCount: plan.skippedTextCount,
             uniqueTextureCount: plan.uniqueTextureCount,
             vertexCount: plan.vertices.count,
             atlasSize: plan.atlasSize,
@@ -3010,6 +3052,34 @@ extension CADPoC.CADMetalRenderer {
             ))
         }
         return bounds.isNull ? 0 : bounds.width
+    }
+
+    func textAtlasRenderedDisplayTextsForTesting(
+        commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> [String] {
+        textAtlasItems(
+            from: commands,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ).items.map(\.text.displayText)
+    }
+
+    func textAtlasSkippedTextCountForTesting(
+        commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> Int {
+        textAtlasItems(
+            from: commands,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ).skippedTextCount
     }
 
     static func textAdvanceWidthForTesting(text: String, font: UIFont) -> CGFloat {

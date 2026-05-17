@@ -10,8 +10,13 @@ struct CADViewerToolbar: View {
     let supportsTextSearch: Bool
     let searchResultCount: Int
     let rendersTextOverlays: Bool
+    let rendersLineTypes: Bool
+    let rendersLineWeights: Bool
+    let rendersDimensionDetails: Bool
     let buildsTextSearchIndex: Bool
     let publishesSnapPoints: Bool
+    let publishesSnapIntersections: Bool
+    let rendersHatchBoundaries: Bool
     let rendersHatches: Bool
     let rendersPlaceholders: Bool
     let showsOverviewMap: Bool
@@ -21,8 +26,13 @@ struct CADViewerToolbar: View {
     let onShowAllLayers: () -> Void
     let onSearchTapped: () -> Void
     let onToggleTextOverlays: () -> Void
+    let onToggleLineTypes: () -> Void
+    let onToggleLineWeights: () -> Void
+    let onToggleDimensionDetails: () -> Void
     let onToggleTextSearchIndex: () -> Void
     let onToggleSnapPoints: () -> Void
+    let onToggleSnapIntersections: () -> Void
+    let onToggleHatchBoundaries: () -> Void
     let onToggleHatches: () -> Void
     let onTogglePlaceholders: () -> Void
     let onToggleOverviewMap: () -> Void
@@ -139,11 +149,27 @@ struct CADViewerToolbar: View {
             Button(action: onToggleTextSearchIndex) {
                 Label("文字搜索索引", systemImage: buildsTextSearchIndex ? "checkmark.circle.fill" : "circle")
             }
+            Button(action: onToggleLineTypes) {
+                Label("虚线/点划线", systemImage: rendersLineTypes ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onToggleLineWeights) {
+                Label("线宽", systemImage: rendersLineWeights ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onToggleDimensionDetails) {
+                Label("标注箭头", systemImage: rendersDimensionDetails ? "checkmark.circle.fill" : "circle")
+            }
             Button(action: onToggleSnapPoints) {
                 Label("吸附点", systemImage: publishesSnapPoints ? "checkmark.circle.fill" : "circle")
             }
+            Button(action: onToggleSnapIntersections) {
+                Label("交点吸附", systemImage: publishesSnapIntersections ? "checkmark.circle.fill" : "circle")
+            }
+            .disabled(!publishesSnapPoints)
+            Button(action: onToggleHatchBoundaries) {
+                Label("填充细节", systemImage: rendersHatchBoundaries ? "checkmark.circle.fill" : "circle")
+            }
             Button(action: onToggleHatches) {
-                Label("填充细节", systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
+                Label("填充实体", systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onTogglePlaceholders) {
                 Label("占位对象", systemImage: rendersPlaceholders ? "checkmark.circle.fill" : "circle")
@@ -167,8 +193,13 @@ struct CADViewerToolbar: View {
     private var performanceOptionEnabledCount: Int {
         [
             rendersTextOverlays,
+            rendersLineTypes,
+            rendersLineWeights,
+            rendersDimensionDetails,
             buildsTextSearchIndex,
             publishesSnapPoints,
+            publishesSnapIntersections,
+            rendersHatchBoundaries,
             rendersHatches,
             rendersPlaceholders,
             showsOverviewMap,

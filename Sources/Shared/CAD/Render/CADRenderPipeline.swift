@@ -3,9 +3,14 @@ import Foundation
 extension CADPoC {
     struct CADRenderPipeline {
         var lodPolicy: SiteKeeperCADKernel.CADLODPolicy
+        var featureOptions: CADCanvasFeatureOptions
 
-        init(lodPolicy: SiteKeeperCADKernel.CADLODPolicy = .standard) {
+        init(
+            lodPolicy: SiteKeeperCADKernel.CADLODPolicy = .standard,
+            featureOptions: CADCanvasFeatureOptions = .fullDetail
+        ) {
             self.lodPolicy = lodPolicy
+            self.featureOptions = featureOptions
         }
 
         struct Output {
@@ -141,7 +146,9 @@ extension CADPoC {
                     let points = path.points
                     if points.count >= 2 {
                         commands.append(.polyline(points, closed: path.isClosed, style: style))
-                        commands.append(contentsOf: dimensionArrowCommands(for: entity, path: path, style: style))
+                        if featureOptions.rendersDimensionDetails {
+                            commands.append(contentsOf: dimensionArrowCommands(for: entity, path: path, style: style))
+                        }
                     }
                 }
                 if let text = entity.text {
@@ -218,6 +225,11 @@ extension CADPoC {
 
             guard shouldFillHatch(entity, path: path) else {
                 return [.polyline(points, closed: path.isClosed, style: style)]
+            }
+            guard featureOptions.rendersHatches else {
+                return featureOptions.rendersHatchBoundaries
+                    ? [.polyline(points, closed: path.isClosed, style: style)]
+                    : []
             }
             return [.hatch(path, style: style)]
         }

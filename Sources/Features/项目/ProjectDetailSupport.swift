@@ -1,6 +1,63 @@
 import SwiftUI
 import UIKit
 
+enum ProjectDateInput {
+    static func date(from text: String) -> Date? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        return Formatters.parseDateOrDateTime(normalized)
+    }
+
+    static func string(from date: Date) -> String {
+        Formatters.date.string(from: date)
+    }
+
+    static func normalizedStorageText(_ text: String) -> String {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+        return date(from: normalized).map(string(from:)) ?? normalized
+    }
+}
+
+struct OptionalProjectDatePicker: View {
+    private let title: String
+    private let emptyToggleTitle: String
+    @Binding private var text: String
+    @State private var hasDate: Bool
+    @State private var selectedDate: Date
+
+    init(_ title: String, text: Binding<String>, defaultDate: Date = Date()) {
+        self.title = title
+        self.emptyToggleTitle = String(format: String(localized: "填写%@"), title)
+        _text = text
+        let parsed = ProjectDateInput.date(from: text.wrappedValue)
+        _hasDate = State(initialValue: parsed != nil)
+        _selectedDate = State(initialValue: parsed ?? defaultDate)
+    }
+
+    var body: some View {
+        Toggle(emptyToggleTitle, isOn: Binding(
+            get: { hasDate },
+            set: { newValue in
+                hasDate = newValue
+                text = newValue ? ProjectDateInput.string(from: selectedDate) : ""
+            }
+        ))
+        if hasDate {
+            DatePicker(title, selection: Binding(
+                get: { selectedDate },
+                set: { newValue in
+                    selectedDate = newValue
+                    text = ProjectDateInput.string(from: newValue)
+                }
+            ), displayedComponents: .date)
+            .onAppear {
+                text = ProjectDateInput.string(from: selectedDate)
+            }
+        }
+    }
+}
+
 enum ProjectDetailMode: String, CaseIterable {
     case overview
     case records
@@ -193,7 +250,7 @@ struct ProjectDrawingEditSheet: View {
                     LabeledContent(String(localized: "格式"), value: drawing.fileType.uppercased())
                     LabeledContent(String(localized: "导入时间"), value: drawing.importedAt)
                     Toggle(String(localized: "设为当前版本"), isOn: $isCurrentVersion)
-                    TextField(String(localized: "关联日志日期(yyyy-MM-dd)"), text: $relatedLogDate)
+                    OptionalProjectDatePicker(String(localized: "关联日志日期"), text: $relatedLogDate)
                     Picker(String(localized: "问题状态"), selection: $issueStatus) {
                         ForEach(DrawingIssueStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
@@ -237,7 +294,7 @@ struct ProjectDrawingEditSheet: View {
                         updated.name = trimmed.isEmpty ? drawing.name : trimmed
                         updated.version = version
                         updated.isCurrentVersion = isCurrentVersion
-                        updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.relatedLogDate = ProjectDateInput.normalizedStorageText(relatedLogDate)
                         updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.note = note
@@ -307,7 +364,7 @@ struct MaterialEditSheet: View {
                         Text(item.displayName).tag(item)
                     }
                 }
-                TextField(String(localized: "进场日期(yyyy-MM-dd)"), text: $arrivalDate)
+                OptionalProjectDatePicker(String(localized: "进场日期"), text: $arrivalDate)
                 LabeledContent(String(localized: "金额")) {
                     Text(ReportBuilder.money(ReportBuilder.number(quantity) * ReportBuilder.number(unitPrice)))
                 }
@@ -335,7 +392,7 @@ struct MaterialEditSheet: View {
                         updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.purchaseStatus = purchaseStatus
-                        updated.arrivalDate = arrivalDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.arrivalDate = ProjectDateInput.normalizedStorageText(arrivalDate)
                         onSave(updated)
                         dismiss()
                     }
@@ -398,7 +455,7 @@ struct QuoteEditSheet: View {
                         Text(item.displayName).tag(item)
                     }
                 }
-                TextField(String(localized: "客户确认日期(yyyy-MM-dd)"), text: $customerConfirmedDate)
+                OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $customerConfirmedDate)
                 TextField(String(localized: "转合同金额"), text: $contractAmount.numericInput(.amount)).keyboardType(.decimalPad)
                 TextField(String(localized: "备注"), text: $notes)
                 LabeledContent(String(localized: "合计")) {
@@ -443,7 +500,7 @@ struct QuoteEditSheet: View {
                         updated.discountRate = NumericInputSupport.normalizedStorageText(discountRate, kind: .discountRate)
                         updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.status = status
-                        updated.customerConfirmedDate = customerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.customerConfirmedDate = ProjectDateInput.normalizedStorageText(customerConfirmedDate)
                         updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.notes = notes
                         onSave(updated)
@@ -488,8 +545,8 @@ struct ProgressEditSheet: View {
         NavigationStack {
             Form {
                 TextField(String(localized: "任务"), text: $title)
-                TextField(String(localized: "开始日期(yyyy-MM-dd)"), text: $startDate)
-                TextField(String(localized: "截止日期(yyyy-MM-dd)"), text: $dueDate)
+                OptionalProjectDatePicker(String(localized: "开始日期"), text: $startDate)
+                OptionalProjectDatePicker(String(localized: "截止日期"), text: $dueDate)
                 Slider(value: $completion, in: 0...1, step: 0.05)
                 LabeledContent(String(localized: "完成率"), value: "\(Int(completion * 100))%")
                 TextField(String(localized: "备注"), text: $note, axis: .vertical)
@@ -511,8 +568,8 @@ struct ProgressEditSheet: View {
                     Button(String(localized: "保存")) {
                         var updated = item
                         updated.title = title
-                        updated.startDate = startDate
-                        updated.dueDate = dueDate
+                        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
+                        updated.dueDate = ProjectDateInput.normalizedStorageText(dueDate)
                         updated.completion = completion
                         updated.note = note
                         onSave(updated)
@@ -689,7 +746,7 @@ struct QuickAddSheet: View {
                             Text(status.displayName).tag(status)
                         }
                     }
-                    TextField(String(localized: "进场日期（yyyy-MM-dd）"), text: $materialArrivalDate)
+                    OptionalProjectDatePicker(String(localized: "进场日期"), text: $materialArrivalDate)
                 case .quote:
                     TextField(String(localized: "项目名称"), text: $name)
                     LabeledContent(String(localized: "单价 ¥")) {
@@ -712,7 +769,7 @@ struct QuickAddSheet: View {
                             Text(status.displayName).tag(status)
                         }
                     }
-                    TextField(String(localized: "客户确认日期（yyyy-MM-dd）"), text: $quoteConfirmedDate)
+                    OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $quoteConfirmedDate)
                     TextField(String(localized: "转合同金额"), text: $quoteContractAmount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                 case .log:
@@ -832,7 +889,7 @@ struct QuickAddSheet: View {
                     brand: materialBrand.trimmingCharacters(in: .whitespacesAndNewlines),
                     supplier: materialSupplier.trimmingCharacters(in: .whitespacesAndNewlines),
                     purchaseStatus: materialPurchaseStatus,
-                    arrivalDate: materialArrivalDate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    arrivalDate: ProjectDateInput.normalizedStorageText(materialArrivalDate),
                     projectId: projectId
                 )
             )
@@ -851,7 +908,7 @@ struct QuickAddSheet: View {
                     discountRate: "0",
                     versionName: quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
                     status: quoteStatus,
-                    customerConfirmedDate: quoteConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    customerConfirmedDate: ProjectDateInput.normalizedStorageText(quoteConfirmedDate),
                     contractAmount: NumericInputSupport.normalizedStorageText(quoteContractAmount, kind: .amount),
                     projectId: projectId
                 )

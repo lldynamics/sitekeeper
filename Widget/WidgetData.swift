@@ -11,22 +11,31 @@ final class WidgetDataStore {
 
     static var languageCode: String {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            return "zh-Hans"
+            return resolvedSystemLanguageCode
         }
         if let code = defaults.string(forKey: WidgetSharedDefaults.languageCodeKey),
            !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if code == "system" {
+                return resolvedSystemLanguageCode
+            }
             return code
         }
         if let code = defaults.stringArray(forKey: WidgetSharedDefaults.appleLanguagesKey)?.first,
            !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return code
         }
-        return "zh-Hans"
+        return resolvedSystemLanguageCode
+    }
+
+    private static var resolvedSystemLanguageCode: String {
+        Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
     }
 
     static func healthSnapshot() -> WidgetDataHealthSnapshot {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            StorageIssueLog.record("Widget App Group 不可用：\(suiteName)")
+            StorageIssueLog.record(
+                String(format: WidgetLocalizedText.string(for: "widget_storage_app_group_unavailable_format"), suiteName)
+            )
             return WidgetDataHealthSnapshot(
                 appGroupReadable: false,
                 lastUpdatedAt: nil,

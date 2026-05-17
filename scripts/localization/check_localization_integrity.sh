@@ -4,18 +4,42 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-files=(
+localizable_files=(
   "Sources/Resources/zh-Hans.lproj/Localizable.strings"
   "Sources/Resources/en.lproj/Localizable.strings"
+  "Widget/zh-Hans.lproj/Localizable.strings"
+  "Widget/en.lproj/Localizable.strings"
+)
+
+info_plist_files=(
+  "Sources/Resources/zh-Hans.lproj/InfoPlist.strings"
+  "Sources/Resources/en.lproj/InfoPlist.strings"
+  "Widget/zh-Hans.lproj/InfoPlist.strings"
+  "Widget/en.lproj/InfoPlist.strings"
+)
+
+required_app_info_plist_keys=(
+  "CFBundleDisplayName"
+  "NSCameraUsageDescription"
+  "NSContactsUsageDescription"
+  "NSLocationWhenInUseUsageDescription"
+  "NSMicrophoneUsageDescription"
+  "NSPhotoLibraryUsageDescription"
+  "NSPhotoLibraryAddUsageDescription"
 )
 
 failed=0
 
-for file in "${files[@]}"; do
+string_keys() {
+  awk -F'"' '/^"/ { print $2 }' "$1" | sort
+}
+
+check_file() {
+  local file="$1"
   if [[ ! -f "$file" ]]; then
     echo "[localization-integrity] ERROR: missing $file" >&2
     failed=1
-    continue
+    return
   fi
 
   duplicates="$(
@@ -34,10 +58,61 @@ for file in "${files[@]}"; do
     printf '%s\n' "$duplicates" | sed 's/^/  - /' >&2
     failed=1
   fi
+}
+
+check_matching_keys() {
+  local zh_file="$1"
+  local en_file="$2"
+
+  if [[ ! -f "$zh_file" || ! -f "$en_file" ]]; then
+    return
+  fi
+
+  missing_en="$(comm -23 <(string_keys "$zh_file") <(string_keys "$en_file"))"
+  missing_zh="$(comm -13 <(string_keys "$zh_file") <(string_keys "$en_file"))"
+
+  if [[ -n "$missing_en" ]]; then
+    echo "[localization-integrity] ERROR: keys missing from $en_file" >&2
+    printf '%s\n' "$missing_en" | sed 's/^/  - /' >&2
+    failed=1
+  fi
+
+  if [[ -n "$missing_zh" ]]; then
+    echo "[localization-integrity] ERROR: keys missing from $zh_file" >&2
+    printf '%s\n' "$missing_zh" | sed 's/^/  - /' >&2
+    failed=1
+  fi
+}
+
+check_required_app_info_plist_keys() {
+  local file="$1"
+
+  if [[ ! -f "$file" ]]; then
+    return
+  fi
+
+  for key in "${required_app_info_plist_keys[@]}"; do
+    if ! string_keys "$file" | grep -Fxq "$key"; then
+      echo "[localization-integrity] ERROR: missing required InfoPlist key $key in $file" >&2
+      failed=1
+    fi
+  done
+}
+
+for file in "${localizable_files[@]}" "${info_plist_files[@]}"; do
+  check_file "$file"
 done
+
+check_matching_keys "Sources/Resources/zh-Hans.lproj/Localizable.strings" "Sources/Resources/en.lproj/Localizable.strings"
+check_matching_keys "Widget/zh-Hans.lproj/Localizable.strings" "Widget/en.lproj/Localizable.strings"
+check_matching_keys "Sources/Resources/zh-Hans.lproj/InfoPlist.strings" "Sources/Resources/en.lproj/InfoPlist.strings"
+check_matching_keys "Widget/zh-Hans.lproj/InfoPlist.strings" "Widget/en.lproj/InfoPlist.strings"
+
+check_required_app_info_plist_keys "Sources/Resources/zh-Hans.lproj/InfoPlist.strings"
+check_required_app_info_plist_keys "Sources/Resources/en.lproj/InfoPlist.strings"
 
 if [[ "$failed" -ne 0 ]]; then
   exit 1
 fi
 
-echo "[localization-integrity] PASS: Localizable.strings keys are unique."
+echo "[localization-integrity] PASS: localized string files are complete and unique."

@@ -61,8 +61,13 @@ struct CADMetalLibreDWGPoCEntry: View {
     @State private var rendererPerformance: CADRendererPerformanceSnapshot?
     @AppStorage("cad.metal.poc.showsOverviewMap") private var showsOverviewMap = false
     @AppStorage("cad.metal.poc.rendersTextOverlays") private var rendersTextOverlays = true
+    @AppStorage("cad.metal.poc.rendersLineTypes") private var rendersLineTypes = false
+    @AppStorage("cad.metal.poc.rendersLineWeights") private var rendersLineWeights = false
+    @AppStorage("cad.metal.poc.rendersDimensionDetails") private var rendersDimensionDetails = false
     @AppStorage("cad.metal.poc.buildsTextSearchIndex") private var buildsTextSearchIndex = false
     @AppStorage("cad.metal.poc.publishesSnapPoints") private var publishesSnapPoints = false
+    @AppStorage("cad.metal.poc.publishesSnapIntersections") private var publishesSnapIntersections = false
+    @AppStorage("cad.metal.poc.rendersHatchBoundaries") private var rendersHatchBoundaries = false
     @AppStorage("cad.metal.poc.rendersHatches") private var rendersHatches = false
     @AppStorage("cad.metal.poc.rendersPlaceholders") private var rendersPlaceholders = false
     @AppStorage("cad.metal.poc.showsRendererDiagnostics") private var showsRendererDiagnostics = false
@@ -113,8 +118,13 @@ struct CADMetalLibreDWGPoCEntry: View {
                     supportsTextSearch: buildsTextSearchIndex,
                     searchResultCount: searchResults.count,
                     rendersTextOverlays: rendersTextOverlays,
+                    rendersLineTypes: rendersLineTypes,
+                    rendersLineWeights: rendersLineWeights,
+                    rendersDimensionDetails: rendersDimensionDetails,
                     buildsTextSearchIndex: buildsTextSearchIndex,
                     publishesSnapPoints: publishesSnapPoints,
+                    publishesSnapIntersections: publishesSnapIntersections,
+                    rendersHatchBoundaries: rendersHatchBoundaries,
                     rendersHatches: rendersHatches,
                     rendersPlaceholders: rendersPlaceholders,
                     showsOverviewMap: showsOverviewMap,
@@ -124,8 +134,13 @@ struct CADMetalLibreDWGPoCEntry: View {
                     onShowAllLayers: showAllLayers,
                     onSearchTapped: toggleSearchPanel,
                     onToggleTextOverlays: { rendersTextOverlays.toggle() },
+                    onToggleLineTypes: { rendersLineTypes.toggle() },
+                    onToggleLineWeights: { rendersLineWeights.toggle() },
+                    onToggleDimensionDetails: { rendersDimensionDetails.toggle() },
                     onToggleTextSearchIndex: { buildsTextSearchIndex.toggle() },
                     onToggleSnapPoints: { publishesSnapPoints.toggle() },
+                    onToggleSnapIntersections: { publishesSnapIntersections.toggle() },
+                    onToggleHatchBoundaries: { rendersHatchBoundaries.toggle() },
                     onToggleHatches: { rendersHatches.toggle() },
                     onTogglePlaceholders: { rendersPlaceholders.toggle() },
                     onToggleOverviewMap: { showsOverviewMap.toggle() },
@@ -190,7 +205,12 @@ struct CADMetalLibreDWGPoCEntry: View {
     private var featureOptions: CADCanvasFeatureOptions {
         CADCanvasFeatureOptions(
             rendersTextOverlays: rendersTextOverlays,
+            rendersLineTypes: rendersLineTypes,
+            rendersLineWeights: rendersLineWeights,
+            rendersDimensionDetails: rendersDimensionDetails,
             publishesSnapPoints: publishesSnapPoints,
+            publishesSnapIntersections: publishesSnapIntersections,
+            rendersHatchBoundaries: rendersHatchBoundaries,
             rendersHatches: rendersHatches,
             rendersPlaceholders: rendersPlaceholders
         )
@@ -246,7 +266,7 @@ struct CADMetalLibreDWGPoCEntry: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            Text("import \(sample.totalEntityCount) / layer \(sample.visibleLayerCount)/\(sample.totalLayerCount) / viewport \(sample.visibleEntityCount) / command \(sample.renderCommandCount) / text \(sample.textOverlayCount)/\(sample.textCommandCount)")
+            Text("import \(sample.totalEntityCount) / layer \(sample.visibleLayerCount)/\(sample.totalLayerCount) / viewport \(sample.visibleEntityCount) / command \(sample.renderCommandCount) / text \(sample.textOverlayCount)/\(sample.textCommandCount) / skippedText \(sample.textOverlaySkippedCount)")
                 .font(.caption2.monospacedDigit())
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -616,9 +636,13 @@ struct CADMetalLibreDWGPoCEntry: View {
     }
 
     private func migrateCADPoCFeatureDefaultsIfNeeded() {
-        guard featureDefaultsVersion < 1 else { return }
-        rendersTextOverlays = true
-        featureDefaultsVersion = 1
+        guard featureDefaultsVersion < 2 else { return }
+        if featureDefaultsVersion < 1 {
+            rendersTextOverlays = true
+        }
+        rendersHatchBoundaries = false
+        publishesSnapIntersections = publishesSnapPoints && publishesSnapIntersections
+        featureDefaultsVersion = 2
     }
 }
 

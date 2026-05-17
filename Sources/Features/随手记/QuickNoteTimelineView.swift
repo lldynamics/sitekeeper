@@ -33,9 +33,9 @@ struct QuickNoteTimelineView: View {
 
             let title: String
             if dateStr == Formatters.date.string(from: today) {
-                title = "今天"
+                title = String(localized: "quick_note_timeline_today")
             } else if dateStr == Formatters.date.string(from: yesterday) {
-                title = "昨天"
+                title = String(localized: "quick_note_timeline_yesterday")
             } else {
                 title = dateStr
             }
@@ -49,7 +49,11 @@ struct QuickNoteTimelineView: View {
     var body: some View {
         if notes.isEmpty {
             Section {
-                ContentUnavailableView("还没有消息", systemImage: "bubble.left.and.text.bubble.right", description: Text("从底部输入框发送现场记录。"))
+                ContentUnavailableView(
+                    String(localized: "quick_note_timeline_empty_title"),
+                    systemImage: "bubble.left.and.text.bubble.right",
+                    description: Text(String(localized: "quick_note_timeline_empty_message"))
+                )
                     .padding(.vertical, 48)
             }
             .listRowSeparator(.hidden)
@@ -133,7 +137,7 @@ private struct QuickNoteTimelineRow: View {
             Button {
                 onConvert()
             } label: {
-                Label("转为", systemImage: "arrow.triangle.branch")
+                Label(String(localized: "quick_note_timeline_convert_label"), systemImage: "arrow.triangle.branch")
             }
             .tint(.appWarning)
         }
@@ -141,12 +145,12 @@ private struct QuickNoteTimelineRow: View {
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("删除", systemImage: "trash")
+                Label(String(localized: "quick_note_timeline_delete_label"), systemImage: "trash")
             }
             Button {
                 onEdit()
             } label: {
-                Label("编辑", systemImage: "pencil")
+                Label(String(localized: "quick_note_timeline_edit_label"), systemImage: "pencil")
             }
             .tint(.appPrimaryAction)
         }
@@ -154,22 +158,22 @@ private struct QuickNoteTimelineRow: View {
             Button {
                 onEdit()
             } label: {
-                Label("编辑", systemImage: "pencil")
+                Label(String(localized: "quick_note_timeline_edit_label"), systemImage: "pencil")
             }
             Button {
                 onConvert()
             } label: {
-                Label("转为记录", systemImage: "arrow.triangle.branch")
+                Label(String(localized: "quick_note_timeline_convert_record_label"), systemImage: "arrow.triangle.branch")
             }
             Button(role: .destructive) {
                 onDelete()
             } label: {
-                Label("删除", systemImage: "trash")
+                Label(String(localized: "quick_note_timeline_delete_label"), systemImage: "trash")
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel(accessibilityLabelText)
-        .accessibilityHint("双击编辑这条随手记")
+        .accessibilityHint(String(localized: "quick_note_timeline_row_accessibility_hint"))
     }
 
     private var messageBubble: some View {
@@ -228,8 +232,8 @@ private struct QuickNoteTimelineRow: View {
                     .font(.caption2.weight(.semibold))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("转为记录")
-            .accessibilityHint("双击打开转换和编辑面板")
+            .accessibilityLabel(String(localized: "quick_note_timeline_convert_record_label"))
+            .accessibilityHint(String(localized: "quick_note_timeline_convert_accessibility_hint"))
         }
         .font(.caption2)
         .foregroundStyle(.secondary)
@@ -256,11 +260,23 @@ private struct QuickNoteTimelineRow: View {
 
     private var accessibilityLabelText: String {
         var parts: [String] = [QuickNoteText.displayContent(for: note)]
-        if !projectName.isEmpty { parts.append("工程 \(projectName)") }
-        parts.append("时间 \(timeText)")
+        if !projectName.isEmpty {
+            parts.append(
+                String(
+                    format: String(localized: "quick_note_timeline_accessibility_project_format"),
+                    projectName
+                )
+            )
+        }
+        parts.append(
+            String(
+                format: String(localized: "quick_note_timeline_accessibility_time_format"),
+                timeText
+            )
+        )
         if !note.attachments.isEmpty {
             parts.append(QuickNoteText.attachmentSummary(note.attachments))
         }
-        return parts.joined(separator: "，")
+        return parts.joined(separator: String(localized: "quick_note_timeline_accessibility_separator"))
     }
 }

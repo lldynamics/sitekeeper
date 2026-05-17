@@ -627,10 +627,16 @@ private func widgetText(_ key: String) -> String {
     WidgetLocalizedText.string(for: key)
 }
 
-private enum WidgetLocalizedText {
+enum WidgetLocalizedText {
     static func string(for key: String) -> String {
         let isChinese = WidgetDataStore.languageCode.lowercased().hasPrefix("zh")
         switch key {
+        case "widget_placeholder_project_primary":
+            return isChinese ? "金方花园" : "Garden Site"
+        case "widget_placeholder_project_secondary":
+            return isChinese ? "翰林府邸" : "Hanlin Residence"
+        case "widget_storage_app_group_unavailable_format":
+            return isChinese ? "Widget App Group 不可用：%@" : "Widget App Group unavailable: %@"
         case "widget_material_stock_count_format":
             return isChinese ? "%d 种材料" : "%d materials"
         case "widget_low_stock_count_format":

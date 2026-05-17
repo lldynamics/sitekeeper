@@ -1,4 +1,78 @@
+import Foundation
+
 extension CADPoC {
+    struct CADDiagnosticLogEntry: Equatable, Codable {
+        let timestamp: String
+        let category: String
+        let message: String
+        let payloadJSON: String?
+        let coalescingKey: String?
+    }
+
+    enum CADDiagnosticLog {
+        private static let maximumEntryCount = 200
+        private static let lock = NSLock()
+        private static var entries: [CADDiagnosticLogEntry] = []
+
+        static func record(
+            category: String,
+            message: String,
+            payloadJSON: String? = nil,
+            coalescingKey: String? = nil
+        ) {
+            let entry = CADDiagnosticLogEntry(
+                timestamp: ISO8601DateFormatter().string(from: Date()),
+                category: category,
+                message: message,
+                payloadJSON: payloadJSON,
+                coalescingKey: coalescingKey
+            )
+            lock.lock()
+            defer { lock.unlock() }
+            if let coalescingKey,
+               let index = entries.lastIndex(where: { $0.coalescingKey == coalescingKey }) {
+                entries[index] = entry
+            } else {
+                entries.append(entry)
+            }
+            if entries.count > maximumEntryCount {
+                entries.removeFirst(entries.count - maximumEntryCount)
+            }
+        }
+
+        static func recordEncoded<T: Encodable>(
+            category: String,
+            message: String,
+            payload: T,
+            coalescingKey: String? = nil
+        ) {
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+            let payloadJSON = (try? encoder.encode(payload))
+                .flatMap { String(data: $0, encoding: .utf8) }
+            record(
+                category: category,
+                message: message,
+                payloadJSON: payloadJSON,
+                coalescingKey: coalescingKey
+            )
+        }
+
+        static func recentEntries(limit: Int = maximumEntryCount) -> [CADDiagnosticLogEntry] {
+            lock.lock()
+            defer { lock.unlock() }
+            return Array(entries.suffix(max(0, limit)))
+        }
+
+        #if DEBUG
+        static func removeAllForTesting() {
+            lock.lock()
+            defer { lock.unlock() }
+            entries.removeAll()
+        }
+        #endif
+    }
+
     struct CADOpenTrace: Equatable, Codable {
         var fileName: String
         var importSource: String
