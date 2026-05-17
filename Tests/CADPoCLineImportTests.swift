@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import Darwin
 import Testing
 @testable import sitekeeper
 #if os(iOS)
@@ -553,6 +554,89 @@ struct CADPoCLineImportTests {
         })
     }
 
+    @Test func libreDWGNativeShimMapsProxyAndTianzhengProxyAsNonDrawableDiagnostics() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine()
+        #expect(engine.entityKindForNativeKindForTesting(Int32(SiteKeeperLibreDWGEntityKindProxy.rawValue)) == .proxy)
+        #expect(engine.entityKindForNativeKindForTesting(Int32(SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue)) == .proxy)
+
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue)
+        nativeEntity.layerName = strdup("TCH_LAYER")
+        nativeEntity.sourceHandle = strdup("PX-TCH")
+        nativeEntity.objectName = strdup("TCH_WALL")
+        nativeEntity.unsupportedReason = strdup("Tianzheng/TCH proxy object preserved as diagnostic metadata.")
+        nativeEntity.colorARGB = 0xFF22AAFF
+        nativeEntity.lineWeight = 2
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.objectName)
+            free(nativeEntity.unsupportedReason)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let database = SiteKeeperCADKernel.CADDatabase(
+            file: SiteKeeperCADKernel.CADFile(url: URL(fileURLWithPath: "/tmp/proxy.dwg"), format: .dwg),
+            entities: [entity]
+        )
+        let renderCommandCount = CADPoC.CADRenderPipeline().commands(from: database.entities).count
+        let trace = CADPoC.CADOpenTrace(
+            fileName: "proxy.dwg",
+            importSource: engine.id,
+            rawProxyEntityCount: 1,
+            rawTianzhengProxyCount: 1,
+            exportedProxyEntityCount: 1,
+            exportedTianzhengProxyCount: 1,
+            entityCount: database.entityCount,
+            drawableEntityCount: database.drawableEntityCount,
+            renderCommandCount: renderCommandCount
+        )
+
+        #expect(entity.kind == .proxy)
+        #expect(entity.layerID == "TCH_LAYER")
+        #expect(entity.sourceHandle == "PX-TCH")
+        #expect(entity.unsupportedReason?.contains("Tianzheng") == true)
+        #expect(entity.diagnostics.entries.contains { $0.code == "CAD_POC_LIBREDWG_TIANZHENG_PROXY_ENTITY" })
+        #expect(!entity.isRenderable)
+        #expect(database.entityCount == 1)
+        #expect(database.drawableEntityCount == 0)
+        #expect(database.placeholderEntityCount == 1)
+        #expect(!database.geometryParsed)
+        #expect(renderCommandCount == 0)
+        #expect(!trace.openedForRender)
+    }
+
+    @Test func libreDWGNativeShimPreservesPaperSpaceLayoutOnImportedEntities() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let points = UnsafeMutablePointer<SiteKeeperLibreDWGPoint>.allocate(capacity: 2)
+        points.initialize(to: SiteKeeperLibreDWGPoint(x: 0, y: 0))
+        points.advanced(by: 1).initialize(to: SiteKeeperLibreDWGPoint(x: 10, y: 0))
+
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindLine.rawValue)
+        nativeEntity.points = points
+        nativeEntity.pointCount = 2
+        nativeEntity.layerName = strdup("PAPER")
+        nativeEntity.sourceHandle = strdup("PAPER-LINE")
+        nativeEntity.layoutSpace = 1
+        nativeEntity.colorARGB = 0xFF00AAFF
+        nativeEntity.lineWeight = 2
+        defer {
+            points.deinitialize(count: 2)
+            points.deallocate()
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+
+        #expect(entity.kind == .line)
+        #expect(entity.layoutID == "paper")
+        #expect(entity.layerID == "PAPER")
+        #expect(entity.bounds.minX == 0)
+        #expect(entity.bounds.maxX == 10)
+    }
+
     @Test func libreDWGNativePoCImportsTextThroughTextEngine() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("cad-text-poc-\(UUID().uuidString)")
@@ -684,6 +768,229 @@ struct CADPoCLineImportTests {
         #expect(width > 20)
         #expect(height > 20)
         #expect(hasTextPixels)
+    }
+
+    @Test func cadMetalPoCRasterizesChineseWhenPreferredFontIsLatinOnly() throws {
+        let font = UIFont(name: "Helvetica", size: 24) ?? .systemFont(ofSize: 24)
+        let image = try #require(CADPoC.CADMetalRenderer.makeTextOverlayRasterImage(
+            displayText: "消防水泵123",
+            font: font,
+            textColor: .black,
+            scale: 2
+        ))
+        let cgImage = try #require(image.cgImage)
+        let width = cgImage.width
+        let height = cgImage.height
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        try pixels.withUnsafeMutableBytes { rawPixels in
+            let context = try #require(CGContext(
+                data: rawPixels.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+        }
+        let nonTransparentPixels = stride(from: 3, to: pixels.count, by: 4).filter { pixels[$0] > 0 }.count
+
+        #expect(width > 40)
+        #expect(height > 20)
+        #expect(nonTransparentPixels > 40)
+    }
+
+    @Test func cadMetalPoCBuildsTextureAtlasForChineseText() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防水泵123",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10, y: 10),
+            style: .default,
+            height: 4
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: textRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 10, minY: 10, maxX: 40, maxY: 16)
+        )
+        renderer.updateDrawing(entities: [entity], layers: [.default])
+        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+
+        #expect(snapshot.textCount == 1)
+        #expect(snapshot.uniqueTextureCount == 7)
+        #expect(snapshot.vertexCount == 42)
+        #expect(snapshot.atlasSize.width > 0)
+        #expect(snapshot.atlasSize.height > 0)
+    }
+
+    @Test func cadMetalPoCUsesFontAdvanceInsteadOfRasterPaddingForGlyphSpacing() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let font = UIFont(name: "PingFangSC-Regular", size: 24) ?? .systemFont(ofSize: 24)
+        let text = "消防水泵"
+        let singleGlyphImageWidths = text.compactMap { character in
+            CADPoC.CADMetalRenderer.makeTextOverlayRasterImage(
+                displayText: String(character),
+                font: font,
+                textColor: .black,
+                scale: 2
+            )?.size.width
+        }.reduce(CGFloat(0), +)
+        let expectedAdvance = CADPoC.CADMetalRenderer.textAdvanceWidthForTesting(text: text, font: font)
+        let atlasLayoutWidth = renderer.textAtlasLayoutWidthForTesting(
+            displayText: text,
+            font: font,
+            widthFactor: 1,
+            contentScale: 2
+        )
+
+        #expect(singleGlyphImageWidths > expectedAdvance + 12)
+        #expect(abs(atlasLayoutWidth - expectedAdvance) < 8)
+    }
+
+    @Test func cadMetalPoCReusesGlyphsForRepeatedText() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let first = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "中文",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: .default,
+            height: 3
+        )
+        let second = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "中文",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 20, y: 0),
+            style: .default,
+            height: 3
+        )
+        let entities = [
+            SiteKeeperCADKernel.CADEntity(
+                kind: .text,
+                layerID: "TEXT",
+                text: first,
+                bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 10, maxY: 4)
+            ),
+            SiteKeeperCADKernel.CADEntity(
+                kind: .text,
+                layerID: "TEXT",
+                text: second,
+                bounds: SiteKeeperCADKernel.CADBounds(minX: 20, minY: 0, maxX: 30, maxY: 4)
+            )
+        ]
+        renderer.updateDrawing(entities: entities, layers: [.default])
+        let commands = CADPoC.CADRenderPipeline().commands(from: entities)
+        let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+
+        #expect(snapshot.textCount == 2)
+        #expect(snapshot.uniqueTextureCount == 2)
+        #expect(snapshot.vertexCount == 24)
+    }
+
+    @Test func cadMetalPoCReusesSharedChineseGlyphsAcrossDifferentTextRuns() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let first = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防水泵",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: .default,
+            height: 3
+        )
+        let second = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防泵房",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 20, y: 0),
+            style: .default,
+            height: 3
+        )
+        let entities = [
+            SiteKeeperCADKernel.CADEntity(
+                kind: .text,
+                layerID: "TEXT",
+                text: first,
+                bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 10, maxY: 4)
+            ),
+            SiteKeeperCADKernel.CADEntity(
+                kind: .text,
+                layerID: "TEXT",
+                text: second,
+                bounds: SiteKeeperCADKernel.CADBounds(minX: 20, minY: 0, maxX: 30, maxY: 4)
+            )
+        ]
+        renderer.updateDrawing(entities: entities, layers: [.default])
+        let commands = CADPoC.CADRenderPipeline().commands(from: entities)
+        let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+
+        #expect(snapshot.textCount == 2)
+        #expect(snapshot.uniqueTextureCount == 5)
+        #expect(snapshot.vertexCount == 48)
+    }
+
+    @Test func cadMetalPoCReusesAtlasTextureAcrossFrames() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防泵房",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 12, y: 18),
+            style: .default,
+            height: 4
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: textRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 12, minY: 18, maxX: 28, maxY: 24)
+        )
+        renderer.updateDrawing(entities: [entity], layers: [.default])
+        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+
+        let first = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+        let second = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+
+        #expect(first.cacheEntryCount == 1)
+        #expect(second.cacheEntryCount == 1)
+        #expect(second.cacheHitCount > first.cacheHitCount)
+        #expect(second.vertexCount == first.vertexCount)
+    }
+
+    @Test func cadMetalPoCTextOverlayUsesDrawableToViewScaleForCoordinates() throws {
+        let point = CADPoC.CADMetalRenderer.textOverlayViewPointForTesting(
+            drawablePoint: SIMD2<Double>(150, 100),
+            drawableSize: CGSize(width: 300, height: 200),
+            viewSize: CGSize(width: 100, height: 100),
+            fallbackScale: 2
+        )
+
+        #expect(abs(point.x - 50) < 0.001)
+        #expect(abs(point.y - 50) < 0.001)
     }
 
     @Test func cadMetalPoCTextOverlayCenterRotatesAroundInsertionPoint() throws {
@@ -873,6 +1180,101 @@ struct CADPoCLineImportTests {
         #expect(mifText.decodeMethod == "mifEscape")
     }
 
+    @Test func cadTextEngineDecodesMarkedSHXAndBigFontHexBytes() throws {
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "\\SHX+D6D0\\BIGFONT+CEC4",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "hztxt",
+                name: "HZTXT",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "中文")
+        #expect(textRun.decodeMethod == "shxBigFontHex")
+        #expect(textRun.warnings.contains("CAD_TEXT_SHX_BIGFONT_HEX_DECODED"))
+        #expect(textRun.warnings.contains { $0.hasPrefix("CAD_TEXT_SHX_BIGFONT_") && $0.hasSuffix("_DECODED") })
+    }
+
+    @Test func cadTextEngineDecodesMarkedBig5BigFontHexBytes() throws {
+        let rawBytes = try #require(Self.encodedBytes("中文", using: Self.big5Encoding))
+        let hex = rawBytes.map { String(format: "%02X", $0) }.joined()
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "\\BIGFONT+\(hex)",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "big5",
+                name: "BIG5",
+                fontName: "txt.shx",
+                bigFontName: "big5.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "中文")
+        #expect(textRun.decodeMethod == "shxBigFontHex")
+        #expect(textRun.warnings.contains("CAD_TEXT_SHX_BIGFONT_BIG5_DECODED"))
+    }
+
+    @Test func libreDWGNativePoCUsesPreferredBig5CodePageForNativeTextBytes() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine(preferredTextCodePage: 950)
+        let rawBytes = try #require(Self.encodedBytes("中文", using: Self.big5Encoding))
+        let rawText = Self.nativeCString(bytes: rawBytes)
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("BIG5-TEXT")
+        nativeEntity.rawText = rawText
+        nativeEntity.textStyleName = strdup("BIG5")
+        nativeEntity.fontName = strdup("txt.shx")
+        nativeEntity.bigFontName = strdup("big5.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            rawText.deallocate()
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+
+        #expect(text.rawText == "中文")
+        #expect(text.displayText == "中文")
+        #expect(text.bigFontFile == "big5.shx")
+        #expect(entity.bounds.minX <= 10)
+        #expect(entity.bounds.maxX >= 10)
+        #expect(entity.bounds.minY <= 20)
+        #expect(entity.bounds.maxY >= 20)
+    }
+
+    @Test func cadTextEngineDecodesGB18030MIFBigFontBytes() throws {
+        let rawBytes = try #require(Self.encodedBytes("𠀀", using: Self.gb18030Encoding))
+        let hex = rawBytes.map { String(format: "%02X", $0) }.joined()
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "\\M+5\(hex)",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "gbcbig",
+                name: "GBCBIG",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "𠀀")
+        #expect(textRun.decodeMethod == "mifEscape")
+        #expect(textRun.warnings.contains("CAD_TEXT_BIGFONT_MIF_DECODED"))
+        #expect(textRun.warnings.contains("CAD_TEXT_BIGFONT_MIF_GB18030_DECODED"))
+    }
+
     @Test func cadTextEngineRepairsGBKMojibakeChineseText() throws {
         let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "ÖÐÎÄ123",
@@ -883,6 +1285,25 @@ struct CADPoCLineImportTests {
         #expect(textRun.displayText == "中文123")
         #expect(textRun.decodeMethod == "encodingRepair")
         #expect(textRun.warnings.contains("CAD_TEXT_GBK_MOJIBAKE_REPAIRED"))
+    }
+
+    @Test func cadTextEngineRepairsGB18030BigFontMojibakeText() throws {
+        let rawText = try #require(Self.singleByteString("𠀀层", using: Self.gb18030Encoding))
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: rawText,
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "gbcbig",
+                name: "GBCBIG",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "𠀀层")
+        #expect(textRun.decodeMethod == "encodingRepair")
+        #expect(textRun.warnings.contains("CAD_TEXT_SHX_BIGFONT_BYTES_DECODED"))
+        #expect(textRun.warnings.contains("CAD_TEXT_GB18030_FALLBACK_DECODED"))
     }
 
     @Test func renderPipelineDoesNotLetGeometryBudgetStarveChineseText() throws {
@@ -2778,7 +3199,7 @@ struct CADPoCLineImportTests {
         let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(engine.canImport(file: file))
-        #expect(result.trace.importSource == "sitekeeper.poc.dwg-libredwg-ios.basic2d-v1")
+        #expect(result.trace.importSource == "sitekeeper.poc.dwg-libredwg-ios.basic2d-v2")
         #expect(result.trace.drawableEntityCount == 0)
         #expect(result.trace.renderCommandCount == 0)
         #expect(!result.trace.openedForRender)
@@ -2993,6 +3414,40 @@ struct CADPoCLineImportTests {
             path: path,
             bounds: path.bounds
         )
+    }
+
+    private static var gb18030Encoding: String.Encoding {
+        String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+            )
+        )
+    }
+
+    private static var big5Encoding: String.Encoding {
+        String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.big5.rawValue)
+            )
+        )
+    }
+
+    private static func encodedBytes(_ text: String, using encoding: String.Encoding) -> [UInt8]? {
+        text.data(using: encoding).map { Array($0) }
+    }
+
+    private static func singleByteString(_ text: String, using encoding: String.Encoding) -> String? {
+        guard let data = text.data(using: encoding) else { return nil }
+        return String(data: data, encoding: .isoLatin1)
+    }
+
+    private static func nativeCString(bytes: [UInt8]) -> UnsafeMutablePointer<CChar> {
+        let pointer = UnsafeMutablePointer<CChar>.allocate(capacity: bytes.count + 1)
+        for (index, byte) in bytes.enumerated() {
+            pointer[index] = CChar(bitPattern: byte)
+        }
+        pointer[bytes.count] = 0
+        return pointer
     }
 
     private struct TestDWGGeometryAdapter: SiteKeeperCADKernel.CADDWGGeometryAdapter {

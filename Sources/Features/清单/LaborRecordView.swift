@@ -286,8 +286,7 @@ struct LaborRecordView: View {
         }
         .sheet(item: $editingRecord) { record in
             LaborRecordEditSheet(record: record, projects: store.projects) { updated in
-                if let index = store.laborRecords.firstIndex(where: { $0.id == updated.id }) {
-                    store.laborRecords[index] = updated
+                if store.updateLaborRecord(updated) {
                     store.scheduleSave()
                     operationNotice = .info(String(localized: "已更新人工记录"))
                 }
@@ -459,7 +458,7 @@ struct LaborRecordView: View {
 
     private func save() {
         guard canSave else { return }
-        store.laborRecords.append(LaborRecord(
+        store.appendLaborRecord(LaborRecord(
             date: Formatters.date.string(from: newDate),
             workers: NumericInputSupport.normalizedStorageText(newWorkers, kind: .quantity),
             hours: NumericInputSupport.normalizedStorageText(newDays, kind: .days),
@@ -533,10 +532,7 @@ struct LaborRecordView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.laborRecords = deletion.restoredItems(
-                    current: store.laborRecords,
-                    id: \.id
-                )
+                store.restoreLaborRecords(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)

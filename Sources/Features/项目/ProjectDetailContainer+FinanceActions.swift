@@ -8,8 +8,7 @@ private struct ProjectDeletionUndoSnapshot {
 
 extension ProjectDetailContainer {
     func saveMaterial(_ updated: MaterialItem) {
-        if let index = financeStore.materialItems.firstIndex(where: { $0.id == updated.id }) {
-            store.materialItems[index] = updated
+        if store.updateMaterialItem(updated) {
             store.scheduleSave()
         }
     }
@@ -27,11 +26,11 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.materialItems = UndoableDeletionCoordinator.restoringItems(
+                store.replaceMaterialItems(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.materialItems,
                     deletedIDs: Set([id])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -43,8 +42,7 @@ extension ProjectDetailContainer {
     }
 
     func saveQuote(_ updated: QuoteItem) {
-        if let index = financeStore.quoteItems.firstIndex(where: { $0.id == updated.id }) {
-            store.quoteItems[index] = updated
+        if store.updateQuoteItem(updated) {
             store.scheduleSave()
         }
     }
@@ -62,11 +60,11 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.quoteItems = UndoableDeletionCoordinator.restoringItems(
+                store.replaceQuoteItems(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.quoteItems,
                     deletedIDs: Set([id])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -78,8 +76,7 @@ extension ProjectDetailContainer {
     }
 
     func saveLabor(_ updated: LaborRecord) {
-        if let index = financeStore.laborRecords.firstIndex(where: { $0.id == updated.id }) {
-            store.laborRecords[index] = updated
+        if store.updateLaborRecord(updated) {
             store.scheduleSave()
         }
     }
@@ -97,11 +94,11 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.laborRecords = UndoableDeletionCoordinator.restoringItems(
+                store.replaceLaborRecords(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.laborRecords,
                     deletedIDs: Set([target.id])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -113,8 +110,8 @@ extension ProjectDetailContainer {
     }
 
     func saveProgress(_ updated: ProgressTask) {
-        if let index = projectStore.progressTasks.firstIndex(where: { $0.id == updated.id }) {
-            store.progressTasks[index] = updated
+        if projectStore.progressTasks.contains(where: { $0.id == updated.id }) {
+            store.updateProgressTask(updated)
             store.scheduleSave()
         }
     }
@@ -132,11 +129,11 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.progressTasks = UndoableDeletionCoordinator.restoringItems(
+                store.replaceProgressTasks(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.progressTasks,
                     deletedIDs: Set([id])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -148,8 +145,8 @@ extension ProjectDetailContainer {
     }
 
     func saveFinancialRecord(_ updated: ProjectFinancialRecord) {
-        if let index = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == updated.id }) {
-            store.projectFinancialRecords[index] = updated
+        if projectStore.projectFinancialRecords.contains(where: { $0.id == updated.id }) {
+            store.updateProjectFinancialRecord(updated)
             store.scheduleSave()
         }
     }
@@ -205,20 +202,26 @@ extension ProjectDetailContainer {
     }
 
     func linkDocument(_ documentID: UUID, to recordID: UUID) {
-        guard let docIndex = projectStore.projectDocuments.firstIndex(where: { $0.id == documentID }),
-              let targetRecordIndex = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == recordID }) else {
+        guard let document = projectStore.projectDocuments.first(where: { $0.id == documentID }),
+              projectStore.projectFinancialRecords.contains(where: { $0.id == recordID }) else {
             return
         }
 
-        let previousRecordID = projectStore.projectDocuments[docIndex].linkedFinancialRecordId
+        let previousRecordID = document.linkedFinancialRecordId
         if let previousRecordID,
-           let previousRecordIndex = projectStore.projectFinancialRecords.firstIndex(where: { $0.id == previousRecordID }) {
-            store.projectFinancialRecords[previousRecordIndex].linkedDocumentIds.removeAll { $0 == documentID }
+           previousRecordID != recordID {
+            _ = store.mutateProjectFinancialRecord(id: previousRecordID) { record in
+                record.linkedDocumentIds.removeAll { $0 == documentID }
+            }
         }
 
-        store.projectDocuments[docIndex].linkedFinancialRecordId = recordID
-        if !projectStore.projectFinancialRecords[targetRecordIndex].linkedDocumentIds.contains(documentID) {
-            store.projectFinancialRecords[targetRecordIndex].linkedDocumentIds.append(documentID)
+        _ = store.mutateProjectDocument(id: documentID) { value in
+            value.linkedFinancialRecordId = recordID
+        }
+        _ = store.mutateProjectFinancialRecord(id: recordID) { record in
+            if !record.linkedDocumentIds.contains(documentID) {
+                record.linkedDocumentIds.append(documentID)
+            }
         }
         store.scheduleSave()
     }
@@ -280,9 +283,9 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.projectDocuments = snapshot.projectDocuments
-                store.projectFinancialRecords = snapshot.projectFinancialRecords
-                store.projectWarehouseMovements = snapshot.projectWarehouseMovements
+                store.replaceProjectDocuments(snapshot.projectDocuments)
+                store.replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
+                store.replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -306,16 +309,18 @@ extension ProjectDetailContainer {
             },
             onBulkSetCategory: { documents, category in
                 let ids = Set(documents.map(\.id))
-                for index in projectStore.projectDocuments.indices where ids.contains(projectStore.projectDocuments[index].id) {
-                    store.projectDocuments[index].category = category
+                var projectDocuments = store.projectDocuments
+                for index in projectDocuments.indices where ids.contains(projectDocuments[index].id) {
+                    projectDocuments[index].category = category
                 }
+                store.replaceProjectDocuments(projectDocuments)
                 store.scheduleSave()
             },
             onScan: {
                 assetState.scanTarget = scanTarget(for: record)
             },
-            onImportFiles: { urls in
-                importProjectDocuments(urls, linkedFinancialRecordId: record.id)
+            onImportFiles: { urls, settings in
+                importProjectDocuments(urls, linkedFinancialRecordId: record.id, ledgerSettings: settings)
             },
             onImportImage: { image, note in
                 importCapturedImage(image, note: note, linkedFinancialRecordId: record.id)

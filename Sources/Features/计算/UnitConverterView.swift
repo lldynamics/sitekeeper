@@ -8,9 +8,24 @@ struct UnitConverterView: View {
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
     private var category: ConvCategory {
         StringEnumFallback.value(categoryRawValue, default: ConvCategory.length)
+    }
+
+    private var inputRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredNonNegative,
+            min: 0,
+            max: 1_000_000_000,
+            rangeMessage: calculatorLoc("请输入 0–1000000000")
+        )
+    }
+
+    private var inputValidation: NumericInputFieldValidation {
+        inputRule.validate(inputValue)
     }
 
     // factor: 1 unit = factor 个基准单位（基准为米/平方米/千克）
@@ -54,13 +69,14 @@ struct UnitConverterView: View {
                     toUnit = opts.last ?? ""
                 }
 
-                LabeledContent("数值") {
-                    TextField("1", text: $inputValue.numericInput(.quantity))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(inputValue, min: 0, max: 1_000_000_000, hint: "请输入 0–1000000000"))
+                CalculatorValidatedNumericField(
+                    title: "数值",
+                    placeholder: "1",
+                    text: $inputValue,
+                    rule: inputRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "快捷值", options: ["0.5", "1", "5", "10", "100"], selection: $inputValue)
 
                 Picker("从", selection: $fromUnit) {
@@ -74,6 +90,7 @@ struct UnitConverterView: View {
             Section {
                 Button("换算") {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     convert()
                 }
                     .frame(maxWidth: .infinity)
@@ -104,8 +121,9 @@ struct UnitConverterView: View {
     }
 
     private func convert() {
-        guard let value = CalculatorInputParser.double(inputValue) else {
-            presentError("请输入有效数值")
+        guard let value = inputValidation.doubleValue else {
+            resultText = ""
+            resultModel = nil
             return
         }
         guard let list = units[category] else {
@@ -135,6 +153,7 @@ struct UnitConverterView: View {
             ]
         )
         resultText = "\(trim(value)) \(fromUnit) = \(trim(converted)) \(toUnit)"
+        inputValue = NumericInputSupport.normalizedStorageText(inputValue, kind: .quantity, preservingInvalid: false)
     }
 
     private func trim(_ v: Double) -> String {
@@ -152,13 +171,6 @@ struct UnitConverterView: View {
         if !options.contains(toUnit) {
             toUnit = options.dropFirst().first ?? options.first ?? ""
         }
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
     }
 
     private func presentError(_ message: String) {

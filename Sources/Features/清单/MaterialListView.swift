@@ -58,21 +58,21 @@ struct MaterialListView: View {
         List {
             Section {
                 ProjectContextStrip(
-                    title: "当前工程",
+                    title: String(localized: "当前工程"),
                     projects: store.projects,
                     selectedProjectId: $projectFilter,
-                    emptyText: "全部项目"
+                    emptyText: String(localized: "全部项目")
                 )
             }
 
             if isSelecting {
                 Section {
                     HStack {
-                        Button("全选当前结果") {
+                        Button(String(localized: "全选当前结果")) {
                             selection = Set(filtered.map(\.id))
                         }
                         Spacer()
-                        Button("清除选择") {
+                        Button(String(localized: "清除选择")) {
                             selection.removeAll()
                         }
                         .disabled(selection.isEmpty)
@@ -83,11 +83,15 @@ struct MaterialListView: View {
 
             if filtered.isEmpty {
                 Section {
-                    ContentUnavailableView("暂无材料记录", systemImage: "shippingbox", description: Text("添加材料后可按工程筛选和汇总成本。"))
+                    ContentUnavailableView(
+                        String(localized: "暂无材料记录"),
+                        systemImage: "shippingbox",
+                        description: Text(String(localized: "添加材料后可按工程筛选和汇总成本。"))
+                    )
                     Button {
                         showAdd = true
                     } label: {
-                        Label("添加材料", systemImage: "plus.circle.fill")
+                        Label(String(localized: "添加材料"), systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.appProminent())
                 }
@@ -105,22 +109,22 @@ struct MaterialListView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "搜索材料名称")
-        .navigationTitle("材料清单")
+        .searchable(text: $searchText, prompt: String(localized: "搜索材料名称"))
+        .navigationTitle(String(localized: "材料清单"))
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 NavigationLink { MaterialLibraryView() } label: {
                     Image(systemName: "books.vertical.fill").visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("打开材料库")
+                .accessibilityLabel(String(localized: "打开材料库"))
             }
             ToolbarItem(placement: .topBarTrailing) {
                 HStack(spacing: 12) {
                     if !selection.isEmpty {
-                        Button("批量归属") { showBulkProjectSheet = true }
+                        Button(String(localized: "批量归属")) { showBulkProjectSheet = true }
                         .font(.caption)
-                        Button("删除(\(selection.count))") {
+                        Button(String(format: String(localized: "删除(%lld)"), Int64(selection.count))) {
                             requestDeleteMaterials(
                                 ids: Array(selection),
                                 message: String(format: String(localized: "确认删除已选 %lld 条材料吗？"), Int64(selection.count)),
@@ -131,11 +135,11 @@ struct MaterialListView: View {
                         .font(.caption).foregroundStyle(.appRisk)
                     }
                     Menu {
-                        Button(isSelecting ? "结束选择" : "选择材料") {
+                        Button(isSelecting ? String(localized: "结束选择") : String(localized: "选择材料")) {
                             isSelecting.toggle()
                             if !isSelecting { selection.removeAll() }
                         }
-                        Button("清空全部材料", role: .destructive) {
+                        Button(String(localized: "清空全部材料"), role: .destructive) {
                             showClearAll = true
                         }
                         .disabled(store.materialItems.isEmpty)
@@ -143,28 +147,28 @@ struct MaterialListView: View {
                         Image(systemName: "ellipsis.circle").visibleIconStyle()
                     }
                     .buttonStyle(.appIcon())
-                    .accessibilityLabel("更多操作")
+                    .accessibilityLabel(String(localized: "更多操作"))
                     Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                        .accessibilityLabel("添加材料")
+                        .accessibilityLabel(String(localized: "添加材料"))
                 }
             }
         }
-        .confirmationDialog("清空全部材料？", isPresented: $showClearAll, titleVisibility: .visible) {
-            Button("清空", role: .destructive) {
+        .confirmationDialog(String(localized: "清空全部材料？"), isPresented: $showClearAll, titleVisibility: .visible) {
+            Button(String(localized: "清空"), role: .destructive) {
                 clearAllMaterials()
             }
-            Button("取消", role: .cancel) {}
+            Button(String(localized: "取消"), role: .cancel) {}
         }
         .confirmationDialog(
-            "删除材料",
+            String(localized: "删除材料"),
             isPresented: $showDeleteConfirm,
             titleVisibility: .visible,
             presenting: pendingDeletePlan
         ) { plan in
-            Button("删除", role: .destructive) {
+            Button(String(localized: "删除"), role: .destructive) {
                 confirmDeleteMaterials(plan)
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingDeletePlan = nil
             }
         } message: { plan in
@@ -173,52 +177,52 @@ struct MaterialListView: View {
         .sheet(isPresented: $showAdd) {
             NavigationStack {
                 Form {
-                    Section("材料") {
+                    Section(String(localized: "材料")) {
                         if !store.templates.filter({ $0.category == .material }).isEmpty {
-                            Menu("套用材料模板") {
+                            Menu(String(localized: "套用材料模板")) {
                                 ForEach(store.templates.filter { $0.category == .material }) { template in
                                     Button(template.name) { applyMaterialTemplate(template) }
                                 }
                             }
                         }
-                        TextField("材料名称", text: $newName)
-                        LabeledContent("数量") {
+                        TextField(String(localized: "材料名称"), text: $newName)
+                        LabeledContent(String(localized: "数量")) {
                             TextField("0", text: $newQty)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .focused($addMaterialFocusedField, equals: .quantity)
                         }
-                        LabeledContent("单位") {
-                            TextField("米 / 卷 / 个", text: $newUnit)
+                        LabeledContent(String(localized: "单位")) {
+                            TextField(String(localized: "米 / 卷 / 个"), text: $newUnit)
                                 .multilineTextAlignment(.trailing)
                         }
-                        LabeledContent("单价") {
+                        LabeledContent(String(localized: "单价")) {
                             TextField("0", text: $newUnitPrice)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .focused($addMaterialFocusedField, equals: .unitPrice)
                         }
-                        TextField("规格型号", text: $newSpecification)
-                        TextField("品牌", text: $newBrand)
-                        TextField("供应商", text: $newSupplier)
-                        Picker("采购状态", selection: $newPurchaseStatus) {
+                        TextField(String(localized: "规格型号"), text: $newSpecification)
+                        TextField(String(localized: "品牌"), text: $newBrand)
+                        TextField(String(localized: "供应商"), text: $newSupplier)
+                        Picker(String(localized: "采购状态"), selection: $newPurchaseStatus) {
                             ForEach(MaterialPurchaseStatus.allCases, id: \.self) { item in
                                 Text(item.displayName).tag(item)
                             }
                         }
-                        TextField("进场日期（yyyy-MM-dd）", text: $newArrivalDate)
+                        TextField(String(localized: "进场日期（yyyy-MM-dd）"), text: $newArrivalDate)
                     }
-                    Section("归属项目") {
-                        Picker("归属项目", selection: $newProjectId) {
-                            Text("无归属").tag(nil as UUID?)
+                    Section(String(localized: "归属项目")) {
+                        Picker(String(localized: "归属项目"), selection: $newProjectId) {
+                            Text(String(localized: "无归属")).tag(nil as UUID?)
                             ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                         }
                     }
                 }
-                .navigationTitle("添加材料").navigationBarTitleDisplayMode(.inline)
+                .navigationTitle(String(localized: "添加材料")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { showAdd = false } }
-                    ToolbarItem(placement: .confirmationAction) { Button("添加") { addItem(); showAdd = false }.disabled(!canAddMaterial) }
+                    ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showAdd = false } }
+                    ToolbarItem(placement: .confirmationAction) { Button(String(localized: "添加")) { addItem(); showAdd = false }.disabled(!canAddMaterial) }
                     KeyboardNavigationToolbar(
                         focusedField: $addMaterialFocusedField,
                         fields: [.quantity, .unitPrice]
@@ -231,8 +235,7 @@ struct MaterialListView: View {
         }
         .sheet(item: $editingItem) { item in
             MaterialEditSheet(item: item, useMetric: useMetric) { updated in
-                if let index = store.materialItems.firstIndex(where: { $0.id == updated.id }) {
-                    store.materialItems[index] = updated
+                if store.updateMaterialItem(updated) {
                     store.scheduleSave()
                 }
             } onDelete: { id in
@@ -261,17 +264,19 @@ struct MaterialListView: View {
                         .foregroundStyle(selection.contains(item.id) ? .appWarning : .secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("选择材料")
-                .accessibilityValue(selection.contains(item.id) ? "已选中" : "未选中")
-                .accessibilityHint("双击切换选中状态")
+                .accessibilityLabel(String(localized: "选择材料"))
+                .accessibilityValue(selection.contains(item.id) ? String(localized: "已选中") : String(localized: "未选中"))
+                .accessibilityHint(String(localized: "双击切换选中状态"))
             }
 
             let quantityText = UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)
             let specText = [item.specification, item.brand, item.supplier].filter { !$0.isEmpty }.joined(separator: " · ")
-            let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
+            let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
             let meta = [quantityText, specText, projectText].filter { !$0.isEmpty }.joined(separator: " · ")
             let totalText = item.unitPriceValue.isPositive ? ReportBuilder.money(ReportBuilder.materialLineTotal(item)) : ""
-            let noteText = item.arrivalDate.isEmpty ? item.purchaseStatus.displayName : "\(item.purchaseStatus.displayName) · 进场 \(item.arrivalDate)"
+            let noteText = item.arrivalDate.isEmpty
+                ? item.purchaseStatus.displayName
+                : String(format: String(localized: "%@ · 进场 %@"), item.purchaseStatus.displayName, item.arrivalDate)
             BusinessRecordRow(
                 icon: "shippingbox.fill",
                 iconColor: purchaseStatusColor(item.purchaseStatus),
@@ -293,15 +298,15 @@ struct MaterialListView: View {
                     Image(systemName: "trash").foregroundStyle(.appRisk)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("删除材料")
+                .accessibilityLabel(String(localized: "删除材料"))
                 .accessibilityValue(item.name)
-                .accessibilityHint("双击删除当前材料")
+                .accessibilityHint(String(localized: "双击删除当前材料"))
             }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .contain)
         .accessibilityAddTraits(.isButton)
-        .accessibilityHint(isSelecting ? "双击选择或取消选择该材料" : "双击编辑材料")
+        .accessibilityHint(isSelecting ? String(localized: "双击选择或取消选择该材料") : String(localized: "双击编辑材料"))
         .onTapGesture {
             if isSelecting {
                 toggleSelection(item.id)
@@ -314,19 +319,19 @@ struct MaterialListView: View {
     private var bulkProjectForm: some View {
         NavigationStack {
             Form {
-                Section("已选择") {
-                    LabeledContent("材料项", value: "\(selection.count)")
+                Section(String(localized: "已选择")) {
+                    LabeledContent(String(localized: "材料项"), value: "\(selection.count)")
                 }
-                Section("归属项目") {
-                    Picker("归属项目", selection: $bulkProjectId) {
-                        Text("无归属").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "归属项目"), selection: $bulkProjectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
                 }
                 Section {
-                    Button("应用到已选材料") {
+                    Button(String(localized: "应用到已选材料")) {
                         applyBulkProject()
                         showBulkProjectSheet = false
                     }
@@ -335,11 +340,11 @@ struct MaterialListView: View {
                     .disabled(selection.isEmpty)
                 }
             }
-            .navigationTitle("批量归属")
+            .navigationTitle(String(localized: "批量归属"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showBulkProjectSheet = false }
+                    Button(String(localized: "取消")) { showBulkProjectSheet = false }
                 }
             }
         }
@@ -409,10 +414,7 @@ struct MaterialListView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialItems = deletion.restoredItems(
-                    current: store.materialItems,
-                    id: \.id
-                )
+                store.restoreMaterialItems(from: deletion)
                 selection = selectionSnapshot
                 isSelecting = isSelectingSnapshot
                 store.scheduleSave()
@@ -448,10 +450,7 @@ struct MaterialListView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialItems = deletion.restoredItems(
-                    current: store.materialItems,
-                    id: \.id
-                )
+                store.restoreMaterialItems(from: deletion)
                 selection = selectionSnapshot
                 isSelecting = isSelectingSnapshot
                 store.scheduleSave()
@@ -465,13 +464,13 @@ struct MaterialListView: View {
     }
 
     private func applyBulkProject() {
-        store.materialItems = store.materialItems.map { item in
+        store.replaceMaterialItems(store.materialItems.map { item in
             var updated = item
             if selection.contains(item.id) {
                 updated.projectId = bulkProjectId
             }
             return updated
-        }
+        })
         selection.removeAll()
         isSelecting = false
         bulkProjectId = nil
@@ -492,7 +491,7 @@ struct MaterialListView: View {
 
     private func addItem() {
         guard canAddMaterial else { return }
-        store.materialItems.append(
+        store.appendMaterialItem(
             MaterialItem(
                 name: newName,
                 quantity: newQty,

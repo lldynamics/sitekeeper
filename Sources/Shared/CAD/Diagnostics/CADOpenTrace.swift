@@ -13,7 +13,11 @@ extension CADPoC {
         var rawDimensionCount: Int
         var rawHatchCount: Int
         var rawTextCount: Int
+        var rawProxyEntityCount: Int
+        var rawTianzhengProxyCount: Int
         var expandedInsertEntityCount: Int
+        var exportedProxyEntityCount: Int
+        var exportedTianzhengProxyCount: Int
         var entityCount: Int
         var drawableEntityCount: Int
         var renderCommandCount: Int
@@ -36,7 +40,11 @@ extension CADPoC {
             rawDimensionCount: Int = 0,
             rawHatchCount: Int = 0,
             rawTextCount: Int = 0,
+            rawProxyEntityCount: Int = 0,
+            rawTianzhengProxyCount: Int = 0,
             expandedInsertEntityCount: Int = 0,
+            exportedProxyEntityCount: Int = 0,
+            exportedTianzhengProxyCount: Int = 0,
             entityCount: Int = 0,
             drawableEntityCount: Int = 0,
             renderCommandCount: Int = 0,
@@ -58,7 +66,11 @@ extension CADPoC {
             self.rawDimensionCount = rawDimensionCount
             self.rawHatchCount = rawHatchCount
             self.rawTextCount = rawTextCount
+            self.rawProxyEntityCount = rawProxyEntityCount
+            self.rawTianzhengProxyCount = rawTianzhengProxyCount
             self.expandedInsertEntityCount = expandedInsertEntityCount
+            self.exportedProxyEntityCount = exportedProxyEntityCount
+            self.exportedTianzhengProxyCount = exportedTianzhengProxyCount
             self.entityCount = entityCount
             self.drawableEntityCount = drawableEntityCount
             self.renderCommandCount = renderCommandCount

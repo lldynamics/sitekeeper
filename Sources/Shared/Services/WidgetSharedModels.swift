@@ -1,5 +1,14 @@
 import Foundation
 
+enum WidgetSharedDefaults {
+    static let suiteName = "group.com.chengjinfang.sitekeeper"
+    static let widgetKind = "SitekeeperWidget"
+    static let dataKey = "widget_data"
+    static let updatedAtKey = "widget_data_updated_at"
+    static let languageCodeKey = "languageCode"
+    static let appleLanguagesKey = "AppleLanguages"
+}
+
 struct WidgetProjectSummary: Codable {
     let id: UUID
     let name: String

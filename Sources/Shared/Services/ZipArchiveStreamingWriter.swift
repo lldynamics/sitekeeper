@@ -44,18 +44,23 @@ struct StreamingZipArchiveWriter {
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        if FileManager.default.fileExists(atPath: fileURL.path) {
-            do {
-                try FileManager.default.removeItem(at: fileURL)
-            } catch {
-                StorageIssueLog.recordEvent(
-                    "zip.writer.cleanup_existing_failed",
+        do {
+            _ = try FileOps.removeIfExists(
+                at: fileURL,
+                context: .init(
+                    event: "zip.writer.cleanup_existing",
                     category: .zipArchive,
-                    details: ["file": fileURL.lastPathComponent],
-                    error: error
+                    source: "StreamingZipArchiveWriter.init"
                 )
-                throw error
-            }
+            )
+        } catch {
+            StorageIssueLog.recordEvent(
+                "zip.writer.cleanup_existing_failed",
+                category: .zipArchive,
+                details: ["file": fileURL.lastPathComponent],
+                error: error
+            )
+            throw error
         }
         FileManager.default.createFile(atPath: fileURL.path, contents: nil)
         outputHandle = try FileHandle(forWritingTo: fileURL)

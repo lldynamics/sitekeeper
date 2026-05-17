@@ -30,7 +30,7 @@ struct TemplateView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(tpl.name)
                                     .font(.body.weight(.medium))
-                                Text(tpl.content)
+                                Text(templateSummary(tpl))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
@@ -79,7 +79,7 @@ struct TemplateView: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(String(localized: "保存")) {
                             guard !newName.isEmpty else { return }
-                            store.templates.append(ProjectTemplate(name: newName, category: newCategory, content: newContent))
+                            store.appendTemplate(ProjectTemplate(name: newName, category: newCategory, content: newContent))
                             store.scheduleSave()
                             AppHaptics.success()
                             newName = ""; newContent = ""; showAdd = false
@@ -112,14 +112,18 @@ struct TemplateView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.templates = deletion.restoredItems(
-                    current: store.templates,
-                    id: \.id
-                )
+                store.restoreTemplates(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
+    }
+
+    private func templateSummary(_ template: ProjectTemplate) -> String {
+        if let categories = template.documentChecklistCategories {
+            return categories.map(\.displayName).joined(separator: "、")
+        }
+        return template.content
     }
 }
 
@@ -132,6 +136,8 @@ private extension TemplateCategory {
             return Color.appDoc
         case .material:
             return Color.appPrimaryAction
+        case .projectDocumentChecklist:
+            return Color.appSuccess
         }
     }
 
@@ -143,6 +149,8 @@ private extension TemplateCategory {
             return "book.pages.fill"
         case .material:
             return "shippingbox.fill"
+        case .projectDocumentChecklist:
+            return "checklist"
         }
     }
 }
@@ -162,6 +170,10 @@ struct ApplyTemplateSheet: View {
         parseQuotationTemplate()
     }
 
+    private var documentChecklistCategories: [ProjectDocumentCategory] {
+        template.documentChecklistCategories ?? []
+    }
+
     private var canApplyTemplate: Bool {
         switch template.category {
         case .material:
@@ -170,6 +182,8 @@ struct ApplyTemplateSheet: View {
             return !quotationParseResult.items.isEmpty
         case .dailyLog:
             return !template.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        case .projectDocumentChecklist:
+            return selectedProjectId != nil && !documentChecklistCategories.isEmpty
         }
     }
 
@@ -187,6 +201,11 @@ struct ApplyTemplateSheet: View {
             )
         case .dailyLog:
             return String(localized: "将新增 1 条日志记录。")
+        case .projectDocumentChecklist:
+            return String(
+                format: String(localized: "将覆盖所选工程资料清单为 %lld 类。"),
+                Int64(documentChecklistCategories.count)
+            )
         }
     }
 
@@ -298,6 +317,27 @@ struct ApplyTemplateSheet: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        case .projectDocumentChecklist:
+            Section(String(localized: "解析预览")) {
+                LabeledContent(
+                    String(localized: "资料类别"),
+                    value: String(format: String(localized: "%lld 类"), Int64(documentChecklistCategories.count))
+                )
+                if documentChecklistCategories.isEmpty {
+                    Text(String(localized: "未识别到可套用的资料类别。"))
+                        .font(.caption)
+                        .foregroundStyle(.appWarning)
+                } else {
+                    Text(documentChecklistCategories.map(\.displayName).joined(separator: "、"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                if selectedProjectId == nil {
+                    Text(String(localized: "请选择工程后再应用资料清单模板。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
     }
 
@@ -305,7 +345,7 @@ struct ApplyTemplateSheet: View {
         switch template.category {
         case .material:
             for item in materialParseResult.items {
-                store.materialItems.append(
+                store.appendMaterialItem(
                     MaterialItem(
                         name: item.name,
                         quantity: item.quantity,
@@ -316,7 +356,7 @@ struct ApplyTemplateSheet: View {
             }
         case .quotation:
             for item in quotationParseResult.items {
-                store.quoteItems.append(
+                store.appendQuoteItem(
                     QuoteItem(
                         name: item.name,
                         unitPrice: item.unitPrice,
@@ -330,7 +370,24 @@ struct ApplyTemplateSheet: View {
                 )
             }
         case .dailyLog:
-            store.dailyLogs.insert(DailyLog(date: Formatters.date.string(from: Date()), weather: String(localized: "晴"), content: template.content, workers: "", photoFileName: nil, projectId: selectedProjectId), at: 0)
+            store.insertDailyLogAtTop(
+                DailyLog(
+                    date: Formatters.date.string(from: Date()),
+                    weather: String(localized: "晴"),
+                    content: template.content,
+                    workers: "",
+                    photoFileName: nil,
+                    projectId: selectedProjectId
+                )
+            )
+        case .projectDocumentChecklist:
+            guard let selectedProjectId,
+                  let index = store.projects.firstIndex(where: { $0.id == selectedProjectId }) else { return }
+            var updatedProject = store.projects[index]
+            updatedProject.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+                documentChecklistCategories
+            )
+            guard store.updateProject(updatedProject) else { return }
         }
         store.scheduleSave()
         AppHaptics.success()

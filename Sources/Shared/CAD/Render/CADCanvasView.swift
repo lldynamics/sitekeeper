@@ -27,21 +27,29 @@ struct CADCanvasFeatureOptions: Equatable {
     var rendersTextOverlays: Bool
     var publishesSnapPoints: Bool
     var rendersHatches: Bool
+    var rendersPlaceholders: Bool
 
     static let performanceDefault = CADCanvasFeatureOptions(
-        rendersTextOverlays: false,
+        rendersTextOverlays: true,
         publishesSnapPoints: false,
-        rendersHatches: false
+        rendersHatches: false,
+        rendersPlaceholders: false
     )
 
     static let fullDetail = CADCanvasFeatureOptions(
         rendersTextOverlays: true,
         publishesSnapPoints: true,
-        rendersHatches: true
+        rendersHatches: true,
+        rendersPlaceholders: true
     )
 
     var enabledCount: Int {
-        [rendersTextOverlays, publishesSnapPoints, rendersHatches].filter { $0 }.count
+        [
+            rendersTextOverlays,
+            publishesSnapPoints,
+            rendersHatches,
+            rendersPlaceholders
+        ].filter { $0 }.count
     }
 
     func allows(_ command: SiteKeeperCADKernel.CADRenderCommand) -> Bool {
@@ -50,10 +58,51 @@ struct CADCanvasFeatureOptions: Equatable {
             return rendersTextOverlays
         case .hatch:
             return rendersHatches
+        case .imagePlaceholder, .unsupportedPlaceholder:
+            return rendersPlaceholders
         default:
             return true
         }
     }
+
+    func allows(_ entity: SiteKeeperCADKernel.CADEntity) -> Bool {
+        if !rendersHatches, entity.kind == .hatch {
+            return false
+        }
+        if !rendersPlaceholders,
+           SiteKeeperCADKernel.CADDatabase.isPlaceholderEntity(entity) {
+            return false
+        }
+        if !rendersPlaceholders {
+            switch entity.kind {
+            case .image, .table, .xref, .proxy, .unsupported:
+                return false
+            default:
+                break
+            }
+        }
+        if !rendersTextOverlays {
+            switch entity.kind {
+            case .text, .mtext, .attrib:
+                return false
+            default:
+                break
+            }
+        }
+        return true
+    }
+}
+
+struct CADCanvasTextImportOptions: Equatable {
+    var preferredTextCodePage: Int32?
+    var preferredTextBigFont: Int32?
+    var fontMappings: [CADRendererFontMapping]
+
+    static let automatic = CADCanvasTextImportOptions(
+        preferredTextCodePage: nil,
+        preferredTextBigFont: nil,
+        fontMappings: []
+    )
 }
 
 #if os(iOS) && canImport(MetalKit)
@@ -67,6 +116,8 @@ struct CADCanvasView: UIViewRepresentable {
     let initialViewState: CADRendererViewState?
     let controlCommand: CADCanvasControlCommand?
     let featureOptions: CADCanvasFeatureOptions
+    let textImportOptions: CADCanvasTextImportOptions
+    let buildsTextSearchIndex: Bool
     let debugTextOverlays: Bool
     let callbacks: CADRendererCallbacks
     let onLayoutsChanged: ([CADPoC.CADLayout]) -> Void
@@ -80,6 +131,8 @@ struct CADCanvasView: UIViewRepresentable {
         initialViewState: CADRendererViewState? = nil,
         controlCommand: CADCanvasControlCommand? = nil,
         featureOptions: CADCanvasFeatureOptions = .performanceDefault,
+        textImportOptions: CADCanvasTextImportOptions = .automatic,
+        buildsTextSearchIndex: Bool = false,
         debugTextOverlays: Bool = false,
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
         onLayoutsChanged: @escaping ([CADPoC.CADLayout]) -> Void = { _ in },
@@ -92,6 +145,8 @@ struct CADCanvasView: UIViewRepresentable {
         self.initialViewState = initialViewState
         self.controlCommand = controlCommand
         self.featureOptions = featureOptions
+        self.textImportOptions = textImportOptions
+        self.buildsTextSearchIndex = buildsTextSearchIndex
         self.debugTextOverlays = debugTextOverlays
         self.callbacks = callbacks
         self.onLayoutsChanged = onLayoutsChanged
@@ -145,21 +200,29 @@ struct CADCanvasView: UIViewRepresentable {
         context.coordinator.renderer.setSelectedLayoutID(selectedLayoutID)
         context.coordinator.renderer.setVisibleLayerIDs(visibleLayerIDs)
         context.coordinator.renderer.setFeatureOptions(featureOptions)
+        context.coordinator.setBuildsTextSearchIndex(buildsTextSearchIndex)
         context.coordinator.renderer.setDebugTextOverlays(debugTextOverlays)
         context.coordinator.renderer.applyInitialViewStateIfNeeded(initialViewState, contentScale: uiView.contentScaleFactor)
         context.coordinator.applyControlCommandIfNeeded(controlCommand, in: uiView)
-        context.coordinator.loadIfNeeded(fileURL: fileURL)
+        context.coordinator.loadIfNeeded(fileURL: fileURL, textImportOptions: textImportOptions)
         uiView.setNeedsDisplay()
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         let renderer = CADPoC.CADMetalRenderer()
         weak var view: MTKView?
-        private var loadedFileURL: URL?
+        private struct LoadedImportKey: Equatable {
+            var fileURL: URL
+            var textImportOptions: CADCanvasTextImportOptions
+        }
+
+        private var loadedImportKey: LoadedImportKey?
         private var importTask: Task<Void, Never>?
         private var lastTrace: CADPoC.CADOpenTrace?
+        private var lastDatabase: SiteKeeperCADKernel.CADDatabase?
         private var lastPinchLocation: CGPoint?
         private var lastControlCommandID: UUID?
+        private var buildsTextSearchIndex = false
         var callbacks = CADRendererCallbacks()
         var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
         var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
@@ -169,13 +232,18 @@ struct CADCanvasView: UIViewRepresentable {
             importTask?.cancel()
         }
 
-        func loadIfNeeded(fileURL: URL) {
-            guard loadedFileURL != fileURL else { return }
-            loadedFileURL = fileURL
+        func loadIfNeeded(fileURL: URL, textImportOptions: CADCanvasTextImportOptions) {
+            let importKey = LoadedImportKey(fileURL: fileURL, textImportOptions: textImportOptions)
+            guard loadedImportKey != importKey else { return }
+            loadedImportKey = importKey
             importTask?.cancel()
             importTask = Task { [weak self] in
                 let file = SiteKeeperCADKernel.CADFile(url: fileURL)
-                let engine = CADPoC.LibreDWGNativeImportEngine()
+                let engine = CADPoC.LibreDWGNativeImportEngine(
+                    preferredTextCodePage: textImportOptions.preferredTextCodePage,
+                    preferredTextBigFont: textImportOptions.preferredTextBigFont,
+                    fontMappings: textImportOptions.fontMappings
+                )
                 guard engine.canImport(file: file) else {
                     self?.applyUnsupportedTrace(file: file, source: engine.id)
                     return
@@ -193,11 +261,12 @@ struct CADCanvasView: UIViewRepresentable {
         @MainActor
         private func applyImportResult(_ result: CADPoC.CADImportResult) {
             lastTrace = result.trace
+            lastDatabase = result.database
             callbacks.onOpenTraceChange(result.trace)
             logTrace(result.trace)
             onLayoutsChanged(result.database.layouts)
             onLayersChanged(result.database.layers)
-            onSearchIndexChanged(SiteKeeperCADKernel.CADTextSearchIndex(database: result.database))
+            publishSearchIndex()
             guard result.trace.openedForRender else {
                 renderer.updateDrawing(entities: [], layers: [])
                 view?.setNeedsDisplay()
@@ -211,6 +280,7 @@ struct CADCanvasView: UIViewRepresentable {
         private func applyUnsupportedTrace(file: SiteKeeperCADKernel.CADFile, source: String) {
             let trace = CADPoC.CADOpenTrace.unsupported(fileName: file.displayName, importSource: source)
             lastTrace = trace
+            lastDatabase = nil
             callbacks.onOpenTraceChange(trace)
             logTrace(trace)
             onLayoutsChanged([])
@@ -218,6 +288,22 @@ struct CADCanvasView: UIViewRepresentable {
             onSearchIndexChanged(nil)
             renderer.updateDrawing(entities: [], layers: [])
             view?.setNeedsDisplay()
+        }
+
+        @MainActor
+        func setBuildsTextSearchIndex(_ enabled: Bool) {
+            guard buildsTextSearchIndex != enabled else { return }
+            buildsTextSearchIndex = enabled
+            publishSearchIndex()
+        }
+
+        @MainActor
+        private func publishSearchIndex() {
+            guard buildsTextSearchIndex, let lastDatabase else {
+                onSearchIndexChanged(nil)
+                return
+            }
+            onSearchIndexChanged(SiteKeeperCADKernel.CADTextSearchIndex(database: lastDatabase))
         }
 
         func applyControlCommandIfNeeded(_ command: CADCanvasControlCommand?, in view: MTKView) {
@@ -353,6 +439,7 @@ struct CADCanvasView: View {
     var initialViewState: CADRendererViewState? = nil
     var controlCommand: CADCanvasControlCommand? = nil
     var featureOptions: CADCanvasFeatureOptions = .performanceDefault
+    var buildsTextSearchIndex: Bool = false
     var debugTextOverlays: Bool = false
     var callbacks: CADRendererCallbacks = CADRendererCallbacks()
     var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }

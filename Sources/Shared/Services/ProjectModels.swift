@@ -699,3 +699,36 @@ struct ProjectTemplate: Identifiable, Codable {
     var category: TemplateCategory
     var content: String
 }
+
+extension ProjectTemplate {
+    private static let documentChecklistContentHeader = "sitekeeper_document_checklist_template_v1"
+
+    static func documentChecklistTemplate(
+        id: UUID = UUID(),
+        name: String,
+        categories: [ProjectDocumentCategory]
+    ) -> ProjectTemplate {
+        ProjectTemplate(
+            id: id,
+            name: name,
+            category: .projectDocumentChecklist,
+            content: documentChecklistContent(categories: categories)
+        )
+    }
+
+    var documentChecklistCategories: [ProjectDocumentCategory]? {
+        guard category == .projectDocumentChecklist else { return nil }
+        let categories = content
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != Self.documentChecklistContentHeader }
+            .compactMap(ProjectDocumentCategory.documentChecklistTemplateCategory(from:))
+        guard !categories.isEmpty else { return nil }
+        return ProjectDocumentCategory.normalizedConstructionArchiveRequirements(categories)
+    }
+
+    private static func documentChecklistContent(categories: [ProjectDocumentCategory]) -> String {
+        let normalizedCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(categories)
+        return ([documentChecklistContentHeader] + normalizedCategories.map(\.rawValue)).joined(separator: "\n")
+    }
+}

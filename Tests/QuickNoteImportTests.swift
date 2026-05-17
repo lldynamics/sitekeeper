@@ -72,7 +72,7 @@ struct QuickNoteImportTests {
         let note = QuickNote(title: "待删除", attachments: [attachment])
         let store = DataStore()
         store.clearAllBusinessData(deleteStoredFiles: false)
-        store.quickNotes = [note]
+        store.replaceQuickNotes([note])
 
         let deletion = store.removeQuickNotes(
             ids: Set([note.id]),

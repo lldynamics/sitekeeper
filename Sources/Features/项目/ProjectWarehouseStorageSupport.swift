@@ -22,9 +22,14 @@ struct ProjectWarehouseVideoTransfer: Transferable {
             let tempDir = FileManager.default.temporaryDirectory.appendingPathComponent("warehouse-media", isDirectory: true)
             try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
             let tempURL = tempDir.appendingPathComponent("warehouse-\(UUID().uuidString).\(ext)")
-            if FileManager.default.fileExists(atPath: tempURL.path) {
-                try FileManager.default.removeItem(at: tempURL)
-            }
+            _ = try FileOps.removeIfExists(
+                at: tempURL,
+                context: .init(
+                    event: "project_warehouse.prepare_temp_video",
+                    category: .fileStorage,
+                    source: "ProjectWarehouseVideoTransfer.transferRepresentation"
+                )
+            )
             try FileManager.default.copyItem(at: source, to: tempURL)
             return ProjectWarehouseVideoTransfer(
                 fileURL: tempURL,
@@ -222,9 +227,21 @@ enum ProjectWarehouseAttachmentImporter {
     private static func cleanupTemporaryFileIfNeeded(_ attachment: ProjectWarehouseAttachmentDraft) {
         guard case .fileURL(let url, let cleanupAfterImport) = attachment.payload, cleanupAfterImport else { return }
         do {
-            try FileManager.default.removeItem(at: url)
+            _ = try FileOps.removeIfExists(
+                at: url,
+                context: .init(
+                    event: "project_warehouse.cleanup_temp_file",
+                    category: .fileStorage,
+                    source: "ProjectWarehouseStorageSupport.cleanupTemporaryFileIfNeeded"
+                )
+            )
         } catch {
-            StorageIssueLog.record(String(format: String(localized: "仓库临时媒体清理失败：%@"), url.lastPathComponent))
+            StorageIssueLog.recordEvent(
+                "project_warehouse.cleanup_temp_file_failed",
+                category: .fileStorage,
+                details: ["file": url.lastPathComponent],
+                error: error
+            )
         }
     }
 

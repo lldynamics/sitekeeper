@@ -333,9 +333,9 @@ struct ProjectWarehouseView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.projectWarehouseMovements = movementSnapshot
-                store.projectDocuments = documentSnapshot
-                store.projectFinancialRecords = financialSnapshot
+                store.replaceProjectWarehouseMovements(movementSnapshot)
+                store.replaceProjectDocuments(documentSnapshot)
+                store.replaceProjectFinancialRecords(financialSnapshot)
                 store.scheduleSave()
             },
             audit: movementDeletion.audit.map(UndoableDeletionAuditContext.init)

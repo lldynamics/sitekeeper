@@ -128,10 +128,7 @@ struct MaterialPriceDatabaseView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialPriceEntries = deletion.restoredItems(
-                    current: store.materialPriceEntries,
-                    id: \.id
-                )
+                store.restoreMaterialPriceEntries(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -146,27 +143,12 @@ struct MaterialPriceDatabaseView: View {
             return MaterialPriceEntry(name: item.name, specification: item.specification, unit: item.unit, category: item.category.rawValue)
         }
         guard !newItems.isEmpty else { return }
-        store.materialPriceEntries.append(contentsOf: newItems)
+        store.appendMaterialPriceEntries(newItems)
         store.scheduleSave()
     }
 
     private func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
-        let entryKey = MaterialIdentity.key(name: entry.name, specification: entry.specification, unit: entry.unit)
-        if let index = store.materialPriceEntries.firstIndex(where: { $0.id == entry.id }) {
-            store.materialPriceEntries[index] = entry
-            store.scheduleSave()
-            return
-        }
-        if let duplicateIndex = store.materialPriceEntries.firstIndex(where: {
-            MaterialIdentity.key(name: $0.name, specification: $0.specification, unit: $0.unit) == entryKey
-        }) {
-            var merged = entry
-            merged.id = store.materialPriceEntries[duplicateIndex].id
-            store.materialPriceEntries[duplicateIndex] = merged
-            store.scheduleSave()
-            return
-        }
-        store.materialPriceEntries.insert(entry, at: 0)
+        store.upsertMaterialPriceEntry(entry)
         store.scheduleSave()
     }
 

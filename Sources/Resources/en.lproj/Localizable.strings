@@ -1499,8 +1499,6 @@
 "超过该天数未成功备份时，工作台会显示“备份超期”提醒。" = "When no backup succeeds for this many days, the dashboard shows a backup overdue reminder.";
 "将删除本机所有项目、附件与导入文件，不会影响你已导出的备份 ZIP。" = "This deletes all local projects, attachments, and imported files. Exported backup ZIP files are not affected.";
 "实验功能" = "Experimental Features";
-"显示模板管理入口" = "Show Template Management Entry";
-"默认关闭。开启后会在工具箱显示“模板管理”。" = "Off by default. When enabled, Template Management appears in the toolbox.";
 "将清空当前本地数据并写入示例项目、日志、报价和材料。此操作不可撤销。" = "Current local data will be cleared and sample projects, logs, quotes, and materials will be written. This cannot be undone.";
 "将写入示例项目、日志、报价和材料，便于演示功能。" = "Sample projects, logs, quotes, and materials will be written for demos.";
 "确认删除这 %lld 条材料吗？" = "Delete these %lld materials?";

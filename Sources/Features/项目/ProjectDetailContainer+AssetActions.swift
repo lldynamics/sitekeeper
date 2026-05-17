@@ -10,7 +10,7 @@ extension ProjectDetailContainer {
         } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
             log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
         }
-        store.dailyLogs[logIndex] = log
+        store.updateDailyLog(log)
         store.scheduleSave()
     }
 
@@ -32,7 +32,7 @@ extension ProjectDetailContainer {
             log.photoFileName = nil
         }
         guard let deletedFileName else { return }
-        store.dailyLogs[logIndex] = log
+        store.updateDailyLog(log)
         undoableDeletion.queue(
             notice: $operationNotice,
             message: String(localized: "已删除项目照片"),
@@ -44,11 +44,11 @@ extension ProjectDetailContainer {
                 store.scheduleSave()
             },
             undo: {
-                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
+                store.replaceDailyLogs(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.dailyLogs,
                     deletedIDs: Set([context.logId])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -72,8 +72,8 @@ extension ProjectDetailContainer {
     }
 
     func saveContact(_ updated: ProjectContact) {
-        if let index = projectStore.projectContacts.firstIndex(where: { $0.id == updated.id }) {
-            store.projectContacts[index] = updated
+        if projectStore.projectContacts.contains(where: { $0.id == updated.id }) {
+            store.upsertProjectContact(updated)
             store.scheduleSave()
         }
     }
@@ -84,19 +84,19 @@ extension ProjectDetailContainer {
     }
 
     func removeContactAssociation(contactID: UUID, from currentProjectID: UUID) {
-        guard let index = projectStore.projectContacts.firstIndex(where: { $0.id == contactID }) else { return }
-        var contact = store.projectContacts[index]
+        guard let contact = projectStore.projectContacts.first(where: { $0.id == contactID }) else { return }
+        var updatedContact = contact
         if contact.projectId == currentProjectID {
             if let promotedProjectID = contact.relatedProjectIds.first(where: { $0 != currentProjectID }) {
-                contact.projectId = promotedProjectID
-                contact.relatedProjectIds.removeAll { $0 == currentProjectID || $0 == promotedProjectID }
-                store.projectContacts[index] = contact
+                updatedContact.projectId = promotedProjectID
+                updatedContact.relatedProjectIds.removeAll { $0 == currentProjectID || $0 == promotedProjectID }
+                store.upsertProjectContact(updatedContact)
             } else {
                 store.removeProjectContact(id: contactID)
             }
         } else {
-            contact.relatedProjectIds.removeAll { $0 == currentProjectID }
-            store.projectContacts[index] = contact
+            updatedContact.relatedProjectIds.removeAll { $0 == currentProjectID }
+            store.upsertProjectContact(updatedContact)
         }
     }
 

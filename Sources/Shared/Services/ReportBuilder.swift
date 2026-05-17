@@ -973,9 +973,14 @@ enum ReportBuilder {
                     StorageIssueLog.record(locFormat("项目交付包 ZIP 关闭失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
                 }
                 do {
-                    try FileManager.default.removeItem(at: packageURL)
-                } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
-                    // ignore missing temporary file
+                    _ = try FileOps.removeIfExists(
+                        at: packageURL,
+                        context: .init(
+                            event: "project_package.cleanup_temporary_zip",
+                            category: .zipArchive,
+                            source: "ReportBuilder.exportProjectPackage"
+                        )
+                    )
                 } catch {
                     StorageIssueLog.record(locFormat("项目交付包临时文件清理失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
                 }

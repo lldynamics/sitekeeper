@@ -74,13 +74,13 @@ struct SiteTodoView: View {
                 compactTodoLayout
             }
         }
-        .navigationTitle("现场待办")
-        .searchable(text: $searchText, prompt: "搜索事项、负责人、备注")
+        .navigationTitle(String(localized: "现场待办"))
+        .searchable(text: $searchText, prompt: String(localized: "搜索事项、负责人、备注"))
         .toolbar {
             if !usesSidebarLayout {
                 Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
                     .buttonStyle(.appIcon())
-                    .accessibilityLabel("新建待办")
+                    .accessibilityLabel(String(localized: "新建待办"))
             }
         }
         .sheet(isPresented: $showAdd) {
@@ -129,16 +129,16 @@ struct SiteTodoView: View {
     private var filterSidebar: some View {
         List {
             filterSection
-            Section("快捷操作") {
+            Section(String(localized: "快捷操作")) {
                 Button {
                     showAdd = true
                 } label: {
-                    Label("新建待办", systemImage: "plus.circle.fill")
+                    Label(String(localized: "新建待办"), systemImage: "plus.circle.fill")
                 }
                 .buttonStyle(.appProminent())
             }
         }
-        .navigationTitle("筛选")
+        .navigationTitle(String(localized: "筛选"))
     }
 
     private var todoListContent: some View {
@@ -148,16 +148,16 @@ struct SiteTodoView: View {
     }
 
     private var filterSection: some View {
-        Section("筛选") {
-            Picker("项目", selection: $projectFilter) {
-                Text("全部项目").tag(nil as UUID?)
+        Section(String(localized: "筛选")) {
+            Picker(String(localized: "项目"), selection: $projectFilter) {
+                Text(String(localized: "全部项目")).tag(nil as UUID?)
                 ForEach(store.projects) { project in
                     Text(project.name).tag(project.id as UUID?)
                 }
             }
-            Picker("状态", selection: $statusFilter) {
+            Picker(String(localized: "状态"), selection: $statusFilter) {
                 ForEach(TodoFilter.allCases, id: \.self) { filter in
-                    Text(filter.rawValue).tag(filter)
+                    Text(filter.displayName).tag(filter)
                 }
             }
             .pickerStyle(.segmented)
@@ -165,9 +165,13 @@ struct SiteTodoView: View {
     }
 
     private var todoListSection: some View {
-        Section("现场待办 (\(filteredTodos.count))") {
+        Section(String(format: String(localized: "现场待办 (%lld)"), Int64(filteredTodos.count))) {
             if filteredTodos.isEmpty {
-                ContentUnavailableView("暂无现场待办", systemImage: "checklist", description: Text("添加事项后可按项目、负责人、优先级和问题类型跟踪。"))
+                ContentUnavailableView(
+                    String(localized: "暂无现场待办"),
+                    systemImage: "checklist",
+                    description: Text(String(localized: "添加事项后可按项目、负责人、优先级和问题类型跟踪。"))
+                )
             } else {
                 ForEach(filteredTodos) { todo in
                     Button { editingTodo = todo } label: {
@@ -182,7 +186,10 @@ struct SiteTodoView: View {
                         Button {
                             toggleDone(todo)
                         } label: {
-                            Label(todo.isDone ? "重开" : "完成", systemImage: todo.isDone ? "arrow.uturn.backward" : "checkmark.circle.fill")
+                            Label(
+                                todo.isDone ? String(localized: "重开") : String(localized: "完成"),
+                                systemImage: todo.isDone ? "arrow.uturn.backward" : "checkmark.circle.fill"
+                            )
                         }
                         .tint(todo.isDone ? Color.appWarning : Color.appSuccess)
                     }
@@ -207,8 +214,7 @@ struct SiteTodoView: View {
     }
 
     private func save(_ updated: SiteTodo) {
-        if let index = store.siteTodos.firstIndex(where: { $0.id == updated.id }) {
-            store.siteTodos[index] = updated
+        if store.updateSiteTodo(updated) {
             store.scheduleSave()
         }
     }
@@ -259,10 +265,7 @@ struct SiteTodoView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.siteTodos = deletion.restoredItems(
-                    current: store.siteTodos,
-                    id: \.id
-                )
+                store.restoreSiteTodos(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -282,7 +285,7 @@ struct SiteTodoView: View {
         guard !ids.isEmpty else { return [] }
         let lookup = Dictionary(uniqueKeysWithValues: store.constructionMethods.map { method in
             let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            return (method.id, title.isEmpty ? "未命名工艺" : title)
+            return (method.id, title.isEmpty ? String(localized: "未命名工艺") : title)
         })
         return ids.compactMap { lookup[$0] }
     }
@@ -298,7 +301,7 @@ private struct SiteTodoRow: View {
             HStack(spacing: 8) {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
                     .foregroundStyle(todo.isDone ? Color.appSuccess : todo.isOverdue ? .appRisk : Color.appWarning)
-                Text(todo.title.isEmpty ? "未命名事项" : todo.title)
+                Text(todo.title.isEmpty ? String(localized: "未命名事项") : todo.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(todo.isDone ? .secondary : .primary)
                 Spacer()
@@ -330,12 +333,12 @@ private struct SiteTodoRow: View {
             }
             if todo.rectificationBeforePhotoFileName != nil || todo.rectificationAfterPhotoFileName != nil {
                 HStack(spacing: 8) {
-                    thumbnail(title: "前", fileName: todo.rectificationBeforePhotoFileName)
-                    thumbnail(title: "后", fileName: todo.rectificationAfterPhotoFileName)
+                    thumbnail(title: String(localized: "前"), fileName: todo.rectificationBeforePhotoFileName)
+                    thumbnail(title: String(localized: "后"), fileName: todo.rectificationAfterPhotoFileName)
                 }
             }
             if let completedAt = todo.completedAt, todo.isDone {
-                Text("完成时间: \(completedAt)")
+                Text(String(format: String(localized: "完成时间: %@"), completedAt))
                     .font(.caption2)
                     .foregroundStyle(Color.appSuccess)
             }
@@ -468,27 +471,27 @@ private struct SiteTodoEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("事项") {
-                    TextField("待办事项", text: $title, axis: .vertical)
+                Section(String(localized: "事项")) {
+                    TextField(String(localized: "待办事项"), text: $title, axis: .vertical)
                         .lineLimit(2...5)
-                    TextField("负责人", text: $owner)
-                    DatePicker("日期", selection: $dueDate, displayedComponents: .date)
-                    Picker("优先级", selection: $priority) {
+                    TextField(String(localized: "负责人"), text: $owner)
+                    DatePicker(String(localized: "日期"), selection: $dueDate, displayedComponents: .date)
+                    Picker(String(localized: "优先级"), selection: $priority) {
                         ForEach(TodoPriority.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    Picker("问题类型", selection: $issueType) {
+                    Picker(String(localized: "问题类型"), selection: $issueType) {
                         ForEach(TodoIssueType.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
-                Section("关联施工工艺") {
+                Section(String(localized: "关联施工工艺")) {
                     if constructionMethods.isEmpty {
-                        Text("暂无工艺条目，可先在工具箱-施工工艺库新增")
+                        Text(String(localized: "暂无工艺条目，可先在工具箱-施工工艺库新增"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -500,7 +503,7 @@ private struct SiteTodoEditSheet: View {
                                         if !method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                                             Text(method.trade)
                                         }
-                                        Text(method.versionName.isEmpty ? "V1" : method.versionName)
+                                        Text(method.versionName.isEmpty ? String(localized: "V1") : method.versionName)
                                         Text(method.publishStatus.displayName)
                                     }
                                     .font(.caption2)
@@ -511,38 +514,38 @@ private struct SiteTodoEditSheet: View {
                         }
                     }
                 }
-                Section("归属项目") {
-                    Picker("项目", selection: $projectId) {
-                        Text("不关联项目").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "项目"), selection: $projectId) {
+                        Text(String(localized: "不关联项目")).tag(nil as UUID?)
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
                 }
-                Section("整改照片") {
-                    photoPickerRow(title: "整改前", fileName: beforePhotoFileName, selection: $beforePhotoItem, clear: clearBeforePhoto)
-                    photoPickerRow(title: "整改后", fileName: afterPhotoFileName, selection: $afterPhotoItem, clear: clearAfterPhoto)
+                Section(String(localized: "整改照片")) {
+                    photoPickerRow(title: String(localized: "整改前"), fileName: beforePhotoFileName, selection: $beforePhotoItem, clear: clearBeforePhoto)
+                    photoPickerRow(title: String(localized: "整改后"), fileName: afterPhotoFileName, selection: $afterPhotoItem, clear: clearAfterPhoto)
                 }
-                Section("状态") {
-                    Toggle("已完成", isOn: $isDone)
+                Section(String(localized: "状态")) {
+                    Toggle(String(localized: "已完成"), isOn: $isDone)
                     if let completedAt, isDone {
-                        LabeledContent("完成时间", value: completedAt)
+                        LabeledContent(String(localized: "完成时间"), value: completedAt)
                     }
                 }
                 if todo != nil {
                     Section {
-                        Button("删除待办", role: .destructive) { showDeleteConfirm = true }
+                        Button(String(localized: "删除待办"), role: .destructive) { showDeleteConfirm = true }
                     }
                 }
             }
-            .navigationTitle(todo == nil ? "新增待办" : "编辑待办")
+            .navigationTitle(todo == nil ? String(localized: "新增待办") : String(localized: "编辑待办"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         let value = updatedTodo
                         didCommit = true
                         onSave(value)
@@ -552,17 +555,17 @@ private struct SiteTodoEditSheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("删除这条待办？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条待办？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     didCommit = true
                     cleanupCreatedDraftPhotoFiles()
                     if let todo { onDelete?(todo) }
                     dismiss()
                 }
             }
-            .alert("现场待办", isPresented: $showAlert) {
-                Button("知道了", role: .cancel) {}
+            .alert(String(localized: "现场待办"), isPresented: $showAlert) {
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(alertMessage)
             }
@@ -591,11 +594,16 @@ private struct SiteTodoEditSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 PhotosPicker(selection: selection, matching: .images) {
-                    Label(fileName == nil ? "添加\(title)照片" : "替换\(title)照片", systemImage: "photo.on.rectangle")
+                    Label(
+                        fileName == nil
+                            ? String(format: String(localized: "添加%@照片"), title)
+                            : String(format: String(localized: "替换%@照片"), title),
+                        systemImage: "photo.on.rectangle"
+                    )
                 }
                 Spacer()
                 if fileName != nil {
-                    Button("移除", role: .destructive, action: clear)
+                    Button(String(localized: "移除"), role: .destructive, action: clear)
                         .font(.caption)
                 }
             }
@@ -629,7 +637,7 @@ private struct SiteTodoEditSheet: View {
             guard let loaded = try await item.loadTransferable(type: Data.self) else { return }
             data = loaded
         } catch {
-            StorageIssueLog.record("待办整改照片导入失败：\(error.localizedDescription)")
+            StorageIssueLog.record(String(format: String(localized: "待办整改照片导入失败：%@"), error.localizedDescription))
             return
         }
         guard !Task.isCancelled else { return }
@@ -646,7 +654,7 @@ private struct SiteTodoEditSheet: View {
         do {
             saved = try PhotoStorage.saveOrThrow(original: data, fileName: fileName)
         } catch {
-            alertMessage = "整改照片保存失败：\(error.localizedDescription)"
+            alertMessage = String(format: String(localized: "整改照片保存失败：%@"), error.localizedDescription)
             showAlert = true
             return
         }
@@ -767,7 +775,7 @@ private struct SiteTodoEditSheet: View {
 
     private func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "未命名工艺" : title
+        return title.isEmpty ? String(localized: "未命名工艺") : title
     }
 
     private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
@@ -789,11 +797,24 @@ private struct SiteTodoEditSheet: View {
     }
 }
 
-private enum TodoFilter: String, CaseIterable {
-    case open = "未完成"
-    case overdue = "延期"
-    case done = "已完成"
-    case all = "全部"
+private enum TodoFilter: CaseIterable {
+    case open
+    case overdue
+    case done
+    case all
+
+    var displayName: String {
+        switch self {
+        case .open:
+            return String(localized: "未完成")
+        case .overdue:
+            return String(localized: "延期")
+        case .done:
+            return String(localized: "已完成")
+        case .all:
+            return String(localized: "全部")
+        }
+    }
 
     func matches(_ todo: SiteTodo) -> Bool {
         switch self {

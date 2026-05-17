@@ -739,25 +739,27 @@ struct DailyLogView: View {
 
     private func applyBatchTagToSelectedPhotos() {
         guard !selectedPhotoKeys.isEmpty else { return }
-        for logIndex in store.dailyLogs.indices {
-            for photoIndex in store.dailyLogs[logIndex].photos.indices {
-                let photo = store.dailyLogs[logIndex].photos[photoIndex]
-                let key = "\(store.dailyLogs[logIndex].id.uuidString)-\(photo.fileName)"
+        var dailyLogs = store.dailyLogs
+        for logIndex in dailyLogs.indices {
+            for photoIndex in dailyLogs[logIndex].photos.indices {
+                let photo = dailyLogs[logIndex].photos[photoIndex]
+                let key = "\(dailyLogs[logIndex].id.uuidString)-\(photo.fileName)"
                 if selectedPhotoKeys.contains(key) {
-                    store.dailyLogs[logIndex].photos[photoIndex].tag = batchPhotoTag
+                    dailyLogs[logIndex].photos[photoIndex].tag = batchPhotoTag
                 }
             }
-            if let legacy = store.dailyLogs[logIndex].photoFileName {
-                let key = "\(store.dailyLogs[logIndex].id.uuidString)-\(legacy)"
+            if let legacy = dailyLogs[logIndex].photoFileName {
+                let key = "\(dailyLogs[logIndex].id.uuidString)-\(legacy)"
                 if selectedPhotoKeys.contains(key) {
-                    if let idx = store.dailyLogs[logIndex].photos.firstIndex(where: { $0.fileName == legacy }) {
-                        store.dailyLogs[logIndex].photos[idx].tag = batchPhotoTag
+                    if let idx = dailyLogs[logIndex].photos.firstIndex(where: { $0.fileName == legacy }) {
+                        dailyLogs[logIndex].photos[idx].tag = batchPhotoTag
                     } else {
-                        store.dailyLogs[logIndex].photos.append(LogPhoto(fileName: legacy, tag: batchPhotoTag))
+                        dailyLogs[logIndex].photos.append(LogPhoto(fileName: legacy, tag: batchPhotoTag))
                     }
                 }
             }
         }
+        store.replaceDailyLogs(dailyLogs)
         store.scheduleSave()
         selectedPhotoKeys.removeAll()
     }
@@ -1050,10 +1052,7 @@ struct DailyLogView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.dailyLogs = deletion.restoredItems(
-                    current: store.dailyLogs,
-                    id: \.id
-                )
+                store.restoreDailyLogs(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -1069,7 +1068,7 @@ struct DailyLogView: View {
         } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
             log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
         }
-        store.dailyLogs[logIndex] = log
+        store.updateDailyLog(log)
         store.scheduleSave()
     }
 
@@ -1090,7 +1089,7 @@ struct DailyLogView: View {
             log.photoFileName = nil
         }
         guard let deletedFileName else { return }
-        store.dailyLogs[logIndex] = log
+        store.updateDailyLog(log)
         let deferredCleanup = DataStoreDeferredFileCleanup.photoFiles(
             [deletedFileName],
             summary: "dailyLog.photoFiles.single"
@@ -1103,11 +1102,11 @@ struct DailyLogView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.dailyLogs = UndoableDeletionCoordinator.restoringItems(
+                store.replaceDailyLogs(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.dailyLogs,
                     deletedIDs: Set([context.logId])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
@@ -1204,7 +1203,7 @@ struct DailyLogView: View {
         log.confirmer = editor.confirmer
         log.linkedConstructionMethodIDs = sortedLinkedMethodIDs(editor.linkedMethodIDs)
         log.projectId = editor.projectId
-        store.dailyLogs[index] = log
+        store.updateDailyLog(log)
         store.scheduleSave()
     }
 

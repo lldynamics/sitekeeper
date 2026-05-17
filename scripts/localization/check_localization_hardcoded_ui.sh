@@ -13,19 +13,20 @@ scripts/localization/check_localization_integrity.sh
 
 targets=(
   "Sources/Features"
+  "Sources/Shared/CAD"
   "Sources/Shared/Services"
   "Sources/Shared/Views"
   "Sources/Shared/Helpers"
 )
 
-exclude_pattern='CAD|cad|CADD|DWG|LibreDWG|SiteKeeperCADKernel'
+exclude_path_pattern='SiteKeeperCADKernel'
 interpolated_pattern='String\(localized:\s*\"[^\"]*\\\('
 hardcoded_ui_pattern='Text\(\"[^\"]*[\p{Han}][^\"]*\"\)|Label\(\"[^\"]*[\p{Han}][^\"]*\"|Button\(\"[^\"]*[\p{Han}][^\"]*\"|TextField\(\"[^\"]*[\p{Han}][^\"]*\"|Section\(\"[^\"]*[\p{Han}][^\"]*\"\)|Toggle\(\"[^\"]*[\p{Han}][^\"]*\"|Picker\(\"[^\"]*[\p{Han}][^\"]*\"|LabeledContent\(\"[^\"]*[\p{Han}][^\"]*\"|Menu\(\"[^\"]*[\p{Han}][^\"]*\"|navigationTitle\(\"[^\"]*[\p{Han}][^\"]*\"|ContentUnavailableView\(\"[^\"]*[\p{Han}][^\"]*\"|alert\(\"[^\"]*[\p{Han}][^\"]*\"'
 supporting_copy_pattern='hint:\s*\"[^\"]*[\p{Han}][^\"]*\"|presentError\(\"[^\"]*[\p{Han}][^\"]*\"|headline:\s*\"[^\"]*[\p{Han}][^\"]*\"|formula:\s*\"[^\"]*[\p{Han}][^\"]*\"|CalculationResult\.item\(\"[^\"]*[\p{Han}][^\"]*\"|tool:\s*\"[^\"]*[\p{Han}][^\"]*\"|input:\s*\"[^\"]*[\p{Han}][^\"]*\"|title:\s*\"[^\"]*[\p{Han}][^\"]*\"'
 
-interpolated_matches="$(rg -n "$interpolated_pattern" "${targets[@]}" | rg -v "$exclude_pattern" || true)"
-hardcoded_ui_matches="$(rg -n "$hardcoded_ui_pattern" "${targets[@]}" | rg -v "$exclude_pattern" || true)"
-supporting_copy_matches="$(rg -n "$supporting_copy_pattern" "${targets[@]}" | rg -v "$exclude_pattern" || true)"
+interpolated_matches="$(rg -n "$interpolated_pattern" "${targets[@]}" | rg -v "$exclude_path_pattern" || true)"
+hardcoded_ui_matches="$(rg -n "$hardcoded_ui_pattern" "${targets[@]}" | rg -v "$exclude_path_pattern" || true)"
+supporting_copy_matches="$(rg -n "$supporting_copy_pattern" "${targets[@]}" | rg -v "$exclude_path_pattern" || true)"
 
 interpolated_count="$(printf '%s\n' "$interpolated_matches" | sed '/^$/d' | wc -l | tr -d ' ')"
 hardcoded_ui_count="$(printf '%s\n' "$hardcoded_ui_matches" | sed '/^$/d' | wc -l | tr -d ' ')"

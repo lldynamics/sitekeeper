@@ -18,7 +18,7 @@ extension SiteKeeperCADKernel {
             verticalAlignmentCode: Int? = nil,
             warnings existingWarnings: [String] = []
         ) -> CADTextRun {
-            let decoded = decoder.decode(rawText: rawText)
+            let decoded = decoder.decode(rawText: rawText, textStyle: style)
             let normalized = normalizer.normalizeText(decoded.decodedText)
             let parsed = mtextParser.parse(normalized.normalizedText)
             let font = fontResolver.resolve(style: style, displayText: parsed.plainText)

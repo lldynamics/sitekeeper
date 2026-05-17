@@ -78,6 +78,12 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -projec
 scripts/release/preflight.sh
 ```
 
+启用本地提交前守卫（一次性）：
+
+```sh
+scripts/dev/install_git_hooks.sh
+```
+
 ## 目录结构
 
 - `Sources/App`：应用入口和底部导航。

@@ -380,7 +380,7 @@ struct CADViewerToolView: View {
                     }
                 }
             }
-            store.projectDrawings.append(versioned)
+            store.appendProjectDrawing(versioned)
             currentDrawings.append(versioned)
             importedDrawings.append(versioned)
             importedCount += 1
@@ -457,38 +457,35 @@ struct CADViewerToolView: View {
     }
 
     private func updateOverlaySnapshot(drawingID: UUID, snapshotData: String) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadOverlaySnapshotData = snapshotData
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadOverlaySnapshotData = snapshotData }) else { return }
         store.scheduleSave()
     }
 
     private func updateCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadViewState = viewState
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadViewState = viewState }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textEncoding = encoding
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textEncoding = encoding }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textBigFont = profile
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textBigFont = profile }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textSchemeSnapshot = snapshot
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textSchemeSnapshot = snapshot }) else { return }
         store.scheduleSave()
     }
 
     private func updateProjectFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
         guard let index = store.projects.firstIndex(where: { $0.id == projectID }) else { return }
-        store.projects[index].cadFontMappings = mappings
+        var project = store.projects[index]
+        project.cadFontMappings = mappings
+        guard store.updateProject(project) else { return }
         store.scheduleSave()
     }
 

@@ -215,7 +215,7 @@ struct MaterialPriceSpikeDetailView: View {
 """,
             projectId: detail.projectId
         )
-        store.siteTodos.insert(reminder, at: 0)
+        store.insertSiteTodoAtTop(reminder)
         store.scheduleSave()
         AppHaptics.success()
         actionFeedbackMessage = "已生成采购提醒"

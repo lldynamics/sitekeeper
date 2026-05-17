@@ -35,12 +35,14 @@ enum ProjectDetailAssetActions {
         _ urls: [URL],
         projectId: UUID,
         linkedFinancialRecordId: UUID?,
+        ledgerSettings: ProjectDocumentImportLedgerSettings? = nil,
         store: DataStore
     ) -> [String] {
         ProjectDetailFinanceDocumentActions.importProjectDocuments(
             urls,
             projectId: projectId,
             linkedFinancialRecordId: linkedFinancialRecordId,
+            ledgerSettings: ledgerSettings,
             store: store
         )
     }
@@ -82,13 +84,13 @@ enum ProjectDetailAssetActions {
     }
 
     static func saveDrawing(_ updated: ProjectDrawing, store: DataStore) {
-        if let index = store.projectDrawings.firstIndex(where: { $0.id == updated.id }) {
+        if store.projectDrawings.contains(where: { $0.id == updated.id }) {
             var value = updated
             value.version = ProjectDetailDrawingHelper.normalizedVersion(value.version)
             if value.isCurrentVersion {
                 updateCurrentVersionFlags(for: value, store: store)
             }
-            store.projectDrawings[index] = value
+            store.updateProjectDrawing(value)
             store.scheduleSave()
         }
     }
@@ -139,12 +141,14 @@ enum ProjectDetailAssetActions {
     }
 
     static func updateCurrentVersionFlags(for drawing: ProjectDrawing, store: DataStore) {
-        for index in store.projectDrawings.indices {
-            if store.projectDrawings[index].projectId == drawing.projectId,
-               store.projectDrawings[index].name == drawing.name,
-               store.projectDrawings[index].id != drawing.id {
-                store.projectDrawings[index].isCurrentVersion = false
+        var drawings = store.projectDrawings
+        for index in drawings.indices {
+            if drawings[index].projectId == drawing.projectId,
+               drawings[index].name == drawing.name,
+               drawings[index].id != drawing.id {
+                drawings[index].isCurrentVersion = false
             }
         }
+        store.replaceProjectDrawings(drawings)
     }
 }

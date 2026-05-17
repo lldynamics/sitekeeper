@@ -209,7 +209,7 @@ struct QuotationView: View {
                     Divider()
                     ForEach(store.materialItems) { m in
                         Button {
-                            store.quoteItems.append(QuoteItem(
+                            store.appendQuoteItem(QuoteItem(
                                 name: m.name, unitPrice: "", quantity: m.quantity, unit: m.unit,
                                 notes: "", taxRate: "0", discountRate: "0", projectId: m.projectId
                             ))
@@ -557,10 +557,9 @@ struct QuotationView: View {
             contractAmount: NumericInputSupport.normalizedStorageText(formContractAmount, kind: .amount),
             projectId: formProjectId
         )
-        if let eid = editingId, let idx = store.quoteItems.firstIndex(where: { $0.id == eid }) {
-            store.quoteItems[idx] = newItem
+        if editingId != nil, store.updateQuoteItem(newItem) {
         } else {
-            store.quoteItems.append(newItem)
+            store.appendQuoteItem(newItem)
         }
         store.scheduleSave()
         operationNotice = .info(editingId == nil ? String(localized: "已新增报价") : String(localized: "已更新报价"))
@@ -586,7 +585,7 @@ struct QuotationView: View {
         let materials = store.materialItems.filter { $0.projectId == generateProjectId }
         let labor = store.laborRecords.filter { $0.projectId == generateProjectId }
         for material in materials {
-            store.quoteItems.append(QuoteItem(
+            store.appendQuoteItem(QuoteItem(
                 name: material.name,
                 unitPrice: NumericInputSupport.normalizedStorageText(defaultMaterialPrice, kind: .amount),
                 quantity: material.quantity,
@@ -606,7 +605,7 @@ struct QuotationView: View {
             let laborPrice = defaultLaborRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? record.unitRate
             : NumericInputSupport.normalizedStorageText(defaultLaborRate, kind: .laborRate)
-            store.quoteItems.append(QuoteItem(
+            store.appendQuoteItem(QuoteItem(
                 name: String(format: String(localized: "人工费 %@"), record.date),
                 unitPrice: laborPrice,
                 quantity: quantity > 0 ? trim(quantity) : record.hours,
@@ -799,7 +798,9 @@ struct QuotationView: View {
 
     private func applyGrandTotalToProjectContract() {
         guard let pid = projectFilter, let projectIndex = store.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[projectIndex].contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
+        var project = store.projects[projectIndex]
+        project.contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
+        guard store.updateProject(project) else { return }
         store.scheduleSave()
         operationNotice = .info(String(localized: "已同步到项目合同金额"))
     }
@@ -827,10 +828,7 @@ struct QuotationView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.quoteItems = deletion.restoredItems(
-                    current: store.quoteItems,
-                    id: \.id
-                )
+                store.restoreQuoteItems(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)

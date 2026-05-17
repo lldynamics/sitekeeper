@@ -1,12 +1,27 @@
 import Foundation
 
 final class WidgetDataStore {
-    static let suiteName = "group.com.chengjinfang.sitekeeper"
-    static let widgetDataKey = "widget_data"
-    static let widgetUpdatedAtKey = "widget_data_updated_at"
+    static let suiteName = WidgetSharedDefaults.suiteName
+    static let widgetDataKey = WidgetSharedDefaults.dataKey
+    static let widgetUpdatedAtKey = WidgetSharedDefaults.updatedAtKey
 
     static var shared: WidgetExportData {
         decodeWidgetData(from: UserDefaults(suiteName: suiteName))
+    }
+
+    static var languageCode: String {
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return "zh-Hans"
+        }
+        if let code = defaults.string(forKey: WidgetSharedDefaults.languageCodeKey),
+           !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return code
+        }
+        if let code = defaults.stringArray(forKey: WidgetSharedDefaults.appleLanguagesKey)?.first,
+           !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return code
+        }
+        return "zh-Hans"
     }
 
     static func healthSnapshot() -> WidgetDataHealthSnapshot {

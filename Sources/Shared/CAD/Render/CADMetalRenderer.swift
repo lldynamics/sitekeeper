@@ -19,6 +19,7 @@ extension CADPoC {
 
         private let commandQueue: MTLCommandQueue?
         private let renderPipelineState: MTLRenderPipelineState?
+        private let textRenderPipelineState: MTLRenderPipelineState?
         private var allRenderableEntities: [Kernel.CADEntity]
         private var entities: [Kernel.CADEntity]
         private var layersByID: [String: Kernel.CADLayer]
@@ -52,9 +53,11 @@ extension CADPoC {
         private var didApplyInitialViewState = false
         private var debugTextOverlays = false
         #if os(iOS)
-        private var textOverlayImages: [String: UIImageView] = [:]
         private var textOverlayMarkers: [String: UIView] = [:]
         private var textRasterCache = CADTextRasterCache()
+        private var textAtlasTextureCache = CADTextAtlasTextureCache()
+        private var currentTextAtlasTextCount = 0
+        private var currentTextAtlasSkippedTextCount = 0
         #endif
 
         private struct ProgressiveRenderKey: Equatable {
@@ -95,11 +98,15 @@ extension CADPoC {
                 device: device,
                 colorPixelFormat: .bgra8Unorm
             )
+            self.textRenderPipelineState = Self.makeTextRenderPipelineState(
+                device: device,
+                colorPixelFormat: .bgra8Unorm
+            )
             super.init()
         }
 
         var isAvailable: Bool {
-            device != nil && commandQueue != nil && renderPipelineState != nil
+            device != nil && commandQueue != nil && renderPipelineState != nil && textRenderPipelineState != nil
         }
 
         func resetView() {
@@ -149,6 +156,9 @@ extension CADPoC {
             clearSearchHighlight()
             #if os(iOS)
             textRasterCache.removeAll()
+            textAtlasTextureCache.removeAll()
+            currentTextAtlasTextCount = 0
+            currentTextAtlasSkippedTextCount = 0
             #endif
             if resetViewState {
                 resetView()
@@ -304,6 +314,9 @@ extension CADPoC {
             #if os(iOS)
             if !options.rendersTextOverlays {
                 textRasterCache.removeAll()
+                textAtlasTextureCache.removeAll()
+                currentTextAtlasTextCount = 0
+                currentTextAtlasSkippedTextCount = 0
             }
             #endif
         }
@@ -416,18 +429,30 @@ extension CADPoC {
             pipelineOutput.performance.renderCommandCount = pipelineOutput.commands.count
             pipelineOutput.performance.drawCallCount = pipelineOutput.commands.reduce(0) { $0 + $1.drawCallCost }
             let textCommandCount = featureOptions.rendersTextOverlays ? pipelineOutput.commands.cadTextCommandCount : 0
-            if featureOptions.publishesSnapPoints {
-                publishSnapPoints(from: visibleEntities)
-            } else {
-                clearPublishedSnapPoints()
-            }
-            syncTextOverlays(
+            #if os(iOS)
+            self.syncDebugTextMarkers(
                 commands: featureOptions.rendersTextOverlays ? pipelineOutput.commands : [],
                 view: view,
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
+            let textAtlasPlan = self.makeTextAtlasRenderPlan(
+                commands: featureOptions.rendersTextOverlays ? pipelineOutput.commands : [],
+                drawableSize: view.drawableSize,
+                viewSize: view.bounds.size,
+                contentScale: view.contentScaleFactor
+            )
+            currentTextAtlasTextCount = textAtlasPlan?.textCount ?? 0
+            currentTextAtlasSkippedTextCount = textAtlasPlan?.skippedTextCount ?? textCommandCount
+            #else
+            let textAtlasPlan: CADTextAtlasRenderPlan? = nil
+            #endif
+            if featureOptions.publishesSnapPoints {
+                publishSnapPoints(from: visibleEntities)
+            } else {
+                clearPublishedSnapPoints()
+            }
             var vertices = makeVertices(
                 commands: pipelineOutput.commands,
                 drawableSize: view.drawableSize,
@@ -445,9 +470,10 @@ extension CADPoC {
                 didProduceCommands: !pipelineOutput.commands.isEmpty,
                 textCommandCount: textCommandCount,
                 textOverlayCount: currentTextOverlayCount,
+                textOverlaySkippedCount: currentTextOverlaySkippedCount,
                 viewportBounds: viewportBounds,
                 viewportEntityCountBeforeLayerFilter: viewportEntitiesBeforeLayerFilter.count,
-                vertexCount: vertices.count
+                vertexCount: vertices.count + (textAtlasPlan?.vertices.count ?? 0)
             )
             publishCanvasState(
                 view: view,
@@ -477,6 +503,14 @@ extension CADPoC {
                 encoder.setVertexBuffer(vertexBuffer, offset: 0, index: 0)
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: vertices.count)
             }
+            if let textAtlasPlan,
+               let textRenderPipelineState,
+               let textVertexBuffer = makeTextVertexBuffer(textAtlasPlan.vertices) {
+                encoder.setRenderPipelineState(textRenderPipelineState)
+                encoder.setVertexBuffer(textVertexBuffer, offset: 0, index: 0)
+                encoder.setFragmentTexture(textAtlasPlan.texture, index: 0)
+                encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: textAtlasPlan.vertices.count)
+            }
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
@@ -505,15 +539,7 @@ extension CADPoC {
         private func entitiesAfterApplyingFeatureOptions(
             _ visibleEntities: [Kernel.CADEntity]
         ) -> [Kernel.CADEntity] {
-            guard !featureOptions.rendersTextOverlays else { return visibleEntities }
-            return visibleEntities.filter { entity in
-                switch entity.kind {
-                case .text, .mtext, .attrib:
-                    return false
-                default:
-                    return true
-                }
-            }
+            visibleEntities.filter { featureOptions.allows($0) }
         }
 
         private func renderOutputForFrame(
@@ -648,6 +674,7 @@ extension CADPoC {
             didProduceCommands: Bool,
             textCommandCount: Int,
             textOverlayCount: Int,
+            textOverlaySkippedCount: Int,
             viewportBounds: Kernel.CADBounds,
             viewportEntityCountBeforeLayerFilter: Int,
             vertexCount: Int
@@ -681,6 +708,7 @@ extension CADPoC {
                     renderCommandCount: trace.renderCommandCount,
                     textCommandCount: textCommandCount,
                     textOverlayCount: textOverlayCount,
+                    textOverlaySkippedCount: textOverlaySkippedCount,
                     renderMs: trace.renderMs,
                     firstFrameMs: trace.firstFrameMs,
                     totalEntityCount: entities.count,
@@ -1155,6 +1183,20 @@ private extension CADPoC.CADMetalRenderer {
         var color: SIMD4<Float>
     }
 
+    struct CADTexturedVertex {
+        var position: SIMD2<Float>
+        var textureCoordinate: SIMD2<Float>
+    }
+
+    struct CADTextAtlasRenderPlan {
+        var texture: MTLTexture
+        var vertices: [CADTexturedVertex]
+        var textCount: Int
+        var skippedTextCount: Int
+        var uniqueTextureCount: Int
+        var atlasSize: CGSize
+    }
+
     static func makeRenderPipelineState(
         device: MTLDevice?,
         colorPixelFormat: MTLPixelFormat
@@ -1174,6 +1216,32 @@ private extension CADPoC.CADMetalRenderer {
         }
     }
 
+    static func makeTextRenderPipelineState(
+        device: MTLDevice?,
+        colorPixelFormat: MTLPixelFormat
+    ) -> MTLRenderPipelineState? {
+        guard let device else { return nil }
+        do {
+            let library = try device.makeLibrary(source: shaderSource, options: nil)
+            let descriptor = MTLRenderPipelineDescriptor()
+            descriptor.label = "CAD Metal PoC Text Atlas Pipeline"
+            descriptor.vertexFunction = library.makeFunction(name: "cad_text_vertex_main")
+            descriptor.fragmentFunction = library.makeFunction(name: "cad_text_fragment_main")
+            descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
+            descriptor.colorAttachments[0].isBlendingEnabled = true
+            descriptor.colorAttachments[0].rgbBlendOperation = .add
+            descriptor.colorAttachments[0].alphaBlendOperation = .add
+            descriptor.colorAttachments[0].sourceRGBBlendFactor = .one
+            descriptor.colorAttachments[0].sourceAlphaBlendFactor = .one
+            descriptor.colorAttachments[0].destinationRGBBlendFactor = .oneMinusSourceAlpha
+            descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
+            return try device.makeRenderPipelineState(descriptor: descriptor)
+        } catch {
+            assertionFailure("CAD Metal text atlas pipeline failed: \(error)")
+            return nil
+        }
+    }
+
     static var shaderSource: String {
         """
         #include <metal_stdlib>
@@ -1189,6 +1257,16 @@ private extension CADPoC.CADMetalRenderer {
             float4 color;
         };
 
+        struct CADTexturedVertex {
+            float2 position;
+            float2 textureCoordinate;
+        };
+
+        struct CADTexturedVertexOut {
+            float4 position [[position]];
+            float2 textureCoordinate;
+        };
+
         vertex CADVertexOut cad_vertex_main(
             uint vertexID [[vertex_id]],
             const device CADMetalVertex *vertices [[buffer(0)]]
@@ -1202,10 +1280,44 @@ private extension CADPoC.CADMetalRenderer {
         fragment half4 cad_fragment_main(CADVertexOut in [[stage_in]]) {
             return half4(in.color);
         }
+
+        vertex CADTexturedVertexOut cad_text_vertex_main(
+            uint vertexID [[vertex_id]],
+            const device CADTexturedVertex *vertices [[buffer(0)]]
+        ) {
+            CADTexturedVertexOut out;
+            out.position = float4(vertices[vertexID].position, 0.0, 1.0);
+            out.textureCoordinate = vertices[vertexID].textureCoordinate;
+            return out;
+        }
+
+        fragment half4 cad_text_fragment_main(
+            CADTexturedVertexOut in [[stage_in]],
+            texture2d<half> textAtlas [[texture(0)]]
+        ) {
+            constexpr sampler textSampler(
+                mag_filter::linear,
+                min_filter::linear,
+                address::clamp_to_edge
+            );
+            return textAtlas.sample(textSampler, in.textureCoordinate);
+        }
         """
     }
 
     func makeVertexBuffer(_ vertices: [CADMetalVertex]) -> MTLBuffer? {
+        guard !vertices.isEmpty else { return nil }
+        return vertices.withUnsafeBytes { rawBuffer in
+            guard let baseAddress = rawBuffer.baseAddress else { return nil as MTLBuffer? }
+            return device?.makeBuffer(
+                bytes: baseAddress,
+                length: rawBuffer.count,
+                options: [.storageModeShared]
+            )
+        }
+    }
+
+    func makeTextVertexBuffer(_ vertices: [CADTexturedVertex]) -> MTLBuffer? {
         guard !vertices.isEmpty else { return nil }
         return vertices.withUnsafeBytes { rawBuffer in
             guard let baseAddress = rawBuffer.baseAddress else { return nil as MTLBuffer? }
@@ -1238,7 +1350,15 @@ private extension CADPoC.CADMetalRenderer {
 
     var currentTextOverlayCount: Int {
         #if os(iOS)
-        textOverlayImages.values.filter { !$0.isHidden && $0.image != nil }.count
+        currentTextAtlasTextCount
+        #else
+        0
+        #endif
+    }
+
+    var currentTextOverlaySkippedCount: Int {
+        #if os(iOS)
+        currentTextAtlasSkippedTextCount
         #else
         0
         #endif
@@ -1644,11 +1764,11 @@ private extension CADPoC.CADMetalRenderer {
         let normalized = lineWidth.isFinite && lineWidth > 0 ? lineWidth : 0.25
         let points: Double
         if normalized >= 2 {
-            points = min(normalized, 12)
+            points = min(max(1.0 + log2(normalized) * 0.22, 1.05), 3.0)
         } else {
-            points = min(max(1 + normalized * 2.5, 1), 7)
+            points = min(max(0.85 + normalized * 1.2, 0.9), 2.2)
         }
-        return max(points * scale, 1.5)
+        return max(points * scale, 1.0)
     }
 
     func lineTypePattern(for lineType: String, screenLineWidth: Double) -> [Double] {
@@ -1853,96 +1973,558 @@ private extension CADPoC.CADMetalRenderer {
         )
     }
 
-    func syncTextOverlays(
+    private struct CADTextAtlasItem {
+        var text: Kernel.CADTextRun
+        var widthPoints: CGFloat
+        var heightPoints: CGFloat
+        var alignmentOffset: CGPoint
+        var glyphs: [CADTextAtlasGlyph]
+    }
+
+    private struct CADTextAtlasGlyph {
+        var cacheKey: CADTextRasterCache.Key
+        var image: UIImage
+        var offsetX: CGFloat
+        var offsetY: CGFloat
+        var widthPoints: CGFloat
+        var heightPoints: CGFloat
+        var advancePoints: CGFloat
+    }
+
+    struct CADPackedTextGlyph {
+        var image: UIImage
+        var rect: CGRect
+    }
+
+    private struct CADTextAtlasCommand {
+        var text: Kernel.CADTextRun
+        var style: Kernel.CADRenderStyle
+        var priority: Double
+        var ordinal: Int
+    }
+
+    private struct CADTextAtlasLayout {
+        var items: [CADTextAtlasItem]
+        var skippedTextCount: Int
+    }
+
+    func makeTextAtlasRenderPlan(
+        commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> CADTextAtlasRenderPlan? {
+        guard featureOptions.rendersTextOverlays,
+              let device,
+              drawableSize.width > 1,
+              drawableSize.height > 1,
+              viewSize.width > 1,
+              viewSize.height > 1 else {
+            return nil
+        }
+
+        let textLayout = textAtlasItems(
+            from: commands,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        )
+        let textItems = textLayout.items
+        guard !textItems.isEmpty else { return nil }
+
+        let cacheKey = CADTextAtlasTextureCache.Key(
+            glyphKeys: textItems.flatMap(\.glyphs).map(\.cacheKey).uniquedAndSortedByStableKey()
+        )
+        let atlas: CADTextAtlasTextureCache.Entry
+        if let cached = textAtlasTextureCache.entry(for: cacheKey) {
+            atlas = cached
+        } else {
+            guard let packedAtlas = makeTextAtlasTexture(
+                from: textItems,
+                device: device
+            ) else {
+                return nil
+            }
+            atlas = packedAtlas
+            textAtlasTextureCache.insert(packedAtlas, for: cacheKey, limit: 16)
+        }
+
+        let vertices = makeTextAtlasVertices(
+            from: textItems,
+            packedGlyphs: atlas.packedGlyphs,
+            atlasSize: atlas.size,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        )
+        guard !vertices.isEmpty else { return nil }
+
+        return CADTextAtlasRenderPlan(
+            texture: atlas.texture,
+            vertices: vertices,
+            textCount: textItems.count,
+            skippedTextCount: textLayout.skippedTextCount,
+            uniqueTextureCount: atlas.uniqueTextureCount,
+            atlasSize: CGSize(width: atlas.size.width, height: atlas.size.height)
+        )
+    }
+
+    private func textAtlasItems(
+        from commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> CADTextAtlasLayout {
+        let modelScale = modelToScreenScale(drawableSize: drawableSize, viewSize: viewSize)
+        let viewScale = Self.drawableToViewScale(
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallback: contentScale
+        )
+        let textCandidates = prioritizedTextAtlasCommands(from: commands, modelScale: modelScale)
+        var items: [CADTextAtlasItem] = []
+        items.reserveCapacity(min(textCandidates.count, maximumTextAtlasCommandCount))
+
+        for candidate in textCandidates {
+            guard items.count < maximumTextAtlasCommandCount else {
+                continue
+            }
+            let text = candidate.text
+            let style = candidate.style
+            let fontSize = Self.textOverlayFontSize(
+                textHeight: text.height,
+                modelScale: modelScale,
+                contentScale: viewScale.y
+            )
+            let displayText = text.displayText.isEmpty ? " " : text.displayText
+            let font = uiFont(named: text.selectedFontName, supporting: displayText, size: CGFloat(fontSize))
+            let textColor = readableTextColor(fromARGB: style.colorARGB)
+            let widthFactor = CGFloat(max(text.widthFactor ?? 1, 0.1))
+            let glyphs = makeTextAtlasGlyphs(
+                displayText: displayText,
+                font: font,
+                textColor: textColor,
+                widthFactor: widthFactor,
+                contentScale: contentScale
+            )
+            guard !glyphs.isEmpty else { continue }
+            let glyphBounds = glyphs.reduce(CGRect.null) { partial, glyph in
+                partial.union(CGRect(
+                    x: glyph.offsetX,
+                    y: glyph.offsetY,
+                    width: glyph.advancePoints,
+                    height: glyph.heightPoints
+                ))
+            }
+            let widthPoints = ceil(max(glyphBounds.width, 1))
+            let heightPoints = ceil(max(glyphBounds.height, 1))
+            guard widthPoints.isFinite,
+                  heightPoints.isFinite,
+                  widthPoints > 0,
+                  heightPoints > 0 else {
+                continue
+            }
+            let alignmentOffset = textOverlayAlignmentOffset(
+                text: text,
+                width: Double(widthPoints),
+                height: Double(heightPoints),
+                modelScale: modelScale,
+                viewScale: viewScale
+            )
+            items.append(CADTextAtlasItem(
+                text: text,
+                widthPoints: widthPoints,
+                heightPoints: heightPoints,
+                alignmentOffset: alignmentOffset,
+                glyphs: glyphs
+            ))
+        }
+
+        return CADTextAtlasLayout(
+            items: items,
+            skippedTextCount: max(textCandidates.count - items.count, 0)
+        )
+    }
+
+    private func prioritizedTextAtlasCommands(
+        from commands: [Kernel.CADRenderCommand],
+        modelScale: Double
+    ) -> [CADTextAtlasCommand] {
+        commands.enumerated()
+            .compactMap { offset, command -> CADTextAtlasCommand? in
+                guard case let .text(text, style) = command else { return nil }
+                return CADTextAtlasCommand(
+                    text: text,
+                    style: style,
+                    priority: textAtlasPriority(text: text, modelScale: modelScale),
+                    ordinal: offset
+                )
+            }
+            .sorted {
+                if abs($0.priority - $1.priority) > 0.0001 {
+                    return $0.priority > $1.priority
+                }
+                return $0.ordinal < $1.ordinal
+            }
+    }
+
+    private func textAtlasPriority(text: Kernel.CADTextRun, modelScale: Double) -> Double {
+        let displayText = text.displayText.isEmpty ? " " : text.displayText
+        let screenHeight = max(text.height * modelScale, 0)
+        let lengthWeight = min(Double(displayText.count), 32) * 0.02
+        let cjkWeight = displayText.cadContainsCJKScalars ? 1.15 : 1
+        return (screenHeight + lengthWeight) * cjkWeight
+    }
+
+    private func makeTextAtlasGlyphs(
+        displayText: String,
+        font: UIFont,
+        textColor: UIColor,
+        widthFactor: CGFloat,
+        contentScale: CGFloat
+    ) -> [CADTextAtlasGlyph] {
+        var glyphs: [CADTextAtlasGlyph] = []
+        glyphs.reserveCapacity(displayText.count)
+
+        var cursorX: CGFloat = 0
+        var cursorY: CGFloat = 0
+        var lineHeight = max(font.lineHeight + 4, 1)
+        let colorKey = readableTextColorKey(textColor)
+        let scaleBucket = Int((max(contentScale, 1) * 10).rounded())
+
+        for character in displayText {
+            if character.isNewline {
+                cursorX = 0
+                cursorY += lineHeight
+                continue
+            }
+
+            let glyphText = String(character)
+            let glyphFont = Self.rasterFont(for: glyphText, preferredFont: font)
+            let pointSizeBucket = Int((glyphFont.pointSize * 2).rounded())
+            let cacheKey = CADTextRasterCache.Key(
+                displayText: glyphText,
+                fontName: glyphFont.fontName,
+                pointSizeBucket: pointSizeBucket,
+                colorARGB: colorKey,
+                scaleBucket: scaleBucket
+            )
+            guard let image = textRasterCache.image(for: cacheKey, limit: 2_048, makeImage: {
+                Self.makeTextOverlayRasterImage(
+                    displayText: glyphText,
+                    font: glyphFont,
+                    textColor: textColor,
+                    scale: contentScale
+                )
+            }) else {
+                continue
+            }
+
+            let imageWidth = ceil(max(image.size.width, glyphFont.pointSize * 0.35, 1))
+            let imageHeight = ceil(max(image.size.height, lineHeight, 1))
+            lineHeight = max(lineHeight, imageHeight)
+            let measuredAdvance = Self.textAdvancePoints(for: glyphText, font: glyphFont)
+            let glyphAdvance = ceil(max(measuredAdvance, glyphFont.pointSize * 0.25, 1)) * widthFactor
+            let glyphWidth = imageWidth * widthFactor
+            glyphs.append(CADTextAtlasGlyph(
+                cacheKey: cacheKey,
+                image: image,
+                offsetX: cursorX,
+                offsetY: cursorY,
+                widthPoints: glyphWidth,
+                heightPoints: imageHeight,
+                advancePoints: glyphAdvance
+            ))
+            cursorX += glyphAdvance
+        }
+
+        return glyphs
+    }
+
+    private func makeTextAtlasTexture(
+        from items: [CADTextAtlasItem],
+        device: MTLDevice
+    ) -> CADTextAtlasTextureCache.Entry? {
+        let uniqueImages = items.flatMap(\.glyphs).reduce(into: [CADTextRasterCache.Key: UIImage]()) { partial, glyph in
+            if partial[glyph.cacheKey] == nil {
+                partial[glyph.cacheKey] = glyph.image
+            }
+        }
+        guard !uniqueImages.isEmpty else { return nil }
+
+        let padding = 2
+        let maxAtlasSize = 4096
+        let maxImageWidth = uniqueImages.values.compactMap(\.cgImage?.width).max() ?? 1
+        let atlasWidth = min(max(maxImageWidth + padding * 2, 1024), maxAtlasSize)
+        var cursorX = padding
+        var cursorY = padding
+        var rowHeight = 0
+        var packed: [CADTextRasterCache.Key: CADPackedTextGlyph] = [:]
+
+        for (key, image) in uniqueImages.sorted(by: { $0.key.stableSortKey < $1.key.stableSortKey }) {
+            guard let cgImage = image.cgImage else { continue }
+            let width = min(cgImage.width, maxAtlasSize - padding * 2)
+            let height = min(cgImage.height, maxAtlasSize - padding * 2)
+            guard width > 0, height > 0 else { continue }
+
+            if cursorX + width + padding > atlasWidth {
+                cursorX = padding
+                cursorY += rowHeight + padding
+                rowHeight = 0
+            }
+            guard cursorY + height + padding <= maxAtlasSize else { continue }
+
+            packed[key] = CADPackedTextGlyph(
+                image: image,
+                rect: CGRect(x: cursorX, y: cursorY, width: width, height: height)
+            )
+            cursorX += width + padding
+            rowHeight = max(rowHeight, height)
+        }
+
+        let atlasHeight = max(cursorY + rowHeight + padding, 1)
+        guard atlasHeight <= maxAtlasSize, !packed.isEmpty else { return nil }
+
+        var pixels = [UInt8](repeating: 0, count: atlasWidth * atlasHeight * 4)
+        for glyph in packed.values {
+            guard let glyphPixels = Self.rgbaPixels(from: glyph.image),
+                  let cgImage = glyph.image.cgImage else {
+                continue
+            }
+            let sourceWidth = min(cgImage.width, Int(glyph.rect.width))
+            let sourceHeight = min(cgImage.height, Int(glyph.rect.height))
+            let destinationX = Int(glyph.rect.minX)
+            let destinationY = Int(glyph.rect.minY)
+            for row in 0..<sourceHeight {
+                let sourceOffset = row * cgImage.width * 4
+                let destinationOffset = ((destinationY + row) * atlasWidth + destinationX) * 4
+                let byteCount = sourceWidth * 4
+                pixels.replaceSubrange(
+                    destinationOffset..<(destinationOffset + byteCount),
+                    with: glyphPixels[sourceOffset..<(sourceOffset + byteCount)]
+                )
+            }
+        }
+
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .rgba8Unorm,
+            width: atlasWidth,
+            height: atlasHeight,
+            mipmapped: false
+        )
+        descriptor.usage = [.shaderRead]
+        guard let texture = device.makeTexture(descriptor: descriptor) else { return nil }
+        texture.replace(
+            region: MTLRegionMake2D(0, 0, atlasWidth, atlasHeight),
+            mipmapLevel: 0,
+            withBytes: pixels,
+            bytesPerRow: atlasWidth * 4
+        )
+
+        return CADTextAtlasTextureCache.Entry(
+            texture: texture,
+            packedGlyphs: packed,
+            size: (atlasWidth, atlasHeight),
+            uniqueTextureCount: packed.count
+        )
+    }
+
+    private func makeTextAtlasVertices(
+        from items: [CADTextAtlasItem],
+        packedGlyphs: [CADTextRasterCache.Key: CADPackedTextGlyph],
+        atlasSize: (width: Int, height: Int),
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> [CADTexturedVertex] {
+        let viewScale = Self.drawableToViewScale(
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallback: contentScale
+        )
+        var vertices: [CADTexturedVertex] = []
+        vertices.reserveCapacity(items.count * 6)
+
+        for item in items {
+            let screen = screenPoint(
+                for: item.text.insertionPoint,
+                drawableSize: drawableSize,
+                viewSize: viewSize
+            )
+            guard screen.x.isFinite, screen.y.isFinite else { continue }
+
+            let insertionViewPoint = Self.viewPoint(
+                fromDrawablePoint: screen,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                fallbackScale: contentScale
+            )
+            let center = Self.textOverlayCenter(
+                insertionScreen: insertionViewPoint,
+                width: item.widthPoints,
+                height: item.heightPoints,
+                alignmentOffset: item.alignmentOffset,
+                rotationRadians: item.text.rotationRadians
+            )
+            let screenAngle = -item.text.rotationRadians
+            let cosine = cos(screenAngle)
+            let sine = sin(screenAngle)
+            for glyphItem in item.glyphs {
+                guard let glyph = packedGlyphs[glyphItem.cacheKey] else { continue }
+                let localCenterX = Double(glyphItem.offsetX + glyphItem.widthPoints / 2 - item.widthPoints / 2)
+                let localCenterY = Double(glyphItem.offsetY + glyphItem.heightPoints / 2 - item.heightPoints / 2)
+                let rotatedCenter = CGPoint(
+                    x: center.x + CGFloat(localCenterX * cosine - localCenterY * sine),
+                    y: center.y + CGFloat(localCenterX * sine + localCenterY * cosine)
+                )
+                vertices.append(contentsOf: makeTextAtlasQuadVertices(
+                    centerViewPoint: rotatedCenter,
+                    widthPoints: glyphItem.widthPoints,
+                    heightPoints: glyphItem.heightPoints,
+                    rotationRadians: item.text.rotationRadians,
+                    glyphRect: glyph.rect,
+                    atlasSize: atlasSize,
+                    drawableSize: drawableSize,
+                    viewScale: viewScale
+                ))
+            }
+        }
+
+        return vertices
+    }
+
+    private func makeTextAtlasQuadVertices(
+        centerViewPoint: CGPoint,
+        widthPoints: CGFloat,
+        heightPoints: CGFloat,
+        rotationRadians: Double,
+        glyphRect: CGRect,
+        atlasSize: (width: Int, height: Int),
+        drawableSize: CGSize,
+        viewScale: CGPoint
+    ) -> [CADTexturedVertex] {
+        let halfWidth = Double(widthPoints) / 2
+        let halfHeight = Double(heightPoints) / 2
+        let screenAngle = -rotationRadians
+        let cosine = cos(screenAngle)
+        let sine = sin(screenAngle)
+
+        func drawablePoint(localX: Double, localY: Double) -> SIMD2<Double> {
+            let rotatedX = localX * cosine - localY * sine
+            let rotatedY = localX * sine + localY * cosine
+            return SIMD2<Double>(
+                (Double(centerViewPoint.x) + rotatedX) * Double(viewScale.x),
+                (Double(centerViewPoint.y) + rotatedY) * Double(viewScale.y)
+            )
+        }
+
+        let topLeft = drawablePoint(localX: -halfWidth, localY: -halfHeight)
+        let bottomLeft = drawablePoint(localX: -halfWidth, localY: halfHeight)
+        let topRight = drawablePoint(localX: halfWidth, localY: -halfHeight)
+        let bottomRight = drawablePoint(localX: halfWidth, localY: halfHeight)
+
+        let u0 = Float(glyphRect.minX / CGFloat(max(atlasSize.width, 1)))
+        let v0 = Float(glyphRect.minY / CGFloat(max(atlasSize.height, 1)))
+        let u1 = Float(glyphRect.maxX / CGFloat(max(atlasSize.width, 1)))
+        let v1 = Float(glyphRect.maxY / CGFloat(max(atlasSize.height, 1)))
+
+        func vertex(_ point: SIMD2<Double>, _ uv: SIMD2<Float>) -> CADTexturedVertex {
+            CADTexturedVertex(
+                position: ndcPoint(fromScreen: point, drawableSize: drawableSize),
+                textureCoordinate: uv
+            )
+        }
+
+        return [
+            vertex(topLeft, SIMD2<Float>(u0, v0)),
+            vertex(bottomLeft, SIMD2<Float>(u0, v1)),
+            vertex(topRight, SIMD2<Float>(u1, v0)),
+            vertex(topRight, SIMD2<Float>(u1, v0)),
+            vertex(bottomLeft, SIMD2<Float>(u0, v1)),
+            vertex(bottomRight, SIMD2<Float>(u1, v1))
+        ]
+    }
+
+    private static func rgbaPixels(from image: UIImage) -> [UInt8]? {
+        guard let cgImage = image.cgImage else { return nil }
+        let width = cgImage.width
+        let height = cgImage.height
+        guard width > 0, height > 0 else { return nil }
+        var pixels = [UInt8](repeating: 0, count: width * height * 4)
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
+            | CGBitmapInfo.byteOrder32Big.rawValue
+        let ok = pixels.withUnsafeMutableBytes { rawPixels -> Bool in
+            guard let context = CGContext(
+                data: rawPixels.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: width * 4,
+                space: colorSpace,
+                bitmapInfo: bitmapInfo
+            ) else {
+                return false
+            }
+            context.clear(CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
+            return true
+        }
+        return ok ? pixels : nil
+    }
+
+    private var maximumTextAtlasCommandCount: Int { 4_096 }
+
+    private func syncDebugTextMarkers(
         commands: [Kernel.CADRenderCommand],
         view: MTKView,
         drawableSize: CGSize,
         viewSize: CGSize,
         contentScale: CGFloat
     ) {
-        #if os(iOS)
-        guard Thread.isMainThread else {
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let view else { return }
-                self.syncTextOverlays(
-                    commands: commands,
-                    view: view,
-                    drawableSize: drawableSize,
-                    viewSize: viewSize,
-                    contentScale: contentScale
-                )
-            }
-            return
-        }
-
-        var activeKeys = Set<String>()
-        let textCommands = commands.enumerated().compactMap { offset, command -> (String, Kernel.CADTextRun, Kernel.CADRenderStyle)? in
-            guard case let .text(text, style) = command else { return nil }
-            return ("text-\(offset)", text, style)
-        }
-
-        for (key, text, style) in textCommands {
-            activeKeys.insert(key)
-            let imageView = textOverlayImages[key] ?? makeTextOverlayImageView(in: view)
-            textOverlayImages[key] = imageView
-            configureTextOverlay(
-                imageView,
-                text: text,
-                style: style,
-                drawableSize: drawableSize,
-                viewSize: viewSize,
-                contentScale: contentScale
-            )
-            view.bringSubviewToFront(imageView)
-
-            if debugTextOverlays {
-                let marker = textOverlayMarkers[key] ?? makeTextInsertionMarker(in: view)
-                textOverlayMarkers[key] = marker
-                configureTextInsertionMarker(
-                    marker,
-                    text: text,
-                    drawableSize: drawableSize,
-                    viewSize: viewSize,
-                    contentScale: contentScale
-                )
-                view.bringSubviewToFront(marker)
-            } else if let marker = textOverlayMarkers[key] {
-                marker.removeFromSuperview()
-                textOverlayMarkers.removeValue(forKey: key)
-            }
-        }
-
-        let staleKeys = textOverlayImages.keys.filter { !activeKeys.contains($0) }
-        for key in staleKeys {
-            guard let imageView = textOverlayImages[key] else { continue }
-            imageView.removeFromSuperview()
-            textOverlayImages.removeValue(forKey: key)
-            if let marker = textOverlayMarkers[key] {
-                marker.removeFromSuperview()
-                textOverlayMarkers.removeValue(forKey: key)
-            }
-        }
-
-        if !debugTextOverlays {
+        guard debugTextOverlays else {
             for marker in textOverlayMarkers.values {
                 marker.removeFromSuperview()
             }
             textOverlayMarkers.removeAll()
+            return
         }
-        #endif
+
+        var activeKeys = Set<String>()
+        let textCommands = commands.enumerated().compactMap { offset, command -> (String, Kernel.CADTextRun)? in
+            guard case let .text(text, _) = command else { return nil }
+            return ("text-\(offset)", text)
+        }
+        for (key, text) in textCommands {
+            activeKeys.insert(key)
+            let marker = textInsertionMarker(for: key, in: view)
+            textOverlayMarkers[key] = marker
+            configureTextInsertionMarker(
+                marker,
+                text: text,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                contentScale: contentScale
+            )
+            view.bringSubviewToFront(marker)
+        }
+
+        let staleKeys = textOverlayMarkers.keys.filter { !activeKeys.contains($0) }
+        for key in staleKeys {
+            textOverlayMarkers[key]?.removeFromSuperview()
+            textOverlayMarkers.removeValue(forKey: key)
+        }
     }
 
-    #if os(iOS)
-    private func makeTextOverlayImageView(in view: MTKView) -> UIImageView {
-        let imageView = UIImageView()
-        imageView.backgroundColor = .clear
-        imageView.isUserInteractionEnabled = false
-        imageView.contentMode = .scaleToFill
-        imageView.alpha = 1
-        imageView.layer.zPosition = 1_000
-        imageView.layer.contentsScale = view.contentScaleFactor
-        view.addSubview(imageView)
-        return imageView
+    private func textInsertionMarker(for key: String, in view: MTKView) -> UIView {
+        if let marker = textOverlayMarkers[key] {
+            if marker.superview !== view {
+                marker.removeFromSuperview()
+                view.addSubview(marker)
+            }
+            return marker
+        }
+        return makeTextInsertionMarker(in: view)
     }
 
     private func makeTextInsertionMarker(in view: MTKView) -> UIView {
@@ -1965,90 +2547,6 @@ private extension CADPoC.CADMetalRenderer {
         return marker
     }
 
-    private func configureTextOverlay(
-        _ imageView: UIImageView,
-        text: Kernel.CADTextRun,
-        style: Kernel.CADRenderStyle,
-        drawableSize: CGSize,
-        viewSize: CGSize,
-        contentScale: CGFloat
-    ) {
-        let screen = screenPoint(
-            for: text.insertionPoint,
-            drawableSize: drawableSize,
-            viewSize: viewSize
-        )
-        let modelScale = modelToScreenScale(drawableSize: drawableSize, viewSize: viewSize)
-        let fontSize = Self.textOverlayFontSize(
-            textHeight: text.height,
-            modelScale: modelScale,
-            contentScale: contentScale
-        )
-        let displayText = text.displayText.isEmpty ? " " : text.displayText
-        let font = uiFont(named: text.selectedFontName, supporting: displayText, size: CGFloat(fontSize))
-        let textColor = readableTextColor(fromARGB: style.colorARGB)
-        let cacheKey = CADTextRasterCache.Key(
-            displayText: displayText,
-            fontName: font.fontName,
-            pointSizeBucket: Int((font.pointSize * 2).rounded()),
-            colorARGB: readableTextColorKey(textColor),
-            scaleBucket: Int((max(contentScale, 1) * 10).rounded())
-        )
-        guard let image = textRasterCache.image(for: cacheKey, limit: 640, makeImage: {
-            Self.makeTextOverlayRasterImage(
-                displayText: displayText,
-                font: font,
-                textColor: textColor,
-                scale: contentScale
-            )
-        }) else {
-            imageView.isHidden = true
-            return
-        }
-        let measuredSize = image.size
-        let widthFactor = CGFloat(max(text.widthFactor ?? 1, 0.1))
-        let width = ceil(measuredSize.width * widthFactor)
-        let height = ceil(measuredSize.height)
-
-        guard screen.x.isFinite, screen.y.isFinite, width.isFinite, height.isFinite else {
-            imageView.isHidden = true
-            return
-        }
-
-        let alignmentOffset = textOverlayAlignmentOffset(
-            text: text,
-            width: Double(width),
-            height: Double(height),
-            modelScale: modelScale,
-            contentScale: contentScale
-        )
-        imageView.image = image
-        imageView.alpha = 1
-        imageView.transform = .identity
-        let insertionScreen = CGPoint(
-            x: CGFloat(screen.x) / max(contentScale, 1),
-            y: CGFloat(screen.y) / max(contentScale, 1)
-        )
-        imageView.bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        imageView.center = Self.textOverlayCenter(
-            insertionScreen: insertionScreen,
-            width: width,
-            height: height,
-            alignmentOffset: alignmentOffset,
-            rotationRadians: text.rotationRadians
-        )
-        imageView.transform = CGAffineTransform(rotationAngle: CGFloat(-text.rotationRadians))
-        imageView.layer.zPosition = 1_000
-        imageView.layer.shadowColor = readableShadowColor(for: textColor).cgColor
-        imageView.layer.shadowOpacity = 0.75
-        imageView.layer.shadowRadius = 1.2
-        imageView.layer.shadowOffset = .zero
-        imageView.layer.borderColor = debugTextOverlays ? UIColor.systemRed.withAlphaComponent(0.85).cgColor : nil
-        imageView.layer.borderWidth = debugTextOverlays ? 1 : 0
-        imageView.layer.cornerRadius = debugTextOverlays ? 2 : 0
-        imageView.isHidden = false
-    }
-
     private func configureTextInsertionMarker(
         _ marker: UIView,
         text: Kernel.CADTextRun,
@@ -2068,9 +2566,11 @@ private extension CADPoC.CADMetalRenderer {
 
         let markerSize: CGFloat = 10
         marker.bounds = CGRect(x: 0, y: 0, width: markerSize, height: markerSize)
-        marker.center = CGPoint(
-            x: CGFloat(screen.x) / max(contentScale, 1),
-            y: CGFloat(screen.y) / max(contentScale, 1)
+        marker.center = Self.viewPoint(
+            fromDrawablePoint: screen,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallbackScale: contentScale
         )
         marker.layer.sublayers?.first { $0.name == "horizontal" }?.frame = CGRect(
             x: 0,
@@ -2092,16 +2592,17 @@ private extension CADPoC.CADMetalRenderer {
         width: Double,
         height: Double,
         modelScale: Double,
-        contentScale: CGFloat
+        viewScale: CGPoint
     ) -> CGPoint {
+        let xScale = modelScale / Double(max(viewScale.x, 0.000001))
+        let yScale = modelScale / Double(max(viewScale.y, 0.000001))
         let textWidth = text.boxWidth.flatMap { $0 > 0 ? $0 : nil }
-            ?? width / max(modelScale / Double(max(contentScale, 1)), 0.000001)
+            ?? width / max(xScale, 0.000001)
         let textHeight = text.boxHeight.flatMap { $0 > 0 ? $0 : nil }
-            ?? max(text.height, height / max(modelScale / Double(max(contentScale, 1)), 0.000001))
+            ?? max(text.height, height / max(yScale, 0.000001))
         let xWorldOffset = cadTextHorizontalOffset(width: textWidth, text: text)
         let yWorldOffset = cadTextVerticalOffset(height: textHeight, text: text)
-        let scale = modelScale / Double(max(contentScale, 1))
-        return CGPoint(x: xWorldOffset * scale, y: yWorldOffset * scale)
+        return CGPoint(x: xWorldOffset * xScale, y: yWorldOffset * yScale)
     }
 
     static func textOverlayFontSize(
@@ -2135,6 +2636,37 @@ private extension CADPoC.CADMetalRenderer {
         return CGPoint(
             x: insertionScreen.x + rotated.x,
             y: insertionScreen.y + rotated.y
+        )
+    }
+
+    static func viewPoint(
+        fromDrawablePoint point: SIMD2<Double>,
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        fallbackScale: CGFloat
+    ) -> CGPoint {
+        let scale = drawableToViewScale(
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallback: fallbackScale
+        )
+        return CGPoint(
+            x: CGFloat(point.x) / max(scale.x, 0.000001),
+            y: CGFloat(point.y) / max(scale.y, 0.000001)
+        )
+    }
+
+    private static func drawableToViewScale(
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        fallback: CGFloat
+    ) -> CGPoint {
+        let fallback = max(fallback, 1)
+        let x = viewSize.width > 0 ? drawableSize.width / viewSize.width : fallback
+        let y = viewSize.height > 0 ? drawableSize.height / viewSize.height : fallback
+        return CGPoint(
+            x: max(x.isFinite && x > 0 ? x : fallback, 0.000001),
+            y: max(y.isFinite && y > 0 ? y : fallback, 0.000001)
         )
     }
 
@@ -2203,7 +2735,7 @@ private extension CADPoC.CADMetalRenderer {
                 return font
             }
         }
-        return .systemFont(ofSize: size)
+        return Self.rasterFallbackFont(supporting: text, size: size)
     }
 
     private func uiColor(fromARGB argb: UInt32) -> UIColor {
@@ -2238,16 +2770,6 @@ private extension CADPoC.CADMetalRenderer {
             | UInt32((max(min(blue, 1), 0) * 255).rounded())
     }
 
-    private func readableShadowColor(for color: UIColor) -> UIColor {
-        var red: CGFloat = 0
-        var green: CGFloat = 0
-        var blue: CGFloat = 0
-        var alpha: CGFloat = 1
-        color.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
-        let luminance = 0.2126 * red + 0.7152 * green + 0.0722 * blue
-        return luminance > 0.5 ? UIColor.black.withAlphaComponent(0.65) : UIColor.white.withAlphaComponent(0.9)
-    }
-    #endif
 }
 
 #if os(iOS)
@@ -2290,7 +2812,90 @@ private struct CADTextRasterCache {
     }
 }
 
+private extension CADTextRasterCache.Key {
+    var stableSortKey: String {
+        "\(displayText)|\(fontName)|\(pointSizeBucket)|\(colorARGB)|\(scaleBucket)"
+    }
+}
+
+private extension Array where Element == CADTextRasterCache.Key {
+    func uniquedAndSortedByStableKey() -> [Element] {
+        var seen = Set<Element>()
+        var result: [Element] = []
+        result.reserveCapacity(count)
+        for key in self where !seen.contains(key) {
+            seen.insert(key)
+            result.append(key)
+        }
+        return result.sorted { $0.stableSortKey < $1.stableSortKey }
+    }
+}
+
+private struct CADTextAtlasTextureCache {
+    struct Key: Hashable {
+        var glyphKeys: [CADTextRasterCache.Key]
+    }
+
+    struct Entry {
+        var texture: MTLTexture
+        var packedGlyphs: [CADTextRasterCache.Key: CADPoC.CADMetalRenderer.CADPackedTextGlyph]
+        var size: (width: Int, height: Int)
+        var uniqueTextureCount: Int
+    }
+
+    private var entries: [Key: Entry] = [:]
+    private var order: [Key] = []
+    private(set) var hitCount = 0
+
+    var entryCount: Int {
+        entries.count
+    }
+
+    mutating func entry(for key: Key) -> Entry? {
+        guard let entry = entries[key] else {
+            return nil
+        }
+        hitCount += 1
+        touch(key)
+        return entry
+    }
+
+    mutating func insert(_ entry: Entry, for key: Key, limit: Int) {
+        entries[key] = entry
+        touch(key)
+        trim(to: limit)
+    }
+
+    mutating func removeAll() {
+        entries.removeAll(keepingCapacity: true)
+        order.removeAll(keepingCapacity: true)
+        hitCount = 0
+    }
+
+    private mutating func touch(_ key: Key) {
+        order.removeAll { $0 == key }
+        order.append(key)
+    }
+
+    private mutating func trim(to limit: Int) {
+        let safeLimit = max(limit, 1)
+        while entries.count > safeLimit, let oldest = order.first {
+            order.removeFirst()
+            entries.removeValue(forKey: oldest)
+        }
+    }
+}
+
 extension CADPoC.CADMetalRenderer {
+    struct CADTextAtlasSnapshot {
+        var textCount: Int
+        var uniqueTextureCount: Int
+        var vertexCount: Int
+        var atlasSize: CGSize
+        var cacheEntryCount: Int
+        var cacheHitCount: Int
+    }
+
     static func textOverlayFontSizeForTesting(
         textHeight: Double,
         modelScale: Double,
@@ -2319,6 +2924,20 @@ extension CADPoC.CADMetalRenderer {
         )
     }
 
+    static func textOverlayViewPointForTesting(
+        drawablePoint: SIMD2<Double>,
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        fallbackScale: CGFloat
+    ) -> CGPoint {
+        viewPoint(
+            fromDrawablePoint: drawablePoint,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallbackScale: fallbackScale
+        )
+    }
+
     func vertexCountForTesting(
         commands: [Kernel.CADRenderCommand],
         drawableSize: CGSize,
@@ -2343,6 +2962,58 @@ extension CADPoC.CADMetalRenderer {
             viewSize: viewSize,
             contentScale: contentScale
         ).count
+    }
+
+    func textAtlasSnapshotForTesting(
+        commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> CADTextAtlasSnapshot? {
+        guard let plan = makeTextAtlasRenderPlan(
+            commands: commands,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ) else {
+            return nil
+        }
+        return CADTextAtlasSnapshot(
+            textCount: plan.textCount,
+            uniqueTextureCount: plan.uniqueTextureCount,
+            vertexCount: plan.vertices.count,
+            atlasSize: plan.atlasSize,
+            cacheEntryCount: textAtlasTextureCache.entryCount,
+            cacheHitCount: textAtlasTextureCache.hitCount
+        )
+    }
+
+    func textAtlasLayoutWidthForTesting(
+        displayText: String,
+        font: UIFont,
+        widthFactor: CGFloat,
+        contentScale: CGFloat
+    ) -> CGFloat {
+        let glyphs = makeTextAtlasGlyphs(
+            displayText: displayText,
+            font: font,
+            textColor: .black,
+            widthFactor: widthFactor,
+            contentScale: contentScale
+        )
+        let bounds = glyphs.reduce(CGRect.null) { partial, glyph in
+            partial.union(CGRect(
+                x: glyph.offsetX,
+                y: glyph.offsetY,
+                width: glyph.advancePoints,
+                height: glyph.heightPoints
+            ))
+        }
+        return bounds.isNull ? 0 : bounds.width
+    }
+
+    static func textAdvanceWidthForTesting(text: String, font: UIFont) -> CGFloat {
+        textAdvancePoints(for: text, font: font)
     }
 
     func renderableEntityCountForTesting() -> Int {
@@ -2377,16 +3048,16 @@ extension CADPoC.CADMetalRenderer {
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .left
         paragraphStyle.lineBreakMode = .byClipping
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: textColor,
-            .paragraphStyle: paragraphStyle
-        ]
+        let attributedText = rasterAttributedString(
+            text,
+            preferredFont: font,
+            textColor: textColor,
+            paragraphStyle: paragraphStyle
+        )
         let maxSize = CGSize(width: 4096, height: 4096)
-        let measured = (text as NSString).boundingRect(
+        let measured = attributedText.boundingRect(
             with: maxSize,
             options: [.usesLineFragmentOrigin, .usesFontLeading],
-            attributes: attributes,
             context: nil
         )
         let size = CGSize(
@@ -2403,14 +3074,82 @@ extension CADPoC.CADMetalRenderer {
         return UIGraphicsImageRenderer(size: size, format: format).image { context in
             UIColor.clear.setFill()
             context.fill(CGRect(origin: .zero, size: size))
-            (text as NSString).draw(
+            attributedText.draw(
                 with: CGRect(x: 3, y: 2, width: size.width - 6, height: size.height - 4),
                 options: [.usesLineFragmentOrigin, .usesFontLeading],
-                attributes: attributes,
                 context: nil
             )
         }
     }
+
+    private static func rasterAttributedString(
+        _ text: String,
+        preferredFont: UIFont,
+        textColor: UIColor,
+        paragraphStyle: NSParagraphStyle
+    ) -> NSAttributedString {
+        let output = NSMutableAttributedString()
+        for character in text {
+            let chunk = String(character)
+            let runFont = preferredFont.supportsCADGlyphs(in: chunk)
+                ? preferredFont
+                : rasterFallbackFont(supporting: chunk, size: preferredFont.pointSize)
+            output.append(NSAttributedString(
+                string: chunk,
+                attributes: [
+                    .font: runFont,
+                    .foregroundColor: textColor,
+                    .paragraphStyle: paragraphStyle
+                ]
+            ))
+        }
+        return output
+    }
+
+    private static func rasterFont(for text: String, preferredFont: UIFont) -> UIFont {
+        preferredFont.supportsCADGlyphs(in: text)
+            ? preferredFont
+            : rasterFallbackFont(supporting: text, size: preferredFont.pointSize)
+    }
+
+    private static func textAdvancePoints(for text: String, font: UIFont) -> CGFloat {
+        guard !text.isEmpty else { return 0 }
+        let attributedText = NSAttributedString(string: text, attributes: [.font: font])
+        let measured = attributedText.boundingRect(
+            with: CGSize(width: 4096, height: 4096),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        )
+        return ceil(max(measured.width, attributedText.size().width, 0))
+    }
+
+    fileprivate static func rasterFallbackFont(supporting text: String, size: CGFloat) -> UIFont {
+        for fallbackName in rasterFallbackFontNames {
+            if let font = UIFont(name: fallbackName, size: size), font.supportsCADText(text) {
+                return font
+            }
+            if let family = UIFont.familyNames.first(where: { $0.caseInsensitiveCompare(fallbackName) == .orderedSame }),
+               let fontName = UIFont.fontNames(forFamilyName: family).first,
+               let font = UIFont(name: fontName, size: size),
+               font.supportsCADText(text) {
+                return font
+            }
+        }
+        return .systemFont(ofSize: size)
+    }
+
+    private static let rasterFallbackFontNames = [
+        "PingFangSC-Regular",
+        "PingFang SC",
+        "HiraginoSansGB-W3",
+        "Hiragino Sans GB",
+        "STHeitiSC-Light",
+        "Heiti SC",
+        "STSongti-SC-Regular",
+        "Songti SC",
+        "Noto Sans CJK SC",
+        "Source Han Sans SC"
+    ]
 }
 #endif
 
@@ -2430,8 +3169,12 @@ private extension UIFont {
     func supportsCADText(_ text: String) -> Bool {
         let probe = text.cadCJKCoverageProbeText
         guard !probe.isEmpty else { return true }
+        return supportsCADGlyphs(in: probe)
+    }
+
+    func supportsCADGlyphs(in text: String) -> Bool {
         let ctFont = CTFontCreateWithName(fontName as CFString, pointSize, nil)
-        let characters = Array(probe.utf16)
+        let characters = Array(text.utf16)
         guard !characters.isEmpty else { return true }
         var glyphs = Array(repeating: CGGlyph(), count: characters.count)
         return characters.withUnsafeBufferPointer { characterBuffer in
@@ -2447,6 +3190,23 @@ private extension UIFont {
 }
 
 private extension String {
+    var cadContainsCJKScalars: Bool {
+        unicodeScalars.contains { scalar in
+            switch scalar.value {
+            case 0x3400...0x4DBF,
+                 0x4E00...0x9FFF,
+                 0xF900...0xFAFF,
+                 0x20000...0x2A6DF,
+                 0x2A700...0x2B73F,
+                 0x2B740...0x2B81F,
+                 0x2B820...0x2CEAF:
+                return true
+            default:
+                return false
+            }
+        }
+    }
+
     var cadCJKCoverageProbeText: String {
         var scalars = String.UnicodeScalarView()
         for scalar in unicodeScalars {

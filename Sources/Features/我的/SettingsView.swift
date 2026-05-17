@@ -2,7 +2,6 @@ import SwiftUI
 
 struct SettingsView: View {
     @Environment(DataStore.self) private var store
-    @AppStorage(UserPreferenceKeys.showTemplates) private var showTemplates = AppFeatureFlags.showTemplates
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
     @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataBackupGate = false
@@ -67,12 +66,6 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
-            Section(String(localized: "实验功能")) {
-                Toggle(String(localized: "显示模板管理入口"), isOn: $showTemplates)
-                Text(String(localized: "默认关闭。开启后会在工具箱显示“模板管理”。"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
             Section(String(localized: "关于")) {
                 HStack {

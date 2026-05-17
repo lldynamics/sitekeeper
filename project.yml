@@ -37,8 +37,10 @@ targets:
       - name: File Deletion Policy Guard
         script: |
           "${SRCROOT}/scripts/release/check_file_deletion_policy.sh"
+          "${SRCROOT}/scripts/release/check_datastore_write_policy.sh"
         inputFiles:
           - "$(SRCROOT)/scripts/release/check_file_deletion_policy.sh"
+          - "$(SRCROOT)/scripts/release/check_datastore_write_policy.sh"
           - "$(SRCROOT)/Sources"
         basedOnDependencyAnalysis: false
     dependencies:

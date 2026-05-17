@@ -16,28 +16,28 @@ extension DataStore {
     }
 
     private func applySampleSnapshot(_ snapshot: BackupSnapshot) {
-        projects = snapshot.projects
-        materialItems = snapshot.materialItems
-        quoteItems = snapshot.quoteItems
-        laborRecords = snapshot.laborRecords
-        dailyLogs = snapshot.dailyLogs
-        historyRecords = snapshot.historyRecords
-        progressTasks = snapshot.progressTasks
-        lightingCircuitPlans = snapshot.lightingCircuitPlans
-        siteTodos = snapshot.siteTodos
-        projectDrawings = snapshot.projectDrawings
-        projectDocuments = snapshot.projectDocuments
-        projectContacts = snapshot.projectContacts
-        projectFinancialRecords = snapshot.projectFinancialRecords
-        quickNotes = snapshot.quickNotes
-        projectWarehouseMovements = snapshot.projectWarehouseMovements
-        templates = snapshot.templates
-        materialPriceEntries = snapshot.materialPriceEntries
-        materialSheetDrafts = snapshot.materialSheetDrafts
-        supplierProfiles = snapshot.supplierProfiles
-        constructionMethods = snapshot.constructionMethods
-        userMaterials = snapshot.userMaterials
-        deletedUserMaterials = snapshot.deletedUserMaterials
+        replaceProjects(snapshot.projects)
+        replaceMaterialItems(snapshot.materialItems)
+        replaceQuoteItems(snapshot.quoteItems)
+        replaceLaborRecords(snapshot.laborRecords)
+        replaceDailyLogs(snapshot.dailyLogs)
+        replaceHistoryRecords(snapshot.historyRecords)
+        replaceProgressTasks(snapshot.progressTasks)
+        replaceLightingCircuitPlans(snapshot.lightingCircuitPlans)
+        replaceSiteTodos(snapshot.siteTodos)
+        replaceProjectDrawings(snapshot.projectDrawings)
+        replaceProjectDocuments(snapshot.projectDocuments)
+        replaceProjectContacts(snapshot.projectContacts)
+        replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
+        replaceQuickNotes(snapshot.quickNotes)
+        replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
+        replaceTemplates(snapshot.templates)
+        replaceMaterialPriceEntries(snapshot.materialPriceEntries)
+        replaceMaterialSheetDrafts(snapshot.materialSheetDrafts)
+        replaceSupplierProfiles(snapshot.supplierProfiles)
+        replaceConstructionMethods(snapshot.constructionMethods)
+        replaceUserMaterials(snapshot.userMaterials)
+        replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
         favoriteMaterialKeys = snapshot.favoriteMaterialKeys
         recentMaterialKeys = snapshot.recentMaterialKeys
     }

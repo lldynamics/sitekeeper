@@ -68,7 +68,7 @@ struct SitekeeperWidgetEntryView: View {
 }
 
 struct SitekeeperWidget: Widget {
-    let kind: String = "SitekeeperWidget"
+    let kind: String = WidgetSharedDefaults.widgetKind
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: SitekeeperProvider()) { entry in

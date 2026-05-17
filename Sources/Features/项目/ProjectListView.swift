@@ -20,7 +20,7 @@ struct ProjectListView: View {
     @State private var newMaterialCost = ""
     @State private var newLaborCost = ""
     @State private var newPaymentStatus: PaymentStatus = .unpaid
-    @State private var newRequiredDocumentCategories = Set(ProjectDocumentCategory.defaultConstructionArchiveRequirements)
+    @State private var newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirm = false
     @State private var operationNotice: OperationToastNotice?
@@ -471,14 +471,16 @@ struct ProjectListView: View {
     private func archiveProject() {
         guard let pid = projectToDelete?.id,
               let index = projectStore.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[index].status = .archived
+        var project = projectStore.projects[index]
+        project.status = .archived
+        guard store.updateProject(project) else { return }
         projectToDelete = nil
         store.scheduleSave()
     }
 
     private func addProject() {
         guard canCreateProject else { return }
-        store.projects.append(Project(
+        store.appendProject(Project(
             name: newName.trimmingCharacters(in: .whitespacesAndNewlines),
             location: newLocation,
             status: .active,
@@ -510,7 +512,7 @@ struct ProjectListView: View {
         newMaterialCost = ""
         newLaborCost = ""
         newPaymentStatus = .unpaid
-        newRequiredDocumentCategories = Set(ProjectDocumentCategory.defaultConstructionArchiveRequirements)
+        newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
         newStartDate = Date()
         newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
     }

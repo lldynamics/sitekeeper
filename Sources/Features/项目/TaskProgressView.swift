@@ -352,7 +352,9 @@ struct TaskProgressView: View {
             },
             set: { value in
                 if let index = store.progressTasks.firstIndex(where: { $0.id == task.id }) {
-                    store.progressTasks[index].completion = value
+                    var updated = store.progressTasks[index]
+                    updated.completion = value
+                    store.updateProgressTask(updated)
                     store.scheduleSave()
                 }
             }
@@ -396,11 +398,11 @@ struct TaskProgressView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.progressTasks = UndoableDeletionCoordinator.restoringItems(
+                store.replaceProgressTasks(UndoableDeletionCoordinator.restoringItems(
                     snapshot: snapshot,
                     current: store.progressTasks,
                     deletedIDs: ids
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(

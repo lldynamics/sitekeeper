@@ -213,6 +213,10 @@ extension CADPreviewContainer {
                         showOverlayLayerSheet = true
                     }
 
+                    if shouldShowNativeCADLayoutMenu {
+                        cadDrawingLayoutMenu(chrome: chrome)
+                    }
+
                     if shouldShowNativeCADLayerMenu {
                         cadDrawingLayerMenu(chrome: chrome)
                     }
@@ -231,6 +235,104 @@ extension CADPreviewContainer {
 
     var shouldShowNativeCADLayerMenu: Bool {
         isDWGFile && !nativeCADLayers.isEmpty
+    }
+
+    var shouldShowNativeCADLayoutMenu: Bool {
+        isDWGFile && !nativeCADLayouts.isEmpty
+    }
+
+    var nativeCADCurrentLayout: CADPoC.CADLayout? {
+        nativeCADLayouts.first { $0.id == nativeCADCurrentLayoutID }
+            ?? nativeCADLayouts.first(where: \.isModelSpace)
+            ?? nativeCADLayouts.first
+    }
+
+    var nativeCADLayoutMenuTitle: String {
+        guard let layout = nativeCADCurrentLayout else {
+            return String(localized: "模型/布局")
+        }
+        return layout.isModelSpace ? String(localized: "模型") : nativeCADLayoutDisplayName(layout)
+    }
+
+    var nativeCADLayoutMenuIcon: String {
+        guard let layout = nativeCADCurrentLayout else { return "rectangle.3.group" }
+        return layout.isModelSpace ? "cube.transparent" : "rectangle.on.rectangle"
+    }
+
+    var nativeCADSelectedLayoutIsPaperSpace: Bool {
+        nativeCADCurrentLayout.map { !$0.isModelSpace } ?? false
+    }
+
+    @ViewBuilder
+    func cadDrawingLayoutMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadDrawingLayoutMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: nativeCADLayoutMenuIcon,
+                    label: nativeCADLayoutMenuTitle,
+                    active: nativeCADSelectedLayoutIsPaperSpace,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(nativeCADSelectedLayoutIsPaperSpace ? .appPrimaryAction : .secondary)
+            .accessibilityLabel(String(localized: "选择模型或布局"))
+        case .immersive:
+            Menu {
+                cadDrawingLayoutMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: nativeCADLayoutMenuIcon,
+                    label: nativeCADLayoutMenuTitle,
+                    active: nativeCADSelectedLayoutIsPaperSpace,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "选择模型或布局"))
+        }
+    }
+
+    @ViewBuilder
+    var cadDrawingLayoutMenuContent: some View {
+        ForEach(nativeCADLayouts) { layout in
+            Button {
+                selectNativeCADLayout(layout.id)
+            } label: {
+                Label(
+                    nativeCADLayoutDisplayName(layout),
+                    systemImage: layout.id == nativeCADCurrentLayout?.id ? "checkmark.circle.fill" : nativeCADLayoutIcon(layout)
+                )
+            }
+        }
+    }
+
+    func nativeCADLayoutDisplayName(_ layout: CADPoC.CADLayout) -> String {
+        if layout.isModelSpace {
+            return String(localized: "模型")
+        }
+        let trimmed = layout.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? layout.id : trimmed
+    }
+
+    func nativeCADLayoutIcon(_ layout: CADPoC.CADLayout) -> String {
+        layout.isModelSpace ? "cube.transparent" : "rectangle.on.rectangle"
+    }
+
+    func selectNativeCADLayout(_ layoutID: String) {
+        guard nativeCADCurrentLayoutID != layoutID else { return }
+        nativeCADCurrentLayoutID = layoutID
+        nativeCanvasTransform = nil
+        nativeSnapPoints.removeAll()
+        nativeSnapSourcePoints.removeAll()
+        nativeEndpointSnapPoints.removeAll()
+        nativeMidpointSnapPoints.removeAll()
+        nativeCenterSnapPoints.removeAll()
+        nativeSnapPointBuckets = CADNativeSnapPointBuckets()
+        clearInProgress()
     }
 
     var nativeCADHiddenLayerCount: Int {
@@ -445,8 +547,10 @@ extension CADPreviewContainer {
     var cadPerformanceOptionEnabledCount: Int {
         [
             rendersCADTextOverlays,
+            buildsCADTextSearchIndex,
             publishesCADSnapPoints,
             rendersCADHatches,
+            rendersCADPlaceholders,
             showsCADOverviewMap,
             showsCADRendererDiagnostics
         ].filter { $0 }.count
@@ -497,6 +601,11 @@ extension CADPreviewContainer {
             Label(String(localized: "文字显示"), systemImage: rendersCADTextOverlays ? "checkmark.circle.fill" : "circle")
         }
         Button {
+            buildsCADTextSearchIndex.toggle()
+        } label: {
+            Label(String(localized: "文字搜索索引"), systemImage: buildsCADTextSearchIndex ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
             publishesCADSnapPoints.toggle()
         } label: {
             Label(String(localized: "吸附点"), systemImage: publishesCADSnapPoints ? "checkmark.circle.fill" : "circle")
@@ -505,6 +614,11 @@ extension CADPreviewContainer {
             rendersCADHatches.toggle()
         } label: {
             Label(String(localized: "填充细节"), systemImage: rendersCADHatches ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            rendersCADPlaceholders.toggle()
+        } label: {
+            Label(String(localized: "占位对象"), systemImage: rendersCADPlaceholders ? "checkmark.circle.fill" : "circle")
         }
         Button {
             showsCADOverviewMap.toggle()

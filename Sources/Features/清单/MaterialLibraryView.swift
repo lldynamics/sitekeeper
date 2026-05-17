@@ -300,7 +300,7 @@ struct MaterialLibraryView: View {
             ) { material, price in
                 let key = materialKey(name: material.name, specification: material.specification, unit: material.unit)
                 if !store.userMaterials.contains(where: { materialKey(name: $0.name, specification: $0.specification, unit: $0.unit) == key }) {
-                    store.userMaterials.append(material)
+                    store.appendUserMaterial(material)
                 }
                 if !price.isEmpty {
                     let entry = MaterialPriceEntry(
@@ -313,7 +313,7 @@ struct MaterialLibraryView: View {
                     upsertMaterialPriceEntry(entry)
                 }
                 let displayName = material.specification.isEmpty ? material.name : "\(material.name) \(material.specification)"
-                store.materialItems.append(MaterialItem(
+                store.appendMaterialItem(MaterialItem(
                     name: displayName,
                     quantity: "1",
                     unit: material.unit,
@@ -876,8 +876,8 @@ struct MaterialLibraryView: View {
             }
             Spacer()
             Button(String(localized: "恢复")) {
-                store.deletedUserMaterials.removeAll { $0.id == item.id }
-                store.userMaterials.append(item)
+                store.removeDeletedUserMaterials(ids: Set([item.id]))
+                store.appendUserMaterial(item)
                 store.scheduleSave()
             }
             .font(.caption)
@@ -996,7 +996,7 @@ struct MaterialLibraryView: View {
             appendState.selectedDefaultMaterialSheetDraftID = targetDraftID
         }
 
-        store.materialSheetDrafts = drafts
+        store.replaceMaterialSheetDrafts(drafts)
         contexts.forEach { appendRecentMaterialKey($0.key) }
         store.scheduleSave()
         let resolvedTitle = title.isEmpty ? "未命名材料单" : title
@@ -1104,9 +1104,7 @@ struct MaterialLibraryView: View {
             createdAt: now,
             updatedAt: now
         )
-        var drafts = store.materialSheetDrafts
-        drafts.insert(newDraft, at: 0)
-        store.materialSheetDrafts = drafts
+        store.insertMaterialSheetDraftAtTop(newDraft)
         store.scheduleSave()
         appendState.selectedDefaultMaterialSheetDraftID = newDraft.id
         lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
@@ -1245,9 +1243,7 @@ struct MaterialLibraryView: View {
         guard !deletion.isEmpty else { return }
 
         let deletedIDs = deletion.removedIDs(\.id)
-        store.deletedUserMaterials.removeAll { deletedIDs.contains($0.id) }
-        store.deletedUserMaterials.insert(contentsOf: deletion.removed, at: 0)
-        if store.deletedUserMaterials.count > 50 { store.deletedUserMaterials = Array(store.deletedUserMaterials.prefix(50)) }
+        store.prependDeletedUserMaterials(deletion.removed, maxCount: 50)
 
         undoableDeletion.queue(
             notice: $operationNotice,
@@ -1257,11 +1253,8 @@ struct MaterialLibraryView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.userMaterials = deletion.restoredItems(
-                    current: store.userMaterials,
-                    id: \.id
-                )
-                store.deletedUserMaterials.removeAll { deletedIDs.contains($0.id) }
+                store.restoreUserMaterials(from: deletion)
+                store.removeDeletedUserMaterials(ids: deletedIDs)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -1316,22 +1309,7 @@ struct MaterialLibraryView: View {
     }
 
     private func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
-        let entryKey = materialKey(name: entry.name, specification: entry.specification, unit: entry.unit)
-        if let index = store.materialPriceEntries.firstIndex(where: { $0.id == entry.id }) {
-            store.materialPriceEntries[index] = entry
-            store.scheduleSave()
-            return
-        }
-        if let duplicateIndex = store.materialPriceEntries.firstIndex(where: {
-            materialKey(name: $0.name, specification: $0.specification, unit: $0.unit) == entryKey
-        }) {
-            var merged = entry
-            merged.id = store.materialPriceEntries[duplicateIndex].id
-            store.materialPriceEntries[duplicateIndex] = merged
-            store.scheduleSave()
-            return
-        }
-        store.materialPriceEntries.insert(entry, at: 0)
+        store.upsertMaterialPriceEntry(entry)
         store.scheduleSave()
     }
 
@@ -1356,10 +1334,7 @@ struct MaterialLibraryView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialPriceEntries = deletion.restoredItems(
-                    current: store.materialPriceEntries,
-                    id: \.id
-                )
+                store.restoreMaterialPriceEntries(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)

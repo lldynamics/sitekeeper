@@ -543,7 +543,7 @@ struct MaterialSheetView: View {
         )
         var drafts = store.materialSheetDrafts
         drafts.insert(newDraft, at: 0)
-        store.materialSheetDrafts = drafts
+        store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
         selectedDraftID = newDraft.id
     }
@@ -558,7 +558,7 @@ struct MaterialSheetView: View {
         var drafts = store.materialSheetDrafts
         drafts[index].title = normalizedTitle
         drafts[index].updatedAt = Formatters.now()
-        store.materialSheetDrafts = drafts
+        store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
     }
 
@@ -573,7 +573,7 @@ struct MaterialSheetView: View {
         var drafts = store.materialSheetDrafts
         drafts[index].isArchived = true
         drafts[index].updatedAt = Formatters.now()
-        store.materialSheetDrafts = drafts
+        store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
 
         undoableDeletion.queue(
@@ -584,11 +584,11 @@ struct MaterialSheetView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.materialSheetDrafts = UndoableDeletionCoordinator.restoringItems(
+                store.replaceMaterialSheetDrafts(UndoableDeletionCoordinator.restoringItems(
                     snapshot: previousDrafts,
                     current: store.materialSheetDrafts,
                     deletedIDs: Set([draft.id])
-                )
+                ))
                 self.selectedDraftID = previousSelectedDraftID
                 loadSelectedDraftIntoEditor()
                 store.scheduleSave()
@@ -651,7 +651,7 @@ struct MaterialSheetView: View {
         drafts[index].exportPreparer = exportPreparer.trimmingCharacters(in: .whitespacesAndNewlines)
         drafts[index].exportDate = Formatters.date.string(from: Date())
         drafts[index].updatedAt = Formatters.now()
-        store.materialSheetDrafts = drafts
+        store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
     }
 
@@ -969,7 +969,7 @@ struct MaterialSheetView: View {
             )
             var drafts = store.materialSheetDrafts
             drafts.insert(newDraft, at: 0)
-            store.materialSheetDrafts = drafts
+            store.replaceMaterialSheetDrafts(drafts)
             store.scheduleSave()
             selectedDraftID = newDraft.id
             sheetItems = [newItem]
@@ -990,7 +990,7 @@ struct MaterialSheetView: View {
                 finalQty = "1"
             }
             let price = item.unitPrice.trimmingCharacters(in: .whitespacesAndNewlines)
-            store.materialItems.append(MaterialItem(
+            store.appendMaterialItem(MaterialItem(
                 name: item.name, quantity: finalQty,
                 unit: item.unit.isEmpty ? "个" : item.unit,
                 unitPrice: price,
@@ -1093,9 +1093,21 @@ struct MaterialSheetView: View {
     private func cleanupExportFileIfNeeded() {
         guard let exportFileURL else { return }
         do {
-            try FileManager.default.removeItem(at: exportFileURL)
+            _ = try FileOps.removeIfExists(
+                at: exportFileURL,
+                context: .init(
+                    event: "material_sheet.cleanup_export_file",
+                    category: .fileStorage,
+                    source: "MaterialSheetView.cleanupExportFileIfNeeded"
+                )
+            )
         } catch {
-            StorageIssueLog.record("材料单导出临时文件清理失败：\(exportFileURL.lastPathComponent)，\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "material_sheet.cleanup_export_file_failed",
+                category: .fileStorage,
+                details: ["file": exportFileURL.lastPathComponent],
+                error: error
+            )
         }
         self.exportFileURL = nil
         showExportChoice = false

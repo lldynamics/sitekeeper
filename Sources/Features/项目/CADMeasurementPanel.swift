@@ -39,7 +39,12 @@ extension CADPreviewContainer {
                         TextField(String(localized: "该基准线实际长度（米）"), text: $calibrationActualMetersDraft)
                             .keyboardType(.decimalPad)
                         if let computedScale = calibrationComputedScale {
-                            Text(String(localized: "将应用：1 图纸单位 = \(Formatters.number(computedScale, minFraction: 0, maxFraction: 8)) m"))
+                            Text(
+                                String(
+                                    format: String(localized: "将应用：1 图纸单位 = %@ m"),
+                                    Formatters.number(computedScale, minFraction: 0, maxFraction: 8)
+                                )
+                            )
                                 .font(.caption)
                                 .foregroundStyle(Color.appSuccess)
                         } else {

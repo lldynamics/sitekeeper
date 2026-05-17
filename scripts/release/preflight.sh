@@ -52,6 +52,9 @@ fi
 echo "==> Checking file deletion policy"
 scripts/release/check_file_deletion_policy.sh
 
+echo "==> Checking DataStore write policy"
+scripts/release/check_datastore_write_policy.sh
+
 echo "==> Checking LibreDWG GPL compliance"
 REQUIRE_LIBREDWG_RELEASE_COMPLIANCE=1 scripts/release/check_libredwg_gpl_compliance.sh
 

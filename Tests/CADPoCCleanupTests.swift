@@ -39,10 +39,11 @@ struct CADPoCCleanupTests {
 
     @Test func cadPoCOptionalDetailFeaturesDefaultToPerformanceMode() throws {
         let defaults = CADCanvasFeatureOptions.performanceDefault
-        #expect(defaults.rendersTextOverlays == false)
+        #expect(defaults.rendersTextOverlays == true)
         #expect(defaults.publishesSnapPoints == false)
         #expect(defaults.rendersHatches == false)
-        #expect(defaults.enabledCount == 0)
+        #expect(defaults.rendersPlaceholders == false)
+        #expect(defaults.enabledCount == 1)
 
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "0",
@@ -60,18 +61,27 @@ struct CADPoCCleanupTests {
         ])
 
         #expect(defaults.allows(.polyline([], closed: false, style: style)))
-        #expect(defaults.allows(.text(text, style: style)) == false)
+        #expect(defaults.allows(.text(text, style: style)))
         #expect(defaults.allows(.hatch(hatchPath, style: style)) == false)
+        #expect(defaults.allows(.unsupportedPlaceholder(entityID: "P1", bounds: .empty, reason: "proxy")) == false)
+        #expect(defaults.allows(SiteKeeperCADKernel.CADEntity(kind: .line, path: hatchPath, bounds: hatchPath.bounds)))
+        #expect(defaults.allows(SiteKeeperCADKernel.CADEntity(kind: .hatch, path: hatchPath, bounds: hatchPath.bounds)) == false)
+        #expect(defaults.allows(SiteKeeperCADKernel.CADEntity(kind: .image, bounds: hatchPath.bounds, unsupportedReason: "placeholder")) == false)
         #expect(CADCanvasFeatureOptions.fullDetail.allows(.text(text, style: style)))
         #expect(CADCanvasFeatureOptions.fullDetail.allows(.hatch(hatchPath, style: style)))
+        #expect(CADCanvasFeatureOptions.fullDetail.allows(.unsupportedPlaceholder(entityID: "P1", bounds: .empty, reason: "proxy")))
+        #expect(CADCanvasFeatureOptions.fullDetail.allows(SiteKeeperCADKernel.CADEntity(kind: .hatch, path: hatchPath, bounds: hatchPath.bounds)))
 
         let root = try Self.repositoryRoot()
         let hostSource = try Self.sourceText(root, "Sources/Features/项目/CADCanvasHost.swift")
         let toolbarSource = try Self.sourceText(root, "Sources/Shared/CAD/Viewer/CADViewerToolbar.swift")
         #expect(hostSource.contains("cadPerformanceMenu"))
         #expect(toolbarSource.contains("文字显示"))
+        #expect(toolbarSource.contains("文字搜索索引"))
         #expect(toolbarSource.contains("吸附点"))
         #expect(toolbarSource.contains("填充细节"))
+        #expect(toolbarSource.contains("占位对象"))
+        #expect(hostSource.contains("cadDrawingLayoutMenu"))
     }
 
     @Test func drawingBusinessTypesRemainCompilable() {

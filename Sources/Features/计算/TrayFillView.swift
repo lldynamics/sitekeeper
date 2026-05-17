@@ -9,16 +9,59 @@ struct TrayFillView: View {
     @State private var showAdd = false; @State private var newDia = ""; @State private var newCount = ""
     @State private var result = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
+
+    private var trayWidthRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 50,
+            max: 10_000,
+            rangeMessage: calculatorLoc("请输入 50–10000")
+        )
+    }
+
+    private var trayHeightRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 30,
+            max: 2_000,
+            rangeMessage: calculatorLoc("请输入 30–2000")
+        )
+    }
+
+    private var trayWidthValidation: NumericInputFieldValidation {
+        trayWidthRule.validate(trayW)
+    }
+
+    private var trayHeightValidation: NumericInputFieldValidation {
+        trayHeightRule.validate(trayH)
+    }
 
     var body: some View {
         Form {
             Section("桥架尺寸 (mm)") {
-                LabeledContent("宽 (mm)") { TextField("200", text: $trayW.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(trayW, min: 50, max: 10_000, hint: "请输入 50–10000"))
+                CalculatorValidatedNumericField(
+                    title: "宽度",
+                    placeholder: "200",
+                    unit: "mm",
+                    text: $trayW,
+                    rule: trayWidthRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用宽度", options: ["100", "150", "200", "300", "400", "600"], selection: $trayW)
-                LabeledContent("高 (mm)") { TextField("100", text: $trayH.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(trayH, min: 30, max: 2000, hint: "请输入 30–2000"))
+                CalculatorValidatedNumericField(
+                    title: "高度",
+                    placeholder: "100",
+                    unit: "mm",
+                    text: $trayH,
+                    rule: trayHeightRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用高度", options: ["50", "75", "100", "150", "200"], selection: $trayH)
             }
             Section("电缆列表") {
@@ -38,6 +81,7 @@ struct TrayFillView: View {
             Section {
                 Button("计算") {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     calc()
                 }
                 .frame(maxWidth: .infinity)
@@ -76,9 +120,10 @@ struct TrayFillView: View {
     }
 
     private func calc() {
-        guard let w = CalculatorInputParser.double(trayW),
-              let h = CalculatorInputParser.double(trayH) else {
-            presentError("请输入有效桥架尺寸")
+        guard let w = trayWidthValidation.doubleValue,
+              let h = trayHeightValidation.doubleValue else {
+            result = ""
+            resultModel = nil
             return
         }
         let trayArea = w * h
@@ -125,18 +170,14 @@ struct TrayFillView: View {
             input: "\(trayW)×\(trayH)mm, \(cables.count)种电缆",
             result: "\(fmt(rate))%"
         )
+
+        trayW = NumericInputSupport.normalizedStorageText(trayW, kind: .quantity, preservingInvalid: false)
+        trayH = NumericInputSupport.normalizedStorageText(trayH, kind: .quantity, preservingInvalid: false)
     }
 
     private func fmt(_ v: Double) -> String {
         let f = NumberFormatter(); f.minimumFractionDigits = 1; f.maximumFractionDigits = 2
         return f.string(from: NSNumber(value: v)) ?? String(v)
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
     }
 
     private func presentError(_ message: String) {

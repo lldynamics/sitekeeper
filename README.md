@@ -78,6 +78,12 @@ Release preflight:
 scripts/release/preflight.sh
 ```
 
+Enable local pre-commit guards (one time):
+
+```sh
+scripts/dev/install_git_hooks.sh
+```
+
 ## Project Layout
 
 - `Sources/App`: app entry point and tab navigation.
