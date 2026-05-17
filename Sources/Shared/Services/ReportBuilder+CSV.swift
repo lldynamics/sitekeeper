@@ -160,7 +160,18 @@ extension ReportBuilder {
         if options.includeProjectDocuments {
             let checklistRows = projectDocumentChecklistExportRows(snapshot: snapshot)
             rows.append(csvMachineSection("project_document_checklist"))
-            rows.append(csv(["project_id", "project_name", "category_key", "category_display", "status", "document_count", "action_count", "returned_count", "archived_count"]))
+            rows.append(csv([
+                "project_id",
+                "project_name",
+                "category_key",
+                "category_display",
+                "status_raw",
+                "status_display",
+                "document_count",
+                "action_count",
+                "returned_count",
+                "archived_count"
+            ]))
             rows += checklistRows.map { row in
                 let item = row.item
                 return csv([
@@ -168,6 +179,7 @@ extension ReportBuilder {
                     row.projectName,
                     item.category.exportKey,
                     item.category.displayName,
+                    item.statusExportKey,
                     item.statusText,
                     "\(item.documentCount)",
                     "\(item.actionCount)",
@@ -178,13 +190,32 @@ extension ReportBuilder {
             rows.append("")
 
             rows.append(csvMachineSection("project_documents"))
-            rows.append(csv(["title", "category_key", "category_display", "submission_status", "responsible_person", "formed_at", "archive_number", "work_section", "page_count", "amount_raw", "amount_display", "created_at", "linked_financial_record_id", "file_name", "note", "project_id"]))
+            rows.append(csv([
+                "title",
+                "category_key",
+                "category_display",
+                "submission_status_raw",
+                "submission_status_display",
+                "responsible_person",
+                "formed_at",
+                "archive_number",
+                "work_section",
+                "page_count",
+                "amount_raw",
+                "amount_display",
+                "created_at",
+                "linked_financial_record_id",
+                "file_name",
+                "note",
+                "project_id"
+            ]))
             rows += snapshot.projectDocuments.map { document in
                 let amount = parsedAmountColumns(document.amount, currencyDisplayMode: options.currencyDisplayMode)
                 return csv([
                     document.title,
                     document.category.exportKey,
                     document.category.displayName,
+                    document.submissionStatus.exportKey,
                     document.submissionStatus.displayName,
                     document.responsiblePerson,
                     document.formedAt,
@@ -491,7 +522,7 @@ extension ProjectDocumentCategory {
     }
 }
 
-private extension ProjectContactRole {
+extension ProjectContactRole {
     var exportKey: String {
         switch self {
         case .owner: "owner"
@@ -552,5 +583,28 @@ private extension CircuitSupplyType {
         case .singlePhase: "single_phase"
         case .threePhase: "three_phase"
         }
+    }
+}
+
+extension ProjectDocumentSubmissionStatus {
+    var exportKey: String {
+        switch self {
+        case .notSubmitted: "not_submitted"
+        case .pending: "pending"
+        case .submitted: "submitted"
+        case .returned: "returned"
+        case .confirmed: "confirmed"
+        case .archived: "archived"
+        }
+    }
+}
+
+extension DocumentArchiveChecklistItem {
+    var statusExportKey: String {
+        if isMissing { return "missing" }
+        if returnedCount > 0 { return "returned" }
+        if actionCount > 0 { return "pending" }
+        if archivedCount == documentCount { return "archived" }
+        return "covered"
     }
 }

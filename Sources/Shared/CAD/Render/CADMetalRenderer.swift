@@ -19,9 +19,15 @@ extension CADPoC {
 
         private let commandQueue: MTLCommandQueue?
         private let renderPipelineState: MTLRenderPipelineState?
+        private var allRenderableEntities: [Kernel.CADEntity]
         private var entities: [Kernel.CADEntity]
+        private var layersByID: [String: Kernel.CADLayer]
         private var spatialIndex: CADSpatialIndex
         private var modelBounds: Kernel.CADBounds
+        private var progressiveRenderState: ProgressiveRenderState?
+        private var drawingRevision = 0
+        private var totalLayerCount = 0
+        private var featureOptions: CADCanvasFeatureOptions = .performanceDefault
 
         private var userZoom: Double = 1
         private var panOffsetPixels = SIMD2<Double>(0, 0)
@@ -29,10 +35,19 @@ extension CADPoC {
         private var firstFrameStart = Date()
         private var didRenderFirstFrame = false
         private var visibleLayerIDs: Set<String>?
+        private var selectedLayoutID: String?
+        private var highlightedSearchEntityID: Kernel.CADEntity.ID?
+        private var highlightedSearchBounds: Kernel.CADBounds?
+        private var lastPublishedSnapPoints: [CADRendererSnapPointPayload] = []
         private let minimumUserZoom = 0.05
         private let maximumUserZoom = 4096.0
         private let pinchZoomAcceleration = 2.4
         private let doubleTapZoomFactor = 3.6
+        private let maximumFilledHatchPointCount = 96
+        private let progressiveVisibleEntityThreshold = 2_000
+        private let progressiveEntityBatchSize = 1_000
+        private let progressiveCommandCacheLimit = 80_000
+        private let snapVisibleEntityLimit = 4_000
         var callbacks = CADRendererCallbacks()
         private var didApplyInitialViewState = false
         private var debugTextOverlays = false
@@ -42,12 +57,38 @@ extension CADPoC {
         private var textRasterCache = CADTextRasterCache()
         #endif
 
+        private struct ProgressiveRenderKey: Equatable {
+            var drawingRevision: Int
+            var viewportMinX: Int64
+            var viewportMinY: Int64
+            var viewportMaxX: Int64
+            var viewportMaxY: Int64
+            var zoomBucket: Int64
+            var visibleLayerKey: String
+            var visibleEntityCount: Int
+        }
+
+        private struct ProgressiveRenderState {
+            var key: ProgressiveRenderKey
+            var commands: [Kernel.CADRenderCommand] = []
+            var nextEntityOffset: Int = 0
+            var completed = false
+            var warnings: Set<String> = []
+        }
+
+        private struct FrameRenderPlan {
+            var output: CADPoC.CADRenderPipeline.Output
+            var needsContinuation: Bool
+        }
+
         override init() {
             let device = MTLCreateSystemDefaultDevice()
             self.device = device
             self.deviceName = device?.name
             self.commandQueue = device?.makeCommandQueue()
+            self.allRenderableEntities = []
             self.entities = []
+            self.layersByID = [:]
             self.spatialIndex = CADSpatialIndex()
             self.modelBounds = .empty
             self.renderPipelineState = Self.makeRenderPipelineState(
@@ -66,6 +107,7 @@ extension CADPoC {
             panOffsetPixels = SIMD2<Double>(0, 0)
             interactionPhase = .stable
             didApplyInitialViewState = false
+            progressiveRenderState = nil
         }
 
         func fitToView() {
@@ -73,10 +115,17 @@ extension CADPoC {
             panOffsetPixels = SIMD2<Double>(0, 0)
             interactionPhase = .stable
             didApplyInitialViewState = true
+            progressiveRenderState = nil
         }
 
         func updateEntities(_ importedEntities: [Kernel.CADEntity]) {
-            entities = importedEntities.filter { entity in
+            updateDrawing(entities: importedEntities, layers: Array(layersByID.values))
+        }
+
+        func updateDrawing(entities importedEntities: [Kernel.CADEntity], layers: [Kernel.CADLayer]) {
+            layersByID = Dictionary(uniqueKeysWithValues: layers.map { ($0.id, $0) })
+            totalLayerCount = max(layersByID.count, 1)
+            allRenderableEntities = importedEntities.filter { entity in
                 switch entity.kind {
                 case .line, .point, .polyline, .lwPolyline, .circle, .arc, .ellipse, .spline, .hatch, .dimension, .text, .mtext, .attrib, .image, .table:
                     return entity.isRenderable
@@ -84,15 +133,31 @@ extension CADPoC {
                     return false
                 }
             }
+            rebuildDrawingForCurrentLayout(resetViewState: true)
+        }
+
+        private func rebuildDrawingForCurrentLayout(resetViewState: Bool) {
+            entities = entitiesForSelectedLayout()
             spatialIndex = CADSpatialIndex(entities: entities)
             modelBounds = fitModelBounds(for: entities)
+            drawingRevision += 1
+            progressiveRenderState = nil
             firstFrameStart = Date()
             didRenderFirstFrame = false
             lastFrameTrace = Kernel.CADPerformanceTrace(entityCount: entities.count)
+            lastPublishedSnapPoints.removeAll()
+            clearSearchHighlight()
             #if os(iOS)
             textRasterCache.removeAll()
             #endif
-            resetView()
+            if resetViewState {
+                resetView()
+            }
+        }
+
+        private func entitiesForSelectedLayout() -> [Kernel.CADEntity] {
+            guard let selectedLayoutID else { return allRenderableEntities }
+            return allRenderableEntities.filter { $0.layoutID == selectedLayoutID }
         }
 
         func applyInitialViewStateIfNeeded(_ state: CADRendererViewState?, contentScale: CGFloat) {
@@ -111,11 +176,13 @@ extension CADPoC {
         func applyPan(deltaPoints: CGPoint, contentScale: CGFloat) {
             panOffsetPixels.x += Double(deltaPoints.x * contentScale)
             panOffsetPixels.y += Double(deltaPoints.y * contentScale)
+            progressiveRenderState = nil
         }
 
         func applyZoom(scale: CGFloat) {
             guard scale.isFinite, scale > 0 else { return }
             userZoom = clampedZoom(userZoom * acceleratedZoomDelta(for: Double(scale)))
+            progressiveRenderState = nil
         }
 
         func applyZoom(
@@ -133,6 +200,7 @@ extension CADPoC {
                 drawableSize: drawableSize,
                 viewSize: viewSize
             )
+            progressiveRenderState = nil
         }
 
         func applyDoubleTapZoom(
@@ -148,6 +216,7 @@ extension CADPoC {
                 drawableSize: drawableSize,
                 viewSize: viewSize
             )
+            progressiveRenderState = nil
         }
 
         func applyZoomStep(
@@ -165,6 +234,7 @@ extension CADPoC {
                 drawableSize: drawableSize,
                 viewSize: viewSize
             )
+            progressiveRenderState = nil
         }
 
         private func zoom(
@@ -205,15 +275,94 @@ extension CADPoC {
         }
 
         func setInteractionPhase(_ phase: Kernel.CADRenderInteractionPhase) {
+            if interactionPhase != phase {
+                progressiveRenderState = nil
+            }
             interactionPhase = phase
         }
 
         func setVisibleLayerIDs(_ layerIDs: Set<String>?) {
+            if visibleLayerIDs != layerIDs {
+                progressiveRenderState = nil
+            }
             visibleLayerIDs = layerIDs
+        }
+
+        func setSelectedLayoutID(_ layoutID: String?) {
+            guard selectedLayoutID != layoutID else { return }
+            selectedLayoutID = layoutID
+            rebuildDrawingForCurrentLayout(resetViewState: true)
+        }
+
+        func setFeatureOptions(_ options: CADCanvasFeatureOptions) {
+            guard featureOptions != options else { return }
+            featureOptions = options
+            progressiveRenderState = nil
+            if !options.publishesSnapPoints {
+                clearPublishedSnapPoints()
+            }
+            #if os(iOS)
+            if !options.rendersTextOverlays {
+                textRasterCache.removeAll()
+            }
+            #endif
         }
 
         func setDebugTextOverlays(_ enabled: Bool) {
             debugTextOverlays = enabled
+        }
+
+        func clearSearchHighlight() {
+            highlightedSearchEntityID = nil
+            highlightedSearchBounds = nil
+        }
+
+        func focusSearchResult(
+            entityID: Kernel.CADEntity.ID,
+            bounds: Kernel.CADBounds,
+            fallbackPoint: Kernel.CADPoint,
+            contentScale: CGFloat,
+            drawableSize: CGSize,
+            viewSize: CGSize
+        ) {
+            let focusBounds = searchFocusBounds(bounds: bounds, fallbackPoint: fallbackPoint)
+            guard !focusBounds.isEmpty,
+                  !modelBounds.isEmpty,
+                  drawableSize.width > 1,
+                  drawableSize.height > 1,
+                  viewSize.width > 1,
+                  viewSize.height > 1
+            else {
+                highlightedSearchEntityID = entityID
+                highlightedSearchBounds = focusBounds.isEmpty ? bounds : focusBounds
+                return
+            }
+
+            let baseScale = fitScale(drawableSize: drawableSize, viewSize: viewSize)
+            let viewScale = Double(max(drawableSize.width / max(viewSize.width, 1), 1))
+            let padding = max(24 * viewScale, fitContentInsetPoints(viewSize: viewSize) * viewScale * 2)
+            let availableWidth = max(Double(drawableSize.width) - padding * 2, 1)
+            let availableHeight = max(Double(drawableSize.height) - padding * 2, 1)
+            let width = max(focusBounds.width, 0.0001)
+            let height = max(focusBounds.height, 0.0001)
+            let targetScreenScale = min(availableWidth / width, availableHeight / height)
+            let nextZoom = clampedZoom(targetScreenScale / max(baseScale, 0.000001))
+
+            userZoom = nextZoom
+            keepWorldPoint(
+                focusBounds.center,
+                atScreenPoint: SIMD2<Double>(
+                    Double(drawableSize.width) / 2,
+                    Double(drawableSize.height) / 2
+                ),
+                drawableSize: drawableSize,
+                viewSize: viewSize
+            )
+            interactionPhase = .stable
+            didApplyInitialViewState = true
+            progressiveRenderState = nil
+            highlightedSearchEntityID = entityID
+            highlightedSearchBounds = normalizedHighlightBounds(bounds: bounds, fallbackPoint: fallbackPoint)
         }
 
         private func clampedZoom(_ value: Double) -> Double {
@@ -250,40 +399,55 @@ extension CADPoC {
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size
             )
+            let viewportEntitiesBeforeLayerFilter = spatialIndex.query(viewportBounds, layerIDs: nil)
             let visibleEntities = spatialIndex.query(viewportBounds, layerIDs: visibleLayerIDs)
+            let commandSourceEntities = entitiesAfterApplyingFeatureOptions(visibleEntities)
             let zoomScale = modelToScreenScale(
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size
             )
-            let pipelineOutput = CADRenderPipeline(
-                lodPolicy: lodPolicy(for: interactionPhase)
-            ).renderOutput(
-                from: visibleEntities,
-                totalEntityCount: entities.count,
-                zoomScale: zoomScale,
-                interactionPhase: interactionPhase,
-                renderBudget: renderBudget(for: interactionPhase, visibleEntityCount: visibleEntities.count)
+            let renderPlan = renderOutputForFrame(
+                visibleEntities: commandSourceEntities,
+                viewportBounds: viewportBounds,
+                zoomScale: zoomScale
             )
-            let textCommandCount = pipelineOutput.commands.cadTextCommandCount
+            var pipelineOutput = renderPlan.output
+            pipelineOutput.commands = commandsAfterApplyingFeatureOptions(pipelineOutput.commands)
+            pipelineOutput.performance.renderCommandCount = pipelineOutput.commands.count
+            pipelineOutput.performance.drawCallCount = pipelineOutput.commands.reduce(0) { $0 + $1.drawCallCost }
+            let textCommandCount = featureOptions.rendersTextOverlays ? pipelineOutput.commands.cadTextCommandCount : 0
+            if featureOptions.publishesSnapPoints {
+                publishSnapPoints(from: visibleEntities)
+            } else {
+                clearPublishedSnapPoints()
+            }
             syncTextOverlays(
-                commands: pipelineOutput.commands,
+                commands: featureOptions.rendersTextOverlays ? pipelineOutput.commands : [],
                 view: view,
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
-            let vertices = makeVertices(
+            var vertices = makeVertices(
                 commands: pipelineOutput.commands,
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
+            vertices.append(contentsOf: makeSearchHighlightVertices(
+                drawableSize: view.drawableSize,
+                viewSize: view.bounds.size,
+                contentScale: view.contentScaleFactor
+            ))
             updateFrameTrace(
                 pipelineTrace: pipelineOutput.performance,
                 frameStart: frameStart,
                 didProduceCommands: !pipelineOutput.commands.isEmpty,
                 textCommandCount: textCommandCount,
-                textOverlayCount: currentTextOverlayCount
+                textOverlayCount: currentTextOverlayCount,
+                viewportBounds: viewportBounds,
+                viewportEntityCountBeforeLayerFilter: viewportEntitiesBeforeLayerFilter.count,
+                vertexCount: vertices.count
             )
             publishCanvasState(
                 view: view,
@@ -316,6 +480,166 @@ extension CADPoC {
             encoder.endEncoding()
             commandBuffer.present(drawable)
             commandBuffer.commit()
+            if renderPlan.needsContinuation {
+                DispatchQueue.main.async { [weak view] in
+                    view?.setNeedsDisplay()
+                }
+            }
+        }
+
+        private func commandsAfterApplyingFeatureOptions(
+            _ commands: [Kernel.CADRenderCommand]
+        ) -> [Kernel.CADRenderCommand] {
+            commands.flatMap { command -> [Kernel.CADRenderCommand] in
+                if case let .hatch(path, style) = command,
+                   !featureOptions.rendersHatches {
+                    let points = path.points
+                    return points.count >= 2
+                        ? [.polyline(points, closed: path.isClosed, style: style)]
+                        : []
+                }
+                return featureOptions.allows(command) ? [command] : []
+            }
+        }
+
+        private func entitiesAfterApplyingFeatureOptions(
+            _ visibleEntities: [Kernel.CADEntity]
+        ) -> [Kernel.CADEntity] {
+            guard !featureOptions.rendersTextOverlays else { return visibleEntities }
+            return visibleEntities.filter { entity in
+                switch entity.kind {
+                case .text, .mtext, .attrib:
+                    return false
+                default:
+                    return true
+                }
+            }
+        }
+
+        private func renderOutputForFrame(
+            visibleEntities: [Kernel.CADEntity],
+            viewportBounds: Kernel.CADBounds,
+            zoomScale: Double
+        ) -> FrameRenderPlan {
+            let budget = renderBudget(for: interactionPhase, visibleEntityCount: visibleEntities.count)
+            let pipeline = CADRenderPipeline(lodPolicy: lodPolicy(for: interactionPhase))
+            guard interactionPhase == .stable,
+                  visibleEntities.count > progressiveVisibleEntityThreshold
+            else {
+                progressiveRenderState = nil
+                return FrameRenderPlan(
+                    output: pipeline.renderOutput(
+                        from: visibleEntities,
+                        layersByID: layersByID,
+                        totalEntityCount: entities.count,
+                        visibleEntityCount: visibleEntities.count,
+                        zoomScale: zoomScale,
+                        interactionPhase: interactionPhase,
+                        renderBudget: budget
+                    ),
+                    needsContinuation: false
+                )
+            }
+
+            let key = progressiveKey(
+                viewportBounds: viewportBounds,
+                zoomScale: zoomScale,
+                visibleEntityCount: visibleEntities.count
+            )
+            if progressiveRenderState?.key != key {
+                progressiveRenderState = ProgressiveRenderState(key: key)
+            }
+
+            var state = progressiveRenderState ?? ProgressiveRenderState(key: key)
+            let renderStart = Date()
+            if !state.completed, state.nextEntityOffset < visibleEntities.count {
+                let remainingCommandCapacity = max(progressiveCommandCacheLimit - state.commands.count, 0)
+                if remainingCommandCapacity == 0 {
+                    state.completed = true
+                    state.warnings.insert("CAD_POC_PROGRESSIVE_COMMAND_CACHE_LIMIT")
+                } else {
+                    let batchEnd = min(
+                        state.nextEntityOffset + progressiveEntityBatchSize,
+                        visibleEntities.count
+                    )
+                    let batch = Array(visibleEntities[state.nextEntityOffset..<batchEnd])
+                    let batchBudget = Kernel.CADRenderBudget(
+                        maxRenderCommands: min(remainingCommandCapacity, budget.maxRenderCommands),
+                        maxFrameTimeMilliseconds: min(budget.maxFrameTimeMilliseconds, 24)
+                    )
+                    let batchOutput = pipeline.renderOutput(
+                        from: batch,
+                        layersByID: layersByID,
+                        totalEntityCount: entities.count,
+                        visibleEntityCount: visibleEntities.count,
+                        zoomScale: zoomScale,
+                        interactionPhase: interactionPhase,
+                        renderBudget: batchBudget
+                    )
+                    state.commands.append(contentsOf: batchOutput.commands.prefix(remainingCommandCapacity))
+                    state.nextEntityOffset = batchEnd
+                    state.warnings.formUnion(batchOutput.performance.warnings)
+                    if batchOutput.commands.count >= remainingCommandCapacity {
+                        state.completed = true
+                        state.warnings.insert("CAD_POC_PROGRESSIVE_COMMAND_CACHE_LIMIT")
+                    }
+                }
+            }
+
+            if state.nextEntityOffset >= visibleEntities.count {
+                state.completed = true
+            }
+
+            let needsContinuation = !state.completed
+            if needsContinuation {
+                state.warnings.insert("CAD_POC_PROGRESSIVE_RENDERING")
+            }
+            progressiveRenderState = state
+
+            let skippedEntityCount = max(visibleEntities.count - min(state.nextEntityOffset, visibleEntities.count), 0)
+            let renderMs = Date().timeIntervalSince(renderStart) * 1000
+            let commands = state.commands
+            let trace = Kernel.CADPerformanceTrace(
+                entityCount: entities.count,
+                visibleEntityCount: visibleEntities.count,
+                renderCommandCount: commands.count,
+                drawCallCount: commands.reduce(0) { $0 + $1.drawCallCost },
+                renderMs: renderMs,
+                frameTimeMilliseconds: renderMs,
+                peakMemoryMB: estimateProgressivePeakMemoryMB(
+                    visibleEntityCount: visibleEntities.count,
+                    commandCount: commands.count
+                ),
+                skippedEntityCount: skippedEntityCount,
+                warnings: Array(state.warnings).sorted()
+            )
+            return FrameRenderPlan(
+                output: CADPoC.CADRenderPipeline.Output(commands: commands, performance: trace),
+                needsContinuation: needsContinuation
+            )
+        }
+
+        private func progressiveKey(
+            viewportBounds: Kernel.CADBounds,
+            zoomScale: Double,
+            visibleEntityCount: Int
+        ) -> ProgressiveRenderKey {
+            let span = max(max(modelBounds.width, modelBounds.height), 1)
+            let bucketSize = max(span / 4096, 0.001)
+            func bucket(_ value: Double) -> Int64 {
+                Int64((value / bucketSize).rounded())
+            }
+            let layerKey = visibleLayerIDs?.sorted().joined(separator: ",") ?? "all"
+            return ProgressiveRenderKey(
+                drawingRevision: drawingRevision,
+                viewportMinX: bucket(viewportBounds.minX),
+                viewportMinY: bucket(viewportBounds.minY),
+                viewportMaxX: bucket(viewportBounds.maxX),
+                viewportMaxY: bucket(viewportBounds.maxY),
+                zoomBucket: Int64((log2(max(zoomScale, 0.0001)) * 64).rounded()),
+                visibleLayerKey: layerKey,
+                visibleEntityCount: visibleEntityCount
+            )
         }
 
         private func updateFrameTrace(
@@ -323,7 +647,10 @@ extension CADPoC {
             frameStart: Date,
             didProduceCommands: Bool,
             textCommandCount: Int,
-            textOverlayCount: Int
+            textOverlayCount: Int,
+            viewportBounds: Kernel.CADBounds,
+            viewportEntityCountBeforeLayerFilter: Int,
+            vertexCount: Int
         ) {
             var trace = pipelineTrace
             let frameMs = Date().timeIntervalSince(frameStart) * 1000
@@ -337,19 +664,35 @@ extension CADPoC {
             }
             lastFrameTrace = trace
             logFrameTrace(trace)
+            let modelBoundsValid = modelBounds.isFiniteForCADDisplay
+            let viewportBoundsValid = viewportBounds.isFiniteForCADDisplay
+            let viewportIntersectsModel = modelBoundsValid
+                && viewportBoundsValid
+                && modelBounds.intersects(viewportBounds)
             callbacks.onPerformanceSample(
                 CADRendererPerformanceSnapshot(
                     entityCountInViewport: trace.visibleEntityCount,
                     drawCallCount: trace.drawCallCount,
                     frameTimeMilliseconds: trace.frameTimeMilliseconds,
                     skippedEntityCount: trace.skippedEntityCount,
-                    visibleLayerCount: visibleLayerIDs?.count ?? Set(entities.map(\.layerID)).count,
+                    visibleLayerCount: visibleLayerIDs?.count ?? totalLayerCount,
+                    totalLayerCount: totalLayerCount,
                     simplifiedMode: interactionPhase != .stable,
                     renderCommandCount: trace.renderCommandCount,
                     textCommandCount: textCommandCount,
                     textOverlayCount: textOverlayCount,
                     renderMs: trace.renderMs,
-                    firstFrameMs: trace.firstFrameMs
+                    firstFrameMs: trace.firstFrameMs,
+                    totalEntityCount: entities.count,
+                    indexedEntityCount: spatialIndex.indexedEntityCount,
+                    viewportEntityCountBeforeLayerFilter: viewportEntityCountBeforeLayerFilter,
+                    layerFilterActive: visibleLayerIDs != nil,
+                    modelBounds: CGRect(modelBounds),
+                    viewportBounds: CGRect(viewportBounds),
+                    modelBoundsValid: modelBoundsValid,
+                    viewportBoundsValid: viewportBoundsValid,
+                    viewportIntersectsModel: viewportIntersectsModel,
+                    vertexCount: vertexCount
                 )
             )
         }
@@ -410,6 +753,399 @@ extension CADPoC {
                 )
             }
         }
+
+        static func makeSnapPointPayloads(
+            for entities: [Kernel.CADEntity],
+            maxSegmentCount: Int = 1_800,
+            maxIntersectionCount: Int = 4_000
+        ) -> [CADRendererSnapPointPayload] {
+            CADSnapPrimitiveExtractor(
+                entities: entities,
+                maxSegmentCount: maxSegmentCount,
+                maxIntersectionCount: maxIntersectionCount
+            ).makePayloads()
+        }
+
+        private func publishSnapPoints(from visibleEntities: [Kernel.CADEntity]) {
+            let snapEntities = visibleEntities.count > snapVisibleEntityLimit
+                ? Array(visibleEntities.prefix(snapVisibleEntityLimit))
+                : visibleEntities
+            let payloads = Self.makeSnapPointPayloads(for: snapEntities)
+            guard payloads != lastPublishedSnapPoints else { return }
+            lastPublishedSnapPoints = payloads
+            callbacks.onSnapPointsChange(payloads)
+        }
+
+        private func clearPublishedSnapPoints() {
+            guard !lastPublishedSnapPoints.isEmpty else { return }
+            lastPublishedSnapPoints = []
+            callbacks.onSnapPointsChange([])
+        }
+    }
+}
+
+private struct CADSnapPrimitiveExtractor {
+    typealias Kernel = SiteKeeperCADKernel
+
+    struct Segment {
+        let start: Kernel.CADPoint
+        let end: Kernel.CADPoint
+        let layerID: String
+        let primitiveKind: String
+        let color: UInt32
+        let lineWeight: Double
+        let lineType: String
+
+        var bounds: Kernel.CADBounds {
+            Kernel.CADBounds.empty.including(start).including(end)
+        }
+    }
+
+    let entities: [Kernel.CADEntity]
+    let maxSegmentCount: Int
+    let maxIntersectionCount: Int
+
+    func makePayloads() -> [CADRendererSnapPointPayload] {
+        var builder = CADSnapPointPayloadBuilder()
+        var segments: [Segment] = []
+        segments.reserveCapacity(min(entities.count * 2, maxSegmentCount))
+
+        for entity in entities where entity.visibility == .visible {
+            appendSnapPoints(for: entity, to: &builder)
+            if segments.count < maxSegmentCount {
+                segments.append(contentsOf: snapSegments(for: entity, remaining: maxSegmentCount - segments.count))
+            }
+        }
+
+        appendIntersections(from: segments, to: &builder)
+        return builder.payloads
+    }
+
+    private func appendSnapPoints(
+        for entity: Kernel.CADEntity,
+        to builder: inout CADSnapPointPayloadBuilder
+    ) {
+        let primitiveKind = snapPrimitiveKind(for: entity)
+        switch entity.kind {
+        case .line, .polyline, .lwPolyline, .spline, .dimension, .hatch:
+            appendPathSnapPoints(
+                entity.path,
+                closed: entity.path?.isClosedForSnap == true,
+                entity: entity,
+                primitiveKind: primitiveKind,
+                to: &builder
+            )
+        case .arc:
+            builder.append(entity.bounds.center, kind: "center", entity: entity, primitiveKind: primitiveKind)
+            appendPathSnapPoints(
+                entity.path,
+                closed: false,
+                entity: entity,
+                primitiveKind: primitiveKind,
+                to: &builder
+            )
+        case .circle, .ellipse:
+            builder.append(entity.bounds.center, kind: "center", entity: entity, primitiveKind: primitiveKind)
+            appendCardinalBoundsPoints(for: entity, primitiveKind: primitiveKind, to: &builder)
+        case .text, .mtext, .attrib:
+            if let text = entity.text {
+                builder.append(text.insertionPoint, kind: "center", entity: entity, primitiveKind: primitiveKind)
+            } else {
+                builder.append(entity.bounds.center, kind: "center", entity: entity, primitiveKind: primitiveKind)
+            }
+        case .point:
+            builder.append(entity.bounds.center, kind: "endpoint", entity: entity, primitiveKind: primitiveKind)
+        case .image, .table, .insert, .blockReference:
+            appendBoundsSnapPoints(for: entity, primitiveKind: primitiveKind, to: &builder)
+        case .xref, .proxy, .unsupported:
+            return
+        }
+    }
+
+    private func appendPathSnapPoints(
+        _ path: Kernel.CADPath?,
+        closed: Bool,
+        entity: Kernel.CADEntity,
+        primitiveKind: String,
+        to builder: inout CADSnapPointPayloadBuilder
+    ) {
+        guard let path else { return }
+        let points = path.pointsForSnap
+        guard !points.isEmpty else { return }
+        for point in points {
+            builder.append(point, kind: "endpoint", entity: entity, primitiveKind: primitiveKind)
+        }
+        for segment in segments(from: points, closed: closed, entity: entity, primitiveKind: primitiveKind) {
+            builder.append(segment.midpoint, kind: "midpoint", entity: entity, primitiveKind: primitiveKind)
+        }
+    }
+
+    private func appendCardinalBoundsPoints(
+        for entity: Kernel.CADEntity,
+        primitiveKind: String,
+        to builder: inout CADSnapPointPayloadBuilder
+    ) {
+        guard !entity.bounds.isEmpty else { return }
+        let center = entity.bounds.center
+        [
+            Kernel.CADPoint(x: center.x, y: entity.bounds.maxY),
+            Kernel.CADPoint(x: entity.bounds.maxX, y: center.y),
+            Kernel.CADPoint(x: center.x, y: entity.bounds.minY),
+            Kernel.CADPoint(x: entity.bounds.minX, y: center.y)
+        ].forEach {
+            builder.append($0, kind: "endpoint", entity: entity, primitiveKind: primitiveKind)
+        }
+    }
+
+    private func appendBoundsSnapPoints(
+        for entity: Kernel.CADEntity,
+        primitiveKind: String,
+        to builder: inout CADSnapPointPayloadBuilder
+    ) {
+        guard !entity.bounds.isEmpty else { return }
+        let corners = [
+            Kernel.CADPoint(x: entity.bounds.minX, y: entity.bounds.minY),
+            Kernel.CADPoint(x: entity.bounds.maxX, y: entity.bounds.minY),
+            Kernel.CADPoint(x: entity.bounds.maxX, y: entity.bounds.maxY),
+            Kernel.CADPoint(x: entity.bounds.minX, y: entity.bounds.maxY)
+        ]
+        corners.forEach {
+            builder.append($0, kind: "endpoint", entity: entity, primitiveKind: primitiveKind)
+        }
+        builder.append(entity.bounds.center, kind: "center", entity: entity, primitiveKind: primitiveKind)
+    }
+
+    private func snapSegments(
+        for entity: Kernel.CADEntity,
+        remaining: Int
+    ) -> [Segment] {
+        guard remaining > 0, let path = entity.path else { return [] }
+        switch entity.kind {
+        case .line, .polyline, .lwPolyline, .spline, .dimension, .hatch:
+            return Array(segments(
+                from: path.pointsForSnap,
+                closed: path.isClosedForSnap,
+                entity: entity,
+                primitiveKind: snapPrimitiveKind(for: entity)
+            ).prefix(remaining))
+        default:
+            return []
+        }
+    }
+
+    private func appendIntersections(
+        from segments: [Segment],
+        to builder: inout CADSnapPointPayloadBuilder
+    ) {
+        guard segments.count > 1 else { return }
+        var intersectionCount = 0
+        for leftIndex in 0..<(segments.count - 1) {
+            let left = segments[leftIndex]
+            for rightIndex in (leftIndex + 1)..<segments.count {
+                guard intersectionCount < maxIntersectionCount else { return }
+                let right = segments[rightIndex]
+                guard left.bounds.intersects(right.bounds.expanded(by: 0.000001)),
+                      let point = intersection(of: left, and: right) else {
+                    continue
+                }
+                builder.append(
+                    point,
+                    kind: "intersection",
+                    layer: [left.layerID, right.layerID]
+                        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                        .uniquedForSnap()
+                        .joined(separator: "/"),
+                    primitiveKind: "line",
+                    styleRGB: left.color,
+                    styleWidth: CGFloat(max(left.lineWeight, right.lineWeight, 1)),
+                    styleName: left.lineType
+                )
+                intersectionCount += 1
+            }
+        }
+    }
+
+    private func segments(
+        from points: [Kernel.CADPoint],
+        closed: Bool,
+        entity: Kernel.CADEntity,
+        primitiveKind: String
+    ) -> [Segment] {
+        guard points.count >= 2 else { return [] }
+        var result: [Segment] = []
+        result.reserveCapacity(points.count)
+        for index in 0..<(points.count - 1) {
+            result.append(segment(from: points[index], to: points[index + 1], entity: entity, primitiveKind: primitiveKind))
+        }
+        if closed, let first = points.first, let last = points.last, first != last {
+            result.append(segment(from: last, to: first, entity: entity, primitiveKind: primitiveKind))
+        }
+        return result
+    }
+
+    private func segment(
+        from start: Kernel.CADPoint,
+        to end: Kernel.CADPoint,
+        entity: Kernel.CADEntity,
+        primitiveKind: String
+    ) -> Segment {
+        Segment(
+            start: start,
+            end: end,
+            layerID: entity.layerID,
+            primitiveKind: primitiveKind,
+            color: entity.color,
+            lineWeight: entity.lineWeight,
+            lineType: entity.lineType
+        )
+    }
+
+    private func intersection(of left: Segment, and right: Segment) -> Kernel.CADPoint? {
+        let p = left.start
+        let r = Kernel.CADPoint(x: left.end.x - left.start.x, y: left.end.y - left.start.y)
+        let q = right.start
+        let s = Kernel.CADPoint(x: right.end.x - right.start.x, y: right.end.y - right.start.y)
+        let denominator = cross(r, s)
+        guard abs(denominator) > 0.000000001 else { return nil }
+
+        let qp = Kernel.CADPoint(x: q.x - p.x, y: q.y - p.y)
+        let t = cross(qp, s) / denominator
+        let u = cross(qp, r) / denominator
+        guard t >= -0.000001, t <= 1.000001, u >= -0.000001, u <= 1.000001 else {
+            return nil
+        }
+
+        return Kernel.CADPoint(x: p.x + r.x * t, y: p.y + r.y * t)
+    }
+
+    private func cross(_ left: Kernel.CADPoint, _ right: Kernel.CADPoint) -> Double {
+        left.x * right.y - left.y * right.x
+    }
+
+    private func snapPrimitiveKind(for entity: Kernel.CADEntity) -> String {
+        switch entity.kind {
+        case .line:
+            return "line"
+        case .polyline, .lwPolyline, .spline:
+            return "polyline"
+        case .arc:
+            return "arc"
+        case .circle:
+            return "circle"
+        case .ellipse:
+            return "ellipse"
+        case .text:
+            return "text"
+        case .mtext, .attrib:
+            return "mtext"
+        case .dimension:
+            return "dimension"
+        case .hatch:
+            return "hatch"
+        case .image:
+            return "image"
+        case .insert, .blockReference:
+            return "blockRef"
+        case .point, .table:
+            return "line"
+        case .xref, .proxy, .unsupported:
+            return "unknownProxy"
+        }
+    }
+}
+
+private struct CADSnapPointPayloadBuilder {
+    typealias Kernel = SiteKeeperCADKernel
+
+    private(set) var payloads: [CADRendererSnapPointPayload] = []
+    private var seenKeys = Set<String>()
+
+    mutating func append(
+        _ point: Kernel.CADPoint,
+        kind: String,
+        entity: Kernel.CADEntity,
+        primitiveKind: String
+    ) {
+        append(
+            point,
+            kind: kind,
+            layer: entity.layerID,
+            primitiveKind: primitiveKind,
+            styleRGB: entity.color,
+            styleWidth: CGFloat(max(entity.lineWeight, 1)),
+            styleName: entity.lineType
+        )
+    }
+
+    mutating func append(
+        _ point: Kernel.CADPoint,
+        kind: String,
+        layer: String,
+        primitiveKind: String,
+        styleRGB: UInt32,
+        styleWidth: CGFloat,
+        styleName: String?
+    ) {
+        guard point.x.isFinite, point.y.isFinite else { return }
+        let key = "\(kind)|\(quantized(point.x))|\(quantized(point.y))|\(layer)|\(primitiveKind)"
+        guard seenKeys.insert(key).inserted else { return }
+        payloads.append(
+            CADRendererSnapPointPayload(
+                point: point.cgPoint,
+                snapKind: kind,
+                layer: layer,
+                primitiveKind: primitiveKind,
+                styleRGB: styleRGB,
+                styleWidth: styleWidth,
+                styleName: styleName
+            )
+        )
+    }
+
+    private func quantized(_ value: Double) -> Int64 {
+        Int64((value * 10_000).rounded())
+    }
+}
+
+private extension SiteKeeperCADKernel.CADPoint {
+    var isFiniteForSnap: Bool {
+        x.isFinite && y.isFinite
+    }
+
+    static func midpoint(_ start: SiteKeeperCADKernel.CADPoint, _ end: SiteKeeperCADKernel.CADPoint) -> SiteKeeperCADKernel.CADPoint {
+        SiteKeeperCADKernel.CADPoint(x: (start.x + end.x) / 2, y: (start.y + end.y) / 2)
+    }
+}
+
+private extension CADSnapPrimitiveExtractor.Segment {
+    var midpoint: SiteKeeperCADKernel.CADPoint {
+        .midpoint(start, end)
+    }
+}
+
+private extension SiteKeeperCADKernel.CADPath {
+    var pointsForSnap: [SiteKeeperCADKernel.CADPoint] {
+        points.filter(\.isFiniteForSnap)
+    }
+
+    var isClosedForSnap: Bool {
+        elements.contains {
+            if case .close = $0 {
+                return true
+            }
+            return false
+        }
+    }
+}
+
+private extension Array where Element == String {
+    func uniquedForSnap() -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for value in self where seen.insert(value).inserted {
+            result.append(value)
+        }
+        return result
     }
 }
 
@@ -486,8 +1222,18 @@ private extension CADPoC.CADMetalRenderer {
         visibleEntityCount: Int
     ) -> Kernel.CADRenderBudget {
         guard phase == .stable else { return .interactive }
+        if visibleEntityCount > progressiveVisibleEntityThreshold {
+            return Kernel.CADRenderBudget(maxRenderCommands: 12_000, maxFrameTimeMilliseconds: 24)
+        }
         let commandBudget = min(max(visibleEntityCount * 2, Kernel.CADRenderBudget.standard.maxRenderCommands), 300_000)
         return Kernel.CADRenderBudget(maxRenderCommands: commandBudget, maxFrameTimeMilliseconds: 500)
+    }
+
+    func estimateProgressivePeakMemoryMB(
+        visibleEntityCount: Int,
+        commandCount: Int
+    ) -> Double {
+        Double(visibleEntityCount * 96 + commandCount * 112) / 1_048_576
     }
 
     var currentTextOverlayCount: Int {
@@ -615,6 +1361,7 @@ private extension CADPoC.CADMetalRenderer {
         )
         let markerSize = 5.0 * Double(max(contentScale, 1))
         let color = rgbaVector(fromARGB: style.colorARGB)
+        let width = screenLineWidth(for: style.lineWidth, contentScale: contentScale)
         let horizontalStart = SIMD2<Double>(screen.x - markerSize, screen.y)
         let horizontalEnd = SIMD2<Double>(screen.x + markerSize, screen.y)
         let verticalStart = SIMD2<Double>(screen.x, screen.y - markerSize)
@@ -623,13 +1370,13 @@ private extension CADPoC.CADMetalRenderer {
             from: horizontalStart,
             to: horizontalEnd,
             color: color,
-            width: max(style.lineWidth * Double(contentScale), 2),
+            width: width,
             drawableSize: drawableSize
         ) + makeScreenSegmentVertices(
             from: verticalStart,
             to: verticalEnd,
             color: color,
-            width: max(style.lineWidth * Double(contentScale), 2),
+            width: width,
             drawableSize: drawableSize
         )
     }
@@ -672,6 +1419,89 @@ private extension CADPoC.CADMetalRenderer {
         )
     }
 
+    func makeSearchHighlightVertices(
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> [CADMetalVertex] {
+        guard let highlightedSearchBounds,
+              !highlightedSearchBounds.isEmpty,
+              !modelBounds.isEmpty else {
+            return []
+        }
+
+        let modelScale = max(modelToScreenScale(drawableSize: drawableSize, viewSize: viewSize), 0.000001)
+        let worldPadding = max(8 / modelScale, max(highlightedSearchBounds.width, highlightedSearchBounds.height) * 0.18)
+        let outlineBounds = highlightedSearchBounds.expanded(by: worldPadding)
+        let outlineStyle = Kernel.CADRenderStyle(
+            layerID: "cad-search-highlight",
+            colorARGB: 0xFFFFB000,
+            lineWidth: 3.0,
+            lineType: "Continuous"
+        )
+        let centerStyle = Kernel.CADRenderStyle(
+            layerID: "cad-search-highlight",
+            colorARGB: 0xFF2563EB,
+            lineWidth: 2.0,
+            lineType: "Continuous"
+        )
+        return makeBoundsPlaceholderVertices(
+            bounds: outlineBounds,
+            style: outlineStyle,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ) + makeMarkerVertices(
+            point: highlightedSearchBounds.center,
+            style: centerStyle,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        )
+    }
+
+    func searchFocusBounds(
+        bounds: Kernel.CADBounds,
+        fallbackPoint: Kernel.CADPoint
+    ) -> Kernel.CADBounds {
+        let highlightBounds = normalizedHighlightBounds(bounds: bounds, fallbackPoint: fallbackPoint)
+        guard !highlightBounds.isEmpty else { return .empty }
+        let drawingSpan = max(max(modelBounds.width, modelBounds.height), 1)
+        let localSpan = max(max(highlightBounds.width, highlightBounds.height), 1)
+        let padding = max(localSpan * 1.35, min(max(drawingSpan * 0.004, 8), drawingSpan * 0.08))
+        return highlightBounds.expanded(by: padding)
+    }
+
+    func normalizedHighlightBounds(
+        bounds: Kernel.CADBounds,
+        fallbackPoint: Kernel.CADPoint
+    ) -> Kernel.CADBounds {
+        let source = bounds.isFiniteForCADDisplay ? bounds : Kernel.CADBounds(
+            minX: fallbackPoint.x,
+            minY: fallbackPoint.y,
+            maxX: fallbackPoint.x,
+            maxY: fallbackPoint.y
+        )
+        guard source.isFiniteForCADDisplay else { return .empty }
+        let drawingSpan = max(max(modelBounds.width, modelBounds.height), 1)
+        let minimumSpan = max(drawingSpan * 0.0008, 0.5)
+        var minX = source.minX
+        var maxX = source.maxX
+        var minY = source.minY
+        var maxY = source.maxY
+        if maxX - minX < minimumSpan {
+            let center = (minX + maxX) / 2
+            minX = center - minimumSpan / 2
+            maxX = center + minimumSpan / 2
+        }
+        if maxY - minY < minimumSpan {
+            let center = (minY + maxY) / 2
+            minY = center - minimumSpan / 2
+            maxY = center + minimumSpan / 2
+        }
+        return Kernel.CADBounds(minX: minX, minY: minY, maxX: maxX, maxY: maxY)
+    }
+
     func makeHatchVertices(
         path: Kernel.CADPath,
         style: Kernel.CADRenderStyle,
@@ -681,6 +1511,16 @@ private extension CADPoC.CADMetalRenderer {
     ) -> [CADMetalVertex] {
         let points = path.points
         guard points.count >= 3 else {
+            return makePolylineVertices(
+                points: points,
+                closed: path.isClosed,
+                style: style,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                contentScale: contentScale
+            )
+        }
+        guard path.isClosed, points.count <= maximumFilledHatchPointCount else {
             return makePolylineVertices(
                 points: points,
                 closed: path.isClosed,
@@ -706,11 +1546,12 @@ private extension CADPoC.CADMetalRenderer {
         let boundaryStyle = Kernel.CADRenderStyle(
             layerID: style.layerID,
             colorARGB: style.colorARGB,
-            lineWidth: max(style.lineWidth, 1)
+            lineWidth: max(style.lineWidth, 1),
+            lineType: style.lineType
         )
         vertices.append(contentsOf: makePolylineVertices(
             points: points,
-            closed: true,
+            closed: path.isClosed,
             style: boundaryStyle,
             drawableSize: drawableSize,
             viewSize: viewSize,
@@ -774,14 +1615,102 @@ private extension CADPoC.CADMetalRenderer {
             viewSize: viewSize
         )
         let color = rgbaVector(fromARGB: style.colorARGB)
+        let screenWidth = screenLineWidth(for: style.lineWidth, contentScale: contentScale)
+        let pattern = lineTypePattern(for: style.lineType, screenLineWidth: screenWidth)
 
-        vertices.append(contentsOf: makeScreenSegmentVertices(
-            from: startScreen,
-            to: endScreen,
-            color: color,
-            width: max(style.lineWidth * Double(contentScale), 2),
-            drawableSize: drawableSize
-        ))
+        if pattern.isEmpty {
+            vertices.append(contentsOf: makeScreenSegmentVertices(
+                from: startScreen,
+                to: endScreen,
+                color: color,
+                width: screenWidth,
+                drawableSize: drawableSize
+            ))
+        } else {
+            for dash in dashedScreenSegments(from: startScreen, to: endScreen, pattern: pattern) {
+                vertices.append(contentsOf: makeScreenSegmentVertices(
+                    from: dash.0,
+                    to: dash.1,
+                    color: color,
+                    width: screenWidth,
+                    drawableSize: drawableSize
+                ))
+            }
+        }
+    }
+
+    func screenLineWidth(for lineWidth: Double, contentScale: CGFloat) -> Double {
+        let scale = Double(max(contentScale, 1))
+        let normalized = lineWidth.isFinite && lineWidth > 0 ? lineWidth : 0.25
+        let points: Double
+        if normalized >= 2 {
+            points = min(normalized, 12)
+        } else {
+            points = min(max(1 + normalized * 2.5, 1), 7)
+        }
+        return max(points * scale, 1.5)
+    }
+
+    func lineTypePattern(for lineType: String, screenLineWidth: Double) -> [Double] {
+        let normalized = lineType
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .replacingOccurrences(of: "_", with: "")
+            .replacingOccurrences(of: "-", with: "")
+        guard !normalized.isEmpty,
+              normalized != "continuous",
+              normalized != "bylayer",
+              normalized != "byblock" else {
+            return []
+        }
+
+        let unit = max(screenLineWidth, 1.5)
+        if normalized.contains("center") {
+            return [unit * 12, unit * 3, unit * 2, unit * 3]
+        }
+        if normalized.contains("phantom") {
+            return [unit * 12, unit * 3, unit * 2, unit * 3, unit * 2, unit * 3]
+        }
+        if normalized.contains("dashdot") {
+            return [unit * 8, unit * 3, unit * 2, unit * 3]
+        }
+        if normalized.contains("dot") {
+            return [unit * 1.4, unit * 3]
+        }
+        if normalized.contains("hidden") || normalized.contains("dash") {
+            return [unit * 8, unit * 4]
+        }
+        return []
+    }
+
+    func dashedScreenSegments(
+        from start: SIMD2<Double>,
+        to end: SIMD2<Double>,
+        pattern: [Double]
+    ) -> [(SIMD2<Double>, SIMD2<Double>)] {
+        guard pattern.count >= 2 else { return [(start, end)] }
+        let dx = end.x - start.x
+        let dy = end.y - start.y
+        let length = hypot(dx, dy)
+        guard length > 0.01 else { return [] }
+
+        let direction = SIMD2<Double>(dx / length, dy / length)
+        var cursor = 0.0
+        var patternIndex = 0
+        var result: [(SIMD2<Double>, SIMD2<Double>)] = []
+        while cursor < length, result.count < 4096 {
+            let segmentLength = max(pattern[patternIndex % pattern.count], 0.5)
+            let next = min(cursor + segmentLength, length)
+            if patternIndex.isMultiple(of: 2), next > cursor {
+                result.append((
+                    start + direction * cursor,
+                    start + direction * next
+                ))
+            }
+            cursor = next
+            patternIndex += 1
+        }
+        return result
     }
 
     func makeScreenSegmentVertices(
@@ -1050,7 +1979,11 @@ private extension CADPoC.CADMetalRenderer {
             viewSize: viewSize
         )
         let modelScale = modelToScreenScale(drawableSize: drawableSize, viewSize: viewSize)
-        let fontSize = min(max(text.height * modelScale / Double(max(contentScale, 1)), 8), 96)
+        let fontSize = Self.textOverlayFontSize(
+            textHeight: text.height,
+            modelScale: modelScale,
+            contentScale: contentScale
+        )
         let displayText = text.displayText.isEmpty ? " " : text.displayText
         let font = uiFont(named: text.selectedFontName, supporting: displayText, size: CGFloat(fontSize))
         let textColor = readableTextColor(fromARGB: style.colorARGB)
@@ -1092,10 +2025,17 @@ private extension CADPoC.CADMetalRenderer {
         imageView.image = image
         imageView.alpha = 1
         imageView.transform = .identity
+        let insertionScreen = CGPoint(
+            x: CGFloat(screen.x) / max(contentScale, 1),
+            y: CGFloat(screen.y) / max(contentScale, 1)
+        )
         imageView.bounds = CGRect(x: 0, y: 0, width: width, height: height)
-        imageView.center = CGPoint(
-            x: CGFloat(screen.x) / max(contentScale, 1) - alignmentOffset.x + width / 2,
-            y: CGFloat(screen.y) / max(contentScale, 1) + alignmentOffset.y - height / 2
+        imageView.center = Self.textOverlayCenter(
+            insertionScreen: insertionScreen,
+            width: width,
+            height: height,
+            alignmentOffset: alignmentOffset,
+            rotationRadians: text.rotationRadians
         )
         imageView.transform = CGAffineTransform(rotationAngle: CGFloat(-text.rotationRadians))
         imageView.layer.zPosition = 1_000
@@ -1162,6 +2102,40 @@ private extension CADPoC.CADMetalRenderer {
         let yWorldOffset = cadTextVerticalOffset(height: textHeight, text: text)
         let scale = modelScale / Double(max(contentScale, 1))
         return CGPoint(x: xWorldOffset * scale, y: yWorldOffset * scale)
+    }
+
+    static func textOverlayFontSize(
+        textHeight: Double,
+        modelScale: Double,
+        contentScale: CGFloat
+    ) -> CGFloat {
+        let scale = Double(max(contentScale, 1))
+        let rawSize = textHeight * modelScale / scale
+        return CGFloat(min(max(rawSize, 5), 256))
+    }
+
+    static func textOverlayCenter(
+        insertionScreen: CGPoint,
+        width: CGFloat,
+        height: CGFloat,
+        alignmentOffset: CGPoint,
+        rotationRadians: Double
+    ) -> CGPoint {
+        let localCenter = CGPoint(
+            x: width / 2 - alignmentOffset.x,
+            y: alignmentOffset.y - height / 2
+        )
+        let screenAngle = -CGFloat(rotationRadians)
+        let cosine = cos(screenAngle)
+        let sine = sin(screenAngle)
+        let rotated = CGPoint(
+            x: localCenter.x * cosine - localCenter.y * sine,
+            y: localCenter.x * sine + localCenter.y * cosine
+        )
+        return CGPoint(
+            x: insertionScreen.x + rotated.x,
+            y: insertionScreen.y + rotated.y
+        )
     }
 
     private func cadTextHorizontalOffset(width: Double, text: Kernel.CADTextRun) -> Double {
@@ -1317,6 +2291,82 @@ private struct CADTextRasterCache {
 }
 
 extension CADPoC.CADMetalRenderer {
+    static func textOverlayFontSizeForTesting(
+        textHeight: Double,
+        modelScale: Double,
+        contentScale: CGFloat
+    ) -> CGFloat {
+        textOverlayFontSize(
+            textHeight: textHeight,
+            modelScale: modelScale,
+            contentScale: contentScale
+        )
+    }
+
+    static func textOverlayCenterForTesting(
+        insertionScreen: CGPoint,
+        width: CGFloat,
+        height: CGFloat,
+        alignmentOffset: CGPoint,
+        rotationRadians: Double
+    ) -> CGPoint {
+        textOverlayCenter(
+            insertionScreen: insertionScreen,
+            width: width,
+            height: height,
+            alignmentOffset: alignmentOffset,
+            rotationRadians: rotationRadians
+        )
+    }
+
+    func vertexCountForTesting(
+        commands: [Kernel.CADRenderCommand],
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> Int {
+        makeVertices(
+            commands: commands,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ).count
+    }
+
+    func searchHighlightVertexCountForTesting(
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> Int {
+        makeSearchHighlightVertices(
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            contentScale: contentScale
+        ).count
+    }
+
+    func renderableEntityCountForTesting() -> Int {
+        entities.count
+    }
+
+    func modelBoundsForTesting() -> Kernel.CADBounds {
+        modelBounds
+    }
+
+    func progressiveRenderOutputForTesting(
+        visibleEntities: [Kernel.CADEntity],
+        viewportBounds: Kernel.CADBounds,
+        zoomScale: Double,
+        phase: Kernel.CADRenderInteractionPhase
+    ) -> CADPoC.CADRenderPipeline.Output {
+        setInteractionPhase(phase)
+        return renderOutputForFrame(
+            visibleEntities: visibleEntities,
+            viewportBounds: viewportBounds,
+            zoomScale: zoomScale
+        ).output
+    }
+
     static func makeTextOverlayRasterImage(
         displayText: String,
         font: UIFont,
@@ -1417,7 +2467,19 @@ private extension String {
 }
 #endif
 
-private extension SiteKeeperCADKernel.CADBounds {
+private extension CGRect {
+    init?(_ bounds: SiteKeeperCADKernel.CADBounds) {
+        guard bounds.isFiniteForCADDisplay else { return nil }
+        self.init(
+            x: CGFloat(bounds.minX),
+            y: CGFloat(bounds.minY),
+            width: CGFloat(bounds.width),
+            height: CGFloat(bounds.height)
+        )
+    }
+}
+
+fileprivate extension SiteKeeperCADKernel.CADBounds {
     var isFiniteForCADDisplay: Bool {
         !isEmpty
             && minX.isFinite

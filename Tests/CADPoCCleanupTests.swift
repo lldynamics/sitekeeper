@@ -37,6 +37,43 @@ struct CADPoCCleanupTests {
         #expect(toolbarSource.contains("下载原图"))
     }
 
+    @Test func cadPoCOptionalDetailFeaturesDefaultToPerformanceMode() throws {
+        let defaults = CADCanvasFeatureOptions.performanceDefault
+        #expect(defaults.rendersTextOverlays == false)
+        #expect(defaults.publishesSnapPoints == false)
+        #expect(defaults.rendersHatches == false)
+        #expect(defaults.enabledCount == 0)
+
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "0",
+            colorARGB: 0xFF000000,
+            lineWidth: 1
+        )
+        let text = SiteKeeperCADKernel.CADTextRun(
+            rawText: "中文",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0)
+        )
+        let hatchPath = SiteKeeperCADKernel.CADPath(elements: [
+            .move(to: SiteKeeperCADKernel.CADPoint(x: 0, y: 0)),
+            .line(to: SiteKeeperCADKernel.CADPoint(x: 10, y: 0)),
+            .close
+        ])
+
+        #expect(defaults.allows(.polyline([], closed: false, style: style)))
+        #expect(defaults.allows(.text(text, style: style)) == false)
+        #expect(defaults.allows(.hatch(hatchPath, style: style)) == false)
+        #expect(CADCanvasFeatureOptions.fullDetail.allows(.text(text, style: style)))
+        #expect(CADCanvasFeatureOptions.fullDetail.allows(.hatch(hatchPath, style: style)))
+
+        let root = try Self.repositoryRoot()
+        let hostSource = try Self.sourceText(root, "Sources/Features/项目/CADCanvasHost.swift")
+        let toolbarSource = try Self.sourceText(root, "Sources/Shared/CAD/Viewer/CADViewerToolbar.swift")
+        #expect(hostSource.contains("cadPerformanceMenu"))
+        #expect(toolbarSource.contains("文字显示"))
+        #expect(toolbarSource.contains("吸附点"))
+        #expect(toolbarSource.contains("填充细节"))
+    }
+
     @Test func drawingBusinessTypesRemainCompilable() {
         let projectId = UUID()
         let drawing = ProjectDrawing(

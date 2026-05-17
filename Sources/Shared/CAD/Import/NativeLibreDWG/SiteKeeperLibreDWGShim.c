@@ -12,6 +12,7 @@
 #endif
 
 #define SITEKEEPER_MAX_INSERT_DEPTH 8
+#define SITEKEEPER_MAX_FILLED_HATCH_POINTS 64
 
 static int sitekeeper_object_matches(const Dwg_Object *object, int type);
 
@@ -278,6 +279,37 @@ static Dwg_Object_STYLE *sitekeeper_style_from_ref(Dwg_Data *dwg, Dwg_Object_Ref
         return NULL;
     }
     return style_object->tio.object->tio.STYLE;
+}
+
+static Dwg_Object_DIMSTYLE *sitekeeper_dimstyle_from_ref(Dwg_Data *dwg, Dwg_Object_Ref *dimstyle_ref)
+{
+    if (dimstyle_ref == NULL) {
+        return NULL;
+    }
+
+    Dwg_Object *dimstyle_object = dimstyle_ref->obj;
+    if (dimstyle_object == NULL && dwg != NULL) {
+        dimstyle_object = dwg_ref_object_silent(dwg, dimstyle_ref);
+    }
+    if (dimstyle_object == NULL || dimstyle_object->tio.object == NULL
+        || dimstyle_object->tio.object->tio.DIMSTYLE == NULL) {
+        return NULL;
+    }
+    if (!sitekeeper_object_matches(dimstyle_object, (int)DWG_TYPE_DIMSTYLE)) {
+        return NULL;
+    }
+    return dimstyle_object->tio.object->tio.DIMSTYLE;
+}
+
+static double sitekeeper_dimstyle_text_height(Dwg_Object_DIMSTYLE *dimstyle)
+{
+    if (dimstyle == NULL || !isfinite(dimstyle->DIMTXT) || dimstyle->DIMTXT <= 0) {
+        return 2.5;
+    }
+    const double scale = isfinite(dimstyle->DIMSCALE) && dimstyle->DIMSCALE > DBL_EPSILON
+        ? dimstyle->DIMSCALE
+        : 1.0;
+    return dimstyle->DIMTXT * scale;
 }
 
 static const char *sitekeeper_style_name(Dwg_Object_STYLE *style)
@@ -571,6 +603,110 @@ static const char *sitekeeper_dimension_text(
         placeholder + 2
     );
     return buffer;
+}
+
+static int sitekeeper_point_is_finite(SiteKeeperLibreDWGPoint point)
+{
+    return isfinite(point.x) && isfinite(point.y);
+}
+
+static double sitekeeper_point_distance(SiteKeeperLibreDWGPoint start, SiteKeeperLibreDWGPoint end)
+{
+    return hypot(end.x - start.x, end.y - start.y);
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_midpoint(
+    SiteKeeperLibreDWGPoint start,
+    SiteKeeperLibreDWGPoint end
+)
+{
+    SiteKeeperLibreDWGPoint point;
+    point.x = (start.x + end.x) / 2.0;
+    point.y = (start.y + end.y) / 2.0;
+    return point;
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_project_point_to_axis(
+    SiteKeeperLibreDWGPoint point,
+    SiteKeeperLibreDWGPoint line_point,
+    double axis_x,
+    double axis_y
+)
+{
+    const double dx = point.x - line_point.x;
+    const double dy = point.y - line_point.y;
+    const double distance_along_axis = dx * axis_x + dy * axis_y;
+    SiteKeeperLibreDWGPoint projected;
+    projected.x = line_point.x + axis_x * distance_along_axis;
+    projected.y = line_point.y + axis_y * distance_along_axis;
+    return projected;
+}
+
+static int32_t sitekeeper_make_dimension_display_points(
+    SiteKeeperLibreDWGPoint start,
+    SiteKeeperLibreDWGPoint end,
+    SiteKeeperLibreDWGPoint dimension_line_point,
+    int has_dimension_line_point,
+    SiteKeeperLibreDWGPoint text_point,
+    int has_text_point,
+    double axis_rotation,
+    int has_axis_rotation,
+    SiteKeeperLibreDWGPoint *points,
+    int32_t capacity
+)
+{
+    if (points == NULL || capacity < 4 || !sitekeeper_point_is_finite(start)
+        || !sitekeeper_point_is_finite(end)) {
+        return 0;
+    }
+
+    const double measured_length = sitekeeper_point_distance(start, end);
+    if (!isfinite(measured_length) || measured_length <= DBL_EPSILON) {
+        points[0] = start;
+        points[1] = end;
+        return 2;
+    }
+
+    double axis_x;
+    double axis_y;
+    if (has_axis_rotation && isfinite(axis_rotation)) {
+        axis_x = cos(axis_rotation);
+        axis_y = sin(axis_rotation);
+    } else {
+        axis_x = (end.x - start.x) / measured_length;
+        axis_y = (end.y - start.y) / measured_length;
+    }
+
+    SiteKeeperLibreDWGPoint reference = sitekeeper_midpoint(start, end);
+    if (has_dimension_line_point && sitekeeper_point_is_finite(dimension_line_point)) {
+        reference = dimension_line_point;
+    } else if (has_text_point && sitekeeper_point_is_finite(text_point)) {
+        reference = text_point;
+    }
+
+    SiteKeeperLibreDWGPoint dimension_start = sitekeeper_project_point_to_axis(
+        start,
+        reference,
+        axis_x,
+        axis_y
+    );
+    SiteKeeperLibreDWGPoint dimension_end = sitekeeper_project_point_to_axis(
+        end,
+        reference,
+        axis_x,
+        axis_y
+    );
+    if (sitekeeper_point_distance(dimension_start, dimension_end) <= DBL_EPSILON) {
+        points[0] = start;
+        points[1] = end;
+        return 2;
+    }
+
+    points[0] = start;
+    points[1] = dimension_start;
+    points[2] = dimension_end;
+    points[3] = end;
+    return 4;
 }
 
 static int sitekeeper_attach_text_to_entity(
@@ -2000,9 +2136,14 @@ static int sitekeeper_append_dimension_path(
     SiteKeeperLibreDWGPoint start,
     SiteKeeperLibreDWGPoint end,
     SiteKeeperLibreDWGPoint text_point,
+    SiteKeeperLibreDWGPoint dimension_line_point,
+    int has_dimension_line_point,
+    double axis_rotation,
+    int has_axis_rotation,
     const char *user_text,
     double measurement,
     double text_rotation,
+    double text_height,
     const SiteKeeperLibreDWGTransform *transform
 )
 {
@@ -2010,7 +2151,23 @@ static int sitekeeper_append_dimension_path(
         return 0;
     }
 
-    SiteKeeperLibreDWGPoint points[2] = { start, end };
+    const int has_text_point = sitekeeper_point_is_finite(text_point);
+    SiteKeeperLibreDWGPoint points[4];
+    const int32_t point_count = sitekeeper_make_dimension_display_points(
+        start,
+        end,
+        dimension_line_point,
+        has_dimension_line_point,
+        text_point,
+        has_text_point,
+        axis_rotation,
+        has_axis_rotation,
+        points,
+        4
+    );
+    if (point_count < 2) {
+        return 0;
+    }
     const int32_t before_count = *entity_count;
     if (!sitekeeper_append_entity(
         result,
@@ -2020,7 +2177,7 @@ static int sitekeeper_append_dimension_path(
         object,
         SiteKeeperLibreDWGEntityKindDimension,
         points,
-        2,
+        point_count,
         0,
         transform
     )) {
@@ -2040,11 +2197,11 @@ static int sitekeeper_append_dimension_path(
         raw_text,
         text_point.x,
         text_point.y,
-        2.5,
+        text_height,
         text_rotation,
         1.0,
-        0,
-        0,
+        1,
+        2,
         NULL,
         transform
     );
@@ -2068,6 +2225,8 @@ static int sitekeeper_append_dimension_linear(
     SiteKeeperLibreDWGPoint start = { dimension->xline1_pt.x, dimension->xline1_pt.y };
     SiteKeeperLibreDWGPoint end = { dimension->xline2_pt.x, dimension->xline2_pt.y };
     SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    SiteKeeperLibreDWGPoint dimension_line_point = { dimension->def_pt.x, dimension->def_pt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
     if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
         text_point.x = (start.x + end.x) / 2.0;
         text_point.y = (start.y + end.y) / 2.0;
@@ -2081,9 +2240,14 @@ static int sitekeeper_append_dimension_linear(
         start,
         end,
         text_point,
+        dimension_line_point,
+        sitekeeper_point_is_finite(dimension_line_point),
+        dimension->dim_rotation,
+        1,
         dimension->user_text,
         dimension->act_measurement,
         dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
         transform
     );
 }
@@ -2104,6 +2268,8 @@ static int sitekeeper_append_dimension_aligned(
     SiteKeeperLibreDWGPoint start = { dimension->xline1_pt.x, dimension->xline1_pt.y };
     SiteKeeperLibreDWGPoint end = { dimension->xline2_pt.x, dimension->xline2_pt.y };
     SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    SiteKeeperLibreDWGPoint dimension_line_point = { dimension->def_pt.x, dimension->def_pt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
     if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
         text_point.x = (start.x + end.x) / 2.0;
         text_point.y = (start.y + end.y) / 2.0;
@@ -2117,9 +2283,14 @@ static int sitekeeper_append_dimension_aligned(
         start,
         end,
         text_point,
+        dimension_line_point,
+        sitekeeper_point_is_finite(dimension_line_point),
+        0,
+        0,
         dimension->user_text,
         dimension->act_measurement,
         dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
         transform
     );
 }
@@ -2140,6 +2311,7 @@ static int sitekeeper_append_dimension_radius(
     SiteKeeperLibreDWGPoint start = { dimension->first_arc_pt.x, dimension->first_arc_pt.y };
     SiteKeeperLibreDWGPoint end = { dimension->def_pt.x, dimension->def_pt.y };
     SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
     if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
         text_point.x = (start.x + end.x) / 2.0;
         text_point.y = (start.y + end.y) / 2.0;
@@ -2153,9 +2325,14 @@ static int sitekeeper_append_dimension_radius(
         start,
         end,
         text_point,
+        end,
+        0,
+        0,
+        0,
         dimension->user_text,
         dimension->act_measurement,
         dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
         transform
     );
 }
@@ -2176,6 +2353,7 @@ static int sitekeeper_append_dimension_diameter(
     SiteKeeperLibreDWGPoint start = { dimension->first_arc_pt.x, dimension->first_arc_pt.y };
     SiteKeeperLibreDWGPoint end = { dimension->def_pt.x, dimension->def_pt.y };
     SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
     if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
         text_point.x = (start.x + end.x) / 2.0;
         text_point.y = (start.y + end.y) / 2.0;
@@ -2189,9 +2367,14 @@ static int sitekeeper_append_dimension_diameter(
         start,
         end,
         text_point,
+        end,
+        0,
+        0,
+        0,
         dimension->user_text,
         dimension->act_measurement,
         dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
         transform
     );
 }
@@ -2304,6 +2487,7 @@ static int sitekeeper_append_hatch_path(
     Dwg_Object_Entity *entity,
     Dwg_Object *object,
     Dwg_HATCH_Path *path,
+    int32_t hatch_path_count,
     const SiteKeeperLibreDWGTransform *transform
 )
 {
@@ -2314,7 +2498,8 @@ static int sitekeeper_append_hatch_path(
     SiteKeeperLibreDWGPoint *points = NULL;
     int32_t point_count = 0;
     int closed = path->closed != 0 || (path->flag & 0x20) == 0;
-    if ((path->flag & 2) != 0 && path->polyline_paths != NULL) {
+    int is_polyline_path = (path->flag & 2) != 0 && path->polyline_paths != NULL;
+    if (is_polyline_path) {
         point_count = (int32_t)path->num_segs_or_paths;
         points = (SiteKeeperLibreDWGPoint *)calloc((size_t)point_count, sizeof(SiteKeeperLibreDWGPoint));
         if (points == NULL) {
@@ -2329,6 +2514,12 @@ static int sitekeeper_append_hatch_path(
         return 0;
     }
 
+    int fill_mode = hatch_path_count == 1
+        && is_polyline_path
+        && path->bulges_present == 0
+        && closed
+        && point_count <= SITEKEEPER_MAX_FILLED_HATCH_POINTS;
+    const int32_t before_count = *entity_count;
     int appended = sitekeeper_append_entity(
         result,
         entity_count,
@@ -2343,6 +2534,7 @@ static int sitekeeper_append_hatch_path(
     );
     free(points);
     if (appended) {
+        result->entities[before_count].hatchFillMode = fill_mode ? 1 : 0;
         result->trace.exportedHatchCount += 1;
         return 1;
     }
@@ -2372,6 +2564,7 @@ static int sitekeeper_append_hatch(
             entity,
             object,
             &hatch->paths[index],
+            (int32_t)hatch->num_paths,
             transform
         );
     }
@@ -2381,6 +2574,7 @@ static int sitekeeper_append_hatch(
 static int sitekeeper_is_insert_object(const Dwg_Object *object)
 {
     return sitekeeper_object_matches(object, (int)DWG_TYPE_INSERT)
+        || sitekeeper_object_matches(object, (int)DWG_TYPE_MINSERT)
         || sitekeeper_object_matches(object, (int)DWG_TYPE_INSERT_r11);
 }
 
@@ -2395,6 +2589,22 @@ static double sitekeeper_insert_scale(double value)
         return 1.0;
     }
     return value;
+}
+
+static int32_t sitekeeper_insert_count(long value)
+{
+    if (value <= 0) {
+        return 1;
+    }
+    if (value > 2048) {
+        return 2048;
+    }
+    return (int32_t)value;
+}
+
+static double sitekeeper_insert_spacing(double value)
+{
+    return isfinite(value) ? value : 0.0;
 }
 
 static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_insert(
@@ -2427,20 +2637,52 @@ static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_insert(
     return object->tio.object->tio.BLOCK_HEADER;
 }
 
-static SiteKeeperLibreDWGTransform sitekeeper_insert_transform(
-    Dwg_Entity_INSERT *insert,
+static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_minsert(
+    Dwg_Data *dwg,
+    Dwg_Entity_MINSERT *insert,
+    Dwg_Object **block_object
+)
+{
+    if (block_object != NULL) {
+        *block_object = NULL;
+    }
+    if (dwg == NULL || insert == NULL || insert->block_header == NULL) {
+        return NULL;
+    }
+
+    Dwg_Object *object = insert->block_header->obj;
+    if (object == NULL) {
+        object = dwg_ref_object_silent(dwg, insert->block_header);
+    }
+    if (object == NULL || object->tio.object == NULL || object->tio.object->tio.BLOCK_HEADER == NULL) {
+        return NULL;
+    }
+    if (!sitekeeper_object_matches(object, (int)DWG_TYPE_BLOCK_HEADER)) {
+        return NULL;
+    }
+
+    if (block_object != NULL) {
+        *block_object = object;
+    }
+    return object->tio.object->tio.BLOCK_HEADER;
+}
+
+static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_values(
+    BITCODE_3DPOINT ins_pt,
+    BITCODE_3DPOINT scale,
+    double rotation,
     Dwg_Object_BLOCK_HEADER *block_header
 )
 {
-    const double sx = sitekeeper_insert_scale(insert->scale.x);
-    const double sy = sitekeeper_insert_scale(insert->scale.y);
-    const double rotation = isfinite(insert->rotation) ? insert->rotation : 0;
-    const double cos_r = cos(rotation);
-    const double sin_r = sin(rotation);
+    const double sx = sitekeeper_insert_scale(scale.x);
+    const double sy = sitekeeper_insert_scale(scale.y);
+    const double resolved_rotation = isfinite(rotation) ? rotation : 0;
+    const double cos_r = cos(resolved_rotation);
+    const double sin_r = sin(resolved_rotation);
     const double base_x = block_header != NULL && isfinite(block_header->base_pt.x) ? block_header->base_pt.x : 0;
     const double base_y = block_header != NULL && isfinite(block_header->base_pt.y) ? block_header->base_pt.y : 0;
-    const double insert_x = isfinite(insert->ins_pt.x) ? insert->ins_pt.x : 0;
-    const double insert_y = isfinite(insert->ins_pt.y) ? insert->ins_pt.y : 0;
+    const double insert_x = isfinite(ins_pt.x) ? ins_pt.x : 0;
+    const double insert_y = isfinite(ins_pt.y) ? ins_pt.y : 0;
 
     SiteKeeperLibreDWGTransform transform;
     transform.m11 = sx * cos_r;
@@ -2449,6 +2691,47 @@ static SiteKeeperLibreDWGTransform sitekeeper_insert_transform(
     transform.m22 = sy * cos_r;
     transform.tx = insert_x - (transform.m11 * base_x + transform.m21 * base_y);
     transform.ty = insert_y - (transform.m12 * base_x + transform.m22 * base_y);
+    return transform;
+}
+
+static SiteKeeperLibreDWGTransform sitekeeper_insert_transform(
+    Dwg_Entity_INSERT *insert,
+    Dwg_Object_BLOCK_HEADER *block_header
+)
+{
+    return sitekeeper_insert_transform_values(
+        insert->ins_pt,
+        insert->scale,
+        insert->rotation,
+        block_header
+    );
+}
+
+static SiteKeeperLibreDWGTransform sitekeeper_minsert_transform(
+    Dwg_Entity_MINSERT *insert,
+    Dwg_Object_BLOCK_HEADER *block_header
+)
+{
+    return sitekeeper_insert_transform_values(
+        insert->ins_pt,
+        insert->scale,
+        insert->rotation,
+        block_header
+    );
+}
+
+static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_with_array_offset(
+    SiteKeeperLibreDWGTransform transform,
+    int32_t column,
+    int32_t row,
+    double column_spacing,
+    double row_spacing
+)
+{
+    const double offset_x = (double)column * column_spacing;
+    const double offset_y = (double)row * row_spacing;
+    transform.tx += transform.m11 * offset_x + transform.m21 * offset_y;
+    transform.ty += transform.m12 * offset_x + transform.m22 * offset_y;
     return transform;
 }
 
@@ -2462,6 +2745,44 @@ static int sitekeeper_process_entity(
     int depth
 );
 
+static void sitekeeper_process_insert_attributes(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Data *dwg,
+    Dwg_Object_Ref **attribs,
+    BITCODE_BL num_owned,
+    SiteKeeperLibreDWGTransform parent_transform,
+    int depth
+)
+{
+    if (attribs == NULL || num_owned <= 0) {
+        return;
+    }
+    for (BITCODE_BL index = 0; index < num_owned; index++) {
+        Dwg_Object_Ref *attribute_ref = attribs[index];
+        if (attribute_ref == NULL) {
+            continue;
+        }
+        Dwg_Object *attribute_object = attribute_ref->obj;
+        if (attribute_object == NULL) {
+            attribute_object = dwg_ref_object_silent(dwg, attribute_ref);
+        }
+        if (attribute_object == NULL || attribute_object->tio.entity == NULL) {
+            continue;
+        }
+        sitekeeper_process_entity(
+            result,
+            entity_count,
+            entity_capacity,
+            attribute_object->tio.entity,
+            attribute_object,
+            parent_transform,
+            depth + 1
+        );
+    }
+}
+
 static int sitekeeper_expand_insert(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -2472,7 +2793,7 @@ static int sitekeeper_expand_insert(
     int depth
 )
 {
-    if (result == NULL || entity == NULL || object == NULL || entity->tio.INSERT == NULL) {
+    if (result == NULL || entity == NULL || object == NULL) {
         return 0;
     }
     if (depth >= SITEKEEPER_MAX_INSERT_DEPTH) {
@@ -2480,62 +2801,86 @@ static int sitekeeper_expand_insert(
     }
 
     Dwg_Object *block_object = NULL;
-    Dwg_Object_BLOCK_HEADER *block_header = sitekeeper_block_header_for_insert(
-        entity->dwg,
-        entity->tio.INSERT,
-        &block_object
-    );
+    SiteKeeperLibreDWGTransform base_insert_transform = sitekeeper_identity_transform();
+    int32_t column_count = 1;
+    int32_t row_count = 1;
+    double column_spacing = 0;
+    double row_spacing = 0;
+    Dwg_Object_Ref **attribute_refs = NULL;
+    BITCODE_BL attribute_count = 0;
+
+    Dwg_Object_BLOCK_HEADER *block_header = NULL;
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_MINSERT) && entity->tio.MINSERT != NULL) {
+        Dwg_Entity_MINSERT *minsert = entity->tio.MINSERT;
+        block_header = sitekeeper_block_header_for_minsert(entity->dwg, minsert, &block_object);
+        base_insert_transform = sitekeeper_minsert_transform(minsert, block_header);
+        column_count = sitekeeper_insert_count(minsert->num_cols);
+        row_count = sitekeeper_insert_count(minsert->num_rows);
+        column_spacing = sitekeeper_insert_spacing(minsert->col_spacing);
+        row_spacing = sitekeeper_insert_spacing(minsert->row_spacing);
+        attribute_refs = minsert->attribs;
+        attribute_count = minsert->num_owned;
+    } else if (entity->tio.INSERT != NULL) {
+        Dwg_Entity_INSERT *insert = entity->tio.INSERT;
+        block_header = sitekeeper_block_header_for_insert(entity->dwg, insert, &block_object);
+        base_insert_transform = sitekeeper_insert_transform(insert, block_header);
+        column_count = sitekeeper_insert_count(insert->num_cols);
+        row_count = sitekeeper_insert_count(insert->num_rows);
+        column_spacing = sitekeeper_insert_spacing(insert->col_spacing);
+        row_spacing = sitekeeper_insert_spacing(insert->row_spacing);
+        attribute_refs = insert->attribs;
+        attribute_count = insert->num_owned;
+    } else {
+        return 0;
+    }
+
     if (block_header == NULL || block_object == NULL) {
         return 0;
     }
 
-    SiteKeeperLibreDWGTransform composed = sitekeeper_compose_transform(
-        parent_transform,
-        sitekeeper_insert_transform(entity->tio.INSERT, block_header)
-    );
-
     const int32_t before_count = *entity_count;
-    Dwg_Object *child = get_first_owned_entity(block_object);
-    while (child != NULL) {
-        if (child->tio.entity != NULL && sitekeeper_entity_is_visible(child->tio.entity)) {
-            sitekeeper_process_entity(
-                result,
-                entity_count,
-                entity_capacity,
-                child->tio.entity,
-                child,
-                composed,
-                depth + 1
+    for (int32_t row = 0; row < row_count; row++) {
+        for (int32_t column = 0; column < column_count; column++) {
+            SiteKeeperLibreDWGTransform cell_transform = sitekeeper_insert_transform_with_array_offset(
+                base_insert_transform,
+                column,
+                row,
+                column_spacing,
+                row_spacing
             );
+            SiteKeeperLibreDWGTransform composed = sitekeeper_compose_transform(
+                parent_transform,
+                cell_transform
+            );
+
+            Dwg_Object *child = get_first_owned_entity(block_object);
+            while (child != NULL) {
+                if (child->tio.entity != NULL && sitekeeper_entity_is_visible(child->tio.entity)) {
+                    sitekeeper_process_entity(
+                        result,
+                        entity_count,
+                        entity_capacity,
+                        child->tio.entity,
+                        child,
+                        composed,
+                        depth + 1
+                    );
+                }
+                child = get_next_owned_entity(block_object, child);
+            }
         }
-        child = get_next_owned_entity(block_object, child);
     }
 
-    Dwg_Entity_INSERT *insert = entity->tio.INSERT;
-    if (insert != NULL && insert->attribs != NULL && insert->num_owned > 0) {
-        for (BITCODE_BL index = 0; index < insert->num_owned; index++) {
-            Dwg_Object_Ref *attribute_ref = insert->attribs[index];
-            if (attribute_ref == NULL) {
-                continue;
-            }
-            Dwg_Object *attribute_object = attribute_ref->obj;
-            if (attribute_object == NULL) {
-                attribute_object = dwg_ref_object_silent(entity->dwg, attribute_ref);
-            }
-            if (attribute_object == NULL || attribute_object->tio.entity == NULL) {
-                continue;
-            }
-            sitekeeper_process_entity(
-                result,
-                entity_count,
-                entity_capacity,
-                attribute_object->tio.entity,
-                attribute_object,
-                parent_transform,
-                depth + 1
-            );
-        }
-    }
+    sitekeeper_process_insert_attributes(
+        result,
+        entity_count,
+        entity_capacity,
+        entity->dwg,
+        attribute_refs,
+        attribute_count,
+        parent_transform,
+        depth
+    );
 
     const int32_t exported_count = *entity_count - before_count;
     if (exported_count > 0) {

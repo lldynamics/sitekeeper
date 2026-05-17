@@ -1020,7 +1020,9 @@ enum ReportBuilder {
             tsv(["exported_at", Formatters.now()]),
             tsv(["delivery_health_score", "\(deliveryHealth.score)"]),
             tsv(["delivery_health_verdict", deliveryHealth.machineVerdict]),
+            tsv(["delivery_health_verdict_display", deliveryHealth.verdictDisplayName]),
             tsv(["delivery_health_failed_checks", deliveryHealth.failedCheckKeys]),
+            tsv(["delivery_health_failed_checks_display", deliveryHealth.failedCheckDisplayText]),
             tsv(["delivery_health_missing_receipts", "\(deliveryHealth.missingReceiptCount)"]),
             tsv(["delivery_health_drawing_count", "\(deliveryHealth.drawingCount)"]),
             tsv(["delivery_health_open_todos", "\(deliveryHealth.openTodoCount)"]),
@@ -1035,7 +1037,7 @@ enum ReportBuilder {
             tsv(["document_checklist_archived_count", "\(documentChecklist.archivedDocumentCount)"]),
             "",
             "[contents]",
-            tsv(["path", "kind", "display_name"]),
+            tsv(["path", "kind_raw", "kind_display"]),
             tsv(["\(deliveryDirectory)/\(pdfName)", "project_delivery_pdf", loc("项目交付包 PDF")]),
             tsv(["\(deliveryDirectory)/\(checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", "document_checklist", loc("施工资料清单")]),
@@ -1146,11 +1148,11 @@ enum ReportBuilder {
         }
 
         if !quickNotes.isEmpty {
-            let header = tsv(["created_at", "content", "attachment_summary"])
+            let header = tsv(["created_at", "content", "attachment_summary_raw", "attachment_summary_display"])
             let lines = quickNotes.sorted(by: { $0.createdAt > $1.createdAt }).map { note in
                 let content = QuickNoteText.displayContent(for: note)
-                let attachmentText = QuickNoteText.attachmentSummary(note.attachments)
-                return tsv([note.createdAt, content, attachmentText])
+                let attachmentSummary = quickNoteAttachmentSummaryColumns(note.attachments)
+                return tsv([note.createdAt, content, attachmentSummary.raw, attachmentSummary.display])
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
@@ -1185,9 +1187,9 @@ enum ReportBuilder {
         }
 
         if !contacts.isEmpty {
-            let header = tsv(["name", "role", "company", "phone", "note"])
+            let header = tsv(["name", "role_key", "role_display", "company", "phone", "note"])
             let rows = contacts.sorted { $0.name < $1.name }.map {
-                tsv([$0.name, $0.roleDisplayName, $0.company, $0.phone, $0.note])
+                tsv([$0.name, $0.normalizedRole.exportKey, $0.roleDisplayName, $0.company, $0.phone, $0.note])
             }
             try addGeneratedFileToProjectPackageZip(
                 zip: &zip,
@@ -1605,11 +1607,27 @@ enum ReportBuilder {
             .replacingOccurrences(of: "\t", with: " ")
     }
 
+    private static func quickNoteAttachmentSummaryColumns(
+        _ attachments: [QuickNoteAttachment]
+    ) -> (raw: String, display: String) {
+        let grouped = Dictionary(grouping: attachments, by: \.attachmentKind)
+        let raw = QuickNoteAttachmentKind
+            .allCases
+            .compactMap { kind -> String? in
+                let count = grouped[kind]?.count ?? 0
+                guard count > 0 else { return nil }
+                return "\(kind.rawValue):\(count)"
+            }
+            .joined(separator: ",")
+        return (raw, QuickNoteText.attachmentSummary(attachments))
+    }
+
     private static func projectDocumentChecklistTSVText(_ checklist: DocumentArchiveChecklistSnapshot) -> String {
         let header = tsv([
             "category_key",
             "category_display",
-            "status",
+            "status_raw",
+            "status_display",
             "document_count",
             "action_count",
             "returned_count",
@@ -1619,6 +1637,7 @@ enum ReportBuilder {
             tsv([
                 item.category.exportKey,
                 item.category.displayName,
+                item.statusExportKey,
                 item.statusText,
                 "\(item.documentCount)",
                 "\(item.actionCount)",

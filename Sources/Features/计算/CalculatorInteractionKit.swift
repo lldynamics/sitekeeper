@@ -55,6 +55,152 @@ struct CalculatorValidationHint: View {
     }
 }
 
+struct CalculatorNumericFieldRule {
+    let kind: NumericInputKind
+    let requirement: NumericInputRequirement
+    let min: Double?
+    let max: Double?
+    let rangeMessage: String?
+    let wholeNumberOnly: Bool
+    let wholeNumberMessage: String?
+
+    init(
+        kind: NumericInputKind,
+        requirement: NumericInputRequirement,
+        min: Double? = nil,
+        max: Double? = nil,
+        rangeMessage: String? = nil,
+        wholeNumberOnly: Bool = false,
+        wholeNumberMessage: String? = nil
+    ) {
+        self.kind = kind
+        self.requirement = requirement
+        self.min = min
+        self.max = max
+        self.rangeMessage = rangeMessage
+        self.wholeNumberOnly = wholeNumberOnly
+        self.wholeNumberMessage = wholeNumberMessage
+    }
+
+    func validate(_ text: String) -> NumericInputFieldValidation {
+        let base = InputValidator.validateField(
+            text,
+            kind: kind,
+            requirement: requirement,
+            min: min,
+            max: max,
+            rangeMessage: rangeMessage
+        )
+
+        guard wholeNumberOnly,
+              base.validation.error == nil,
+              base.rangeErrorMessage == nil,
+              let decimal = base.decimalValue else {
+            return base
+        }
+
+        let value = NSDecimalNumber(decimal: decimal).doubleValue
+        guard value.rounded(.towardZero) != value else {
+            return base
+        }
+
+        return NumericInputFieldValidation(
+            validation: base.validation,
+            rangeErrorMessage: wholeNumberMessage ?? calculatorLoc("请输入整数")
+        )
+    }
+}
+
+struct CalculatorValidatedNumericField: View {
+    let title: String
+    let placeholder: String
+    let unit: String?
+    let rule: CalculatorNumericFieldRule
+    let keyboardType: UIKeyboardType
+    let showWhenEmpty: Bool
+
+    @Binding private var text: String
+    private let focusBinding: FocusState<Bool>.Binding?
+
+    init(
+        title: String,
+        placeholder: String,
+        unit: String? = nil,
+        text: Binding<String>,
+        rule: CalculatorNumericFieldRule,
+        keyboardType: UIKeyboardType = .decimalPad,
+        showWhenEmpty: Bool = false,
+        focus: FocusState<Bool>.Binding? = nil
+    ) {
+        self.title = title
+        self.placeholder = placeholder
+        self.unit = unit
+        _text = text
+        self.rule = rule
+        self.keyboardType = keyboardType
+        self.showWhenEmpty = showWhenEmpty
+        focusBinding = focus
+    }
+
+    var validation: NumericInputFieldValidation {
+        rule.validate(text)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent {
+                HStack(spacing: 6) {
+                    field
+                    if let unit, !unit.isEmpty {
+                        Text(unit)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            shouldShowError ? Color.appRisk.opacity(0.55) : Color.clear,
+                            lineWidth: 1
+                        )
+                )
+            } label: {
+                Text(title)
+            }
+
+            NumericInputFieldValidationHint(
+                validation: validation,
+                showWhenEmpty: showWhenEmpty
+            )
+        }
+    }
+
+    private var shouldShowError: Bool {
+        guard validation.errorMessage != nil else { return false }
+        return showWhenEmpty || !validation.isEmpty
+    }
+
+    @ViewBuilder
+    private var field: some View {
+        if let focusBinding {
+            TextField(placeholder, text: $text.numericInput(rule.kind))
+                .keyboardType(keyboardType)
+                .multilineTextAlignment(.trailing)
+                .focused(focusBinding)
+        } else {
+            TextField(placeholder, text: $text.numericInput(rule.kind))
+                .keyboardType(keyboardType)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
 struct CalculatorPresetChips: View {
     let title: String
     let options: [String]

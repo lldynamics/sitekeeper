@@ -3,10 +3,26 @@ import SwiftUI
 struct CADViewerToolbar: View {
     let fileURL: URL
     let displayName: String
+    let layouts: [CADPoC.CADLayout]
+    let currentLayoutID: String?
     let layers: [CADPoC.CADLayer]
     let visibleLayerIDs: Set<String>?
+    let supportsTextSearch: Bool
+    let searchResultCount: Int
+    let rendersTextOverlays: Bool
+    let publishesSnapPoints: Bool
+    let rendersHatches: Bool
+    let showsOverviewMap: Bool
+    let showsRendererDiagnostics: Bool
+    let onSelectLayout: (String) -> Void
     let onToggleLayer: (String) -> Void
     let onShowAllLayers: () -> Void
+    let onSearchTapped: () -> Void
+    let onToggleTextOverlays: () -> Void
+    let onToggleSnapPoints: () -> Void
+    let onToggleHatches: () -> Void
+    let onToggleOverviewMap: () -> Void
+    let onToggleRendererDiagnostics: () -> Void
     let onClose: () -> Void
     let onReportIssue: () -> Void
 
@@ -26,7 +42,10 @@ struct CADViewerToolbar: View {
 
             Spacer(minLength: 8)
 
+            layoutMenu
             layerMenu
+            performanceMenu
+            searchButton
             downloadButton
             reportButton
             closeButton
@@ -42,7 +61,10 @@ struct CADViewerToolbar: View {
             }
 
             HStack(spacing: 8) {
+                layoutMenu
                 layerMenu
+                performanceMenu
+                searchButton
                 downloadButton
                 reportButton
             }
@@ -54,6 +76,29 @@ struct CADViewerToolbar: View {
             .font(.subheadline.weight(.semibold))
             .lineLimit(1)
             .minimumScaleFactor(0.72)
+    }
+
+    @ViewBuilder
+    private var layoutMenu: some View {
+        if !layouts.isEmpty {
+            Menu {
+                ForEach(layouts) { layout in
+                    Button {
+                        onSelectLayout(layout.id)
+                    } label: {
+                        Label(
+                            layoutDisplayName(layout),
+                            systemImage: layout.id == currentLayoutID ? "checkmark.circle.fill" : layoutIcon(layout)
+                        )
+                    }
+                }
+            } label: {
+                Label(currentLayoutLabel, systemImage: currentLayoutIcon)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .accessibilityLabel("选择模型或布局")
+        }
     }
 
     @ViewBuilder
@@ -78,6 +123,64 @@ struct CADViewerToolbar: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
+        }
+    }
+
+    @ViewBuilder
+    private var performanceMenu: some View {
+        Menu {
+            Button(action: onToggleTextOverlays) {
+                Label("文字显示", systemImage: rendersTextOverlays ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onToggleSnapPoints) {
+                Label("吸附点", systemImage: publishesSnapPoints ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onToggleHatches) {
+                Label("填充细节", systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onToggleOverviewMap) {
+                Label("全局小窗", systemImage: showsOverviewMap ? "checkmark.circle.fill" : "circle")
+            }
+            Divider()
+            Button(action: onToggleRendererDiagnostics) {
+                Label("渲染诊断", systemImage: showsRendererDiagnostics ? "checkmark.circle.fill" : "circle")
+            }
+        } label: {
+            Label(performanceMenuLabel, systemImage: "speedometer")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .tint(performanceOptionEnabledCount > 0 ? .appPrimaryAction : .secondary)
+        .accessibilityLabel("CAD 性能和显示开关")
+    }
+
+    private var performanceOptionEnabledCount: Int {
+        [
+            rendersTextOverlays,
+            publishesSnapPoints,
+            rendersHatches,
+            showsOverviewMap,
+            showsRendererDiagnostics
+        ].filter { $0 }.count
+    }
+
+    private var performanceMenuLabel: String {
+        performanceOptionEnabledCount == 0 ? "性能优先" : "细节 \(performanceOptionEnabledCount)"
+    }
+
+    @ViewBuilder
+    private var searchButton: some View {
+        if supportsTextSearch {
+            Button(action: onSearchTapped) {
+                if searchResultCount > 0 {
+                    Label("搜索 \(searchResultCount)", systemImage: "magnifyingglass")
+                } else {
+                    Label("搜索", systemImage: "magnifyingglass")
+                }
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.regular)
+            .accessibilityLabel("搜索图纸文字")
         }
     }
 
@@ -109,5 +212,30 @@ struct CADViewerToolbar: View {
 
     private func isLayerVisible(_ layer: CADPoC.CADLayer) -> Bool {
         visibleLayerIDs?.contains(layer.id) ?? layer.isVisible
+    }
+
+    private var currentLayout: CADPoC.CADLayout? {
+        layouts.first { $0.id == currentLayoutID } ?? layouts.first(where: \.isModelSpace) ?? layouts.first
+    }
+
+    private var currentLayoutLabel: String {
+        guard let layout = currentLayout else { return "模型/布局" }
+        return layout.isModelSpace ? "模型" : layoutDisplayName(layout)
+    }
+
+    private var currentLayoutIcon: String {
+        currentLayout.map(layoutIcon) ?? "rectangle.3.group"
+    }
+
+    private func layoutIcon(_ layout: CADPoC.CADLayout) -> String {
+        layout.isModelSpace ? "cube.transparent" : "rectangle.on.rectangle"
+    }
+
+    private func layoutDisplayName(_ layout: CADPoC.CADLayout) -> String {
+        let trimmed = layout.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if layout.isModelSpace {
+            return "模型"
+        }
+        return trimmed.isEmpty ? layout.id : trimmed
     }
 }

@@ -721,6 +721,11 @@ extension CADPreviewContainer {
                             }
                         }
                     }
+                    Button {
+                        revealAllOverlayContent()
+                    } label: {
+                        Label(String(localized: "显示全部标记"), systemImage: "eye")
+                    }
                 }
 
                 Section {

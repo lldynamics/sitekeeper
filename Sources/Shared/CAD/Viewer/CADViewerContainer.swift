@@ -43,11 +43,23 @@ struct CADMetalLibreDWGPoCEntry: View {
     let onClose: () -> Void
     let onReportIssue: () -> Void
     @State private var layers: [CADPoC.CADLayer] = []
+    @State private var layouts: [CADPoC.CADLayout] = []
+    @State private var currentLayoutID: String?
     @State private var visibleLayerIDs: Set<String>?
     @State private var canvasControlCommand: CADCanvasControlCommand?
     @State private var rendererViewState: CADRendererViewState?
     @State private var canvasTransform: CADRendererCanvasTransform?
-    @AppStorage("cad.metal.poc.showsOverviewMap") private var showsOverviewMap = true
+    @State private var textSearchIndex: SiteKeeperCADKernel.CADTextSearchIndex?
+    @State private var searchText = ""
+    @State private var searchResults: [SiteKeeperCADKernel.CADTextSearchResult] = []
+    @State private var selectedSearchResultIndex: Int?
+    @State private var showsSearchPanel = false
+    @State private var rendererPerformance: CADRendererPerformanceSnapshot?
+    @AppStorage("cad.metal.poc.showsOverviewMap") private var showsOverviewMap = false
+    @AppStorage("cad.metal.poc.rendersTextOverlays") private var rendersTextOverlays = false
+    @AppStorage("cad.metal.poc.publishesSnapPoints") private var publishesSnapPoints = false
+    @AppStorage("cad.metal.poc.rendersHatches") private var rendersHatches = false
+    @AppStorage("cad.metal.poc.showsRendererDiagnostics") private var showsRendererDiagnostics = false
 
     init(
         fileURL: URL,
@@ -79,10 +91,26 @@ struct CADMetalLibreDWGPoCEntry: View {
                 CADViewerToolbar(
                     fileURL: fileURL,
                     displayName: displayName,
+                    layouts: layouts,
+                    currentLayoutID: effectiveCurrentLayoutID,
                     layers: layers,
                     visibleLayerIDs: effectiveVisibleLayerIDs,
+                    supportsTextSearch: true,
+                    searchResultCount: searchResults.count,
+                    rendersTextOverlays: rendersTextOverlays,
+                    publishesSnapPoints: publishesSnapPoints,
+                    rendersHatches: rendersHatches,
+                    showsOverviewMap: showsOverviewMap,
+                    showsRendererDiagnostics: showsRendererDiagnostics,
+                    onSelectLayout: selectLayout,
                     onToggleLayer: toggleLayer,
                     onShowAllLayers: showAllLayers,
+                    onSearchTapped: toggleSearchPanel,
+                    onToggleTextOverlays: { rendersTextOverlays.toggle() },
+                    onToggleSnapPoints: { publishesSnapPoints.toggle() },
+                    onToggleHatches: { rendersHatches.toggle() },
+                    onToggleOverviewMap: { showsOverviewMap.toggle() },
+                    onToggleRendererDiagnostics: { showsRendererDiagnostics.toggle() },
                     onClose: onClose,
                     onReportIssue: onReportIssue
                 )
@@ -96,14 +124,24 @@ struct CADMetalLibreDWGPoCEntry: View {
     private var canvasLayer: some View {
         CADCanvasView(
             fileURL: fileURL,
+            selectedLayoutID: effectiveCurrentLayoutID,
             visibleLayerIDs: effectiveVisibleLayerIDs,
             initialViewState: initialViewState,
             controlCommand: canvasControlCommand,
-            debugTextOverlays: false,
+            featureOptions: featureOptions,
+            debugTextOverlays: showsRendererDiagnostics && rendersTextOverlays,
             callbacks: bridgedRendererCallbacks,
-            onLayersChanged: handleLayersChanged
+            onLayoutsChanged: handleLayoutsChanged,
+            onLayersChanged: handleLayersChanged,
+            onSearchIndexChanged: handleSearchIndexChanged
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .overlay(alignment: .topLeading) {
+            if showsSearchPanel {
+                searchPanel
+                    .padding(12)
+            }
+        }
         .overlay(alignment: .topTrailing) {
             zoomControls
                 .padding(12)
@@ -115,6 +153,22 @@ struct CADMetalLibreDWGPoCEntry: View {
                     .padding(12)
             }
         }
+        .overlay(alignment: .bottomLeading) {
+            if showsRendererDiagnostics,
+               let rendererPerformance,
+               rendererPerformance.hasActionableRendererFailure {
+                rendererDiagnosticBadge(rendererPerformance)
+                    .padding(12)
+            }
+        }
+    }
+
+    private var featureOptions: CADCanvasFeatureOptions {
+        CADCanvasFeatureOptions(
+            rendersTextOverlays: rendersTextOverlays,
+            publishesSnapPoints: publishesSnapPoints,
+            rendersHatches: rendersHatches
+        )
     }
 
     private var bridgedRendererCallbacks: CADRendererCallbacks {
@@ -124,6 +178,11 @@ struct CADMetalLibreDWGPoCEntry: View {
         }
         next.onPerformanceSample = { sample in
             callbacks.onPerformanceSample(sample)
+            DispatchQueue.main.async {
+                if rendererPerformance != sample {
+                    rendererPerformance = sample
+                }
+            }
         }
         next.onOpenQualityChange = { quality in
             callbacks.onOpenQualityChange(quality)
@@ -145,6 +204,36 @@ struct CADMetalLibreDWGPoCEntry: View {
             }
         }
         return next
+    }
+
+    private func rendererDiagnosticBadge(_ sample: CADRendererPerformanceSnapshot) -> some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange)
+                Text("渲染诊断：\(sample.rendererDiagnosticSummary)")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            Text(sample.rendererFailureReason)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Text("import \(sample.totalEntityCount) / layer \(sample.visibleLayerCount)/\(sample.totalLayerCount) / viewport \(sample.visibleEntityCount) / command \(sample.renderCommandCount) / text \(sample.textOverlayCount)/\(sample.textCommandCount)")
+                .font(.caption2.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 360, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+        }
     }
 
     private var zoomControls: some View {
@@ -216,19 +305,263 @@ struct CADMetalLibreDWGPoCEntry: View {
         canvasControlCommand = CADCanvasControlCommand(kind: kind)
     }
 
+    private var searchPanel: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "magnifyingglass")
+                    .foregroundStyle(.secondary)
+
+                TextField("搜索图纸文字", text: $searchText)
+                    .textFieldStyle(.plain)
+                    .submitLabel(.search)
+                    .onSubmit {
+                        executeTextSearch()
+                    }
+                    .onChange(of: searchText) { _, _ in
+                        refreshSearchResults()
+                    }
+
+                Button {
+                    executeTextSearch()
+                } label: {
+                    Image(systemName: "arrow.right.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .disabled(searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Button {
+                    clearTextSearch()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .accessibilityLabel("清除搜索")
+            }
+
+            searchStatusRow
+
+            if !searchResults.isEmpty {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(searchResults.prefix(8).enumerated()), id: \.element.id) { index, result in
+                            Button {
+                                focusSearchResult(at: index)
+                            } label: {
+                                HStack(spacing: 6) {
+                                    Image(systemName: selectedSearchResultIndex == index ? "scope" : "text.magnifyingglass")
+                                        .foregroundStyle(selectedSearchResultIndex == index ? Color.appPrimaryAction : .secondary)
+                                    Text(result.previewText)
+                                        .font(.caption)
+                                        .lineLimit(1)
+                                    Spacer(minLength: 8)
+                                }
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .frame(maxHeight: 168)
+            }
+        }
+        .padding(10)
+        .frame(width: 320)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: .black.opacity(0.14), radius: 12, y: 5)
+    }
+
+    @ViewBuilder
+    private var searchStatusRow: some View {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if textSearchIndex == nil {
+            Text("正在读取文字索引")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if trimmed.isEmpty {
+            Text("输入文字后按回车定位")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else if searchResults.isEmpty {
+            Text("未找到匹配文字")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else {
+            HStack(spacing: 8) {
+                Text(searchResultPositionLabel)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 8)
+                Button {
+                    focusAdjacentSearchResult(step: -1)
+                } label: {
+                    Image(systemName: "chevron.up")
+                }
+                .buttonStyle(.plain)
+                .disabled(searchResults.count <= 1)
+                Button {
+                    focusAdjacentSearchResult(step: 1)
+                } label: {
+                    Image(systemName: "chevron.down")
+                }
+                .buttonStyle(.plain)
+                .disabled(searchResults.count <= 1)
+            }
+        }
+    }
+
+    private var searchResultPositionLabel: String {
+        let current = (selectedSearchResultIndex ?? 0) + 1
+        return "\(current)/\(searchResults.count)"
+    }
+
     private var effectiveVisibleLayerIDs: Set<String>? {
-        externalVisibleLayerIDs ?? visibleLayerIDs
+        Self.reconciledVisibleLayerIDs(
+            requested: externalVisibleLayerIDs ?? visibleLayerIDs,
+            importedLayers: layers
+        )
+    }
+
+    private var effectiveCurrentLayoutID: String? {
+        guard !layouts.isEmpty else { return currentLayoutID }
+        if let currentLayoutID, layouts.contains(where: { $0.id == currentLayoutID }) {
+            return currentLayoutID
+        }
+        return Self.defaultLayoutID(layouts)
+    }
+
+    private func handleLayoutsChanged(_ importedLayouts: [CADPoC.CADLayout]) {
+        layouts = importedLayouts
+        let nextLayoutID: String?
+        if let currentLayoutID, importedLayouts.contains(where: { $0.id == currentLayoutID }) {
+            nextLayoutID = currentLayoutID
+        } else {
+            nextLayoutID = Self.defaultLayoutID(importedLayouts)
+        }
+        if currentLayoutID != nextLayoutID {
+            currentLayoutID = nextLayoutID
+        }
+        refreshSearchResults()
     }
 
     private func handleLayersChanged(_ importedLayers: [CADPoC.CADLayer]) {
         layers = importedLayers
         onLayersChangedExternal(importedLayers)
-        let importedVisibleIDs = Set(importedLayers.filter(\.isVisible).map(\.id))
-        if effectiveVisibleLayerIDs == nil {
-            let nextVisible = importedVisibleIDs.isEmpty ? Set(importedLayers.map(\.id)) : importedVisibleIDs
+        let requested = externalVisibleLayerIDs ?? visibleLayerIDs
+        let nextVisible = requested.map {
+            Self.reconciledVisibleLayerIDs(requested: $0, importedLayers: importedLayers) ?? $0
+        } ?? Self.defaultVisibleLayerIDs(importedLayers)
+        if nextVisible != externalVisibleLayerIDs || nextVisible != visibleLayerIDs {
             visibleLayerIDs = nextVisible
             onVisibleLayerIDsChangedExternal(nextVisible)
         }
+    }
+
+    private func handleSearchIndexChanged(_ index: SiteKeeperCADKernel.CADTextSearchIndex?) {
+        textSearchIndex = index
+        refreshSearchResults()
+    }
+
+    private func toggleSearchPanel() {
+        withAnimation(.easeInOut(duration: 0.16)) {
+            showsSearchPanel.toggle()
+        }
+        if showsSearchPanel, !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            executeTextSearch()
+        }
+    }
+
+    private func refreshSearchResults() {
+        let trimmed = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let textSearchIndex else {
+            searchResults = []
+            selectedSearchResultIndex = nil
+            return
+        }
+
+        let layoutID = effectiveCurrentLayoutID
+        searchResults = textSearchIndex.search(trimmed).filter {
+            layoutID == nil || $0.layoutId == layoutID
+        }
+        if searchResults.isEmpty {
+            selectedSearchResultIndex = nil
+        } else if let selectedSearchResultIndex {
+            self.selectedSearchResultIndex = min(selectedSearchResultIndex, searchResults.count - 1)
+        } else {
+            selectedSearchResultIndex = 0
+        }
+    }
+
+    private func executeTextSearch() {
+        refreshSearchResults()
+        focusSearchResult(at: selectedSearchResultIndex ?? 0)
+    }
+
+    private func focusAdjacentSearchResult(step: Int) {
+        guard !searchResults.isEmpty else { return }
+        let current = selectedSearchResultIndex ?? 0
+        let next = (current + step + searchResults.count) % searchResults.count
+        focusSearchResult(at: next)
+    }
+
+    private func focusSearchResult(at index: Int) {
+        guard searchResults.indices.contains(index) else { return }
+        selectedSearchResultIndex = index
+        let result = searchResults[index]
+        sendCanvasCommand(
+            .focusSearchResult(
+                entityID: result.entityId,
+                bounds: result.bounds,
+                fallbackPoint: result.worldPoint
+            )
+        )
+    }
+
+    private func clearTextSearch() {
+        searchText = ""
+        searchResults = []
+        selectedSearchResultIndex = nil
+        sendCanvasCommand(.clearSearchHighlight)
+    }
+
+    static func reconciledVisibleLayerIDs(
+        requested: Set<String>?,
+        importedLayers: [CADPoC.CADLayer]
+    ) -> Set<String>? {
+        guard let requested else { return nil }
+        guard !importedLayers.isEmpty else { return requested }
+        guard !requested.isEmpty else { return requested }
+
+        let importedIDs = Set(importedLayers.map(\.id))
+        let validRequestedIDs = requested.intersection(importedIDs)
+        if !validRequestedIDs.isEmpty {
+            return validRequestedIDs
+        }
+
+        let visibleImportedIDs = Set(importedLayers.filter(\.isVisible).map(\.id))
+        return visibleImportedIDs.isEmpty ? importedIDs : visibleImportedIDs
+    }
+
+    static func defaultVisibleLayerIDs(_ importedLayers: [CADPoC.CADLayer]) -> Set<String>? {
+        guard !importedLayers.isEmpty else { return nil }
+        let visibleImportedIDs = Set(importedLayers.filter(\.isVisible).map(\.id))
+        return visibleImportedIDs.isEmpty ? Set(importedLayers.map(\.id)) : visibleImportedIDs
+    }
+
+    static func defaultLayoutID(_ importedLayouts: [CADPoC.CADLayout]) -> String? {
+        importedLayouts.first(where: \.isModelSpace)?.id ?? importedLayouts.first?.id
+    }
+
+    private func selectLayout(_ layoutID: String) {
+        guard currentLayoutID != layoutID else { return }
+        currentLayoutID = layoutID
+        selectedSearchResultIndex = nil
+        sendCanvasCommand(.clearSearchHighlight)
+        refreshSearchResults()
     }
 
     private func toggleLayer(_ layerID: String) {

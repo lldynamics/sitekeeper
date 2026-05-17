@@ -406,6 +406,8 @@ struct ReportBuilderTests {
         #expect(csvText.contains("\"role_key\",\"role_display\""))
         #expect(csvText.contains("\"movement_type_key\",\"movement_type_display\""))
         #expect(csvText.contains("\"supply_type_key\",\"supply_type_display\""))
+        #expect(csvText.contains("\"project_id\",\"project_name\",\"category_key\",\"category_display\",\"status_raw\",\"status_display\""))
+        #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"submission_status_raw\",\"submission_status_display\""))
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
         let htmlText = String(data: html, encoding: .utf8) ?? ""

@@ -25,21 +25,21 @@ actor SiteKeeperCADKernelAppViewerEngine: CADViewerEngine {
             return CADOpenResult(
                 drawingId: file.drawingId,
                 openState: .unsupported,
-                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                message: CADViewerMessages.interactivePreviewUnavailableMessage,
                 technicalDetails: details
             )
         case .failed:
             return CADOpenResult(
                 drawingId: file.drawingId,
                 openState: .failed,
-                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                message: CADViewerMessages.interactivePreviewUnavailableMessage,
                 technicalDetails: details
             )
         default:
             return CADOpenResult(
                 drawingId: file.drawingId,
                 openState: .failed,
-                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                message: CADViewerMessages.interactivePreviewUnavailableMessage,
                 technicalDetails: details
             )
         }

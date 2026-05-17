@@ -19,6 +19,8 @@ extension CADPoC {
         var renderCommandCount: Int
         var bounds: SiteKeeperCADKernel.CADBounds
         var openedForRender: Bool
+        var importCacheHit: Bool
+        var importMilliseconds: Double
 
         init(
             fileName: String,
@@ -39,7 +41,9 @@ extension CADPoC {
             drawableEntityCount: Int = 0,
             renderCommandCount: Int = 0,
             bounds: SiteKeeperCADKernel.CADBounds = .empty,
-            openedForRender: Bool? = nil
+            openedForRender: Bool? = nil,
+            importCacheHit: Bool = false,
+            importMilliseconds: Double = 0
         ) {
             self.fileName = fileName
             self.importSource = importSource
@@ -60,6 +64,8 @@ extension CADPoC {
             self.renderCommandCount = renderCommandCount
             self.bounds = bounds
             self.openedForRender = openedForRender ?? (drawableEntityCount > 0 && renderCommandCount > 0)
+            self.importCacheHit = importCacheHit
+            self.importMilliseconds = importMilliseconds
         }
 
         static func unsupported(fileName: String, importSource: String) -> CADOpenTrace {

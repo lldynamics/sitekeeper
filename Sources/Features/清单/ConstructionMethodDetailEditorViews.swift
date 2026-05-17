@@ -3,6 +3,8 @@ import PhotosUI
 import UIKit
 import AVFoundation
 
+private let constructionMethodDeleteUndoHint = String(localized: "删除后可在提示中撤销，附件会延迟清理。")
+
 private func constructionMethodShareText(_ method: ConstructionMethod) -> String {
     let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未命名工艺") : method.title
     let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未分类") : method.trade
@@ -84,7 +86,7 @@ struct ConstructionMethodDetailInlineView: View {
                 }
             }
         } message: {
-            Text(String(localized: "删除后不可撤销。"))
+            Text(constructionMethodDeleteUndoHint)
         }
     }
 }
@@ -162,7 +164,7 @@ struct ConstructionMethodDetailView: View {
                     }
                 }
             } message: {
-                Text(String(localized: "删除后不可撤销。"))
+                Text(constructionMethodDeleteUndoHint)
             }
         }
     }
@@ -901,6 +903,8 @@ struct ConstructionMethodEditSheet: View {
                     if let target = method { onDelete?(target) }
                     dismiss()
                 }
+            } message: {
+                Text(constructionMethodDeleteUndoHint)
             }
             .alert(String(localized: "无法添加媒体"), isPresented: $showAlert) {
                 Button(String(localized: "知道了"), role: .cancel) {}

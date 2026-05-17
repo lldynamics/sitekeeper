@@ -3,22 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-enum CADTechnicalDiagnosticsVisibility {
-    static let internalSwitchKey = "cad.internal.showTechnicalDiagnostics"
-
-    static var isEnabled: Bool {
-        #if DEBUG
-        true
-        #else
-        UserDefaults.standard.bool(forKey: internalSwitchKey)
-        #endif
-    }
-
-    static func isEnabled(isDebugBuild: Bool, internalSwitchOn: Bool) -> Bool {
-        isDebugBuild || internalSwitchOn
-    }
-}
-
 struct ProjectCADPreviewRequest: Identifiable {
     let id = UUID()
     let projectId: UUID
@@ -143,12 +127,25 @@ struct CADDiagnosticMachineTrace: Codable {
         let frameTimeMilliseconds: Double
         let skippedEntityCount: Int
         let visibleLayerCount: Int
+        let totalLayerCount: Int
         let simplifiedMode: Bool
         let renderCommandCount: Int
         let textCommandCount: Int
         let textOverlayCount: Int
         let renderMilliseconds: Double
         let firstFrameMilliseconds: Double
+        let totalEntityCount: Int
+        let indexedEntityCount: Int
+        let viewportEntityCountBeforeLayerFilter: Int
+        let layerFilterActive: Bool
+        let modelBounds: Bounds?
+        let viewportBounds: Bounds?
+        let modelBoundsValid: Bool
+        let viewportBoundsValid: Bool
+        let viewportIntersectsModel: Bool
+        let vertexCount: Int
+        let rendererFailureLayer: String
+        let rendererFailureReason: String
     }
 
     struct OpenQuality: Codable {
@@ -231,6 +228,16 @@ private extension CADDiagnosticMachineTrace.Bounds {
         guard let bounds, !bounds.isEmpty else { return nil }
         self.init(minX: bounds.minX, minY: bounds.minY, maxX: bounds.maxX, maxY: bounds.maxY)
     }
+
+    init?(_ rect: CGRect?) {
+        guard let rect, !rect.isNull, !rect.isEmpty else { return nil }
+        self.init(
+            minX: Double(rect.minX),
+            minY: Double(rect.minY),
+            maxX: Double(rect.maxX),
+            maxY: Double(rect.maxY)
+        )
+    }
 }
 
 private extension CADDiagnosticMachineTrace.KernelTrace {
@@ -304,8 +311,73 @@ struct CADKernelUnavailableView: View {
     let technicalDetails: CADOpenTechnicalDetails?
     let onReportIssue: () -> Void
 
-    private var shouldShowTechnicalDetails: Bool {
-        CADTechnicalDiagnosticsVisibility.isEnabled && technicalDetails != nil
+    private struct UserDiagnosticSummary {
+        let headline: String
+        let detail: String
+        let layerLabel: String
+    }
+
+    private var userDiagnosticSummary: UserDiagnosticSummary {
+        guard let details = technicalDetails else {
+            return UserDiagnosticSummary(
+                headline: String(localized: "暂未获取完整诊断信息"),
+                detail: String(localized: "请点击“反馈问题”导出诊断包，我们会根据机器 trace 继续排查。"),
+                layerLabel: String(localized: "未识别")
+            )
+        }
+        guard let trace = details.pipelineTrace else {
+            if details.geometryParsed, details.drawableEntityCount > 0 {
+                return UserDiagnosticSummary(
+                    headline: String(localized: "图纸已完成基础解析"),
+                    detail: String(localized: "当前阻塞更可能发生在渲染或显示配置阶段。"),
+                    layerLabel: String(localized: "渲染")
+                )
+            }
+            return UserDiagnosticSummary(
+                headline: String(localized: "图纸未形成可渲染对象"),
+                detail: String(localized: "建议先导出诊断包，重点检查导入和结构转换阶段。"),
+                layerLabel: String(localized: "导入/转换")
+            )
+        }
+
+        switch failureLayer(for: trace) {
+        case "none":
+            return UserDiagnosticSummary(
+                headline: String(localized: "图纸数据已进入可渲染阶段"),
+                detail: String(localized: "当前问题更可能与显示配置、视图状态或设备环境有关。"),
+                layerLabel: String(localized: "渲染完成")
+            )
+        case "libredwg":
+            return UserDiagnosticSummary(
+                headline: String(localized: "导入阶段未产出有效几何"),
+                detail: String(localized: "常见原因是图纸版本或对象类型暂不兼容。"),
+                layerLabel: String(localized: "导入")
+            )
+        case "adapter":
+            return UserDiagnosticSummary(
+                headline: String(localized: "结构转换未生成实体"),
+                detail: String(localized: "原始数据存在，但转换层尚未产出可用数据库实体。"),
+                layerLabel: String(localized: "转换")
+            )
+        case "database":
+            return UserDiagnosticSummary(
+                headline: String(localized: "实体已生成但不可绘制"),
+                detail: String(localized: "建议重点排查实体构建与可绘制对象映射。"),
+                layerLabel: String(localized: "实体")
+            )
+        case "render":
+            return UserDiagnosticSummary(
+                headline: String(localized: "渲染命令未生成"),
+                detail: String(localized: "可绘制实体存在，但渲染阶段未输出可显示命令。"),
+                layerLabel: String(localized: "渲染")
+            )
+        default:
+            return UserDiagnosticSummary(
+                headline: String(localized: "已识别异常但暂未定位层级"),
+                detail: String(localized: "请导出诊断包，我们会结合机器 trace 继续定位。"),
+                layerLabel: String(localized: "未知")
+            )
+        }
     }
 
     var body: some View {
@@ -315,7 +387,7 @@ struct CADKernelUnavailableView: View {
                 .foregroundStyle(Color.appWarning)
 
             VStack(spacing: 6) {
-                Text("当前图纸暂不支持在线预览")
+                Text("当前图纸暂不支持交互预览")
                     .font(.title3.weight(.semibold))
                 Text(message)
                     .font(.subheadline)
@@ -342,38 +414,41 @@ struct CADKernelUnavailableView: View {
             .buttonStyle(.bordered)
             .controlSize(.large)
 
-            if shouldShowTechnicalDetails, let details = technicalDetails {
-                DisclosureGroup("技术信息") {
-                    VStack(alignment: .leading, spacing: 6) {
-                        LabeledContent("DWG version") { Text(details.dwgVersion ?? "-") }
-                        LabeledContent("file size") { Text("\(details.fileSizeBytes ?? 0) bytes") }
-                        LabeledContent("import engine") { Text(details.importEngine ?? "-") }
-                        LabeledContent("geometryParsed") { Text(details.geometryParsed ? "true" : "false") }
-                        LabeledContent("drawableEntityCount") { Text("\(details.drawableEntityCount)") }
-                        if let trace = details.pipelineTrace {
-                            LabeledContent("failureStage") { Text(trace.failureStage) }
-                            LabeledContent("databaseEntityCount") { Text("\(trace.databaseEntityCount)") }
-                            LabeledContent("adapterEntityCount") { Text("\(trace.adapterEntityCount)") }
-                            LabeledContent("renderCommandCount") { Text("\(trace.renderCommandCount)") }
-                            LabeledContent("currentLayout") { Text(trace.currentLayout ?? "-") }
-                            LabeledContent("visibleLayerCount") { Text("\(trace.visibleLayerCount)") }
-                            LabeledContent("extents") { Text(formatBounds(trace.extents)) }
-                        }
-                        if !details.diagnostics.isEmpty {
-                            Text("diagnostics")
-                                .font(.caption.weight(.semibold))
-                            ForEach(Array(details.diagnostics.prefix(8).enumerated()), id: \.offset) { _, line in
-                                Text(line)
-                                    .font(.caption2.monospaced())
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(localized: "诊断结论"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(userDiagnosticSummary.headline)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+                Text(userDiagnosticSummary.detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(String(localized: "定位层"))：\(userDiagnosticSummary.layerLabel)")
                     .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                    .foregroundStyle(.secondary)
+                Text(String(localized: "详细机器 trace 已写入反馈包中的 pipeline_trace.json。"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.appStrokeSecondary, lineWidth: 1)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(
+                "\(String(localized: "诊断结论"))，\(userDiagnosticSummary.headline)，\(userDiagnosticSummary.detail)"
+            )
+            .accessibilityHint(String(localized: "反馈包中包含可供技术排查的机器 trace 文件"))
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(24)
         .frame(maxWidth: 520)
@@ -381,9 +456,28 @@ struct CADKernelUnavailableView: View {
         .background(Color(uiColor: .systemGroupedBackground))
     }
 
-    private func formatBounds(_ bounds: SiteKeeperCADKernel.CADBounds?) -> String {
-        guard let bounds, !bounds.isEmpty else { return "-" }
-        return "\(bounds.minX), \(bounds.minY) - \(bounds.maxX), \(bounds.maxY)"
+    private func failureLayer(for trace: SiteKeeperCADKernel.DWGOpenPipelineTrace) -> String {
+        if trace.openState == .rendered || trace.failureStage == "rendered" {
+            return "none"
+        }
+        if trace.jsonRawEntityCount == 0,
+           trace.dxfRawEntityCount == 0,
+           trace.adapterEntityCount == 0,
+           trace.databaseEntityCount == 0 {
+            return "libredwg"
+        }
+        if trace.adapterEntityCount == 0 { return "adapter" }
+        if trace.drawableEntityCount == 0 { return "database" }
+        if trace.renderCommandCount == 0 { return "render" }
+
+        let stage = trace.failureStage.lowercased()
+        if stage.contains("libredwg") || stage.contains("geometry_source") || stage.contains("import") {
+            return "libredwg"
+        }
+        if stage.contains("adapter") { return "adapter" }
+        if stage.contains("database") || stage.contains("drawable") { return "database" }
+        if stage.contains("render") { return "render" }
+        return "unknown"
     }
 }
 
@@ -476,6 +570,7 @@ enum CADNativeSnapPointKind: String {
     case endpoint
     case midpoint
     case center
+    case intersection
 }
 
 enum CADNativePrimitiveKind: String {
@@ -575,10 +670,12 @@ private struct CADNativeSnapPointBuckets {
     let endpointPoints: [CGPoint]
     let midpointPoints: [CGPoint]
     let centerPoints: [CGPoint]
+    let intersectionPoints: [CGPoint]
     let measurementAllPoints: [CGPoint]
     let measurementEndpointPoints: [CGPoint]
     let measurementMidpointPoints: [CGPoint]
     let measurementCenterPoints: [CGPoint]
+    let measurementIntersectionPoints: [CGPoint]
 
     var isEmpty: Bool {
         sourcePoints.isEmpty
@@ -590,14 +687,17 @@ private struct CADNativeSnapPointBuckets {
         var endpointPoints: [CGPoint] = []
         var midpointPoints: [CGPoint] = []
         var centerPoints: [CGPoint] = []
+        var intersectionPoints: [CGPoint] = []
         var measurementAllPoints: [CGPoint] = []
         var measurementEndpointPoints: [CGPoint] = []
         var measurementMidpointPoints: [CGPoint] = []
         var measurementCenterPoints: [CGPoint] = []
+        var measurementIntersectionPoints: [CGPoint] = []
         allPoints.reserveCapacity(sourcePoints.count)
         endpointPoints.reserveCapacity(sourcePoints.count / 2)
         midpointPoints.reserveCapacity(sourcePoints.count / 3)
         centerPoints.reserveCapacity(sourcePoints.count / 4)
+        intersectionPoints.reserveCapacity(sourcePoints.count / 5)
         measurementAllPoints.reserveCapacity(sourcePoints.count)
 
         for sourcePoint in sourcePoints {
@@ -621,6 +721,11 @@ private struct CADNativeSnapPointBuckets {
                 if sourcePoint.primitiveKind.supportsMeasurementSnap {
                     measurementCenterPoints.append(sourcePoint.point)
                 }
+            case .intersection:
+                intersectionPoints.append(sourcePoint.point)
+                if sourcePoint.primitiveKind.supportsMeasurementSnap {
+                    measurementIntersectionPoints.append(sourcePoint.point)
+                }
             }
         }
 
@@ -628,10 +733,12 @@ private struct CADNativeSnapPointBuckets {
         self.endpointPoints = endpointPoints
         self.midpointPoints = midpointPoints
         self.centerPoints = centerPoints
+        self.intersectionPoints = intersectionPoints
         self.measurementAllPoints = measurementAllPoints
         self.measurementEndpointPoints = measurementEndpointPoints
         self.measurementMidpointPoints = measurementMidpointPoints
         self.measurementCenterPoints = measurementCenterPoints
+        self.measurementIntersectionPoints = measurementIntersectionPoints
     }
 
     func points(enabledModes: Set<CADSnapMode>, measurementOnly: Bool) -> [CGPoint] {
@@ -639,9 +746,15 @@ private struct CADNativeSnapPointBuckets {
         let endpointCandidates = measurementOnly ? measurementEndpointPoints : endpointPoints
         let midpointCandidates = measurementOnly ? measurementMidpointPoints : midpointPoints
         let centerCandidates = measurementOnly ? measurementCenterPoints : centerPoints
+        let intersectionCandidates = measurementOnly ? measurementIntersectionPoints : intersectionPoints
 
         var points: [CGPoint] = []
-        points.reserveCapacity(endpointCandidates.count + midpointCandidates.count + centerCandidates.count)
+        points.reserveCapacity(
+            endpointCandidates.count
+                + midpointCandidates.count
+                + centerCandidates.count
+                + intersectionCandidates.count
+        )
         if enabledModes.contains(.endpoint) {
             points.append(contentsOf: endpointCandidates)
         }
@@ -650,6 +763,9 @@ private struct CADNativeSnapPointBuckets {
         }
         if enabledModes.contains(.center) {
             points.append(contentsOf: centerCandidates)
+        }
+        if enabledModes.contains(.intersection) {
+            points.append(contentsOf: intersectionCandidates)
         }
         return points.isEmpty ? allCandidates : points
     }
@@ -715,6 +831,7 @@ enum CADSnapMode: String, CaseIterable {
     case endpoint
     case midpoint
     case center
+    case intersection
 
     var title: String {
         switch self {
@@ -724,6 +841,8 @@ enum CADSnapMode: String, CaseIterable {
             return String(localized: "中点")
         case .center:
             return String(localized: "圆心")
+        case .intersection:
+            return String(localized: "交点")
         }
     }
 
@@ -735,6 +854,8 @@ enum CADSnapMode: String, CaseIterable {
             return "line.3.horizontal"
         case .center:
             return "circle"
+        case .intersection:
+            return "plus"
         }
     }
 }
@@ -1004,17 +1125,43 @@ struct CADOverlaySnapshot: Codable, Equatable {
             next.points = measurement.points.map { CADPoint(transform.drawingPoint(fromCanvas: $0.cgPoint)) }
             return next
         }
+        arrowAnnotations = arrowAnnotations.map { arrow in
+            var next = arrow
+            next.start = CADPoint(transform.drawingPoint(fromCanvas: arrow.start.cgPoint))
+            next.end = CADPoint(transform.drawingPoint(fromCanvas: arrow.end.cgPoint))
+            return next
+        }
         notes = notes.map { note in
             var next = note
-            next.point = CADPoint(transform.drawingPoint(fromCanvas: note.point.cgPoint))
+            let point = CADPoint(transform.drawingPoint(fromCanvas: note.point.cgPoint))
+            next.point = point
+            next.worldPoint = point
             return next
         }
         countMarkers = countMarkers.map { marker in
             var next = marker
-            next.point = CADPoint(transform.drawingPoint(fromCanvas: marker.point.cgPoint))
+            let point = CADPoint(transform.drawingPoint(fromCanvas: marker.point.cgPoint))
+            next.point = point
+            next.worldPoint = point
+            return next
+        }
+        issueMarkers = issueMarkers.map { marker in
+            var next = marker
+            let point = CADPoint(transform.drawingPoint(fromCanvas: marker.point.cgPoint))
+            next.point = point
+            next.worldPoint = point
+            next.normalizedPoint = CADPoint(Self.normalizedPoint(point.cgPoint, in: transform.bounds))
             return next
         }
         coordinateSpace = .drawing
+    }
+
+    private static func normalizedPoint(_ point: CGPoint, in bounds: CGRect) -> CGPoint {
+        guard bounds.width > 0, bounds.height > 0 else { return point }
+        return CGPoint(
+            x: min(max((point.x - bounds.minX) / bounds.width, 0), 1),
+            y: min(max((point.y - bounds.minY) / bounds.height, 0), 1)
+        )
     }
 
     init(from decoder: Decoder) throws {
@@ -1206,7 +1353,6 @@ struct CADPreviewContainer: View {
     @State var showOverlayLayerSheet = false
     @State var showAnnotationExportFormatDialog = false
     @State var showTextEncodingDialog = false
-    @State var showCADDiagnosticSheet = false
     @State var scaleDraft = ""
     @State var calibrationActualMetersDraft = ""
     @State var selectedCalibrationMeasurementID: UUID?
@@ -1268,11 +1414,16 @@ struct CADPreviewContainer: View {
         CADOpenResult(
             drawingId: UUID(),
             openState: .unsupported,
-            message: CADViewerMessages.onlinePreviewUnavailableMessage,
+            message: CADViewerMessages.interactivePreviewUnavailableMessage,
             technicalDetails: nil
         )
     )
     @AppStorage("cadViewerMode") private var cadViewerModeRaw = CADViewerMode.auto.rawValue
+    @AppStorage("cad.metal.poc.showsOverviewMap") var showsCADOverviewMap = false
+    @AppStorage("cad.metal.poc.rendersTextOverlays") var rendersCADTextOverlays = false
+    @AppStorage("cad.metal.poc.publishesSnapPoints") var publishesCADSnapPoints = false
+    @AppStorage("cad.metal.poc.rendersHatches") var rendersCADHatches = false
+    @AppStorage("cad.metal.poc.showsRendererDiagnostics") var showsCADRendererDiagnostics = false
     let overlaySnapTolerance: CGFloat = 14
     let activeStrokeSamplingCanvasDistance: CGFloat = 3
     let activeStrokePointLimit = 4096
@@ -1328,7 +1479,7 @@ struct CADPreviewContainer: View {
             return true
         }
         guard isCADFile else { return true }
-        if case .online = cadOpenRoute {
+        if case .rendered = cadOpenRoute {
             return true
         }
         return false
@@ -1342,8 +1493,8 @@ struct CADPreviewContainer: View {
         switch cadOpenRoute {
         case .unsupported(let result):
             return result.message
-        case .online(let result):
-            return result.message.isEmpty ? CADViewerMessages.onlinePreviewUnavailableMessage : result.message
+        case .rendered(let result):
+            return result.message.isEmpty ? CADViewerMessages.interactivePreviewUnavailableMessage : result.message
         }
     }
 
@@ -1353,7 +1504,7 @@ struct CADPreviewContainer: View {
         route: CADOpenRoute
     ) -> Bool {
         guard isCADFile, rendererBound else { return false }
-        if case .online = route {
+        if case .rendered = route {
             return true
         }
         return false
@@ -1374,7 +1525,7 @@ struct CADPreviewContainer: View {
             CADOpenResult(
                 drawingId: activeRequest.drawingID,
                 openState: .unsupported,
-                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                message: CADViewerMessages.interactivePreviewUnavailableMessage,
                 technicalDetails: nil
             )
         )
@@ -1384,7 +1535,7 @@ struct CADPreviewContainer: View {
 
     var cadOpenTechnicalDetails: CADOpenTechnicalDetails? {
         switch cadOpenRoute {
-        case .online(let result), .unsupported(let result):
+        case .rendered(let result), .unsupported(let result):
             return result.technicalDetails
         }
     }
@@ -1922,7 +2073,7 @@ struct CADPreviewContainer: View {
                         CADOpenResult(
                             drawingId: activeRequest.drawingID,
                             openState: .unsupported,
-                            message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                            message: CADViewerMessages.interactivePreviewUnavailableMessage,
                             technicalDetails: nil
                         )
                     )
@@ -1933,7 +2084,7 @@ struct CADPreviewContainer: View {
                             CADOpenResult(
                                 drawingId: activeRequest.drawingID,
                                 openState: .unsupported,
-                                message: CADViewerMessages.onlinePreviewUnavailableMessage,
+                                message: CADViewerMessages.interactivePreviewUnavailableMessage,
                                 technicalDetails: nil
                             )
                         )
@@ -1944,7 +2095,7 @@ struct CADPreviewContainer: View {
                             CADOpenResult(
                                 drawingId: activeRequest.drawingID,
                                 openState: .unsupported,
-                                message: CADOpenRouter.unsupportedOnlineOpenMessage,
+                                message: CADOpenRouter.unsupportedOpenMessage,
                                 technicalDetails: nil
                             )
                         )
@@ -2015,11 +2166,6 @@ struct CADPreviewContainer: View {
             .sheet(isPresented: $showTextEncodingDialog) {
                 CADTextOptionsPanel {
                     textOptionsSheet
-                }
-            }
-            .sheet(isPresented: $showCADDiagnosticSheet) {
-                CADDiagnosticPanel {
-                    cadDiagnosticSheet
                 }
             }
             .sheet(isPresented: $showScaleSheet) {
@@ -2491,6 +2637,38 @@ struct CADPreviewContainer: View {
             .map(\.rawValue)
     }
 
+    func revealAllOverlayContent() {
+        hiddenOverlayGroups.removeAll()
+        hiddenStrokeLayers.removeAll()
+        hiddenOverlayColorHexes.removeAll()
+        updateOverlayDisplayPreferences()
+    }
+
+    func revealOverlayContent(for group: CADOverlayVisibilityGroup) {
+        hiddenOverlayGroups.remove(group)
+        switch group {
+        case .annotation:
+            snapshot.strokes.forEach { stroke in
+                hiddenStrokeLayers.remove(strokeLayerName(stroke))
+                hiddenOverlayColorHexes.remove(strokeColorHex(stroke))
+            }
+            snapshot.arrowAnnotations.forEach { arrow in
+                hiddenStrokeLayers.remove(strokeLayerName(arrow))
+                hiddenOverlayColorHexes.remove(arrowColorHex(arrow))
+            }
+        case .measurement:
+            snapshot.lengthMeasurements.forEach { hiddenOverlayColorHexes.remove(lengthMeasurementColorHex($0)) }
+            snapshot.areaMeasurements.forEach { hiddenOverlayColorHexes.remove(areaMeasurementColorHex($0)) }
+        case .notes:
+            snapshot.notes.forEach { hiddenOverlayColorHexes.remove(noteColorHex($0)) }
+        case .counts:
+            break
+        case .issues:
+            snapshot.issueMarkers.forEach { hiddenOverlayColorHexes.remove(issueMarkerColorHex($0)) }
+        }
+        updateOverlayDisplayPreferences()
+    }
+
     func copyOverlayDisplayPreferences(
         from source: CADOverlaySnapshot,
         to destination: inout CADOverlaySnapshot
@@ -2544,20 +2722,20 @@ struct CADPreviewContainer: View {
         isSelectingStroke = false
         switch nextTool {
         case .annotation, .cloud:
-            hiddenOverlayGroups.remove(.annotation)
+            revealOverlayContent(for: .annotation)
             if selectedStrokeLayer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 selectedStrokeLayer = String(localized: "现场批注")
             }
         case .length, .continuousLength, .area:
-            hiddenOverlayGroups.remove(.measurement)
+            revealOverlayContent(for: .measurement)
         case .arrow:
-            hiddenOverlayGroups.remove(.annotation)
+            revealOverlayContent(for: .annotation)
         case .note:
-            hiddenOverlayGroups.remove(.notes)
+            revealOverlayContent(for: .notes)
         case .issueMarker:
-            hiddenOverlayGroups.remove(.issues)
+            revealOverlayContent(for: .issues)
         case .count:
-            hiddenOverlayGroups.remove(.counts)
+            revealOverlayContent(for: .counts)
         case .browse:
             break
         }
@@ -2713,6 +2891,9 @@ struct CADPreviewContainer: View {
         }
         if let performance = lastRendererPerformance {
             lines.append("\(String(localized: "性能采样"))：visible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), textCommands=\(performance.textCommandCount), textOverlays=\(performance.textOverlayCount), renderMs=\(Int(performance.renderMs))ms, firstFrameMs=\(Int(performance.firstFrameMs))ms, skipped=\(performance.skippedEntityCount), layers=\(performance.visibleLayerCount)")
+            lines.append("\(String(localized: "渲染闭环"))：layer=\(performance.rendererFailureLayer), reason=\(performance.rendererFailureReason)")
+            lines.append("\(String(localized: "闭环计数"))：import=\(performance.totalEntityCount), indexed=\(performance.indexedEntityCount), viewportBeforeLayer=\(performance.viewportEntityCountBeforeLayerFilter), viewportVisible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), vertices=\(performance.vertexCount), text=\(performance.textOverlayCount)/\(performance.textCommandCount), layers=\(performance.visibleLayerCount)/\(performance.totalLayerCount)")
+            lines.append("\(String(localized: "闭环状态"))：modelBoundsValid=\(performance.modelBoundsValid), viewportBoundsValid=\(performance.viewportBoundsValid), viewportIntersectsModel=\(performance.viewportIntersectsModel), layerFilterActive=\(performance.layerFilterActive)")
             if performance.textCommandCount > 0 && performance.textOverlayCount == 0 {
                 lines.append("\(String(localized: "文字渲染诊断"))：CAD 已生成文字命令，但当前帧没有可见文字贴图；优先检查 viewport、文字坐标、图层和字体栅格化。")
             }
@@ -2840,12 +3021,25 @@ struct CADPreviewContainer: View {
                     frameTimeMilliseconds: performance.frameTimeMilliseconds,
                     skippedEntityCount: performance.skippedEntityCount,
                     visibleLayerCount: performance.visibleLayerCount,
+                    totalLayerCount: performance.totalLayerCount,
                     simplifiedMode: performance.simplifiedMode,
                     renderCommandCount: performance.renderCommandCount,
                     textCommandCount: performance.textCommandCount,
                     textOverlayCount: performance.textOverlayCount,
                     renderMilliseconds: performance.renderMs,
-                    firstFrameMilliseconds: performance.firstFrameMs
+                    firstFrameMilliseconds: performance.firstFrameMs,
+                    totalEntityCount: performance.totalEntityCount,
+                    indexedEntityCount: performance.indexedEntityCount,
+                    viewportEntityCountBeforeLayerFilter: performance.viewportEntityCountBeforeLayerFilter,
+                    layerFilterActive: performance.layerFilterActive,
+                    modelBounds: CADDiagnosticMachineTrace.Bounds(performance.modelBounds),
+                    viewportBounds: CADDiagnosticMachineTrace.Bounds(performance.viewportBounds),
+                    modelBoundsValid: performance.modelBoundsValid,
+                    viewportBoundsValid: performance.viewportBoundsValid,
+                    viewportIntersectsModel: performance.viewportIntersectsModel,
+                    vertexCount: performance.vertexCount,
+                    rendererFailureLayer: performance.rendererFailureLayer,
+                    rendererFailureReason: performance.rendererFailureReason
                 )
             },
             openQuality: cadOpenQuality.map { quality in
@@ -2871,6 +3065,16 @@ struct CADPreviewContainer: View {
     ) -> CADDiagnosticMachineTrace.Pipeline {
         if let kernelTrace {
             let failureLayer = diagnosticFailureLayer(kernelTrace)
+            if failureLayer == "none", let rendererFailureLayer = diagnosticFailureLayer(lastRendererPerformance) {
+                return CADDiagnosticMachineTrace.Pipeline(
+                    failureLayer: rendererFailureLayer,
+                    failureStage: "renderer_\(rendererFailureLayer)",
+                    openState: currentOpenStateRawValue(),
+                    importSource: cadOpenTechnicalDetails?.importEngine,
+                    conclusion: diagnosticConclusion(for: rendererFailureLayer),
+                    traceSource: "renderer_frame_trace"
+                )
+            }
             return CADDiagnosticMachineTrace.Pipeline(
                 failureLayer: failureLayer,
                 failureStage: kernelTrace.failureStage,
@@ -2883,6 +3087,16 @@ struct CADPreviewContainer: View {
 
         if let nativeTrace {
             let failureLayer = diagnosticFailureLayer(nativeTrace)
+            if failureLayer == "none", let rendererFailureLayer = diagnosticFailureLayer(lastRendererPerformance) {
+                return CADDiagnosticMachineTrace.Pipeline(
+                    failureLayer: rendererFailureLayer,
+                    failureStage: "renderer_\(rendererFailureLayer)",
+                    openState: nativeTrace.openedForRender ? "rendered" : "unsupported",
+                    importSource: nativeTrace.importSource,
+                    conclusion: diagnosticConclusion(for: rendererFailureLayer),
+                    traceSource: "renderer_frame_trace"
+                )
+            }
             return CADDiagnosticMachineTrace.Pipeline(
                 failureLayer: failureLayer,
                 failureStage: nativeTrace.openedForRender ? "rendered" : failureLayer,
@@ -2890,6 +3104,17 @@ struct CADPreviewContainer: View {
                 importSource: nativeTrace.importSource,
                 conclusion: diagnosticConclusion(for: failureLayer),
                 traceSource: "native_canvas_trace"
+            )
+        }
+
+        if let rendererFailureLayer = diagnosticFailureLayer(lastRendererPerformance) {
+            return CADDiagnosticMachineTrace.Pipeline(
+                failureLayer: rendererFailureLayer,
+                failureStage: "renderer_\(rendererFailureLayer)",
+                openState: currentOpenStateRawValue(),
+                importSource: cadOpenTechnicalDetails?.importEngine,
+                conclusion: diagnosticConclusion(for: rendererFailureLayer),
+                traceSource: "renderer_frame_trace"
             )
         }
 
@@ -2977,6 +3202,13 @@ struct CADPreviewContainer: View {
         return "unknown"
     }
 
+    func diagnosticFailureLayer(_ performance: CADRendererPerformanceSnapshot?) -> String? {
+        guard let performance, performance.rendererFailureLayer != "none" else {
+            return nil
+        }
+        return performance.rendererFailureLayer
+    }
+
     func diagnosticConclusion(for failureLayer: String) -> String {
         switch failureLayer {
         case "none":
@@ -2989,6 +3221,20 @@ struct CADPreviewContainer: View {
             return "Database entities exist but no drawable entities are available."
         case "render":
             return "Drawable entities exist but render commands are unavailable."
+        case "import":
+            return "Renderer received no imported entities."
+        case "bounds":
+            return "Entities exist but bounds/indexing are invalid."
+        case "layer":
+            return "Entities exist but current layer visibility hides them."
+        case "viewport":
+            return "Entities exist but the current viewport does not hit drawable bounds."
+        case "renderCommand":
+            return "Visible entities exist but render commands are not produced."
+        case "textOverlay":
+            return "Text commands exist but text overlays are missing or incomplete."
+        case "metal":
+            return "Render commands exist but Metal output has no drawable vertices."
         default:
             return "CAD pipeline failure layer is unknown."
         }
@@ -2996,7 +3242,7 @@ struct CADPreviewContainer: View {
 
     func currentOpenStateRawValue() -> String {
         switch cadOpenRoute {
-        case .online(let result), .unsupported(let result):
+        case .rendered(let result), .unsupported(let result):
             switch result.openState {
             case .rendered:
                 return "rendered"
@@ -3012,6 +3258,21 @@ struct CADPreviewContainer: View {
         var notes: [String] = []
         if pipeline.failureLayer == "libredwg" {
             notes.append("Stop at LibreDWG until raw drawable geometry is available.")
+        }
+        if pipeline.failureLayer == "layer" {
+            notes.append("Check layer visibility and layer names before changing import/render code.")
+        }
+        if pipeline.failureLayer == "viewport" {
+            notes.append("Check fit-to-extents, viewport transform, and model bounds intersection.")
+        }
+        if pipeline.failureLayer == "bounds" {
+            notes.append("Check entity bounds and spatial index insertion.")
+        }
+        if pipeline.failureLayer == "renderCommand" {
+            notes.append("Check entity-to-render-command mapping for visible entity types.")
+        }
+        if pipeline.failureLayer == "textOverlay" {
+            notes.append("Check text position, scale, rotation, font rasterization, and overlay visibility.")
         }
         if diagnostics.isEmpty {
             notes.append("No kernel diagnostics were attached to this export.")
@@ -3951,6 +4212,7 @@ struct CADPreviewContainer: View {
         nativeEndpointSnapPoints.forEach { append($0, kind: .endpoint, primitiveKind: .line) }
         nativeMidpointSnapPoints.forEach { append($0, kind: .midpoint, primitiveKind: .line) }
         nativeCenterSnapPoints.forEach { append($0, kind: .center, primitiveKind: .circle) }
+        nativeSnapPointBuckets.intersectionPoints.forEach { append($0, kind: .intersection, primitiveKind: .line) }
         if result.isEmpty {
             nativeSnapPoints.forEach { append($0, kind: .endpoint, primitiveKind: .line) }
         }

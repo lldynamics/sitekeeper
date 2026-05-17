@@ -104,10 +104,17 @@ extension SiteKeeperCADKernel {
                 )
 
                 let layer = database.layer(id: entity.layerID) ?? .default
+                let entityLineType = entity.lineType.trimmingCharacters(in: .whitespacesAndNewlines)
+                let lineType = entityLineType.isEmpty ||
+                    entityLineType.caseInsensitiveCompare("ByLayer") == .orderedSame ||
+                    entityLineType.caseInsensitiveCompare("ByBlock") == .orderedSame
+                        ? layer.lineType
+                        : entityLineType
                 let style = CADRenderStyle(
                     layerID: entity.layerID,
                     colorARGB: entity.color == 0x00000000 ? layer.colorARGB : entity.color,
-                    lineWidth: entity.lineWeight < 0 ? layer.lineWeight : entity.lineWeight
+                    lineWidth: entity.lineWeight < 0 ? layer.lineWeight : entity.lineWeight,
+                    lineType: lineType
                 )
 
                 switch lodDecision {

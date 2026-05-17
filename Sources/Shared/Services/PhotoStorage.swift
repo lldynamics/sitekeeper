@@ -146,17 +146,21 @@ enum PhotoStorage {
 
     static func deleteOrThrow(fileName: String) throws {
         let manager = FileManager.default
-        let urls = [fileURL(for: fileName), thumbnailFileURL(for: fileName)]
-        var deletedAnyFile = false
-        do {
-            for url in urls where manager.fileExists(atPath: url.path) {
-                try manager.removeItem(at: url)
-                deletedAnyFile = true
-            }
-        } catch {
-            throw FileStorageError.deleteFailed(fileName)
+        let targets: [(url: URL, category: FileQuarantineCategory)] = [
+            (fileURL(for: fileName), .photoOriginal),
+            (thumbnailFileURL(for: fileName), .photoThumbnail)
+        ]
+        var quarantinedAnyFile = false
+        for target in targets {
+            guard manager.fileExists(atPath: target.url.path) else { continue }
+            let quarantined = try FileQuarantineStore.quarantine(
+                fileAt: target.url,
+                category: target.category,
+                originalFileName: fileName
+            )
+            quarantinedAnyFile = quarantinedAnyFile || quarantined
         }
-        guard deletedAnyFile else { throw FileStorageError.deleteFailed(fileName) }
+        guard quarantinedAnyFile else { throw FileStorageError.deleteFailed(fileName) }
     }
 
     static func delete(fileNames: [String]) {

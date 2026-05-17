@@ -131,6 +131,13 @@ extension SiteKeeperCADKernel {
             if copy.color == 0x00000000 {
                 copy.color = parent.color
             }
+            if copy.lineType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                copy.lineType.caseInsensitiveCompare("ByBlock") == .orderedSame {
+                copy.lineType = parent.lineType
+            }
+            if copy.lineWeight < 0 {
+                copy.lineWeight = parent.lineWeight
+            }
             copy.diagnostics = copy.diagnostics.merging(parent.diagnostics)
             return copy
         }
@@ -152,6 +159,13 @@ extension SiteKeeperCADKernel {
                 }
                 if copy.color == 0x00000000 {
                     copy.color = insertContext.color
+                }
+                if copy.lineType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    copy.lineType.caseInsensitiveCompare("ByBlock") == .orderedSame {
+                    copy.lineType = insertContext.lineType
+                }
+                if copy.lineWeight < 0 {
+                    copy.lineWeight = insertContext.lineWeight
                 }
                 copy.diagnostics = copy.diagnostics
                     .merging(insertContext.diagnostics)
@@ -178,6 +192,7 @@ extension SiteKeeperCADKernel {
                 var transformedText = text
                 transformedText.insertionPoint = geometryTransform.apply(to: text.insertionPoint)
                 transformedText.height = text.height * geometryTransform.approximateScale
+                transformedText.rotationRadians = text.rotationRadians + geometryTransform.rotationRadians
                 copy.text = transformedText
                 if copy.bounds.isEmpty {
                     copy.bounds = CADBounds(

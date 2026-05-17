@@ -1,7 +1,6 @@
 import AVFoundation
 import Foundation
 import UIKit
-import AVFoundation
 import UniformTypeIdentifiers
 
 private enum DocumentStorageIssueLogger {
@@ -125,11 +124,19 @@ enum ProjectDocumentStorage {
     }
 
     static func deleteOrThrow(fileName: String) throws {
-        do {
-            try FileManager.default.removeItem(at: fileURL(for: fileName))
-        } catch {
-            throw FileStorageError.deleteFailed(fileName)
-        }
+        let removed = try FileOps.removeIfExists(
+            at: fileURL(for: fileName),
+            strategy: .quarantine(
+                category: .projectDocument,
+                originalFileName: fileName
+            ),
+            context: .init(
+                event: "project_document.delete",
+                category: .fileStorage,
+                source: "ProjectDocumentStorage.deleteOrThrow"
+            )
+        )
+        guard removed else { throw FileStorageError.deleteFailed(fileName) }
     }
 
     static func exists(fileName: String) -> Bool {
@@ -365,12 +372,20 @@ enum DrawingStorage {
     }
 
     static func deleteOrThrow(fileName: String) throws {
-        do {
-            try FileManager.default.removeItem(at: fileURL(for: fileName))
-            deleteSidecars(for: fileName)
-        } catch {
-            throw FileStorageError.deleteFailed(fileName)
-        }
+        let removed = try FileOps.removeIfExists(
+            at: fileURL(for: fileName),
+            strategy: .quarantine(
+                category: .drawing,
+                originalFileName: fileName
+            ),
+            context: .init(
+                event: "drawing.delete",
+                category: .fileStorage,
+                source: "DrawingStorage.deleteOrThrow"
+            )
+        )
+        guard removed else { throw FileStorageError.deleteFailed(fileName) }
+        quarantineSidecars(for: fileName)
     }
 
     static func data(for fileName: String) -> Data? {
@@ -491,10 +506,15 @@ enum DrawingStorage {
         }
 
         let targetSidecarURL = targetURL.appendingPathExtension("sitekeeper-cad.json")
-        if FileManager.default.fileExists(atPath: targetSidecarURL.path) {
-            try FileManager.default.removeItem(at: targetSidecarURL)
-        }
-        try FileManager.default.copyItem(at: sourceSidecarURL, to: targetSidecarURL)
+        try FileOps.replaceByCopyWithRollback(
+            from: sourceSidecarURL,
+            to: targetSidecarURL,
+            context: .init(
+                event: "drawing.sidecar_replace",
+                category: .fileStorage,
+                source: "DrawingStorage.copyDWGSidecarIfAvailable"
+            )
+        )
     }
 
     private static func dwgSidecarCandidates(for sourceURL: URL) -> [URL] {
@@ -512,14 +532,18 @@ enum DrawingStorage {
         ]
     }
 
-    private static func deleteSidecars(for fileName: String) {
+    private static func quarantineSidecars(for fileName: String) {
         for sidecar in sidecarFileNames(for: fileName) {
             let url = fileURL(for: sidecar)
             guard FileManager.default.fileExists(atPath: url.path) else { continue }
             do {
-                try FileManager.default.removeItem(at: url)
+                _ = try FileQuarantineStore.quarantine(
+                    fileAt: url,
+                    category: .drawingSidecar,
+                    originalFileName: sidecar
+                )
             } catch {
-                DocumentStorageIssueLogger.record("drawing.sidecar_delete_failed", fileName: sidecar, error: error)
+                DocumentStorageIssueLogger.record("drawing.sidecar_quarantine_failed", fileName: sidecar, error: error)
             }
         }
     }
@@ -606,10 +630,15 @@ enum QuickNoteAttachmentStorage {
         let fileName = makeFileName(extension: ext)
         let target = fileURL(for: fileName)
         try ensureDirectoryExists()
-        if FileManager.default.fileExists(atPath: target.path) {
-            try FileManager.default.removeItem(at: target)
-        }
-        try FileManager.default.copyItem(at: source, to: target)
+        try FileOps.replaceByCopyWithRollback(
+            from: source,
+            to: target,
+            context: .init(
+                event: "quick_note_attachment.import_file",
+                category: .fileStorage,
+                source: "QuickNoteAttachmentStorage.importFileOrThrow"
+            )
+        )
         return QuickNoteAttachment(kind: .file, fileName: fileName, originalName: source.lastPathComponent)
     }
 
@@ -618,10 +647,15 @@ enum QuickNoteAttachmentStorage {
         let fileName = makeFileName(extension: ext)
         let target = fileURL(for: fileName)
         try ensureDirectoryExists()
-        if FileManager.default.fileExists(atPath: target.path) {
-            try FileManager.default.removeItem(at: target)
-        }
-        try FileManager.default.copyItem(at: source, to: target)
+        try FileOps.replaceByCopyWithRollback(
+            from: source,
+            to: target,
+            context: .init(
+                event: "quick_note_attachment.import_video",
+                category: .fileStorage,
+                source: "QuickNoteAttachmentStorage.importVideoOrThrow"
+            )
+        )
         let byteSize = fileSize(for: fileName)
         let durationSeconds: Double? = await {
             let asset = AVURLAsset(url: target)
@@ -705,11 +739,19 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func deleteOrThrow(fileName: String) throws {
-        do {
-            try FileManager.default.removeItem(at: fileURL(for: fileName))
-        } catch {
-            throw FileStorageError.deleteFailed(fileName)
-        }
+        let removed = try FileOps.removeIfExists(
+            at: fileURL(for: fileName),
+            strategy: .quarantine(
+                category: .quickNoteAttachment,
+                originalFileName: fileName
+            ),
+            context: .init(
+                event: "quick_note_attachment.delete",
+                category: .fileStorage,
+                source: "QuickNoteAttachmentStorage.deleteOrThrow"
+            )
+        )
+        guard removed else { throw FileStorageError.deleteFailed(fileName) }
     }
 
     static func delete(fileNames: [String]) {
@@ -841,7 +883,14 @@ enum QuickNoteAttachmentStorage {
         }
         for url in files where url.lastPathComponent.hasPrefix("thumb-") {
             do {
-                try FileManager.default.removeItem(at: url)
+                _ = try FileOps.removeIfExists(
+                    at: url,
+                    context: .init(
+                        event: "quick_note_attachment.thumbnail_cache_clear",
+                        category: .fileStorage,
+                        source: "QuickNoteAttachmentStorage.clearThumbnailCache"
+                    )
+                )
             } catch {
                 DocumentStorageIssueLogger.record("quick_note_attachment.thumbnail_cleanup_failed", fileName: url.lastPathComponent, error: error)
             }
@@ -881,7 +930,14 @@ enum QuickNoteAttachmentStorage {
 
     static func clearAttachmentsDirectory() {
         do {
-            try FileManager.default.removeItem(at: attachmentDir)
+            _ = try FileOps.removeIfExists(
+                at: attachmentDir,
+                context: .init(
+                    event: "quick_note_attachment.directory_clear",
+                    category: .fileStorage,
+                    source: "QuickNoteAttachmentStorage.clearAttachmentsDirectory"
+                )
+            )
         } catch {
             DocumentStorageIssueLogger.record("quick_note_attachment.directory_cleanup_failed", fileName: attachmentDir.lastPathComponent, error: error)
         }
