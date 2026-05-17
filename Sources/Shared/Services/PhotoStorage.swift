@@ -73,14 +73,28 @@ enum PhotoStorage {
             let fm = FileManager.default
             if fm.fileExists(atPath: fileURL(for: fileName).path) {
                 do {
-                    try fm.removeItem(at: fileURL(for: fileName))
+                    _ = try FileOps.removeIfExists(
+                        at: fileURL(for: fileName),
+                        context: .init(
+                            event: "photo.save_rollback_cleanup",
+                            category: .fileStorage,
+                            source: "PhotoStorage.saveOrThrow.originalRollback"
+                        )
+                    )
                 } catch {
                     logIssue("rollback_original_delete_failed", fileName: fileName, error: error)
                 }
             }
             if fm.fileExists(atPath: thumbnailFileURL(for: fileName).path) {
                 do {
-                    try fm.removeItem(at: thumbnailFileURL(for: fileName))
+                    _ = try FileOps.removeIfExists(
+                        at: thumbnailFileURL(for: fileName),
+                        context: .init(
+                            event: "photo.save_rollback_cleanup",
+                            category: .fileStorage,
+                            source: "PhotoStorage.saveOrThrow.thumbnailRollback"
+                        )
+                    )
                 } catch {
                     logIssue("rollback_thumbnail_delete_failed", fileName: fileName, error: error)
                 }
@@ -331,9 +345,16 @@ enum PhotoStorage {
         }
         for url in files {
             do {
-                try FileManager.default.removeItem(at: url)
+                _ = try FileOps.removeIfExists(
+                    at: url,
+                    context: .init(
+                        event: "photo.thumbnail_cache_cleanup",
+                        category: .fileStorage,
+                        source: "PhotoStorage.clearThumbnailCache"
+                    )
+                )
             } catch {
-                logIssue("thumbnail_cache_cleanup_failed", fileName: url.lastPathComponent, error: error)
+                // FileOps 已记录失败事件，继续清理其他缓存文件。
             }
         }
         PhotoCache.shared.clear()

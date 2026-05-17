@@ -42,28 +42,28 @@ final class DataStore {
     }
 
     // 清单
-    var materialItems: [MaterialItem] {
+    private(set) var materialItems: [MaterialItem] {
         get { proxiedRead(\.materialItems, financeStore.materialItems) }
         set { proxiedWrite(\.materialItems) { financeStore.setMaterialItems(newValue) } }
     }
-    var quoteItems: [QuoteItem] {
+    private(set) var quoteItems: [QuoteItem] {
         get { proxiedRead(\.quoteItems, financeStore.quoteItems) }
         set { proxiedWrite(\.quoteItems) { financeStore.setQuoteItems(newValue) } }
     }
-    var laborRecords: [LaborRecord] {
+    private(set) var laborRecords: [LaborRecord] {
         get { proxiedRead(\.laborRecords, financeStore.laborRecords) }
         set { proxiedWrite(\.laborRecords) { financeStore.setLaborRecords(newValue) } }
     }
     // 项目
-    var projects: [Project] {
+    private(set) var projects: [Project] {
         get { proxiedRead(\.projects, projectStore.projects) }
         set { proxiedWrite(\.projects) { projectStore.setProjects(newValue) } }
     }
-    var dailyLogs: [DailyLog] {
+    private(set) var dailyLogs: [DailyLog] {
         get { proxiedRead(\.dailyLogs, projectStore.dailyLogs) }
         set { proxiedWrite(\.dailyLogs) { projectStore.setDailyLogs(newValue) } }
     }
-    var historyRecords: [HistoryRecord] {
+    private(set) var historyRecords: [HistoryRecord] {
         get { proxiedRead(\.historyRecords, projectStore.historyRecords) }
         set {
             proxiedWrite(\.historyRecords) {
@@ -71,69 +71,69 @@ final class DataStore {
             }
         }
     }
-    var progressTasks: [ProgressTask] {
+    private(set) var progressTasks: [ProgressTask] {
         get { proxiedRead(\.progressTasks, projectStore.progressTasks) }
         set { proxiedWrite(\.progressTasks) { projectStore.setProgressTasks(newValue) } }
     }
-    var lightingCircuitPlans: [LightingCircuitPlan] {
+    private(set) var lightingCircuitPlans: [LightingCircuitPlan] {
         get { proxiedRead(\.lightingCircuitPlans, projectStore.lightingCircuitPlans) }
         set { proxiedWrite(\.lightingCircuitPlans) { projectStore.setLightingCircuitPlans(newValue) } }
     }
-    var siteTodos: [SiteTodo] {
+    private(set) var siteTodos: [SiteTodo] {
         get { proxiedRead(\.siteTodos, projectStore.siteTodos) }
         set { proxiedWrite(\.siteTodos) { projectStore.setSiteTodos(newValue) } }
     }
-    var projectDrawings: [ProjectDrawing] {
+    private(set) var projectDrawings: [ProjectDrawing] {
         get { proxiedRead(\.projectDrawings, projectStore.projectDrawings) }
         set { proxiedWrite(\.projectDrawings) { projectStore.setProjectDrawings(newValue) } }
     }
-    var projectContacts: [ProjectContact] {
+    private(set) var projectContacts: [ProjectContact] {
         get { proxiedRead(\.projectContacts, projectStore.projectContacts) }
         set { proxiedWrite(\.projectContacts) { projectStore.setProjectContacts(newValue) } }
     }
-    var projectFinancialRecords: [ProjectFinancialRecord] {
+    private(set) var projectFinancialRecords: [ProjectFinancialRecord] {
         get { proxiedRead(\.projectFinancialRecords, projectStore.projectFinancialRecords) }
         set { proxiedWrite(\.projectFinancialRecords) { projectStore.setProjectFinancialRecords(newValue) } }
     }
-    var projectDocuments: [ProjectDocument] {
+    private(set) var projectDocuments: [ProjectDocument] {
         get { proxiedRead(\.projectDocuments, projectStore.projectDocuments) }
         set { proxiedWrite(\.projectDocuments) { projectStore.setProjectDocuments(newValue) } }
     }
-    var quickNotes: [QuickNote] {
+    private(set) var quickNotes: [QuickNote] {
         get { proxiedRead(\.quickNotes, projectStore.quickNotes) }
         set { proxiedWrite(\.quickNotes) { projectStore.setQuickNotes(newValue) } }
     }
-    var projectWarehouseMovements: [ProjectWarehouseMovement] {
+    private(set) var projectWarehouseMovements: [ProjectWarehouseMovement] {
         get { proxiedRead(\.projectWarehouseMovements, projectStore.projectWarehouseMovements) }
         set { proxiedWrite(\.projectWarehouseMovements) { projectStore.setProjectWarehouseMovements(newValue) } }
     }
 
     // 模板 / 材料库
-    var templates: [ProjectTemplate] {
+    private(set) var templates: [ProjectTemplate] {
         get { proxiedRead(\.templates, materialLibraryStore.templates) }
         set { proxiedWrite(\.templates) { materialLibraryStore.setTemplates(newValue) } }
     }
-    var materialPriceEntries: [MaterialPriceEntry] {
+    private(set) var materialPriceEntries: [MaterialPriceEntry] {
         get { proxiedRead(\.materialPriceEntries, materialLibraryStore.materialPriceEntries) }
         set { proxiedWrite(\.materialPriceEntries) { materialLibraryStore.setMaterialPriceEntries(newValue) } }
     }
-    var materialSheetDrafts: [MaterialSheetDraft] {
+    private(set) var materialSheetDrafts: [MaterialSheetDraft] {
         get { proxiedRead(\.materialSheetDrafts, materialLibraryStore.materialSheetDrafts) }
         set { proxiedWrite(\.materialSheetDrafts) { materialLibraryStore.setMaterialSheetDrafts(newValue) } }
     }
-    var supplierProfiles: [SupplierProfile] {
+    private(set) var supplierProfiles: [SupplierProfile] {
         get { proxiedRead(\.supplierProfiles, materialLibraryStore.supplierProfiles) }
         set { proxiedWrite(\.supplierProfiles) { materialLibraryStore.setSupplierProfiles(newValue) } }
     }
-    var constructionMethods: [ConstructionMethod] {
+    private(set) var constructionMethods: [ConstructionMethod] {
         get { proxiedRead(\.constructionMethods, materialLibraryStore.constructionMethods) }
         set { proxiedWrite(\.constructionMethods) { materialLibraryStore.setConstructionMethods(newValue) } }
     }
-    var userMaterials: [UserMaterial] {
+    private(set) var userMaterials: [UserMaterial] {
         get { proxiedRead(\.userMaterials, materialLibraryStore.userMaterials) }
         set { proxiedWrite(\.userMaterials) { materialLibraryStore.setUserMaterials(newValue) } }
     }
-    var deletedUserMaterials: [UserMaterial] {
+    private(set) var deletedUserMaterials: [UserMaterial] {
         get { proxiedRead(\.deletedUserMaterials, materialLibraryStore.deletedUserMaterials) }
         set { proxiedWrite(\.deletedUserMaterials) { materialLibraryStore.setDeletedUserMaterials(newValue) } }
     }
@@ -533,6 +533,19 @@ final class DataStore {
         self[keyPath: keyPath] = values
     }
 
+    private func mergeUniqueElementsByID<Element: Identifiable>(
+        _ incoming: [Element],
+        into keyPath: ReferenceWritableKeyPath<DataStore, [Element]>
+    ) where Element.ID: Hashable {
+        guard !incoming.isEmpty else { return }
+        var current = self[keyPath: keyPath]
+        var existingIDs = Set(current.map(\.id))
+        for item in incoming where existingIDs.insert(item.id).inserted {
+            current.append(item)
+        }
+        self[keyPath: keyPath] = current
+    }
+
     @discardableResult
     private func removeElements<Element>(
         from keyPath: ReferenceWritableKeyPath<DataStore, [Element]>,
@@ -601,6 +614,27 @@ final class DataStore {
     }
 
     @discardableResult
+    func updateMaterialItem(_ item: MaterialItem) -> Bool {
+        var current = materialItems
+        guard let index = current.firstIndex(where: { $0.id == item.id }) else { return false }
+        current[index] = item
+        materialItems = current
+        return true
+    }
+
+    func replaceMaterialItems(_ items: [MaterialItem]) {
+        materialItems = items
+    }
+
+    func mergeMaterialItemsByID(_ items: [MaterialItem]) {
+        mergeUniqueElementsByID(items, into: \.materialItems)
+    }
+
+    func restoreMaterialItems(from deletion: DataStoreRemovalResult<MaterialItem>) {
+        materialItems = deletion.restoredItems(current: materialItems, id: \.id)
+    }
+
+    @discardableResult
     func removeMaterialItems(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -619,6 +653,27 @@ final class DataStore {
 
     func appendQuoteItem(_ item: QuoteItem) {
         appendElement(item, to: \.quoteItems)
+    }
+
+    @discardableResult
+    func updateQuoteItem(_ item: QuoteItem) -> Bool {
+        var current = quoteItems
+        guard let index = current.firstIndex(where: { $0.id == item.id }) else { return false }
+        current[index] = item
+        quoteItems = current
+        return true
+    }
+
+    func replaceQuoteItems(_ items: [QuoteItem]) {
+        quoteItems = items
+    }
+
+    func mergeQuoteItemsByID(_ items: [QuoteItem]) {
+        mergeUniqueElementsByID(items, into: \.quoteItems)
+    }
+
+    func restoreQuoteItems(from deletion: DataStoreRemovalResult<QuoteItem>) {
+        quoteItems = deletion.restoredItems(current: quoteItems, id: \.id)
     }
 
     @discardableResult
@@ -643,6 +698,27 @@ final class DataStore {
     }
 
     @discardableResult
+    func updateLaborRecord(_ record: LaborRecord) -> Bool {
+        var current = laborRecords
+        guard let index = current.firstIndex(where: { $0.id == record.id }) else { return false }
+        current[index] = record
+        laborRecords = current
+        return true
+    }
+
+    func replaceLaborRecords(_ records: [LaborRecord]) {
+        laborRecords = records
+    }
+
+    func mergeLaborRecordsByID(_ records: [LaborRecord]) {
+        mergeUniqueElementsByID(records, into: \.laborRecords)
+    }
+
+    func restoreLaborRecords(from deletion: DataStoreRemovalResult<LaborRecord>) {
+        laborRecords = deletion.restoredItems(current: laborRecords, id: \.id)
+    }
+
+    @discardableResult
     func removeLaborRecords(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -659,12 +735,54 @@ final class DataStore {
         )
     }
 
+    func appendProject(_ project: Project) {
+        appendElement(project, to: \.projects)
+    }
+
+    @discardableResult
+    func updateProject(_ project: Project) -> Bool {
+        var current = projects
+        guard let index = current.firstIndex(where: { $0.id == project.id }) else { return false }
+        current[index] = project
+        projects = current
+        return true
+    }
+
+    func replaceProjects(_ values: [Project]) {
+        projects = values
+    }
+
+    func mergeProjectsByID(_ values: [Project]) {
+        mergeUniqueElementsByID(values, into: \.projects)
+    }
+
     func appendDailyLog(_ log: DailyLog) {
         appendElement(log, to: \.dailyLogs)
     }
 
     func insertDailyLogAtTop(_ log: DailyLog) {
         insertElement(log, at: 0, to: \.dailyLogs)
+    }
+
+    @discardableResult
+    func updateDailyLog(_ log: DailyLog) -> Bool {
+        var current = dailyLogs
+        guard let index = current.firstIndex(where: { $0.id == log.id }) else { return false }
+        current[index] = log
+        dailyLogs = current
+        return true
+    }
+
+    func replaceDailyLogs(_ logs: [DailyLog]) {
+        dailyLogs = logs
+    }
+
+    func mergeDailyLogsByID(_ logs: [DailyLog]) {
+        mergeUniqueElementsByID(logs, into: \.dailyLogs)
+    }
+
+    func restoreDailyLogs(from deletion: DataStoreRemovalResult<DailyLog>) {
+        dailyLogs = deletion.restoredItems(current: dailyLogs, id: \.id)
     }
 
     @discardableResult
@@ -689,6 +807,27 @@ final class DataStore {
     }
 
     @discardableResult
+    func updateProgressTask(_ task: ProgressTask) -> Bool {
+        var current = progressTasks
+        guard let index = current.firstIndex(where: { $0.id == task.id }) else { return false }
+        current[index] = task
+        progressTasks = current
+        return true
+    }
+
+    func replaceProgressTasks(_ tasks: [ProgressTask]) {
+        progressTasks = tasks
+    }
+
+    func mergeProgressTasksByID(_ tasks: [ProgressTask]) {
+        mergeUniqueElementsByID(tasks, into: \.progressTasks)
+    }
+
+    func restoreProgressTasks(from deletion: DataStoreRemovalResult<ProgressTask>) {
+        progressTasks = deletion.restoredItems(current: progressTasks, id: \.id)
+    }
+
+    @discardableResult
     func removeProgressTasks(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -705,12 +844,75 @@ final class DataStore {
         )
     }
 
+    func insertLightingCircuitPlanAtTop(_ plan: LightingCircuitPlan) {
+        insertElement(plan, at: 0, to: \.lightingCircuitPlans)
+    }
+
+    @discardableResult
+    func updateLightingCircuitPlan(_ plan: LightingCircuitPlan) -> Bool {
+        var current = lightingCircuitPlans
+        guard let index = current.firstIndex(where: { $0.id == plan.id }) else { return false }
+        current[index] = plan
+        lightingCircuitPlans = current
+        return true
+    }
+
+    func replaceLightingCircuitPlans(_ plans: [LightingCircuitPlan]) {
+        lightingCircuitPlans = plans
+    }
+
+    func mergeLightingCircuitPlansByID(_ plans: [LightingCircuitPlan]) {
+        mergeUniqueElementsByID(plans, into: \.lightingCircuitPlans)
+    }
+
+    func restoreLightingCircuitPlans(from deletion: DataStoreRemovalResult<LightingCircuitPlan>) {
+        lightingCircuitPlans = deletion.restoredItems(current: lightingCircuitPlans, id: \.id)
+    }
+
+    @discardableResult
+    func removeLightingCircuitPlans(
+        ids: Set<UUID>,
+        audit: DataStoreDeletionAuditContext? = nil,
+        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
+        recordsAuditImmediately: Bool = false
+    ) -> DataStoreRemovalResult<LightingCircuitPlan> {
+        removeElements(
+            from: \.lightingCircuitPlans,
+            ids: ids,
+            id: \.id,
+            audit: audit,
+            deferredFileCleanup: deferredFileCleanup,
+            recordsAuditImmediately: recordsAuditImmediately
+        )
+    }
+
     func appendSiteTodo(_ todo: SiteTodo) {
         appendElement(todo, to: \.siteTodos)
     }
 
     func insertSiteTodoAtTop(_ todo: SiteTodo) {
         insertElement(todo, at: 0, to: \.siteTodos)
+    }
+
+    @discardableResult
+    func updateSiteTodo(_ todo: SiteTodo) -> Bool {
+        var current = siteTodos
+        guard let index = current.firstIndex(where: { $0.id == todo.id }) else { return false }
+        current[index] = todo
+        siteTodos = current
+        return true
+    }
+
+    func replaceSiteTodos(_ todos: [SiteTodo]) {
+        siteTodos = todos
+    }
+
+    func mergeSiteTodosByID(_ todos: [SiteTodo]) {
+        mergeUniqueElementsByID(todos, into: \.siteTodos)
+    }
+
+    func restoreSiteTodos(from deletion: DataStoreRemovalResult<SiteTodo>) {
+        siteTodos = deletion.restoredItems(current: siteTodos, id: \.id)
     }
 
     @discardableResult
@@ -736,6 +938,39 @@ final class DataStore {
 
     func appendProjectDrawings(_ drawings: [ProjectDrawing]) {
         appendElements(drawings, to: \.projectDrawings)
+    }
+
+    @discardableResult
+    func updateProjectDrawing(_ drawing: ProjectDrawing) -> Bool {
+        var current = projectDrawings
+        guard let index = current.firstIndex(where: { $0.id == drawing.id }) else { return false }
+        current[index] = drawing
+        projectDrawings = current
+        return true
+    }
+
+    @discardableResult
+    func mutateProjectDrawing(
+        id: UUID,
+        _ mutation: (inout ProjectDrawing) -> Void
+    ) -> Bool {
+        var current = projectDrawings
+        guard let index = current.firstIndex(where: { $0.id == id }) else { return false }
+        mutation(&current[index])
+        projectDrawings = current
+        return true
+    }
+
+    func replaceProjectDrawings(_ drawings: [ProjectDrawing]) {
+        projectDrawings = drawings
+    }
+
+    func mergeProjectDrawingsByID(_ drawings: [ProjectDrawing]) {
+        mergeUniqueElementsByID(drawings, into: \.projectDrawings)
+    }
+
+    func restoreProjectDrawings(from deletion: DataStoreRemovalResult<ProjectDrawing>) {
+        projectDrawings = deletion.restoredItems(current: projectDrawings, id: \.id)
     }
 
     @discardableResult
@@ -777,6 +1012,36 @@ final class DataStore {
 
     func insertProjectContactAtTop(_ contact: ProjectContact) {
         insertElement(contact, at: 0, to: \.projectContacts)
+    }
+
+    func mergeProjectContactsByID(_ contacts: [ProjectContact]) {
+        mergeUniqueElementsByID(contacts, into: \.projectContacts)
+    }
+
+    func replaceProjectContacts(_ contacts: [ProjectContact]) {
+        projectContacts = contacts
+    }
+
+    func upsertProjectContact(
+        _ contact: ProjectContact,
+        insertAtTopWhenNew: Bool = false
+    ) {
+        var currentContacts = projectContacts
+        if let index = currentContacts.firstIndex(where: { $0.id == contact.id }) {
+            currentContacts[index] = contact
+            projectContacts = currentContacts
+            return
+        }
+        if insertAtTopWhenNew {
+            currentContacts.insert(contact, at: 0)
+        } else {
+            currentContacts.append(contact)
+        }
+        projectContacts = currentContacts
+    }
+
+    func restoreProjectContacts(from deletion: DataStoreRemovalResult<ProjectContact>) {
+        projectContacts = deletion.restoredItems(current: projectContacts, id: \.id)
     }
 
     @discardableResult
@@ -822,6 +1087,39 @@ final class DataStore {
     }
 
     @discardableResult
+    func updateProjectFinancialRecord(_ record: ProjectFinancialRecord) -> Bool {
+        var current = projectFinancialRecords
+        guard let index = current.firstIndex(where: { $0.id == record.id }) else { return false }
+        current[index] = record
+        projectFinancialRecords = current
+        return true
+    }
+
+    @discardableResult
+    func mutateProjectFinancialRecord(
+        id: UUID,
+        _ mutation: (inout ProjectFinancialRecord) -> Void
+    ) -> Bool {
+        var current = projectFinancialRecords
+        guard let index = current.firstIndex(where: { $0.id == id }) else { return false }
+        mutation(&current[index])
+        projectFinancialRecords = current
+        return true
+    }
+
+    func replaceProjectFinancialRecords(_ records: [ProjectFinancialRecord]) {
+        projectFinancialRecords = records
+    }
+
+    func mergeProjectFinancialRecordsByID(_ records: [ProjectFinancialRecord]) {
+        mergeUniqueElementsByID(records, into: \.projectFinancialRecords)
+    }
+
+    func restoreProjectFinancialRecords(from deletion: DataStoreRemovalResult<ProjectFinancialRecord>) {
+        projectFinancialRecords = deletion.restoredItems(current: projectFinancialRecords, id: \.id)
+    }
+
+    @discardableResult
     func removeProjectFinancialRecords(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -844,6 +1142,39 @@ final class DataStore {
 
     func appendProjectDocuments(_ documents: [ProjectDocument]) {
         appendElements(documents, to: \.projectDocuments)
+    }
+
+    @discardableResult
+    func updateProjectDocument(_ document: ProjectDocument) -> Bool {
+        var current = projectDocuments
+        guard let index = current.firstIndex(where: { $0.id == document.id }) else { return false }
+        current[index] = document
+        projectDocuments = current
+        return true
+    }
+
+    @discardableResult
+    func mutateProjectDocument(
+        id: UUID,
+        _ mutation: (inout ProjectDocument) -> Void
+    ) -> Bool {
+        var current = projectDocuments
+        guard let index = current.firstIndex(where: { $0.id == id }) else { return false }
+        mutation(&current[index])
+        projectDocuments = current
+        return true
+    }
+
+    func replaceProjectDocuments(_ documents: [ProjectDocument]) {
+        projectDocuments = documents
+    }
+
+    func mergeProjectDocumentsByID(_ documents: [ProjectDocument]) {
+        mergeUniqueElementsByID(documents, into: \.projectDocuments)
+    }
+
+    func restoreProjectDocuments(from deletion: DataStoreRemovalResult<ProjectDocument>) {
+        projectDocuments = deletion.restoredItems(current: projectDocuments, id: \.id)
     }
 
     @discardableResult
@@ -872,6 +1203,39 @@ final class DataStore {
     }
 
     @discardableResult
+    func updateQuickNote(_ note: QuickNote) -> Bool {
+        var current = quickNotes
+        guard let index = current.firstIndex(where: { $0.id == note.id }) else { return false }
+        current[index] = note
+        quickNotes = current
+        return true
+    }
+
+    @discardableResult
+    func mutateQuickNote(
+        id: UUID,
+        _ mutation: (inout QuickNote) -> Void
+    ) -> Bool {
+        var current = quickNotes
+        guard let index = current.firstIndex(where: { $0.id == id }) else { return false }
+        mutation(&current[index])
+        quickNotes = current
+        return true
+    }
+
+    func replaceQuickNotes(_ notes: [QuickNote]) {
+        quickNotes = notes
+    }
+
+    func mergeQuickNotesByID(_ notes: [QuickNote]) {
+        mergeUniqueElementsByID(notes, into: \.quickNotes)
+    }
+
+    func restoreQuickNotes(from deletion: DataStoreRemovalResult<QuickNote>) {
+        quickNotes = deletion.restoredItems(current: quickNotes, id: \.id)
+    }
+
+    @discardableResult
     func removeQuickNotes(
         ids: Set<UUID>,
         audit: DataStoreDeletionAuditContext? = nil,
@@ -894,6 +1258,39 @@ final class DataStore {
 
     func insertProjectWarehouseMovementAtTop(_ movement: ProjectWarehouseMovement) {
         insertElement(movement, at: 0, to: \.projectWarehouseMovements)
+    }
+
+    @discardableResult
+    func updateProjectWarehouseMovement(_ movement: ProjectWarehouseMovement) -> Bool {
+        var current = projectWarehouseMovements
+        guard let index = current.firstIndex(where: { $0.id == movement.id }) else { return false }
+        current[index] = movement
+        projectWarehouseMovements = current
+        return true
+    }
+
+    @discardableResult
+    func mutateProjectWarehouseMovement(
+        id: UUID,
+        _ mutation: (inout ProjectWarehouseMovement) -> Void
+    ) -> Bool {
+        var current = projectWarehouseMovements
+        guard let index = current.firstIndex(where: { $0.id == id }) else { return false }
+        mutation(&current[index])
+        projectWarehouseMovements = current
+        return true
+    }
+
+    func replaceProjectWarehouseMovements(_ movements: [ProjectWarehouseMovement]) {
+        projectWarehouseMovements = movements
+    }
+
+    func mergeProjectWarehouseMovementsByID(_ movements: [ProjectWarehouseMovement]) {
+        mergeUniqueElementsByID(movements, into: \.projectWarehouseMovements)
+    }
+
+    func restoreProjectWarehouseMovements(from deletion: DataStoreRemovalResult<ProjectWarehouseMovement>) {
+        projectWarehouseMovements = deletion.restoredItems(current: projectWarehouseMovements, id: \.id)
     }
 
     @discardableResult
@@ -1072,8 +1469,110 @@ final class DataStore {
         appendElements(entries, to: \.materialPriceEntries)
     }
 
+    func mergeMaterialPriceEntriesByID(_ entries: [MaterialPriceEntry]) {
+        mergeUniqueElementsByID(entries, into: \.materialPriceEntries)
+    }
+
+    func replaceMaterialPriceEntries(_ entries: [MaterialPriceEntry]) {
+        materialPriceEntries = entries
+    }
+
     func insertMaterialPriceEntryAtTop(_ entry: MaterialPriceEntry) {
         insertElement(entry, at: 0, to: \.materialPriceEntries)
+    }
+
+    func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
+        var entries = materialPriceEntries
+        if let index = entries.firstIndex(where: { $0.id == entry.id }) {
+            entries[index] = entry
+            materialPriceEntries = entries
+            return
+        }
+
+        let entryKey = MaterialIdentity.key(
+            name: entry.name,
+            specification: entry.specification,
+            unit: entry.unit
+        )
+        if let duplicateIndex = entries.firstIndex(where: {
+            MaterialIdentity.key(name: $0.name, specification: $0.specification, unit: $0.unit) == entryKey
+        }) {
+            var merged = entry
+            merged.id = entries[duplicateIndex].id
+            entries[duplicateIndex] = merged
+            materialPriceEntries = entries
+            return
+        }
+
+        entries.insert(entry, at: 0)
+        materialPriceEntries = entries
+    }
+
+    func restoreMaterialPriceEntries(from deletion: DataStoreRemovalResult<MaterialPriceEntry>) {
+        materialPriceEntries = deletion.restoredItems(current: materialPriceEntries, id: \.id)
+    }
+
+    func replaceMaterialSheetDrafts(_ drafts: [MaterialSheetDraft]) {
+        materialSheetDrafts = drafts
+    }
+
+    func insertMaterialSheetDraftAtTop(_ draft: MaterialSheetDraft) {
+        insertElement(draft, at: 0, to: \.materialSheetDrafts)
+    }
+
+    func mergeMaterialSheetDraftsByID(_ drafts: [MaterialSheetDraft]) {
+        mergeUniqueElementsByID(drafts, into: \.materialSheetDrafts)
+    }
+
+    func replaceSupplierProfiles(_ profiles: [SupplierProfile]) {
+        supplierProfiles = profiles
+    }
+
+    func mergeSupplierProfilesByID(_ profiles: [SupplierProfile]) {
+        mergeUniqueElementsByID(profiles, into: \.supplierProfiles)
+    }
+
+    func appendUserMaterial(_ material: UserMaterial) {
+        appendElement(material, to: \.userMaterials)
+    }
+
+    func replaceUserMaterials(_ materials: [UserMaterial]) {
+        userMaterials = materials
+    }
+
+    func mergeUserMaterialsByID(_ materials: [UserMaterial]) {
+        mergeUniqueElementsByID(materials, into: \.userMaterials)
+    }
+
+    func restoreUserMaterials(from deletion: DataStoreRemovalResult<UserMaterial>) {
+        userMaterials = deletion.restoredItems(current: userMaterials, id: \.id)
+    }
+
+    func replaceDeletedUserMaterials(_ materials: [UserMaterial]) {
+        deletedUserMaterials = materials
+    }
+
+    func mergeDeletedUserMaterialsByID(_ materials: [UserMaterial]) {
+        mergeUniqueElementsByID(materials, into: \.deletedUserMaterials)
+    }
+
+    func removeDeletedUserMaterials(ids: Set<UUID>) {
+        guard !ids.isEmpty else { return }
+        var current = deletedUserMaterials
+        current.removeAll { ids.contains($0.id) }
+        deletedUserMaterials = current
+    }
+
+    func prependDeletedUserMaterials(_ materials: [UserMaterial], maxCount: Int? = nil) {
+        guard !materials.isEmpty else { return }
+        var current = deletedUserMaterials
+        let incomingIDs = Set(materials.map(\.id))
+        current.removeAll { incomingIDs.contains($0.id) }
+        current.insert(contentsOf: materials, at: 0)
+        if let maxCount, maxCount > 0, current.count > maxCount {
+            current = Array(current.prefix(maxCount))
+        }
+        deletedUserMaterials = current
     }
 
     @discardableResult
@@ -1131,8 +1630,38 @@ final class DataStore {
         appendElement(template, to: \.templates)
     }
 
+    func mergeTemplatesByID(_ templates: [ProjectTemplate]) {
+        mergeUniqueElementsByID(templates, into: \.templates)
+    }
+
+    func replaceTemplates(_ templates: [ProjectTemplate]) {
+        self.templates = templates
+    }
+
     func insertTemplateAtTop(_ template: ProjectTemplate) {
         insertElement(template, at: 0, to: \.templates)
+    }
+
+    func upsertTemplate(
+        _ template: ProjectTemplate,
+        insertAtTopWhenNew: Bool = false
+    ) {
+        var currentTemplates = templates
+        if let index = currentTemplates.firstIndex(where: { $0.id == template.id }) {
+            currentTemplates[index] = template
+            templates = currentTemplates
+            return
+        }
+        if insertAtTopWhenNew {
+            currentTemplates.insert(template, at: 0)
+        } else {
+            currentTemplates.append(template)
+        }
+        templates = currentTemplates
+    }
+
+    func restoreTemplates(from deletion: DataStoreRemovalResult<ProjectTemplate>) {
+        templates = deletion.restoredItems(current: templates, id: \.id)
     }
 
     @discardableResult
@@ -1169,6 +1698,36 @@ final class DataStore {
         )
     }
 
+    func mergeConstructionMethodsByID(_ methods: [ConstructionMethod]) {
+        mergeUniqueElementsByID(methods, into: \.constructionMethods)
+    }
+
+    func replaceConstructionMethods(_ methods: [ConstructionMethod]) {
+        constructionMethods = methods
+    }
+
+    func upsertConstructionMethod(
+        _ method: ConstructionMethod,
+        insertAtTopWhenNew: Bool = false
+    ) {
+        var currentMethods = constructionMethods
+        if let index = currentMethods.firstIndex(where: { $0.id == method.id }) {
+            currentMethods[index] = method
+            constructionMethods = currentMethods
+            return
+        }
+        if insertAtTopWhenNew {
+            currentMethods.insert(method, at: 0)
+        } else {
+            currentMethods.append(method)
+        }
+        constructionMethods = currentMethods
+    }
+
+    func restoreConstructionMethods(from deletion: DataStoreRemovalResult<ConstructionMethod>) {
+        constructionMethods = deletion.restoredItems(current: constructionMethods, id: \.id)
+    }
+
     func importSampleData(replacingExisting: Bool) {
 #if DEBUG
         guard AppFeatureFlags.allowsSampleDataImport else {
@@ -1189,6 +1748,18 @@ final class DataStore {
         let record = HistoryRecord(tool: tool, input: input, result: result, date: date)
         historyRecords = [record] + historyRecords
         scheduleSave()
+    }
+
+    func replaceHistoryRecords(_ records: [HistoryRecord]) {
+        historyRecords = records
+    }
+
+    func mergeHistoryRecordsByID(_ records: [HistoryRecord]) {
+        mergeUniqueElementsByID(records, into: \.historyRecords)
+    }
+
+    func restoreHistoryRecords(from deletion: DataStoreRemovalResult<HistoryRecord>) {
+        historyRecords = deletion.restoredItems(current: historyRecords, id: \.id)
     }
 
     @discardableResult
@@ -1584,7 +2155,7 @@ final class DataStore {
     }
 
     func publishWidgetData() {
-        guard let defaults = UserDefaults(suiteName: "group.com.chengjinfang.sitekeeper") else { return }
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
         let activeProjects = projects.filter {
             $0.status == .active || $0.status == .paused
         }
@@ -1652,19 +2223,19 @@ final class DataStore {
         } catch {
             Self.recordIssue(
                 "datastore.widget_payload_encode_failed",
-                details: ["target": "widget_data"],
+                details: ["target": WidgetSharedDefaults.dataKey],
                 error: error
             )
             return
         }
-        defaults.set(data, forKey: "widget_data")
-        defaults.set(widgetData.lastUpdatedAt, forKey: "widget_data_updated_at")
+        defaults.set(data, forKey: WidgetSharedDefaults.dataKey)
+        defaults.set(widgetData.lastUpdatedAt, forKey: WidgetSharedDefaults.updatedAtKey)
         reloadWidgetTimelines()
     }
 
     private func reloadWidgetTimelines() {
 #if canImport(WidgetKit)
-        WidgetCenter.shared.reloadTimelines(ofKind: "SitekeeperWidget")
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSharedDefaults.widgetKind)
 #endif
     }
 
@@ -1786,9 +2357,14 @@ actor DataStorePersistenceActor {
             do {
                 try data.write(to: primaryStoreURL, options: .atomic)
                 do {
-                    try FileManager.default.removeItem(at: legacyStoreURL)
-                } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
-                    // ignore missing legacy file
+                    _ = try FileOps.removeIfExists(
+                        at: legacyStoreURL,
+                        context: .init(
+                            event: "datastore.legacy_store_cleanup",
+                            category: .dataStore,
+                            source: "DataStore.loadSnapshotFromDisk"
+                        )
+                    )
                 } catch {
                     Self.recordIssue(
                         "datastore.legacy_store_cleanup_failed",

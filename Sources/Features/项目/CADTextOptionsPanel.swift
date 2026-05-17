@@ -263,7 +263,12 @@ extension CADPreviewContainer {
             bigFont: preset.bigFont,
             resetAutoDetectScore: true
         )
-        alertMessage = String(localized: "已切换为 \(preset.encoding.displayName) / \(preset.bigFont.displayName)。\(preset.reason)")
+        alertMessage = String(
+            format: String(localized: "已切换为 %@ / %@。%@"),
+            preset.encoding.displayName,
+            preset.bigFont.displayName,
+            preset.reason
+        )
         showAlert = true
     }
 

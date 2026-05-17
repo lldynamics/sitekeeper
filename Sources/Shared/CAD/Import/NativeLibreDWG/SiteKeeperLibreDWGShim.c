@@ -1,6 +1,7 @@
 #include "SiteKeeperLibreDWGShim.h"
 
 #include <dwg_api.h>
+#include <ctype.h>
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
@@ -23,6 +24,7 @@ typedef struct SiteKeeperLibreDWGTransform {
     double m22;
     double tx;
     double ty;
+    int32_t layoutSpace;
 } SiteKeeperLibreDWGTransform;
 
 static SiteKeeperLibreDWGTransform sitekeeper_identity_transform(void)
@@ -34,6 +36,7 @@ static SiteKeeperLibreDWGTransform sitekeeper_identity_transform(void)
     transform.m22 = 1;
     transform.tx = 0;
     transform.ty = 0;
+    transform.layoutSpace = 0;
     return transform;
 }
 
@@ -64,6 +67,7 @@ static SiteKeeperLibreDWGTransform sitekeeper_compose_transform(
     result.m12 = parent.m12 * child.m11 + parent.m22 * child.m12;
     result.m22 = parent.m12 * child.m21 + parent.m22 * child.m22;
     result.ty = parent.m12 * child.tx + parent.m22 * child.ty + parent.ty;
+    result.layoutSpace = parent.layoutSpace;
     return result;
 }
 
@@ -362,9 +366,134 @@ static int sitekeeper_object_matches(const Dwg_Object *object, int type)
     return (int)object->type == type || (int)object->fixedtype == type;
 }
 
+static const char *sitekeeper_safe_string(const char *value)
+{
+    return value != NULL ? value : "";
+}
+
+static int sitekeeper_contains_case_insensitive(const char *haystack, const char *needle)
+{
+    if (haystack == NULL || needle == NULL || needle[0] == '\0') {
+        return 0;
+    }
+
+    const size_t needle_length = strlen(needle);
+    for (const char *cursor = haystack; *cursor != '\0'; cursor++) {
+        size_t offset = 0;
+        while (offset < needle_length
+            && cursor[offset] != '\0'
+            && toupper((unsigned char)cursor[offset]) == toupper((unsigned char)needle[offset])) {
+            offset += 1;
+        }
+        if (offset == needle_length) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static int sitekeeper_object_field_contains(const Dwg_Object *object, const char *token)
+{
+    if (object == NULL || token == NULL) {
+        return 0;
+    }
+    if (sitekeeper_contains_case_insensitive(object->name, token)
+        || sitekeeper_contains_case_insensitive(object->dxfname, token)) {
+        return 1;
+    }
+    if (object->klass != NULL) {
+        return sitekeeper_contains_case_insensitive(object->klass->appname, token)
+            || sitekeeper_contains_case_insensitive(object->klass->cppname, token)
+            || sitekeeper_contains_case_insensitive(object->klass->dxfname, token);
+    }
+    return 0;
+}
+
+static int sitekeeper_object_is_tianzheng(const Dwg_Object *object)
+{
+    return sitekeeper_object_field_contains(object, "TCH_")
+        || sitekeeper_object_field_contains(object, "TCH")
+        || sitekeeper_object_field_contains(object, "TIANZHENG")
+        || sitekeeper_object_field_contains(object, "TARCH");
+}
+
+static char *sitekeeper_object_display_name(const Dwg_Object *object)
+{
+    if (object == NULL) {
+        return sitekeeper_copy_string("UNKNOWN");
+    }
+    if (object->dxfname != NULL && object->dxfname[0] != '\0') {
+        return sitekeeper_copy_string(object->dxfname);
+    }
+    if (object->name != NULL && object->name[0] != '\0') {
+        return sitekeeper_copy_string(object->name);
+    }
+    if (object->klass != NULL && object->klass->dxfname != NULL && object->klass->dxfname[0] != '\0') {
+        return sitekeeper_copy_string(object->klass->dxfname);
+    }
+    if (object->klass != NULL && object->klass->cppname != NULL && object->klass->cppname[0] != '\0') {
+        return sitekeeper_copy_string(object->klass->cppname);
+    }
+
+    char buffer[64];
+    snprintf(
+        buffer,
+        sizeof(buffer),
+        "type=%d,fixedtype=%d",
+        (int)object->type,
+        (int)object->fixedtype
+    );
+    return sitekeeper_copy_string(buffer);
+}
+
+static char *sitekeeper_proxy_reason(const Dwg_Object *object, int is_tianzheng)
+{
+    long class_id = -1;
+    long proxy_data_size = -1;
+    long entity_data_size = -1;
+    if (object != NULL
+        && sitekeeper_object_matches(object, (int)DWG_TYPE_PROXY_ENTITY)
+        && object->tio.entity != NULL
+        && object->tio.entity->tio.PROXY_ENTITY != NULL) {
+        Dwg_Entity_PROXY_ENTITY *proxy = object->tio.entity->tio.PROXY_ENTITY;
+        class_id = (long)proxy->class_id;
+        proxy_data_size = (long)proxy->proxy_data_size;
+        entity_data_size = (long)proxy->data_size;
+    }
+
+    char buffer[512];
+    snprintf(
+        buffer,
+        sizeof(buffer),
+        "%s; name=%s; dxfname=%s; app=%s; cpp=%s; class=%s; type=%d; fixedtype=%d; classId=%ld; proxyDataBytes=%ld; entityDataBytes=%ld",
+        is_tianzheng
+            ? "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the CAD Metal PoC."
+            : "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the CAD Metal PoC.",
+        sitekeeper_safe_string(object != NULL ? object->name : NULL),
+        sitekeeper_safe_string(object != NULL ? object->dxfname : NULL),
+        sitekeeper_safe_string(object != NULL && object->klass != NULL ? object->klass->appname : NULL),
+        sitekeeper_safe_string(object != NULL && object->klass != NULL ? object->klass->cppname : NULL),
+        sitekeeper_safe_string(object != NULL && object->klass != NULL ? object->klass->dxfname : NULL),
+        object != NULL ? (int)object->type : -1,
+        object != NULL ? (int)object->fixedtype : -1,
+        class_id,
+        proxy_data_size,
+        entity_data_size
+    );
+    return sitekeeper_copy_string(buffer);
+}
+
 static int sitekeeper_entity_is_visible(const Dwg_Object_Entity *entity)
 {
     return entity != NULL && entity->invisible == 0;
+}
+
+static int32_t sitekeeper_entity_layout_space(const Dwg_Object_Entity *entity)
+{
+    if (entity == NULL) {
+        return 0;
+    }
+    return entity->entmode == 1 ? 1 : 0;
 }
 
 static double sitekeeper_line_weight(const Dwg_Object_Entity *entity)
@@ -464,6 +593,7 @@ static int sitekeeper_append_entity(
     out->points = points_copy;
     out->pointCount = point_count;
     out->isClosed = is_closed;
+    out->layoutSpace = transform != NULL ? transform->layoutSpace : sitekeeper_entity_layout_space(entity);
     out->layerName = sitekeeper_layer_name(entity);
     out->sourceHandle = sitekeeper_handle_string(object);
     out->colorARGB = sitekeeper_entity_color_argb(entity);
@@ -518,6 +648,7 @@ static int sitekeeper_append_text_entity(
     out->points = NULL;
     out->pointCount = 0;
     out->isClosed = 0;
+    out->layoutSpace = transform != NULL ? transform->layoutSpace : sitekeeper_entity_layout_space(entity);
     out->layerName = sitekeeper_layer_name(entity);
     out->sourceHandle = sitekeeper_handle_string(object);
     out->rawText = text_copy;
@@ -539,6 +670,45 @@ static int sitekeeper_append_text_entity(
     sitekeeper_include_point(&result->trace, insertion.x, insertion.y);
     *entity_count += 1;
     result->trace.exportedTextCount += 1;
+    return 1;
+}
+
+static int sitekeeper_append_proxy_entity(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    int32_t kind,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (result == NULL || entity_count == NULL) {
+        return 0;
+    }
+    if (!sitekeeper_ensure_entity_capacity(result, entity_capacity, *entity_count + 1)) {
+        return 0;
+    }
+
+    const int is_tianzheng = kind == SiteKeeperLibreDWGEntityKindTianzhengProxy;
+    SiteKeeperLibreDWGEntity *out = &result->entities[*entity_count];
+    out->kind = kind;
+    out->points = NULL;
+    out->pointCount = 0;
+    out->isClosed = 0;
+    out->layoutSpace = transform != NULL ? transform->layoutSpace : sitekeeper_entity_layout_space(entity);
+    out->layerName = sitekeeper_layer_name(entity);
+    out->sourceHandle = sitekeeper_handle_string(object);
+    out->objectName = sitekeeper_object_display_name(object);
+    out->unsupportedReason = sitekeeper_proxy_reason(object, is_tianzheng);
+    out->colorARGB = sitekeeper_entity_color_argb(entity);
+    out->lineWeight = sitekeeper_line_weight(entity);
+
+    *entity_count += 1;
+    result->trace.exportedProxyEntityCount += 1;
+    if (is_tianzheng) {
+        result->trace.exportedTianzhengProxyCount += 1;
+    }
     return 1;
 }
 
@@ -2691,6 +2861,7 @@ static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_values(
     transform.m22 = sy * cos_r;
     transform.tx = insert_x - (transform.m11 * base_x + transform.m21 * base_y);
     transform.ty = insert_y - (transform.m12 * base_x + transform.m22 * base_y);
+    transform.layoutSpace = 0;
     return transform;
 }
 
@@ -3073,6 +3244,37 @@ static int sitekeeper_process_entity(
             depth
         );
     }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_PROXY_ENTITY)) {
+        const int is_tianzheng = sitekeeper_object_is_tianzheng(object);
+        result->trace.rawProxyEntityCount += 1;
+        if (is_tianzheng) {
+            result->trace.rawTianzhengProxyCount += 1;
+        }
+        return sitekeeper_append_proxy_entity(
+            result,
+            entity_count,
+            entity_capacity,
+            entity,
+            object,
+            is_tianzheng
+                ? SiteKeeperLibreDWGEntityKindTianzhengProxy
+                : SiteKeeperLibreDWGEntityKindProxy,
+            &transform
+        );
+    }
+    if (sitekeeper_object_is_tianzheng(object)) {
+        result->trace.rawProxyEntityCount += 1;
+        result->trace.rawTianzhengProxyCount += 1;
+        return sitekeeper_append_proxy_entity(
+            result,
+            entity_count,
+            entity_capacity,
+            entity,
+            object,
+            SiteKeeperLibreDWGEntityKindTianzhengProxy,
+            &transform
+        );
+    }
     return 0;
 }
 
@@ -3125,7 +3327,9 @@ int32_t SiteKeeperLibreDWGReadBasic2D(const char *path, SiteKeeperLibreDWGEntity
         }
 
         Dwg_Object *object = sitekeeper_object_for_entity(entity);
-        sitekeeper_process_entity(result, &entity_count, &entity_capacity, entity, object, identity, 0);
+        SiteKeeperLibreDWGTransform entity_transform = identity;
+        entity_transform.layoutSpace = sitekeeper_entity_layout_space(entity);
+        sitekeeper_process_entity(result, &entity_count, &entity_capacity, entity, object, entity_transform, 0);
     }
     free(entities);
 
@@ -3156,6 +3360,8 @@ void SiteKeeperLibreDWGFreeBasic2D(SiteKeeperLibreDWGEntityResult *result)
         free(result->entities[index].textStyleName);
         free(result->entities[index].fontName);
         free(result->entities[index].bigFontName);
+        free(result->entities[index].objectName);
+        free(result->entities[index].unsupportedReason);
     }
     free(result->entities);
     result->entities = NULL;

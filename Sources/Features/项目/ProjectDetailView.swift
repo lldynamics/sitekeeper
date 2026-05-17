@@ -222,8 +222,11 @@ struct ProjectDetailContainer: View {
             get: { project.status },
             set: { newVal in
                 if let idx = projectStore.projects.firstIndex(where: { $0.id == projectId }) {
-                    store.projects[idx].status = newVal
-                    store.scheduleSave()
+                    var updatedProject = projectStore.projects[idx]
+                    updatedProject.status = newVal
+                    if store.updateProject(updatedProject) {
+                        store.scheduleSave()
+                    }
                 }
             }
         )
@@ -349,6 +352,7 @@ struct ProjectDetailContainer: View {
             imagePickerSource: $assetState.imagePickerSource,
             deliveryGuideData: deliveryGuideData(snapshot: snapshot),
             constructionMethods: store.constructionMethods,
+            relatedProgress: snapshot.relatedProgress,
             recentFinancialRecords: snapshot.relatedFinancialRecords,
             onOpenModeFromDeliveryGuide: { mode in
                 routeState.mode = mode
@@ -395,6 +399,7 @@ struct ProjectDetailContainer: View {
                 relatedLogs: snapshot.relatedLogs,
                 relatedDrawings: snapshot.relatedDrawings,
                 relatedFinancialRecords: snapshot.relatedFinancialRecords,
+                relatedDocuments: snapshot.relatedDocuments,
                 linkedDocuments: linkedDocuments(for:),
                 attachmentSheetBuilder: { record in
                     attachmentSheet(record: record, documents: snapshot.relatedDocuments)
@@ -446,8 +451,8 @@ struct ProjectDetailContainer: View {
             onImportDrawings: importDrawings(_:),
             showDocumentFileImporter: $assetState.showDocumentFileImporter,
             documentImportTypes: Self.documentImportTypes,
-            onImportDocuments: { urls in
-                importProjectDocuments(urls)
+            onImportDocuments: { urls, settings in
+                importProjectDocuments(urls, ledgerSettings: settings)
             },
             selectedPhotoItem: $assetState.selectedPhotoItem,
             onImportPhotoItem: { item in

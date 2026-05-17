@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 enum UserPreferenceKeys {
     static let useMetric = "useMetric"
@@ -35,7 +38,6 @@ enum UserPreferenceKeys {
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
     static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
-    static let showTemplates = "feature.showTemplates"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
     static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
     static let materialLibraryPromptAfterAdd = "materialLibrary.promptAfterAdd"
@@ -154,12 +156,28 @@ enum AppLanguage: String, CaseIterable {
     static func apply(_ language: AppLanguage) {
         UserDefaults.standard.set([language.appleLanguageCode], forKey: "AppleLanguages")
         UserDefaults.standard.set(language.rawValue, forKey: UserPreferenceKeys.languageCode)
+        syncWidgetLanguage(language)
+        reloadWidgetLanguage()
     }
 
     static func restoreFromStorage() {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
         let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
         UserDefaults.standard.set([lang.appleLanguageCode], forKey: "AppleLanguages")
+        syncWidgetLanguage(lang)
+        reloadWidgetLanguage()
+    }
+
+    private static func syncWidgetLanguage(_ language: AppLanguage) {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
+        defaults.set(language.rawValue, forKey: WidgetSharedDefaults.languageCodeKey)
+        defaults.set([language.appleLanguageCode], forKey: WidgetSharedDefaults.appleLanguagesKey)
+    }
+
+    private static func reloadWidgetLanguage() {
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSharedDefaults.widgetKind)
+#endif
     }
 }
 
@@ -383,9 +401,6 @@ enum AppFeatureFlags {
 #endif
     }
 
-    static var showTemplates: Bool {
-        UserPreferences.bool(UserPreferenceKeys.showTemplates, default: false)
-    }
 }
 
 enum UserPreferences {

@@ -61,17 +61,15 @@ struct QuotationTemplateLibraryView: View {
         .onAppear(perform: openFocusedTemplateIfNeeded)
         .sheet(isPresented: $showAdd) {
             QuoteTemplateEditSheet(template: nil) { template in
-                store.templates.insert(template, at: 0)
+                store.insertTemplateAtTop(template)
                 store.scheduleSave()
                 showAdd = false
             }
         }
         .sheet(item: $editingTemplate) { template in
             QuoteTemplateEditSheet(template: template) { updated in
-                if let index = store.templates.firstIndex(where: { $0.id == updated.id }) {
-                    store.templates[index] = updated
-                    store.scheduleSave()
-                }
+                store.upsertTemplate(updated)
+                store.scheduleSave()
                 editingTemplate = nil
             } onDelete: { target in
                 deleteTemplateIds(Set([target.id]))
@@ -113,10 +111,7 @@ struct QuotationTemplateLibraryView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.templates = deletion.restoredItems(
-                    current: store.templates,
-                    id: \.id
-                )
+                store.restoreTemplates(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)

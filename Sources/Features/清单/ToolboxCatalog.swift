@@ -10,8 +10,6 @@ enum ToolboxDestination: String, Hashable {
     case contacts
     case methods
     case cadViewer
-    case export
-    case template
 }
 
 struct QuickToolEntry: Identifiable {

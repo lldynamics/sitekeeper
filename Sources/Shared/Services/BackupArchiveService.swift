@@ -301,9 +301,14 @@ enum BackupArchiveService {
 
         private func cleanupTemporaryFiles() {
             do {
-                try FileManager.default.removeItem(at: stageRoot)
-            } catch let cocoaError as CocoaError where cocoaError.code == .fileNoSuchFile {
-                return
+                _ = try FileOps.removeIfExists(
+                    at: stageRoot,
+                    context: .init(
+                        event: "backup.restore.stage_cleanup",
+                        category: .zipArchive,
+                        source: "BackupArchiveService.RestorationSession.cleanupTemporaryFiles"
+                    )
+                )
             } catch {
                 recordBackupArchiveIssue(
                     "backup.restore.stage_cleanup_failed",
@@ -347,7 +352,14 @@ enum BackupArchiveService {
                     )
                 }
                 do {
-                    try FileManager.default.removeItem(at: archiveURL)
+                    _ = try FileOps.removeIfExists(
+                        at: archiveURL,
+                        context: .init(
+                            event: "backup.archive.temp_cleanup",
+                            category: .zipArchive,
+                            source: "BackupArchiveService.makeArchive"
+                        )
+                    )
                 } catch {
                     recordBackupArchiveIssue(
                         "backup.archive.temp_cleanup_failed",
@@ -799,7 +811,14 @@ enum BackupArchiveService {
         defer {
             if shouldCleanupStageOnExit {
                 do {
-                    try FileManager.default.removeItem(at: stageRoot)
+                    _ = try FileOps.removeIfExists(
+                        at: stageRoot,
+                        context: .init(
+                            event: "backup.restore.stage_cleanup",
+                            category: .zipArchive,
+                            source: "BackupArchiveService.restoreArchive"
+                        )
+                    )
                 } catch {
                     recordBackupArchiveIssue(
                         "backup.restore.stage_cleanup_failed",
@@ -1111,9 +1130,14 @@ enum BackupArchiveService {
                         rollbackURL: rollbackURLForRecord
                     )
                 )
-                if manager.fileExists(atPath: targetURL.path) {
-                    try manager.removeItem(at: targetURL)
-                }
+                _ = try FileOps.removeIfExists(
+                    at: targetURL,
+                    context: .init(
+                        event: "backup.restore.replace_target",
+                        category: .zipArchive,
+                        source: "BackupArchiveService.commitStagedFiles"
+                    )
+                )
                 try manager.copyItem(at: sourceURL, to: targetURL)
                 committedFileNames.append(fileName)
             } catch {
@@ -1133,9 +1157,14 @@ enum BackupArchiveService {
         let manager = FileManager.default
         for file in files.reversed() {
             do {
-                if manager.fileExists(atPath: file.targetURL.path) {
-                    try manager.removeItem(at: file.targetURL)
-                }
+                _ = try FileOps.removeIfExists(
+                    at: file.targetURL,
+                    context: .init(
+                        event: "backup.restore.rollback_remove_target",
+                        category: .zipArchive,
+                        source: "BackupArchiveService.rollbackCommittedFiles"
+                    )
+                )
                 if let rollbackURL = file.rollbackURL, manager.fileExists(atPath: rollbackURL.path) {
                     try manager.moveItem(at: rollbackURL, to: file.targetURL)
                 }

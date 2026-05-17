@@ -467,8 +467,8 @@ struct LightingCircuitPlannerView: View {
         }
 
         if overwrite, let selected = selectedPlan,
-           let idx = store.lightingCircuitPlans.firstIndex(where: { $0.id == selected.id }) {
-            store.lightingCircuitPlans[idx] = LightingCircuitPlan(
+           store.lightingCircuitPlans.contains(where: { $0.id == selected.id }) {
+            store.updateLightingCircuitPlan(LightingCircuitPlan(
                 id: selected.id,
                 name: finalName,
                 projectId: selectedProjectId,
@@ -481,7 +481,7 @@ struct LightingCircuitPlannerView: View {
                 isCopper: isCopper,
                 loads: normalizedRows,
                 updatedAt: Formatters.now()
-            )
+            ))
         } else {
             let plan = LightingCircuitPlan(
                 name: finalName,
@@ -496,7 +496,7 @@ struct LightingCircuitPlannerView: View {
                 loads: normalizedRows,
                 updatedAt: Formatters.now()
             )
-            store.lightingCircuitPlans.insert(plan, at: 0)
+            store.insertLightingCircuitPlanAtTop(plan)
             selectedPlanId = plan.id
         }
         planName = finalName
@@ -506,7 +506,7 @@ struct LightingCircuitPlannerView: View {
 
     private func deleteSelectedPlan() {
         guard let selected = selectedPlan else { return }
-        store.lightingCircuitPlans.removeAll { $0.id == selected.id }
+        store.removeLightingCircuitPlans(ids: Set([selected.id]))
         selectedPlanId = nil
         store.scheduleSave()
         persistInputs()

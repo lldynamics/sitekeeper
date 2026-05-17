@@ -153,11 +153,22 @@ struct MaterialCategoryManagementView: View {
         let normalizedTarget = normalizedCategory(target)
         guard !normalizedSource.isEmpty, !normalizedTarget.isEmpty, normalizedSource != normalizedTarget else { return }
 
-        for index in store.userMaterials.indices where normalizedCategory(store.userMaterials[index].category) == normalizedSource {
-            store.userMaterials[index].category = normalizedTarget
+        var updatedUserMaterials = store.userMaterials
+        var didUpdateUserMaterials = false
+        for index in updatedUserMaterials.indices where normalizedCategory(updatedUserMaterials[index].category) == normalizedSource {
+            updatedUserMaterials[index].category = normalizedTarget
+            didUpdateUserMaterials = true
         }
-        for index in store.materialPriceEntries.indices where normalizedCategory(store.materialPriceEntries[index].category) == normalizedSource {
-            store.materialPriceEntries[index].category = normalizedTarget
+        if didUpdateUserMaterials {
+            store.replaceUserMaterials(updatedUserMaterials)
+        }
+        let materialPriceEntriesToMigrate = store.materialPriceEntries.filter {
+            normalizedCategory($0.category) == normalizedSource
+        }
+        for entry in materialPriceEntriesToMigrate {
+            var updated = entry
+            updated.category = normalizedTarget
+            store.upsertMaterialPriceEntry(updated)
         }
         store.scheduleSave()
     }

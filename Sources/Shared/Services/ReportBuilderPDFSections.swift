@@ -70,7 +70,7 @@ enum ReportBuilderPDFSections {
             lines.append("")
             lines.append(String(localized: "项目票据与资料"))
             lines += snapshot.projectDocuments.sorted(by: { $0.createdAt > $1.createdAt }).map {
-                let register = [$0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection]
+                let register = [$0.versionDisplayText, $0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
                 return "- \($0.createdAt) [\($0.category.displayName)] \($0.title)  \($0.pageCount)页  \(ReportBuilder.money(ReportBuilder.number($0.amount), currencyDisplayMode: currencyDisplayMode))  \(register)"

@@ -243,7 +243,7 @@ private struct ConstructionMethodDetailContent: View {
     private func createReference(_ action: ConstructionMethodReferenceAction, projectId: UUID?) {
         switch action {
         case .todo:
-            store.siteTodos.insert(
+            store.insertSiteTodoAtTop(
                 SiteTodo(
                     title: String(format: String(localized: "按工艺检查：%@"), methodDisplayTitle(method)),
                     dueDate: Formatters.date.string(from: Date()),
@@ -252,12 +252,11 @@ private struct ConstructionMethodDetailContent: View {
                     note: constructionMethodReferenceText(method),
                     linkedConstructionMethodIDs: [method.id],
                     projectId: projectId
-                ),
-                at: 0
+                )
             )
             operationMessage = String(localized: "已生成现场待办")
         case .dailyLog:
-            store.dailyLogs.insert(
+            store.insertDailyLogAtTop(
                 DailyLog(
                     date: Formatters.date.string(from: Date()),
                     weather: autoWeatherNow(),
@@ -269,12 +268,11 @@ private struct ConstructionMethodDetailContent: View {
                     rectification: "",
                     linkedConstructionMethodIDs: [method.id],
                     projectId: projectId
-                ),
-                at: 0
+                )
             )
             operationMessage = String(localized: "已生成施工日志")
         case .rectification:
-            store.siteTodos.insert(
+            store.insertSiteTodoAtTop(
                 SiteTodo(
                     title: String(format: String(localized: "整改复核：%@"), methodDisplayTitle(method)),
                     dueDate: Formatters.date.string(from: Date()),
@@ -283,8 +281,7 @@ private struct ConstructionMethodDetailContent: View {
                     note: String(format: String(localized: "整改依据：\n%@"), constructionMethodReferenceText(method)),
                     linkedConstructionMethodIDs: [method.id],
                     projectId: projectId
-                ),
-                at: 0
+                )
             )
             operationMessage = String(localized: "已生成整改待办")
         }

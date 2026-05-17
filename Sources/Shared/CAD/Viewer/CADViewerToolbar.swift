@@ -10,8 +10,10 @@ struct CADViewerToolbar: View {
     let supportsTextSearch: Bool
     let searchResultCount: Int
     let rendersTextOverlays: Bool
+    let buildsTextSearchIndex: Bool
     let publishesSnapPoints: Bool
     let rendersHatches: Bool
+    let rendersPlaceholders: Bool
     let showsOverviewMap: Bool
     let showsRendererDiagnostics: Bool
     let onSelectLayout: (String) -> Void
@@ -19,8 +21,10 @@ struct CADViewerToolbar: View {
     let onShowAllLayers: () -> Void
     let onSearchTapped: () -> Void
     let onToggleTextOverlays: () -> Void
+    let onToggleTextSearchIndex: () -> Void
     let onToggleSnapPoints: () -> Void
     let onToggleHatches: () -> Void
+    let onTogglePlaceholders: () -> Void
     let onToggleOverviewMap: () -> Void
     let onToggleRendererDiagnostics: () -> Void
     let onClose: () -> Void
@@ -132,11 +136,17 @@ struct CADViewerToolbar: View {
             Button(action: onToggleTextOverlays) {
                 Label("文字显示", systemImage: rendersTextOverlays ? "checkmark.circle.fill" : "circle")
             }
+            Button(action: onToggleTextSearchIndex) {
+                Label("文字搜索索引", systemImage: buildsTextSearchIndex ? "checkmark.circle.fill" : "circle")
+            }
             Button(action: onToggleSnapPoints) {
                 Label("吸附点", systemImage: publishesSnapPoints ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleHatches) {
                 Label("填充细节", systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
+            }
+            Button(action: onTogglePlaceholders) {
+                Label("占位对象", systemImage: rendersPlaceholders ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleOverviewMap) {
                 Label("全局小窗", systemImage: showsOverviewMap ? "checkmark.circle.fill" : "circle")
@@ -157,8 +167,10 @@ struct CADViewerToolbar: View {
     private var performanceOptionEnabledCount: Int {
         [
             rendersTextOverlays,
+            buildsTextSearchIndex,
             publishesSnapPoints,
             rendersHatches,
+            rendersPlaceholders,
             showsOverviewMap,
             showsRendererDiagnostics
         ].filter { $0 }.count

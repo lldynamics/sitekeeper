@@ -823,13 +823,15 @@ struct DataHealthView: View {
             detail: String(format: l("%d 项"), beforeCount),
             source: "DataHealthView"
         )
-        for index in store.dailyLogs.indices {
-            if let fileName = store.dailyLogs[index].photoFileName,
+        var repairedLogs = store.dailyLogs
+        for index in repairedLogs.indices {
+            if let fileName = repairedLogs[index].photoFileName,
                !PhotoStorage.exists(fileName: fileName) {
-                store.dailyLogs[index].photoFileName = nil
+                repairedLogs[index].photoFileName = nil
             }
-            store.dailyLogs[index].photos.removeAll { !PhotoStorage.exists(fileName: $0.fileName) }
+            repairedLogs[index].photos.removeAll { !PhotoStorage.exists(fileName: $0.fileName) }
         }
+        store.replaceDailyLogs(repairedLogs)
 
         let missingDocumentIds = Set(
             store.projectDocuments
@@ -837,64 +839,98 @@ struct DataHealthView: View {
                 .map(\.id)
         )
         if !missingDocumentIds.isEmpty {
-            store.projectDocuments.removeAll { missingDocumentIds.contains($0.id) }
+            var projectDocuments = store.projectDocuments
+            projectDocuments.removeAll { missingDocumentIds.contains($0.id) }
+            store.replaceProjectDocuments(projectDocuments)
         }
 
-        for index in store.quickNotes.indices {
-            store.quickNotes[index].attachments.removeAll {
+        var repairedQuickNotes = store.quickNotes
+        for index in repairedQuickNotes.indices {
+            repairedQuickNotes[index].attachments.removeAll {
                 !QuickNoteAttachmentStorage.exists(fileName: $0.fileName)
             }
         }
+        store.replaceQuickNotes(repairedQuickNotes)
 
-        for index in store.siteTodos.indices {
-            if let fileName = store.siteTodos[index].rectificationBeforePhotoFileName,
+        var repairedTodos = store.siteTodos
+        for index in repairedTodos.indices {
+            if let fileName = repairedTodos[index].rectificationBeforePhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
-                store.siteTodos[index].rectificationBeforePhotoFileName = nil
+                repairedTodos[index].rectificationBeforePhotoFileName = nil
             }
-            if let fileName = store.siteTodos[index].rectificationAfterPhotoFileName,
+            if let fileName = repairedTodos[index].rectificationAfterPhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
-                store.siteTodos[index].rectificationAfterPhotoFileName = nil
+                repairedTodos[index].rectificationAfterPhotoFileName = nil
             }
         }
+        store.replaceSiteTodos(repairedTodos)
 
         let validDocumentIds = Set(store.projectDocuments.map(\.id))
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { !validDocumentIds.contains($0) }
+        var financialRecords = store.projectFinancialRecords
+        for index in financialRecords.indices {
+            financialRecords[index].linkedDocumentIds.removeAll { !validDocumentIds.contains($0) }
         }
-        for index in store.projectWarehouseMovements.indices {
-            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { !validDocumentIds.contains($0) }
+        store.replaceProjectFinancialRecords(financialRecords)
+
+        var warehouseMovements = store.projectWarehouseMovements
+        for index in warehouseMovements.indices {
+            warehouseMovements[index].linkedDocumentIds.removeAll { !validDocumentIds.contains($0) }
         }
+        store.replaceProjectWarehouseMovements(warehouseMovements)
 
         let validRecordIds = Set(store.projectFinancialRecords.map(\.id))
-        for index in store.projectDocuments.indices {
-            if let linkedId = store.projectDocuments[index].linkedFinancialRecordId,
+        var projectDocumentsForLinks = store.projectDocuments
+        for index in projectDocumentsForLinks.indices {
+            if let linkedId = projectDocumentsForLinks[index].linkedFinancialRecordId,
                !validRecordIds.contains(linkedId) {
-                store.projectDocuments[index].linkedFinancialRecordId = nil
+                projectDocumentsForLinks[index].linkedFinancialRecordId = nil
             }
         }
+        store.replaceProjectDocuments(projectDocumentsForLinks)
 
         let validProjectIds = Set(store.projects.map(\.id))
-        for index in store.materialItems.indices where invalidOptionalProjectId(store.materialItems[index].projectId, validProjectIds: validProjectIds) {
-            store.materialItems[index].projectId = nil
+        var materialItems = store.materialItems
+        for index in materialItems.indices where invalidOptionalProjectId(materialItems[index].projectId, validProjectIds: validProjectIds) {
+            materialItems[index].projectId = nil
         }
-        for index in store.quoteItems.indices where invalidOptionalProjectId(store.quoteItems[index].projectId, validProjectIds: validProjectIds) {
-            store.quoteItems[index].projectId = nil
+        store.replaceMaterialItems(materialItems)
+
+        var quoteItems = store.quoteItems
+        for index in quoteItems.indices where invalidOptionalProjectId(quoteItems[index].projectId, validProjectIds: validProjectIds) {
+            quoteItems[index].projectId = nil
         }
-        for index in store.laborRecords.indices where invalidOptionalProjectId(store.laborRecords[index].projectId, validProjectIds: validProjectIds) {
-            store.laborRecords[index].projectId = nil
+        store.replaceQuoteItems(quoteItems)
+
+        var laborRecords = store.laborRecords
+        for index in laborRecords.indices where invalidOptionalProjectId(laborRecords[index].projectId, validProjectIds: validProjectIds) {
+            laborRecords[index].projectId = nil
         }
-        for index in store.dailyLogs.indices where invalidOptionalProjectId(store.dailyLogs[index].projectId, validProjectIds: validProjectIds) {
-            store.dailyLogs[index].projectId = nil
+        store.replaceLaborRecords(laborRecords)
+
+        var logs = store.dailyLogs
+        for index in logs.indices where invalidOptionalProjectId(logs[index].projectId, validProjectIds: validProjectIds) {
+            logs[index].projectId = nil
         }
-        for index in store.siteTodos.indices where invalidOptionalProjectId(store.siteTodos[index].projectId, validProjectIds: validProjectIds) {
-            store.siteTodos[index].projectId = nil
+        store.replaceDailyLogs(logs)
+
+        var todos = store.siteTodos
+        for index in todos.indices where invalidOptionalProjectId(todos[index].projectId, validProjectIds: validProjectIds) {
+            todos[index].projectId = nil
         }
-        for index in store.quickNotes.indices where invalidOptionalProjectId(store.quickNotes[index].projectId, validProjectIds: validProjectIds) {
-            store.quickNotes[index].projectId = nil
+        store.replaceSiteTodos(todos)
+        var quickNotes = store.quickNotes
+        for index in quickNotes.indices where invalidOptionalProjectId(quickNotes[index].projectId, validProjectIds: validProjectIds) {
+            quickNotes[index].projectId = nil
         }
-        for index in store.lightingCircuitPlans.indices where invalidOptionalProjectId(store.lightingCircuitPlans[index].projectId, validProjectIds: validProjectIds) {
-            store.lightingCircuitPlans[index].projectId = nil
+        store.replaceQuickNotes(quickNotes)
+        var lightingCircuitPlans = store.lightingCircuitPlans
+        for index in lightingCircuitPlans.indices where invalidOptionalProjectId(
+            lightingCircuitPlans[index].projectId,
+            validProjectIds: validProjectIds
+        ) {
+            lightingCircuitPlans[index].projectId = nil
         }
+        store.replaceLightingCircuitPlans(lightingCircuitPlans)
 
         store.scheduleSave()
         let afterCount = referenceIssueCount

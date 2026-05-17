@@ -664,7 +664,7 @@ struct CADNativeSnapSourcePoint {
     }
 }
 
-private struct CADNativeSnapPointBuckets {
+struct CADNativeSnapPointBuckets {
     let sourcePoints: [CADNativeSnapSourcePoint]
     let allPoints: [CGPoint]
     let endpointPoints: [CGPoint]
@@ -1398,7 +1398,9 @@ struct CADPreviewContainer: View {
     @State var nativeMidpointSnapPoints: [CGPoint] = []
     @State var nativeCenterSnapPoints: [CGPoint] = []
     @State var nativeSnapSourcePoints: [CADNativeSnapSourcePoint] = []
-    @State private var nativeSnapPointBuckets = CADNativeSnapPointBuckets()
+    @State var nativeSnapPointBuckets = CADNativeSnapPointBuckets()
+    @State var nativeCADLayouts: [CADPoC.CADLayout] = []
+    @State var nativeCADCurrentLayoutID: String?
     @State var nativeCADLayers: [CADPoC.CADLayer] = []
     @State var nativeCADVisibleLayerIDs: Set<String>?
     @State var enabledSnapModes: Set<CADSnapMode> = Set(CADSnapMode.allCases)
@@ -1420,10 +1422,13 @@ struct CADPreviewContainer: View {
     )
     @AppStorage("cadViewerMode") private var cadViewerModeRaw = CADViewerMode.auto.rawValue
     @AppStorage("cad.metal.poc.showsOverviewMap") var showsCADOverviewMap = false
-    @AppStorage("cad.metal.poc.rendersTextOverlays") var rendersCADTextOverlays = false
+    @AppStorage("cad.metal.poc.rendersTextOverlays") var rendersCADTextOverlays = true
+    @AppStorage("cad.metal.poc.buildsTextSearchIndex") var buildsCADTextSearchIndex = false
     @AppStorage("cad.metal.poc.publishesSnapPoints") var publishesCADSnapPoints = false
     @AppStorage("cad.metal.poc.rendersHatches") var rendersCADHatches = false
+    @AppStorage("cad.metal.poc.rendersPlaceholders") var rendersCADPlaceholders = false
     @AppStorage("cad.metal.poc.showsRendererDiagnostics") var showsCADRendererDiagnostics = false
+    @AppStorage("cad.metal.poc.featureDefaultsVersion") var cadFeatureDefaultsVersion = 0
     let overlaySnapTolerance: CGFloat = 14
     let activeStrokeSamplingCanvasDistance: CGFloat = 3
     let activeStrokePointLimit = 4096
@@ -1942,7 +1947,20 @@ struct CADPreviewContainer: View {
                         showsToolbar: false,
                         initialViewState: initialRendererViewState,
                         callbacks: rendererCallbacks,
+                        selectedLayoutID: nativeCADCurrentLayoutID,
                         visibleLayerIDs: nativeCADVisibleLayerIDs,
+                        onLayoutsChanged: { layouts in
+                            nativeCADLayouts = layouts
+                            let nextLayoutID = CADMetalLibreDWGPoCEntry.defaultLayoutID(layouts)
+                            if let current = nativeCADCurrentLayoutID,
+                               layouts.contains(where: { $0.id == current }) {
+                                return
+                            }
+                            nativeCADCurrentLayoutID = nextLayoutID
+                        },
+                        onSelectedLayoutIDChanged: { layoutID in
+                            nativeCADCurrentLayoutID = layoutID
+                        },
                         onLayersChanged: { layers in
                             nativeCADLayers = layers
                         },
@@ -2044,6 +2062,7 @@ struct CADPreviewContainer: View {
             }
         }
             .onAppear {
+                migrateCADPoCFeatureDefaultsIfNeeded()
                 snapshot = restoredSnapshot(for: activeRequest)
                 snapshot.normalizeMeasurementScale()
                 applyOverlayDisplayPreferences(from: snapshot)
@@ -2060,6 +2079,8 @@ struct CADPreviewContainer: View {
                 currentCADViewState = activeRequest.cadViewState
                 lastPersistedCADViewState = activeRequest.cadViewState
                 nativeCADLayers = []
+                nativeCADLayouts = []
+                nativeCADCurrentLayoutID = nil
                 let savedCADLayerIDs = Set(activeRequest.cadViewState.visibleLayerNames)
                 nativeCADVisibleLayerIDs = activeRequest.cadViewState.usesSavedVisibleLayers && !savedCADLayerIDs.isEmpty
                     ? savedCADLayerIDs
@@ -2442,6 +2463,12 @@ struct CADPreviewContainer: View {
         AppHaptics.impact(.light, intensity: 0.55)
     }
 
+    func migrateCADPoCFeatureDefaultsIfNeeded() {
+        guard cadFeatureDefaultsVersion < 1 else { return }
+        rendersCADTextOverlays = true
+        cadFeatureDefaultsVersion = 1
+    }
+
     func persistCADViewStateIfNeeded(_ viewState: CADDrawingViewState, force: Bool = false) {
         guard force || viewState != lastPersistedCADViewState else { return }
         lastPersistedCADViewState = viewState
@@ -2458,7 +2485,11 @@ struct CADPreviewContainer: View {
             bigFont: profile,
             resetAutoDetectScore: true
         )
-        alertMessage = String(localized: "已切换为 \(encoding.displayName) / \(profile.displayName)。")
+        alertMessage = String(
+            format: String(localized: "已切换为 %@ / %@。"),
+            encoding.displayName,
+            profile.displayName
+        )
         showAlert = true
     }
 
@@ -2541,7 +2572,10 @@ struct CADPreviewContainer: View {
             layoutId: SiteKeeperCADKernel.CADLayout.modelSpace.id,
             worldPoint: CADPoint(point),
             viewportTransform: currentFallbackViewportTransform(),
-            title: String(localized: "问题点 \(snapshot.issueMarkers.count + 1)"),
+            title: String(
+                format: String(localized: "问题点 %lld"),
+                Int64(snapshot.issueMarkers.count + 1)
+            ),
             note: "",
             photoFileName: photoFileName,
             layerName: nearestDrawingLayerName(toStoredPoint: point),
@@ -2765,7 +2799,10 @@ struct CADPreviewContainer: View {
         snapshot.metersPerDrawingUnit = computedScale
         scaleDraft = Formatters.number(computedScale, minFraction: 0, maxFraction: 8)
         showScaleSheet = false
-        alertMessage = String(localized: "已更新标定：1 图纸单位 = \(Formatters.number(computedScale, minFraction: 0, maxFraction: 8)) m")
+        alertMessage = String(
+            format: String(localized: "已更新标定：1 图纸单位 = %@ m"),
+            Formatters.number(computedScale, minFraction: 0, maxFraction: 8)
+        )
         showAlert = true
     }
 
@@ -3852,7 +3889,10 @@ struct CADPreviewContainer: View {
                 quantity: "\(count)",
                 unitPrice: "0",
                 wasteRate: "0",
-                source: String(localized: "数数-\(category)"),
+                source: String(
+                    format: String(localized: "数数-%@"),
+                    category
+                ),
                 sourceLinkKind: .countMarkers,
                 sourceLinkCategory: category,
                 sourceLinkMarkerIDs: sourceIDs

@@ -17,7 +17,14 @@ enum ExportFileURLPreparer {
         let parent = fileURL.deletingLastPathComponent()
         if parent.lastPathComponent.hasPrefix(exportDirectoryPrefix) {
             do {
-                try FileManager.default.removeItem(at: parent)
+                _ = try FileOps.removeIfExists(
+                    at: parent,
+                    context: .init(
+                        event: "export.cleanup_directory",
+                        category: .fileStorage,
+                        source: "ExportFileURLPreparer.cleanup"
+                    )
+                )
             } catch {
                 StorageIssueLog.recordEvent(
                     "export.cleanup_directory_failed",
@@ -26,9 +33,16 @@ enum ExportFileURLPreparer {
                     error: error
                 )
             }
-        } else if FileManager.default.fileExists(atPath: fileURL.path) {
+        } else {
             do {
-                try FileManager.default.removeItem(at: fileURL)
+                _ = try FileOps.removeIfExists(
+                    at: fileURL,
+                    context: .init(
+                        event: "export.cleanup_file",
+                        category: .fileStorage,
+                        source: "ExportFileURLPreparer.cleanup"
+                    )
+                )
             } catch {
                 StorageIssueLog.recordEvent(
                     "export.cleanup_file_failed",

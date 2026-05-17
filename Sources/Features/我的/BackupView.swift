@@ -1349,16 +1349,22 @@ struct BackupView: View {
 
     private func cleanupPendingImportFileIfNeeded() {
         guard let pendingImportFileURL else { return }
-        if FileManager.default.fileExists(atPath: pendingImportFileURL.path) {
-            do {
-                try FileManager.default.removeItem(at: pendingImportFileURL)
-            } catch {
-                StorageIssueLog.record(String(
-                    format: String(localized: "导入临时文件清理失败：%@，%@"),
-                    pendingImportFileURL.lastPathComponent,
-                    error.localizedDescription
-                ))
-            }
+        do {
+            _ = try FileOps.removeIfExists(
+                at: pendingImportFileURL,
+                context: .init(
+                    event: "backup_view.cleanup_pending_import_file",
+                    category: .fileStorage,
+                    source: "BackupView.cleanupPendingImportFileIfNeeded"
+                )
+            )
+        } catch {
+            StorageIssueLog.recordEvent(
+                "backup_view.cleanup_pending_import_file_failed",
+                category: .fileStorage,
+                details: ["file": pendingImportFileURL.lastPathComponent],
+                error: error
+            )
         }
         self.pendingImportFileURL = nil
         self.pendingImportPreview = nil

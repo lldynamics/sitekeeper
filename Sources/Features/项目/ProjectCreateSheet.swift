@@ -8,6 +8,7 @@ enum ProjectCreateNumericField: Hashable {
 }
 
 struct ProjectCreateSheet: View {
+    @Environment(DataStore.self) private var store
     @Binding var name: String
     @Binding var location: String
     @Binding var customerName: String
@@ -25,6 +26,11 @@ struct ProjectCreateSheet: View {
     let canCreate: Bool
     let onCancel: () -> Void
     let onCreate: () -> Void
+    @State private var recommendationStage: ProjectDocumentRecommendationStage = .preConstruction
+
+    private var savedDocumentChecklistTemplates: [ProjectDocumentChecklistTemplate] {
+        ProjectDocumentChecklistTemplate.customTemplates(from: store.templates)
+    }
 
     var body: some View {
         NavigationStack {
@@ -35,7 +41,11 @@ struct ProjectCreateSheet: View {
                         .lineLimit(2...4)
                     TextField(String(localized: "负责人"), text: $managerName)
                 }
-                ProjectDocumentChecklistTemplateSection(selectedCategories: $requiredDocumentCategories)
+                ProjectDocumentChecklistTemplateSection(
+                    selectedCategories: $requiredDocumentCategories,
+                    recommendationStage: $recommendationStage,
+                    customTemplates: savedDocumentChecklistTemplates
+                )
                 Section(String(localized: "客户")) {
                     TextField(String(localized: "客户姓名/单位"), text: $customerName)
                     TextField(String(localized: "客户电话"), text: $customerPhone)
@@ -135,15 +145,85 @@ struct ProjectCreateSheet: View {
 
 struct ProjectDocumentChecklistTemplateSection: View {
     @Binding var selectedCategories: Set<ProjectDocumentCategory>
+    @Binding var recommendationStage: ProjectDocumentRecommendationStage
+    let customTemplates: [ProjectDocumentChecklistTemplate]
+
+    private var recommendedCategories: [ProjectDocumentCategory] {
+        ProjectDocumentCategory.recommendedConstructionArchiveRequirements(for: recommendationStage)
+    }
 
     var body: some View {
         Section(String(localized: "资料清单模板")) {
+            LabeledContent(
+                String(localized: "当前清单"),
+                value: String(format: String(localized: "%lld 类"), Int64(selectedCategories.count))
+            )
+            templateMenu
+
+            Picker(String(localized: "推荐阶段"), selection: $recommendationStage) {
+                ForEach(ProjectDocumentRecommendationStage.allCases, id: \.self) { stage in
+                    Text(stage.displayName).tag(stage)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Label(
+                    String(format: String(localized: "%@推荐"), recommendationStage.displayName),
+                    systemImage: "wand.and.stars"
+                )
+                .font(.caption.weight(.semibold))
+                Text(recommendationStage.detailText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Text(recommendationStage.recommendedCategoryText)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
+            Button {
+                selectedCategories = Set(recommendedCategories)
+            } label: {
+                Label(String(localized: "套用本阶段推荐"), systemImage: "checklist.checked")
+            }
+
             ForEach(ProjectDocumentCategory.defaultConstructionArchiveRequirements, id: \.self) { category in
                 Toggle(isOn: binding(for: category)) {
                     Text(category.displayName)
                 }
             }
         }
+    }
+
+    private var templateMenu: some View {
+        Menu {
+            Section(String(localized: "项目类型")) {
+                ForEach(ProjectDocumentChecklistTemplate.builtInPresets) { template in
+                    Button {
+                        applyTemplate(template)
+                    } label: {
+                        Text(template.name)
+                    }
+                }
+            }
+            if !customTemplates.isEmpty {
+                Section(String(localized: "我的模板")) {
+                    ForEach(customTemplates) { template in
+                        Button {
+                            applyTemplate(template)
+                        } label: {
+                            Text(template.name)
+                        }
+                    }
+                }
+            }
+        } label: {
+            Label(String(localized: "套用项目类型模板"), systemImage: "square.stack.3d.up.fill")
+        }
+    }
+
+    private func applyTemplate(_ template: ProjectDocumentChecklistTemplate) {
+        selectedCategories = Set(ProjectDocumentCategory.normalizedConstructionArchiveRequirements(template.categories))
     }
 
     private func binding(for category: ProjectDocumentCategory) -> Binding<Bool> {

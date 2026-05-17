@@ -369,9 +369,14 @@ struct SimpleZipArchiveReader {
     ) throws {
         let manager = FileManager.default
         try manager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if manager.fileExists(atPath: destinationURL.path) {
-            try manager.removeItem(at: destinationURL)
-        }
+        _ = try FileOps.removeIfExists(
+            at: destinationURL,
+            context: .init(
+                event: "zip.reader.write_entry.prepare_destination",
+                category: .zipArchive,
+                source: "SimpleZipArchiveReader.writeEntry"
+            )
+        )
 
         guard manager.createFile(atPath: destinationURL.path, contents: nil) else {
             throw ZipReadError.invalidArchive

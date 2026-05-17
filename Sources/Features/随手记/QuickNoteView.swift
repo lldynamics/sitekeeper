@@ -142,14 +142,14 @@ struct QuickNoteView: View {
     private func saveEditedNote(original: QuickNote, updated: QuickNote) {
         let updatedFileNames = Set(updated.attachments.map(\.fileName))
         let removedAttachments = original.attachments.filter { !updatedFileNames.contains($0.fileName) }
-        if let index = store.quickNotes.firstIndex(where: { $0.id == updated.id }) {
+        if store.quickNotes.contains(where: { $0.id == updated.id }) {
             let restoreSnapshot = store.quickNotes.map { note in
                 guard note.id == updated.id else { return note }
                 var restore = updated
                 restore.attachments = uniqueAttachments(original.attachments + updated.attachments)
                 return restore
             }
-            store.quickNotes[index] = updated
+            store.updateQuickNote(updated)
             store.scheduleSave()
             queueAttachmentRemovalUndo(
                 removedAttachments,
@@ -195,11 +195,11 @@ struct QuickNoteView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.quickNotes = UndoableDeletionCoordinator.restoringItems(
+                store.replaceQuickNotes(UndoableDeletionCoordinator.restoringItems(
                     snapshot: restoreSnapshot,
                     current: store.quickNotes,
                     deletedIDs: ids
-                )
+                ))
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -233,11 +233,11 @@ struct QuickNoteView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.quickNotes = UndoableDeletionCoordinator.restoringItems(
+                store.replaceQuickNotes(UndoableDeletionCoordinator.restoringItems(
                     snapshot: restoreSnapshot,
                     current: store.quickNotes,
                     deletedIDs: Set([noteId])
-                )
+                ))
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(

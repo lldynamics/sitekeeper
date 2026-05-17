@@ -259,20 +259,20 @@ struct ReportBuilderTests {
         let store = DataStore()
         let p1 = Project(name: "项目A", location: "地址A", status: .active)
         let p2 = Project(name: "项目B", location: "地址B", status: .active)
-        store.projects = [p1, p2]
-        store.materialItems = [
+        store.replaceProjects([p1, p2])
+        store.replaceMaterialItems([
             MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
             MaterialItem(name: "钢筋", quantity: "5", unit: "吨", unitPrice: "4000", projectId: p2.id)
-        ]
-        store.quickNotes = [
+        ])
+        store.replaceQuickNotes([
             QuickNote(title: "笔记A", content: "项目A备注", projectId: p1.id),
             QuickNote(title: "笔记B", content: "项目B备注", projectId: p2.id)
-        ]
-        store.projectContacts = [
+        ])
+        store.replaceProjectContacts([
             ProjectContact(projectId: p1.id, name: "张三", role: .owner, phone: "13800138000"),
             ProjectContact(projectId: p2.id, name: "李四", role: .team, phone: "13900139000")
-        ]
-        store.projectFinancialRecords = [
+        ])
+        store.replaceProjectFinancialRecords([
             ProjectFinancialRecord(
                 projectId: p1.id,
                 date: "",
@@ -289,7 +289,7 @@ struct ReportBuilderTests {
                 amount: "2000",
                 counterparty: "客户B"
             )
-        ]
+        ])
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: ExportContentOptions())
@@ -311,11 +311,11 @@ struct ReportBuilderTests {
         let store = DataStore()
         let p1 = Project(name: "项目A", location: "地址A", status: .active)
         let p2 = Project(name: "项目B", location: "地址B", status: .active)
-        store.projects = [p1, p2]
-        store.projectContacts = [
+        store.replaceProjects([p1, p2])
+        store.replaceProjectContacts([
             ProjectContact(projectId: p1.id, name: "张三", role: .owner, phone: "13800138000"),
             ProjectContact(projectId: p2.id, name: "李四", role: .team, phone: "13900139000")
-        ]
+        ])
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
         var options = ExportContentOptions()
@@ -333,15 +333,15 @@ struct ReportBuilderTests {
         let store = DataStore()
         let p1 = Project(name: "项目A", location: "地址A", status: .active)
         let p2 = Project(name: "项目B", location: "地址B", status: .active)
-        store.projects = [p1, p2]
-        store.materialItems = [
+        store.replaceProjects([p1, p2])
+        store.replaceMaterialItems([
             MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
             MaterialItem(name: "钢筋", quantity: "5", unit: "吨", unitPrice: "4000", projectId: p2.id)
-        ]
-        store.quickNotes = [
+        ])
+        store.replaceQuickNotes([
             QuickNote(title: "笔记A", content: "项目A备注", projectId: p1.id),
             QuickNote(title: "笔记B", content: "项目B备注", projectId: p2.id)
-        ]
+        ])
 
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
         // 两个项目的材料都在快照中，各自携带正确的 projectId
@@ -355,19 +355,19 @@ struct ReportBuilderTests {
     @Test func exportSupportsAllNewModules() {
         let store = makeSampleStore()
         let projectId = store.projects.first?.id ?? UUID()
-        store.projectContacts = [
+        store.replaceProjectContacts([
             ProjectContact(projectId: projectId, name: "联系人测试", role: .owner, phone: "13800138000")
-        ]
-        store.projectDrawings = [
+        ])
+        store.replaceProjectDrawings([
             ProjectDrawing(projectId: projectId, name: "图纸测试", fileName: "drawing.pdf", fileType: "PDF")
-        ]
-        store.projectWarehouseMovements = [
+        ])
+        store.replaceProjectWarehouseMovements([
             ProjectWarehouseMovement(projectId: projectId, date: "2026-05-04", movementType: .inbound, materialName: "材料测试", quantity: "1")
-        ]
-        store.quickNotes = [
+        ])
+        store.replaceQuickNotes([
             QuickNote(title: "随手记测试", content: "现场备注", projectId: projectId)
-        ]
-        store.lightingCircuitPlans = [
+        ])
+        store.replaceLightingCircuitPlans([
             LightingCircuitPlan(
                 name: "照明方案测试",
                 projectId: projectId,
@@ -383,7 +383,7 @@ struct ReportBuilderTests {
                 ],
                 updatedAt: "2026-05-04 10:00"
             )
-        ]
+        ])
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         var options = ExportContentOptions()
@@ -407,7 +407,8 @@ struct ReportBuilderTests {
         #expect(csvText.contains("\"movement_type_key\",\"movement_type_display\""))
         #expect(csvText.contains("\"supply_type_key\",\"supply_type_display\""))
         #expect(csvText.contains("\"project_id\",\"project_name\",\"category_key\",\"category_display\",\"status_raw\",\"status_display\""))
-        #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"submission_status_raw\",\"submission_status_display\""))
+        #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"version_number\",\"version_state\""))
+        #expect(csvText.contains("\"replaces_document_id\",\"replaced_by_document_id\",\"submission_status_raw\""))
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
         let htmlText = String(data: html, encoding: .utf8) ?? ""

@@ -11,6 +11,7 @@ struct VoltageDropView: View {
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
 
     private let resistivityCopper: Double = 0.0175
@@ -21,37 +22,99 @@ struct VoltageDropView: View {
         StringEnumFallback.value(materialRawValue, default: WireMaterial.copper)
     }
 
+    private var currentRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 0.1,
+            max: 100_000,
+            rangeMessage: calculatorLoc("请输入 0.1–100000")
+        )
+    }
+
+    private var lengthRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 1,
+            max: 1_000_000,
+            rangeMessage: calculatorLoc("请输入 1–1000000")
+        )
+    }
+
+    private var sectionRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 1,
+            max: 20_000,
+            rangeMessage: calculatorLoc("请输入 1–20000")
+        )
+    }
+
+    private var voltageRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 12,
+            max: 100_000,
+            rangeMessage: calculatorLoc("请输入 12–100000")
+        )
+    }
+
+    private var currentValidation: NumericInputFieldValidation {
+        currentRule.validate(current)
+    }
+
+    private var lengthValidation: NumericInputFieldValidation {
+        lengthRule.validate(length)
+    }
+
+    private var sectionValidation: NumericInputFieldValidation {
+        sectionRule.validate(section)
+    }
+
+    private var voltageValidation: NumericInputFieldValidation {
+        voltageRule.validate(voltage)
+    }
+
     var body: some View {
         Form {
             Section("线路参数") {
-                LabeledContent("电流 (A)") {
-                    TextField("例如 20", text: $current.numericInput(.quantity))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(current, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
+                CalculatorValidatedNumericField(
+                    title: "电流",
+                    placeholder: "例如 20",
+                    unit: "A",
+                    text: $current,
+                    rule: currentRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用电流", options: ["10", "16", "20", "32", "50", "63"], selection: $current)
-                LabeledContent("长度 (m)") {
-                    TextField("例如 100", text: $length.numericInput(.quantity))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(length, min: 1, max: 1_000_000, hint: "请输入 1–1000000"))
+                CalculatorValidatedNumericField(
+                    title: "长度",
+                    placeholder: "例如 100",
+                    unit: "m",
+                    text: $length,
+                    rule: lengthRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用长度", options: ["20", "50", "80", "100", "150", "200"], selection: $length)
                 Toggle("回路长度（已含来/回）", isOn: $isLoopLength)
                 Picker("材质", selection: $materialRawValue) {
                     Text("铜").tag(WireMaterial.copper.rawValue)
                     Text("铝").tag(WireMaterial.aluminum.rawValue)
                 }
-                LabeledContent("截面积 (mm²)") {
-                    TextField("2.5", text: $section.numericInput(.quantity))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(section, min: 1, max: 20_000, hint: "请输入 1–20000"))
+                CalculatorValidatedNumericField(
+                    title: "截面积",
+                    placeholder: "2.5",
+                    unit: "mm²",
+                    text: $section,
+                    rule: sectionRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
                         ForEach(commonSections, id: \.self) { s in
@@ -66,13 +129,15 @@ struct VoltageDropView: View {
                         }
                     }
                 }
-                LabeledContent("额定电压 (V)") {
-                    TextField("220", text: $voltage.numericInput(.quantity))
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(voltage, min: 12, max: 100_000, hint: "请输入 12–100000"))
+                CalculatorValidatedNumericField(
+                    title: "额定电压",
+                    placeholder: "220",
+                    unit: "V",
+                    text: $voltage,
+                    rule: voltageRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "电压预设", options: ["220", "380"], selection: $voltage)
             }
 
@@ -96,6 +161,7 @@ struct VoltageDropView: View {
             Section {
                 Button("计算") {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     calcAndSave()
                 }
                     .frame(maxWidth: .infinity)
@@ -121,11 +187,12 @@ struct VoltageDropView: View {
     }
 
     private func calc() {
-        guard let i = CalculatorInputParser.double(current),
-              let l = CalculatorInputParser.double(length),
-              let s = CalculatorInputParser.double(section),
-              let v = CalculatorInputParser.double(voltage) else {
-            presentError("请输入有效数值")
+        guard let i = currentValidation.doubleValue,
+              let l = lengthValidation.doubleValue,
+              let s = sectionValidation.doubleValue,
+              let v = voltageValidation.doubleValue else {
+            resultText = ""
+            resultModel = nil
             return
         }
         let isCopper = material == .copper
@@ -175,6 +242,11 @@ struct VoltageDropView: View {
         \(ampNote)
         \(recNote)
         """
+
+        current = NumericInputSupport.normalizedStorageText(current, kind: .quantity, preservingInvalid: false)
+        length = NumericInputSupport.normalizedStorageText(length, kind: .quantity, preservingInvalid: false)
+        section = NumericInputSupport.normalizedStorageText(section, kind: .quantity, preservingInvalid: false)
+        voltage = NumericInputSupport.normalizedStorageText(voltage, kind: .quantity, preservingInvalid: false)
     }
 
     private func calcAndSave() {
@@ -194,13 +266,6 @@ struct VoltageDropView: View {
 
     private func formatSection(_ value: Double) -> String {
         value.truncatingRemainder(dividingBy: 1) == 0 ? String(format: "%.0f", value) : String(format: "%.1f", value)
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
     }
 
     private func presentError(_ message: String) {

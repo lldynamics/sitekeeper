@@ -75,7 +75,7 @@ struct ConstructionMethodLibraryView: View {
         }
         .sheet(isPresented: $showAdd) {
             ConstructionMethodEditSheet(method: nil) { method in
-                store.constructionMethods.insert(method, at: 0)
+                store.upsertConstructionMethod(method, insertAtTopWhenNew: true)
                 selectedMethodID = method.id
                 store.scheduleSave()
                 showAdd = false
@@ -282,22 +282,19 @@ struct ConstructionMethodLibraryView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.constructionMethods = deletion.restoredItems(
-                    current: store.constructionMethods,
-                    id: \.id
-                )
-                store.siteTodos = restoringMethodLinks(
+                store.restoreConstructionMethods(from: deletion)
+                store.replaceSiteTodos(restoringMethodLinks(
                     current: store.siteTodos,
                     snapshot: todoSnapshot,
                     deletedIDs: deletedIDs,
                     links: \.linkedConstructionMethodIDs
-                )
-                store.dailyLogs = restoringMethodLinks(
+                ))
+                store.replaceDailyLogs(restoringMethodLinks(
                     current: store.dailyLogs,
                     snapshot: logSnapshot,
                     deletedIDs: deletedIDs,
                     links: \.linkedConstructionMethodIDs
-                )
+                ))
                 if let previousSelection,
                    store.constructionMethods.contains(where: { $0.id == previousSelection }) {
                     selectedMethodID = previousSelection
@@ -338,37 +335,48 @@ struct ConstructionMethodLibraryView: View {
     }
 
     private func updateMethod(_ updated: ConstructionMethod) {
-        if let index = store.constructionMethods.firstIndex(where: { $0.id == updated.id }) {
-            let oldFiles = Set((store.constructionMethods[index].attachments + store.constructionMethods[index].tutorialAttachments).map(\.fileName))
-            let newFiles = Set((updated.attachments + updated.tutorialAttachments).map(\.fileName))
-            store.constructionMethods[index] = updated
-            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
-                Array(oldFiles.subtracting(newFiles)),
-                summary: "engineeringDatabase.updateMethodAttachments"
-            )?.perform()
-            selectedMethodID = updated.id
-            store.scheduleSave()
-        }
+        guard let existing = store.constructionMethods.first(where: { $0.id == updated.id }) else { return }
+        let oldFiles = Set((existing.attachments + existing.tutorialAttachments).map(\.fileName))
+        let newFiles = Set((updated.attachments + updated.tutorialAttachments).map(\.fileName))
+        store.upsertConstructionMethod(updated)
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            Array(oldFiles.subtracting(newFiles)),
+            summary: "engineeringDatabase.updateMethodAttachments"
+        )?.perform()
+        selectedMethodID = updated.id
+        store.scheduleSave()
     }
 
     private func unlinkDeletedMethodReferences(_ removedIDs: [UUID]) {
         let removedIDSet = Set(removedIDs)
         guard !removedIDSet.isEmpty else { return }
 
-        for index in store.siteTodos.indices {
-            let current = store.siteTodos[index].linkedConstructionMethodIDs
+        var siteTodos = store.siteTodos
+        var didUpdateSiteTodos = false
+        for index in siteTodos.indices {
+            let current = siteTodos[index].linkedConstructionMethodIDs
             let filtered = current.filter { !removedIDSet.contains($0) }
             if filtered.count != current.count {
-                store.siteTodos[index].linkedConstructionMethodIDs = filtered
+                siteTodos[index].linkedConstructionMethodIDs = filtered
+                didUpdateSiteTodos = true
             }
         }
+        if didUpdateSiteTodos {
+            store.replaceSiteTodos(siteTodos)
+        }
 
-        for index in store.dailyLogs.indices {
-            let current = store.dailyLogs[index].linkedConstructionMethodIDs
+        var dailyLogs = store.dailyLogs
+        var didUpdateDailyLogs = false
+        for index in dailyLogs.indices {
+            let current = dailyLogs[index].linkedConstructionMethodIDs
             let filtered = current.filter { !removedIDSet.contains($0) }
             if filtered.count != current.count {
-                store.dailyLogs[index].linkedConstructionMethodIDs = filtered
+                dailyLogs[index].linkedConstructionMethodIDs = filtered
+                didUpdateDailyLogs = true
             }
+        }
+        if didUpdateDailyLogs {
+            store.replaceDailyLogs(dailyLogs)
         }
     }
 }

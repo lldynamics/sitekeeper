@@ -15,7 +15,11 @@ struct ProjectFileBrowserView: View {
     @State private var previewURL: URL?
     @State private var selectedProjectId: UUID?
     @State private var selectedCategory: ProjectFileCategory = .images
+    @State private var healthFilter: ProjectFileHealthFilter = .all
     @State private var selectedSplitItemId: String?
+    @State private var deliveryInspectionExportPayload: ExportPayload?
+    @State private var showDeliveryInspectionExporter = false
+    @State private var operationNotice: OperationToastNotice?
 
     private var normalizedQuery: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -29,12 +33,32 @@ struct ProjectFileBrowserView: View {
         FileSearchExecutionKey(keyword: normalizedQuery, signature: fileSearchDataSignature)
     }
 
-    private var filteredProjects: [Project] {
+    private var searchMatchedProjects: [Project] {
         SearchMatcher.filter(
             store.projects,
             keyword: normalizedQuery,
             sort: { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         )
+    }
+
+    private var filteredProjects: [Project] {
+        let result = searchMatchedProjects
+        guard healthFilter != .all else { return result }
+        return result.filter { projectMatchesHealthFilter($0) }
+    }
+
+    private var visibleDeliveryInspections: [ProjectDocumentDeliveryInspection] {
+        searchMatchedProjects
+            .map { ProjectDocumentDeliveryInspection(project: $0, store: store) }
+            .sorted { left, right in
+                if left.isReadyForDelivery != right.isReadyForDelivery {
+                    return !left.isReadyForDelivery
+                }
+                if left.issueDetailCount != right.issueDetailCount {
+                    return left.issueDetailCount > right.issueDetailCount
+                }
+                return left.project.name.localizedStandardCompare(right.project.name) == .orderedAscending
+            }
     }
 
     private var fileSearchResults: [ProjectFileSearchResult] {
@@ -44,7 +68,7 @@ struct ProjectFileBrowserView: View {
 
     private var displayedFileSearchResults: [ProjectFileSearchResult] {
         guard normalizedQuery == normalizedDebouncedQuery else { return [] }
-        return fileSearchResults
+        return fileSearchResults.filter { healthFilter.matches($0.item) }
     }
 
     private var fileSearchDataSignature: Int {
@@ -95,6 +119,9 @@ struct ProjectFileBrowserView: View {
             hasher.combine(document.fileName)
             hasher.combine(document.fileType)
             hasher.combine(document.category)
+            hasher.combine(document.submissionStatus.rawValue)
+            hasher.combine(document.responsiblePerson)
+            hasher.combine(document.formedAt)
             hasher.combine(document.createdAt)
             hasher.combine(document.amount)
             hasher.combine(document.note)
@@ -228,6 +255,7 @@ struct ProjectFileBrowserView: View {
     private var splitCategoryItems: [ProjectFileItem] {
         guard let selectedProjectId else { return [] }
         return ProjectFileCollector.items(for: selectedProjectId, category: selectedCategory, store: store)
+            .filter { healthFilter.matches($0) }
     }
 
     private var selectedSplitItem: ProjectFileItem? {
@@ -244,6 +272,25 @@ struct ProjectFileBrowserView: View {
             }
         }
         .quickLookPreview($previewURL)
+        .fileExporter(
+            isPresented: $showDeliveryInspectionExporter,
+            document: ExportDocument(data: deliveryInspectionExportPayload?.data ?? Data()),
+            contentType: deliveryInspectionExportPayload?.contentType ?? .pdf,
+            defaultFilename: deliveryInspectionExportPayload?.defaultFilename ?? String(localized: "交付体检清单.pdf")
+        ) { result in
+            switch result {
+            case .success:
+                AppHaptics.success()
+                operationNotice = .info(String(localized: "已导出体检清单"))
+            case .failure(let error):
+                if (error as NSError).code != NSUserCancelledError {
+                    AppHaptics.error()
+                    operationNotice = .info(String(format: String(localized: "导出失败：%@"), error.localizedDescription))
+                }
+            }
+            deliveryInspectionExportPayload = nil
+        }
+        .operationToast(notice: $operationNotice)
         .onAppear {
             syncSplitSelectionIfNeeded()
         }
@@ -259,24 +306,170 @@ struct ProjectFileBrowserView: View {
         .onChange(of: selectedCategory) { _, _ in
             syncSplitSelectionIfNeeded()
         }
+        .onChange(of: healthFilter) { _, _ in
+            syncSplitSelectionIfNeeded()
+        }
         .onDisappear {
             isSearchingFiles = false
         }
     }
 
+    @ViewBuilder
+    private func deliveryInspectionSection(isSplitNavigation: Bool) -> some View {
+        let inspections = visibleDeliveryInspections
+        let issueInspections = inspections.filter { !$0.isReadyForDelivery }
+        let issueCount = issueInspections.reduce(0) { $0 + $1.issueDetailCount }
+
+        if !inspections.isEmpty {
+            Section(String(localized: "交付体检")) {
+                if issueInspections.isEmpty {
+                    ProjectFileMicroGuideRow(
+                        icon: "checkmark.seal.fill",
+                        color: .appSuccess,
+                        title: String(localized: "一键体检通过"),
+                        detail: String(localized: "资料类别、原件、归档状态、责任人和形成日期暂未发现交付风险。")
+                    )
+                } else {
+                    ProjectFileMicroGuideRow(
+                        icon: "checklist.unchecked",
+                        color: .appWarning,
+                        title: String(
+                            format: String(localized: "%lld 个项目需处理"),
+                            Int64(issueInspections.count)
+                        ),
+                        detail: String(
+                            format: String(localized: "共 %lld 条交付前检查项，优先处理缺件、退回和未归档资料。"),
+                            Int64(issueCount)
+                        )
+                    )
+
+                    ForEach(issueInspections.prefix(4)) { inspection in
+                        if isSplitNavigation {
+                            ProjectFileDeliveryInspectionRow(inspection: inspection) { issue in
+                                Button {
+                                    selectDeliveryInspection(inspection, issue: issue)
+                                } label: {
+                                    ProjectFileDeliveryIssueLine(issue: issue, showsAction: true)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .listRowBackground(Color.clear)
+                        } else {
+                            ProjectFileDeliveryInspectionRow(inspection: inspection) { issue in
+                                NavigationLink {
+                                    deliveryDestination(for: inspection, issue: issue)
+                                } label: {
+                                    ProjectFileDeliveryIssueLine(issue: issue, showsAction: true)
+                                }
+                            }
+                        }
+                    }
+
+                    if issueInspections.count > 4 {
+                        Text(
+                            String(
+                                format: String(localized: "还有 %lld 个项目待体检处理，可用搜索缩小范围。"),
+                                Int64(issueInspections.count - 4)
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                }
+                deliveryInspectionExportMenu(inspections)
+            }
+        }
+    }
+
+    private func deliveryInspectionExportMenu(_ inspections: [ProjectDocumentDeliveryInspection]) -> some View {
+        Menu {
+            Button {
+                exportDeliveryInspections(inspections, format: .pdf)
+            } label: {
+                Label(String(localized: "导出 PDF"), systemImage: "doc.richtext")
+            }
+            Button {
+                exportDeliveryInspections(inspections, format: .csv)
+            } label: {
+                Label(String(localized: "导出 CSV"), systemImage: "tablecells")
+            }
+        } label: {
+            Label(String(localized: "导出体检清单"), systemImage: "square.and.arrow.up")
+        }
+        .font(.caption.weight(.semibold))
+        .buttonStyle(.bordered)
+    }
+
+    private func exportDeliveryInspections(
+        _ inspections: [ProjectDocumentDeliveryInspection],
+        format: ProjectDocumentDeliveryInspectionExportFormat
+    ) {
+        guard !inspections.isEmpty else { return }
+        deliveryInspectionExportPayload = ProjectDocumentDeliveryInspectionExport.makePayload(
+            for: inspections,
+            format: format
+        )
+        showDeliveryInspectionExporter = true
+    }
+
+    @ViewBuilder
+    private func deliveryDestination(
+        for inspection: ProjectDocumentDeliveryInspection,
+        issue: ProjectDocumentDeliveryInspectionIssue
+    ) -> some View {
+        if let category = issue.kind.preferredCategory {
+            ProjectFileListView(
+                project: inspection.project,
+                category: category,
+                initialHealthFilter: issue.kind.preferredHealthFilter
+            )
+        } else {
+            ProjectFileCategoryView(
+                project: inspection.project,
+                initialHealthFilter: issue.kind.preferredHealthFilter
+            )
+        }
+    }
+
+    private func selectDeliveryInspection(
+        _ inspection: ProjectDocumentDeliveryInspection,
+        issue: ProjectDocumentDeliveryInspectionIssue
+    ) {
+        selectedProjectId = inspection.project.id
+        selectedCategory = issue.kind.preferredCategory ?? deliveryFallbackCategory(for: inspection, issue: issue)
+        healthFilter = issue.kind.preferredHealthFilter
+        selectedSplitItemId = nil
+        syncSplitSelectionIfNeeded()
+    }
+
+    private func deliveryFallbackCategory(
+        for inspection: ProjectDocumentDeliveryInspection,
+        issue: ProjectDocumentDeliveryInspectionIssue
+    ) -> ProjectFileCategory {
+        guard issue.kind == .missingFiles else { return .documents }
+        return ProjectFileCategory.allCases.first { category in
+            ProjectFileCollector.items(for: inspection.project.id, category: category, store: store)
+                .contains { !$0.exists }
+        } ?? .documents
+    }
+
     private var compactBrowserLayout: some View {
         List {
+            deliveryInspectionSection(isSplitNavigation: false)
+
+            ProjectFileHealthFilterSection(selection: $healthFilter)
+
             if !normalizedQuery.isEmpty {
-                Section("文件搜索结果") {
+                Section(String(localized: "文件搜索结果")) {
                     if isSearchingFiles || isBuildingFileIndex || normalizedQuery != normalizedDebouncedQuery {
                         HStack(spacing: 8) {
                             ProgressView()
-                            Text("正在搜索文件…")
+                            Text(String(localized: "正在搜索文件…"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     } else if displayedFileSearchResults.isEmpty {
-                        Text("未找到匹配文件，请尝试不同关键词。")
+                        Text(String(localized: "未找到匹配文件，请尝试不同关键词。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -303,7 +496,7 @@ struct ProjectFileBrowserView: View {
                         }
 
                         if displayedFileSearchResults.count > 30 {
-                            Text("仅显示前 30 条结果，请继续输入缩小范围。")
+                            Text(String(localized: "仅显示前 30 条结果，请继续输入缩小范围。"))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -311,12 +504,12 @@ struct ProjectFileBrowserView: View {
                 }
 
                 if !displayedFileSearchResults.isEmpty {
-                    Section("建议下一步") {
+                    Section(String(localized: "建议下一步")) {
                         ProjectFileMicroGuideRow(
                             icon: "sparkle.magnifyingglass",
                             color: .appDoc,
-                            title: "已命中文件，可直接预览",
-                            detail: "点条目可查看，点右侧菜单可分享或打开。"
+                            title: String(localized: "已命中文件，可直接预览"),
+                            detail: String(localized: "点条目可查看，点右侧菜单可分享或打开。")
                         )
 
                         if missingResultCount > 0 {
@@ -327,12 +520,12 @@ struct ProjectFileBrowserView: View {
                                     format: String(localized: "发现 %lld 个缺失文件"),
                                     Int64(missingResultCount)
                                 ),
-                                detail: "建议回到项目详情重新导入图纸或资料，避免交付时缺件。"
+                                detail: String(localized: "建议回到项目详情重新导入图纸或资料，避免交付时缺件。")
                             )
                             NavigationLink {
                                 ProjectListView(initialOverviewFilter: .active)
                             } label: {
-                                Label("去项目列表排查", systemImage: "arrow.right.circle.fill")
+                                Label(String(localized: "去项目列表排查"), systemImage: "arrow.right.circle.fill")
                             }
                             .buttonStyle(.bordered)
                         }
@@ -342,35 +535,39 @@ struct ProjectFileBrowserView: View {
 
             if filteredProjects.isEmpty {
                 if normalizedQuery.isEmpty {
-                    Section("建议下一步") {
+                    Section(String(localized: "建议下一步")) {
                         ContentUnavailableView(
-                            "暂无项目资料",
+                            String(localized: "暂无项目资料"),
                             systemImage: "folder",
-                            description: Text("先新建项目并补充日志、图纸、票据或随手记附件，这里会自动聚合显示。")
+                            description: Text(String(localized: "先新建项目并补充日志、图纸、票据或随手记附件，这里会自动聚合显示。"))
                         )
                         NavigationLink {
                             ProjectListView(autoOpenComposerToken: 1)
                         } label: {
-                            Label("去新建项目", systemImage: "plus.circle.fill")
+                            Label(String(localized: "去新建项目"), systemImage: "plus.circle.fill")
                         }
                         .buttonStyle(.appProminent())
                     }
                 } else {
-                    Section("建议下一步") {
+                    Section(String(localized: "建议下一步")) {
                         ContentUnavailableView(
-                            "未找到匹配项目",
+                            String(localized: "未找到匹配项目"),
                             systemImage: "magnifyingglass",
-                            description: Text(displayedFileSearchResults.isEmpty ? "请尝试其他关键词。" : "未匹配到项目名，可直接使用上方文件结果。")
+                            description: Text(
+                                displayedFileSearchResults.isEmpty
+                                    ? String(localized: "请尝试其他关键词。")
+                                    : String(localized: "未匹配到项目名，可直接使用上方文件结果。")
+                            )
                         )
                         Button {
                             searchText = ""
                         } label: {
-                            Label("清除关键词", systemImage: "arrow.uturn.backward.circle")
+                            Label(String(localized: "清除关键词"), systemImage: "arrow.uturn.backward.circle")
                         }
                     }
                 }
             } else {
-                Section("项目") {
+                Section(String(localized: "项目")) {
                     ForEach(filteredProjects) { project in
                         let summary = ProjectFileSummary(projectId: project.id, store: store)
                         NavigationLink {
@@ -382,25 +579,29 @@ struct ProjectFileBrowserView: View {
                 }
             }
         }
-        .navigationTitle("项目资料")
+        .navigationTitle(String(localized: "项目资料"))
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "搜索项目或资料文件")
+        .searchable(text: $searchText, prompt: String(localized: "搜索项目或资料文件"))
     }
 
     private var splitBrowserLayout: some View {
         NavigationSplitView {
             List {
+                deliveryInspectionSection(isSplitNavigation: true)
+
+                ProjectFileHealthFilterSection(selection: $healthFilter)
+
                 if !normalizedQuery.isEmpty {
-                    Section("文件搜索结果") {
+                    Section(String(localized: "文件搜索结果")) {
                         if isSearchingFiles || isBuildingFileIndex || normalizedQuery != normalizedDebouncedQuery {
                             HStack(spacing: 8) {
                                 ProgressView()
-                                Text("正在搜索文件…")
+                                Text(String(localized: "正在搜索文件…"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
                         } else if displayedFileSearchResults.isEmpty {
-                            Text("未找到匹配文件，请尝试不同关键词。")
+                            Text(String(localized: "未找到匹配文件，请尝试不同关键词。"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
@@ -429,9 +630,9 @@ struct ProjectFileBrowserView: View {
                     }
                 }
 
-                Section("全部项目") {
+                Section(String(localized: "全部项目")) {
                     if filteredProjects.isEmpty {
-                        Text(normalizedQuery.isEmpty ? "暂无项目" : "未找到匹配项目")
+                        Text(normalizedQuery.isEmpty ? String(localized: "暂无项目") : String(localized: "未找到匹配项目"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -450,8 +651,8 @@ struct ProjectFileBrowserView: View {
                     }
                 }
             }
-            .navigationTitle("项目资料")
-            .searchable(text: $searchText, prompt: "搜索项目或资料文件")
+            .navigationTitle(String(localized: "项目资料"))
+            .searchable(text: $searchText, prompt: String(localized: "搜索项目或资料文件"))
         } content: {
             List {
                 if let selectedProject {
@@ -467,7 +668,7 @@ struct ProjectFileBrowserView: View {
                         }
                     }
 
-                    Section("文件分类") {
+                    Section(String(localized: "文件分类")) {
                         ForEach(ProjectFileCategory.allCases, id: \.self) { category in
                             let count = ProjectFileSummary(projectId: selectedProject.id, store: store).count(for: category)
                             Button {
@@ -498,7 +699,7 @@ struct ProjectFileBrowserView: View {
 
                     Section(selectedCategory.title) {
                         if splitCategoryItems.isEmpty {
-                            Text("当前分类暂无文件")
+                            Text(String(localized: "当前分类暂无文件"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {
@@ -514,13 +715,13 @@ struct ProjectFileBrowserView: View {
                     }
                 } else {
                     ContentUnavailableView(
-                        "请选择项目",
+                        String(localized: "请选择项目"),
                         systemImage: "building.2.crop.circle",
-                        description: Text("左侧是项目列表；选择后查看该项目资料。")
+                        description: Text(String(localized: "左侧是项目列表；选择后查看该项目资料。"))
                     )
                 }
             }
-            .navigationTitle(selectedProject?.name ?? "文件分类")
+            .navigationTitle(selectedProject?.name ?? String(localized: "文件分类"))
             .navigationBarTitleDisplayMode(.inline)
         } detail: {
             Group {
@@ -543,9 +744,15 @@ struct ProjectFileBrowserView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 6) {
-                                LabeledContent("类型", value: item.fileType.uppercased())
-                                LabeledContent("大小", value: item.formattedSize)
-                                LabeledContent("状态", value: item.exists ? "可用" : "文件缺失")
+                                LabeledContent(String(localized: "类型"), value: item.fileType.uppercased())
+                                LabeledContent(String(localized: "大小"), value: item.formattedSize)
+                                LabeledContent(String(localized: "状态"), value: item.exists ? String(localized: "可用") : String(localized: "文件缺失"))
+                                if let documentStatus = item.documentStatus {
+                                    LabeledContent(String(localized: "报验状态"), value: documentStatus.displayName)
+                                }
+                                if item.isLargeFile {
+                                    LabeledContent(String(localized: "体积提示"), value: String(localized: "大文件"))
+                                }
                             }
                             .font(.subheadline)
 
@@ -553,14 +760,14 @@ struct ProjectFileBrowserView: View {
                                 Button {
                                     previewURL = item.url
                                 } label: {
-                                    Label("预览文件", systemImage: "eye")
+                                    Label(String(localized: "预览文件"), systemImage: "eye")
                                 }
                                 .buttonStyle(.appProminent())
                                 ShareLink(item: item.url) {
-                                    Label("分享/打开", systemImage: "square.and.arrow.up")
+                                    Label(String(localized: "分享/打开"), systemImage: "square.and.arrow.up")
                                 }
                             } else {
-                                Text("该文件在本地已缺失，请回到项目详情重新导入。")
+                                Text(String(localized: "该文件在本地已缺失，请回到项目详情重新导入。"))
                                     .font(.caption)
                                     .foregroundStyle(.appRisk)
                             }
@@ -569,13 +776,13 @@ struct ProjectFileBrowserView: View {
                     }
                 } else {
                     ContentUnavailableView(
-                        "请选择文件",
+                        String(localized: "请选择文件"),
                         systemImage: "doc.text.magnifyingglass",
-                        description: Text("在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。")
+                        description: Text(String(localized: "在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。"))
                     )
                 }
             }
-            .navigationTitle("文件预览")
+            .navigationTitle(String(localized: "文件预览"))
             .navigationBarTitleDisplayMode(.inline)
         }
         .navigationSplitViewStyle(.balanced)
@@ -598,6 +805,12 @@ struct ProjectFileBrowserView: View {
         }
         if selectedSplitItemId == nil {
             selectedSplitItemId = splitCategoryItems.first?.id
+        }
+    }
+
+    private func projectMatchesHealthFilter(_ project: Project) -> Bool {
+        ProjectFileCollector.allItems(for: project.id, store: store).contains {
+            healthFilter.matches($0)
         }
     }
 }
@@ -625,15 +838,15 @@ private struct ProjectFileProjectRow: View {
                         .font(.body.weight(.semibold))
                         .lineLimit(1)
                     Spacer()
-                    Text("\(summary.totalCount) 个文件")
+                    Text(String(format: String(localized: "%lld 个文件"), Int64(summary.totalCount)))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(summary.totalCount > 0 ? Color.appPrimaryAction : .secondary)
                 }
                 HStack(spacing: AppSpacing.tight) {
-                    ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .appDoc)
+                    ProjectFileCountChip(title: String(localized: "图片"), value: summary.imageCount, color: .appDoc)
                     ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .appPrimaryAction)
-                    ProjectFileCountChip(title: "资料", value: summary.documentCount, color: .appPrimaryAction)
-                    ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
+                    ProjectFileCountChip(title: String(localized: "资料"), value: summary.documentCount, color: .appPrimaryAction)
+                    ProjectFileCountChip(title: String(localized: "附件"), value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
                 }
                 if !project.location.isEmpty {
                     Text(project.location)
@@ -649,6 +862,122 @@ private struct ProjectFileProjectRow: View {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(isSelected ? Color.appPrimarySurface : Color.clear)
         )
+    }
+}
+
+private struct ProjectFileDeliveryInspectionRow<IssueContent: View>: View {
+    let inspection: ProjectDocumentDeliveryInspection
+    let issueContent: (ProjectDocumentDeliveryInspectionIssue) -> IssueContent
+
+    init(
+        inspection: ProjectDocumentDeliveryInspection,
+        @ViewBuilder issueContent: @escaping (ProjectDocumentDeliveryInspectionIssue) -> IssueContent
+    ) {
+        self.inspection = inspection
+        self.issueContent = issueContent
+    }
+
+    private var visibleIssues: ArraySlice<ProjectDocumentDeliveryInspectionIssue> {
+        inspection.issues.prefix(3)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
+                Image(systemName: "shippingbox.and.arrow.backward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.appWarning)
+                    .frame(width: 18)
+                Text(inspection.project.name)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text(
+                    String(
+                        format: String(localized: "%lld 条"),
+                        Int64(inspection.issueDetailCount)
+                    )
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(Color.appRisk)
+            }
+
+            ForEach(visibleIssues) { issue in
+                issueContent(issue)
+            }
+
+            if inspection.issues.count > visibleIssues.count {
+                Text(
+                    String(
+                        format: String(localized: "另有 %lld 类问题"),
+                        Int64(inspection.issues.count - visibleIssues.count)
+                    )
+                )
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, AppSpacing.tight)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.appWarning.opacity(0.08))
+        )
+    }
+}
+
+private struct ProjectFileDeliveryIssueLine: View {
+    let issue: ProjectDocumentDeliveryInspectionIssue
+    var showsAction = false
+
+    private var sampleText: String {
+        let text = issue.samples.prefix(3).joined(separator: "、")
+        if issue.samples.count > 3 {
+            return String(
+                format: String(localized: "%@ 等"),
+                text
+            )
+        }
+        return text
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 7) {
+            Image(systemName: issue.kind.systemImage)
+                .font(.caption2.weight(.bold))
+                .foregroundStyle(issue.kind.tint)
+                .frame(width: 14, height: 14)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(
+                        String(
+                            format: String(localized: "%@ %lld"),
+                            issue.kind.title,
+                            Int64(issue.count)
+                        )
+                    )
+                    .font(.caption.weight(.semibold))
+
+                    if showsAction {
+                        Text(issue.kind.actionTitle)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(issue.kind.tint)
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(issue.kind.tint)
+                    }
+                }
+
+                if !sampleText.isEmpty {
+                    Text(sampleText)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+        }
     }
 }
 
@@ -672,6 +1001,18 @@ private struct ProjectFileSplitItemRow: View {
                 HStack(spacing: AppSpacing.tight) {
                     Text(item.fileType.uppercased())
                     Text(item.formattedSize)
+                    if let status = item.documentStatus {
+                        Text(status.displayName)
+                            .foregroundStyle(status.requiresArchiveAttention ? Color.appWarning : Color.secondary)
+                    }
+                    if item.hasDocumentLedgerIssues {
+                        Text(String(localized: "台账缺项"))
+                            .foregroundStyle(.appWarning)
+                    }
+                    if item.isLargeFile {
+                        Text(String(localized: "大文件"))
+                            .foregroundStyle(.appRisk)
+                    }
                 }
                 .font(.caption2.weight(.semibold))
                 .foregroundStyle(item.exists ? Color.secondary : Color.appRisk)

@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ProjectEditSheet: View {
+    @Environment(DataStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let project: Project
+    let progressTasks: [ProgressTask]
     let onSave: (Project) -> Void
 
     @State private var name: String
@@ -15,10 +17,16 @@ struct ProjectEditSheet: View {
     @State private var contractAmount: String
     @State private var paymentStatus: PaymentStatus
     @State private var requiredDocumentCategories: Set<ProjectDocumentCategory>
+    @State private var recommendationStage: ProjectDocumentRecommendationStage
     @FocusState private var isInputFocused: Bool
 
-    init(project: Project, onSave: @escaping (Project) -> Void) {
+    private var savedDocumentChecklistTemplates: [ProjectDocumentChecklistTemplate] {
+        ProjectDocumentChecklistTemplate.customTemplates(from: store.templates)
+    }
+
+    init(project: Project, progressTasks: [ProgressTask] = [], onSave: @escaping (Project) -> Void) {
         self.project = project
+        self.progressTasks = progressTasks
         self.onSave = onSave
         _name = State(initialValue: project.name)
         _location = State(initialValue: project.location)
@@ -30,6 +38,10 @@ struct ProjectEditSheet: View {
         _contractAmount = State(initialValue: project.contractAmount)
         _paymentStatus = State(initialValue: project.paymentStatus)
         _requiredDocumentCategories = State(initialValue: Set(project.requiredDocumentCategories))
+        _recommendationStage = State(initialValue: ProjectDocumentCategory.recommendedStage(
+            for: project,
+            progressTasks: progressTasks
+        ))
     }
 
     var body: some View {
@@ -51,7 +63,11 @@ struct ProjectEditSheet: View {
                         .keyboardType(.phonePad)
                         .focused($isInputFocused)
                 }
-                ProjectDocumentChecklistTemplateSection(selectedCategories: $requiredDocumentCategories)
+                ProjectDocumentChecklistTemplateSection(
+                    selectedCategories: $requiredDocumentCategories,
+                    recommendationStage: $recommendationStage,
+                    customTemplates: savedDocumentChecklistTemplates
+                )
                 Section(String(localized: "工期")) {
                     TextField(String(localized: "开工日期(yyyy-MM-dd)"), text: $startDate)
                         .focused($isInputFocused)

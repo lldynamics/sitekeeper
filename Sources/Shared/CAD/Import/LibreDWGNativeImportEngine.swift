@@ -10,7 +10,26 @@ extension CADPoC {
     struct LibreDWGNativeImportEngine: SiteKeeperCADKernel.CADImportEngine {
         typealias Kernel = SiteKeeperCADKernel
 
-        let id = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v1"
+        private static let nativePaperLayoutID = "paper"
+        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v2"
+        var preferredTextCodePage: Int32?
+        var preferredTextBigFont: Int32?
+        var fontMappings: [CADRendererFontMapping]
+
+        init(
+            preferredTextCodePage: Int32? = nil,
+            preferredTextBigFont: Int32? = nil,
+            fontMappings: [CADRendererFontMapping] = []
+        ) {
+            self.preferredTextCodePage = preferredTextCodePage == 0 ? nil : preferredTextCodePage
+            self.preferredTextBigFont = preferredTextBigFont == 0 ? nil : preferredTextBigFont
+            self.fontMappings = fontMappings
+        }
+
+        var id: String {
+            let textKey = textOptionCacheKey
+            return textKey.isEmpty ? baseID : "\(baseID).\(textKey)"
+        }
 
         func canImport(file: Kernel.CADFile) -> Bool {
             switch file.format {
@@ -77,12 +96,16 @@ extension CADPoC {
             let rawEllipseCount = Int(nativeResult.trace.rawEllipseCount)
             let rawSplineCount = Int(nativeResult.trace.rawSplineCount)
             let rawFilledShapeCount = Int(nativeResult.trace.rawFilledShapeCount)
+            let rawProxyEntityCount = Int(nativeResult.trace.rawProxyEntityCount)
+            let rawTianzhengProxyCount = Int(nativeResult.trace.rawTianzhengProxyCount)
             let expandedInsertEntityCount = Int(nativeResult.trace.exportedInsertEntityCount)
             let exportedDimensionCount = Int(nativeResult.trace.exportedDimensionCount)
             let exportedHatchCount = Int(nativeResult.trace.exportedHatchCount)
             let exportedEllipseCount = Int(nativeResult.trace.exportedEllipseCount)
             let exportedSplineCount = Int(nativeResult.trace.exportedSplineCount)
             let exportedFilledShapeCount = Int(nativeResult.trace.exportedFilledShapeCount)
+            let exportedProxyEntityCount = Int(nativeResult.trace.exportedProxyEntityCount)
+            let exportedTianzhengProxyCount = Int(nativeResult.trace.exportedTianzhengProxyCount)
             let rawEntityCount = Int(nativeResult.trace.rawEntityCount)
             let entityCount = Int(nativeResult.entityCount)
             let nativeEntities = UnsafeBufferPointer(
@@ -101,7 +124,7 @@ extension CADPoC {
                     severity: .info,
                     code: "CAD_POC_LIBREDWG_IOS_NATIVE_USED",
                     message: "LibreDWG was called inside the iOS process and converted basic 2D geometry into CADEntity.",
-                    detail: "status=\(status), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount)"
+                    detail: "status=\(status), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
                 )
             )
             if status != 0 {
@@ -224,6 +247,26 @@ extension CADPoC {
                     )
                 )
             }
+            if rawProxyEntityCount > 0 {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_LIBREDWG_PROXY_ENTITY_PRESERVED",
+                        message: "DWG proxy entities were preserved as diagnostics and are not counted as drawable geometry.",
+                        detail: "rawProxyEntityCount=\(rawProxyEntityCount), exportedProxyEntityCount=\(exportedProxyEntityCount)"
+                    )
+                )
+            }
+            if rawTianzhengProxyCount > 0 {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_LIBREDWG_TIANZHENG_PROXY_PRESERVED",
+                        message: "Tianzheng/TCH proxy entities were preserved as diagnostics; custom object geometry is not decoded by the CAD Metal PoC.",
+                        detail: "rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
+                    )
+                )
+            }
             if rawEntityCount == 0 {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
@@ -235,6 +278,16 @@ extension CADPoC {
                 )
             }
             Self.appendTextDiagnostics(from: textTrace, to: &diagnostics)
+            if rawEntityCount > 0, !entities.contains(where: \.isRenderable) {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_LIBREDWG_NO_DRAWABLE_GEOMETRY",
+                        message: "LibreDWG returned entities, but none were drawable by the CAD Metal PoC.",
+                        detail: "rawEntityCount=\(rawEntityCount), exportedEntityCount=\(entityCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount)"
+                    )
+                )
+            }
 
             let bounds = entities.reduce(Kernel.CADBounds.empty) { $0.union($1.bounds) }
             let layerIDs = Set(entities.map(\.layerID))
@@ -249,11 +302,12 @@ extension CADPoC {
                     )
                 }
 
+            let layouts = Self.nativeLayouts(from: entities)
             var database = Kernel.CADDatabase(
                 file: file,
                 extents: bounds,
                 layers: layers,
-                layouts: [.modelSpace],
+                layouts: layouts,
                 entities: entities,
                 diagnostics: diagnostics,
                 importSource: id,
@@ -284,7 +338,11 @@ extension CADPoC {
                 rawDimensionCount: rawDimensionCount,
                 rawHatchCount: rawHatchCount,
                 rawTextCount: rawTextCount,
+                rawProxyEntityCount: rawProxyEntityCount,
+                rawTianzhengProxyCount: rawTianzhengProxyCount,
                 expandedInsertEntityCount: expandedInsertEntityCount,
+                exportedProxyEntityCount: exportedProxyEntityCount,
+                exportedTianzhengProxyCount: exportedTianzhengProxyCount,
                 entityCount: database.entityCount,
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
@@ -336,26 +394,49 @@ extension CADPoC {
                 return .image
             case SiteKeeperLibreDWGEntityKindWipeout.rawValue:
                 return .hatch
+            case SiteKeeperLibreDWGEntityKindProxy.rawValue,
+                 SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue:
+                return .proxy
             default:
                 return nil
             }
+        }
+
+        func entityKindForNativeKindForTesting(_ nativeKind: Int32) -> Kernel.CADEntityKind? {
+            entityKind(for: nativeKind)
+        }
+
+        func makeNativeEntityForTesting(_ nativeEntity: SiteKeeperLibreDWGEntity) -> Kernel.CADEntity? {
+            makeNativeEntity(nativeEntity)
         }
 
         private func makeNativeEntity(_ nativeEntity: SiteKeeperLibreDWGEntity) -> Kernel.CADEntity? {
             guard let kind = entityKind(for: nativeEntity.kind) else {
                 return nil
             }
-            let layerID = Self.decodedNativeString(nativeEntity.layerName) ?? Kernel.CADLayer.default.id
+            let layerID = decodedNativeString(nativeEntity.layerName) ?? Kernel.CADLayer.default.id
             let normalizedLayerID = layerID.isEmpty ? Kernel.CADLayer.default.id : layerID
-            let sourceHandle = Self.decodedNativeString(nativeEntity.sourceHandle)
+            let sourceHandle = decodedNativeString(nativeEntity.sourceHandle)
+            let layoutID = nativeLayoutID(for: nativeEntity)
 
             switch kind {
+            case .proxy:
+                return makeNativeProxyEntity(
+                    nativeEntity,
+                    layerID: normalizedLayerID,
+                    layoutID: layoutID,
+                    sourceHandle: sourceHandle
+                )
             case .text, .mtext, .attrib:
                 guard let rawTextPointer = nativeEntity.rawText else { return nil }
-                let rawText = Self.decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
-                let styleName = Self.decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
-                let fontName = Self.decodedNativeString(nativeEntity.fontName)
-                let bigFontName = Self.decodedNativeString(nativeEntity.bigFontName)
+                let rawText = decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
+                let styleName = decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
+                let fontName = decodedNativeString(nativeEntity.fontName)
+                let bigFontName = resolvedBigFontName(
+                    nativeBigFontName: decodedNativeString(nativeEntity.bigFontName),
+                    fontName: fontName,
+                    styleName: styleName
+                )
                 let height = nativeEntity.textHeight.isFinite && nativeEntity.textHeight > 0
                     ? nativeEntity.textHeight
                     : 2.5
@@ -383,7 +464,7 @@ extension CADPoC {
                 return Kernel.CADEntity(
                     kind: kind,
                     layerID: normalizedLayerID,
-                    layoutID: Kernel.CADLayout.modelSpace.id,
+                    layoutID: layoutID,
                     color: nativeEntity.colorARGB,
                     lineType: "Continuous",
                     lineWeight: max(nativeEntity.lineWeight, 2),
@@ -396,10 +477,14 @@ extension CADPoC {
                 var text: Kernel.CADTextRun?
                 var bounds = path?.bounds ?? .empty
                 if let rawTextPointer = nativeEntity.rawText {
-                    let rawText = Self.decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
-                    let styleName = Self.decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
-                    let fontName = Self.decodedNativeString(nativeEntity.fontName)
-                    let bigFontName = Self.decodedNativeString(nativeEntity.bigFontName)
+                    let rawText = decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
+                    let styleName = decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
+                    let fontName = decodedNativeString(nativeEntity.fontName)
+                    let bigFontName = resolvedBigFontName(
+                        nativeBigFontName: decodedNativeString(nativeEntity.bigFontName),
+                        fontName: fontName,
+                        styleName: styleName
+                    )
                     let height = nativeEntity.textHeight.isFinite && nativeEntity.textHeight > 0
                         ? nativeEntity.textHeight
                         : 2.5
@@ -431,7 +516,7 @@ extension CADPoC {
                 return Kernel.CADEntity(
                     kind: .dimension,
                     layerID: normalizedLayerID,
-                    layoutID: Kernel.CADLayout.modelSpace.id,
+                    layoutID: layoutID,
                     color: nativeEntity.colorARGB,
                     lineType: "Continuous",
                     lineWeight: max(nativeEntity.lineWeight, 2),
@@ -455,7 +540,7 @@ extension CADPoC {
                 return Kernel.CADEntity(
                     kind: kind,
                     layerID: normalizedLayerID,
-                    layoutID: Kernel.CADLayout.modelSpace.id,
+                    layoutID: layoutID,
                     color: nativeEntity.colorARGB,
                     lineType: "Continuous",
                     lineWeight: max(nativeEntity.lineWeight, 2),
@@ -470,6 +555,57 @@ extension CADPoC {
                     unsupportedReason: nativeUnsupportedReason(for: nativeEntity.kind)
                 )
             }
+        }
+
+        private func makeNativeProxyEntity(
+            _ nativeEntity: SiteKeeperLibreDWGEntity,
+            layerID: String,
+            layoutID: String,
+            sourceHandle: String?
+        ) -> Kernel.CADEntity {
+            let objectName = decodedNativeString(nativeEntity.objectName) ?? "DWG_PROXY_ENTITY"
+            let reason = decodedNativeString(nativeEntity.unsupportedReason)
+                ?? nativeUnsupportedReason(for: nativeEntity.kind)
+                ?? "DWG proxy entity preserved as diagnostic metadata."
+            let isTianzheng = UInt32(nativeEntity.kind) == SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue
+            let code = isTianzheng
+                ? "CAD_POC_LIBREDWG_TIANZHENG_PROXY_ENTITY"
+                : "CAD_POC_LIBREDWG_PROXY_ENTITY"
+            let message = isTianzheng
+                ? "Tianzheng/TCH proxy object was preserved as non-renderable diagnostic metadata."
+                : "DWG proxy object was preserved as non-renderable diagnostic metadata."
+
+            return Kernel.CADEntity(
+                kind: .proxy,
+                layerID: layerID,
+                layoutID: layoutID,
+                color: nativeEntity.colorARGB,
+                lineType: "Continuous",
+                lineWeight: max(nativeEntity.lineWeight, 2),
+                bounds: .empty,
+                sourceHandle: sourceHandle,
+                diagnostics: Kernel.CADDrawingDiagnostics(entries: [
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: code,
+                        message: message,
+                        detail: "handle=\(sourceHandle ?? ""); objectName=\(objectName); reason=\(reason)"
+                    )
+                ]),
+                unsupportedReason: reason
+            )
+        }
+
+        private func nativeLayoutID(for nativeEntity: SiteKeeperLibreDWGEntity) -> String {
+            nativeEntity.layoutSpace == 1 ? Self.nativePaperLayoutID : Kernel.CADLayout.modelSpace.id
+        }
+
+        private static func nativeLayouts(from entities: [Kernel.CADEntity]) -> [Kernel.CADLayout] {
+            var layouts: [Kernel.CADLayout] = [.modelSpace]
+            if entities.contains(where: { $0.layoutID == nativePaperLayoutID }) {
+                layouts.append(Kernel.CADLayout(id: nativePaperLayoutID, name: "Paper", isModelSpace: false))
+            }
+            return layouts
         }
 
         private func nativeDiagnostics(
@@ -571,6 +707,10 @@ extension CADPoC {
                 return "Image placeholder; raster image drawing is not implemented in the CAD Metal PoC."
             case SiteKeeperLibreDWGEntityKindUnderlay.rawValue:
                 return "Underlay placeholder; referenced PDF/DWF/DGN drawing is not rendered in the CAD Metal PoC."
+            case SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue:
+                return "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the CAD Metal PoC."
+            case SiteKeeperLibreDWGEntityKindProxy.rawValue:
+                return "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the CAD Metal PoC."
             default:
                 return nil
             }
@@ -701,7 +841,7 @@ extension CADPoC {
             return colors
         }
 
-        private static func decodedNativeString(_ pointer: UnsafePointer<CChar>?) -> String? {
+        private func decodedNativeString(_ pointer: UnsafePointer<CChar>?) -> String? {
             guard let pointer else { return nil }
             let length = strlen(pointer)
             guard length > 0 else { return nil }
@@ -723,6 +863,72 @@ extension CADPoC {
             return fallback.isEmpty ? nil : fallback
         }
 
+        private func resolvedBigFontName(
+            nativeBigFontName: String?,
+            fontName: String?,
+            styleName: String
+        ) -> String? {
+            if let mapped = mappedBigFontName(
+                nativeBigFontName: nativeBigFontName,
+                fontName: fontName,
+                styleName: styleName
+            ) {
+                return mapped
+            }
+            if let preferred = bigFontName(forBridgeCode: preferredTextBigFont) {
+                return preferred
+            }
+            return nativeBigFontName
+        }
+
+        private func mappedBigFontName(
+            nativeBigFontName: String?,
+            fontName: String?,
+            styleName: String
+        ) -> String? {
+            for mapping in fontMappings where !mapping.pattern.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                let pattern = mapping.pattern
+                let candidate: String
+                switch mapping.sourceKind {
+                case "bigfont":
+                    candidate = nativeBigFontName ?? ""
+                case "font":
+                    candidate = fontName ?? ""
+                case "style":
+                    candidate = styleName
+                case "any":
+                    candidate = [nativeBigFontName, fontName, styleName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                default:
+                    candidate = [nativeBigFontName, fontName, styleName]
+                        .compactMap { $0 }
+                        .joined(separator: " ")
+                }
+                guard candidate.localizedCaseInsensitiveContains(pattern),
+                      let bigFont = bigFontName(forBridgeCode: mapping.bigFont) else {
+                    continue
+                }
+                return bigFont
+            }
+            return nil
+        }
+
+        private func bigFontName(forBridgeCode bridgeCode: Int32?) -> String? {
+            switch bridgeCode {
+            case 1:
+                return "gbcbig.shx"
+            case 2:
+                return "hztxt.shx"
+            case 3:
+                return "hzfs.shx"
+            case 4:
+                return "big5.shx"
+            default:
+                return nil
+            }
+        }
+
         private static let gb18030Encoding = String.Encoding(
             rawValue: CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
@@ -741,8 +947,64 @@ extension CADPoC {
             )
         )
 
-        private static var nativeTextEncodings: [String.Encoding] {
-            [.utf8, gb18030Encoding, gbkEncoding, gb2312Encoding, .isoLatin1]
+        private static let big5Encoding = String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.big5.rawValue)
+            )
+        )
+
+        private var nativeTextEncodings: [String.Encoding] {
+            var encodings: [String.Encoding] = []
+            if let preferred = preferredNativeTextEncoding {
+                encodings.append(preferred)
+            }
+            encodings.append(contentsOf: [
+                .utf8,
+                Self.gb18030Encoding,
+                Self.gbkEncoding,
+                Self.gb2312Encoding,
+                Self.big5Encoding,
+                .isoLatin1
+            ])
+            var seen = Set<UInt>()
+            return encodings.filter { encoding in
+                seen.insert(encoding.rawValue).inserted
+            }
+        }
+
+        private var preferredNativeTextEncoding: String.Encoding? {
+            switch preferredTextCodePage {
+            case 936:
+                return Self.gbkEncoding
+            case 54936:
+                return Self.gb18030Encoding
+            case 950:
+                return Self.big5Encoding
+            default:
+                if preferredTextBigFont == 4 {
+                    return Self.big5Encoding
+                }
+                return nil
+            }
+        }
+
+        private var textOptionCacheKey: String {
+            var parts: [String] = []
+            if let preferredTextCodePage {
+                parts.append("cp\(preferredTextCodePage)")
+            }
+            if let preferredTextBigFont {
+                parts.append("bf\(preferredTextBigFont)")
+            }
+            if !fontMappings.isEmpty {
+                let mappingKey = fontMappings
+                    .map { "\($0.sourceKind):\($0.pattern):\($0.bigFont)" }
+                    .sorted()
+                    .joined(separator: ",")
+                    .stableCADImportHash
+                parts.append("fm\(mappingKey)")
+            }
+            return parts.joined(separator: "-")
         }
 
         private func importDXFGeometry(
@@ -3291,5 +3553,14 @@ private extension SiteKeeperCADKernel.CADPath {
 private extension String {
     var containsUnicodeReplacementCharacter: Bool {
         unicodeScalars.contains { $0.value == 0xFFFD }
+    }
+
+    var stableCADImportHash: String {
+        var hash: UInt64 = 0xcbf29ce484222325
+        for byte in utf8 {
+            hash ^= UInt64(byte)
+            hash &*= 0x100000001b3
+        }
+        return String(format: "%016llx", hash)
     }
 }

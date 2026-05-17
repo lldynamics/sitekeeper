@@ -124,7 +124,7 @@ struct QuickNoteEditSheet: View {
                         projectId: projectId,
                         initialNote: currentText.isEmpty ? updatedNote.title : currentText
                     ) { record in
-                        store.projectFinancialRecords.append(record)
+                        store.appendProjectFinancialRecord(record)
                         store.scheduleSave()
                         showMessage("已新增项目账目。")
                     }
@@ -214,7 +214,7 @@ struct QuickNoteEditSheet: View {
     private func convertToTodo() {
         guard let projectId else { return showNeedProject() }
         let text = currentText
-        store.siteTodos.append(SiteTodo(
+        store.appendSiteTodo(SiteTodo(
             title: String((text.isEmpty ? updatedNote.title : text).prefix(40)),
             owner: "",
             dueDate: Formatters.date.string(from: Date()),
@@ -284,7 +284,7 @@ struct QuickNoteEditSheet: View {
                 return
             }
             await MainActor.run {
-                store.projectDocuments.append(ProjectDocument(
+                store.appendProjectDocument(ProjectDocument(
                     projectId: projectId,
                     title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
                     category: .constructionRecord,

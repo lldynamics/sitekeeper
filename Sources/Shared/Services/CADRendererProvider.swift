@@ -72,6 +72,7 @@ struct CADRendererPerformanceSnapshot: Equatable {
     let renderCommandCount: Int
     let textCommandCount: Int
     let textOverlayCount: Int
+    let textOverlaySkippedCount: Int
     let renderMs: Double
     let firstFrameMs: Double
     let totalEntityCount: Int
@@ -98,6 +99,7 @@ struct CADRendererPerformanceSnapshot: Equatable {
         renderCommandCount: Int? = nil,
         textCommandCount: Int = 0,
         textOverlayCount: Int = 0,
+        textOverlaySkippedCount: Int = 0,
         renderMs: Double? = nil,
         firstFrameMs: Double? = nil,
         totalEntityCount: Int? = nil,
@@ -146,6 +148,7 @@ struct CADRendererPerformanceSnapshot: Equatable {
         self.renderCommandCount = resolvedRenderCommandCount
         self.textCommandCount = textCommandCount
         self.textOverlayCount = textOverlayCount
+        self.textOverlaySkippedCount = textOverlaySkippedCount
         self.renderMs = renderMs ?? frameTimeMilliseconds
         self.firstFrameMs = firstFrameMs ?? frameTimeMilliseconds
         self.totalEntityCount = resolvedTotalEntityCount

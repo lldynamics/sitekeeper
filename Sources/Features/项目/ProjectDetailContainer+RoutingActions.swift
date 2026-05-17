@@ -245,8 +245,7 @@ extension ProjectDetailContainer {
     }
 
     func updateProject(_ updated: Project) {
-        guard let idx = projectStore.projects.firstIndex(where: { $0.id == updated.id }) else { return }
-        store.projects[idx] = updated
+        guard store.updateProject(updated) else { return }
         store.scheduleSave()
     }
 

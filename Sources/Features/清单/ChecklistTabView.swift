@@ -271,10 +271,6 @@ struct ChecklistTabView: View {
             ConstructionMethodLibraryView()
         case .cadViewer:
             CADViewerToolView()
-        case .export:
-            DataManagementView(initialRoute: .backup)
-        case .template:
-            TemplateView()
         }
     }
 }

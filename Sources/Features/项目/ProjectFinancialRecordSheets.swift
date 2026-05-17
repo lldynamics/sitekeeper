@@ -744,10 +744,11 @@ struct ProjectFinancialAttachmentSheet: View {
     let onAttach: (ProjectDocument) -> Void
     let onBulkSetCategory: ([ProjectDocument], ProjectDocumentCategory) -> Void
     let onScan: () -> Void
-    let onImportFiles: ([URL]) -> Void
+    let onImportFiles: ([URL], ProjectDocumentImportLedgerSettings) -> Void
     let onImportImage: (UIImage, String) -> Void
 
     @State private var showFileImporter = false
+    @State private var pendingDocumentImportRequest: ProjectDocumentImportConfirmationRequest?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showImagePicker = false
     @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
@@ -946,7 +947,19 @@ struct ProjectFinancialAttachmentSheet: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                onImportFiles(urls)
+                pendingDocumentImportRequest = ProjectDocumentImportConfirmationRequest(
+                    urls: urls,
+                    defaultSettings: importLedgerDefaultSettings
+                )
+            }
+        }
+        .sheet(item: $pendingDocumentImportRequest) { request in
+            ProjectDocumentImportConfirmationSheet(
+                urls: request.urls,
+                defaultSettings: request.defaultSettings
+            ) { settings in
+                onImportFiles(request.urls, settings)
+                pendingDocumentImportRequest = nil
             }
         }
         .sheet(isPresented: $showImagePicker) {
@@ -976,6 +989,13 @@ struct ProjectFinancialAttachmentSheet: View {
             }
             selectedPhotoItem = nil
         }
+    }
+
+    private var importLedgerDefaultSettings: ProjectDocumentImportLedgerSettings {
+        ProjectDocumentImportLedgerSettings(
+            category: ProjectDetailFinanceDocumentHelper.documentCategory(for: record.category),
+            formedAt: record.date
+        )
     }
 
     private func toggleLinked(_ id: UUID) {

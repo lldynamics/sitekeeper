@@ -603,7 +603,7 @@ struct CalculatorResultCard: View {
             createdAt: timestamp,
             updatedAt: timestamp
         )
-        store.quickNotes.insert(note, at: 0)
+        store.insertQuickNoteAtTop(note)
         store.scheduleSave()
         presentSaveSuccess(
             calculatorLocFormat("已保存到 %@ 的随手记", project.name),
@@ -624,18 +624,19 @@ struct CalculatorResultCard: View {
         \(copyText)
         """
         if let existingIndex = store.dailyLogs.firstIndex(where: { $0.projectId == project.id && $0.date == today }) {
-            let current = store.dailyLogs[existingIndex].content.trimmingCharacters(in: .whitespacesAndNewlines)
-            store.dailyLogs[existingIndex].content = current.isEmpty ? block : "\(current)\n\n\(block)"
+            var existing = store.dailyLogs[existingIndex]
+            let current = existing.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            existing.content = current.isEmpty ? block : "\(current)\n\n\(block)"
+            store.updateDailyLog(existing)
         } else {
-            store.dailyLogs.insert(
+            store.insertDailyLogAtTop(
                 DailyLog(
                     date: today,
                     weather: autoWeatherNow(),
                     content: block,
                     workers: "0",
                     projectId: project.id
-                ),
-                at: 0
+                )
             )
         }
         store.scheduleSave()

@@ -28,7 +28,9 @@ typedef enum SiteKeeperLibreDWGEntityKind {
     SiteKeeperLibreDWGEntityKindMLine = 18,
     SiteKeeperLibreDWGEntityKindImage = 19,
     SiteKeeperLibreDWGEntityKindWipeout = 20,
-    SiteKeeperLibreDWGEntityKindUnderlay = 21
+    SiteKeeperLibreDWGEntityKindUnderlay = 21,
+    SiteKeeperLibreDWGEntityKindProxy = 22,
+    SiteKeeperLibreDWGEntityKindTianzhengProxy = 23
 } SiteKeeperLibreDWGEntityKind;
 
 typedef struct SiteKeeperLibreDWGPoint {
@@ -41,12 +43,15 @@ typedef struct SiteKeeperLibreDWGEntity {
     SiteKeeperLibreDWGPoint *points;
     int32_t pointCount;
     int32_t isClosed;
+    int32_t layoutSpace;
     char *layerName;
     char *sourceHandle;
     char *rawText;
     char *textStyleName;
     char *fontName;
     char *bigFontName;
+    char *objectName;
+    char *unsupportedReason;
     uint32_t colorARGB;
     double lineWeight;
     double textX;
@@ -75,6 +80,8 @@ typedef struct SiteKeeperLibreDWGTrace {
     int32_t rawEllipseCount;
     int32_t rawSplineCount;
     int32_t rawFilledShapeCount;
+    int32_t rawProxyEntityCount;
+    int32_t rawTianzhengProxyCount;
     int32_t exportedLineCount;
     int32_t exportedPolylineCount;
     int32_t exportedCircleCount;
@@ -86,6 +93,8 @@ typedef struct SiteKeeperLibreDWGTrace {
     int32_t exportedEllipseCount;
     int32_t exportedSplineCount;
     int32_t exportedFilledShapeCount;
+    int32_t exportedProxyEntityCount;
+    int32_t exportedTianzhengProxyCount;
     double minX;
     double minY;
     double maxX;

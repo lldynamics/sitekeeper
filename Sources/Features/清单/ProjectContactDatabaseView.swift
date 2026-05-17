@@ -171,17 +171,15 @@ struct ProjectContactDatabaseView: View {
         .onAppear(perform: openFocusedContactIfNeeded)
         .sheet(isPresented: $showAdd) {
             ProjectContactDatabaseEditSheet(contact: nil, projects: store.projects, initialProjectId: selectedProjectId) { contact in
-                store.projectContacts.insert(contact, at: 0)
+                store.upsertProjectContact(contact, insertAtTopWhenNew: true)
                 store.scheduleSave()
                 showAdd = false
             }
         }
         .sheet(item: $editingContact) { contact in
             ProjectContactDatabaseEditSheet(contact: contact, projects: store.projects, initialProjectId: contact.projectId) { updated in
-                if let index = store.projectContacts.firstIndex(where: { $0.id == updated.id }) {
-                    store.projectContacts[index] = updated
-                    store.scheduleSave()
-                }
+                store.upsertProjectContact(updated)
+                store.scheduleSave()
                 editingContact = nil
             } onDelete: { target in
                 deleteContact(target)
@@ -329,10 +327,7 @@ struct ProjectContactDatabaseView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.projectContacts = deletion.restoredItems(
-                    current: store.projectContacts,
-                    id: \.id
-                )
+                store.restoreProjectContacts(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
@@ -558,7 +553,7 @@ struct ProjectContactDatabaseView: View {
             phone: imported.primaryPhone,
             note: noteLines.joined(separator: "\n")
         )
-        store.projectContacts.insert(contact, at: 0)
+        store.upsertProjectContact(contact, insertAtTopWhenNew: true)
         store.scheduleSave()
         selectedProjectId = projectId
         AppHaptics.success()

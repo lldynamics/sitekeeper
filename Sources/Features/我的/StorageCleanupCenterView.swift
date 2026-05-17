@@ -1155,13 +1155,13 @@ private struct StorageCleanupUndoSnapshot: Codable {
 
     @MainActor
     func restore(into store: DataStore) {
-        store.dailyLogs = dailyLogs
-        store.siteTodos = siteTodos
-        store.quickNotes = quickNotes
-        store.projectDrawings = projectDrawings
-        store.projectDocuments = projectDocuments
-        store.projectFinancialRecords = projectFinancialRecords
-        store.projectWarehouseMovements = projectWarehouseMovements
+        store.replaceDailyLogs(dailyLogs)
+        store.replaceSiteTodos(siteTodos)
+        store.replaceQuickNotes(quickNotes)
+        store.replaceProjectDrawings(projectDrawings)
+        store.replaceProjectDocuments(projectDocuments)
+        store.replaceProjectFinancialRecords(projectFinancialRecords)
+        store.replaceProjectWarehouseMovements(projectWarehouseMovements)
     }
 }
 
@@ -1482,7 +1482,14 @@ private enum StorageCleanupTrashStore {
                 withIntermediateDirectories: true
             )
             if manager.fileExists(atPath: originalURL.path) {
-                try manager.removeItem(at: trashedURL)
+                _ = try FileOps.removeIfExists(
+                    at: trashedURL,
+                    context: .init(
+                        event: "storage_cleanup.trash_restore_cleanup",
+                        category: .fileStorage,
+                        source: "StorageCleanupTrashStore.restore"
+                    )
+                )
             } else {
                 try manager.moveItem(at: trashedURL, to: originalURL)
             }
@@ -1516,7 +1523,14 @@ private enum StorageCleanupTrashStore {
         }
         guard FileManager.default.fileExists(atPath: batchURL.path) else { return }
         do {
-            try FileManager.default.removeItem(at: batchURL)
+            _ = try FileOps.removeIfExists(
+                at: batchURL,
+                context: .init(
+                    event: "storage_cleanup.trash_batch_remove",
+                    category: .fileStorage,
+                    source: "StorageCleanupTrashStore.removeBatchDirectory"
+                )
+            )
         } catch {
             throw StorageCleanupTrashError.permanentDeleteFailed(batchID.uuidString)
         }

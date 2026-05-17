@@ -335,8 +335,10 @@ struct ProjectDetailModeSectionsView: View {
                 onCapturePhoto: onCaptureDocumentPhoto
             )
             ProjectDocumentsView(
+                project: project,
                 documents: relatedDocuments,
                 requiredCategories: project.requiredDocumentCategories,
+                progressTasks: relatedProgress,
                 financialRecords: relatedFinancialRecords,
                 constructionMethods: constructionMethods,
                 icon: ProjectDetailFinanceDocumentHelper.documentIcon(_:),

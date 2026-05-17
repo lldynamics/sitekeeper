@@ -57,7 +57,7 @@ struct DataStoreTests {
     @Test func calculationHistoryRemovalReturnsRestorableResult() {
         let first = HistoryRecord(tool: "墙面", input: "A", result: "1", date: "2026-05-16 10:00")
         let second = HistoryRecord(tool: "照明", input: "B", result: "2", date: "2026-05-16 10:01")
-        testStore.historyRecords = [first, second]
+        testStore.replaceHistoryRecords([first, second])
 
         let deletion = testStore.removeCalculationHistory(ids: Set([first.id]))
 
@@ -69,7 +69,7 @@ struct DataStoreTests {
     @Test func calculationHistoryClearReturnsRestorableResult() {
         let first = HistoryRecord(tool: "墙面", input: "A", result: "1", date: "2026-05-16 10:00")
         let second = HistoryRecord(tool: "照明", input: "B", result: "2", date: "2026-05-16 10:01")
-        testStore.historyRecords = [first, second]
+        testStore.replaceHistoryRecords([first, second])
 
         let deletion = testStore.clearCalculationHistory()
 
@@ -167,12 +167,12 @@ struct DataStoreTests {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let first = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         let second = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        testStore.projects = [first, second]
-        testStore.materialSheetDrafts = [
+        testStore.replaceProjects([first, second])
+        testStore.replaceMaterialSheetDrafts([
             MaterialSheetDraft(title: "A 草稿", projectId: first.id),
             MaterialSheetDraft(title: "B 草稿", projectId: second.id),
             MaterialSheetDraft(title: "无归属草稿", projectId: nil)
-        ]
+        ])
 
         testStore.deleteProject(first.id)
 
@@ -187,7 +187,7 @@ struct DataStoreTests {
         let projectA = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         let projectB = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
         let projectC = Project(name: "C", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        testStore.projects = [projectA, projectB, projectC]
+        testStore.replaceProjects([projectA, projectB, projectC])
 
         let sharedContact = ProjectContact(
             projectId: projectB.id,
@@ -199,7 +199,7 @@ struct DataStoreTests {
             relatedProjectIds: [projectB.id],
             name: "被删主联系人"
         )
-        testStore.projectContacts = [sharedContact, deletedPrimaryContact]
+        testStore.replaceProjectContacts([sharedContact, deletedPrimaryContact])
 
         testStore.deleteProject(projectA.id)
 
@@ -238,8 +238,8 @@ struct DataStoreTests {
             QuickNoteAttachmentStorage.delete(fileName: attachmentFile)
         }
 
-        testStore.projects = [project]
-        testStore.dailyLogs = [
+        testStore.replaceProjects([project])
+        testStore.replaceDailyLogs([
             DailyLog(
                 date: "2026-05-16",
                 weather: "晴",
@@ -248,21 +248,21 @@ struct DataStoreTests {
                 photos: [LogPhoto(fileName: photoFile)],
                 projectId: project.id
             )
-        ]
-        testStore.siteTodos = [
+        ])
+        testStore.replaceSiteTodos([
             SiteTodo(title: "整改", rectificationBeforePhotoFileName: todoPhotoFile, projectId: project.id)
-        ]
-        testStore.projectDrawings = [drawing]
-        testStore.projectDocuments = [
+        ])
+        testStore.replaceProjectDrawings([drawing])
+        testStore.replaceProjectDocuments([
             ProjectDocument(projectId: project.id, title: "票据", fileName: documentFile)
-        ]
-        testStore.quickNotes = [
+        ])
+        testStore.replaceQuickNotes([
             QuickNote(
                 title: "随手记",
                 projectId: project.id,
                 attachments: [QuickNoteAttachment(kind: .file, fileName: attachmentFile)]
             )
-        ]
+        ])
 
         let deletion = testStore.removeProjectCascade(project.id)
 
@@ -330,21 +330,21 @@ struct DataStoreTests {
         let draft = MaterialSheetDraft(title: "材料单", projectId: projectA.id)
         let sharedContact = ProjectContact(projectId: projectB.id, relatedProjectIds: [projectA.id], name: "共享联系人")
         let deletedPrimaryContact = ProjectContact(projectId: projectA.id, relatedProjectIds: [projectB.id], name: "项目联系人")
-        testStore.projects = [projectA, projectB]
-        testStore.materialItems = [material]
-        testStore.quoteItems = [quote]
-        testStore.laborRecords = [labor]
-        testStore.dailyLogs = [log]
-        testStore.progressTasks = [progress]
-        testStore.lightingCircuitPlans = [plan]
-        testStore.siteTodos = [todo]
-        testStore.projectDrawings = [drawing]
-        testStore.projectFinancialRecords = [financial]
-        testStore.projectDocuments = [document]
-        testStore.quickNotes = [note]
-        testStore.projectWarehouseMovements = [movement]
-        testStore.materialSheetDrafts = [draft]
-        testStore.projectContacts = [sharedContact, deletedPrimaryContact]
+        testStore.replaceProjects([projectA, projectB])
+        testStore.replaceMaterialItems([material])
+        testStore.replaceQuoteItems([quote])
+        testStore.replaceLaborRecords([labor])
+        testStore.replaceDailyLogs([log])
+        testStore.replaceProgressTasks([progress])
+        testStore.replaceLightingCircuitPlans([plan])
+        testStore.replaceSiteTodos([todo])
+        testStore.replaceProjectDrawings([drawing])
+        testStore.replaceProjectFinancialRecords([financial])
+        testStore.replaceProjectDocuments([document])
+        testStore.replaceQuickNotes([note])
+        testStore.replaceProjectWarehouseMovements([movement])
+        testStore.replaceMaterialSheetDrafts([draft])
+        testStore.replaceProjectContacts([sharedContact, deletedPrimaryContact])
 
         let deletion = testStore.removeProjectCascade(projectA.id)
         let prunedSharedContact = try #require(testStore.projectContacts.first { $0.id == sharedContact.id })
@@ -408,8 +408,8 @@ struct DataStoreTests {
             rectificationBeforePhotoFileName: "other-before.jpg",
             projectId: projectB
         )
-        testStore.dailyLogs = [targetLog, otherLog]
-        testStore.siteTodos = [targetTodo, otherTodo]
+        testStore.replaceDailyLogs([targetLog, otherLog])
+        testStore.replaceSiteTodos([targetTodo, otherTodo])
 
         let result = testStore.clearProjectPhotoReferences(projectId: projectA)
 
@@ -481,11 +481,11 @@ struct DataStoreTests {
             quantity: "1",
             linkedDocumentIds: [videoDocument.id, ticketDocument.id]
         )
-        testStore.quickNotes = [targetNote, otherNote]
-        testStore.projectDocuments = [videoDocument, ticketDocument, otherDocument]
-        testStore.projectDrawings = [targetDrawing, sharedDrawing, otherSharedDrawing]
-        testStore.projectFinancialRecords = [financial]
-        testStore.projectWarehouseMovements = [movement]
+        testStore.replaceQuickNotes([targetNote, otherNote])
+        testStore.replaceProjectDocuments([videoDocument, ticketDocument, otherDocument])
+        testStore.replaceProjectDrawings([targetDrawing, sharedDrawing, otherSharedDrawing])
+        testStore.replaceProjectFinancialRecords([financial])
+        testStore.replaceProjectWarehouseMovements([movement])
 
         let videoResult = testStore.clearProjectVideoReferences(
             projectId: projectA,
@@ -523,12 +523,12 @@ struct DataStoreTests {
     @Test func relatedDataCountIncludesMaterialSheetDrafts() {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let project = Project(name: "草稿项目", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        testStore.projects = [project]
-        testStore.materialSheetDrafts = [
+        testStore.replaceProjects([project])
+        testStore.replaceMaterialSheetDrafts([
             MaterialSheetDraft(title: "D1", projectId: project.id),
             MaterialSheetDraft(title: "D2", projectId: project.id),
             MaterialSheetDraft(title: "No Project", projectId: nil)
-        ]
+        ])
 
         #expect(testStore.relatedDataCount(for: project.id) == 2)
     }
@@ -538,7 +538,7 @@ struct DataStoreTests {
     @Test func flushSaveWritesToDisk() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
         let project = Project(name: "flush test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        testStore.projects.append(project)
+        testStore.appendProject(project)
         await testStore.flushSave()
 
         let restored = DataStore(storageDirectory: storageDirectory)
@@ -548,7 +548,7 @@ struct DataStoreTests {
 
     @Test func flushSaveReplacesPendingScheduleSave() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
-        testStore.projects.append(Project(name: "flush pending", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01"))
+        testStore.appendProject(Project(name: "flush pending", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01"))
         testStore.scheduleSave()
         await testStore.flushSave()
 

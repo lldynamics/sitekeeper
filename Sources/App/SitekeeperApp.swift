@@ -61,12 +61,17 @@ private enum UITestLaunchConfig {
             let localStoreFiles = ["sitekeeper.json", "construction_toolbox.json"]
             for fileName in localStoreFiles {
                 let fileURL = documentsDirectory.appendingPathComponent(fileName)
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    do {
-                        try FileManager.default.removeItem(at: fileURL)
-                    } catch {
-                        StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
-                    }
+                do {
+                    _ = try FileOps.removeIfExists(
+                        at: fileURL,
+                        context: .init(
+                            event: "ui_test.reset_local_state.remove_store_file",
+                            category: .dataStore,
+                            source: "SitekeeperApp.resetLocalState"
+                        )
+                    )
+                } catch {
+                    StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
                 }
             }
         }

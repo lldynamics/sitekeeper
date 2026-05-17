@@ -113,10 +113,7 @@ struct CalculationHistoryView: View {
                 store.scheduleSave()
             },
             undo: {
-                store.historyRecords = deletion.restoredItems(
-                    current: store.historyRecords,
-                    id: \.id
-                )
+                store.restoreHistoryRecords(from: deletion)
                 store.scheduleSave()
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)

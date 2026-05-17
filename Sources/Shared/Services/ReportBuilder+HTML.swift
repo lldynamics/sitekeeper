@@ -53,8 +53,8 @@ extension ReportBuilder {
             table(loc("施工资料清单"), headers: ["项目", "类别", "状态", "资料数", "待处理", "退回", "已归档"], rows: checklistRows.map {
                 [$0.projectName, $0.item.category.displayName, $0.item.statusText, "\($0.item.documentCount)", "\($0.item.actionCount)", "\($0.item.returnedCount)", "\($0.item.archivedCount)"]
             })
-            table(loc("项目票据与资料"), headers: ["名称", "类型", "报验状态", "责任人", "形成日期", "归档编号", "分部/工序", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"], rows: snapshot.projectDocuments.map {
-                [$0.title, $0.category.displayName, $0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection, "\($0.pageCount)", amountDisplay(rawText: $0.amount, currencyDisplayMode: currencyDisplayMode), $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString]
+            table(loc("项目票据与资料"), headers: ["名称", "类型", "版本", "版本状态", "替换上一版ID", "后续版本ID", "报验状态", "责任人", "形成日期", "归档编号", "分部/工序", "页数", "金额", "创建时间", "关联账目ID", "文件名", "备注", "项目ID"], rows: snapshot.projectDocuments.map {
+                [$0.title, $0.category.displayName, $0.versionLabel, $0.versionState.displayName, $0.replacesDocumentId?.uuidString ?? "", $0.replacedByDocumentId?.uuidString ?? "", $0.submissionStatus.displayName, $0.responsiblePerson, $0.formedAt, $0.archiveNumber, $0.workSection, "\($0.pageCount)", amountDisplay(rawText: $0.amount, currencyDisplayMode: currencyDisplayMode), $0.createdAt, $0.linkedFinancialRecordId?.uuidString ?? "", $0.fileName, $0.note, $0.projectId.uuidString]
             })
         }
         if options.includeProjectContacts {

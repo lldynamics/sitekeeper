@@ -34,10 +34,14 @@ struct CADViewerContainer: View {
 struct CADMetalLibreDWGPoCEntry: View {
     let fileURL: URL
     let displayName: String
+    let textImportOptions: CADCanvasTextImportOptions
     let showsToolbar: Bool
     let initialViewState: CADRendererViewState?
     let callbacks: CADRendererCallbacks
+    let externalCurrentLayoutID: String?
     let externalVisibleLayerIDs: Set<String>?
+    let onLayoutsChangedExternal: ([CADPoC.CADLayout]) -> Void
+    let onCurrentLayoutIDChangedExternal: (String?) -> Void
     let onLayersChangedExternal: ([CADPoC.CADLayer]) -> Void
     let onVisibleLayerIDsChangedExternal: (Set<String>?) -> Void
     let onClose: () -> Void
@@ -56,18 +60,25 @@ struct CADMetalLibreDWGPoCEntry: View {
     @State private var showsSearchPanel = false
     @State private var rendererPerformance: CADRendererPerformanceSnapshot?
     @AppStorage("cad.metal.poc.showsOverviewMap") private var showsOverviewMap = false
-    @AppStorage("cad.metal.poc.rendersTextOverlays") private var rendersTextOverlays = false
+    @AppStorage("cad.metal.poc.rendersTextOverlays") private var rendersTextOverlays = true
+    @AppStorage("cad.metal.poc.buildsTextSearchIndex") private var buildsTextSearchIndex = false
     @AppStorage("cad.metal.poc.publishesSnapPoints") private var publishesSnapPoints = false
     @AppStorage("cad.metal.poc.rendersHatches") private var rendersHatches = false
+    @AppStorage("cad.metal.poc.rendersPlaceholders") private var rendersPlaceholders = false
     @AppStorage("cad.metal.poc.showsRendererDiagnostics") private var showsRendererDiagnostics = false
+    @AppStorage("cad.metal.poc.featureDefaultsVersion") private var featureDefaultsVersion = 0
 
     init(
         fileURL: URL,
         displayName: String,
+        textImportOptions: CADCanvasTextImportOptions = .automatic,
         showsToolbar: Bool = true,
         initialViewState: CADRendererViewState? = nil,
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
+        externalCurrentLayoutID: String? = nil,
         externalVisibleLayerIDs: Set<String>? = nil,
+        onLayoutsChangedExternal: @escaping ([CADPoC.CADLayout]) -> Void = { _ in },
+        onCurrentLayoutIDChangedExternal: @escaping (String?) -> Void = { _ in },
         onLayersChangedExternal: @escaping ([CADPoC.CADLayer]) -> Void = { _ in },
         onVisibleLayerIDsChangedExternal: @escaping (Set<String>?) -> Void = { _ in },
         onClose: @escaping () -> Void,
@@ -75,10 +86,14 @@ struct CADMetalLibreDWGPoCEntry: View {
     ) {
         self.fileURL = fileURL
         self.displayName = displayName
+        self.textImportOptions = textImportOptions
         self.showsToolbar = showsToolbar
         self.initialViewState = initialViewState
         self.callbacks = callbacks
+        self.externalCurrentLayoutID = externalCurrentLayoutID
         self.externalVisibleLayerIDs = externalVisibleLayerIDs
+        self.onLayoutsChangedExternal = onLayoutsChangedExternal
+        self.onCurrentLayoutIDChangedExternal = onCurrentLayoutIDChangedExternal
         self.onLayersChangedExternal = onLayersChangedExternal
         self.onVisibleLayerIDsChangedExternal = onVisibleLayerIDsChangedExternal
         self.onClose = onClose
@@ -95,11 +110,13 @@ struct CADMetalLibreDWGPoCEntry: View {
                     currentLayoutID: effectiveCurrentLayoutID,
                     layers: layers,
                     visibleLayerIDs: effectiveVisibleLayerIDs,
-                    supportsTextSearch: true,
+                    supportsTextSearch: buildsTextSearchIndex,
                     searchResultCount: searchResults.count,
                     rendersTextOverlays: rendersTextOverlays,
+                    buildsTextSearchIndex: buildsTextSearchIndex,
                     publishesSnapPoints: publishesSnapPoints,
                     rendersHatches: rendersHatches,
+                    rendersPlaceholders: rendersPlaceholders,
                     showsOverviewMap: showsOverviewMap,
                     showsRendererDiagnostics: showsRendererDiagnostics,
                     onSelectLayout: selectLayout,
@@ -107,8 +124,10 @@ struct CADMetalLibreDWGPoCEntry: View {
                     onShowAllLayers: showAllLayers,
                     onSearchTapped: toggleSearchPanel,
                     onToggleTextOverlays: { rendersTextOverlays.toggle() },
+                    onToggleTextSearchIndex: { buildsTextSearchIndex.toggle() },
                     onToggleSnapPoints: { publishesSnapPoints.toggle() },
                     onToggleHatches: { rendersHatches.toggle() },
+                    onTogglePlaceholders: { rendersPlaceholders.toggle() },
                     onToggleOverviewMap: { showsOverviewMap.toggle() },
                     onToggleRendererDiagnostics: { showsRendererDiagnostics.toggle() },
                     onClose: onClose,
@@ -119,6 +138,9 @@ struct CADMetalLibreDWGPoCEntry: View {
             canvasLayer
         }
         .background(Color(.systemBackground))
+        .onAppear {
+            migrateCADPoCFeatureDefaultsIfNeeded()
+        }
     }
 
     private var canvasLayer: some View {
@@ -129,6 +151,8 @@ struct CADMetalLibreDWGPoCEntry: View {
             initialViewState: initialViewState,
             controlCommand: canvasControlCommand,
             featureOptions: featureOptions,
+            textImportOptions: textImportOptions,
+            buildsTextSearchIndex: buildsTextSearchIndex,
             debugTextOverlays: showsRendererDiagnostics && rendersTextOverlays,
             callbacks: bridgedRendererCallbacks,
             onLayoutsChanged: handleLayoutsChanged,
@@ -167,7 +191,8 @@ struct CADMetalLibreDWGPoCEntry: View {
         CADCanvasFeatureOptions(
             rendersTextOverlays: rendersTextOverlays,
             publishesSnapPoints: publishesSnapPoints,
-            rendersHatches: rendersHatches
+            rendersHatches: rendersHatches,
+            rendersPlaceholders: rendersPlaceholders
         )
     }
 
@@ -428,6 +453,9 @@ struct CADMetalLibreDWGPoCEntry: View {
 
     private var effectiveCurrentLayoutID: String? {
         guard !layouts.isEmpty else { return currentLayoutID }
+        if let externalCurrentLayoutID, layouts.contains(where: { $0.id == externalCurrentLayoutID }) {
+            return externalCurrentLayoutID
+        }
         if let currentLayoutID, layouts.contains(where: { $0.id == currentLayoutID }) {
             return currentLayoutID
         }
@@ -436,14 +464,19 @@ struct CADMetalLibreDWGPoCEntry: View {
 
     private func handleLayoutsChanged(_ importedLayouts: [CADPoC.CADLayout]) {
         layouts = importedLayouts
+        onLayoutsChangedExternal(importedLayouts)
+        let requestedLayoutID = externalCurrentLayoutID ?? currentLayoutID
         let nextLayoutID: String?
-        if let currentLayoutID, importedLayouts.contains(where: { $0.id == currentLayoutID }) {
-            nextLayoutID = currentLayoutID
+        if let requestedLayoutID, importedLayouts.contains(where: { $0.id == requestedLayoutID }) {
+            nextLayoutID = requestedLayoutID
         } else {
             nextLayoutID = Self.defaultLayoutID(importedLayouts)
         }
         if currentLayoutID != nextLayoutID {
             currentLayoutID = nextLayoutID
+        }
+        if externalCurrentLayoutID != nextLayoutID {
+            onCurrentLayoutIDChangedExternal(nextLayoutID)
         }
         refreshSearchResults()
     }
@@ -557,8 +590,9 @@ struct CADMetalLibreDWGPoCEntry: View {
     }
 
     private func selectLayout(_ layoutID: String) {
-        guard currentLayoutID != layoutID else { return }
+        guard effectiveCurrentLayoutID != layoutID else { return }
         currentLayoutID = layoutID
+        onCurrentLayoutIDChangedExternal(layoutID)
         selectedSearchResultIndex = nil
         sendCanvasCommand(.clearSearchHighlight)
         refreshSearchResults()
@@ -579,6 +613,12 @@ struct CADMetalLibreDWGPoCEntry: View {
         let nextVisible = Set(layers.map(\.id))
         visibleLayerIDs = nextVisible
         onVisibleLayerIDsChangedExternal(nextVisible)
+    }
+
+    private func migrateCADPoCFeatureDefaultsIfNeeded() {
+        guard featureDefaultsVersion < 1 else { return }
+        rendersTextOverlays = true
+        featureDefaultsVersion = 1
     }
 }
 

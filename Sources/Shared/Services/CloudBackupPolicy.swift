@@ -310,34 +310,32 @@ actor CloudBackupCoordinator {
                 try CloudBackupService.listBackups()
             }.value
             do {
-                try FileManager.default.removeItem(at: archive.fileURL)
-            } catch {
-                StorageIssueLog.recordEvent(
-                    "cloud_backup.temp_archive_cleanup_failed",
-                    category: .cloudBackup,
-                    details: [
-                        "file": archive.fileURL.lastPathComponent,
-                        "phase": "after-upload"
-                    ],
-                    error: error
+                _ = try FileOps.removeIfExists(
+                    at: archive.fileURL,
+                    context: .init(
+                        event: "cloud_backup.temp_archive_cleanup",
+                        category: .cloudBackup,
+                        source: "CloudBackupCoordinator.backupToCloud.afterUpload"
+                    )
                 )
+            } catch {
+                // FileOps 已记录失败，上传成功路径不因临时文件清理失败而中断。
             }
             archiveFileURL = nil
             return CloudBackupExecutionResult(savedFile: savedFile, allBackups: files)
         } catch {
             if let archiveFileURL {
                 do {
-                    try FileManager.default.removeItem(at: archiveFileURL)
-                } catch {
-                    StorageIssueLog.recordEvent(
-                        "cloud_backup.temp_archive_cleanup_failed",
-                        category: .cloudBackup,
-                        details: [
-                            "file": archiveFileURL.lastPathComponent,
-                            "phase": "failure-cleanup"
-                        ],
-                        error: error
+                    _ = try FileOps.removeIfExists(
+                        at: archiveFileURL,
+                        context: .init(
+                            event: "cloud_backup.temp_archive_cleanup",
+                            category: .cloudBackup,
+                            source: "CloudBackupCoordinator.backupToCloud.failureCleanup"
+                        )
                     )
+                } catch {
+                    // FileOps 已记录失败，保持原始备份错误向上抛出。
                 }
             }
             throw error

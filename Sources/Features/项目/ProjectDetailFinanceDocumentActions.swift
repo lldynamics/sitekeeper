@@ -60,12 +60,17 @@ enum ProjectDetailFinanceDocumentActions {
         )
         guard !documentDeletion.isEmpty else { return nil }
 
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        var financialRecords = store.projectFinancialRecords
+        for index in financialRecords.indices {
+            financialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
         }
-        for index in store.projectWarehouseMovements.indices {
-            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
+        store.replaceProjectFinancialRecords(financialRecords)
+
+        var warehouseMovements = store.projectWarehouseMovements
+        for index in warehouseMovements.indices {
+            warehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
         }
+        store.replaceProjectWarehouseMovements(warehouseMovements)
         return DocumentDeletionExecution(
             documentDeletion: documentDeletion,
             removableDocumentFileNames: removableFileNames
@@ -116,18 +121,25 @@ enum ProjectDetailFinanceDocumentActions {
                     deferredFileCleanup: deferredFileCleanup,
                     recordsAuditImmediately: recordsAuditImmediately
                 )
-                for index in store.projectFinancialRecords.indices {
-                    store.projectFinancialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                var financialRecords = store.projectFinancialRecords
+                for index in financialRecords.indices {
+                    financialRecords[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
                 }
-                for index in store.projectWarehouseMovements.indices {
-                    store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
+                store.replaceProjectFinancialRecords(financialRecords)
+
+                var warehouseMovements = store.projectWarehouseMovements
+                for index in warehouseMovements.indices {
+                    warehouseMovements[index].linkedDocumentIds.removeAll { targetDocumentIds.contains($0) }
                 }
+                store.replaceProjectWarehouseMovements(warehouseMovements)
             }
         } else if !targetDocumentIds.isEmpty {
-            for index in store.projectDocuments.indices {
-                guard targetDocumentIds.contains(store.projectDocuments[index].id) else { continue }
-                store.projectDocuments[index].linkedFinancialRecordId = nil
+            var projectDocuments = store.projectDocuments
+            for index in projectDocuments.indices {
+                guard targetDocumentIds.contains(projectDocuments[index].id) else { continue }
+                projectDocuments[index].linkedFinancialRecordId = nil
             }
+            store.replaceProjectDocuments(projectDocuments)
         }
 
         let financialDeletion = store.removeProjectFinancialRecords(
@@ -249,6 +261,7 @@ enum ProjectDetailFinanceDocumentActions {
         _ urls: [URL],
         projectId: UUID,
         linkedFinancialRecordId: UUID? = nil,
+        ledgerSettings: ProjectDocumentImportLedgerSettings? = nil,
         store: DataStore
     ) -> [String] {
         guard !urls.isEmpty else { return [] }
@@ -302,15 +315,20 @@ enum ProjectDetailFinanceDocumentActions {
                     continue
                 }
             }
+            let resolvedSettings = (ledgerSettings ?? ProjectDocumentImportLedgerSettings(category: category)).normalized
             appendProjectDocument(
                 fileName: fileName,
                 pageCount: pageCount,
                 target: ProjectScanTarget(
                     title: url.deletingPathExtension().lastPathComponent,
-                    category: category,
+                    category: resolvedSettings.category,
                     amount: "",
                     linkedFinancialRecordId: linkedFinancialRecordId,
                     linkedConstructionMethodIDs: [],
+                    submissionStatus: resolvedSettings.submissionStatus,
+                    responsiblePerson: resolvedSettings.responsiblePerson,
+                    formedAt: resolvedSettings.formedAt,
+                    workSection: resolvedSettings.workSection,
                     note: "来源: 文件导入"
                 ),
                 projectId: projectId,
@@ -446,8 +464,10 @@ enum ProjectDetailFinanceDocumentActions {
               store.projectFinancialRecords.contains(where: { $0.id == record.id }) else { return }
         if document.linkedFinancialRecordId == record.id {
             relinkDocument(documentId: document.id, to: nil, store: store)
-        } else if let index = store.projectFinancialRecords.firstIndex(where: { $0.id == record.id }) {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { $0 == document.id }
+        } else {
+            _ = store.mutateProjectFinancialRecord(id: record.id) { value in
+                value.linkedDocumentIds.removeAll { $0 == document.id }
+            }
         }
         store.scheduleSave()
     }
@@ -455,8 +475,30 @@ enum ProjectDetailFinanceDocumentActions {
     @MainActor
     static func saveDocumentEdit(_ updated: ProjectDocument, store: DataStore) {
         guard let index = store.projectDocuments.firstIndex(where: { $0.id == updated.id }) else { return }
-        store.projectDocuments[index] = updated
-        relinkDocument(documentId: updated.id, to: updated.linkedFinancialRecordId, store: store)
+        let previous = store.projectDocuments[index]
+        var normalized = updated
+        normalized.versionNumber = max(1, normalized.versionNumber)
+        if normalized.replacesDocumentId == normalized.id {
+            normalized.replacesDocumentId = nil
+        }
+        if normalized.replacedByDocumentId == normalized.id {
+            normalized.replacedByDocumentId = nil
+        }
+        if let previousVersionId = normalized.replacesDocumentId,
+           let previousVersion = store.projectDocuments.first(where: { $0.id == previousVersionId }) {
+            if previousVersion.replacesDocumentId == normalized.id {
+                normalized.replacesDocumentId = nil
+            } else if normalized.versionNumber <= previousVersion.normalizedVersionNumber {
+                normalized.versionNumber = min(999, previousVersion.normalizedVersionNumber + 1)
+            }
+        }
+        store.updateProjectDocument(normalized)
+        reconcileDocumentVersionLinks(
+            document: normalized,
+            previousReplacesDocumentId: previous.replacesDocumentId,
+            store: store
+        )
+        relinkDocument(documentId: normalized.id, to: normalized.linkedFinancialRecordId, store: store)
         store.scheduleSave()
     }
 
@@ -490,10 +532,11 @@ enum ProjectDetailFinanceDocumentActions {
             note: target.note
         )
         store.appendProjectDocument(document)
-        if let recordId = target.linkedFinancialRecordId,
-           let index = store.projectFinancialRecords.firstIndex(where: { $0.id == recordId }) {
-            if !store.projectFinancialRecords[index].linkedDocumentIds.contains(document.id) {
-                store.projectFinancialRecords[index].linkedDocumentIds.append(document.id)
+        if let recordId = target.linkedFinancialRecordId {
+            _ = store.mutateProjectFinancialRecord(id: recordId) { record in
+                if !record.linkedDocumentIds.contains(document.id) {
+                    record.linkedDocumentIds.append(document.id)
+                }
             }
         }
         store.scheduleSave()
@@ -502,21 +545,49 @@ enum ProjectDetailFinanceDocumentActions {
 
     @MainActor
     private static func relinkDocument(documentId: UUID, to recordId: UUID?, store: DataStore) {
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { $0 == documentId }
+        var financialRecords = store.projectFinancialRecords
+        for index in financialRecords.indices {
+            financialRecords[index].linkedDocumentIds.removeAll { $0 == documentId }
         }
         let validRecordId: UUID?
         if let recordId,
-           let recordIndex = store.projectFinancialRecords.firstIndex(where: { $0.id == recordId }) {
-            if !store.projectFinancialRecords[recordIndex].linkedDocumentIds.contains(documentId) {
-                store.projectFinancialRecords[recordIndex].linkedDocumentIds.append(documentId)
+           let recordIndex = financialRecords.firstIndex(where: { $0.id == recordId }) {
+            if !financialRecords[recordIndex].linkedDocumentIds.contains(documentId) {
+                financialRecords[recordIndex].linkedDocumentIds.append(documentId)
             }
             validRecordId = recordId
         } else {
             validRecordId = nil
         }
-        if let documentIndex = store.projectDocuments.firstIndex(where: { $0.id == documentId }) {
-            store.projectDocuments[documentIndex].linkedFinancialRecordId = validRecordId
+        store.replaceProjectFinancialRecords(financialRecords)
+        _ = store.mutateProjectDocument(id: documentId) { document in
+            document.linkedFinancialRecordId = validRecordId
+        }
+    }
+
+    @MainActor
+    private static func reconcileDocumentVersionLinks(
+        document: ProjectDocument,
+        previousReplacesDocumentId: UUID?,
+        store: DataStore
+    ) {
+        if let previousReplacesDocumentId,
+           previousReplacesDocumentId != document.replacesDocumentId {
+            _ = store.mutateProjectDocument(id: previousReplacesDocumentId) { previousVersion in
+                guard previousVersion.replacedByDocumentId == document.id else { return }
+                previousVersion.replacedByDocumentId = nil
+                if previousVersion.versionState == .superseded {
+                    previousVersion.versionState = .current
+                }
+            }
+        }
+
+        guard let previousVersionId = document.replacesDocumentId else { return }
+        _ = store.mutateProjectDocument(id: previousVersionId) { previousVersion in
+            previousVersion.replacedByDocumentId = document.id
+            if previousVersion.versionState == .current {
+                previousVersion.versionState = .superseded
+            }
         }
     }
 

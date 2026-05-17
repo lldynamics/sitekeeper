@@ -461,6 +461,61 @@ struct ProjectContact: Identifiable, Codable {
     }
 }
 
+struct ProjectDocumentStatusHistoryEntry: Identifiable, Codable, Equatable {
+    var id = UUID()
+    var fromStatus: ProjectDocumentSubmissionStatus
+    var toStatus: ProjectDocumentSubmissionStatus
+    var operatorName: String
+    var changedAt: String
+    var reason: String
+
+    init(
+        id: UUID = UUID(),
+        fromStatus: ProjectDocumentSubmissionStatus,
+        toStatus: ProjectDocumentSubmissionStatus,
+        operatorName: String = "",
+        changedAt: String = Formatters.now(),
+        reason: String = ""
+    ) {
+        self.id = id
+        self.fromStatus = fromStatus
+        self.toStatus = toStatus
+        self.operatorName = operatorName
+        self.changedAt = changedAt
+        self.reason = reason
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, fromStatus, toStatus, operatorName, changedAt, reason
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        fromStatus = try container.decodeStringEnum(
+            ProjectDocumentSubmissionStatus.self,
+            forKey: .fromStatus,
+            default: .notSubmitted
+        )
+        toStatus = try container.decodeStringEnum(
+            ProjectDocumentSubmissionStatus.self,
+            forKey: .toStatus,
+            default: .notSubmitted
+        )
+        operatorName = try container.decodeIfPresent(String.self, forKey: .operatorName) ?? ""
+        changedAt = try container.decodeIfPresent(String.self, forKey: .changedAt) ?? Formatters.now()
+        reason = try container.decodeIfPresent(String.self, forKey: .reason) ?? ""
+    }
+}
+
+enum ProjectDocumentVersionState: String, CaseIterable, Codable {
+    case current = "当前版"
+    case superseded = "已替换"
+    case voided = "已作废"
+
+    var displayName: String { rawValue }
+}
+
 struct ProjectDocument: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
@@ -479,6 +534,11 @@ struct ProjectDocument: Identifiable, Codable {
     var workSection: String
     var createdAt: String
     var note: String
+    var statusHistory: [ProjectDocumentStatusHistoryEntry]
+    var versionNumber: Int
+    var versionState: ProjectDocumentVersionState
+    var replacesDocumentId: UUID?
+    var replacedByDocumentId: UUID?
 
     init(
         id: UUID = UUID(),
@@ -497,7 +557,12 @@ struct ProjectDocument: Identifiable, Codable {
         archiveNumber: String = "",
         workSection: String = "",
         createdAt: String = Formatters.now(),
-        note: String = ""
+        note: String = "",
+        statusHistory: [ProjectDocumentStatusHistoryEntry] = [],
+        versionNumber: Int = 1,
+        versionState: ProjectDocumentVersionState = .current,
+        replacesDocumentId: UUID? = nil,
+        replacedByDocumentId: UUID? = nil
     ) {
         self.id = id
         self.projectId = projectId
@@ -516,10 +581,15 @@ struct ProjectDocument: Identifiable, Codable {
         self.workSection = workSection
         self.createdAt = createdAt
         self.note = note
+        self.statusHistory = statusHistory
+        self.versionNumber = max(1, versionNumber)
+        self.versionState = versionState
+        self.replacesDocumentId = replacesDocumentId == id ? nil : replacesDocumentId
+        self.replacedByDocumentId = replacedByDocumentId == id ? nil : replacedByDocumentId
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, linkedConstructionMethodIDs, submissionStatus, responsiblePerson, formedAt, archiveNumber, workSection, createdAt, note
+        case id, projectId, title, category, fileName, fileType, pageCount, amount, linkedFinancialRecordId, linkedConstructionMethodIDs, submissionStatus, responsiblePerson, formedAt, archiveNumber, workSection, createdAt, note, statusHistory, versionNumber, versionState, replacesDocumentId, replacedByDocumentId
     }
 
     init(from decoder: Decoder) throws {
@@ -549,6 +619,40 @@ struct ProjectDocument: Identifiable, Codable {
         workSection = try container.decodeIfPresent(String.self, forKey: .workSection) ?? ""
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
+        statusHistory = try container.decodeIfPresent([ProjectDocumentStatusHistoryEntry].self, forKey: .statusHistory) ?? []
+        versionNumber = max(1, try container.decodeIfPresent(Int.self, forKey: .versionNumber) ?? 1)
+        versionState = try container.decodeStringEnum(
+            ProjectDocumentVersionState.self,
+            forKey: .versionState,
+            default: .current
+        )
+        replacesDocumentId = try container.decodeIfPresent(UUID.self, forKey: .replacesDocumentId)
+        replacedByDocumentId = try container.decodeIfPresent(UUID.self, forKey: .replacedByDocumentId)
+        if replacesDocumentId == id {
+            replacesDocumentId = nil
+        }
+        if replacedByDocumentId == id {
+            replacedByDocumentId = nil
+        }
+    }
+}
+
+extension ProjectDocument {
+    var normalizedVersionNumber: Int {
+        max(1, versionNumber)
+    }
+
+    var versionLabel: String {
+        "V\(normalizedVersionNumber)"
+    }
+
+    var versionDisplayText: String {
+        switch versionState {
+        case .current:
+            return versionLabel
+        case .superseded, .voided:
+            return "\(versionLabel) · \(versionState.displayName)"
+        }
     }
 }
 
@@ -730,6 +834,7 @@ enum TemplateCategory: String, CaseIterable, Codable {
     case quotation = "报价模板"
     case dailyLog = "日志模板"
     case material = "材料模板"
+    case projectDocumentChecklist = "资料清单模板"
 
     var displayName: String {
         switch self {
@@ -739,6 +844,8 @@ enum TemplateCategory: String, CaseIterable, Codable {
             return String(localized: "日志模板")
         case .material:
             return String(localized: "材料模板")
+        case .projectDocumentChecklist:
+            return String(localized: "资料清单模板")
         }
     }
 }
@@ -781,6 +888,165 @@ enum ProjectContactRole: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
+enum ProjectDocumentRecommendationStage: String, CaseIterable, Codable {
+    case preConstruction
+    case construction
+    case acceptance
+
+    var displayName: String {
+        switch self {
+        case .preConstruction:
+            return String(localized: "开工前")
+        case .construction:
+            return String(localized: "施工中")
+        case .acceptance:
+            return String(localized: "验收阶段")
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .preConstruction:
+            return String(localized: "优先准备技术方案、管理报审和开工资料。")
+        case .construction:
+            return String(localized: "重点跟进物资、测量、施工记录和试验资料。")
+        case .acceptance:
+            return String(localized: "集中补齐过程验收和竣工验收资料。")
+        }
+    }
+
+    var recommendedCategories: [ProjectDocumentCategory] {
+        switch self {
+        case .preConstruction:
+            return [.constructionTechnical, .constructionManagement]
+        case .construction:
+            return [.constructionMaterial, .constructionSurvey, .constructionRecord, .constructionTest]
+        case .acceptance:
+            return [.processAcceptance, .completionAcceptance]
+        }
+    }
+
+    var recommendedCategoryText: String {
+        recommendedCategories.map(\.displayName).joined(separator: "、")
+    }
+}
+
+enum ProjectDocumentChecklistTemplatePreset: String, CaseIterable, Codable, Identifiable {
+    case civil = "土建"
+    case decoration = "装饰"
+    case mechanicalElectrical = "机电"
+    case fireProtection = "消防"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .civil:
+            return String(localized: "土建")
+        case .decoration:
+            return String(localized: "装饰")
+        case .mechanicalElectrical:
+            return String(localized: "机电")
+        case .fireProtection:
+            return String(localized: "消防")
+        }
+    }
+
+    var detailText: String {
+        switch self {
+        case .civil:
+            return String(localized: "保留完整施工资料口径，适合土建主体和综合工程。")
+        case .decoration:
+            return String(localized: "弱化测量资料，重点保留材料、施工记录、试验和验收。")
+        case .mechanicalElectrical:
+            return String(localized: "突出物资、测量定位、施工记录、试验和验收资料。")
+        case .fireProtection:
+            return String(localized: "突出方案报审、材料进场、施工记录、试验和验收资料。")
+        }
+    }
+
+    var categories: [ProjectDocumentCategory] {
+        switch self {
+        case .civil:
+            return ProjectDocumentCategory.defaultConstructionArchiveRequirements
+        case .decoration:
+            return [
+                .constructionTechnical,
+                .constructionMaterial,
+                .constructionRecord,
+                .constructionTest,
+                .constructionManagement,
+                .processAcceptance,
+                .completionAcceptance
+            ]
+        case .mechanicalElectrical:
+            return [
+                .constructionTechnical,
+                .constructionMaterial,
+                .constructionSurvey,
+                .constructionRecord,
+                .constructionTest,
+                .processAcceptance,
+                .completionAcceptance
+            ]
+        case .fireProtection:
+            return [
+                .constructionTechnical,
+                .constructionMaterial,
+                .constructionRecord,
+                .constructionTest,
+                .constructionManagement,
+                .processAcceptance,
+                .completionAcceptance
+            ]
+        }
+    }
+
+    var checklistTemplate: ProjectDocumentChecklistTemplate {
+        ProjectDocumentChecklistTemplate(
+            id: "preset-\(rawValue)",
+            name: displayName,
+            detailText: detailText,
+            categories: ProjectDocumentCategory.normalizedConstructionArchiveRequirements(categories),
+            source: .preset
+        )
+    }
+}
+
+struct ProjectDocumentChecklistTemplate: Identifiable, Equatable {
+    enum Source: Equatable {
+        case preset
+        case custom(UUID)
+    }
+
+    var id: String
+    var name: String
+    var detailText: String
+    var categories: [ProjectDocumentCategory]
+    var source: Source
+
+    var categoryText: String {
+        categories.map(\.displayName).joined(separator: "、")
+    }
+
+    static var builtInPresets: [ProjectDocumentChecklistTemplate] {
+        ProjectDocumentChecklistTemplatePreset.allCases.map(\.checklistTemplate)
+    }
+
+    static func customTemplates(from templates: [ProjectTemplate]) -> [ProjectDocumentChecklistTemplate] {
+        templates.compactMap { template in
+            guard let categories = template.documentChecklistCategories else { return nil }
+            return ProjectDocumentChecklistTemplate(
+                id: "custom-\(template.id.uuidString)",
+                name: template.name,
+                detailText: String(format: String(localized: "%lld 类资料"), Int64(categories.count)),
+                categories: categories,
+                source: .custom(template.id)
+            )
+        }
+    }
+}
+
 enum ProjectDocumentCategory: String, CaseIterable, Codable {
     case paymentRequest = "请款资料"
     case construction = "施工资料"
@@ -810,6 +1076,65 @@ enum ProjectDocumentCategory: String, CaseIterable, Codable {
         .processAcceptance,
         .completionAcceptance
     ]
+
+    static func recommendedStage(
+        for project: Project,
+        progressTasks: [ProgressTask] = [],
+        referenceDate: Date = Date()
+    ) -> ProjectDocumentRecommendationStage {
+        if project.status.isArchiveLike {
+            return .acceptance
+        }
+        if !progressTasks.isEmpty {
+            let averageProgress = progressTasks.reduce(0) { $0 + $1.clampedCompletion } / Double(progressTasks.count)
+            if averageProgress >= 0.85 {
+                return .acceptance
+            }
+            if averageProgress > 0 {
+                return .construction
+            }
+        }
+        if let startDate = Formatters.date.date(from: project.startDate) {
+            let calendar = Calendar.current
+            if calendar.startOfDay(for: startDate) <= calendar.startOfDay(for: referenceDate) {
+                return .construction
+            }
+        }
+        return .preConstruction
+    }
+
+    static func recommendedConstructionArchiveRequirements(
+        for stage: ProjectDocumentRecommendationStage
+    ) -> [ProjectDocumentCategory] {
+        normalizedConstructionArchiveRequirements(stage.recommendedCategories)
+    }
+
+    static func documentChecklistTemplateCategory(from token: String) -> ProjectDocumentCategory? {
+        let normalized = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let category = ProjectDocumentCategory(rawValue: normalized) {
+            return category
+        }
+        switch normalized {
+        case "construction_technical":
+            return .constructionTechnical
+        case "construction_material":
+            return .constructionMaterial
+        case "construction_survey":
+            return .constructionSurvey
+        case "construction_record":
+            return .constructionRecord
+        case "construction_test":
+            return .constructionTest
+        case "construction_management":
+            return .constructionManagement
+        case "process_acceptance":
+            return .processAcceptance
+        case "completion_acceptance":
+            return .completionAcceptance
+        default:
+            return nil
+        }
+    }
 
     static func normalizedConstructionArchiveRequirements(
         _ categories: [ProjectDocumentCategory]
