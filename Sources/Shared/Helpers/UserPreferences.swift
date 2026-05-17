@@ -134,18 +134,34 @@ enum AppAppearanceMode: String, CaseIterable {
 }
 
 enum AppLanguage: String, CaseIterable {
+    case system = "system"
     case chinese = "zh-Hans"
     case english = "en"
 
     var displayName: String {
         switch self {
+        case .system: return "跟随系统"
         case .chinese: return "中文"
         case .english: return "English"
         }
     }
 
-    var appleLanguageCode: String {
-        rawValue
+    var preferredLocale: Locale {
+        switch self {
+        case .system:
+            return .autoupdatingCurrent
+        case .chinese, .english:
+            return Locale(identifier: rawValue)
+        }
+    }
+
+    var appleLanguageCodes: [String]? {
+        switch self {
+        case .system:
+            return nil
+        case .chinese, .english:
+            return [rawValue]
+        }
     }
 
     static var current: AppLanguage {
@@ -154,7 +170,11 @@ enum AppLanguage: String, CaseIterable {
     }
 
     static func apply(_ language: AppLanguage) {
-        UserDefaults.standard.set([language.appleLanguageCode], forKey: "AppleLanguages")
+        if let appleLanguageCodes = language.appleLanguageCodes {
+            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
         UserDefaults.standard.set(language.rawValue, forKey: UserPreferenceKeys.languageCode)
         syncWidgetLanguage(language)
         reloadWidgetLanguage()
@@ -163,7 +183,11 @@ enum AppLanguage: String, CaseIterable {
     static func restoreFromStorage() {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
         let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
-        UserDefaults.standard.set([lang.appleLanguageCode], forKey: "AppleLanguages")
+        if let appleLanguageCodes = lang.appleLanguageCodes {
+            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
         syncWidgetLanguage(lang)
         reloadWidgetLanguage()
     }
@@ -171,7 +195,11 @@ enum AppLanguage: String, CaseIterable {
     private static func syncWidgetLanguage(_ language: AppLanguage) {
         guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
         defaults.set(language.rawValue, forKey: WidgetSharedDefaults.languageCodeKey)
-        defaults.set([language.appleLanguageCode], forKey: WidgetSharedDefaults.appleLanguagesKey)
+        if let appleLanguageCodes = language.appleLanguageCodes {
+            defaults.set(appleLanguageCodes, forKey: WidgetSharedDefaults.appleLanguagesKey)
+        } else {
+            defaults.removeObject(forKey: WidgetSharedDefaults.appleLanguagesKey)
+        }
     }
 
     private static func reloadWidgetLanguage() {
@@ -217,9 +245,9 @@ enum AppTheme: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .dropboxBlue: return "晴空蓝"
-        case .jiangnanSpring: return "江南春"
-        case .warmAmber: return "暖橙"
+        case .dropboxBlue: return String(localized: "晴空蓝")
+        case .jiangnanSpring: return String(localized: "江南春")
+        case .warmAmber: return String(localized: "暖橙")
         }
     }
 

@@ -107,4 +107,217 @@ struct QuickNoteImportTests {
 
         #expect(!QuickNoteAttachmentStorage.exists(fileName: fileName))
     }
+
+    @Test func audioRecorderRejectsDeniedMicrophonePermission() async {
+        let session = FakeQuickNoteAudioSession()
+        session.permissionAllowed = false
+        let recorderFactory = FakeQuickNoteAudioRecorderFactory()
+        let fileStore = FakeQuickNoteAudioFileStore()
+        let recorder = QuickNoteAudioRecorder(
+            session: session,
+            recorderFactory: recorderFactory,
+            fileStore: fileStore
+        )
+
+        do {
+            _ = try await recorder.toggleRecording()
+            Issue.record("拒绝麦克风权限时不应开始录音")
+        } catch QuickNoteAudioRecorderError.permissionDenied {
+            #expect(!recorder.isRecording)
+            #expect(session.permissionRequestCount == 1)
+            #expect(session.configureCount == 0)
+            #expect(recorderFactory.makeCount == 0)
+            #expect(fileStore.preparedURLs.isEmpty)
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    @Test func audioRecorderStopsWhenInputIsUnavailable() async {
+        let session = FakeQuickNoteAudioSession()
+        session.inputAvailable = false
+        let recorderFactory = FakeQuickNoteAudioRecorderFactory()
+        let fileStore = FakeQuickNoteAudioFileStore()
+        let recorder = QuickNoteAudioRecorder(
+            session: session,
+            recorderFactory: recorderFactory,
+            fileStore: fileStore
+        )
+
+        do {
+            _ = try await recorder.toggleRecording()
+            Issue.record("没有音频输入时不应开始录音")
+        } catch QuickNoteAudioRecorderError.inputUnavailable {
+            #expect(!recorder.isRecording)
+            #expect(session.configureCount == 1)
+            #expect(session.deactivateCount == 1)
+            #expect(recorderFactory.makeCount == 0)
+            #expect(fileStore.preparedURLs.isEmpty)
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    @Test func audioRecorderCleansTemporaryFileWhenStartFails() async {
+        let session = FakeQuickNoteAudioSession()
+        let fakeRecording = FakeQuickNoteAudioRecording()
+        fakeRecording.recordResult = false
+        let recorderFactory = FakeQuickNoteAudioRecorderFactory(recording: fakeRecording)
+        let fileStore = FakeQuickNoteAudioFileStore(fileName: "failed-recording.m4a")
+        let recorder = QuickNoteAudioRecorder(
+            session: session,
+            recorderFactory: recorderFactory,
+            fileStore: fileStore
+        )
+
+        do {
+            _ = try await recorder.toggleRecording()
+            Issue.record("录音启动失败时不应进入录音状态")
+        } catch QuickNoteAudioRecorderError.startFailed {
+            #expect(!recorder.isRecording)
+            #expect(session.deactivateCount == 1)
+            #expect(fakeRecording.prepareCount == 1)
+            #expect(fakeRecording.recordCount == 1)
+            #expect(fakeRecording.stopCount == 0)
+            #expect(fileStore.deletedRecordings.map { $0.fileName } == ["failed-recording.m4a"])
+            #expect(fileStore.deletedRecordings.first?.summary == "quickNoteAudioRecorder.failedRecording")
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    @Test func audioRecorderStopReturnsAudioAttachment() async throws {
+        let session = FakeQuickNoteAudioSession()
+        let fakeRecording = FakeQuickNoteAudioRecording()
+        fakeRecording.currentTime = 8.25
+        let recorderFactory = FakeQuickNoteAudioRecorderFactory(recording: fakeRecording)
+        let fileStore = FakeQuickNoteAudioFileStore(fileName: "site-voice-note.m4a")
+        let recorder = QuickNoteAudioRecorder(
+            session: session,
+            recorderFactory: recorderFactory,
+            fileStore: fileStore
+        )
+
+        let firstToggle = try await recorder.toggleRecording()
+        #expect(firstToggle == nil)
+        #expect(recorder.isRecording)
+        #expect(fakeRecording.isMeteringEnabled)
+        #expect(fakeRecording.prepareCount == 1)
+        #expect(fakeRecording.recordCount == 1)
+
+        let stoppedAttachment = try await recorder.toggleRecording()
+        let attachment = try #require(stoppedAttachment)
+        #expect(!recorder.isRecording)
+        #expect(attachment.attachmentKind == .audio)
+        #expect(attachment.fileName == "site-voice-note.m4a")
+        #expect(attachment.durationSeconds == Optional(8.25))
+        #expect(fakeRecording.stopCount == 1)
+        #expect(session.deactivateCount == 1)
+        #expect(fileStore.deletedRecordings.isEmpty)
+    }
+}
+
+private final class FakeQuickNoteAudioSession: QuickNoteAudioSessionControlling {
+    var permissionAllowed = true
+    var inputAvailable = true
+    var configureError: Error?
+    private(set) var permissionRequestCount = 0
+    private(set) var configureCount = 0
+    private(set) var deactivateCount = 0
+
+    var isInputAvailable: Bool {
+        inputAvailable
+    }
+
+    func requestRecordPermission() async -> Bool {
+        permissionRequestCount += 1
+        return permissionAllowed
+    }
+
+    func configureForRecording() throws {
+        configureCount += 1
+        if let configureError {
+            throw configureError
+        }
+    }
+
+    func deactivateAfterRecording() {
+        deactivateCount += 1
+    }
+}
+
+private final class FakeQuickNoteAudioRecorderFactory: QuickNoteAudioRecorderCreating {
+    var makeError: Error?
+    private let recording: FakeQuickNoteAudioRecording
+    private(set) var makeCount = 0
+    private(set) var requestedURL: URL?
+    private(set) var requestedSettings: [String: Any] = [:]
+
+    init(recording: FakeQuickNoteAudioRecording = FakeQuickNoteAudioRecording()) {
+        self.recording = recording
+    }
+
+    func makeRecorder(url: URL, settings: [String: Any]) throws -> any QuickNoteAudioRecording {
+        makeCount += 1
+        requestedURL = url
+        requestedSettings = settings
+        if let makeError {
+            throw makeError
+        }
+        return recording
+    }
+}
+
+private final class FakeQuickNoteAudioRecording: QuickNoteAudioRecording {
+    var isMeteringEnabled = false
+    var currentTime: TimeInterval = 0
+    var prepareResult = true
+    var recordResult = true
+    private(set) var prepareCount = 0
+    private(set) var recordCount = 0
+    private(set) var stopCount = 0
+
+    func prepareToRecord() -> Bool {
+        prepareCount += 1
+        return prepareResult
+    }
+
+    func record() -> Bool {
+        recordCount += 1
+        return recordResult
+    }
+
+    func stop() {
+        stopCount += 1
+    }
+}
+
+private final class FakeQuickNoteAudioFileStore: QuickNoteAudioRecordingFileStoring {
+    let fileName: String
+    var prepareError: Error?
+    private(set) var preparedURLs: [URL] = []
+    private(set) var deletedRecordings: [(fileName: String, summary: String)] = []
+
+    init(fileName: String = "quick-note-audio-test.m4a") {
+        self.fileName = fileName
+    }
+
+    func makeFileName(extension ext: String) -> String {
+        fileName
+    }
+
+    func fileURL(for fileName: String) -> URL {
+        FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
+    }
+
+    func prepareDirectory(for recordingURL: URL) throws {
+        preparedURLs.append(recordingURL)
+        if let prepareError {
+            throw prepareError
+        }
+    }
+
+    func deleteRecording(fileName: String, summary: String) {
+        deletedRecordings.append((fileName, summary))
+    }
 }

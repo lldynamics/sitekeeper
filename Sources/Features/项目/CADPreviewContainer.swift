@@ -220,6 +220,7 @@ struct CADDiagnosticMachineTrace: Codable {
     let kernelTrace: KernelTrace?
     let nativeTrace: NativeTrace?
     let diagnostics: [String]
+    let runtimeLog: [CADPoC.CADDiagnosticLogEntry]
     let notes: [String]
 }
 
@@ -1423,8 +1424,13 @@ struct CADPreviewContainer: View {
     @AppStorage("cadViewerMode") private var cadViewerModeRaw = CADViewerMode.auto.rawValue
     @AppStorage("cad.metal.poc.showsOverviewMap") var showsCADOverviewMap = false
     @AppStorage("cad.metal.poc.rendersTextOverlays") var rendersCADTextOverlays = true
+    @AppStorage("cad.metal.poc.rendersLineTypes") var rendersCADLineTypes = false
+    @AppStorage("cad.metal.poc.rendersLineWeights") var rendersCADLineWeights = false
+    @AppStorage("cad.metal.poc.rendersDimensionDetails") var rendersCADDimensionDetails = false
     @AppStorage("cad.metal.poc.buildsTextSearchIndex") var buildsCADTextSearchIndex = false
     @AppStorage("cad.metal.poc.publishesSnapPoints") var publishesCADSnapPoints = false
+    @AppStorage("cad.metal.poc.publishesSnapIntersections") var publishesCADSnapIntersections = false
+    @AppStorage("cad.metal.poc.rendersHatchBoundaries") var rendersCADHatchBoundaries = false
     @AppStorage("cad.metal.poc.rendersHatches") var rendersCADHatches = false
     @AppStorage("cad.metal.poc.rendersPlaceholders") var rendersCADPlaceholders = false
     @AppStorage("cad.metal.poc.showsRendererDiagnostics") var showsCADRendererDiagnostics = false
@@ -2464,9 +2470,13 @@ struct CADPreviewContainer: View {
     }
 
     func migrateCADPoCFeatureDefaultsIfNeeded() {
-        guard cadFeatureDefaultsVersion < 1 else { return }
-        rendersCADTextOverlays = true
-        cadFeatureDefaultsVersion = 1
+        guard cadFeatureDefaultsVersion < 2 else { return }
+        if cadFeatureDefaultsVersion < 1 {
+            rendersCADTextOverlays = true
+        }
+        rendersCADHatchBoundaries = false
+        publishesCADSnapIntersections = publishesCADSnapPoints && publishesCADSnapIntersections
+        cadFeatureDefaultsVersion = 2
     }
 
     func persistCADViewStateIfNeeded(_ viewState: CADDrawingViewState, force: Bool = false) {
@@ -2927,9 +2937,9 @@ struct CADPreviewContainer: View {
             lines.append("\(String(localized: "降级原因"))：\(forceFallbackReason ?? "-")")
         }
         if let performance = lastRendererPerformance {
-            lines.append("\(String(localized: "性能采样"))：visible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), textCommands=\(performance.textCommandCount), textOverlays=\(performance.textOverlayCount), renderMs=\(Int(performance.renderMs))ms, firstFrameMs=\(Int(performance.firstFrameMs))ms, skipped=\(performance.skippedEntityCount), layers=\(performance.visibleLayerCount)")
+            lines.append("\(String(localized: "性能采样"))：visible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), textCommands=\(performance.textCommandCount), textOverlays=\(performance.textOverlayCount), textSkipped=\(performance.textOverlaySkippedCount), renderMs=\(Int(performance.renderMs))ms, firstFrameMs=\(Int(performance.firstFrameMs))ms, skipped=\(performance.skippedEntityCount), layers=\(performance.visibleLayerCount)")
             lines.append("\(String(localized: "渲染闭环"))：layer=\(performance.rendererFailureLayer), reason=\(performance.rendererFailureReason)")
-            lines.append("\(String(localized: "闭环计数"))：import=\(performance.totalEntityCount), indexed=\(performance.indexedEntityCount), viewportBeforeLayer=\(performance.viewportEntityCountBeforeLayerFilter), viewportVisible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), vertices=\(performance.vertexCount), text=\(performance.textOverlayCount)/\(performance.textCommandCount), layers=\(performance.visibleLayerCount)/\(performance.totalLayerCount)")
+            lines.append("\(String(localized: "闭环计数"))：import=\(performance.totalEntityCount), indexed=\(performance.indexedEntityCount), viewportBeforeLayer=\(performance.viewportEntityCountBeforeLayerFilter), viewportVisible=\(performance.visibleEntityCount), commands=\(performance.renderCommandCount), vertices=\(performance.vertexCount), text=\(performance.textOverlayCount)/\(performance.textCommandCount), textSkipped=\(performance.textOverlaySkippedCount), layers=\(performance.visibleLayerCount)/\(performance.totalLayerCount)")
             lines.append("\(String(localized: "闭环状态"))：modelBoundsValid=\(performance.modelBoundsValid), viewportBoundsValid=\(performance.viewportBoundsValid), viewportIntersectsModel=\(performance.viewportIntersectsModel), layerFilterActive=\(performance.layerFilterActive)")
             if performance.textCommandCount > 0 && performance.textOverlayCount == 0 {
                 lines.append("\(String(localized: "文字渲染诊断"))：CAD 已生成文字命令，但当前帧没有可见文字贴图；优先检查 viewport、文字坐标、图层和字体栅格化。")
@@ -2987,6 +2997,17 @@ struct CADPreviewContainer: View {
             lines.append("")
             lines.append("## \(String(localized: "内核报告"))")
             lines.append(rendererReport)
+        }
+        let runtimeLog = CADPoC.CADDiagnosticLog.recentEntries(limit: 24)
+        if !runtimeLog.isEmpty {
+            lines.append("")
+            lines.append("## CAD runtime log")
+            for entry in runtimeLog {
+                lines.append("- [\(entry.timestamp)] \(entry.category): \(entry.message)")
+                if let payload = entry.payloadJSON, !payload.isEmpty {
+                    lines.append("  payload: \(payload)")
+                }
+            }
         }
         if let extraMessage {
             lines.append("")
@@ -3092,6 +3113,7 @@ struct CADPreviewContainer: View {
             kernelTrace: kernelTrace.map(CADDiagnosticMachineTrace.KernelTrace.init),
             nativeTrace: nativeTrace.map(CADDiagnosticMachineTrace.NativeTrace.init),
             diagnostics: diagnostics,
+            runtimeLog: CADPoC.CADDiagnosticLog.recentEntries(limit: 50),
             notes: diagnosticNotes(pipeline: pipeline, diagnostics: diagnostics)
         )
     }

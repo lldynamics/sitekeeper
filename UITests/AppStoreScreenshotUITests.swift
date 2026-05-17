@@ -15,6 +15,7 @@ final class AppStoreScreenshotUITests: XCTestCase {
     private func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
         let url = screenshotOutputDirectory.appendingPathComponent("\(name).png")
         do {
+            try FileManager.default.createDirectory(at: screenshotOutputDirectory, withIntermediateDirectories: true)
             try XCUIScreen.main.screenshot().pngRepresentation.write(to: url)
         } catch {
             XCTFail("截图保存失败: \(error.localizedDescription)", line: line)

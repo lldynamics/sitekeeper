@@ -25,20 +25,35 @@ struct CADCanvasControlCommand: Equatable, Identifiable {
 
 struct CADCanvasFeatureOptions: Equatable {
     var rendersTextOverlays: Bool
+    var rendersLineTypes: Bool
+    var rendersLineWeights: Bool
+    var rendersDimensionDetails: Bool
     var publishesSnapPoints: Bool
+    var publishesSnapIntersections: Bool
+    var rendersHatchBoundaries: Bool
     var rendersHatches: Bool
     var rendersPlaceholders: Bool
 
     static let performanceDefault = CADCanvasFeatureOptions(
         rendersTextOverlays: true,
+        rendersLineTypes: false,
+        rendersLineWeights: false,
+        rendersDimensionDetails: false,
         publishesSnapPoints: false,
+        publishesSnapIntersections: false,
+        rendersHatchBoundaries: false,
         rendersHatches: false,
         rendersPlaceholders: false
     )
 
     static let fullDetail = CADCanvasFeatureOptions(
         rendersTextOverlays: true,
+        rendersLineTypes: true,
+        rendersLineWeights: true,
+        rendersDimensionDetails: true,
         publishesSnapPoints: true,
+        publishesSnapIntersections: true,
+        rendersHatchBoundaries: true,
         rendersHatches: true,
         rendersPlaceholders: true
     )
@@ -46,7 +61,12 @@ struct CADCanvasFeatureOptions: Equatable {
     var enabledCount: Int {
         [
             rendersTextOverlays,
+            rendersLineTypes,
+            rendersLineWeights,
+            rendersDimensionDetails,
             publishesSnapPoints,
+            publishesSnapIntersections,
+            rendersHatchBoundaries,
             rendersHatches,
             rendersPlaceholders
         ].filter { $0 }.count
@@ -57,7 +77,7 @@ struct CADCanvasFeatureOptions: Equatable {
         case .text:
             return rendersTextOverlays
         case .hatch:
-            return rendersHatches
+            return rendersHatchBoundaries || rendersHatches
         case .imagePlaceholder, .unsupportedPlaceholder:
             return rendersPlaceholders
         default:
@@ -66,7 +86,7 @@ struct CADCanvasFeatureOptions: Equatable {
     }
 
     func allows(_ entity: SiteKeeperCADKernel.CADEntity) -> Bool {
-        if !rendersHatches, entity.kind == .hatch {
+        if !rendersHatchBoundaries, !rendersHatches, entity.kind == .hatch {
             return false
         }
         if !rendersPlaceholders,
@@ -264,6 +284,7 @@ struct CADCanvasView: UIViewRepresentable {
             lastDatabase = result.database
             callbacks.onOpenTraceChange(result.trace)
             logTrace(result.trace)
+            logTextTrace(result.database.textTrace, fileName: result.trace.fileName)
             onLayoutsChanged(result.database.layouts)
             onLayersChanged(result.database.layers)
             publishSearchIndex()
@@ -346,12 +367,51 @@ struct CADCanvasView: UIViewRepresentable {
         }
 
         private func logTrace(_ trace: CADPoC.CADOpenTrace) {
-            #if DEBUG
-            if let data = try? JSONEncoder().encode(trace),
-               let json = String(data: data, encoding: .utf8) {
-                print("CADOpenTrace \(json)")
+            CADPoC.CADDiagnosticLog.recordEncoded(
+                category: "cad.openTrace",
+                message: "CAD open trace captured.",
+                payload: trace
+            )
+        }
+
+        private func logTextTrace(_ traces: [SiteKeeperCADKernel.CADTextTrace], fileName: String) {
+            guard !traces.isEmpty else { return }
+            struct TextTraceSample: Codable {
+                var entityId: String
+                var entityType: String
+                var rawText: String
+                var decodedText: String
+                var displayText: String
+                var textStyleName: String
+                var fontFile: String?
+                var bigFontFile: String?
+                var selectedFontName: String
+                var fontWasAvailable: Bool
+                var warnings: [String]
             }
-            #endif
+
+            let samples = traces.prefix(32).map {
+                TextTraceSample(
+                    entityId: $0.entityId,
+                    entityType: $0.entityType,
+                    rawText: $0.rawText,
+                    decodedText: $0.decodedText,
+                    displayText: $0.displayText,
+                    textStyleName: $0.textStyleName,
+                    fontFile: $0.fontFile,
+                    bigFontFile: $0.bigFontFile,
+                    selectedFontName: $0.selectedFontName,
+                    fontWasAvailable: $0.fontWasAvailable,
+                    warnings: $0.warnings
+                )
+            }
+
+            CADPoC.CADDiagnosticLog.recordEncoded(
+                category: "cad.textTrace",
+                message: "CAD text trace captured.",
+                payload: samples,
+                coalescingKey: "cad.textTrace.\(fileName)"
+            )
         }
 
         @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {

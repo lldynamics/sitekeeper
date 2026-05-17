@@ -257,6 +257,14 @@ private struct ClearLocalDataBackupGateSheet: View {
         localBackupLastSuccessAt > flowStartedAt
     }
 
+    private var canContinueClearing: Bool {
+#if DEBUG
+        ProcessInfo.processInfo.environment["UITEST_ALLOW_CLEAR_WITHOUT_BACKUP"] == "1" || hasBackupCreatedInThisFlow
+#else
+        hasBackupCreatedInThisFlow
+#endif
+    }
+
     private var backupStatusText: String {
         guard localBackupLastSuccessAt > 0 else {
             return String(localized: "尚未生成本机备份")
@@ -316,7 +324,7 @@ private struct ClearLocalDataBackupGateSheet: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .frame(maxWidth: .infinity)
-                    .disabled(!hasBackupCreatedInThisFlow)
+                    .disabled(!canContinueClearing)
                 }
             }
             .padding(20)

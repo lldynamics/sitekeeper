@@ -1,5 +1,7 @@
-"CFBundleDisplayName" = "工地掌柜";
+"CFBundleDisplayName" = "Sitekeeper";
 "NSCameraUsageDescription" = "Used to scan invoices/receipts, capture site photos, and attach notes.";
+"NSContactsUsageDescription" = "Used to import project contacts from Contacts and support phone or message follow-up.";
 "NSLocationWhenInUseUsageDescription" = "Used to add capture location to watermark photos when enabled by you.";
+"NSMicrophoneUsageDescription" = "Used to record site voice notes in Quick Notes.";
 "NSPhotoLibraryUsageDescription" = "Used to pick photos and files for projects, receipts, and quick notes.";
 "NSPhotoLibraryAddUsageDescription" = "Used to save watermark photos to your system photo library.";

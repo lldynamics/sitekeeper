@@ -547,8 +547,13 @@ extension CADPreviewContainer {
     var cadPerformanceOptionEnabledCount: Int {
         [
             rendersCADTextOverlays,
+            rendersCADLineTypes,
+            rendersCADLineWeights,
+            rendersCADDimensionDetails,
             buildsCADTextSearchIndex,
             publishesCADSnapPoints,
+            publishesCADSnapIntersections,
+            rendersCADHatchBoundaries,
             rendersCADHatches,
             rendersCADPlaceholders,
             showsCADOverviewMap,
@@ -606,14 +611,40 @@ extension CADPreviewContainer {
             Label(String(localized: "文字搜索索引"), systemImage: buildsCADTextSearchIndex ? "checkmark.circle.fill" : "circle")
         }
         Button {
+            rendersCADLineTypes.toggle()
+        } label: {
+            Label(String(localized: "虚线/点划线"), systemImage: rendersCADLineTypes ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            rendersCADLineWeights.toggle()
+        } label: {
+            Label(String(localized: "线宽"), systemImage: rendersCADLineWeights ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            rendersCADDimensionDetails.toggle()
+        } label: {
+            Label(String(localized: "标注箭头"), systemImage: rendersCADDimensionDetails ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
             publishesCADSnapPoints.toggle()
         } label: {
             Label(String(localized: "吸附点"), systemImage: publishesCADSnapPoints ? "checkmark.circle.fill" : "circle")
         }
         Button {
+            publishesCADSnapIntersections.toggle()
+        } label: {
+            Label(String(localized: "交点吸附"), systemImage: publishesCADSnapIntersections ? "checkmark.circle.fill" : "circle")
+        }
+        .disabled(!publishesCADSnapPoints)
+        Button {
+            rendersCADHatchBoundaries.toggle()
+        } label: {
+            Label(String(localized: "填充细节"), systemImage: rendersCADHatchBoundaries ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
             rendersCADHatches.toggle()
         } label: {
-            Label(String(localized: "填充细节"), systemImage: rendersCADHatches ? "checkmark.circle.fill" : "circle")
+            Label(String(localized: "填充实体"), systemImage: rendersCADHatches ? "checkmark.circle.fill" : "circle")
         }
         Button {
             rendersCADPlaceholders.toggle()

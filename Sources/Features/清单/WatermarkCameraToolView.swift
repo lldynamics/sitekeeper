@@ -16,7 +16,7 @@ struct WatermarkCameraToolView: View {
     @AppStorage("watermarkCameraPhotographer") private var photographer = ""
     @AppStorage("watermarkCameraLocationText") private var locationText = ""
     @AppStorage("watermarkCameraTemplateRaw") private var templateRaw = CameraWatermarkTemplate.constructionLog.rawValue
-    @AppStorage("watermarkCameraTag") private var tag = "现场记录"
+    @AppStorage("watermarkCameraTag") private var tag = String(localized: "wm_camera_default_tag")
     @AppStorage("watermarkCameraAutoSaveToAlbum") private var autoSaveToAlbum = true
     @AppStorage("watermarkCameraAutoOpenLogDraft") private var autoOpenLogDraft = false
     @AppStorage("watermarkCameraExportQualityRaw") private var exportQualityRaw = WatermarkExportQuality.standard.rawValue
@@ -28,7 +28,7 @@ struct WatermarkCameraToolView: View {
     @State private var selectedCapturedPhotoID: UUID?
     @State private var exportData = Data()
     @State private var showExporter = false
-    @State private var alertTitle = "无法继续"
+    @State private var alertTitle = String(localized: "wm_camera_alert_cannot_continue_title")
     @State private var alertMessage = ""
     @State private var alertSettingsURL: URL?
     @State private var showAlert = false
@@ -95,7 +95,7 @@ struct WatermarkCameraToolView: View {
             autoSaveSection
             recentCaptureSection
         }
-        .navigationTitle("水印相机")
+        .navigationTitle(String(localized: "wm_camera_nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showCamera) {
             WatermarkCameraCaptureView(
@@ -115,18 +115,23 @@ struct WatermarkCameraToolView: View {
         ) { result in
             switch result {
             case .success:
-                presentInfo("照片已导出。")
+                presentInfo(String(localized: "wm_camera_export_photo_success"))
             case .failure(let error):
-                presentError("照片导出失败：\(error.localizedDescription)")
+                presentError(
+                    String(
+                        format: String(localized: "wm_camera_export_photo_failed_format"),
+                        error.localizedDescription
+                    )
+                )
             }
         }
         .alert(alertTitle, isPresented: $showAlert) {
             if let alertSettingsURL {
-                Button("前往设置") {
+                Button(String(localized: "wm_camera_go_to_settings_button")) {
                     openURL(alertSettingsURL)
                 }
             }
-            Button("知道了", role: .cancel) {}
+            Button(String(localized: "wm_camera_ack_button"), role: .cancel) {}
         } message: {
             Text(alertMessage)
         }
@@ -139,7 +144,11 @@ struct WatermarkCameraToolView: View {
                     initialContent: logDraftContent
                 )
             } else {
-                ContentUnavailableView("暂无日志草稿", systemImage: "book.pages", description: Text("请先拍摄一张水印照片。"))
+                ContentUnavailableView(
+                    String(localized: "wm_camera_no_log_draft_title"),
+                    systemImage: "book.pages",
+                    description: Text(String(localized: "wm_camera_capture_photo_first_message"))
+                )
             }
         }
         .overlay(alignment: .top) {
@@ -179,10 +188,10 @@ struct WatermarkCameraToolView: View {
     private var projectSection: some View {
         Section {
             ProjectContextStrip(
-                title: "当前工程",
+                title: String(localized: "wm_camera_current_project_title"),
                 projects: store.projects,
                 selectedProjectId: $selectedProjectId,
-                emptyText: "不关联项目"
+                emptyText: String(localized: "wm_camera_unlinked_project_text")
             )
         }
     }
@@ -206,7 +215,7 @@ struct WatermarkCameraToolView: View {
                 }
             }
         } header: {
-            Label("水印模板", systemImage: "rectangle.and.pencil.and.ellipsis")
+            Label(String(localized: "wm_camera_template_section_title"), systemImage: "rectangle.and.pencil.and.ellipsis")
         }
     }
 
@@ -215,7 +224,7 @@ struct WatermarkCameraToolView: View {
             Button {
                 openCamera()
             } label: {
-                Label("拍摄水印照片", systemImage: "camera.fill")
+                Label(String(localized: "wm_camera_capture_button"), systemImage: "camera.fill")
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
@@ -225,10 +234,10 @@ struct WatermarkCameraToolView: View {
 
     private var watermarkInfoSection: some View {
         Section {
-            TextField("标签", text: $tag)
-            TextField("拍摄人", text: $photographer)
+            TextField(String(localized: "wm_camera_tag_field"), text: $tag)
+            TextField(String(localized: "wm_camera_photographer_field"), text: $photographer)
             HStack {
-                TextField("定位/位置", text: $locationText)
+                TextField(String(localized: "wm_camera_location_field"), text: $locationText)
                 Button {
                     locationManager.requestLocation()
                 } label: {
@@ -242,38 +251,45 @@ struct WatermarkCameraToolView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Label("水印信息", systemImage: "info.circle")
+            Label(String(localized: "wm_camera_info_section_title"), systemImage: "info.circle")
         }
     }
 
     private var cameraSettingsSection: some View {
         Section {
             DisclosureGroup {
-                Picker("导出画质", selection: exportQualityBinding) {
+                Picker(String(localized: "wm_camera_export_quality_picker"), selection: exportQualityBinding) {
                     ForEach(WatermarkExportQuality.allCases, id: \.self) { quality in
                         Text(quality.displayName).tag(quality)
                     }
                 }
-                Toggle("相机网格线", isOn: $showGrid)
-                Toggle("默认闪光灯", isOn: $flashEnabled)
-                Stepper("连拍张数：\(boundedBurstCount)", value: $burstCount, in: 1...5)
+                Toggle(String(localized: "wm_camera_show_grid_toggle"), isOn: $showGrid)
+                Toggle(String(localized: "wm_camera_flash_default_toggle"), isOn: $flashEnabled)
+                Stepper(
+                    String(
+                        format: String(localized: "wm_camera_burst_count_stepper_format"),
+                        boundedBurstCount
+                    ),
+                    value: $burstCount,
+                    in: 1...5
+                )
             } label: {
-                Label("相机设置", systemImage: "camera.fill")
+                Label(String(localized: "wm_camera_settings_section_title"), systemImage: "camera.fill")
             }
         }
     }
 
     private var autoSaveSection: some View {
         Section {
-            Toggle("拍完自动保存到相册", isOn: $autoSaveToAlbum)
-            Toggle("拍完自动进入施工日志草稿", isOn: $autoOpenLogDraft)
+            Toggle(String(localized: "wm_camera_auto_save_album_toggle"), isOn: $autoSaveToAlbum)
+            Toggle(String(localized: "wm_camera_auto_open_log_draft_toggle"), isOn: $autoOpenLogDraft)
         }
     }
 
     @ViewBuilder
     private var recentCaptureSection: some View {
         if let capturedPhoto {
-            Section("最近拍摄") {
+            Section(String(localized: "wm_camera_recent_capture_section_title")) {
                 Image(uiImage: capturedPhoto.image)
                     .resizable()
                     .scaledToFit()
@@ -320,7 +336,13 @@ struct WatermarkCameraToolView: View {
                     Text(capturedPhotoMetaText(capturedAt: capturedPhoto.capturedAt))
                     Text(projectAssociationText)
                     if hasMultipleCapturedPhotos {
-                        Text("连拍共 \(capturedPhotos.count) 张，当前处理第 \(selectedCapturedPhotoNumber) 张")
+                        Text(
+                            String(
+                                format: String(localized: "wm_camera_burst_progress_text_format"),
+                                capturedPhotos.count,
+                                selectedCapturedPhotoNumber
+                            )
+                        )
                     }
                 }
                 .font(.caption2)
@@ -329,8 +351,12 @@ struct WatermarkCameraToolView: View {
                 recentCaptureActions
             }
         } else {
-            Section("最近拍摄") {
-                ContentUnavailableView("还没有照片", systemImage: "camera.aperture", description: Text("拍摄后可直接导出带水印的 JPEG。"))
+            Section(String(localized: "wm_camera_recent_capture_section_title")) {
+                ContentUnavailableView(
+                    String(localized: "wm_camera_no_photo_title"),
+                    systemImage: "camera.aperture",
+                    description: Text(String(localized: "wm_camera_no_photo_message"))
+                )
             }
         }
     }
@@ -340,7 +366,7 @@ struct WatermarkCameraToolView: View {
             Button {
                 saveCurrentImageToAlbum()
             } label: {
-                Label("保存相册", systemImage: "photo.on.rectangle.angled")
+                Label(String(localized: "wm_camera_save_album_button"), systemImage: "photo.on.rectangle.angled")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.bordered)
@@ -351,7 +377,7 @@ struct WatermarkCameraToolView: View {
                 Button {
                     saveAllImagesToAlbum()
                 } label: {
-                    Label("保存全部", systemImage: "photo.stack")
+                    Label(String(localized: "wm_camera_save_all_button"), systemImage: "photo.stack")
                         .font(.caption.weight(.semibold))
                 }
                 .buttonStyle(.bordered)
@@ -362,7 +388,7 @@ struct WatermarkCameraToolView: View {
             Button {
                 saveCurrentImageAsProjectDocument()
             } label: {
-                Label("附项目资料", systemImage: "folder.badge.plus")
+                Label(String(localized: "wm_camera_attach_project_document_button"), systemImage: "folder.badge.plus")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.bordered)
@@ -372,7 +398,7 @@ struct WatermarkCameraToolView: View {
             Button {
                 exportCurrentImage()
             } label: {
-                Label("导出", systemImage: "square.and.arrow.up")
+                Label(String(localized: "wm_camera_export_button"), systemImage: "square.and.arrow.up")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.bordered)
@@ -388,7 +414,7 @@ struct WatermarkCameraToolView: View {
                             initialContent: logDraftContent
                         )
                     } label: {
-                        Label("进入施工日志", systemImage: "book.pages.fill")
+                        Label(String(localized: "wm_camera_enter_daily_log_menu"), systemImage: "book.pages.fill")
                     }
                 }
                 if let todoSeedData {
@@ -399,7 +425,7 @@ struct WatermarkCameraToolView: View {
                             initialBeforePhotoData: todoSeedData
                         )
                     } label: {
-                        Label("转为整改前待办", systemImage: "checklist")
+                        Label(String(localized: "wm_camera_convert_to_before_fix_todo_menu"), systemImage: "checklist")
                     }
                     NavigationLink {
                         SiteTodoView(
@@ -408,17 +434,17 @@ struct WatermarkCameraToolView: View {
                             initialAfterPhotoData: todoSeedData
                         )
                     } label: {
-                        Label("转为整改后待办", systemImage: "checkmark.seal.fill")
+                        Label(String(localized: "wm_camera_convert_to_after_fix_todo_menu"), systemImage: "checkmark.seal.fill")
                     }
                 }
                 Divider()
                 Button(role: .destructive) {
                     clearCapturedPhotos()
                 } label: {
-                    Label("清空照片", systemImage: "trash")
+                    Label(String(localized: "wm_camera_clear_photos_menu"), systemImage: "trash")
                 }
             } label: {
-                Label("更多", systemImage: "ellipsis.circle")
+                Label(String(localized: "wm_camera_more_menu"), systemImage: "ellipsis.circle")
                     .font(.caption.weight(.semibold))
             }
             .buttonStyle(.bordered)
@@ -454,21 +480,21 @@ struct WatermarkCameraToolView: View {
     }
 
     private var projectAssociationText: String {
-        guard let name = effectiveProjectName else { return "未关联项目" }
-        return "工程：\(name)"
+        guard let name = effectiveProjectName else { return String(localized: "wm_camera_unlinked_project_text") }
+        return String(format: String(localized: "wm_camera_project_association_format"), name)
     }
 
     private func capturedPhotoMetaText(capturedAt: Date) -> String {
         let time = Formatters.dateTime.string(from: capturedAt)
         let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTag.isEmpty {
-            return "\(time) · \(template.displayName)"
+            return String(format: String(localized: "wm_camera_capture_meta_without_tag_format"), time, template.displayName)
         }
-        return "\(time) · \(template.displayName) · \(trimmedTag)"
+        return String(format: String(localized: "wm_camera_capture_meta_with_tag_format"), time, template.displayName, trimmedTag)
     }
 
     private var exportFileName: String {
-        let base = effectiveProjectName ?? "水印照片"
+        let base = effectiveProjectName ?? String(localized: "wm_camera_export_default_name")
         let safe = base.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
         return "\(safe)_\(Formatters.compactTimestamp(from: capturedPhoto?.capturedAt ?? Date()))"
     }
@@ -491,9 +517,9 @@ struct WatermarkCameraToolView: View {
     private var logDraftContent: String {
         let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmedTag.isEmpty {
-            return "水印照片记录"
+            return String(localized: "wm_camera_log_draft_default_content")
         }
-        return "水印照片记录：\(trimmedTag)"
+        return String(format: String(localized: "wm_camera_log_draft_with_tag_format"), trimmedTag)
     }
 
     private func handleCapturedImages(_ images: [UIImage], capturedAt: Date) {
@@ -504,13 +530,16 @@ struct WatermarkCameraToolView: View {
             )
         }
         guard !outputs.isEmpty else {
-            presentError("未获取到照片，请重试。")
+            presentError(String(localized: "wm_camera_capture_empty_result_error"))
             return
         }
         capturedPhotos = outputs
         selectedCapturedPhotoID = outputs.first?.id
         UINotificationFeedbackGenerator().notificationOccurred(.success)
-        presentToast("已拍摄 \(outputs.count) 张，可继续处理。", style: .success)
+        presentToast(
+            String(format: String(localized: "wm_camera_capture_success_toast_format"), outputs.count),
+            style: .success
+        )
         if autoSaveToAlbum {
             if outputs.count > 1 {
                 saveAllImagesToAlbum()
@@ -525,14 +554,14 @@ struct WatermarkCameraToolView: View {
 
     private func openCamera() {
         guard AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil else {
-            presentBlockingError("当前设备不可用相机。")
+            presentBlockingError(String(localized: "wm_camera_device_unavailable_error"))
             return
         }
         Task { @MainActor in
             let isGranted = await requestCameraAccessIfNeeded()
             guard isGranted else {
                 presentBlockingError(
-                    "未获得相机权限，无法拍摄。",
+                    String(localized: "wm_camera_permission_denied_error"),
                     settingsURL: appSettingsURL
                 )
                 return
@@ -562,7 +591,7 @@ struct WatermarkCameraToolView: View {
     private func exportCurrentImage() {
         guard let image = capturedPhoto?.image,
               let data = image.jpegData(compressionQuality: exportQuality.compression) else {
-            presentError("照片导出失败。")
+            presentError(String(localized: "wm_camera_export_photo_failed"))
             return
         }
         exportData = data
@@ -571,7 +600,7 @@ struct WatermarkCameraToolView: View {
 
     private func saveCurrentImageToAlbum() {
         guard let image = capturedPhoto?.image else {
-            presentError("请先拍摄水印照片。")
+            presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
         }
 
@@ -583,7 +612,7 @@ struct WatermarkCameraToolView: View {
     private func saveAllImagesToAlbum() {
         let images = capturedPhotos.map(\.image)
         guard !images.isEmpty else {
-            presentError("请先拍摄水印照片。")
+            presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
         }
         performWithPhotoLibraryAccess {
@@ -603,7 +632,7 @@ struct WatermarkCameraToolView: View {
                         action()
                     } else {
                         presentBlockingError(
-                            "没有相册写入权限，无法保存。",
+                            String(localized: "wm_camera_album_permission_missing_error"),
                             settingsURL: appSettingsURL
                         )
                     }
@@ -611,11 +640,11 @@ struct WatermarkCameraToolView: View {
             }
         case .denied, .restricted:
             presentBlockingError(
-                "没有相册写入权限，请到系统设置中开启。",
+                String(localized: "wm_camera_album_permission_settings_error"),
                 settingsURL: appSettingsURL
             )
         @unknown default:
-            presentError("无法确认相册权限。")
+            presentError(String(localized: "wm_camera_album_permission_unknown_error"))
         }
     }
 
@@ -629,9 +658,18 @@ struct WatermarkCameraToolView: View {
             Task { @MainActor in
                 savingToAlbum = false
                 if success {
-                    presentInfo(images.count > 1 ? "已保存 \(images.count) 张到相册。" : "已保存到相册。")
+                    if images.count > 1 {
+                        presentInfo(String(format: String(localized: "wm_camera_save_album_multi_success_format"), images.count))
+                    } else {
+                        presentInfo(String(localized: "wm_camera_save_album_single_success"))
+                    }
                 } else {
-                    presentError("保存到相册失败：\(error?.localizedDescription ?? "未知错误")")
+                    presentError(
+                        String(
+                            format: String(localized: "wm_camera_save_album_failed_format"),
+                            error?.localizedDescription ?? String(localized: "wm_camera_unknown_error")
+                        )
+                    )
                 }
             }
         }
@@ -639,27 +677,39 @@ struct WatermarkCameraToolView: View {
 
     private func watermarkPhotoNote(capturedAt: Date) -> String {
         [
-            "来源: 水印相机",
-            "拍摄时间: \(Formatters.dateTime.string(from: capturedAt))",
-            photographer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "拍摄人: \(photographer)",
-            locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "位置: \(locationText)",
-            tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : "标签: \(tag)"
+            String(localized: "wm_camera_photo_note_source"),
+            String(
+                format: String(localized: "wm_camera_photo_note_capture_time_format"),
+                Formatters.dateTime.string(from: capturedAt)
+            ),
+            photographer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : String(format: String(localized: "wm_camera_photo_note_photographer_format"), photographer),
+            locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : String(format: String(localized: "wm_camera_photo_note_location_format"), locationText),
+            tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? nil
+            : String(format: String(localized: "wm_camera_photo_note_tag_format"), tag)
         ].compactMap { $0 }.joined(separator: "\n")
     }
 
     @MainActor
     private func saveCurrentImageAsProjectDocument() {
         guard let selectedProjectId else {
-            presentError("请先选择要附加的工程。")
+            presentError(String(localized: "wm_camera_pick_project_first_error"))
             return
         }
         guard let capturedPhoto else {
-            presentError("请先拍摄水印照片。")
+            presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
         }
         let error = ProjectDetailFinanceDocumentActions.importCapturedImage(
             capturedPhoto.image,
-            title: "水印照片-\(Formatters.dateTime.string(from: capturedPhoto.capturedAt))",
+            title: String(
+                format: String(localized: "wm_camera_project_document_title_format"),
+                Formatters.dateTime.string(from: capturedPhoto.capturedAt)
+            ),
             createdAt: Formatters.dateTime.string(from: capturedPhoto.capturedAt),
             category: .constructionRecord,
             note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
@@ -669,7 +719,7 @@ struct WatermarkCameraToolView: View {
         if let error {
             presentError(error)
         } else {
-            presentInfo("已附到项目资料。")
+            presentInfo(String(localized: "wm_camera_attach_project_document_success"))
         }
     }
 
@@ -687,7 +737,7 @@ struct WatermarkCameraToolView: View {
     }
 
     private func presentBlockingError(_ message: String, settingsURL: URL? = nil) {
-        alertTitle = "无法继续"
+        alertTitle = String(localized: "wm_camera_alert_cannot_continue_title")
         alertMessage = message
         alertSettingsURL = settingsURL
         showAlert = true
@@ -737,9 +787,9 @@ private enum WatermarkExportQuality: String, CaseIterable {
     var displayName: String {
         switch self {
         case .standard:
-            return "标准"
+            return String(localized: "wm_camera_export_quality_standard")
         case .high:
-            return "高清"
+            return String(localized: "wm_camera_export_quality_high")
         }
     }
 
@@ -829,7 +879,7 @@ private struct WatermarkCameraCaptureView: View {
 
             VStack(spacing: 0) {
                 HStack {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "wm_camera_close_button")) { dismiss() }
                         .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
@@ -857,7 +907,7 @@ private struct WatermarkCameraCaptureView: View {
                 .padding(.bottom, 10)
 
                 HStack(spacing: 16) {
-                    Text("连拍 x\(burstCount)")
+                    Text(String(format: String(localized: "wm_camera_burst_count_indicator_format"), burstCount))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .padding(.horizontal, 10)
@@ -874,7 +924,11 @@ private struct WatermarkCameraCaptureView: View {
                     }
                     .disabled(isCapturing)
 
-                    Text(flashEnabled ? "闪光: 开" : "闪光: 关")
+                    Text(
+                        flashEnabled
+                        ? String(localized: "wm_camera_flash_on_text")
+                        : String(localized: "wm_camera_flash_off_text")
+                    )
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.white.opacity(0.85))
                         .padding(.horizontal, 10)
@@ -884,8 +938,8 @@ private struct WatermarkCameraCaptureView: View {
                 .padding(.bottom, 28)
             }
         }
-        .alert("相机不可用", isPresented: $showError) {
-            Button("知道了") { dismiss() }
+        .alert(String(localized: "wm_camera_unavailable_alert_title"), isPresented: $showError) {
+            Button(String(localized: "wm_camera_ack_button")) { dismiss() }
         } message: {
             Text(captureError)
         }
@@ -919,7 +973,7 @@ private struct WatermarkCameraCaptureView: View {
                     onCapture(images, capturedAt)
                     dismiss()
                 } else {
-                    captureError = "未获取到照片，请重试。"
+                    captureError = String(localized: "wm_camera_capture_empty_result_error")
                     showError = true
                 }
             }
@@ -994,7 +1048,7 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
             guard let self else { return }
             self.configureIfNeeded()
             guard self.isConfigured else {
-                completion([], Date(), self.lastErrorMessage ?? "相机初始化失败。")
+                completion([], Date(), self.lastErrorMessage ?? String(localized: "wm_camera_init_failed_error"))
                 return
             }
             self.completion = completion
@@ -1010,11 +1064,11 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
         guard !isConfigured else { return }
         let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
         if authStatus == .denied || authStatus == .restricted {
-            lastErrorMessage = "相机权限未开启，请到系统设置中允许访问相机。"
+            lastErrorMessage = String(localized: "wm_camera_permission_not_enabled_settings_error")
             return
         }
         if authStatus == .notDetermined {
-            lastErrorMessage = "请先授权相机权限，再重新打开相机。"
+            lastErrorMessage = String(localized: "wm_camera_permission_request_first_error")
             return
         }
 
@@ -1022,7 +1076,7 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
         session.sessionPreset = .photo
 
         guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            lastErrorMessage = "当前设备不可用相机。"
+            lastErrorMessage = String(localized: "wm_camera_device_unavailable_error")
             session.commitConfiguration()
             return
         }
@@ -1031,12 +1085,15 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
             if session.canAddInput(input) {
                 session.addInput(input)
             } else {
-                lastErrorMessage = "无法添加相机输入。"
+                lastErrorMessage = String(localized: "wm_camera_add_input_failed_error")
                 session.commitConfiguration()
                 return
             }
         } catch {
-            lastErrorMessage = "相机输入失败：\(error.localizedDescription)"
+            lastErrorMessage = String(
+                format: String(localized: "wm_camera_input_failed_format"),
+                error.localizedDescription
+            )
             session.commitConfiguration()
             return
         }
@@ -1044,7 +1101,7 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
         if session.canAddOutput(photoOutput) {
             session.addOutput(photoOutput)
         } else {
-            lastErrorMessage = "无法添加相机输出。"
+            lastErrorMessage = String(localized: "wm_camera_add_output_failed_error")
             session.commitConfiguration()
             return
         }
@@ -1079,11 +1136,16 @@ private final class WatermarkCameraSession: NSObject, ObservableObject, AVCaptur
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
         if let error {
-            finish(error: "拍摄失败：\(error.localizedDescription)")
+            finish(
+                error: String(
+                    format: String(localized: "wm_camera_capture_failed_format"),
+                    error.localizedDescription
+                )
+            )
             return
         }
         guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
-            finish(error: "照片数据损坏，请重试。")
+            finish(error: String(localized: "wm_camera_corrupted_photo_data_error"))
             return
         }
         capturedImages.append(image)
@@ -1143,20 +1205,20 @@ private final class WatermarkCameraLocationManager: NSObject, ObservableObject, 
 
     func requestLocation() {
         guard CLLocationManager.locationServicesEnabled() else {
-            statusText = "定位服务未开启"
+            statusText = String(localized: "wm_camera_location_service_disabled")
             return
         }
         switch manager.authorizationStatus {
         case .notDetermined:
-            statusText = "正在请求定位权限"
+            statusText = String(localized: "wm_camera_location_requesting_permission")
             manager.requestWhenInUseAuthorization()
         case .authorizedAlways, .authorizedWhenInUse:
-            statusText = "正在获取当前位置"
+            statusText = String(localized: "wm_camera_location_fetching")
             manager.requestLocation()
         case .denied, .restricted:
-            statusText = "定位权限未开启，可手动填写位置"
+            statusText = String(localized: "wm_camera_location_permission_disabled")
         @unknown default:
-            statusText = "无法获取定位，可手动填写位置"
+            statusText = String(localized: "wm_camera_location_unavailable")
         }
     }
 
@@ -1189,17 +1251,17 @@ private final class WatermarkCameraLocationManager: NSObject, ObservableObject, 
                     } else {
                         self.locationText = readable
                     }
-                    self.statusText = "已填入当前位置"
+                    self.statusText = String(localized: "wm_camera_location_filled_current")
                 } else {
                     self.locationText = fallback
-                    self.statusText = "已填入经纬度位置"
+                    self.statusText = String(localized: "wm_camera_location_filled_coordinates")
                 }
             }
         }
     }
 
     func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        statusText = "定位失败，可手动填写位置"
+        statusText = String(localized: "wm_camera_location_failed")
     }
 }
 

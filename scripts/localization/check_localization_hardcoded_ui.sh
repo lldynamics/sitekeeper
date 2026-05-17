@@ -12,6 +12,7 @@ cd "$repo_root"
 scripts/localization/check_localization_integrity.sh
 
 targets=(
+  "Widget"
   "Sources/Features"
   "Sources/Shared/CAD"
   "Sources/Shared/Services"
@@ -21,7 +22,7 @@ targets=(
 
 exclude_path_pattern='SiteKeeperCADKernel'
 interpolated_pattern='String\(localized:\s*\"[^\"]*\\\('
-hardcoded_ui_pattern='Text\(\"[^\"]*[\p{Han}][^\"]*\"\)|Label\(\"[^\"]*[\p{Han}][^\"]*\"|Button\(\"[^\"]*[\p{Han}][^\"]*\"|TextField\(\"[^\"]*[\p{Han}][^\"]*\"|Section\(\"[^\"]*[\p{Han}][^\"]*\"\)|Toggle\(\"[^\"]*[\p{Han}][^\"]*\"|Picker\(\"[^\"]*[\p{Han}][^\"]*\"|LabeledContent\(\"[^\"]*[\p{Han}][^\"]*\"|Menu\(\"[^\"]*[\p{Han}][^\"]*\"|navigationTitle\(\"[^\"]*[\p{Han}][^\"]*\"|ContentUnavailableView\(\"[^\"]*[\p{Han}][^\"]*\"|alert\(\"[^\"]*[\p{Han}][^\"]*\"'
+hardcoded_ui_pattern='Text\(\"[^\"]*[\p{Han}][^\"]*\"\)|Label\(\"[^\"]*[\p{Han}][^\"]*\"|Button\(\"[^\"]*[\p{Han}][^\"]*\"|TextField\(\"[^\"]*[\p{Han}][^\"]*\"|Section\(\"[^\"]*[\p{Han}][^\"]*\"\)|Toggle\(\"[^\"]*[\p{Han}][^\"]*\"|Picker\(\"[^\"]*[\p{Han}][^\"]*\"|LabeledContent\(\"[^\"]*[\p{Han}][^\"]*\"|Menu\(\"[^\"]*[\p{Han}][^\"]*\"|navigationTitle\(\"[^\"]*[\p{Han}][^\"]*\"|ContentUnavailableView\(\"[^\"]*[\p{Han}][^\"]*\"|alert\(\"[^\"]*[\p{Han}][^\"]*\"|configurationDisplayName\(\"[^\"]*[\p{Han}][^\"]*\"|description\(\"[^\"]*[\p{Han}][^\"]*\"'
 supporting_copy_pattern='hint:\s*\"[^\"]*[\p{Han}][^\"]*\"|presentError\(\"[^\"]*[\p{Han}][^\"]*\"|headline:\s*\"[^\"]*[\p{Han}][^\"]*\"|formula:\s*\"[^\"]*[\p{Han}][^\"]*\"|CalculationResult\.item\(\"[^\"]*[\p{Han}][^\"]*\"|tool:\s*\"[^\"]*[\p{Han}][^\"]*\"|input:\s*\"[^\"]*[\p{Han}][^\"]*\"|title:\s*\"[^\"]*[\p{Han}][^\"]*\"'
 
 interpolated_matches="$(rg -n "$interpolated_pattern" "${targets[@]}" | rg -v "$exclude_path_pattern" || true)"

@@ -69,10 +69,8 @@ struct ProjectEditSheet: View {
                     customTemplates: savedDocumentChecklistTemplates
                 )
                 Section(String(localized: "工期")) {
-                    TextField(String(localized: "开工日期(yyyy-MM-dd)"), text: $startDate)
-                        .focused($isInputFocused)
-                    TextField(String(localized: "预计完工(yyyy-MM-dd)"), text: $expectedEndDate)
-                        .focused($isInputFocused)
+                    OptionalProjectDatePicker(String(localized: "开工日期"), text: $startDate)
+                    OptionalProjectDatePicker(String(localized: "预计完工"), text: $expectedEndDate)
                 }
                 Section(String(localized: "合同")) {
                     TextField(String(localized: "合同金额（元）"), text: $contractAmount.numericInput(.amount))
@@ -109,8 +107,8 @@ struct ProjectEditSheet: View {
                         updated.customerName = customerName
                         updated.customerPhone = customerPhone
                         updated.managerName = managerName
-                        updated.startDate = startDate
-                        updated.expectedEndDate = expectedEndDate
+                        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
+                        updated.expectedEndDate = ProjectDateInput.normalizedStorageText(expectedEndDate)
                         updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.paymentStatus = paymentStatus
                         updated.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(

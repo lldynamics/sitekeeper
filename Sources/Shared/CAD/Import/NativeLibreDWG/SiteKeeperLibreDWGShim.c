@@ -350,6 +350,17 @@ static char *sitekeeper_handle_string(const Dwg_Object *object)
     return sitekeeper_copy_string(buffer);
 }
 
+static char *sitekeeper_handle_string_with_suffix(const Dwg_Object *object, unsigned long suffix)
+{
+    char buffer[48];
+    if (object == NULL) {
+        snprintf(buffer, sizeof(buffer), "0-%lu", suffix);
+    } else {
+        snprintf(buffer, sizeof(buffer), "%llX-%lu", (unsigned long long)object->handle.value, suffix);
+    }
+    return sitekeeper_copy_string(buffer);
+}
+
 static Dwg_Object *sitekeeper_object_for_entity(Dwg_Object_Entity *entity)
 {
     if (entity == NULL || entity->dwg == NULL || entity->objid >= entity->dwg->num_objects) {
@@ -417,6 +428,190 @@ static int sitekeeper_object_is_tianzheng(const Dwg_Object *object)
         || sitekeeper_object_field_contains(object, "TARCH");
 }
 
+static int sitekeeper_is_text_candidate_code_unit(uint16_t value)
+{
+    return value == 0x0009
+        || value == 0x000A
+        || value == 0x000D
+        || (value >= 0x0020 && value <= 0xD7FF)
+        || (value >= 0xE000 && value <= 0xFFFD);
+}
+
+static int sitekeeper_is_cjk_code_unit(uint16_t value)
+{
+    return (value >= 0x3400 && value <= 0x4DBF)
+        || (value >= 0x4E00 && value <= 0x9FFF)
+        || (value >= 0xF900 && value <= 0xFAFF);
+}
+
+static size_t sitekeeper_utf8_code_unit_length(uint16_t value)
+{
+    if (value < 0x80) {
+        return 1;
+    }
+    if (value < 0x800) {
+        return 2;
+    }
+    return 3;
+}
+
+static char *sitekeeper_copy_utf16le_candidate(const BITCODE_RC *bytes, BITCODE_BL byte_count)
+{
+    if (bytes == NULL || byte_count < 4) {
+        return NULL;
+    }
+
+    size_t best_start = 0;
+    size_t best_units = 0;
+    size_t best_cjk = 0;
+    const size_t count = (size_t)byte_count;
+
+    for (size_t offset = 0; offset < 2 && offset + 1 < count; offset++) {
+        size_t index = offset;
+        while (index + 1 < count) {
+            size_t run_start = index;
+            size_t run_units = 0;
+            size_t run_cjk = 0;
+            while (index + 1 < count) {
+                const uint16_t value = (uint16_t)bytes[index] | ((uint16_t)bytes[index + 1] << 8);
+                if (value == 0 || !sitekeeper_is_text_candidate_code_unit(value)) {
+                    break;
+                }
+                run_units += 1;
+                if (sitekeeper_is_cjk_code_unit(value)) {
+                    run_cjk += 1;
+                }
+                index += 2;
+                if (run_units >= 160) {
+                    break;
+                }
+            }
+            if (run_cjk > 0 && run_units >= 2 && run_units > best_units) {
+                best_start = run_start;
+                best_units = run_units;
+                best_cjk = run_cjk;
+            }
+            index += 2;
+        }
+    }
+
+    if (best_units == 0 || best_cjk == 0) {
+        return NULL;
+    }
+
+    size_t output_capacity = 1;
+    for (size_t unit = 0; unit < best_units; unit++) {
+        const size_t byte_index = best_start + unit * 2;
+        const uint16_t value = (uint16_t)bytes[byte_index] | ((uint16_t)bytes[byte_index + 1] << 8);
+        output_capacity += sitekeeper_utf8_code_unit_length(value);
+    }
+
+    char *output = (char *)malloc(output_capacity);
+    if (output == NULL) {
+        return NULL;
+    }
+
+    size_t out = 0;
+    for (size_t unit = 0; unit < best_units; unit++) {
+        const size_t byte_index = best_start + unit * 2;
+        const uint16_t value = (uint16_t)bytes[byte_index] | ((uint16_t)bytes[byte_index + 1] << 8);
+        if (value < 0x80) {
+            output[out++] = (char)value;
+        } else if (value < 0x800) {
+            output[out++] = (char)(0xC0 | (value >> 6));
+            output[out++] = (char)(0x80 | (value & 0x3F));
+        } else {
+            output[out++] = (char)(0xE0 | (value >> 12));
+            output[out++] = (char)(0x80 | ((value >> 6) & 0x3F));
+            output[out++] = (char)(0x80 | (value & 0x3F));
+        }
+    }
+    output[out] = '\0';
+    return output;
+}
+
+static int sitekeeper_is_ascii_text_byte(unsigned char value)
+{
+    return value == '\t'
+        || value == '\n'
+        || value == '\r'
+        || (value >= 0x20 && value <= 0x7E);
+}
+
+static char *sitekeeper_copy_ascii_candidate(const BITCODE_RC *bytes, BITCODE_BL byte_count)
+{
+    if (bytes == NULL || byte_count < 4) {
+        return NULL;
+    }
+
+    size_t best_start = 0;
+    size_t best_length = 0;
+    size_t best_alpha = 0;
+    const size_t count = (size_t)byte_count;
+
+    size_t index = 0;
+    while (index < count) {
+        while (index < count && !sitekeeper_is_ascii_text_byte((unsigned char)bytes[index])) {
+            index += 1;
+        }
+        const size_t run_start = index;
+        size_t run_length = 0;
+        size_t run_alpha = 0;
+        while (index < count && sitekeeper_is_ascii_text_byte((unsigned char)bytes[index])) {
+            if (isalpha((unsigned char)bytes[index])) {
+                run_alpha += 1;
+            }
+            run_length += 1;
+            index += 1;
+            if (run_length >= 180) {
+                break;
+            }
+        }
+        if (run_length >= 4 && run_alpha > 0 && run_length > best_length) {
+            best_start = run_start;
+            best_length = run_length;
+            best_alpha = run_alpha;
+        }
+    }
+
+    if (best_length == 0 || best_alpha == 0) {
+        return NULL;
+    }
+
+    char *output = (char *)malloc(best_length + 1);
+    if (output == NULL) {
+        return NULL;
+    }
+    memcpy(output, bytes + best_start, best_length);
+    output[best_length] = '\0';
+    return output;
+}
+
+static char *sitekeeper_proxy_text_candidate(const Dwg_Object *object)
+{
+    if (object == NULL
+        || !sitekeeper_object_matches(object, (int)DWG_TYPE_PROXY_ENTITY)
+        || object->tio.entity == NULL
+        || object->tio.entity->tio.PROXY_ENTITY == NULL) {
+        return NULL;
+    }
+
+    Dwg_Entity_PROXY_ENTITY *proxy = object->tio.entity->tio.PROXY_ENTITY;
+    char *candidate = sitekeeper_copy_utf16le_candidate(proxy->data, proxy->data_size);
+    if (candidate != NULL) {
+        return candidate;
+    }
+    candidate = sitekeeper_copy_utf16le_candidate(proxy->proxy_data, proxy->proxy_data_size);
+    if (candidate != NULL) {
+        return candidate;
+    }
+    candidate = sitekeeper_copy_ascii_candidate(proxy->data, proxy->data_size);
+    if (candidate != NULL) {
+        return candidate;
+    }
+    return sitekeeper_copy_ascii_candidate(proxy->proxy_data, proxy->proxy_data_size);
+}
+
 static char *sitekeeper_object_display_name(const Dwg_Object *object)
 {
     if (object == NULL) {
@@ -451,6 +646,7 @@ static char *sitekeeper_proxy_reason(const Dwg_Object *object, int is_tianzheng)
     long class_id = -1;
     long proxy_data_size = -1;
     long entity_data_size = -1;
+    char *text_candidate = NULL;
     if (object != NULL
         && sitekeeper_object_matches(object, (int)DWG_TYPE_PROXY_ENTITY)
         && object->tio.entity != NULL
@@ -459,13 +655,14 @@ static char *sitekeeper_proxy_reason(const Dwg_Object *object, int is_tianzheng)
         class_id = (long)proxy->class_id;
         proxy_data_size = (long)proxy->proxy_data_size;
         entity_data_size = (long)proxy->data_size;
+        text_candidate = sitekeeper_proxy_text_candidate(object);
     }
 
-    char buffer[512];
+    char buffer[768];
     snprintf(
         buffer,
         sizeof(buffer),
-        "%s; name=%s; dxfname=%s; app=%s; cpp=%s; class=%s; type=%d; fixedtype=%d; classId=%ld; proxyDataBytes=%ld; entityDataBytes=%ld",
+        "%s; name=%s; dxfname=%s; app=%s; cpp=%s; class=%s; type=%d; fixedtype=%d; classId=%ld; proxyDataBytes=%ld; entityDataBytes=%ld%s%.180s",
         is_tianzheng
             ? "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the CAD Metal PoC."
             : "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the CAD Metal PoC.",
@@ -478,8 +675,11 @@ static char *sitekeeper_proxy_reason(const Dwg_Object *object, int is_tianzheng)
         object != NULL ? (int)object->fixedtype : -1,
         class_id,
         proxy_data_size,
-        entity_data_size
+        entity_data_size,
+        text_candidate != NULL ? "; textCandidate=" : "",
+        text_candidate != NULL ? text_candidate : ""
     );
+    free(text_candidate);
     return sitekeeper_copy_string(buffer);
 }
 
@@ -2002,6 +2202,304 @@ static int sitekeeper_append_mline(
     return appended;
 }
 
+static int sitekeeper_append_multileader(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.MULTILEADER == NULL) {
+        return 0;
+    }
+
+    Dwg_Entity_MULTILEADER *mleader = entity->tio.MULTILEADER;
+    int appended = 0;
+    Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+
+    if (ctx->leaders != NULL) {
+        for (BITCODE_BL leader_index = 0; leader_index < ctx->num_leaders; leader_index++) {
+            Dwg_LEADER_Node *node = &ctx->leaders[leader_index];
+            if (node->lines == NULL) {
+                continue;
+            }
+            for (BITCODE_BL line_index = 0; line_index < node->num_lines; line_index++) {
+                Dwg_LEADER_Line *line = &node->lines[line_index];
+                if (line->points == NULL || line->num_points < 2) {
+                    continue;
+                }
+
+                const int32_t point_count = (int32_t)line->num_points;
+                SiteKeeperLibreDWGPoint *points = (SiteKeeperLibreDWGPoint *)calloc(
+                    (size_t)point_count,
+                    sizeof(SiteKeeperLibreDWGPoint)
+                );
+                if (points == NULL) {
+                    continue;
+                }
+                for (int32_t index = 0; index < point_count; index++) {
+                    points[index].x = line->points[index].x;
+                    points[index].y = line->points[index].y;
+                }
+                appended += sitekeeper_append_entity(
+                    result,
+                    entity_count,
+                    entity_capacity,
+                    entity,
+                    object,
+                    SiteKeeperLibreDWGEntityKindLeader,
+                    points,
+                    point_count,
+                    0,
+                    transform
+                );
+                free(points);
+            }
+        }
+    }
+
+    if (ctx->has_content_txt && ctx->content.txt.default_text != NULL && ctx->content.txt.default_text[0] != '\0') {
+        Dwg_MLEADER_Content_MText *text = &ctx->content.txt;
+        SiteKeeperLibreDWGPoint insertion = { text->location.x, text->location.y };
+        if (!sitekeeper_point_is_finite(insertion)) {
+            insertion.x = ctx->content_base.x;
+            insertion.y = ctx->content_base.y;
+        }
+        if (!sitekeeper_point_is_finite(insertion)) {
+            insertion.x = ctx->base.x;
+            insertion.y = ctx->base.y;
+        }
+
+        Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
+        if (style == NULL) {
+            style = sitekeeper_style_from_ref(entity->dwg, mleader->text_style);
+        }
+        const double height = isfinite(text->height) && text->height > DBL_EPSILON
+            ? text->height
+            : ctx->text_height;
+        appended += sitekeeper_append_text_entity(
+            result,
+            entity_count,
+            entity_capacity,
+            entity,
+            object,
+            SiteKeeperLibreDWGEntityKindMText,
+            text->default_text,
+            insertion.x,
+            insertion.y,
+            height,
+            text->rotation,
+            1.0,
+            text->width,
+            0,
+            text->alignment,
+            ctx->text_alignment,
+            style,
+            transform
+        );
+    }
+
+    if (mleader->blocklabels != NULL) {
+        Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, mleader->text_style);
+        for (BITCODE_BL label_index = 0; label_index < mleader->num_blocklabels; label_index++) {
+            Dwg_LEADER_BlockLabel *label = &mleader->blocklabels[label_index];
+            if (label->label_text == NULL || label->label_text[0] == '\0') {
+                continue;
+            }
+            appended += sitekeeper_append_text_entity(
+                result,
+                entity_count,
+                entity_capacity,
+                entity,
+                object,
+                SiteKeeperLibreDWGEntityKindMText,
+                label->label_text,
+                ctx->base.x,
+                ctx->base.y,
+                ctx->text_height,
+                0,
+                1.0,
+                label->width,
+                0,
+                1,
+                2,
+                style,
+                transform
+            );
+        }
+    }
+
+    return appended;
+}
+
+static const char *sitekeeper_table_cell_text(const Dwg_TABLE_Cell *cell)
+{
+    if (cell == NULL) {
+        return NULL;
+    }
+    if (cell->text_value != NULL && cell->text_value[0] != '\0') {
+        return cell->text_value;
+    }
+    if (cell->value.value_string != NULL && cell->value.value_string[0] != '\0') {
+        return cell->value.value_string;
+    }
+    if (cell->value.data_string != NULL && cell->value.data_string[0] != '\0') {
+        return cell->value.data_string;
+    }
+    if (cell->attr_defs != NULL) {
+        for (BITCODE_BL index = 0; index < cell->num_attr_defs; index++) {
+            if (cell->attr_defs[index].text != NULL && cell->attr_defs[index].text[0] != '\0') {
+                return cell->attr_defs[index].text;
+            }
+        }
+    }
+    return NULL;
+}
+
+static Dwg_Object_STYLE *sitekeeper_table_cell_style(
+    Dwg_Data *dwg,
+    Dwg_Entity_TABLE *table,
+    Dwg_TABLE_Cell *cell,
+    BITCODE_BL row
+)
+{
+    Dwg_Object_STYLE *style = sitekeeper_style_from_ref(dwg, cell != NULL ? cell->text_style : NULL);
+    if (style != NULL || table == NULL) {
+        return style;
+    }
+    if (row == 0) {
+        style = sitekeeper_style_from_ref(dwg, table->title_text_style);
+    } else if (row == 1) {
+        style = sitekeeper_style_from_ref(dwg, table->header_text_style);
+    }
+    if (style == NULL) {
+        style = sitekeeper_style_from_ref(dwg, table->data_text_style);
+    }
+    return style;
+}
+
+static double sitekeeper_table_column_width(Dwg_Entity_TABLE *table, BITCODE_BL column)
+{
+    if (table != NULL && table->col_widths != NULL && column < table->num_cols
+        && isfinite(table->col_widths[column]) && table->col_widths[column] > DBL_EPSILON) {
+        return table->col_widths[column];
+    }
+    return 20.0;
+}
+
+static double sitekeeper_table_row_height(Dwg_Entity_TABLE *table, BITCODE_BL row)
+{
+    if (table != NULL && table->row_heights != NULL && row < table->num_rows
+        && isfinite(table->row_heights[row]) && table->row_heights[row] > DBL_EPSILON) {
+        return table->row_heights[row];
+    }
+    if (table != NULL) {
+        if (row == 0 && isfinite(table->title_row_height) && table->title_row_height > DBL_EPSILON) {
+            return table->title_row_height;
+        }
+        if (row == 1 && isfinite(table->header_row_height) && table->header_row_height > DBL_EPSILON) {
+            return table->header_row_height;
+        }
+        if (isfinite(table->data_row_height) && table->data_row_height > DBL_EPSILON) {
+            return table->data_row_height;
+        }
+    }
+    return 8.0;
+}
+
+static double sitekeeper_table_text_height(Dwg_Entity_TABLE *table, Dwg_TABLE_Cell *cell, BITCODE_BL row)
+{
+    if (cell != NULL && isfinite(cell->text_height) && cell->text_height > DBL_EPSILON) {
+        return cell->text_height;
+    }
+    return fmax(sitekeeper_table_row_height(table, row) * 0.45, 2.5);
+}
+
+static int sitekeeper_append_table(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.TABLE == NULL || entity->tio.TABLE->cells == NULL || entity->tio.TABLE->num_cells == 0) {
+        return 0;
+    }
+
+    Dwg_Entity_TABLE *table = entity->tio.TABLE;
+    const BITCODE_BL column_count = table->num_cols > 0 ? table->num_cols : 1;
+    const BITCODE_BL row_count = table->num_rows > 0 ? table->num_rows : (BITCODE_BL)((table->num_cells + column_count - 1) / column_count);
+    const double rotation = isfinite(table->rotation) ? table->rotation : 0;
+    const double cos_angle = cos(rotation);
+    const double sin_angle = sin(rotation);
+    const double scale_x = isfinite(table->scale.x) && fabs(table->scale.x) > DBL_EPSILON ? table->scale.x : 1;
+    const double scale_y = isfinite(table->scale.y) && fabs(table->scale.y) > DBL_EPSILON ? table->scale.y : 1;
+    int appended = 0;
+
+    for (unsigned long cell_index = 0; cell_index < table->num_cells; cell_index++) {
+        Dwg_TABLE_Cell *cell = &table->cells[cell_index];
+        const char *text = sitekeeper_table_cell_text(cell);
+        if (text == NULL || text[0] == '\0') {
+            continue;
+        }
+
+        BITCODE_BL row = (BITCODE_BL)(cell_index / column_count);
+        BITCODE_BL column = (BITCODE_BL)(cell_index % column_count);
+        if (row >= row_count) {
+            row = row_count > 0 ? row_count - 1 : 0;
+        }
+
+        double local_x = 0;
+        for (BITCODE_BL col = 0; col < column; col++) {
+            local_x += sitekeeper_table_column_width(table, col);
+        }
+        const double cell_width = sitekeeper_table_column_width(table, column);
+        local_x += cell_width * 0.08;
+
+        double local_y = 0;
+        for (BITCODE_BL current_row = 0; current_row < row; current_row++) {
+            local_y -= sitekeeper_table_row_height(table, current_row);
+        }
+        const double cell_height = sitekeeper_table_row_height(table, row);
+        local_y -= cell_height * 0.55;
+
+        const double x = table->ins_pt.x + (local_x * scale_x) * cos_angle - (local_y * scale_y) * sin_angle;
+        const double y = table->ins_pt.y + (local_x * scale_x) * sin_angle + (local_y * scale_y) * cos_angle;
+        const int32_t before_count = *entity_count;
+        int did_append = sitekeeper_append_text_entity(
+            result,
+            entity_count,
+            entity_capacity,
+            entity,
+            object,
+            SiteKeeperLibreDWGEntityKindMText,
+            text,
+            x,
+            y,
+            sitekeeper_table_text_height(table, cell, row),
+            rotation + cell->rotation,
+            1.0,
+            cell_width,
+            cell_height,
+            cell->cell_alignment,
+            cell->cell_alignment,
+            sitekeeper_table_cell_style(entity->dwg, table, cell, row),
+            transform
+        );
+        if (did_append) {
+            free(result->entities[before_count].sourceHandle);
+            result->entities[before_count].sourceHandle = sitekeeper_handle_string_with_suffix(object, cell_index);
+            appended += 1;
+        }
+    }
+
+    return appended;
+}
+
 static int sitekeeper_append_image_frame(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -2539,6 +3037,132 @@ static int sitekeeper_append_dimension_diameter(
         text_point,
         end,
         0,
+        0,
+        0,
+        dimension->user_text,
+        dimension->act_measurement,
+        dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
+        transform
+    );
+}
+
+static int sitekeeper_append_dimension_ordinate(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.DIMENSION_ORDINATE == NULL) {
+        return 0;
+    }
+    Dwg_Entity_DIMENSION_ORDINATE *dimension = entity->tio.DIMENSION_ORDINATE;
+    SiteKeeperLibreDWGPoint start = { dimension->feature_location_pt.x, dimension->feature_location_pt.y };
+    SiteKeeperLibreDWGPoint end = { dimension->leader_endpt.x, dimension->leader_endpt.y };
+    SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
+    if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
+        text_point.x = end.x;
+        text_point.y = end.y;
+    }
+    return sitekeeper_append_dimension_path(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        start,
+        end,
+        text_point,
+        end,
+        1,
+        0,
+        0,
+        dimension->user_text,
+        dimension->act_measurement,
+        dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
+        transform
+    );
+}
+
+static int sitekeeper_append_dimension_ang3pt(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.DIMENSION_ANG3PT == NULL) {
+        return 0;
+    }
+    Dwg_Entity_DIMENSION_ANG3PT *dimension = entity->tio.DIMENSION_ANG3PT;
+    SiteKeeperLibreDWGPoint start = { dimension->xline1_pt.x, dimension->xline1_pt.y };
+    SiteKeeperLibreDWGPoint end = { dimension->xline2_pt.x, dimension->xline2_pt.y };
+    SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    SiteKeeperLibreDWGPoint dimension_line_point = { dimension->def_pt.x, dimension->def_pt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
+    if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
+        text_point = sitekeeper_midpoint(start, end);
+    }
+    return sitekeeper_append_dimension_path(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        start,
+        end,
+        text_point,
+        dimension_line_point,
+        sitekeeper_point_is_finite(dimension_line_point),
+        0,
+        0,
+        dimension->user_text,
+        dimension->act_measurement,
+        dimension->text_rotation,
+        sitekeeper_dimstyle_text_height(dimstyle),
+        transform
+    );
+}
+
+static int sitekeeper_append_dimension_ang2ln(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.DIMENSION_ANG2LN == NULL) {
+        return 0;
+    }
+    Dwg_Entity_DIMENSION_ANG2LN *dimension = entity->tio.DIMENSION_ANG2LN;
+    SiteKeeperLibreDWGPoint start = { dimension->xline1end_pt.x, dimension->xline1end_pt.y };
+    SiteKeeperLibreDWGPoint end = { dimension->xline2end_pt.x, dimension->xline2end_pt.y };
+    SiteKeeperLibreDWGPoint text_point = { dimension->text_midpt.x, dimension->text_midpt.y };
+    SiteKeeperLibreDWGPoint dimension_line_point = { dimension->def_pt.x, dimension->def_pt.y };
+    Dwg_Object_DIMSTYLE *dimstyle = sitekeeper_dimstyle_from_ref(entity->dwg, dimension->dimstyle);
+    if (!isfinite(text_point.x) || !isfinite(text_point.y)) {
+        text_point = sitekeeper_midpoint(start, end);
+    }
+    return sitekeeper_append_dimension_path(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        start,
+        end,
+        text_point,
+        dimension_line_point,
+        sitekeeper_point_is_finite(dimension_line_point),
         0,
         0,
         dimension->user_text,
@@ -3154,6 +3778,10 @@ static int sitekeeper_process_entity(
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_LEADER)) {
         return sitekeeper_append_leader(result, entity_count, entity_capacity, entity, object, &transform);
     }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_MULTILEADER)) {
+        result->trace.rawTextCount += 1;
+        return sitekeeper_append_multileader(result, entity_count, entity_capacity, entity, object, &transform);
+    }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_MLINE)) {
         return sitekeeper_append_mline(result, entity_count, entity_capacity, entity, object, &transform);
     }
@@ -3188,6 +3816,22 @@ static int sitekeeper_process_entity(
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_DIMENSION_DIAMETER)) {
         result->trace.rawDimensionCount += 1;
         return sitekeeper_append_dimension_diameter(result, entity_count, entity_capacity, entity, object, &transform);
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_DIMENSION_ORDINATE)) {
+        result->trace.rawDimensionCount += 1;
+        return sitekeeper_append_dimension_ordinate(result, entity_count, entity_capacity, entity, object, &transform);
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_DIMENSION_ANG3PT)) {
+        result->trace.rawDimensionCount += 1;
+        return sitekeeper_append_dimension_ang3pt(result, entity_count, entity_capacity, entity, object, &transform);
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_DIMENSION_ANG2LN)) {
+        result->trace.rawDimensionCount += 1;
+        return sitekeeper_append_dimension_ang2ln(result, entity_count, entity_capacity, entity, object, &transform);
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_TABLE)) {
+        result->trace.rawTextCount += 1;
+        return sitekeeper_append_table(result, entity_count, entity_capacity, entity, object, &transform);
     }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_HATCH)) {
         result->trace.rawHatchCount += 1;

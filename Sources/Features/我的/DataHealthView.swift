@@ -99,7 +99,7 @@ struct DataHealthView: View {
     }
 
     private var widgetHealth: WidgetDataHealthSnapshot {
-        guard let defaults = UserDefaults(suiteName: "group.com.chengjinfang.sitekeeper") else {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else {
             return WidgetDataHealthSnapshot(
                 appGroupReadable: false,
                 lastUpdatedAt: nil,
@@ -108,13 +108,13 @@ struct DataHealthView: View {
             )
         }
         let data: WidgetExportData
-        if let raw = defaults.data(forKey: "widget_data"),
+        if let raw = defaults.data(forKey: WidgetSharedDefaults.dataKey),
            let decoded = try? JSONDecoder().decode(WidgetExportData.self, from: raw) {
             data = decoded
         } else {
             data = WidgetExportData(projects: [], pendingTodos: 0, materialStockCount: 0, lowStockCount: 0)
         }
-        let timestamp = defaults.double(forKey: "widget_data_updated_at")
+        let timestamp = defaults.double(forKey: WidgetSharedDefaults.updatedAtKey)
         return WidgetDataHealthSnapshot(
             appGroupReadable: true,
             lastUpdatedAt: timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : nil,

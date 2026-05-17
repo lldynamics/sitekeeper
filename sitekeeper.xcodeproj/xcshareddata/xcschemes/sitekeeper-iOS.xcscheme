@@ -29,7 +29,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "1798D906DD4780E6FC846714"
-               BuildableName = "&#x5de5;&#x5730;&#x638c;&#x67dc;Widget.appex"
+               BuildableName = "SitekeeperWidget.appex"
                BlueprintName = "sitekeeperWidgetExtension"
                ReferencedContainer = "container:sitekeeper.xcodeproj">
             </BuildableReference>

@@ -35,11 +35,13 @@
 		11F1A9F8B7309F5EFC3013D0 /* CalculatorInteractionKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8574D913CAA0D388BC0D7016 /* CalculatorInteractionKit.swift */; };
 		122BBE596EB0BAE9CA0D0B5B /* DailyLogSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = EFDEBF7A43640538111CEE0E /* DailyLogSupportViews.swift */; };
 		123F64EBE2716A05A69DED53 /* CADPoCLineImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 831E094AE1DB5E9D53E5CDC3 /* CADPoCLineImportTests.swift */; };
+		12899839B12E75F5FF199E37 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = 4B109AB4B9B03F42E2AAAFBA /* InfoPlist.strings */; };
 		138FA28720F9675E91A7B210 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 760AA521D532102AF50F99C0 /* DashboardView.swift */; };
 		140CDAD78DCB5A45A300110A /* SiteKeeperCADLODPolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03FCFA95CE0EDCC607DCD01B /* SiteKeeperCADLODPolicy.swift */; };
 		147D46AD0F82C18DD62C5D86 /* CADLayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9A462DE85E9B863BCF29121 /* CADLayer.swift */; };
 		14DDE10B7CC94CF17F934F32 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = DF1D19FA8ABABCC63B7823BD /* Localizable.strings */; };
 		15901DAD483671B5F0296FD4 /* DomainStores.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0AF6234D3600524CC11D17D1 /* DomainStores.swift */; };
+		15DA1C9E3CBDDF3F71CFFDB7 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 19F962E05F7F2C3DD4D2B182 /* Localizable.strings */; };
 		166B2EE5D4DE8832DB643039 /* ProjectDetailContactsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9C1FF2E6371B840A26AD992 /* ProjectDetailContactsSection.swift */; };
 		17DF53CF32D435E0E9AC8748 /* ProjectDocumentImportConfirmationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31F10EF7E655CBBBA6104CB3 /* ProjectDocumentImportConfirmationSheet.swift */; };
 		1AB367B83271037B3EA54D9B /* QuickToolViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9E7376EF597CECA03446DB09 /* QuickToolViews.swift */; };
@@ -440,6 +442,7 @@
 		2463B432CFB59269EBFD300C /* BackupArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupArchiveService.swift; sourceTree = "<group>"; };
 		256A856DA2B3BBF50F61A059 /* SiteKeeperCADImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADImportEngine.swift; sourceTree = "<group>"; };
 		256D1629C5EC1A3DAB1C1869 /* ProjectDetailRiskAndLogViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailRiskAndLogViews.swift; sourceTree = "<group>"; };
+		25DDCB918F85297B5D4F8455 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
 		297634101F9FB00324C59D76 /* ExportFileURLPreparer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportFileURLPreparer.swift; sourceTree = "<group>"; };
 		29785D312893849AAAC2AAF0 /* SiteKeeperCADTextEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADTextEngine.swift; sourceTree = "<group>"; };
 		2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanelViews.swift; sourceTree = "<group>"; };
@@ -481,6 +484,7 @@
 		43FF2251ACC9E67949773AA2 /* AppStoreScreenshotUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreScreenshotUITests.swift; sourceTree = "<group>"; };
 		451BEF8A91226A73956E9A05 /* MaterialCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialCenterView.swift; sourceTree = "<group>"; };
 		4641412AD028082D30FAC1E4 /* ProjectCreateSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectCreateSheet.swift; sourceTree = "<group>"; };
+		46CA8E60A712758AFC5288B7 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		46ED2426859CCDB2F7E81B14 /* UndoableDeletionCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UndoableDeletionCoordinatorTests.swift; sourceTree = "<group>"; };
 		47AAB79AE6AF5682ADECA74D /* SiteKeeperCADFontResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiteKeeperCADFontResolver.swift; sourceTree = "<group>"; };
 		47F4074A64739725AEB722A5 /* sitekeeper.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = sitekeeper.entitlements; sourceTree = "<group>"; };
@@ -581,6 +585,7 @@
 		8C155CB1E0074FAC8F655AC4 /* RealtimeSearchSuggestionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RealtimeSearchSuggestionViews.swift; sourceTree = "<group>"; };
 		8D8177485D327812FA329566 /* VoltageDropView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoltageDropView.swift; sourceTree = "<group>"; };
 		8D862C746AA4A9AA0DDE0B82 /* ProjectDetailFinanceDocumentHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailFinanceDocumentHelper.swift; sourceTree = "<group>"; };
+		9046725303C895BE98853348 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
 		90E5376C71FA3A09C058012C /* ProjectFinancialMetricsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFinancialMetricsTests.swift; sourceTree = "<group>"; };
 		910201D99499915F66165BDC /* Formatters.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Formatters.swift; sourceTree = "<group>"; };
 		9141345E99FD02D876A191E5 /* DWGImportEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWGImportEngine.swift; sourceTree = "<group>"; };
@@ -597,6 +602,7 @@
 		99A05742820D2AE76B133AF4 /* WidgetSharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSharedModels.swift; sourceTree = "<group>"; };
 		9B2DB85FC05B826DB8EBE0A7 /* CADMarkupCoordinateMapper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADMarkupCoordinateMapper.swift; sourceTree = "<group>"; };
 		9C8870374B211568F2B454D5 /* CADRendererBootstrap.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CADRendererBootstrap.swift; sourceTree = "<group>"; };
+		9C96A07FEC3842FBEF2A5644 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		9CE85D8B97DBCD5B304852F7 /* DWGGeometrySourceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DWGGeometrySourceResolver.swift; sourceTree = "<group>"; };
 		9DBB4266F1F7D42034C1823E /* WidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WidgetExtension.entitlements; sourceTree = "<group>"; };
 		9E3A4003E2FE77FC52F904AD /* OperationAuditLog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OperationAuditLog.swift; sourceTree = "<group>"; };
@@ -982,6 +988,8 @@
 				C300676B36A45E7D4575BECF /* WidgetData.swift */,
 				9DBB4266F1F7D42034C1823E /* WidgetExtension.entitlements */,
 				6506FA40B6293CD6C0C01A54 /* WidgetViews.swift */,
+				4B109AB4B9B03F42E2AAAFBA /* InfoPlist.strings */,
+				19F962E05F7F2C3DD4D2B182 /* Localizable.strings */,
 			);
 			path = Widget;
 			sourceTree = "<group>";
@@ -1561,6 +1569,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				CD283F385D7DD2D02DCA3460 /* Assets.xcassets in Resources */,
+				12899839B12E75F5FF199E37 /* InfoPlist.strings in Resources */,
+				15DA1C9E3CBDDF3F71CFFDB7 /* Localizable.strings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2014,6 +2024,24 @@
 /* End PBXTargetDependency section */
 
 /* Begin PBXVariantGroup section */
+		19F962E05F7F2C3DD4D2B182 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9046725303C895BE98853348 /* en */,
+				46CA8E60A712758AFC5288B7 /* zh-Hans */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		4B109AB4B9B03F42E2AAAFBA /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				9C96A07FEC3842FBEF2A5644 /* en */,
+				25DDCB918F85297B5D4F8455 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
 		A8D31D595DE2DB63A38AD516 /* InfoPlist.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
@@ -2049,7 +2077,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";
@@ -2091,7 +2119,7 @@
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜";
-				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
+				INFOPLIST_KEY_CFBundleURLTypes = "[[\"CFBundleTypeRole\": \"Editor\", \"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]";
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_NSCameraUsageDescription = "用于扫描项目发票、收据、施工资料和随手记拍照。";
 				INFOPLIST_KEY_NSContactsUsageDescription = "用于从系统通讯录导入项目联系人，并支持电话短信联络。";
@@ -2145,7 +2173,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Widget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜Widget";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sitekeeper Widget";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.chengjinfang.sitekeeper;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2155,7 +2183,7 @@
 				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chengjinfang.sitekeeper.widget;
 				PRODUCT_MODULE_NAME = sitekeeperWidget;
-				PRODUCT_NAME = "工地掌柜Widget";
+				PRODUCT_NAME = SitekeeperWidget;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -2288,7 +2316,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = Widget/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = "工地掌柜Widget";
+				INFOPLIST_KEY_CFBundleDisplayName = "Sitekeeper Widget";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = com.chengjinfang.sitekeeper;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -2298,7 +2326,7 @@
 				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.chengjinfang.sitekeeper.widget;
 				PRODUCT_MODULE_NAME = sitekeeperWidget;
-				PRODUCT_NAME = "工地掌柜Widget";
+				PRODUCT_NAME = SitekeeperWidget;
 				SDKROOT = iphoneos;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";

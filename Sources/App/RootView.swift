@@ -40,7 +40,7 @@ struct RootView: View {
     }
 
     private var preferredLocale: Locale {
-        Locale(identifier: languageCode)
+        StringEnumFallback.value(languageCode, default: AppLanguage.chinese).preferredLocale
     }
 
     private var usesPadSplitShell: Bool {
