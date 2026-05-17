@@ -10,22 +10,10 @@ struct SettingsView: View {
     @State private var isClearingLocalData = false
     @State private var clearLocalDataFlowStartedAt = 0.0
     @State private var clearLocalDataPhase = ""
+    @State private var clearLocalDataPreview = ClearLocalDataImpactPreview.empty
 
     private var allowsSampleDataImport: Bool {
         AppFeatureFlags.allowsSampleDataImport
-    }
-
-    private var clearLocalDataSnapshot: String {
-        [
-            "projects=\(store.projects.count)",
-            "logs=\(store.dailyLogs.count)",
-            "todos=\(store.siteTodos.count)",
-            "quotes=\(store.quoteItems.count)",
-            "materials=\(store.materialItems.count)",
-            "drawings=\(store.projectDrawings.count)",
-            "documents=\(store.projectDocuments.count)",
-            "notes=\(store.quickNotes.count)"
-        ].joined(separator: ", ")
     }
 
     var body: some View {
@@ -58,6 +46,7 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(String(localized: "清空本机全部数据（需先备份）"), role: .destructive) {
+                    clearLocalDataPreview = buildClearLocalDataPreview()
                     clearLocalDataFlowStartedAt = Date().timeIntervalSince1970
                     showClearLocalDataBackupGate = true
                 }
@@ -116,9 +105,9 @@ struct SettingsView: View {
             }
         }
         .sheet(isPresented: $showClearLocalDataSheet) {
-            ClearLocalDataConfirmationSheet {
+            ClearLocalDataConfirmationSheet(preview: clearLocalDataPreview) {
                 Task {
-                    let snapshot = clearLocalDataSnapshot
+                    let snapshot = clearLocalDataPreview.auditSnapshot
                     await MainActor.run {
                         showClearLocalDataSheet = false
                         isClearingLocalData = true
@@ -161,6 +150,107 @@ struct SettingsView: View {
         }
     }
 
+    private func buildClearLocalDataPreview() -> ClearLocalDataImpactPreview {
+        let ticketDocuments = store.projectDocuments.filter { document in
+            isTicketCategory(document.category)
+        }
+        let normalDocuments = store.projectDocuments.filter { document in
+            !isTicketCategory(document.category)
+        }
+        return ClearLocalDataImpactPreview(
+            projectCount: store.projects.count,
+            photoCount: PhotoStorage.referencedFileNames(
+                logs: store.dailyLogs,
+                todos: store.siteTodos
+            ).count,
+            ticketCount: ticketDocuments.count,
+            documentCount: normalDocuments.count,
+            historyCount: store.historyRecords.count,
+            photoFileCount: PhotoStorage.allStoredFileNames().count,
+            drawingFileCount: DrawingStorage.allStoredFileNames().count,
+            documentFileCount: ProjectDocumentStorage.allStoredFileNames().count,
+            attachmentFileCount: QuickNoteAttachmentStorage.allStoredFileNames().count
+        )
+    }
+
+    private func isTicketCategory(_ category: ProjectDocumentCategory) -> Bool {
+        switch category {
+        case .invoice, .receipt, .paymentRequest:
+            return true
+        default:
+            return false
+        }
+    }
+}
+
+private struct ClearLocalDataImpactPreview {
+    struct Item: Identifiable {
+        let title: String
+        let count: Int
+
+        var id: String { title }
+    }
+
+    let projectCount: Int
+    let photoCount: Int
+    let ticketCount: Int
+    let documentCount: Int
+    let historyCount: Int
+    let photoFileCount: Int
+    let drawingFileCount: Int
+    let documentFileCount: Int
+    let attachmentFileCount: Int
+
+    static let empty = ClearLocalDataImpactPreview(
+        projectCount: 0,
+        photoCount: 0,
+        ticketCount: 0,
+        documentCount: 0,
+        historyCount: 0,
+        photoFileCount: 0,
+        drawingFileCount: 0,
+        documentFileCount: 0,
+        attachmentFileCount: 0
+    )
+
+    var recordItems: [Item] {
+        [
+            Item(title: String(localized: "项目"), count: projectCount),
+            Item(title: String(localized: "照片记录"), count: photoCount),
+            Item(title: String(localized: "票据记录"), count: ticketCount),
+            Item(title: String(localized: "资料记录"), count: documentCount),
+            Item(title: String(localized: "历史记录"), count: historyCount)
+        ]
+    }
+
+    var fileItems: [Item] {
+        [
+            Item(title: String(localized: "照片文件（含缩略图）"), count: photoFileCount),
+            Item(title: String(localized: "图纸文件"), count: drawingFileCount),
+            Item(title: String(localized: "资料文件"), count: documentFileCount),
+            Item(title: String(localized: "附件文件"), count: attachmentFileCount)
+        ]
+    }
+
+    var totalFileCount: Int {
+        fileItems.reduce(0) { partial, item in
+            partial + item.count
+        }
+    }
+
+    var auditSnapshot: String {
+        [
+            "projects=\(projectCount)",
+            "photoRecords=\(photoCount)",
+            "ticketRecords=\(ticketCount)",
+            "documentRecords=\(documentCount)",
+            "historyRecords=\(historyCount)",
+            "photoFiles=\(photoFileCount)",
+            "drawingFiles=\(drawingFileCount)",
+            "documentFiles=\(documentFileCount)",
+            "attachmentFiles=\(attachmentFileCount)"
+        ].joined(separator: ", ")
+    }
 }
 
 private struct ClearLocalDataBackupGateSheet: View {
@@ -274,6 +364,7 @@ private struct FavoriteCalcEditor: View {
 }
 
 private struct ClearLocalDataConfirmationSheet: View {
+    let preview: ClearLocalDataImpactPreview
     let onConfirm: () -> Void
     let onCancel: () -> Void
 
@@ -290,48 +381,91 @@ private struct ClearLocalDataConfirmationSheet: View {
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 20) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 48))
-                    .foregroundStyle(.appRisk)
-                    .padding(.top, 24)
+            ScrollView {
+                VStack(spacing: 20) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 48))
+                        .foregroundStyle(.appRisk)
+                        .padding(.top, 24)
 
-                Text(String(localized: "即将清空本机全部数据"))
-                    .font(.title2.weight(.semibold))
+                    Text(String(localized: "即将清空本机全部数据"))
+                        .font(.title2.weight(.semibold))
 
-                Text(String(localized: "此操作不可恢复。\n所有项目、日志、报价、材料与附件文件将被永久删除。"))
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
+                    Text(String(localized: "此操作不可恢复。以下内容将被删除："))
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(String(localized: "预计影响记录："))
+                            .font(.callout.weight(.semibold))
+                        ForEach(preview.recordItems) { item in
+                            Text(
+                                String(
+                                    format: String(localized: "- %@ %lld 条"),
+                                    item.title,
+                                    Int64(item.count)
+                                )
+                            )
+                            .font(.callout)
+                        }
+
+                        Text(String(localized: "预计删除文件："))
+                            .font(.callout.weight(.semibold))
+                            .padding(.top, 4)
+                        ForEach(preview.fileItems) { item in
+                            Text(
+                                String(
+                                    format: String(localized: "- %@ %lld 个"),
+                                    item.title,
+                                    Int64(item.count)
+                                )
+                            )
+                            .font(.callout)
+                        }
+                        Text(
+                            String(
+                                format: String(localized: "合计 %lld 个文件。"),
+                                Int64(preview.totalFileCount)
+                            )
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding()
+                    .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(String(format: String(localized: "请输入「%@」以确认："), requiredPhrase))
-                        .font(.callout.weight(.medium))
-                    TextField(requiredPhrase, text: $input)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isFocused)
-                        .autocorrectionDisabled()
-                }
-                .padding(.horizontal)
-
-                HStack(spacing: 16) {
-                    Button(String(localized: "取消"), role: .cancel) {
-                        onCancel()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(String(format: String(localized: "请输入「%@」以确认："), requiredPhrase))
+                            .font(.callout.weight(.medium))
+                        TextField(requiredPhrase, text: $input)
+                            .textFieldStyle(.roundedBorder)
+                            .focused($isFocused)
+                            .autocorrectionDisabled()
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.large)
+                    .padding(.horizontal)
 
-                    Button(String(localized: "确认清空"), role: .destructive) {
-                        onConfirm()
+                    HStack(spacing: 16) {
+                        Button(String(localized: "取消"), role: .cancel) {
+                            onCancel()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.large)
+
+                        Button(String(localized: "确认清空"), role: .destructive) {
+                            onConfirm()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.large)
+                        .disabled(!isInputValid)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(!isInputValid)
-                }
-                .padding(.top, 8)
+                    .padding(.top, 8)
 
-                Spacer()
+                    Spacer(minLength: 0)
+                }
             }
             .interactiveDismissDisabled()
             .onAppear { isFocused = true }

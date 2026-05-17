@@ -37,6 +37,10 @@ extension SiteKeeperCADKernel {
             return scale.isFinite && scale > 0 ? scale : 1
         }
 
+        var rotationRadians: Double {
+            atan2(matrix.b, matrix.a)
+        }
+
         func concatenating(_ other: CADTransform) -> CADTransform {
             CADTransform(matrix: matrix.concatenating(other.matrix))
         }

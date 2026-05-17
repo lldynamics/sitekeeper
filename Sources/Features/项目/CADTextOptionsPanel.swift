@@ -15,6 +15,23 @@ extension CADPreviewContainer {
         return !matched.isEmpty || !unresolved.isEmpty
     }
 
+    var hasUnresolvedFontDiagnosticIssue: Bool {
+        !(textSchemeSnapshot.unresolvedFontSummary ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    var hasSuspiciousTextDiagnosticIssue: Bool {
+        let searchable = [
+            textSchemeSnapshot.detectionSummary,
+            textSchemeSnapshot.fontResolutionSummary
+        ]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .joined(separator: " ")
+        guard !searchable.isEmpty else { return false }
+        return searchable.localizedStandardContains("疑似") ||
+            searchable.localizedStandardContains("乱码") ||
+            searchable.localizedStandardContains("未匹配")
+    }
+
     var projectFontMappingRows: [CADProjectFontMapping] {
         activeRequest.projectFontMappings.sorted { lhs, rhs in
             if lhs.source.rawValue == rhs.source.rawValue {

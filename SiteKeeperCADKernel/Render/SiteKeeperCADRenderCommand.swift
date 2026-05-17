@@ -32,8 +32,38 @@ extension SiteKeeperCADKernel {
     }
 
     struct CADRenderStyle: Equatable, Codable {
+        private enum CodingKeys: String, CodingKey {
+            case layerID
+            case colorARGB
+            case lineWidth
+            case lineType
+        }
+
         var layerID: String
         var colorARGB: UInt32
         var lineWidth: Double
+        var lineType: String
+
+        init(
+            layerID: String,
+            colorARGB: UInt32,
+            lineWidth: Double,
+            lineType: String = "Continuous"
+        ) {
+            self.layerID = layerID
+            self.colorARGB = colorARGB
+            self.lineWidth = lineWidth
+            self.lineType = lineType
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            self.init(
+                layerID: try container.decode(String.self, forKey: .layerID),
+                colorARGB: try container.decode(UInt32.self, forKey: .colorARGB),
+                lineWidth: try container.decode(Double.self, forKey: .lineWidth),
+                lineType: try container.decodeIfPresent(String.self, forKey: .lineType) ?? "Continuous"
+            )
+        }
     }
 }

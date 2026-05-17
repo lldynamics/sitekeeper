@@ -188,7 +188,7 @@ struct ProjectPackageAndStorageTests {
         #expect(readmeText.contains("delivery_health_failed_checks\tdrawings"))
         #expect(readmeText.contains("delivery_health_backup_fresh\ttrue"))
         #expect(readmeText.contains("[contents]"))
-        #expect(readmeText.contains("path\tkind\tdisplay_name"))
+        #expect(readmeText.contains("path\tkind_raw\tkind_display"))
         #expect(readmeText.contains("00-delivery/\(folder)_project_delivery_package.pdf\tproject_delivery_pdf\t"))
         #expect(readmeText.contains("00-delivery/delivery_checklist.txt\tdelivery_checklist\t"))
         #expect(readmeText.contains("00-delivery/document_checklist.tsv\tdocument_checklist\t"))
@@ -201,8 +201,47 @@ struct ProjectPackageAndStorageTests {
         #expect(checklistText.contains("4. 施工资料清单"))
         let documentChecklistEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/document_checklist.tsv" })
         let documentChecklistText = try #require(String(data: documentChecklistEntry.data, encoding: .utf8))
-        #expect(documentChecklistText.contains("category_key\tcategory_display\tstatus\tdocument_count\taction_count\treturned_count\tarchived_count"))
+        #expect(documentChecklistText.contains("category_key\tcategory_display\tstatus_raw\tstatus_display\tdocument_count\taction_count\treturned_count\tarchived_count"))
         #expect(documentChecklistText.contains("construction_technical"))
+    }
+
+    @Test func projectPackageAuxiliaryTSVUsesMachineAndDisplayColumns() throws {
+        let project = Project(name: "交付字段测试", location: "工地", status: .active)
+        let contact = ProjectContact(projectId: project.id, name: "张工", role: .owner, company: "甲方", phone: "00000000000")
+        let note = QuickNote(
+            title: "现场备注",
+            content: "",
+            projectId: project.id,
+            attachments: [
+                QuickNoteAttachment(kind: .photo, fileName: "missing-photo.jpg"),
+                QuickNoteAttachment(kind: .file, fileName: "missing-file.bin")
+            ]
+        )
+
+        let archiveURL = try ReportBuilder.makeProjectPackageZIP(
+            project: project,
+            materials: [],
+            quotes: [],
+            labor: [],
+            logs: [],
+            tasks: [],
+            todos: [],
+            contacts: [contact],
+            quickNotes: [note]
+        )
+        defer { try? FileManager.default.removeItem(at: archiveURL) }
+
+        let entries = try SimpleZipArchiveReader.read(Data(contentsOf: archiveURL))
+        let folder = "交付字段测试"
+        let contactsEntry = try #require(entries.first { $0.path == "\(folder)/05-contacts/contacts.tsv" })
+        let contactsText = try #require(String(data: contactsEntry.data, encoding: .utf8))
+        #expect(contactsText.contains("name\trole_key\trole_display\tcompany\tphone\tnote"))
+        #expect(contactsText.contains("\towner\t"))
+
+        let quickNotesEntry = try #require(entries.first { $0.path == "\(folder)/04-quick-notes/quick_notes.tsv" })
+        let quickNotesText = try #require(String(data: quickNotesEntry.data, encoding: .utf8))
+        #expect(quickNotesText.contains("created_at\tcontent\tattachment_summary_raw\tattachment_summary_display"))
+        #expect(quickNotesText.contains("photo:1,file:1"))
     }
 
     @Test func warehouseMovementLinkedDocumentsAreBackwardCompatible() throws {

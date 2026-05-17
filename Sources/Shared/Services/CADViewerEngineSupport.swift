@@ -55,10 +55,6 @@ struct CADOpenResult: Equatable {
     let openState: CADOpenState
     let message: String
     let technicalDetails: CADOpenTechnicalDetails?
-
-    var supportsOnlineView: Bool {
-        openState == .rendered
-    }
 }
 
 enum CADViewerEngineError: LocalizedError, Equatable {
@@ -126,15 +122,15 @@ enum CADViewerEngineRegistry {
 }
 
 enum CADOpenRoute: Equatable {
-    case online(CADOpenResult)
+    case rendered(CADOpenResult)
     case unsupported(CADOpenResult)
 }
 
 enum CADViewerMessages {
-    static let onlinePreviewUnavailableMessage = "当前图纸暂不支持在线预览，可下载原图查看。"
-    static let engineMissingMessage = onlinePreviewUnavailableMessage
-    static let dwgDiagnosticImportMessage = onlinePreviewUnavailableMessage
-    static let dxfImportEnginePendingMessage = onlinePreviewUnavailableMessage
+    static let interactivePreviewUnavailableMessage = "当前图纸暂不支持交互预览，可下载原图查看。"
+    static let engineMissingMessage = interactivePreviewUnavailableMessage
+    static let dwgDiagnosticImportMessage = interactivePreviewUnavailableMessage
+    static let dxfImportEnginePendingMessage = interactivePreviewUnavailableMessage
 
     static func importEnginePendingMessage(for fileExtension: String) -> String {
         switch fileExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
@@ -150,13 +146,13 @@ enum CADViewerMessages {
 
 @MainActor
 enum CADOpenRouter {
-    static let unsupportedOnlineOpenMessage = CADViewerMessages.engineMissingMessage
+    static let unsupportedOpenMessage = CADViewerMessages.engineMissingMessage
 
     static func route(for file: CADFile) async -> CADOpenRoute {
         do {
             let result = try await CADViewerEngineRegistry.shared.open(file: file)
             if result.openState == .rendered {
-                return .online(result)
+                return .rendered(result)
             }
             return .unsupported(result)
         } catch {
@@ -164,7 +160,7 @@ enum CADOpenRouter {
                 CADOpenResult(
                     drawingId: file.drawingId,
                     openState: .failed,
-                    message: unsupportedOnlineOpenMessage,
+                    message: unsupportedOpenMessage,
                     technicalDetails: nil
                 )
             )

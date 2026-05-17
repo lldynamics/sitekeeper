@@ -217,6 +217,10 @@ extension CADPreviewContainer {
                         cadDrawingLayerMenu(chrome: chrome)
                     }
 
+                    if isDWGFile {
+                        cadPerformanceMenu(chrome: chrome)
+                    }
+
                     cadMeasurementMenu(chrome: chrome)
                     cadAnnotationMenu(chrome: chrome)
                 }
@@ -436,6 +440,83 @@ extension CADPreviewContainer {
 
     func showAllNativeCADLayers() {
         nativeCADVisibleLayerIDs = Set(nativeCADLayers.map(\.id))
+    }
+
+    var cadPerformanceOptionEnabledCount: Int {
+        [
+            rendersCADTextOverlays,
+            publishesCADSnapPoints,
+            rendersCADHatches,
+            showsCADOverviewMap,
+            showsCADRendererDiagnostics
+        ].filter { $0 }.count
+    }
+
+    @ViewBuilder
+    func cadPerformanceMenu(chrome: CADCommandBarChrome) -> some View {
+        switch chrome {
+        case .standard:
+            Menu {
+                cadPerformanceMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "speedometer",
+                    label: cadPerformanceMenuTitle,
+                    active: cadPerformanceOptionEnabledCount > 0,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.bordered)
+            .tint(cadPerformanceOptionEnabledCount > 0 ? .appPrimaryAction : .secondary)
+        case .immersive:
+            Menu {
+                cadPerformanceMenuContent
+            } label: {
+                cadCommandMenuLabel(
+                    systemImage: "speedometer",
+                    label: cadPerformanceMenuTitle,
+                    active: cadPerformanceOptionEnabledCount > 0,
+                    chrome: chrome
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    var cadPerformanceMenuTitle: String {
+        cadPerformanceOptionEnabledCount == 0
+            ? String(localized: "性能优先")
+            : "\(String(localized: "细节")) \(cadPerformanceOptionEnabledCount)"
+    }
+
+    @ViewBuilder
+    var cadPerformanceMenuContent: some View {
+        Button {
+            rendersCADTextOverlays.toggle()
+        } label: {
+            Label(String(localized: "文字显示"), systemImage: rendersCADTextOverlays ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            publishesCADSnapPoints.toggle()
+        } label: {
+            Label(String(localized: "吸附点"), systemImage: publishesCADSnapPoints ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            rendersCADHatches.toggle()
+        } label: {
+            Label(String(localized: "填充细节"), systemImage: rendersCADHatches ? "checkmark.circle.fill" : "circle")
+        }
+        Button {
+            showsCADOverviewMap.toggle()
+        } label: {
+            Label(String(localized: "全局小窗"), systemImage: showsCADOverviewMap ? "checkmark.circle.fill" : "circle")
+        }
+        Divider()
+        Button {
+            showsCADRendererDiagnostics.toggle()
+        } label: {
+            Label(String(localized: "渲染诊断"), systemImage: showsCADRendererDiagnostics ? "checkmark.circle.fill" : "circle")
+        }
     }
 
     @ViewBuilder

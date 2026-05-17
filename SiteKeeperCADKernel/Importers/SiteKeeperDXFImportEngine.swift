@@ -273,7 +273,8 @@ private struct DXFParser {
                     isVisible: isVisible,
                     isLocked: isLocked,
                     colorARGB: layerColor,
-                    lineWeight: lineWeight
+                    lineWeight: lineWeight,
+                    lineType: firstString(code: 6, in: record.pairs) ?? "Continuous"
                 )
             }
         case "STYLE":

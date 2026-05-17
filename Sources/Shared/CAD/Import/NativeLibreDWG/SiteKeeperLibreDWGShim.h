@@ -58,6 +58,7 @@ typedef struct SiteKeeperLibreDWGEntity {
     double textBoxHeight;
     int32_t textHorizontalAlignment;
     int32_t textVerticalAlignment;
+    int32_t hatchFillMode;
 } SiteKeeperLibreDWGEntity;
 
 typedef struct SiteKeeperLibreDWGTrace {

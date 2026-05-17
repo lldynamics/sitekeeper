@@ -102,10 +102,15 @@ enum CloudBackupService {
     ) throws -> CloudBackupFile {
         let directory = try backupsDirectoryURL(createIfNeeded: true)
         let targetURL = directory.appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: targetURL.path) {
-            try FileManager.default.removeItem(at: targetURL)
-        }
-        try FileManager.default.copyItem(at: archiveFileURL, to: targetURL)
+        try FileOps.replaceByCopyWithRollback(
+            from: archiveFileURL,
+            to: targetURL,
+            context: .init(
+                event: "cloud_backup.save_archive",
+                category: .cloudBackup,
+                source: "CloudBackupService.saveArchiveToCloud"
+            )
+        )
         try pruneOldBackups(keepMostRecent: retainedCount)
         guard let file = cloudBackupFile(from: targetURL) else {
             throw CloudBackupError.invalidBackupFile
@@ -121,10 +126,15 @@ enum CloudBackupService {
 
         let targetURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("icloud-backup-import-\(UUID().uuidString).zip")
-        if FileManager.default.fileExists(atPath: targetURL.path) {
-            try FileManager.default.removeItem(at: targetURL)
-        }
-        try FileManager.default.copyItem(at: file.fileURL, to: targetURL)
+        try FileOps.replaceByCopyWithRollback(
+            from: file.fileURL,
+            to: targetURL,
+            context: .init(
+                event: "cloud_backup.copy_to_temporary",
+                category: .cloudBackup,
+                source: "CloudBackupService.copyBackupToTemporaryFile"
+            )
+        )
         return targetURL
     }
 
@@ -145,7 +155,14 @@ enum CloudBackupService {
         let backups = try listBackups()
         for file in backups.dropFirst(retainedCount) {
             do {
-                try FileManager.default.removeItem(at: file.fileURL)
+                _ = try FileOps.removeIfExists(
+                    at: file.fileURL,
+                    context: .init(
+                        event: "cloud_backup.retention_prune",
+                        category: .cloudBackup,
+                        source: "CloudBackupService.pruneOldBackups"
+                    )
+                )
             } catch {
                 recordIssue(
                     "cloud_backup.retention_prune_failed",

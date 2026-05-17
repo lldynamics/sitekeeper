@@ -15,12 +15,14 @@ extension CADPoC {
 
         func commands(
             from entities: [SiteKeeperCADKernel.CADEntity],
+            layersByID: [String: SiteKeeperCADKernel.CADLayer] = [:],
             totalEntityCount: Int? = nil,
             zoomScale: Double = 1,
             interactionPhase: SiteKeeperCADKernel.CADRenderInteractionPhase = .stable
         ) -> [SiteKeeperCADKernel.CADRenderCommand] {
             renderOutput(
                 from: entities,
+                layersByID: layersByID,
                 totalEntityCount: totalEntityCount,
                 zoomScale: zoomScale,
                 interactionPhase: interactionPhase
@@ -29,7 +31,9 @@ extension CADPoC {
 
         func renderOutput(
             from entities: [SiteKeeperCADKernel.CADEntity],
+            layersByID: [String: SiteKeeperCADKernel.CADLayer] = [:],
             totalEntityCount: Int? = nil,
+            visibleEntityCount: Int? = nil,
             zoomScale: Double = 1,
             interactionPhase: SiteKeeperCADKernel.CADRenderInteractionPhase = .stable,
             renderBudget: SiteKeeperCADKernel.CADRenderBudget = .standard
@@ -59,7 +63,7 @@ extension CADPoC {
                     continue
                 }
 
-                let entityCommands = renderCommands(for: entity)
+                let entityCommands = renderCommands(for: entity, layersByID: layersByID)
                 guard !entityCommands.isEmpty else {
                     skippedEntityCount += 1
                     continue
@@ -81,7 +85,7 @@ extension CADPoC {
                 commands: commands,
                 performance: SiteKeeperCADKernel.CADPerformanceTrace(
                     entityCount: resolvedEntityCount,
-                    visibleEntityCount: entities.count,
+                    visibleEntityCount: visibleEntityCount ?? entities.count,
                     renderCommandCount: commands.count,
                     drawCallCount: commands.reduce(0) { $0 + $1.drawCallCost },
                     renderMs: renderMs,
@@ -106,13 +110,10 @@ extension CADPoC {
         }
 
         private func renderCommands(
-            for entity: SiteKeeperCADKernel.CADEntity
+            for entity: SiteKeeperCADKernel.CADEntity,
+            layersByID: [String: SiteKeeperCADKernel.CADLayer]
         ) -> [SiteKeeperCADKernel.CADRenderCommand] {
-            let style = SiteKeeperCADKernel.CADRenderStyle(
-                layerID: entity.layerID,
-                colorARGB: entity.color,
-                lineWidth: max(entity.lineWeight, 2)
-            )
+            let style = resolvedStyle(for: entity, layersByID: layersByID)
 
             switch entity.kind {
             case .point:
@@ -154,11 +155,7 @@ extension CADPoC {
                 return [.polyline(points, closed: false, style: style)]
             case .hatch:
                 guard let path = entity.path else { return [] }
-                let points = path.points
-                guard points.count >= 3 else {
-                    return points.count >= 2 ? [.polyline(points, closed: path.isClosed, style: style)] : []
-                }
-                return [.hatch(path, style: style)]
+                return hatchCommands(for: entity, path: path, style: style)
             case .polyline, .lwPolyline, .circle, .arc, .ellipse, .spline:
                 guard let path = entity.path else { return [] }
                 let points = path.points
@@ -185,13 +182,101 @@ extension CADPoC {
             }
         }
 
-        private func dimensionArrowCommands(
+        private func resolvedStyle(
+            for entity: SiteKeeperCADKernel.CADEntity,
+            layersByID: [String: SiteKeeperCADKernel.CADLayer]
+        ) -> SiteKeeperCADKernel.CADRenderStyle {
+            let layer = layersByID[entity.layerID] ?? .default
+            let color = entity.color == 0x00000000 ? layer.colorARGB : entity.color
+            let lineWidth = entity.lineWeight > 0 ? entity.lineWeight : layer.lineWeight
+            let entityLineType = entity.lineType.trimmingCharacters(in: .whitespacesAndNewlines)
+            let lineType: String
+            if entityLineType.isEmpty ||
+                entityLineType.caseInsensitiveCompare("ByLayer") == .orderedSame ||
+                entityLineType.caseInsensitiveCompare("ByBlock") == .orderedSame {
+                lineType = layer.lineType
+            } else {
+                lineType = entityLineType
+            }
+            return SiteKeeperCADKernel.CADRenderStyle(
+                layerID: entity.layerID,
+                colorARGB: color,
+                lineWidth: max(lineWidth, 0.25),
+                lineType: lineType
+            )
+        }
+
+        private func hatchCommands(
             for entity: SiteKeeperCADKernel.CADEntity,
             path: SiteKeeperCADKernel.CADPath,
             style: SiteKeeperCADKernel.CADRenderStyle
         ) -> [SiteKeeperCADKernel.CADRenderCommand] {
             let points = path.points
-            guard let start = points.first, let end = points.last else { return [] }
+            guard points.count >= 3 else {
+                return points.count >= 2 ? [.polyline(points, closed: path.isClosed, style: style)] : []
+            }
+
+            guard shouldFillHatch(entity, path: path) else {
+                return [.polyline(points, closed: path.isClosed, style: style)]
+            }
+            return [.hatch(path, style: style)]
+        }
+
+        private func shouldFillHatch(
+            _ entity: SiteKeeperCADKernel.CADEntity,
+            path: SiteKeeperCADKernel.CADPath
+        ) -> Bool {
+            let points = path.points
+            guard path.isClosed, points.count >= 3, points.count <= 64 else {
+                return false
+            }
+            guard !path.containsCurve else {
+                return false
+            }
+
+            let boundaryOnlyCodes: Set<String> = [
+                "CAD_POC_HATCH_BOUNDARY_ONLY",
+                "CAD_POC_HATCH_COMPLEX_BOUNDARY_DEGRADED",
+                "CAD_POC_HATCH_BOUNDARY_UNRESOLVED",
+                "CAD_POC_HATCH_COMPLEX_BOUNDARY_UNRESOLVED",
+                "CAD_HATCH_DEGRADED_TO_BOUNDARY",
+                "CAD_LOD_COMPLEX_HATCH_SKIPPED",
+                "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY"
+            ]
+            let diagnosticCodes = Set(entity.diagnostics.entries.map(\.code))
+            guard diagnosticCodes.isDisjoint(with: boundaryOnlyCodes) else {
+                return false
+            }
+
+            return isConvexPolygon(points)
+        }
+
+        private func isConvexPolygon(_ points: [SiteKeeperCADKernel.CADPoint]) -> Bool {
+            guard points.count >= 3 else { return false }
+            var sign = 0
+            for index in points.indices {
+                let previous = points[(index + points.count - 1) % points.count]
+                let current = points[index]
+                let next = points[(index + 1) % points.count]
+                let cross = ((current.x - previous.x) * (next.y - current.y))
+                    - ((current.y - previous.y) * (next.x - current.x))
+                guard abs(cross) > 0.000001 else { continue }
+                let currentSign = cross > 0 ? 1 : -1
+                if sign == 0 {
+                    sign = currentSign
+                } else if sign != currentSign {
+                    return false
+                }
+            }
+            return sign != 0
+        }
+
+        private func dimensionArrowCommands(
+            for entity: SiteKeeperCADKernel.CADEntity,
+            path: SiteKeeperCADKernel.CADPath,
+            style: SiteKeeperCADKernel.CADRenderStyle
+        ) -> [SiteKeeperCADKernel.CADRenderCommand] {
+            guard let (start, end) = dimensionLineSegment(from: path) else { return [] }
             let dx = end.x - start.x
             let dy = end.y - start.y
             let length = hypot(dx, dy)
@@ -217,6 +302,17 @@ extension CADPoC {
                     style: style
                 )
             ]
+        }
+
+        private func dimensionLineSegment(
+            from path: SiteKeeperCADKernel.CADPath
+        ) -> (SiteKeeperCADKernel.CADPoint, SiteKeeperCADKernel.CADPoint)? {
+            let points = path.points
+            if points.count >= 4 {
+                return (points[1], points[2])
+            }
+            guard let start = points.first, let end = points.last else { return nil }
+            return (start, end)
         }
 
         private func dimensionArrowPath(
@@ -271,6 +367,15 @@ private extension Array {
 }
 
 private extension SiteKeeperCADKernel.CADPath {
+    var containsCurve: Bool {
+        elements.contains {
+            if case .curve = $0 {
+                return true
+            }
+            return false
+        }
+    }
+
     var isClosed: Bool {
         elements.contains {
             if case .close = $0 {

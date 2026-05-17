@@ -6,6 +6,12 @@ struct CADCanvasControlCommand: Equatable, Identifiable {
         case zoomIn
         case zoomOut
         case fitToView
+        case focusSearchResult(
+            entityID: SiteKeeperCADKernel.CADEntity.ID,
+            bounds: SiteKeeperCADKernel.CADBounds,
+            fallbackPoint: SiteKeeperCADKernel.CADPoint
+        )
+        case clearSearchHighlight
     }
 
     let id: UUID
@@ -17,35 +23,80 @@ struct CADCanvasControlCommand: Equatable, Identifiable {
     }
 }
 
+struct CADCanvasFeatureOptions: Equatable {
+    var rendersTextOverlays: Bool
+    var publishesSnapPoints: Bool
+    var rendersHatches: Bool
+
+    static let performanceDefault = CADCanvasFeatureOptions(
+        rendersTextOverlays: false,
+        publishesSnapPoints: false,
+        rendersHatches: false
+    )
+
+    static let fullDetail = CADCanvasFeatureOptions(
+        rendersTextOverlays: true,
+        publishesSnapPoints: true,
+        rendersHatches: true
+    )
+
+    var enabledCount: Int {
+        [rendersTextOverlays, publishesSnapPoints, rendersHatches].filter { $0 }.count
+    }
+
+    func allows(_ command: SiteKeeperCADKernel.CADRenderCommand) -> Bool {
+        switch command {
+        case .text:
+            return rendersTextOverlays
+        case .hatch:
+            return rendersHatches
+        default:
+            return true
+        }
+    }
+}
+
 #if os(iOS) && canImport(MetalKit)
 import MetalKit
 import UIKit
 
 struct CADCanvasView: UIViewRepresentable {
     let fileURL: URL
+    let selectedLayoutID: String?
     let visibleLayerIDs: Set<String>?
     let initialViewState: CADRendererViewState?
     let controlCommand: CADCanvasControlCommand?
+    let featureOptions: CADCanvasFeatureOptions
     let debugTextOverlays: Bool
     let callbacks: CADRendererCallbacks
+    let onLayoutsChanged: ([CADPoC.CADLayout]) -> Void
     let onLayersChanged: ([CADPoC.CADLayer]) -> Void
+    let onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void
 
     init(
         fileURL: URL,
+        selectedLayoutID: String? = nil,
         visibleLayerIDs: Set<String>? = nil,
         initialViewState: CADRendererViewState? = nil,
         controlCommand: CADCanvasControlCommand? = nil,
+        featureOptions: CADCanvasFeatureOptions = .performanceDefault,
         debugTextOverlays: Bool = false,
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
-        onLayersChanged: @escaping ([CADPoC.CADLayer]) -> Void = { _ in }
+        onLayoutsChanged: @escaping ([CADPoC.CADLayout]) -> Void = { _ in },
+        onLayersChanged: @escaping ([CADPoC.CADLayer]) -> Void = { _ in },
+        onSearchIndexChanged: @escaping (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
     ) {
         self.fileURL = fileURL
+        self.selectedLayoutID = selectedLayoutID
         self.visibleLayerIDs = visibleLayerIDs
         self.initialViewState = initialViewState
         self.controlCommand = controlCommand
+        self.featureOptions = featureOptions
         self.debugTextOverlays = debugTextOverlays
         self.callbacks = callbacks
+        self.onLayoutsChanged = onLayoutsChanged
         self.onLayersChanged = onLayersChanged
+        self.onSearchIndexChanged = onSearchIndexChanged
     }
 
     func makeCoordinator() -> Coordinator {
@@ -86,10 +137,14 @@ struct CADCanvasView: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MTKView, context: Context) {
+        context.coordinator.onLayoutsChanged = onLayoutsChanged
         context.coordinator.onLayersChanged = onLayersChanged
+        context.coordinator.onSearchIndexChanged = onSearchIndexChanged
         context.coordinator.callbacks = callbacks
         context.coordinator.renderer.callbacks = callbacks
+        context.coordinator.renderer.setSelectedLayoutID(selectedLayoutID)
         context.coordinator.renderer.setVisibleLayerIDs(visibleLayerIDs)
+        context.coordinator.renderer.setFeatureOptions(featureOptions)
         context.coordinator.renderer.setDebugTextOverlays(debugTextOverlays)
         context.coordinator.renderer.applyInitialViewStateIfNeeded(initialViewState, contentScale: uiView.contentScaleFactor)
         context.coordinator.applyControlCommandIfNeeded(controlCommand, in: uiView)
@@ -106,7 +161,9 @@ struct CADCanvasView: UIViewRepresentable {
         private var lastPinchLocation: CGPoint?
         private var lastControlCommandID: UUID?
         var callbacks = CADRendererCallbacks()
+        var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
         var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
+        var onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
 
         deinit {
             importTask?.cancel()
@@ -138,13 +195,15 @@ struct CADCanvasView: UIViewRepresentable {
             lastTrace = result.trace
             callbacks.onOpenTraceChange(result.trace)
             logTrace(result.trace)
+            onLayoutsChanged(result.database.layouts)
             onLayersChanged(result.database.layers)
+            onSearchIndexChanged(SiteKeeperCADKernel.CADTextSearchIndex(database: result.database))
             guard result.trace.openedForRender else {
-                renderer.updateEntities([])
+                renderer.updateDrawing(entities: [], layers: [])
                 view?.setNeedsDisplay()
                 return
             }
-            renderer.updateEntities(result.database.entities)
+            renderer.updateDrawing(entities: result.database.entities, layers: result.database.layers)
             view?.setNeedsDisplay()
         }
 
@@ -154,8 +213,10 @@ struct CADCanvasView: UIViewRepresentable {
             lastTrace = trace
             callbacks.onOpenTraceChange(trace)
             logTrace(trace)
+            onLayoutsChanged([])
             onLayersChanged([])
-            renderer.updateEntities([])
+            onSearchIndexChanged(nil)
+            renderer.updateDrawing(entities: [], layers: [])
             view?.setNeedsDisplay()
         }
 
@@ -182,6 +243,17 @@ struct CADCanvasView: UIViewRepresentable {
                 )
             case .fitToView:
                 renderer.fitToView()
+            case let .focusSearchResult(entityID, bounds, fallbackPoint):
+                renderer.focusSearchResult(
+                    entityID: entityID,
+                    bounds: bounds,
+                    fallbackPoint: fallbackPoint,
+                    contentScale: view.contentScaleFactor,
+                    drawableSize: view.drawableSize,
+                    viewSize: view.bounds.size
+                )
+            case .clearSearchHighlight:
+                renderer.clearSearchHighlight()
             }
             renderer.setInteractionPhase(.stable)
             view.setNeedsDisplay()
@@ -276,11 +348,16 @@ struct CADCanvasView: UIViewRepresentable {
 #else
 struct CADCanvasView: View {
     let fileURL: URL
+    var selectedLayoutID: String? = nil
     var visibleLayerIDs: Set<String>? = nil
     var initialViewState: CADRendererViewState? = nil
     var controlCommand: CADCanvasControlCommand? = nil
+    var featureOptions: CADCanvasFeatureOptions = .performanceDefault
+    var debugTextOverlays: Bool = false
     var callbacks: CADRendererCallbacks = CADRendererCallbacks()
+    var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
     var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
+    var onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
 
     var body: some View {
         Color.white
