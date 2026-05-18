@@ -17,21 +17,21 @@ struct ProjectContactAddSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("联系人") {
+                Section(String(localized: "联系人")) {
                     Button {
                         showSystemContactPicker = true
                     } label: {
-                        Label("从通讯录导入", systemImage: "person.badge.plus")
+                        Label(String(localized: "从通讯录导入"), systemImage: "person.badge.plus")
                     }
-                    TextField("姓名/单位", text: $name)
+                    TextField(String(localized: "姓名/单位"), text: $name)
                     ProjectContactRoleField(role: $role)
-                    TextField("公司/班组", text: $company)
-                    TextField("电话", text: $phone)
+                    TextField(String(localized: "公司/班组"), text: $company)
+                    TextField(String(localized: "电话"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("历史项目（可多选）") {
+                Section(String(localized: "历史项目（可多选）")) {
                     ProjectTagMultiSelectView(
                         projects: store.projects,
                         primaryProjectId: projectId,
@@ -39,14 +39,14 @@ struct ProjectContactAddSheet: View {
                     )
                 }
             }
-            .navigationTitle("添加联系人")
+            .navigationTitle(String(localized: "添加联系人"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(ProjectContact(
                             projectId: projectId,
                             relatedProjectIds: Array(relatedProjectIDs),
@@ -84,7 +84,7 @@ struct ProjectContactAddSheet: View {
         guard imported.phoneNumbers.count > 1 else { return }
         let spareText = imported.phoneNumbers.dropFirst().joined(separator: "、")
         guard !spareText.isEmpty else { return }
-        let marker = "备用号码：\(spareText)"
+        let marker = String(format: String(localized: "备用号码：%@"), spareText)
         if note.contains(marker) { return }
         note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         note = note.isEmpty ? marker : "\(note)\n\(marker)"
@@ -126,21 +126,21 @@ struct ProjectContactEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("联系人") {
+                Section(String(localized: "联系人")) {
                     Button {
                         showSystemContactPicker = true
                     } label: {
-                        Label("从通讯录导入", systemImage: "person.badge.plus")
+                        Label(String(localized: "从通讯录导入"), systemImage: "person.badge.plus")
                     }
-                    TextField("姓名/单位", text: $name)
+                    TextField(String(localized: "姓名/单位"), text: $name)
                     ProjectContactRoleField(role: $role)
-                    TextField("公司/班组", text: $company)
-                    TextField("电话", text: $phone)
+                    TextField(String(localized: "公司/班组"), text: $company)
+                    TextField(String(localized: "电话"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
-                Section("历史项目（可多选）") {
+                Section(String(localized: "历史项目（可多选）")) {
                     ProjectTagMultiSelectView(
                         projects: store.projects,
                         primaryProjectId: contact.projectId,
@@ -148,19 +148,19 @@ struct ProjectContactEditSheet: View {
                     )
                 }
                 Section {
-                    Button("删除联系人", role: .destructive) {
+                    Button(String(localized: "删除联系人"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                 }
             }
-            .navigationTitle("编辑联系人")
+            .navigationTitle(String(localized: "编辑联系人"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         var updated = contact
                         updated.name = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.role = role
@@ -174,9 +174,9 @@ struct ProjectContactEditSheet: View {
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
-            .alert("删除这个联系人？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这个联系人？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete(contact)
                     dismiss()
                 }
@@ -204,7 +204,7 @@ struct ProjectContactEditSheet: View {
         guard imported.phoneNumbers.count > 1 else { return }
         let spareText = imported.phoneNumbers.dropFirst().joined(separator: "、")
         guard !spareText.isEmpty else { return }
-        let marker = "备用号码：\(spareText)"
+        let marker = String(format: String(localized: "备用号码：%@"), spareText)
         if note.contains(marker) { return }
         note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         note = note.isEmpty ? marker : "\(note)\n\(marker)"
@@ -227,7 +227,7 @@ struct ProjectTagMultiSelectView: View {
 
     var body: some View {
         if selectableProjects.isEmpty {
-            Text("暂无可选项目")
+            Text(String(localized: "暂无可选项目"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         } else {

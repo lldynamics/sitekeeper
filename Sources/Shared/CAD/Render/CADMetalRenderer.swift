@@ -28,6 +28,8 @@ extension CADPoC {
         private var progressiveRenderState: ProgressiveRenderState?
         private var drawingRevision = 0
         private var totalLayerCount = 0
+        private var totalTextEntityCount = 0
+        private var indexedTextEntityCount = 0
         private var featureOptions: CADCanvasFeatureOptions = .performanceDefault
 
         private var userZoom: Double = 1
@@ -58,6 +60,9 @@ extension CADPoC {
         private var textAtlasTextureCache = CADTextAtlasTextureCache()
         private var currentTextAtlasTextCount = 0
         private var currentTextAtlasSkippedTextCount = 0
+        private var textOverlayLabels: [String: UILabel] = [:]
+        private var currentUIKitTextLabelCount = 0
+        private var currentUIKitTextLabelSkippedCount = 0
         #endif
 
         private struct ProgressiveRenderKey: Equatable {
@@ -82,6 +87,16 @@ extension CADPoC {
         private struct FrameRenderPlan {
             var output: CADPoC.CADRenderPipeline.Output
             var needsContinuation: Bool
+        }
+
+        private struct TextViewportDiagnostics {
+            var textWorldBounds: Kernel.CADBounds = .empty
+            var visibleLayerTextWorldBounds: Kernel.CADBounds = .empty
+            var nearestTextBounds: Kernel.CADBounds = .empty
+            var nearestTextDistance: Double?
+            var nearestTextPreview: String?
+            var nearestTextLayerID: String?
+            var detailRows: [String] = []
         }
 
         override init() {
@@ -146,6 +161,8 @@ extension CADPoC {
         private func rebuildDrawingForCurrentLayout(resetViewState: Bool) {
             entities = entitiesForSelectedLayout()
             spatialIndex = CADSpatialIndex(entities: entities)
+            totalTextEntityCount = entities.filter(Self.isTextEntity).count
+            indexedTextEntityCount = spatialIndex.query(.empty).filter(Self.isTextEntity).count
             modelBounds = fitModelBounds(for: entities)
             drawingRevision += 1
             progressiveRenderState = nil
@@ -159,6 +176,7 @@ extension CADPoC {
             textAtlasTextureCache.removeAll()
             currentTextAtlasTextCount = 0
             currentTextAtlasSkippedTextCount = 0
+            clearTextOverlayLabels()
             #endif
             if resetViewState {
                 resetView()
@@ -317,6 +335,7 @@ extension CADPoC {
                 textAtlasTextureCache.removeAll()
                 currentTextAtlasTextCount = 0
                 currentTextAtlasSkippedTextCount = 0
+                clearTextOverlayLabels()
             }
             #endif
         }
@@ -415,6 +434,16 @@ extension CADPoC {
             let viewportEntitiesBeforeLayerFilter = spatialIndex.query(viewportBounds, layerIDs: nil)
             let visibleEntities = spatialIndex.query(viewportBounds, layerIDs: visibleLayerIDs)
             let commandSourceEntities = entitiesAfterApplyingFeatureOptions(visibleEntities)
+            let viewportTextEntityCountBeforeLayerFilter = viewportEntitiesBeforeLayerFilter.filter(Self.isTextEntity).count
+            let visibleTextEntityCount = visibleEntities.filter(Self.isTextEntity).count
+            let renderInputTextEntityCount = commandSourceEntities.filter(Self.isTextEntity).count
+            var textViewportDiagnostics = makeTextViewportDiagnostics(viewportBounds: viewportBounds)
+            if visibleTextEntityCount == 0 {
+                textViewportDiagnostics.detailRows.insert(
+                    contentsOf: Self.viewportEntityDiagnosticRows(visibleEntities),
+                    at: 0
+                )
+            }
             let zoomScale = modelToScreenScale(
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size
@@ -430,6 +459,10 @@ extension CADPoC {
             pipelineOutput.performance.drawCallCount = pipelineOutput.commands.reduce(0) { $0 + $1.drawCallCost }
             let textCommandCount = featureOptions.rendersTextOverlays ? pipelineOutput.commands.cadTextCommandCount : 0
             #if os(iOS)
+            let textOverlaySourceEntities = textOverlaySourceEntities(
+                renderInputEntities: commandSourceEntities,
+                renderCommands: pipelineOutput.commands
+            )
             self.syncDebugTextMarkers(
                 commands: featureOptions.rendersTextOverlays ? pipelineOutput.commands : [],
                 view: view,
@@ -437,14 +470,31 @@ extension CADPoC {
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
-            let textAtlasPlan = self.makeTextAtlasRenderPlan(
-                commands: featureOptions.rendersTextOverlays ? pipelineOutput.commands : [],
+            let uiTextOverlayStats = self.syncTextOverlayLabels(
+                entities: featureOptions.rendersTextOverlays ? textOverlaySourceEntities : [],
+                view: view,
                 drawableSize: view.drawableSize,
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
-            currentTextAtlasTextCount = textAtlasPlan?.textCount ?? 0
-            currentTextAtlasSkippedTextCount = textAtlasPlan?.skippedTextCount ?? textCommandCount
+            let textAtlasPlan: CADTextAtlasRenderPlan? = nil
+            currentTextAtlasTextCount = 0
+            currentTextAtlasSkippedTextCount = 0
+            if featureOptions.rendersTextOverlays, uiTextOverlayStats.source > 0 {
+                textViewportDiagnostics.detailRows.append(
+                    "ui text overlay \(uiTextOverlayStats.visible) / source \(uiTextOverlayStats.source) / skipped \(uiTextOverlayStats.skipped)"
+                )
+                if uiTextOverlayStats.overlapSkipped > 0 {
+                    textViewportDiagnostics.detailRows.append(
+                        "ui text overlap hidden \(uiTextOverlayStats.overlapSkipped)"
+                    )
+                }
+                if uiTextOverlayStats.rawSource > uiTextOverlayStats.source {
+                    textViewportDiagnostics.detailRows.append(
+                        "ui text dedup \(uiTextOverlayStats.rawSource - uiTextOverlayStats.source) / raw \(uiTextOverlayStats.rawSource)"
+                    )
+                }
+            }
             #else
             let textAtlasPlan: CADTextAtlasRenderPlan? = nil
             #endif
@@ -473,6 +523,10 @@ extension CADPoC {
                 textOverlaySkippedCount: currentTextOverlaySkippedCount,
                 viewportBounds: viewportBounds,
                 viewportEntityCountBeforeLayerFilter: viewportEntitiesBeforeLayerFilter.count,
+                viewportTextEntityCountBeforeLayerFilter: viewportTextEntityCountBeforeLayerFilter,
+                visibleTextEntityCount: visibleTextEntityCount,
+                renderInputTextEntityCount: renderInputTextEntityCount,
+                textViewportDiagnostics: textViewportDiagnostics,
                 vertexCount: vertices.count + (textAtlasPlan?.vertices.count ?? 0)
             )
             publishCanvasState(
@@ -666,6 +720,10 @@ extension CADPoC {
         }
 
         private func shouldPrioritizeTextForProgressiveRender(_ entity: Kernel.CADEntity) -> Bool {
+            Self.isTextEntity(entity)
+        }
+
+        private static func isTextEntity(_ entity: Kernel.CADEntity) -> Bool {
             switch entity.kind {
             case .text, .mtext, .attrib:
                 return entity.text != nil
@@ -708,6 +766,10 @@ extension CADPoC {
             textOverlaySkippedCount: Int,
             viewportBounds: Kernel.CADBounds,
             viewportEntityCountBeforeLayerFilter: Int,
+            viewportTextEntityCountBeforeLayerFilter: Int,
+            visibleTextEntityCount: Int,
+            renderInputTextEntityCount: Int,
+            textViewportDiagnostics: TextViewportDiagnostics,
             vertexCount: Int
         ) {
             var trace = pipelineTrace
@@ -751,9 +813,427 @@ extension CADPoC {
                     modelBoundsValid: modelBoundsValid,
                     viewportBoundsValid: viewportBoundsValid,
                     viewportIntersectsModel: viewportIntersectsModel,
-                    vertexCount: vertexCount
+                    vertexCount: vertexCount,
+                    totalTextEntityCount: totalTextEntityCount,
+                    indexedTextEntityCount: indexedTextEntityCount,
+                    viewportTextEntityCountBeforeLayerFilter: viewportTextEntityCountBeforeLayerFilter,
+                    visibleTextEntityCount: visibleTextEntityCount,
+                    renderInputTextEntityCount: renderInputTextEntityCount,
+                    textWorldBounds: CGRect(textViewportDiagnostics.textWorldBounds),
+                    visibleLayerTextWorldBounds: CGRect(textViewportDiagnostics.visibleLayerTextWorldBounds),
+                    nearestTextBounds: CGRect(textViewportDiagnostics.nearestTextBounds),
+                    nearestTextDistance: textViewportDiagnostics.nearestTextDistance,
+                    nearestTextPreview: textViewportDiagnostics.nearestTextPreview,
+                    nearestTextLayerID: textViewportDiagnostics.nearestTextLayerID,
+                    textDiagnosticRows: textViewportDiagnostics.detailRows
                 )
             )
+        }
+
+        private func makeTextViewportDiagnostics(viewportBounds: Kernel.CADBounds) -> TextViewportDiagnostics {
+            var diagnostics = TextViewportDiagnostics()
+            let proxyRows = Self.proxyTextCandidateDiagnosticRows(
+                entities: entities,
+                visibleLayerIDs: visibleLayerIDs,
+                viewportBounds: viewportBounds
+            )
+            let textEntities = entities.filter(Self.isTextEntity)
+            guard !textEntities.isEmpty else {
+                diagnostics.detailRows.append(contentsOf: proxyRows)
+                return diagnostics
+            }
+
+            let layerVisibleTextEntities = textEntities.filter { entity in
+                visibleLayerIDs == nil || visibleLayerIDs?.contains(entity.layerID) == true
+            }
+
+            diagnostics.textWorldBounds = textEntities.reduce(Kernel.CADBounds.empty) { partial, entity in
+                partial.union(CADSpatialIndex.effectiveBounds(for: entity))
+            }
+            diagnostics.visibleLayerTextWorldBounds = layerVisibleTextEntities.reduce(Kernel.CADBounds.empty) { partial, entity in
+                partial.union(CADSpatialIndex.effectiveBounds(for: entity))
+            }
+
+            let nearestCandidates = layerVisibleTextEntities.isEmpty ? textEntities : layerVisibleTextEntities
+            let nearest = nearestCandidates.compactMap { entity -> (entity: Kernel.CADEntity, bounds: Kernel.CADBounds, distance: Double)? in
+                let bounds = CADSpatialIndex.effectiveBounds(for: entity)
+                guard !bounds.isEmpty else { return nil }
+                return (entity, bounds, Self.distanceBetween(bounds, viewportBounds))
+            }.min { lhs, rhs in
+                lhs.distance < rhs.distance
+            }
+
+            if let nearest {
+                diagnostics.nearestTextBounds = nearest.bounds
+                diagnostics.nearestTextDistance = nearest.distance
+                diagnostics.nearestTextPreview = nearest.entity.text?.displayText
+                diagnostics.nearestTextLayerID = nearest.entity.layerID
+                diagnostics.detailRows.append(Self.nearestTextViewportOffsetRow(
+                    nearestBounds: nearest.bounds,
+                    viewportBounds: viewportBounds
+                ))
+            }
+            diagnostics.detailRows.append(contentsOf: Self.textViewportDetailRows(
+                textEntities: textEntities,
+                layerVisibleTextEntities: layerVisibleTextEntities,
+                viewportBounds: viewportBounds
+            ))
+            diagnostics.detailRows.append(contentsOf: proxyRows)
+            return diagnostics
+        }
+
+        private static func nearestTextViewportOffsetRow(
+            nearestBounds: Kernel.CADBounds,
+            viewportBounds: Kernel.CADBounds
+        ) -> String {
+            let nearestCenter = nearestBounds.center
+            let viewportCenter = viewportBounds.center
+            let dx = nearestCenter.x - viewportCenter.x
+            let dy = nearestCenter.y - viewportCenter.y
+            let horizontal: String
+            if nearestBounds.maxX < viewportBounds.minX {
+                horizontal = "left"
+            } else if nearestBounds.minX > viewportBounds.maxX {
+                horizontal = "right"
+            } else {
+                horizontal = "inside-x"
+            }
+
+            let vertical: String
+            if nearestBounds.maxY < viewportBounds.minY {
+                vertical = "below"
+            } else if nearestBounds.minY > viewportBounds.maxY {
+                vertical = "above"
+            } else {
+                vertical = "inside-y"
+            }
+
+            return "nearest text offset dx \(Self.formatDiagnosticNumber(dx)) / dy \(Self.formatDiagnosticNumber(dy)) / \(horizontal),\(vertical)"
+        }
+
+        private static func textViewportDetailRows(
+            textEntities: [Kernel.CADEntity],
+            layerVisibleTextEntities: [Kernel.CADEntity],
+            viewportBounds: Kernel.CADBounds
+        ) -> [String] {
+            let viewportTextEntities = layerVisibleTextEntities.filter {
+                CADSpatialIndex.effectiveBounds(for: $0).intersects(viewportBounds)
+            }
+            let orderedKinds = ["text", "mtext", "attrib", "dimension"]
+            let allCounts = Self.textKindCounts(textEntities)
+            let layerCounts = Self.textKindCounts(layerVisibleTextEntities)
+            var rows: [String] = []
+            if !viewportTextEntities.isEmpty {
+                rows.append(Self.viewportTextPreviewRow(for: viewportTextEntities))
+                rows.append(Self.textDecodeSummaryRow(for: viewportTextEntities))
+                if let sample = viewportTextEntities.compactMap(\.text).first {
+                    rows.append(Self.textDecodeSampleRow(for: sample))
+                }
+            }
+            rows.append(contentsOf: [
+                "text kind total \(Self.formatTextKindCounts(allCounts, orderedKinds: orderedKinds))",
+                "text kind layer \(Self.formatTextKindCounts(layerCounts, orderedKinds: orderedKinds))"
+            ])
+            if viewportTextEntities.isEmpty,
+               let annotationRow = Self.annotationLayerTextDiagnosticRow(
+                candidates: layerVisibleTextEntities,
+                viewportBounds: viewportBounds
+               ) {
+                rows.insert(annotationRow, at: 0)
+            }
+
+            for kind in orderedKinds {
+                let candidates = layerVisibleTextEntities.filter {
+                    Self.textDiagnosticKindLabel(for: $0) == kind
+                }
+                guard !candidates.isEmpty else { continue }
+
+                let viewportHits = candidates.filter {
+                    CADSpatialIndex.effectiveBounds(for: $0).intersects(viewportBounds)
+                }.count
+                let nearest = candidates.compactMap { entity -> (entity: Kernel.CADEntity, bounds: Kernel.CADBounds, distance: Double)? in
+                    let bounds = CADSpatialIndex.effectiveBounds(for: entity)
+                    guard !bounds.isEmpty else { return nil }
+                    return (entity, bounds, Self.distanceBetween(bounds, viewportBounds))
+                }.min { lhs, rhs in
+                    lhs.distance < rhs.distance
+                }
+
+                if let nearest {
+                    rows.append(
+                        "near \(kind) total \(candidates.count) / viewport \(viewportHits) / d \(Self.formatDiagnosticNumber(nearest.distance)) / layer \(nearest.entity.layerID) \(Self.compactDiagnosticPreview(nearest.entity.text?.displayText))"
+                    )
+                    rows.append("near \(kind) bounds \(Self.formatDiagnosticBounds(nearest.bounds))")
+                    if let text = nearest.entity.text {
+                        rows.append(Self.textDecodeSampleRow(for: text, prefix: "near \(kind) decode"))
+                    }
+                } else {
+                    rows.append("near \(kind) total \(candidates.count) / viewport \(viewportHits) / no finite bounds")
+                }
+            }
+
+            return rows
+        }
+
+        private static func viewportTextPreviewRow(for entities: [Kernel.CADEntity]) -> String {
+            let previews = entities
+                .prefix(4)
+                .map { entity -> String in
+                    let handle = entity.sourceHandle.map { "#\($0)" } ?? ""
+                    let preview = Self.compactDiagnosticPreview(entity.text?.displayText)
+                    return "\(entity.layerID)\(handle):\(preview)"
+                }
+                .joined(separator: " | ")
+            return "view text \(entities.count) \(previews)"
+        }
+
+        private static func annotationLayerTextDiagnosticRow(
+            candidates: [Kernel.CADEntity],
+            viewportBounds: Kernel.CADBounds
+        ) -> String? {
+            let annotationCandidates = candidates.filter { entity in
+                let layer = entity.layerID.uppercased()
+                return layer.contains("-BZ") || layer == "BZ" || layer.contains("标注")
+            }
+            guard !annotationCandidates.isEmpty else { return nil }
+
+            let nearest = annotationCandidates.compactMap { entity -> (entity: Kernel.CADEntity, bounds: Kernel.CADBounds, distance: Double)? in
+                let bounds = CADSpatialIndex.effectiveBounds(for: entity)
+                guard !bounds.isEmpty else { return nil }
+                return (entity, bounds, Self.distanceBetween(bounds, viewportBounds))
+            }.min { lhs, rhs in
+                lhs.distance < rhs.distance
+            }
+            guard let nearest else {
+                return "-BZ text total \(annotationCandidates.count) / no finite bounds"
+            }
+            let preview = Self.compactDiagnosticPreview(nearest.entity.text?.displayText)
+            return "-BZ text total \(annotationCandidates.count) / nearest d \(Self.formatDiagnosticNumber(nearest.distance)) / layer \(nearest.entity.layerID) \(preview)"
+        }
+
+        private static func proxyTextCandidateDiagnosticRows(
+            entities: [Kernel.CADEntity],
+            visibleLayerIDs: Set<String>?,
+            viewportBounds: Kernel.CADBounds
+        ) -> [String] {
+            let candidates = entities.compactMap { entity -> (entity: Kernel.CADEntity, preview: String)? in
+                guard entity.kind == .proxy,
+                      let preview = proxyTextCandidatePreview(from: entity.unsupportedReason) else {
+                    return nil
+                }
+                return (entity, preview)
+            }
+            guard !candidates.isEmpty else {
+                return []
+            }
+
+            let layerVisibleCandidates = candidates.filter { candidate in
+                visibleLayerIDs == nil || visibleLayerIDs?.contains(candidate.entity.layerID) == true
+            }
+            let boundedCandidates = layerVisibleCandidates.compactMap { candidate -> (entity: Kernel.CADEntity, preview: String, bounds: Kernel.CADBounds)? in
+                let bounds = CADSpatialIndex.effectiveBounds(for: candidate.entity)
+                guard !bounds.isEmpty else {
+                    return nil
+                }
+                return (candidate.entity, candidate.preview, bounds)
+            }
+            let viewportHits = boundedCandidates.filter { $0.bounds.intersects(viewportBounds) }.count
+            let nearest = boundedCandidates.min { lhs, rhs in
+                Self.distanceBetween(lhs.bounds, viewportBounds) < Self.distanceBetween(rhs.bounds, viewportBounds)
+            }
+            let tianzhengCount = candidates.filter { candidate in
+                candidate.entity.unsupportedReason?.localizedCaseInsensitiveContains("Tianzheng") == true
+                    || candidate.entity.unsupportedReason?.localizedCaseInsensitiveContains("TCH") == true
+            }.count
+
+            var row = "proxy text total \(candidates.count) / layer \(layerVisibleCandidates.count) / inView \(viewportHits)"
+            if let nearest {
+                let distance = Self.distanceBetween(nearest.bounds, viewportBounds)
+                row += " / nearest d \(Self.formatDiagnosticNumber(distance)) / layer \(nearest.entity.layerID) \(nearest.preview)"
+            } else if let sample = layerVisibleCandidates.first ?? candidates.first {
+                let handle = sample.entity.sourceHandle.map { "#\($0)" } ?? ""
+                row += " / no finite bounds / sample \(sample.entity.layerID)\(handle):\(sample.preview)"
+            } else {
+                row += " / no finite bounds"
+            }
+            if tianzhengCount > 0 {
+                row += " / tch \(tianzhengCount)"
+            }
+            return [row]
+        }
+
+        private static func proxyTextCandidatePreview(from reason: String?) -> String? {
+            guard let reason,
+                  let range = reason.range(of: "textCandidate=", options: [.caseInsensitive]) else {
+                return nil
+            }
+            let suffix = reason[range.upperBound...]
+            let value = suffix
+                .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
+                .first
+                .map(String.init) ?? String(suffix)
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return nil
+            }
+            return compactDiagnosticPreview(trimmed)
+        }
+
+        private static func viewportEntityDiagnosticRows(_ entities: [Kernel.CADEntity]) -> [String] {
+            guard !entities.isEmpty else { return [] }
+
+            let kindCounts = entities.reduce(into: [Kernel.CADEntityKind: Int]()) { counts, entity in
+                counts[entity.kind, default: 0] += 1
+            }
+            let leaderEntities = entities.filter { entity in
+                entity.diagnostics.entries.contains { entry in
+                    entry.code.localizedCaseInsensitiveContains("LEADER")
+                        || entry.message.localizedCaseInsensitiveContains("LEADER")
+                }
+            }
+            let orderedKinds: [Kernel.CADEntityKind] = [.line, .polyline, .lwPolyline, .dimension, .hatch, .proxy]
+            let kindSummary = orderedKinds
+                .map { "\($0.rawValue)=\(kindCounts[$0, default: 0])" }
+                .joined(separator: " ")
+            let layerSummary = Array(
+                entities.reduce(into: [String: Int]()) { counts, entity in
+                    counts[entity.layerID, default: 0] += 1
+                }
+                .sorted { lhs, rhs in
+                    if lhs.value != rhs.value { return lhs.value > rhs.value }
+                    return lhs.key.localizedStandardCompare(rhs.key) == .orderedAscending
+                }
+                .prefix(3)
+            )
+            .map { "\($0.key)=\($0.value)" }
+            .joined(separator: ",")
+            let handleSummary = entities
+                .compactMap(\.sourceHandle)
+                .prefix(3)
+                .joined(separator: ",")
+            var row = "view kinds \(kindSummary) leader=\(leaderEntities.count)"
+            if !layerSummary.isEmpty {
+                row += " / layers \(layerSummary)"
+            }
+            if !handleSummary.isEmpty {
+                row += " / handles \(handleSummary)"
+            }
+            var rows = [row]
+            if let leader = leaderEntities.first {
+                let handle = leader.sourceHandle.map { " / handle \($0)" } ?? ""
+                rows.append("view leader layer \(leader.layerID)\(handle)")
+            }
+            return rows
+        }
+
+        private static func textDecodeSummaryRow(for entities: [Kernel.CADEntity]) -> String {
+            let texts = entities.compactMap(\.text)
+            let emptyDisplayCount = texts.filter {
+                $0.displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }.count
+            let replacementCount = texts.reduce(0) { $0 + Self.replacementCharacterCount(in: $1.displayText) }
+            let warningCount = texts.reduce(0) { $0 + $1.warnings.count }
+            return "text decode viewport empty \(emptyDisplayCount)/\(texts.count) / replacement \(replacementCount) / warnings \(warningCount)"
+        }
+
+        private static func textDecodeSampleRow(
+            for text: Kernel.CADTextRun,
+            prefix: String = "text decode sample"
+        ) -> String {
+            let rawLength = text.rawText.count
+            let decodedLength = text.decodedText.count
+            let displayLength = text.displayText.count
+            let rawPreview = compactDiagnosticPreview(text.rawText)
+            let displayPreview = compactDiagnosticPreview(text.displayText)
+            return "\(prefix) rawLen \(rawLength) / decodedLen \(decodedLength) / displayLen \(displayLength) / raw \(rawPreview) / display \(displayPreview)"
+        }
+
+        private static func replacementCharacterCount(in text: String) -> Int {
+            text.unicodeScalars.filter { scalar in
+                scalar.value == 0xFFFD || scalar.value == 0x25A1 || scalar.value == 0x25A0
+            }.count
+        }
+
+        private static func textKindCounts(_ entities: [Kernel.CADEntity]) -> [String: Int] {
+            entities.reduce(into: [:]) { counts, entity in
+                counts[textDiagnosticKindLabel(for: entity), default: 0] += 1
+            }
+        }
+
+        private static func formatTextKindCounts(_ counts: [String: Int], orderedKinds: [String]) -> String {
+            orderedKinds.map { "\($0) \(counts[$0, default: 0])" }.joined(separator: " / ")
+        }
+
+        private static func textDiagnosticKindLabel(for entity: Kernel.CADEntity) -> String {
+            switch entity.kind {
+            case .text:
+                return "text"
+            case .mtext:
+                return "mtext"
+            case .attrib:
+                return "attrib"
+            case .dimension:
+                return "dimension"
+            default:
+                return entity.kind.rawValue
+            }
+        }
+
+        private static func formatDiagnosticNumber(_ value: Double) -> String {
+            guard value.isFinite else { return "-" }
+            if abs(value) >= 1000 {
+                return String(format: "%.0f", value)
+            }
+            if abs(value) >= 10 {
+                return String(format: "%.1f", value)
+            }
+            return String(format: "%.2f", value)
+        }
+
+        private static func compactDiagnosticPreview(_ value: String?) -> String {
+            guard let value else { return "" }
+            let singleLine = value.replacingOccurrences(of: "\n", with: " ")
+            if singleLine.count <= 12 {
+                return singleLine
+            }
+            return "\(singleLine.prefix(12))..."
+        }
+
+        private static func formatDiagnosticBounds(_ bounds: Kernel.CADBounds) -> String {
+            guard !bounds.isEmpty else { return "-" }
+            return "(\(formatDiagnosticNumber(bounds.minX)),\(formatDiagnosticNumber(bounds.minY))) \(formatDiagnosticNumber(bounds.width))x\(formatDiagnosticNumber(bounds.height))"
+        }
+
+        private static func formatDiagnosticPoint(_ point: Kernel.CADPoint) -> String {
+            "(\(formatDiagnosticNumber(point.x)),\(formatDiagnosticNumber(point.y)))"
+        }
+
+        private static func distanceBetween(_ lhs: Kernel.CADBounds, _ rhs: Kernel.CADBounds) -> Double {
+            guard !lhs.isEmpty, !rhs.isEmpty else { return .infinity }
+            if lhs.intersects(rhs) {
+                return 0
+            }
+            let dx: Double
+            if lhs.maxX < rhs.minX {
+                dx = rhs.minX - lhs.maxX
+            } else if rhs.maxX < lhs.minX {
+                dx = lhs.minX - rhs.maxX
+            } else {
+                dx = 0
+            }
+            let dy: Double
+            if lhs.maxY < rhs.minY {
+                dy = rhs.minY - lhs.maxY
+            } else if rhs.maxY < lhs.minY {
+                dy = lhs.minY - rhs.maxY
+            } else {
+                dy = 0
+            }
+            return hypot(dx, dy)
+        }
+
+        private static func distanceBetween(_ lhs: Kernel.CADPoint, _ rhs: Kernel.CADPoint) -> Double {
+            hypot(lhs.x - rhs.x, lhs.y - rhs.y)
         }
 
         private func logFrameTrace(_ trace: Kernel.CADPerformanceTrace) {
@@ -1223,6 +1703,12 @@ private extension CADPoC.CADMetalRenderer {
         var textureCoordinate: SIMD2<Float>
     }
 
+    struct CADTextAtlasVertexBuildResult {
+        var vertices: [CADTexturedVertex]
+        var fallbackAnchorCount: Int
+        var offscreenItemCount: Int
+    }
+
     struct CADTextAtlasRenderPlan {
         var texture: MTLTexture
         var vertices: [CADTexturedVertex]
@@ -1230,6 +1716,25 @@ private extension CADPoC.CADMetalRenderer {
         var skippedTextCount: Int
         var uniqueTextureCount: Int
         var atlasSize: CGSize
+        var diagnosticRows: [String]
+
+        init(
+            texture: MTLTexture,
+            vertices: [CADTexturedVertex],
+            textCount: Int,
+            skippedTextCount: Int,
+            uniqueTextureCount: Int,
+            atlasSize: CGSize,
+            diagnosticRows: [String]
+        ) {
+            self.texture = texture
+            self.vertices = vertices
+            self.textCount = textCount
+            self.skippedTextCount = skippedTextCount
+            self.uniqueTextureCount = uniqueTextureCount
+            self.atlasSize = atlasSize
+            self.diagnosticRows = diagnosticRows
+        }
     }
 
     static func makeRenderPipelineState(
@@ -1385,7 +1890,7 @@ private extension CADPoC.CADMetalRenderer {
 
     var currentTextOverlayCount: Int {
         #if os(iOS)
-        currentTextAtlasTextCount
+        max(currentTextAtlasTextCount, currentUIKitTextLabelCount)
         #else
         0
         #endif
@@ -1393,7 +1898,7 @@ private extension CADPoC.CADMetalRenderer {
 
     var currentTextOverlaySkippedCount: Int {
         #if os(iOS)
-        currentTextAtlasSkippedTextCount
+        max(currentTextAtlasSkippedTextCount, currentUIKitTextLabelSkippedCount)
         #else
         0
         #endif
@@ -2017,8 +2522,28 @@ private extension CADPoC.CADMetalRenderer {
         var text: Kernel.CADTextRun
         var widthPoints: CGFloat
         var heightPoints: CGFloat
+        var fontSizePoints: CGFloat
+        var worldHeight: Double
         var alignmentOffset: CGPoint
         var glyphs: [CADTextAtlasGlyph]
+
+        init(
+            text: Kernel.CADTextRun,
+            widthPoints: CGFloat,
+            heightPoints: CGFloat,
+            fontSizePoints: CGFloat,
+            worldHeight: Double,
+            alignmentOffset: CGPoint,
+            glyphs: [CADTextAtlasGlyph]
+        ) {
+            self.text = text
+            self.widthPoints = widthPoints
+            self.heightPoints = heightPoints
+            self.fontSizePoints = fontSizePoints
+            self.worldHeight = worldHeight
+            self.alignmentOffset = alignmentOffset
+            self.glyphs = glyphs
+        }
     }
 
     private struct CADTextAtlasGlyph {
@@ -2089,7 +2614,7 @@ private extension CADPoC.CADMetalRenderer {
             textAtlasTextureCache.insert(packedAtlas, for: cacheKey, limit: 16)
         }
 
-        let vertices = makeTextAtlasVertices(
+        let vertexBuild = makeTextAtlasVertices(
             from: textItems,
             packedGlyphs: atlas.packedGlyphs,
             atlasSize: atlas.size,
@@ -2097,6 +2622,7 @@ private extension CADPoC.CADMetalRenderer {
             viewSize: viewSize,
             contentScale: contentScale
         )
+        let vertices = vertexBuild.vertices
         guard !vertices.isEmpty else { return nil }
 
         return CADTextAtlasRenderPlan(
@@ -2105,7 +2631,17 @@ private extension CADPoC.CADMetalRenderer {
             textCount: textItems.count,
             skippedTextCount: textLayout.skippedTextCount,
             uniqueTextureCount: atlas.uniqueTextureCount,
-            atlasSize: CGSize(width: atlas.size.width, height: atlas.size.height)
+            atlasSize: CGSize(width: atlas.size.width, height: atlas.size.height),
+            diagnosticRows: textAtlasDiagnosticRows(
+                items: textItems,
+                vertices: vertices,
+                atlasSize: atlas.size,
+                fallbackAnchorCount: vertexBuild.fallbackAnchorCount,
+                offscreenItemCount: vertexBuild.offscreenItemCount,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                contentScale: contentScale
+            )
         )
     }
 
@@ -2131,8 +2667,9 @@ private extension CADPoC.CADMetalRenderer {
             }
             let text = candidate.text
             let style = candidate.style
+            let worldHeight = Self.textOverlayWorldHeight(for: text)
             let fontSize = Self.textOverlayFontSize(
-                textHeight: text.height,
+                textHeight: worldHeight,
                 modelScale: modelScale,
                 contentScale: viewScale.y
             )
@@ -2175,6 +2712,8 @@ private extension CADPoC.CADMetalRenderer {
                 text: text,
                 widthPoints: widthPoints,
                 heightPoints: heightPoints,
+                fontSizePoints: fontSize,
+                worldHeight: worldHeight,
                 alignmentOffset: alignmentOffset,
                 glyphs: glyphs
             ))
@@ -2210,10 +2749,31 @@ private extension CADPoC.CADMetalRenderer {
 
     private func textAtlasPriority(text: Kernel.CADTextRun, modelScale: Double) -> Double {
         let displayText = text.displayText.isEmpty ? " " : text.displayText
-        let screenHeight = max(text.height * modelScale, 0)
+        let screenHeight = max(Self.textOverlayWorldHeight(for: text) * modelScale, 0)
         let lengthWeight = min(Double(displayText.count), 32) * 0.02
         let cjkWeight = displayText.cadContainsCJKScalars ? 1.15 : 1
         return (screenHeight + lengthWeight) * cjkWeight
+    }
+
+    private static func textOverlayWorldHeight(for text: Kernel.CADTextRun) -> Double {
+        let declaredHeight = text.height.isFinite && text.height > 0 ? text.height : 2.5
+        guard let boxHeight = text.boxHeight,
+              boxHeight.isFinite,
+              boxHeight > 0 else {
+            return declaredHeight
+        }
+
+        let lineCount = max(text.displayText.cadRenderableLineCount, 1)
+        let boxLineHeight = boxHeight / Double(lineCount)
+
+        // LibreDWG can expose MTEXT content and extents while leaving text_height at
+        // the CAD default. In that case the glyph atlas is technically produced but
+        // too small to see in a deep-zoom construction drawing.
+        if declaredHeight <= 2.6, boxLineHeight > declaredHeight * 8 {
+            return boxLineHeight
+        }
+
+        return declaredHeight
     }
 
     private func makeTextAtlasGlyphs(
@@ -2376,14 +2936,17 @@ private extension CADPoC.CADMetalRenderer {
         drawableSize: CGSize,
         viewSize: CGSize,
         contentScale: CGFloat
-    ) -> [CADTexturedVertex] {
+    ) -> CADTextAtlasVertexBuildResult {
         let viewScale = Self.drawableToViewScale(
             drawableSize: drawableSize,
             viewSize: viewSize,
             fallback: contentScale
         )
         var vertices: [CADTexturedVertex] = []
-        vertices.reserveCapacity(items.count * 6)
+        vertices.reserveCapacity(items.reduce(0) { $0 + $1.glyphs.count * 6 })
+        var fallbackAnchorCount = 0
+        var offscreenItemCount = 0
+        let fallbackMargin = max(96 * Double(max(contentScale, 1)), 96)
 
         for item in items {
             let screen = screenPoint(
@@ -2406,31 +2969,161 @@ private extension CADPoC.CADMetalRenderer {
                 alignmentOffset: item.alignmentOffset,
                 rotationRadians: item.text.rotationRadians
             )
-            let screenAngle = -item.text.rotationRadians
-            let cosine = cos(screenAngle)
-            let sine = sin(screenAngle)
-            for glyphItem in item.glyphs {
-                guard let glyph = packedGlyphs[glyphItem.cacheKey] else { continue }
-                let localCenterX = Double(glyphItem.offsetX + glyphItem.widthPoints / 2 - item.widthPoints / 2)
-                let localCenterY = Double(glyphItem.offsetY + glyphItem.heightPoints / 2 - item.heightPoints / 2)
-                let rotatedCenter = CGPoint(
-                    x: center.x + CGFloat(localCenterX * cosine - localCenterY * sine),
-                    y: center.y + CGFloat(localCenterX * sine + localCenterY * cosine)
-                )
-                vertices.append(contentsOf: makeTextAtlasQuadVertices(
-                    centerViewPoint: rotatedCenter,
-                    widthPoints: glyphItem.widthPoints,
-                    heightPoints: glyphItem.heightPoints,
-                    rotationRadians: item.text.rotationRadians,
-                    glyphRect: glyph.rect,
-                    atlasSize: atlasSize,
-                    drawableSize: drawableSize,
-                    viewScale: viewScale
-                ))
+            let itemVertices = makeTextAtlasVertices(
+                for: item,
+                center: center,
+                packedGlyphs: packedGlyphs,
+                atlasSize: atlasSize,
+                drawableSize: drawableSize,
+                viewScale: viewScale
+            )
+            if Self.texturedVerticesIntersectViewport(itemVertices)
+                || !Self.drawablePointIsNearViewport(screen, drawableSize: drawableSize, margin: fallbackMargin) {
+                if !Self.texturedVerticesIntersectViewport(itemVertices) {
+                    offscreenItemCount += 1
+                }
+                vertices.append(contentsOf: itemVertices)
+                continue
             }
+
+            let fallbackCenter = Self.textOverlayCenter(
+                insertionScreen: insertionViewPoint,
+                width: item.widthPoints,
+                height: item.heightPoints,
+                alignmentOffset: .zero,
+                rotationRadians: item.text.rotationRadians
+            )
+            let fallbackVertices = makeTextAtlasVertices(
+                for: item,
+                center: fallbackCenter,
+                packedGlyphs: packedGlyphs,
+                atlasSize: atlasSize,
+                drawableSize: drawableSize,
+                viewScale: viewScale
+            )
+            fallbackAnchorCount += 1
+            if !Self.texturedVerticesIntersectViewport(fallbackVertices) {
+                offscreenItemCount += 1
+            }
+            vertices.append(contentsOf: fallbackVertices)
+        }
+
+        return CADTextAtlasVertexBuildResult(
+            vertices: vertices,
+            fallbackAnchorCount: fallbackAnchorCount,
+            offscreenItemCount: offscreenItemCount
+        )
+    }
+
+    private func makeTextAtlasVertices(
+        for item: CADTextAtlasItem,
+        center: CGPoint,
+        packedGlyphs: [CADTextRasterCache.Key: CADPackedTextGlyph],
+        atlasSize: (width: Int, height: Int),
+        drawableSize: CGSize,
+        viewScale: CGPoint
+    ) -> [CADTexturedVertex] {
+        var vertices: [CADTexturedVertex] = []
+        vertices.reserveCapacity(item.glyphs.count * 6)
+        let screenAngle = -item.text.rotationRadians
+        let cosine = cos(screenAngle)
+        let sine = sin(screenAngle)
+
+        for glyphItem in item.glyphs {
+            guard let glyph = packedGlyphs[glyphItem.cacheKey] else { continue }
+            let localCenterX = Double(glyphItem.offsetX + glyphItem.widthPoints / 2 - item.widthPoints / 2)
+            let localCenterY = Double(glyphItem.offsetY + glyphItem.heightPoints / 2 - item.heightPoints / 2)
+            let rotatedCenter = CGPoint(
+                x: center.x + CGFloat(localCenterX * cosine - localCenterY * sine),
+                y: center.y + CGFloat(localCenterX * sine + localCenterY * cosine)
+            )
+            vertices.append(contentsOf: makeTextAtlasQuadVertices(
+                centerViewPoint: rotatedCenter,
+                widthPoints: glyphItem.widthPoints,
+                heightPoints: glyphItem.heightPoints,
+                rotationRadians: item.text.rotationRadians,
+                glyphRect: glyph.rect,
+                atlasSize: atlasSize,
+                drawableSize: drawableSize,
+                viewScale: viewScale
+            ))
         }
 
         return vertices
+    }
+
+    private func textAtlasDiagnosticRows(
+        items: [CADTextAtlasItem],
+        vertices: [CADTexturedVertex],
+        atlasSize: (width: Int, height: Int),
+        fallbackAnchorCount: Int,
+        offscreenItemCount: Int,
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> [String] {
+        var rows: [String] = [
+            "text atlas item \(items.count) / vertex \(vertices.count) / texture \(atlasSize.width)x\(atlasSize.height)"
+        ]
+        if fallbackAnchorCount > 0 || offscreenItemCount > 0 {
+            rows.append("text atlas anchorFallback \(fallbackAnchorCount) / offscreen \(offscreenItemCount)")
+        }
+        if !vertices.isEmpty {
+            let minX = vertices.map(\.position.x).min() ?? 0
+            let maxX = vertices.map(\.position.x).max() ?? 0
+            let minY = vertices.map(\.position.y).min() ?? 0
+            let maxY = vertices.map(\.position.y).max() ?? 0
+            let vertexInsideCount = vertices.filter {
+                $0.position.x >= -1 && $0.position.x <= 1
+                    && $0.position.y >= -1 && $0.position.y <= 1
+            }.count
+            let quadIntersectsViewport = maxX >= -1 && minX <= 1 && maxY >= -1 && minY <= 1
+            rows.append(
+                "text atlas ndc x \(Self.formatDiagnosticNumber(Double(minX)))...\(Self.formatDiagnosticNumber(Double(maxX))) y \(Self.formatDiagnosticNumber(Double(minY)))...\(Self.formatDiagnosticNumber(Double(maxY))) / inside \(vertexInsideCount)/\(vertices.count) / intersects \(quadIntersectsViewport)"
+            )
+        }
+
+        if let first = items.first {
+            let drawablePoint = screenPoint(
+                for: first.text.insertionPoint,
+                drawableSize: drawableSize,
+                viewSize: viewSize
+            )
+            let viewPoint = Self.viewPoint(
+                fromDrawablePoint: drawablePoint,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                fallbackScale: contentScale
+            )
+            rows.append(
+                "text atlas sample font \(Self.formatDiagnosticNumber(Double(first.fontSizePoints))) / worldH \(Self.formatDiagnosticNumber(first.worldHeight)) / view \(Self.formatDiagnosticNumber(Double(viewPoint.x))),\(Self.formatDiagnosticNumber(Double(viewPoint.y))) / size \(Self.formatDiagnosticNumber(Double(first.widthPoints)))x\(Self.formatDiagnosticNumber(Double(first.heightPoints)))"
+            )
+            rows.append(
+                "text atlas sample \(Self.compactDiagnosticPreview(first.text.displayText))"
+            )
+        }
+
+        return rows
+    }
+
+    private static func texturedVerticesIntersectViewport(_ vertices: [CADTexturedVertex]) -> Bool {
+        guard !vertices.isEmpty else { return false }
+        let minX = vertices.map(\.position.x).min() ?? 0
+        let maxX = vertices.map(\.position.x).max() ?? 0
+        let minY = vertices.map(\.position.y).min() ?? 0
+        let maxY = vertices.map(\.position.y).max() ?? 0
+        return maxX >= -1 && minX <= 1 && maxY >= -1 && minY <= 1
+    }
+
+    private static func drawablePointIsNearViewport(
+        _ point: SIMD2<Double>,
+        drawableSize: CGSize,
+        margin: Double
+    ) -> Bool {
+        point.x >= -margin
+            && point.x <= Double(drawableSize.width) + margin
+            && point.y >= -margin
+            && point.y <= Double(drawableSize.height) + margin
     }
 
     private func makeTextAtlasQuadVertices(
@@ -2514,6 +3207,7 @@ private extension CADPoC.CADMetalRenderer {
     }
 
     private var maximumTextAtlasCommandCount: Int { 4_096 }
+    private var maximumUIKitTextOverlayCount: Int { 512 }
 
     private func syncDebugTextMarkers(
         commands: [Kernel.CADRenderCommand],
@@ -2554,6 +3248,391 @@ private extension CADPoC.CADMetalRenderer {
             textOverlayMarkers[key]?.removeFromSuperview()
             textOverlayMarkers.removeValue(forKey: key)
         }
+    }
+
+    private func syncTextOverlayLabels(
+        entities: [Kernel.CADEntity],
+        view: MTKView,
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> (visible: Int, source: Int, rawSource: Int, skipped: Int, overlapSkipped: Int) {
+        guard featureOptions.rendersTextOverlays,
+              drawableSize.width > 1,
+              drawableSize.height > 1,
+              viewSize.width > 1,
+              viewSize.height > 1 else {
+            clearTextOverlayLabels()
+            return (0, 0, 0, entities.filter(Self.isTextEntity).count, 0)
+        }
+
+        let modelScale = modelToScreenScale(drawableSize: drawableSize, viewSize: viewSize)
+        let viewScale = Self.drawableToViewScale(
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallback: contentScale
+        )
+        let rawTextEntityCount = entities.filter(Self.isTextEntity).count
+        let textEntities = prioritizedTextOverlayEntities(
+            entities,
+            modelScale: modelScale
+        )
+        let maxLabelCount = maximumUIKitTextOverlayCount
+        var activeKeys = Set<String>()
+        var visibleCount = 0
+        var skippedCount = max(rawTextEntityCount - textEntities.count, 0)
+            + max(textEntities.count - maxLabelCount, 0)
+
+        for entity in textEntities.prefix(maxLabelCount) {
+            guard let text = entity.text else {
+                skippedCount += 1
+                continue
+            }
+            let key = "label-\(entity.id.uuidString)"
+            let style = rendererStyle(for: entity)
+            activeKeys.insert(key)
+            let label = textOverlayLabel(for: key, in: view)
+            textOverlayLabels[key] = label
+            let isVisible = configureTextOverlayLabel(
+                label,
+                text: text,
+                style: style,
+                modelScale: modelScale,
+                viewScale: viewScale,
+                view: view,
+                drawableSize: drawableSize,
+                viewSize: viewSize,
+                contentScale: contentScale
+            )
+            if isVisible {
+                visibleCount += 1
+                view.bringSubviewToFront(label)
+            } else {
+                skippedCount += 1
+            }
+        }
+
+        let staleKeys = textOverlayLabels.keys.filter { !activeKeys.contains($0) }
+        for key in staleKeys {
+            textOverlayLabels[key]?.removeFromSuperview()
+            textOverlayLabels.removeValue(forKey: key)
+        }
+
+        currentUIKitTextLabelCount = visibleCount
+        currentUIKitTextLabelSkippedCount = skippedCount
+        return (visibleCount, textEntities.count, rawTextEntityCount, skippedCount, 0)
+    }
+
+    private func textOverlaySourceEntities(
+        renderInputEntities: [Kernel.CADEntity],
+        renderCommands: [Kernel.CADRenderCommand]
+    ) -> [Kernel.CADEntity] {
+        guard featureOptions.rendersTextOverlays else { return [] }
+
+        let commandTexts = renderCommands.compactMap { command -> Kernel.CADTextRun? in
+            guard case let .text(text, _) = command else { return nil }
+            return text
+        }
+        guard !commandTexts.isEmpty else { return [] }
+
+        var unmatchedEntities = renderInputEntities.filter(Self.isTextEntity)
+        var matchedEntities: [Kernel.CADEntity] = []
+        matchedEntities.reserveCapacity(min(commandTexts.count, unmatchedEntities.count))
+
+        for commandText in commandTexts {
+            guard let entityIndex = unmatchedEntities.firstIndex(where: { entity in
+                Self.textOverlayEntity(entity, matches: commandText)
+            }) else {
+                continue
+            }
+            matchedEntities.append(unmatchedEntities.remove(at: entityIndex))
+        }
+
+        return matchedEntities
+    }
+
+    private static func textOverlayEntity(
+        _ entity: Kernel.CADEntity,
+        matches commandText: Kernel.CADTextRun
+    ) -> Bool {
+        guard let entityText = entity.text else { return false }
+        if entityText == commandText {
+            return true
+        }
+
+        return entityText.displayText == commandText.displayText
+            && distanceBetween(entityText.insertionPoint, commandText.insertionPoint) <= 0.000001
+            && abs(entityText.height - commandText.height) <= 0.000001
+            && abs(entityText.rotationRadians - commandText.rotationRadians) <= 0.000001
+    }
+
+    private func prioritizedTextOverlayEntities(
+        _ entities: [Kernel.CADEntity],
+        modelScale: Double
+    ) -> [Kernel.CADEntity] {
+        let sorted = entities
+            .filter(Self.isTextEntity)
+            .sorted { lhs, rhs in
+                let lhsPriority = textOverlayEntityPriority(lhs, modelScale: modelScale)
+                let rhsPriority = textOverlayEntityPriority(rhs, modelScale: modelScale)
+                if abs(lhsPriority - rhsPriority) > 0.0001 {
+                    return lhsPriority > rhsPriority
+                }
+                let lhsHandle = lhs.sourceHandle ?? lhs.id.uuidString
+                let rhsHandle = rhs.sourceHandle ?? rhs.id.uuidString
+                return lhsHandle.localizedStandardCompare(rhsHandle) == .orderedAscending
+            }
+        return deduplicatedTextOverlayEntities(sorted, modelScale: modelScale)
+    }
+
+    private func deduplicatedTextOverlayEntities(
+        _ entities: [Kernel.CADEntity],
+        modelScale: Double
+    ) -> [Kernel.CADEntity] {
+        let worldTolerance = max(10.0 / max(modelScale, 0.000001), 0.01)
+        var kept: [Kernel.CADEntity] = []
+        var fingerprints: [(text: String, point: Kernel.CADPoint)] = []
+
+        for entity in entities {
+            guard let text = entity.text else { continue }
+            let displayText = Self.normalizedTextOverlayFingerprint(text.displayText)
+            guard !displayText.isEmpty else { continue }
+            let point = text.insertionPoint
+            let isDuplicate = fingerprints.contains { existing in
+                existing.text == displayText
+                    && Self.distanceBetween(existing.point, point) <= worldTolerance
+            }
+            guard !isDuplicate else { continue }
+            kept.append(entity)
+            fingerprints.append((displayText, point))
+        }
+
+        return kept
+    }
+
+    private func textOverlayEntityPriority(
+        _ entity: Kernel.CADEntity,
+        modelScale: Double
+    ) -> Double {
+        guard let text = entity.text else { return 0 }
+        let displayText = text.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !displayText.isEmpty else { return -1 }
+        let kindWeight: Double
+        switch entity.kind {
+        case .mtext:
+            kindWeight = 8
+        case .text:
+            kindWeight = 7
+        case .attrib:
+            kindWeight = 6
+        case .dimension:
+            kindWeight = 2
+        default:
+            kindWeight = 1
+        }
+        let cjkWeight = displayText.cadContainsCJKScalars ? 10.0 : 0.0
+        let screenHeight = Self.textOverlayWorldHeight(for: text) * modelScale
+        let lengthWeight = min(Double(displayText.count), 32.0) * 0.04
+        return cjkWeight + kindWeight + max(screenHeight, 0) + lengthWeight
+    }
+
+    private static func normalizedTextOverlayFingerprint(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "\r", with: "\n")
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func rendererStyle(for entity: Kernel.CADEntity) -> Kernel.CADRenderStyle {
+        let layer = layersByID[entity.layerID] ?? .default
+        let color = entity.color == 0x00000000 ? layer.colorARGB : entity.color
+        let lineWidth = entity.lineWeight > 0 ? entity.lineWeight : layer.lineWeight
+        let entityLineType = entity.lineType.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lineType: String
+        if entityLineType.isEmpty ||
+            entityLineType.caseInsensitiveCompare("ByLayer") == .orderedSame ||
+            entityLineType.caseInsensitiveCompare("ByBlock") == .orderedSame {
+            lineType = layer.lineType
+        } else {
+            lineType = entityLineType
+        }
+        return Kernel.CADRenderStyle(
+            layerID: entity.layerID,
+            colorARGB: color,
+            lineWidth: max(lineWidth, 0.25),
+            lineType: lineType
+        )
+    }
+
+    private func textOverlayLabel(for key: String, in view: MTKView) -> UILabel {
+        if let label = textOverlayLabels[key] {
+            if label.superview !== view {
+                label.removeFromSuperview()
+                view.addSubview(label)
+            }
+            return label
+        }
+
+        let label = UILabel(frame: .zero)
+        label.backgroundColor = .clear
+        label.isOpaque = false
+        label.isUserInteractionEnabled = false
+        label.numberOfLines = 0
+        label.lineBreakMode = .byClipping
+        label.adjustsFontSizeToFitWidth = false
+        label.layer.zPosition = 1_050
+        label.layer.allowsEdgeAntialiasing = true
+        view.addSubview(label)
+        return label
+    }
+
+    @discardableResult
+    private func configureTextOverlayLabel(
+        _ label: UILabel,
+        text: Kernel.CADTextRun,
+        style: Kernel.CADRenderStyle,
+        modelScale: Double,
+        viewScale: CGPoint,
+        view: MTKView,
+        drawableSize: CGSize,
+        viewSize: CGSize,
+        contentScale: CGFloat
+    ) -> Bool {
+        let displayText = text.displayText.isEmpty ? " " : text.displayText
+        let worldHeight = Self.textOverlayWorldHeight(for: text)
+        let fontSize = Self.textOverlayFontSize(
+            textHeight: worldHeight,
+            modelScale: modelScale,
+            contentScale: viewScale.y
+        )
+        guard fontSize.isFinite, fontSize > 0 else {
+            label.isHidden = true
+            return false
+        }
+
+        let font = uiFont(named: text.selectedFontName, supporting: displayText, size: CGFloat(fontSize))
+        let textColor = readableTextColor(fromARGB: style.colorARGB)
+        label.text = displayText
+        label.font = font
+        label.textColor = textColor
+
+        let cadBoxTargetWidth = text.boxWidth.flatMap { boxWidth -> CGFloat? in
+            guard boxWidth.isFinite, boxWidth > 0 else { return nil }
+            let scaled = boxWidth * modelScale / Double(max(viewScale.x, 0.000001))
+            return CGFloat(max(scaled, Double(fontSize)))
+        }
+        let unwrappedFittingSize = CGSize(
+            width: max(viewSize.width * 32, 32_768),
+            height: max(viewSize.height * 8, 8_192)
+        )
+        let unwrappedSize = label.sizeThatFits(unwrappedFittingSize)
+        let fittingWidth = Self.textOverlayFittingWidth(
+            cadBoxTargetWidth: cadBoxTargetWidth,
+            unwrappedWidth: unwrappedSize.width,
+            fontSize: fontSize
+        )
+        let fittingSize = CGSize(
+            width: fittingWidth,
+            height: max(viewSize.height * 4, 4096)
+        )
+        let measuredSize = label.sizeThatFits(fittingSize)
+        let width = ceil(max(fittingWidth, measuredSize.width, 1))
+        let height = ceil(max(measuredSize.height, font.lineHeight, 1))
+        guard width.isFinite, height.isFinite, width > 0, height > 0 else {
+            label.isHidden = true
+            return false
+        }
+
+        let screen = screenPoint(
+            for: text.insertionPoint,
+            drawableSize: drawableSize,
+            viewSize: viewSize
+        )
+        guard screen.x.isFinite, screen.y.isFinite else {
+            label.isHidden = true
+            return false
+        }
+
+        let insertionViewPoint = Self.viewPoint(
+            fromDrawablePoint: screen,
+            drawableSize: drawableSize,
+            viewSize: viewSize,
+            fallbackScale: contentScale
+        )
+        let alignmentOffset = textOverlayAlignmentOffset(
+            text: text,
+            width: Double(width),
+            height: Double(height),
+            modelScale: modelScale,
+            viewScale: viewScale
+        )
+        var center = Self.textOverlayCenter(
+            insertionScreen: insertionViewPoint,
+            width: width,
+            height: height,
+            alignmentOffset: alignmentOffset,
+            rotationRadians: text.rotationRadians
+        )
+        if !Self.viewRect(center: center, size: CGSize(width: width, height: height))
+            .intersects(view.bounds.insetBy(dx: -96, dy: -96)),
+           Self.drawablePointIsNearViewport(
+            screen,
+            drawableSize: drawableSize,
+            margin: max(96 * Double(max(contentScale, 1)), 96)
+           ) {
+            center = Self.textOverlayCenter(
+                insertionScreen: insertionViewPoint,
+                width: width,
+                height: height,
+                alignmentOffset: .zero,
+                rotationRadians: text.rotationRadians
+            )
+        }
+
+        label.bounds = CGRect(x: 0, y: 0, width: width, height: height)
+        label.center = center
+        label.transform = CGAffineTransform(rotationAngle: CGFloat(-text.rotationRadians))
+        label.isHidden = false
+        return true
+    }
+
+    private static func textOverlayFittingWidth(
+        cadBoxTargetWidth: CGFloat?,
+        unwrappedWidth: CGFloat,
+        fontSize: CGFloat
+    ) -> CGFloat {
+        let safeUnwrappedWidth = unwrappedWidth.isFinite && unwrappedWidth > 0
+            ? unwrappedWidth
+            : max(fontSize, 1)
+        let safeBoxWidth = cadBoxTargetWidth.flatMap { width -> CGFloat? in
+            guard width.isFinite, width > 0 else { return nil }
+            return width
+        }
+
+        // LibreDWG often exposes MTEXT rect_width/extents_width values that are
+        // much narrower than the actual single-line construction label. UIKit
+        // would auto-wrap every label into columns. Keep explicit MTEXT newlines
+        // from displayText, but do not introduce extra wrapping from a narrow box.
+        return ceil(max(safeBoxWidth ?? 0, safeUnwrappedWidth, fontSize, 1))
+    }
+
+    private static func viewRect(center: CGPoint, size: CGSize) -> CGRect {
+        CGRect(
+            x: center.x - size.width / 2,
+            y: center.y - size.height / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func clearTextOverlayLabels() {
+        for label in textOverlayLabels.values {
+            label.removeFromSuperview()
+        }
+        textOverlayLabels.removeAll()
+        currentUIKitTextLabelCount = 0
+        currentUIKitTextLabelSkippedCount = 0
     }
 
     private func textInsertionMarker(for key: String, in view: MTKView) -> UIView {
@@ -2634,6 +3713,14 @@ private extension CADPoC.CADMetalRenderer {
         modelScale: Double,
         viewScale: CGPoint
     ) -> CGPoint {
+        if let attachmentCode = Self.cadMTextAttachmentCode(for: text) {
+            return Self.cadMTextAttachmentOverlayOffset(
+                attachmentCode: attachmentCode,
+                width: width,
+                height: height
+            )
+        }
+
         let xScale = modelScale / Double(max(viewScale.x, 0.000001))
         let yScale = modelScale / Double(max(viewScale.y, 0.000001))
         let textWidth = text.boxWidth.flatMap { $0 > 0 ? $0 : nil }
@@ -2643,6 +3730,47 @@ private extension CADPoC.CADMetalRenderer {
         let xWorldOffset = cadTextHorizontalOffset(width: textWidth, text: text)
         let yWorldOffset = cadTextVerticalOffset(height: textHeight, text: text)
         return CGPoint(x: xWorldOffset * xScale, y: yWorldOffset * yScale)
+    }
+
+    private static func cadMTextAttachmentCode(for text: Kernel.CADTextRun) -> Int? {
+        guard let horizontal = text.horizontalAlignmentCode,
+              let vertical = text.verticalAlignmentCode,
+              horizontal == vertical,
+              (1...9).contains(horizontal),
+              text.boxWidth != nil || text.boxHeight != nil else {
+            return nil
+        }
+        return horizontal
+    }
+
+    private static func cadMTextAttachmentOverlayOffset(
+        attachmentCode: Int,
+        width: Double,
+        height: Double
+    ) -> CGPoint {
+        let safeWidth = max(width.isFinite ? width : 0, 0)
+        let safeHeight = max(height.isFinite ? height : 0, 0)
+        let xOffset: Double
+        switch attachmentCode {
+        case 2, 5, 8:
+            xOffset = safeWidth / 2
+        case 3, 6, 9:
+            xOffset = safeWidth
+        default:
+            xOffset = 0
+        }
+
+        let yOffset: Double
+        switch attachmentCode {
+        case 1, 2, 3:
+            yOffset = safeHeight
+        case 4, 5, 6:
+            yOffset = safeHeight / 2
+        default:
+            yOffset = 0
+        }
+
+        return CGPoint(x: xOffset, y: yOffset)
     }
 
     static func textOverlayFontSize(
@@ -2764,7 +3892,16 @@ private extension CADPoC.CADMetalRenderer {
            font.supportsCADText(text) {
             return font
         }
-        for fallbackName in ["PingFang SC", "Hiragino Sans GB", "Heiti SC", "Songti SC"] {
+        for fallbackName in [
+            "PingFang SC",
+            "Hiragino Sans GB",
+            "Heiti SC",
+            "Songti SC",
+            "FangSong",
+            "STFangsong",
+            "FangSong_GB2312",
+            "SimFang"
+        ] {
             if let font = UIFont(name: fallbackName, size: size), font.supportsCADText(text) {
                 return font
             }
@@ -2933,6 +4070,7 @@ extension CADPoC.CADMetalRenderer {
         var uniqueTextureCount: Int
         var vertexCount: Int
         var atlasSize: CGSize
+        var diagnosticRows: [String]
         var cacheEntryCount: Int
         var cacheHitCount: Int
     }
@@ -2947,6 +4085,10 @@ extension CADPoC.CADMetalRenderer {
             modelScale: modelScale,
             contentScale: contentScale
         )
+    }
+
+    static func textOverlayWorldHeightForTesting(text: Kernel.CADTextRun) -> Double {
+        textOverlayWorldHeight(for: text)
     }
 
     static func textOverlayCenterForTesting(
@@ -2976,6 +4118,34 @@ extension CADPoC.CADMetalRenderer {
             drawableSize: drawableSize,
             viewSize: viewSize,
             fallbackScale: fallbackScale
+        )
+    }
+
+    func textOverlayAlignmentOffsetForTesting(
+        text: Kernel.CADTextRun,
+        width: Double,
+        height: Double,
+        modelScale: Double,
+        viewScale: CGPoint
+    ) -> CGPoint {
+        textOverlayAlignmentOffset(
+            text: text,
+            width: width,
+            height: height,
+            modelScale: modelScale,
+            viewScale: viewScale
+        )
+    }
+
+    static func textOverlayFittingWidthForTesting(
+        cadBoxTargetWidth: CGFloat?,
+        unwrappedWidth: CGFloat,
+        fontSize: CGFloat
+    ) -> CGFloat {
+        textOverlayFittingWidth(
+            cadBoxTargetWidth: cadBoxTargetWidth,
+            unwrappedWidth: unwrappedWidth,
+            fontSize: fontSize
         )
     }
 
@@ -3025,6 +4195,7 @@ extension CADPoC.CADMetalRenderer {
             uniqueTextureCount: plan.uniqueTextureCount,
             vertexCount: plan.vertices.count,
             atlasSize: plan.atlasSize,
+            diagnosticRows: plan.diagnosticRows,
             cacheEntryCount: textAtlasTextureCache.entryCount,
             cacheHitCount: textAtlasTextureCache.hitCount
         )
@@ -3066,6 +4237,16 @@ extension CADPoC.CADMetalRenderer {
             viewSize: viewSize,
             contentScale: contentScale
         ).items.map(\.text.displayText)
+    }
+
+    func textOverlaySourceDisplayTextsForTesting(
+        renderInputEntities: [Kernel.CADEntity],
+        renderCommands: [Kernel.CADRenderCommand]
+    ) -> [String] {
+        textOverlaySourceEntities(
+            renderInputEntities: renderInputEntities,
+            renderCommands: renderCommands
+        ).compactMap(\.text?.displayText)
     }
 
     func textAtlasSkippedTextCountForTesting(
@@ -3217,6 +4398,10 @@ extension CADPoC.CADMetalRenderer {
         "Heiti SC",
         "STSongti-SC-Regular",
         "Songti SC",
+        "FangSong",
+        "STFangsong",
+        "FangSong_GB2312",
+        "SimFang",
         "Noto Sans CJK SC",
         "Source Han Sans SC"
     ]
@@ -3260,6 +4445,14 @@ private extension UIFont {
 }
 
 private extension String {
+    var cadRenderableLineCount: Int {
+        let lines = split(whereSeparator: \.isNewline)
+        let nonEmptyCount = lines.filter {
+            !String($0).trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }.count
+        return max(nonEmptyCount, 1)
+    }
+
     var cadContainsCJKScalars: Bool {
         unicodeScalars.contains { scalar in
             switch scalar.value {

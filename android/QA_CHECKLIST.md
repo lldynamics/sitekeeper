@@ -19,7 +19,7 @@ Use this checklist before treating the Android port as a usable test build.
 - Open `工艺库`, filter by 专业/状态, add/edit/delete one construction method, and confirm 工序、质检、安全清单 render in the row.
 - In a project, add/edit one 日志, 待办, and 项目资料 with a linked 工艺库 item, then confirm the rows display `关联工艺`.
 - In a project, confirm `项目时间线` appears below the project metrics and combines 日志、待办、进度、收支、材料、资料、图纸、报价、用工、仓库流水 by latest date.
-- In a project, tap `导出交付包`, save the ZIP with the Android document picker, then confirm it contains `交付报告.md`, `文件清单.md`, archived project documents, drawings, and site photos.
+- In a project, confirm `项目交付` shows actual packaged file counts plus missing-file details, then tap `导出交付包`, save the ZIP with the Android document picker, and confirm it contains `交付报告.md`, `文件清单.md`, archived project documents, drawings, and site photos.
 - Add and edit施工日志, 待办, 进度, 联系人, 项目资料, 项目图纸, 报价, 用工, and 仓库流水 records.
 
 ## Local Files
@@ -38,6 +38,7 @@ Use this checklist before treating the Android port as a usable test build.
 - Import the ZIP as replace and confirm archived local files still open.
 - Import legacy JSON and confirm file-related warnings are shown for metadata-only attachments.
 - Import a deliberately incomplete ZIP and confirm preflight warnings identify missing or orphaned files.
+- Open `我的`, confirm `数据体检` shows missing/orphan counts for documents, photos, drawings, and quick note attachments, then run `重新体检`; if missing originals exist, confirm `缺失明细` lists the affected items, `打开项目` jumps to the correct project, and `生成整改待办` creates project todo rows without duplicates.
 
 ## Release Gate
 

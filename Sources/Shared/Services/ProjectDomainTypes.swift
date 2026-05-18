@@ -71,6 +71,67 @@ enum CADDrawingTextBigFont: String, CaseIterable, Codable, Sendable {
     }
 }
 
+enum CADDrawingTextDisplayFont: String, CaseIterable, Codable, Sendable, Identifiable {
+    case auto
+    case pingFangSC
+    case songtiSC
+    case fangSong
+    case kaiTi
+    case system
+    case imported
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .auto:
+            return "自动字体"
+        case .pingFangSC:
+            return "苹方"
+        case .songtiSC:
+            return "宋体"
+        case .fangSong:
+            return "仿宋"
+        case .kaiTi:
+            return "楷体"
+        case .system:
+            return "系统字体"
+        case .imported:
+            return "导入字体"
+        }
+    }
+
+    var candidateFontNames: [String] {
+        switch self {
+        case .auto:
+            return []
+        case .pingFangSC:
+            return ["PingFangSC-Regular", "PingFang SC"]
+        case .songtiSC:
+            return ["STSongti-SC-Regular", "Songti SC", "STSong", "SimSun", "NSimSun"]
+        case .fangSong:
+            return [
+                "FangSong",
+                "STFangsong",
+                "FangSong_GB2312",
+                "SimFang",
+                "FZFSJW--GB1-0",
+                "FZFangSong-Z02S"
+            ]
+        case .kaiTi:
+            return ["Kaiti SC", "STKaiti", "KaiTi", "KaiTi_GB2312", "SimKai"]
+        case .system:
+            return []
+        case .imported:
+            return []
+        }
+    }
+
+    var isImportedFont: Bool {
+        self == .imported
+    }
+}
+
 extension CADDrawingTextBigFont {
     static func inferredFromFontName(_ rawName: String) -> CADDrawingTextBigFont {
         let normalized = rawName
@@ -86,7 +147,10 @@ extension CADDrawingTextBigFont {
         )
 
         let big5Aliases: Set<String> = ["big5", "chineset", "chinese_t", "cht", "mingliu", "pmingliu", "kaiu", "msung", "bkai"]
-        let hzfsAliases: Set<String> = ["hzfs", "hzfs1", "hzfs2", "hzfangsong", "fs", "fs1", "fs2"]
+        let hzfsAliases: Set<String> = [
+            "hzfs", "hzfs1", "hzfs2", "hzfangsong", "fs", "fs1", "fs2",
+            "simfang", "fangsong", "fangsonggb2312", "fangsong_gb2312", "stfangsong"
+        ]
         let hztxtAliases: Set<String> = ["hztxt", "hztxt1", "hztxt2", "hztext", "txt", "simplex", "romans", "romanc", "romand", "isocp"]
         let gbcbigAliases: Set<String> = ["gbcbig", "gbcbiggb", "gbtxt", "gbenor", "gbeitc", "gbhz", "gbfs", "tssdeng", "tssdchn", "tssd", "chinesegb"]
 

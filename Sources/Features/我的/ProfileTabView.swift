@@ -3,7 +3,6 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
@@ -20,7 +19,6 @@ struct ProfileTabView: View {
     @State private var lastStorageSampleAt: Date?
     @State private var hasLoadedStorageUsage = false
     @State private var showUserNameEditor = false
-    @State private var showSampleImportConfirm = false
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
@@ -147,26 +145,6 @@ struct ProfileTabView: View {
                     }
                 }
                 .accessibilityIdentifier("profile-data-management-link")
-#if DEBUG
-                if AppFeatureFlags.allowsSampleDataImport {
-                    Button(role: .destructive) {
-                        showSampleImportConfirm = true
-                    } label: {
-                        HStack(spacing: AppSpacing.tight) {
-                            Image(systemName: "sparkles")
-                                .foregroundStyle(Color.appWarning)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(String(localized: "导入示例数据"))
-                                Text(String(localized: "覆盖当前本地数据，用演示项目体验完整流程"))
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .accessibilityLabel(String(localized: "导入示例数据"))
-                    .accessibilityHint(String(localized: "会先确认，确认后覆盖当前本地数据"))
-                }
-#endif
             }
 
             Section(String(localized: "系统")) {
@@ -223,21 +201,6 @@ struct ProfileTabView: View {
         .sheet(isPresented: $showUserNameEditor) {
             userNameEditorSheet
         }
-#if DEBUG
-        .alert(String(localized: "导入示例数据？"), isPresented: $showSampleImportConfirm) {
-            Button(String(localized: "取消"), role: .cancel) {}
-            Button(String(localized: "覆盖并导入"), role: .destructive) {
-                store.importSampleData(replacingExisting: true)
-                AppHaptics.success()
-            }
-        } message: {
-            if store.hasAnyBusinessData {
-                Text(String(localized: "将清空当前本地数据并写入示例项目、日志、报价、材料和仓库记录。此操作不可撤销。"))
-            } else {
-                Text(String(localized: "将写入示例项目、日志、报价、材料和仓库记录，便于演示功能。"))
-            }
-        }
-#endif
     }
 
     private var backupStatusCard: some View {

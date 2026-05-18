@@ -326,7 +326,7 @@ struct QuotationView: View {
                     }
                 }
                 Section(String(localized: "商务信息")) {
-                    TextField(String(localized: "客户确认日期（yyyy-MM-dd）"), text: $formCustomerConfirmedDate)
+                    OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $formCustomerConfirmedDate)
                     LabeledContent(String(localized: "合同金额")) {
                         VStack(alignment: .trailing, spacing: 2) {
                             TextField("0", text: $formContractAmount.numericInput(.amount))
@@ -553,7 +553,7 @@ struct QuotationView: View {
             discountRate: NumericInputSupport.normalizedStorageText(formDiscount, kind: .discountRate),
             versionName: formVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : formVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
             status: formStatus,
-            customerConfirmedDate: formCustomerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
+            customerConfirmedDate: ProjectDateInput.normalizedStorageText(formCustomerConfirmedDate),
             contractAmount: NumericInputSupport.normalizedStorageText(formContractAmount, kind: .amount),
             projectId: formProjectId
         )

@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct CADTextOptionsPanel<Content: View>: View {
     @ViewBuilder let content: () -> Content
@@ -104,12 +105,46 @@ extension CADPreviewContainer {
         if hasSuspiciousTextDiagnosticIssue {
             return String(localized: "优先使用自动修复中文；如果仍乱码，再切换为中文通用方案。")
         }
-        return String(localized: "只保留会影响 DWG 中文显示的修复动作；不再提供系统字体导入和多语言手动试错。")
+        return String(localized: "优先修复 DWG 编码和 SHX/大字体；显示字体可切换为仿宋、宋体或导入 TTF/OTF/TTC。")
     }
 
     var recommendedChineseTextRepairTitle: String {
         let preset = recommendedChineseTextRepairPreset()
         return "\(preset.encoding.displayName) / \(preset.bigFont.displayName)"
+    }
+
+    var selectedCADDisplayFont: CADDrawingTextDisplayFont {
+        CADDrawingTextDisplayFont(rawValue: cadTextDisplayFontRaw) ?? .auto
+    }
+
+    var currentCADDisplayFontStatus: String {
+        let choice = selectedCADDisplayFont
+        if choice == .auto {
+            return "自动"
+        }
+        if choice == .system {
+            return "系统默认"
+        }
+        let resolved = CADImportedFontRegistry.resolvedDisplayFontName(
+            for: choice,
+            importedFontName: cadImportedTextFontName,
+            importedFontPath: cadImportedTextFontPath
+        )?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !resolved.isEmpty {
+            return resolved
+        }
+        if choice == .imported {
+            return "未导入字体"
+        }
+        return "未找到可用的\(choice.displayName)，会回到自动字体"
+    }
+
+    var cadDisplayFontImportTypes: [UTType] {
+        [
+            UTType(filenameExtension: "ttf"),
+            UTType(filenameExtension: "otf"),
+            UTType(filenameExtension: "ttc")
+        ].compactMap { $0 }
     }
 
     var textOptionsSheet: some View {
@@ -145,7 +180,7 @@ extension CADPreviewContainer {
                             systemImage: "sparkles"
                         )
                     }
-                    .disabled(isAutoDetectingText || !shouldUseCADKernelRenderer)
+                    .disabled(isAutoDetectingText || !canUseCADTextRepair)
 
                     Button {
                         applyRecommendedChineseTextRepair()
@@ -153,7 +188,7 @@ extension CADPreviewContainer {
                     } label: {
                         Label("推荐中文组合", systemImage: "character.book.closed")
                     }
-                    .disabled(!shouldUseCADKernelRenderer)
+                    .disabled(!canUseCADTextRepair)
 
                     Text("推荐：\(recommendedChineseTextRepairTitle)")
                         .font(.caption)
@@ -165,7 +200,49 @@ extension CADPreviewContainer {
                     } label: {
                         Label("恢复自动识别", systemImage: "arrow.counterclockwise")
                     }
-                    .disabled(!shouldUseCADKernelRenderer)
+                    .disabled(!canUseCADTextRepair)
+                }
+
+                Section("文字显示字体") {
+                    Picker("显示字体", selection: $cadTextDisplayFontRaw) {
+                        ForEach(CADDrawingTextDisplayFont.allCases) { option in
+                            Text(option.displayName).tag(option.rawValue)
+                        }
+                    }
+                    .disabled(!canUseCADTextRepair)
+                    .onChange(of: cadTextDisplayFontRaw) { _, _ in
+                        reloadCurrentCADPreview()
+                    }
+
+                    LabeledContent("当前字体") {
+                        Text(currentCADDisplayFontStatus)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.trailing)
+                    }
+
+                    HStack {
+                        Button {
+                            applyCADDisplayFont(.fangSong)
+                        } label: {
+                            Label("试用仿宋", systemImage: "textformat")
+                        }
+                        .disabled(!canUseCADTextRepair)
+
+                        Spacer()
+
+                        Button {
+                            showCADDisplayFontImporter = true
+                        } label: {
+                            Label("导入字体", systemImage: "square.and.arrow.down")
+                        }
+                        .disabled(!canUseCADTextRepair)
+                    }
+
+                    Text("这里控制已解码文字的显示字体；SHX/BigFont 解码仍由上方编码和大字体方案决定。SHX 文件不能当作系统字体直接导入。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
 
                 if hasFontResolutionFeedback {
@@ -192,7 +269,7 @@ extension CADPreviewContainer {
                             } label: {
                                 Label("保存当前字体替代", systemImage: "tray.and.arrow.down")
                             }
-                            .disabled(!shouldUseCADKernelRenderer)
+                            .disabled(!canUseCADTextRepair)
                         } else {
                             Text("检测到未匹配 SHX/大字体时，这里会出现可保存的项目替代表。")
                                 .font(.caption)
@@ -226,6 +303,13 @@ extension CADPreviewContainer {
                     }
                 }
             }
+        }
+        .fileImporter(
+            isPresented: $showCADDisplayFontImporter,
+            allowedContentTypes: cadDisplayFontImportTypes,
+            allowsMultipleSelection: false
+        ) { result in
+            handleCADDisplayFontImport(result)
         }
     }
 
@@ -270,6 +354,60 @@ extension CADPreviewContainer {
             preset.reason
         )
         showAlert = true
+    }
+
+    func applyCADDisplayFont(_ font: CADDrawingTextDisplayFont) {
+        let didChange = cadTextDisplayFontRaw != font.rawValue
+        cadTextDisplayFontRaw = font.rawValue
+        if font == .fangSong,
+           CADImportedFontRegistry.resolvedDisplayFontName(
+            for: .fangSong,
+            importedFontName: cadImportedTextFontName,
+            importedFontPath: cadImportedTextFontPath
+           ) == nil {
+            alertMessage = String(localized: "当前系统没有可用仿宋字体。可导入 TTF/OTF/TTC 字体后再切换为“导入字体”。")
+            showAlert = true
+        }
+        if !didChange {
+            reloadCurrentCADPreview()
+        }
+    }
+
+    func handleCADDisplayFontImport(_ result: Result<[URL], Error>) {
+        switch result {
+        case let .success(urls):
+            do {
+                guard let url = urls.first else {
+                    return
+                }
+                let font = try CADImportedFontRegistry.importFont(from: url)
+                cadImportedTextFontName = font.fontName
+                cadImportedTextFontPath = font.filePath
+                cadTextDisplayFontRaw = CADDrawingTextDisplayFont.imported.rawValue
+                reloadCurrentCADPreview()
+                alertMessage = String(localized: "字体已导入并应用：\(font.fontName)")
+                showAlert = true
+            } catch {
+                alertMessage = cadFontImportErrorMessage(
+                    prefix: String(localized: "字体导入失败"),
+                    error: error
+                )
+                showAlert = true
+            }
+        case let .failure(error):
+            if (error as? CocoaError)?.code != .userCancelled {
+                alertMessage = cadFontImportErrorMessage(
+                    prefix: String(localized: "字体导入失败"),
+                    error: error
+                )
+                showAlert = true
+            }
+        }
+    }
+
+    func cadFontImportErrorMessage(prefix: String, error: Error) -> String {
+        let message = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        return message.isEmpty ? prefix : "\(prefix)：\(message)"
     }
 
     func recommendedChineseTextRepairPreset(

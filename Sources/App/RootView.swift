@@ -19,10 +19,6 @@ struct RootView: View {
 
     private let currentOnboardingVersion = 1
 
-    private var allowsSampleDataImport: Bool {
-        AppFeatureFlags.allowsSampleDataImport
-    }
-
     private var skipOnboardingForUITests: Bool {
         ProcessInfo.processInfo.arguments.contains("-uitest-skip-onboarding")
             || ProcessInfo.processInfo.environment["UITEST_SKIP_ONBOARDING"] == "1"
@@ -57,7 +53,6 @@ struct RootView: View {
 
             if showOnboarding {
                 FirstLaunchOnboardingView(
-                    allowsSampleDataImport: allowsSampleDataImport,
                     onCreateProject: {
                         finishOnboarding()
                         selectedTab = .records
@@ -68,10 +63,6 @@ struct RootView: View {
                         Task { @MainActor in
                             showOnboardingBackupImport = true
                         }
-                    },
-                    onLoadSample: {
-                        store.importSampleData(replacingExisting: true)
-                        finishOnboarding()
                     }
                 )
                 .background(Color(.systemBackground))
@@ -397,10 +388,8 @@ enum Tab: Hashable, CaseIterable, Identifiable {
 }
 
 private struct FirstLaunchOnboardingView: View {
-    let allowsSampleDataImport: Bool
     let onCreateProject: () -> Void
     let onImportBackup: () -> Void
-    let onLoadSample: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -424,18 +413,6 @@ private struct FirstLaunchOnboardingView: View {
                         actionRow(title: "导入备份", subtitle: "从 ZIP 恢复已有项目数据", icon: "square.and.arrow.down.fill")
                     }
                     .buttonStyle(.bordered)
-#if DEBUG
-                    if allowsSampleDataImport {
-                        Button(action: onLoadSample) {
-                            actionRow(
-                                title: String(localized: "查看示例"),
-                                subtitle: String(localized: "导入演示数据体验完整功能"),
-                                icon: "sparkles"
-                            )
-                        }
-                        .buttonStyle(.bordered)
-                    }
-#endif
                 }
                 .buttonBorderShape(.roundedRectangle)
                 Spacer()

@@ -11,19 +11,23 @@ extension CADPoC {
         typealias Kernel = SiteKeeperCADKernel
 
         private static let nativePaperLayoutID = "paper"
-        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v2"
+        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v13"
         var preferredTextCodePage: Int32?
         var preferredTextBigFont: Int32?
         var fontMappings: [CADRendererFontMapping]
+        var preferredDisplayFontName: String?
 
         init(
             preferredTextCodePage: Int32? = nil,
             preferredTextBigFont: Int32? = nil,
-            fontMappings: [CADRendererFontMapping] = []
+            fontMappings: [CADRendererFontMapping] = [],
+            preferredDisplayFontName: String? = nil
         ) {
             self.preferredTextCodePage = preferredTextCodePage == 0 ? nil : preferredTextCodePage
             self.preferredTextBigFont = preferredTextBigFont == 0 ? nil : preferredTextBigFont
             self.fontMappings = fontMappings
+            let displayFont = preferredDisplayFontName?.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.preferredDisplayFontName = displayFont?.isEmpty == false ? displayFont : nil
         }
 
         var id: String {
@@ -117,6 +121,11 @@ extension CADPoC {
                 makeNativeEntity(nativeEntity)
             }
             let textTrace = Self.textTraces(from: entities)
+            let importedTextSummary = Self.importedTextSummary(
+                entities: entities,
+                traces: textTrace
+            )
+            let proxyTextCandidateSummary = Self.proxyTextCandidateSummary(entities: entities)
 
             var diagnostics = Kernel.CADDrawingDiagnostics()
             diagnostics.append(
@@ -124,9 +133,27 @@ extension CADPoC {
                     severity: .info,
                     code: "CAD_POC_LIBREDWG_IOS_NATIVE_USED",
                     message: "LibreDWG was called inside the iOS process and converted basic 2D geometry into CADEntity.",
-                    detail: "status=\(status), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
+                    detail: "status=\(status), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
                 )
             )
+            diagnostics.append(
+                Kernel.CADDrawingDiagnostics.Entry(
+                    severity: .info,
+                    code: "CAD_POC_TEXT_IMPORT_SUMMARY",
+                    message: "CAD text import summary for LibreDWG native PoC.",
+                    detail: importedTextSummary
+                )
+            )
+            if rawTextCount > 0, textTrace.isEmpty {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_TEXT_RAW_BUT_NOT_IMPORTED",
+                        message: "LibreDWG reported raw text objects, but no text entities reached CADDatabase.",
+                        detail: "rawTextCount=\(rawTextCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount))"
+                    )
+                )
+            }
             if status != 0 {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
@@ -254,6 +281,16 @@ extension CADPoC {
                         code: "CAD_POC_LIBREDWG_PROXY_ENTITY_PRESERVED",
                         message: "DWG proxy entities were preserved as diagnostics and are not counted as drawable geometry.",
                         detail: "rawProxyEntityCount=\(rawProxyEntityCount), exportedProxyEntityCount=\(exportedProxyEntityCount)"
+                    )
+                )
+            }
+            if let proxyTextCandidateSummary {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_PROXY_TEXT_CANDIDATE_SUMMARY",
+                        message: "Proxy/Tianzheng custom objects contain possible text bytes; they are diagnostic-only until geometry and anchors are decoded.",
+                        detail: proxyTextCandidateSummary
                     )
                 )
             }
@@ -410,6 +447,10 @@ extension CADPoC {
             makeNativeEntity(nativeEntity)
         }
 
+        func proxyTextCandidateSummaryForTesting(entities: [Kernel.CADEntity]) -> String? {
+            Self.proxyTextCandidateSummary(entities: entities)
+        }
+
         private func makeNativeEntity(_ nativeEntity: SiteKeeperLibreDWGEntity) -> Kernel.CADEntity? {
             guard let kind = entityKind(for: nativeEntity.kind) else {
                 return nil
@@ -448,7 +489,8 @@ extension CADPoC {
                     bigFontName: bigFontName,
                     widthFactor: nativeTextWidthFactor(nativeEntity)
                 )
-                let text = Kernel.CADTextEngine().makeTextRun(
+                let text = applyPreferredDisplayFont(
+                    to: Kernel.CADTextEngine().makeTextRun(
                     rawText: rawText,
                     insertionPoint: insertion,
                     style: style,
@@ -459,6 +501,7 @@ extension CADPoC {
                     boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                     horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
                     verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
+                    )
                 )
                 let bounds = nativeTextBounds(for: text, insertion: insertion, height: height)
                 return Kernel.CADEntity(
@@ -496,7 +539,8 @@ extension CADPoC {
                         bigFontName: bigFontName,
                         widthFactor: nativeTextWidthFactor(nativeEntity)
                     )
-                    text = Kernel.CADTextEngine().makeTextRun(
+                    text = applyPreferredDisplayFont(
+                        to: Kernel.CADTextEngine().makeTextRun(
                         rawText: rawText,
                         insertionPoint: insertion,
                         style: style,
@@ -507,6 +551,7 @@ extension CADPoC {
                         boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                         horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
                         verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
+                        )
                     )
                     bounds = bounds.union(nativeTextBounds(for: text!, insertion: insertion, height: height))
                 }
@@ -929,6 +974,19 @@ extension CADPoC {
             }
         }
 
+        private func applyPreferredDisplayFont(to text: Kernel.CADTextRun) -> Kernel.CADTextRun {
+            guard let preferredDisplayFontName else { return text }
+            var next = text
+            next.selectedFontName = preferredDisplayFontName
+            next.fontWasAvailable = true
+            next.fallbackReason = "user-display-font"
+            let warning = "CAD_TEXT_DISPLAY_FONT_OVERRIDE:\(preferredDisplayFontName)"
+            if !next.warnings.contains(warning) {
+                next.warnings.append(warning)
+            }
+            return next
+        }
+
         private static let gb18030Encoding = String.Encoding(
             rawValue: CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
@@ -981,6 +1039,11 @@ extension CADPoC {
             case 950:
                 return Self.big5Encoding
             default:
+                if preferredTextBigFont == 1
+                    || preferredTextBigFont == 2
+                    || preferredTextBigFont == 3 {
+                    return Self.gb18030Encoding
+                }
                 if preferredTextBigFont == 4 {
                     return Self.big5Encoding
                 }
@@ -1004,6 +1067,9 @@ extension CADPoC {
                     .stableCADImportHash
                 parts.append("fm\(mappingKey)")
             }
+            if let preferredDisplayFontName {
+                parts.append("df\(preferredDisplayFontName.stableCADImportHash)")
+            }
             return parts.joined(separator: "-")
         }
 
@@ -1018,7 +1084,7 @@ extension CADPoC {
                 ?? String(data: data, encoding: .isoLatin1)
                 ?? String(decoding: data, as: UTF8.self)
             let parsed = DXFBasic2DParser.parse(contents)
-            let records = parsed.records
+            let records = parsed.records.map { applyingPreferredDisplayFont(to: $0) }
             let layerIDs = Set(records.map(\.layerID)).union(parsed.layersByID.keys)
             let layers = layerIDs.isEmpty
                 ? [Kernel.CADLayer.default]
@@ -1042,6 +1108,14 @@ extension CADPoC {
                     )
                 )
             }
+            diagnostics.append(
+                Kernel.CADDrawingDiagnostics.Entry(
+                    severity: .info,
+                    code: "CAD_POC_TEXT_IMPORT_SUMMARY",
+                    message: "CAD text import summary for LibreDWG native PoC.",
+                    detail: Self.importedTextSummary(entities: entities, traces: textTrace)
+                )
+            )
             Self.appendTextDiagnostics(from: textTrace, to: &diagnostics)
 
             var database = Kernel.CADDatabase(
@@ -1089,6 +1163,20 @@ extension CADPoC {
             return CADImportResult(database: database, trace: trace)
         }
 
+        private func applyingPreferredDisplayFont(
+            to record: DXFBasic2DParser.EntityRecord
+        ) -> DXFBasic2DParser.EntityRecord {
+            guard preferredDisplayFontName != nil else { return record }
+            var next = record
+            if let text = next.text {
+                next.text = applyPreferredDisplayFont(to: text)
+            }
+            if !next.attachedAttributes.isEmpty {
+                next.attachedAttributes = next.attachedAttributes.map { applyingPreferredDisplayFont(to: $0) }
+            }
+            return next
+        }
+
         private func makeEntity(record: DXFBasic2DParser.EntityRecord, layer: Kernel.CADLayer?) -> Kernel.CADEntity {
             return Kernel.CADEntity(
                 id: UUID(),
@@ -1126,6 +1214,91 @@ extension CADPoC {
                     entityType: entity.kind
                 )
             }
+        }
+
+        private static func importedTextSummary(
+            entities: [Kernel.CADEntity],
+            traces: [Kernel.CADTextTrace]
+        ) -> String {
+            let orderedKinds: [Kernel.CADEntityKind] = [.text, .mtext, .attrib, .dimension, .table]
+            let counts = entities.reduce(into: [Kernel.CADEntityKind: Int]()) { partial, entity in
+                guard entity.text != nil else { return }
+                partial[entity.kind, default: 0] += 1
+            }
+            let countSummary = orderedKinds
+                .map { "\($0.rawValue)=\(counts[$0, default: 0])" }
+                .joined(separator: ",")
+            let emptyDisplayCount = traces.filter {
+                $0.displayText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }.count
+            let replacementCount = traces.reduce(0) { partial, trace in
+                partial + trace.displayText.unicodeScalars.filter { scalar in
+                    scalar.value == 0xFFFD || scalar.value == 0x25A1 || scalar.value == 0x25A0
+                }.count
+            }
+            let warningCount = traces.reduce(0) { $0 + $1.warnings.count }
+            let firstCJK = traces.first {
+                $0.displayText.cadContainsCJKScalars || $0.rawText.cadContainsCJKScalars
+            }
+            let sample = firstCJK ?? traces.first
+            let sampleSummary = sample.map {
+                "sampleType=\($0.entityType), raw=\(Self.compactDiagnosticText($0.rawText)), display=\(Self.compactDiagnosticText($0.displayText)), style=\($0.textStyleName), font=\($0.fontFile ?? "-"), bigFont=\($0.bigFontFile ?? "-")"
+            } ?? "sample=-"
+            return "cadTextCount=\(traces.count), kinds=\(countSummary), emptyDisplay=\(emptyDisplayCount), replacement=\(replacementCount), warnings=\(warningCount), \(sampleSummary)"
+        }
+
+        private static func compactDiagnosticText(_ value: String) -> String {
+            let collapsed = value
+                .replacingOccurrences(of: "\n", with: "\\n")
+                .replacingOccurrences(of: "\r", with: "\\r")
+            guard collapsed.count > 24 else { return collapsed }
+            return "\(collapsed.prefix(24))..."
+        }
+
+        private static func proxyTextCandidateSummary(entities: [Kernel.CADEntity]) -> String? {
+            let proxyEntities = entities.filter { $0.kind == .proxy }
+            let candidates = proxyEntities.compactMap { entity -> (entity: Kernel.CADEntity, preview: String)? in
+                guard let preview = proxyTextCandidatePreview(from: entity.unsupportedReason) else {
+                    return nil
+                }
+                return (entity, preview)
+            }
+            guard !candidates.isEmpty else {
+                return nil
+            }
+
+            let tianzhengCount = candidates.filter { candidate in
+                candidate.entity.unsupportedReason?.localizedCaseInsensitiveContains("Tianzheng") == true
+                    || candidate.entity.unsupportedReason?.localizedCaseInsensitiveContains("TCH") == true
+            }.count
+            let finiteBoundsCount = candidates.filter { candidate in
+                !CADSpatialIndex.effectiveBounds(for: candidate.entity).isEmpty
+            }.count
+            let sample = candidates
+                .prefix(3)
+                .map { candidate in
+                    let handle = candidate.entity.sourceHandle.map { "#\($0)" } ?? ""
+                    return "\(candidate.entity.layerID)\(handle):\(candidate.preview)"
+                }
+                .joined(separator: " | ")
+            return "proxyTextCandidateCount=\(candidates.count), proxyEntityCount=\(proxyEntities.count), tianzhengTextCandidateCount=\(tianzhengCount), finiteBounds=\(finiteBoundsCount), sample=\(sample)"
+        }
+
+        private static func proxyTextCandidatePreview(from reason: String?) -> String? {
+            guard let reason,
+                  let range = reason.range(of: "textCandidate=", options: [.caseInsensitive]) else {
+                return nil
+            }
+            let suffix = reason[range.upperBound...]
+            let value = suffix
+                .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
+                .first
+                .map(String.init) ?? String(suffix)
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                return nil
+            }
+            return compactDiagnosticText(trimmed)
         }
 
         private static func appendTextDiagnostics(
@@ -1229,7 +1402,7 @@ extension CADPoC {
     }
 }
 
-private enum DXFBasic2DParser {
+enum DXFBasic2DParser {
     typealias Kernel = SiteKeeperCADKernel
 
     struct Pair {
@@ -1278,2336 +1451,11 @@ private enum DXFBasic2DParser {
         var attachedAttributes: [EntityRecord] = []
     }
 
-    private struct PolylineVertex {
+    struct PolylineVertex {
         var point: Kernel.CADPoint
         var bulge: Double
     }
 
-    static func parse(_ contents: String) -> ParseResult {
-        let pairs = decodePairs(contents)
-        let tablePairs = tablesSection(from: pairs)
-        let layersByID = parseLayers(from: tablePairs)
-        let textStylesByID = parseTextStyles(from: tablePairs)
-        let blocksByName = parseBlocks(from: blocksSection(from: pairs), textStylesByID: textStylesByID)
-        let entityPairs = entitiesSection(from: pairs)
-        let rawRecords = parseEntityRecords(from: entityPairs, textStylesByID: textStylesByID)
-        let records = expandInsertRecords(rawRecords, blocksByName: blocksByName)
-        let diagnostics = records.flatMap(\.diagnostics)
-        let layouts = buildLayouts(from: records)
-        return ParseResult(
-            records: records,
-            layersByID: layersByID,
-            layouts: layouts,
-            textStylesByID: textStylesByID,
-            diagnostics: diagnostics
-        )
-    }
-
-    private static func parseEntityRecords(
-        from entityPairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> [EntityRecord] {
-        var records: [EntityRecord] = []
-        var index = 0
-        while index < entityPairs.count {
-            let pair = entityPairs[index]
-            guard pair.code == 0 else {
-                index += 1
-                continue
-            }
-
-            let type = pair.value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            index += 1
-            var recordPairs: [Pair] = []
-            while index < entityPairs.count, entityPairs[index].code != 0 {
-                recordPairs.append(entityPairs[index])
-                index += 1
-            }
-
-            let parsedRecords: [EntityRecord]
-            if type == "POLYLINE" {
-                let vertexPairs = consumePolylineVertices(from: entityPairs, index: &index)
-                parsedRecords = makePolyline(from: recordPairs, vertexPairs: vertexPairs).map { [$0] } ?? []
-            } else if type == "INSERT" || type == "MINSERT" {
-                if var insert = makeInsert(type: type, from: recordPairs) {
-                    insert.attachedAttributes = consumeInsertAttributes(
-                        from: entityPairs,
-                        index: &index,
-                        textStylesByID: textStylesByID
-                    )
-                    parsedRecords = [insert]
-                } else {
-                    parsedRecords = []
-                }
-            } else {
-                parsedRecords = makeEntities(type: type, pairs: recordPairs, textStylesByID: textStylesByID)
-            }
-            for parsedRecord in parsedRecords {
-                var record = parsedRecord
-                record.lineType = lineType(from: recordPairs) ?? record.lineType
-                record.layoutID = layoutID(from: recordPairs) ?? record.layoutID
-                records.append(record)
-            }
-        }
-        return records
-    }
-
-    private static func decodePairs(_ contents: String) -> [Pair] {
-        let lines = contents
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-        var pairs: [Pair] = []
-        var index = 0
-        while index + 1 < lines.count {
-            let codeText = lines[index].trimmingCharacters(in: .whitespacesAndNewlines)
-            let value = lines[index + 1].trimmingCharacters(in: .whitespacesAndNewlines)
-            if let code = Int(codeText) {
-                pairs.append(Pair(code: code, value: value))
-            }
-            index += 2
-        }
-        return pairs
-    }
-
-    private static func tablesSection(from pairs: [Pair]) -> [Pair] {
-        var index = 0
-        while index < pairs.count {
-            if pairs[index].code == 0,
-               normalized(pairs[index].value) == "SECTION",
-               index + 1 < pairs.count,
-               pairs[index + 1].code == 2,
-               normalized(pairs[index + 1].value) == "TABLES" {
-                index += 2
-                var section: [Pair] = []
-                while index < pairs.count {
-                    if pairs[index].code == 0, normalized(pairs[index].value) == "ENDSEC" {
-                        break
-                    }
-                    section.append(pairs[index])
-                    index += 1
-                }
-                return section
-            }
-            index += 1
-        }
-        return []
-    }
-
-    private static func blocksSection(from pairs: [Pair]) -> [Pair] {
-        var index = 0
-        while index < pairs.count {
-            if pairs[index].code == 0,
-               normalized(pairs[index].value) == "SECTION",
-               index + 1 < pairs.count,
-               pairs[index + 1].code == 2,
-               normalized(pairs[index + 1].value) == "BLOCKS" {
-                index += 2
-                var section: [Pair] = []
-                while index < pairs.count {
-                    if pairs[index].code == 0, normalized(pairs[index].value) == "ENDSEC" {
-                        break
-                    }
-                    section.append(pairs[index])
-                    index += 1
-                }
-                return section
-            }
-            index += 1
-        }
-        return []
-    }
-
-    private static func entitiesSection(from pairs: [Pair]) -> [Pair] {
-        var index = 0
-        while index < pairs.count {
-            if pairs[index].code == 0,
-               normalized(pairs[index].value) == "SECTION",
-               index + 1 < pairs.count,
-               pairs[index + 1].code == 2,
-               normalized(pairs[index + 1].value) == "ENTITIES" {
-                index += 2
-                var section: [Pair] = []
-                while index < pairs.count {
-                    if pairs[index].code == 0,
-                       normalized(pairs[index].value) == "ENDSEC" {
-                        break
-                    }
-                    section.append(pairs[index])
-                    index += 1
-                }
-                return section
-            }
-            index += 1
-        }
-        return pairs
-    }
-
-    private static func parseBlocks(
-        from blockPairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> [String: BlockDefinition] {
-        var blocksByName: [String: BlockDefinition] = [:]
-        var index = 0
-        while index < blockPairs.count {
-            guard blockPairs[index].code == 0, normalized(blockPairs[index].value) == "BLOCK" else {
-                index += 1
-                continue
-            }
-
-            index += 1
-            var headerPairs: [Pair] = []
-            while index < blockPairs.count, blockPairs[index].code != 0 {
-                headerPairs.append(blockPairs[index])
-                index += 1
-            }
-
-            var bodyPairs: [Pair] = []
-            while index < blockPairs.count {
-                if blockPairs[index].code == 0, normalized(blockPairs[index].value) == "ENDBLK" {
-                    index += 1
-                    while index < blockPairs.count, blockPairs[index].code != 0 {
-                        index += 1
-                    }
-                    break
-                }
-                bodyPairs.append(blockPairs[index])
-                index += 1
-            }
-
-            guard let name = blockName(from: headerPairs) else { continue }
-            let base = point(in: headerPairs, xCode: 10, yCode: 20) ?? .zero
-            let flags = firstInt(code: 70, in: headerPairs) ?? 0
-            blocksByName[name] = BlockDefinition(
-                name: name,
-                basePoint: base,
-                records: parseEntityRecords(from: bodyPairs, textStylesByID: textStylesByID),
-                isXref: (flags & 4) == 4 || (flags & 8) == 8 || (flags & 16) == 16,
-                xrefPath: firstString(code: 1, in: headerPairs)
-            )
-        }
-        return blocksByName
-    }
-
-    private static func parseLayers(from tablePairs: [Pair]) -> [String: Kernel.CADLayer] {
-        var layersByID: [String: Kernel.CADLayer] = [:]
-        var index = 0
-        while index < tablePairs.count {
-            guard tablePairs[index].code == 0, normalized(tablePairs[index].value) == "TABLE" else {
-                index += 1
-                continue
-            }
-            index += 1
-            let tableName = index < tablePairs.count && tablePairs[index].code == 2
-                ? normalized(tablePairs[index].value)
-                : ""
-            if index < tablePairs.count, tablePairs[index].code == 2 {
-                index += 1
-            }
-
-            var body: [Pair] = []
-            while index < tablePairs.count {
-                if tablePairs[index].code == 0, normalized(tablePairs[index].value) == "ENDTAB" {
-                    break
-                }
-                body.append(tablePairs[index])
-                index += 1
-            }
-
-            if tableName == "LAYER" {
-                for layer in parseLayerRecords(from: body) {
-                    layersByID[layer.id] = layer
-                }
-            }
-            index += 1
-        }
-        return layersByID
-    }
-
-    private static func parseLayerRecords(from pairs: [Pair]) -> [Kernel.CADLayer] {
-        var layers: [Kernel.CADLayer] = []
-        var index = 0
-        while index < pairs.count {
-            guard pairs[index].code == 0, normalized(pairs[index].value) == "LAYER" else {
-                index += 1
-                continue
-            }
-            index += 1
-            var recordPairs: [Pair] = []
-            while index < pairs.count, pairs[index].code != 0 {
-                recordPairs.append(pairs[index])
-                index += 1
-            }
-
-            let name = firstString(code: 2, in: recordPairs)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let name, !name.isEmpty else { continue }
-
-            let flags = firstInt(code: 70, in: recordPairs) ?? 0
-            let aci = firstInt(code: 62, in: recordPairs) ?? 7
-            let color = colorARGB(from: recordPairs, defaultACI: abs(aci)) ?? 0xFF2F3437
-            let layerLineType = lineType(from: recordPairs) ?? "Continuous"
-            layers.append(
-                Kernel.CADLayer(
-                    id: name,
-                    name: name,
-                    isVisible: aci >= 0 && (flags & 1) == 0,
-                    isLocked: (flags & 4) == 4,
-                    colorARGB: color,
-                    lineWeight: lineWeight(from: recordPairs) ?? 0.25,
-                    lineType: layerLineType
-                )
-            )
-        }
-        return layers
-    }
-
-    private static func parseTextStyles(from tablePairs: [Pair]) -> [String: Kernel.CADTextStyle] {
-        var stylesByID: [String: Kernel.CADTextStyle] = [:]
-        var index = 0
-        while index < tablePairs.count {
-            guard tablePairs[index].code == 0, normalized(tablePairs[index].value) == "TABLE" else {
-                index += 1
-                continue
-            }
-            index += 1
-            let tableName = index < tablePairs.count && tablePairs[index].code == 2
-                ? normalized(tablePairs[index].value)
-                : ""
-            if index < tablePairs.count, tablePairs[index].code == 2 {
-                index += 1
-            }
-
-            var body: [Pair] = []
-            while index < tablePairs.count {
-                if tablePairs[index].code == 0, normalized(tablePairs[index].value) == "ENDTAB" {
-                    break
-                }
-                body.append(tablePairs[index])
-                index += 1
-            }
-
-            if tableName == "STYLE" {
-                for style in parseTextStyleRecords(from: body) {
-                    stylesByID[style.id] = style
-                }
-            }
-            index += 1
-        }
-        return stylesByID
-    }
-
-    private static func parseTextStyleRecords(from pairs: [Pair]) -> [Kernel.CADTextStyle] {
-        var styles: [Kernel.CADTextStyle] = []
-        var index = 0
-        while index < pairs.count {
-            guard pairs[index].code == 0, normalized(pairs[index].value) == "STYLE" else {
-                index += 1
-                continue
-            }
-            index += 1
-            var recordPairs: [Pair] = []
-            while index < pairs.count, pairs[index].code != 0 {
-                recordPairs.append(pairs[index])
-                index += 1
-            }
-
-            let name = firstString(code: 2, in: recordPairs)?
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            guard let name, !name.isEmpty else { continue }
-            styles.append(
-                Kernel.CADTextStyle(
-                    id: name,
-                    name: name,
-                    fontName: firstString(code: 3, in: recordPairs)?
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                    bigFontName: firstString(code: 4, in: recordPairs)?
-                        .trimmingCharacters(in: .whitespacesAndNewlines),
-                    fixedHeight: positiveOrNil(firstDouble(code: 40, in: recordPairs)),
-                    widthFactor: positiveOrNil(firstDouble(code: 41, in: recordPairs)) ?? 1,
-                    obliqueAngleRadians: (firstDouble(code: 50, in: recordPairs) ?? 0) * .pi / 180
-                )
-            )
-        }
-        return styles
-    }
-
-    private static func buildLayouts(from records: [EntityRecord]) -> [Kernel.CADLayout] {
-        let layoutIDs = records
-            .map(\.layoutID)
-            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        var seen = Set<String>()
-        var layouts: [Kernel.CADLayout] = []
-        for layoutID in [Kernel.CADLayout.modelSpace.id] + layoutIDs {
-            let normalizedID = normalized(layoutID)
-            guard seen.insert(normalizedID).inserted else { continue }
-            if normalizedID == normalized(Kernel.CADLayout.modelSpace.id) {
-                layouts.append(.modelSpace)
-            } else {
-                layouts.append(Kernel.CADLayout(id: layoutID, name: layoutID, isModelSpace: false))
-            }
-        }
-        return layouts.isEmpty ? [.modelSpace] : layouts
-    }
-
-    private static func makeEntities(
-        type: String,
-        pairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> [EntityRecord] {
-        if type == "TABLE" {
-            return makeTableCellTexts(from: pairs, textStylesByID: textStylesByID)
-        }
-        guard let record = makeEntity(type: type, pairs: pairs, textStylesByID: textStylesByID) else {
-            return []
-        }
-        return [record]
-    }
-
-    private static func makeEntity(
-        type: String,
-        pairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> EntityRecord? {
-        let record: EntityRecord?
-        switch type {
-        case "LINE":
-            record = makeLine(from: pairs)
-        case "POINT":
-            record = makePoint(from: pairs)
-        case "XLINE", "RAY":
-            record = makeInfiniteLine(type: type, from: pairs)
-        case "LWPOLYLINE":
-            record = makeLWPolyline(from: pairs)
-        case "CIRCLE":
-            record = makeCircle(from: pairs)
-        case "ARC":
-            record = makeArc(from: pairs)
-        case "ELLIPSE":
-            record = makeEllipse(from: pairs)
-        case "SPLINE":
-            record = makeSpline(from: pairs)
-        case "DIMENSION":
-            record = makeDimension(from: pairs, textStylesByID: textStylesByID)
-        case "TEXT", "MTEXT", "ATTRIB", "ATTDEF":
-            record = makeText(type: type, from: pairs, textStylesByID: textStylesByID)
-        case "INSERT", "MINSERT":
-            record = makeInsert(type: type, from: pairs)
-        case "HATCH":
-            record = makeHatch(from: pairs)
-        case "LEADER", "MLEADER", "MULTILEADER":
-            record = makeLeader(type: type, from: pairs)
-        case "MLINE":
-            record = makeMLine(from: pairs)
-        case "SOLID", "TRACE", "3DFACE":
-            record = makeFilledShape(type: type, from: pairs)
-        case "IMAGE", "PDFUNDERLAY", "DWFUNDERLAY", "DGNUNDERLAY", "UNDERLAY":
-            record = makeImagePlaceholder(type: type, from: pairs)
-        case "WIPEOUT":
-            record = makeWipeout(from: pairs)
-        default:
-            record = unsupportedRecord(
-                type: type,
-                pairs: pairs,
-                code: "CAD_POC_DXF_UNSUPPORTED_ENTITY",
-                reason: "\(type) is not supported by the CAD Metal PoC."
-            )
-        }
-        guard var record else {
-            return nil
-        }
-        record.lineType = lineType(from: pairs) ?? record.lineType
-        return record
-    }
-
-    private static func consumePolylineVertices(from pairs: [Pair], index: inout Int) -> [[Pair]] {
-        var vertexPairs: [[Pair]] = []
-        while index < pairs.count, pairs[index].code == 0 {
-            let childType = pairs[index].value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-            if childType == "VERTEX" {
-                index += 1
-                var childPairs: [Pair] = []
-                while index < pairs.count, pairs[index].code != 0 {
-                    childPairs.append(pairs[index])
-                    index += 1
-                }
-                vertexPairs.append(childPairs)
-                continue
-            }
-            if childType == "SEQEND" {
-                index += 1
-                while index < pairs.count, pairs[index].code != 0 {
-                    index += 1
-                }
-                break
-            }
-            break
-        }
-        return vertexPairs
-    }
-
-    private static func consumeInsertAttributes(
-        from pairs: [Pair],
-        index: inout Int,
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> [EntityRecord] {
-        var attributes: [EntityRecord] = []
-        while index < pairs.count, pairs[index].code == 0 {
-            let childType = normalized(pairs[index].value)
-            if childType == "ATTRIB" || childType == "ATTDEF" {
-                index += 1
-                var childPairs: [Pair] = []
-                while index < pairs.count, pairs[index].code != 0 {
-                    childPairs.append(pairs[index])
-                    index += 1
-                }
-                if var attribute = makeText(
-                    type: childType,
-                    from: childPairs,
-                    textStylesByID: textStylesByID
-                ) {
-                    attribute.lineType = lineType(from: childPairs) ?? attribute.lineType
-                    attribute.layoutID = layoutID(from: childPairs) ?? attribute.layoutID
-                    attributes.append(attribute)
-                }
-                continue
-            }
-            if childType == "SEQEND" {
-                index += 1
-                while index < pairs.count, pairs[index].code != 0 {
-                    index += 1
-                }
-                break
-            }
-            break
-        }
-        return attributes
-    }
-
-    private static func makeLine(from pairs: [Pair]) -> EntityRecord? {
-        guard
-            let startX = firstDouble(code: 10, in: pairs),
-            let startY = firstDouble(code: 20, in: pairs),
-            let endX = firstDouble(code: 11, in: pairs),
-            let endY = firstDouble(code: 21, in: pairs)
-        else {
-            return nil
-        }
-        let path = Kernel.CADPath(elements: [
-            .move(to: Kernel.CADPoint(x: startX, y: startY)),
-            .line(to: Kernel.CADPoint(x: endX, y: endY))
-        ])
-        return EntityRecord(
-            kind: .line,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "LINE"
-        )
-    }
-
-    private static func makePoint(from pairs: [Pair]) -> EntityRecord? {
-        guard let point = point(in: pairs, xCode: 10, yCode: 20) else {
-            return unsupportedRecord(
-                type: "POINT",
-                pairs: pairs,
-                code: "CAD_POC_POINT_GEOMETRY_UNRESOLVED",
-                reason: "POINT geometry cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let bounds = Kernel.CADBounds(
-            minX: point.x - 0.5,
-            minY: point.y - 0.5,
-            maxX: point.x + 0.5,
-            maxY: point.y + 0.5
-        )
-        let path = Kernel.CADPath(elements: [
-            .move(to: Kernel.CADPoint(x: point.x - 0.5, y: point.y)),
-            .line(to: Kernel.CADPoint(x: point.x + 0.5, y: point.y))
-        ])
-        return EntityRecord(
-            kind: .point,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "POINT"
-        )
-    }
-
-    private static func makeInfiniteLine(type: String, from pairs: [Pair]) -> EntityRecord? {
-        guard let base = point(in: pairs, xCode: 10, yCode: 20),
-              let direction = point(in: pairs, xCode: 11, yCode: 21) else {
-            return unsupportedRecord(
-                type: type,
-                pairs: pairs,
-                code: "CAD_POC_INFINITE_LINE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) geometry cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let length = hypot(direction.x, direction.y)
-        guard length > 0 else {
-            return unsupportedRecord(
-                type: type,
-                pairs: pairs,
-                code: "CAD_POC_INFINITE_LINE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) direction cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let dx = direction.x / length
-        let dy = direction.y / length
-        let previewLength = 100_000.0
-        let start: Kernel.CADPoint
-        let end: Kernel.CADPoint
-        if type == "XLINE" {
-            start = Kernel.CADPoint(x: base.x - dx * previewLength, y: base.y - dy * previewLength)
-            end = Kernel.CADPoint(x: base.x + dx * previewLength, y: base.y + dy * previewLength)
-        } else {
-            start = base
-            end = Kernel.CADPoint(x: base.x + dx * previewLength, y: base.y + dy * previewLength)
-        }
-        let path = Kernel.CADPath(elements: [.move(to: start), .line(to: end)])
-        return EntityRecord(
-            kind: .line,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_INFINITE_LINE_CLIPPED",
-                    message: "\(type) imported as a finite preview segment.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeLWPolyline(from pairs: [Pair]) -> EntityRecord? {
-        let vertices = orderedPolylineVertices(in: pairs, xCode: 10, yCode: 20, bulgeCode: 42)
-        guard vertices.count >= 2 else { return nil }
-
-        let isClosed = (firstInt(code: 70, in: pairs) ?? 0) & 1 == 1
-        let points = tessellatedPolylinePoints(vertices: vertices, closed: isClosed)
-        let path = makePath(from: points, closed: isClosed)
-        let hasBulge = vertices.contains { abs($0.bulge) > 0.000001 }
-
-        return EntityRecord(
-            kind: .lwPolyline,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "LWPOLYLINE",
-            diagnostics: hasBulge ? [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_LWPOLYLINE_BULGE_TESSELLATED",
-                    message: "LWPOLYLINE bulge arcs were tessellated into polyline segments.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ] : []
-        )
-    }
-
-    private static func makePolyline(from pairs: [Pair], vertexPairs: [[Pair]]) -> EntityRecord? {
-        let vertices = vertexPairs.compactMap { pairs -> PolylineVertex? in
-            guard let point = point(in: pairs, xCode: 10, yCode: 20) else { return nil }
-            return PolylineVertex(point: point, bulge: firstDouble(code: 42, in: pairs) ?? 0)
-        }
-        guard vertices.count >= 2 else { return nil }
-
-        let isClosed = (firstInt(code: 70, in: pairs) ?? 0) & 1 == 1
-        let points = tessellatedPolylinePoints(vertices: vertices, closed: isClosed)
-        let path = makePath(from: points, closed: isClosed)
-        let hasBulge = vertices.contains { abs($0.bulge) > 0.000001 }
-        return EntityRecord(
-            kind: .polyline,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "POLYLINE",
-            diagnostics: hasBulge ? [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_POLYLINE_BULGE_TESSELLATED",
-                    message: "POLYLINE vertex bulge arcs were tessellated into polyline segments.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ] : []
-        )
-    }
-
-    private static func makeCircle(from pairs: [Pair]) -> EntityRecord? {
-        guard
-            let center = point(in: pairs, xCode: 10, yCode: 20),
-            let radius = firstDouble(code: 40, in: pairs),
-            radius > 0
-        else {
-            return nil
-        }
-        let path = tessellatedArcPath(
-            center: center,
-            radius: radius,
-            startDegrees: 0,
-            endDegrees: 360,
-            closed: true
-        )
-        return EntityRecord(
-            kind: .circle,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "CIRCLE"
-        )
-    }
-
-    private static func makeArc(from pairs: [Pair]) -> EntityRecord? {
-        guard
-            let center = point(in: pairs, xCode: 10, yCode: 20),
-            let radius = firstDouble(code: 40, in: pairs),
-            let startDegrees = firstDouble(code: 50, in: pairs),
-            let endDegrees = firstDouble(code: 51, in: pairs),
-            radius > 0
-        else {
-            return nil
-        }
-        let path = tessellatedArcPath(
-            center: center,
-            radius: radius,
-            startDegrees: startDegrees,
-            endDegrees: endDegrees,
-            closed: false
-        )
-        return EntityRecord(
-            kind: .arc,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "ARC"
-        )
-    }
-
-    private static func makeEllipse(from pairs: [Pair]) -> EntityRecord? {
-        guard
-            let center = point(in: pairs, xCode: 10, yCode: 20),
-            let majorVector = point(in: pairs, xCode: 11, yCode: 21)
-        else {
-            return unsupportedRecord(
-                type: "ELLIPSE",
-                pairs: pairs,
-                code: "CAD_POC_ELLIPSE_GEOMETRY_UNRESOLVED",
-                reason: "ELLIPSE geometry cannot be resolved by the CAD Metal PoC."
-            )
-        }
-
-        let majorRadius = hypot(majorVector.x, majorVector.y)
-        let ratio = positiveOrNil(firstDouble(code: 40, in: pairs)) ?? 1
-        guard majorRadius > 0, ratio > 0 else {
-            return unsupportedRecord(
-                type: "ELLIPSE",
-                pairs: pairs,
-                code: "CAD_POC_ELLIPSE_GEOMETRY_UNRESOLVED",
-                reason: "ELLIPSE geometry cannot be resolved by the CAD Metal PoC."
-            )
-        }
-
-        let start = firstDouble(code: 41, in: pairs) ?? 0
-        var end = firstDouble(code: 42, in: pairs) ?? (2 * Double.pi)
-        while end < start {
-            end += 2 * Double.pi
-        }
-        var sweep = end - start
-        if sweep <= 0.000001 {
-            sweep = 2 * Double.pi
-        }
-
-        let fullEllipse = abs(sweep - 2 * Double.pi) < 0.0001 || sweep >= 2 * Double.pi
-        let rotation = atan2(majorVector.y, majorVector.x)
-        let cosRotation = cos(rotation)
-        let sinRotation = sin(rotation)
-        let minorRadius = majorRadius * ratio
-        let segmentCount = max(16, min(128, Int(ceil(abs(sweep) / (Double.pi / 32)))))
-        let pointRange = fullEllipse ? 0..<segmentCount : 0..<(segmentCount + 1)
-        let points = pointRange.map { index -> Kernel.CADPoint in
-            let divisor = Double(max(segmentCount, 1))
-            let parameter = start + sweep * Double(index) / divisor
-            let localX = cos(parameter) * majorRadius
-            let localY = sin(parameter) * minorRadius
-            return Kernel.CADPoint(
-                x: center.x + localX * cosRotation - localY * sinRotation,
-                y: center.y + localX * sinRotation + localY * cosRotation
-            )
-        }
-        let path = makePath(from: points, closed: fullEllipse)
-
-        return EntityRecord(
-            kind: .ellipse,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "ELLIPSE",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_ELLIPSE_TESSELLATED",
-                    message: "ELLIPSE imported as tessellated polyline for the CAD Metal PoC.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeSpline(from pairs: [Pair]) -> EntityRecord? {
-        var points = orderedPoints(in: pairs, xCode: 10, yCode: 20)
-        if points.count < 2 {
-            points = orderedPoints(in: pairs, xCode: 11, yCode: 21)
-        }
-
-        guard points.count >= 2 else {
-            return unsupportedRecord(
-                type: "SPLINE",
-                pairs: pairs,
-                code: "CAD_POC_SPLINE_POINTS_UNRESOLVED",
-                reason: "SPLINE control points cannot be resolved by the CAD Metal PoC."
-            )
-        }
-
-        let isClosed = (firstInt(code: 70, in: pairs) ?? 0) & 1 == 1
-        let path = makePath(from: points, closed: isClosed)
-        return EntityRecord(
-            kind: .spline,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "SPLINE",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_SPLINE_DEGRADED_TO_POLYLINE",
-                    message: "SPLINE imported as control-point polyline for the CAD Metal PoC.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeDimension(
-        from pairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> EntityRecord? {
-        let endpoints = dimensionEndpoints(from: pairs)
-        guard let endpoints else {
-            return unsupportedRecord(
-                type: "DIMENSION",
-                pairs: pairs,
-                code: "CAD_POC_DIMENSION_GEOMETRY_UNRESOLVED",
-                reason: "DIMENSION geometry cannot be resolved by the CAD Metal PoC."
-            )
-        }
-
-        let height = positiveOrNil(firstDouble(code: 40, in: pairs))
-            ?? positiveOrNil(firstDouble(code: 140, in: pairs))
-            ?? 2.5
-        let explicitTextPoint = point(in: pairs, xCode: 11, yCode: 21)
-        let dimensionLinePoint = point(in: pairs, xCode: 10, yCode: 20) ?? explicitTextPoint
-        let explicitAxisAngle = firstDouble(code: 50, in: pairs).map { $0 * .pi / 180 }
-        let geometry = dimensionGeometry(
-            start: endpoints.start,
-            end: endpoints.end,
-            dimensionLinePoint: dimensionLinePoint,
-            textPoint: explicitTextPoint,
-            axisAngle: explicitAxisAngle,
-            textHeight: height
-        )
-        let path = geometry.path
-        let textPoint = explicitTextPoint ?? geometry.defaultTextPoint
-        let measurement = firstDouble(code: 42, in: pairs)
-            ?? distance(from: endpoints.start, to: endpoints.end)
-        let measurementText = formattedMeasurement(measurement)
-        let rawText = dimensionDisplayText(from: pairs, measurementText: measurementText)
-        let styleName = firstString(code: 7, in: pairs)
-            ?? firstString(code: 3, in: pairs)
-            ?? Kernel.CADTextStyle.default.id
-        let style = textStylesByID[styleName] ?? Kernel.CADTextStyle(id: styleName, name: styleName)
-        let textRotation = explicitAxisAngle
-            ?? atan2(geometry.dimensionEnd.y - geometry.dimensionStart.y, geometry.dimensionEnd.x - geometry.dimensionStart.x)
-        let text = Kernel.CADTextEngine().makeTextRun(
-            rawText: rawText,
-            insertionPoint: textPoint,
-            style: style,
-            height: height,
-            rotationRadians: textRotation,
-            widthFactor: style.widthFactor,
-            horizontalAlignmentCode: 1,
-            verticalAlignmentCode: 2
-        )
-        let bounds = path.bounds.union(textBounds(for: text, insertion: textPoint, height: height))
-
-        return EntityRecord(
-            kind: .dimension,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: text,
-            bounds: bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "DIMENSION",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_DIMENSION_SIMPLIFIED",
-                    message: "DIMENSION imported with extension lines, dimension line, arrowheads, positioned text, and simplified scale style for the CAD Metal PoC.",
-                    detail: firstString(code: 5, in: pairs)
-                ),
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_DIMENSION_STYLE_SIMPLIFIED",
-                    message: "DIMENSION style was simplified to text height, arrow scale, and line color.",
-                    detail: styleName
-                )
-            ]
-        )
-    }
-
-    private struct DimensionGeometry {
-        var path: Kernel.CADPath
-        var dimensionStart: Kernel.CADPoint
-        var dimensionEnd: Kernel.CADPoint
-        var defaultTextPoint: Kernel.CADPoint
-    }
-
-    private static func dimensionGeometry(
-        start: Kernel.CADPoint,
-        end: Kernel.CADPoint,
-        dimensionLinePoint: Kernel.CADPoint?,
-        textPoint: Kernel.CADPoint?,
-        axisAngle: Double?,
-        textHeight: Double
-    ) -> DimensionGeometry {
-        let measuredLength = distance(from: start, to: end)
-        guard measuredLength > 0.000001 else {
-            let path = Kernel.CADPath(elements: [.move(to: start), .line(to: end)])
-            return DimensionGeometry(
-                path: path,
-                dimensionStart: start,
-                dimensionEnd: end,
-                defaultTextPoint: midpoint(start, end)
-            )
-        }
-
-        let axis: Kernel.CADPoint
-        if let axisAngle, axisAngle.isFinite {
-            axis = Kernel.CADPoint(x: cos(axisAngle), y: sin(axisAngle))
-        } else {
-            axis = Kernel.CADPoint(
-                x: (end.x - start.x) / measuredLength,
-                y: (end.y - start.y) / measuredLength
-            )
-        }
-
-        let reference = dimensionLinePoint ?? textPoint ?? midpoint(start, end)
-        let dimensionStart = projectedPoint(start, ontoLineThrough: reference, axis: axis)
-        let dimensionEnd = projectedPoint(end, ontoLineThrough: reference, axis: axis)
-        let dimensionLength = distance(from: dimensionStart, to: dimensionEnd)
-        guard dimensionLength > 0.000001 else {
-            let path = Kernel.CADPath(elements: [.move(to: start), .line(to: end)])
-            return DimensionGeometry(
-                path: path,
-                dimensionStart: start,
-                dimensionEnd: end,
-                defaultTextPoint: midpoint(start, end)
-            )
-        }
-
-        let path = Kernel.CADPath(elements: [
-            .move(to: start),
-            .line(to: dimensionStart),
-            .line(to: dimensionEnd),
-            .line(to: end)
-        ])
-        let normal = Kernel.CADPoint(x: -axis.y, y: axis.x)
-        let labelOffset = max(textHeight * 0.35, 0)
-        let defaultTextPoint = Kernel.CADPoint(
-            x: (dimensionStart.x + dimensionEnd.x) / 2 + normal.x * labelOffset,
-            y: (dimensionStart.y + dimensionEnd.y) / 2 + normal.y * labelOffset
-        )
-        return DimensionGeometry(
-            path: path,
-            dimensionStart: dimensionStart,
-            dimensionEnd: dimensionEnd,
-            defaultTextPoint: defaultTextPoint
-        )
-    }
-
-    private static func projectedPoint(
-        _ point: Kernel.CADPoint,
-        ontoLineThrough linePoint: Kernel.CADPoint,
-        axis: Kernel.CADPoint
-    ) -> Kernel.CADPoint {
-        let dx = point.x - linePoint.x
-        let dy = point.y - linePoint.y
-        let distanceAlongAxis = dx * axis.x + dy * axis.y
-        return Kernel.CADPoint(
-            x: linePoint.x + axis.x * distanceAlongAxis,
-            y: linePoint.y + axis.y * distanceAlongAxis
-        )
-    }
-
-    private static func makeText(
-        type: String,
-        from pairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> EntityRecord? {
-        let rawText = joinedText(from: pairs, acceptedCodes: Set([1, 3]))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawText.isEmpty else { return nil }
-
-        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
-        let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
-        let style = textStylesByID[styleName] ?? Kernel.CADTextStyle(id: styleName, name: styleName)
-        let height = positiveOrNil(firstDouble(code: 40, in: pairs)) ?? style.fixedHeight ?? 2.5
-        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
-        let widthFactor = type == "MTEXT"
-            ? style.widthFactor
-            : positiveOrNil(firstDouble(code: 41, in: pairs)) ?? style.widthFactor
-        let boxWidth = type == "MTEXT" ? positiveOrNil(firstDouble(code: 41, in: pairs)) : nil
-        let boxHeight = type == "MTEXT" ? positiveOrNil(firstDouble(code: 46, in: pairs)) : nil
-        let attachmentCode = firstInt(code: 71, in: pairs)
-        let text = Kernel.CADTextEngine().makeTextRun(
-            rawText: rawText,
-            insertionPoint: insertion,
-            style: style,
-            height: height,
-            rotationRadians: rotation,
-            widthFactor: widthFactor,
-            boxWidth: boxWidth,
-            boxHeight: boxHeight,
-            horizontalAlignmentCode: firstInt(code: 72, in: pairs) ?? attachmentCode,
-            verticalAlignmentCode: firstInt(code: 73, in: pairs) ?? attachmentCode
-        )
-        let bounds = textBounds(for: text, insertion: insertion, height: height)
-        let kind: Kernel.CADEntityKind = type == "MTEXT"
-            ? .mtext
-            : ((type == "ATTRIB" || type == "ATTDEF") ? .attrib : .text)
-        return EntityRecord(
-            kind: kind,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: nil,
-            text: text,
-            bounds: bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            attributeTag: attributeTag(type: type, pairs: pairs),
-            sourceType: type
-        )
-    }
-
-    private static func makeInsert(type: String, from pairs: [Pair]) -> EntityRecord? {
-        guard let blockName = blockName(from: pairs) else { return nil }
-        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
-        let scaleX = firstDouble(code: 41, in: pairs) ?? 1
-        let scaleY = firstDouble(code: 42, in: pairs) ?? 1
-        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
-        let transform = Kernel.CADTransform
-            .translation(x: insertion.x, y: insertion.y)
-            .concatenating(.rotation(rotation))
-            .concatenating(.scale(x: scaleX, y: scaleY))
-        return EntityRecord(
-            kind: .insert,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: nil,
-            text: nil,
-            bounds: .empty,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            blockName: blockName,
-            insertTransform: transform,
-            insertColumnCount: max(firstInt(code: 70, in: pairs) ?? 1, 1),
-            insertRowCount: max(firstInt(code: 71, in: pairs) ?? 1, 1),
-            insertColumnSpacing: firstDouble(code: 44, in: pairs) ?? 0,
-            insertRowSpacing: firstDouble(code: 45, in: pairs) ?? 0,
-            sourceType: type
-        )
-    }
-
-    private static func makeHatch(from pairs: [Pair]) -> EntityRecord? {
-        let boundary = orderedPoints(in: pairs, xCode: 10, yCode: 20)
-        let boundaryPathCount = firstInt(code: 91, in: pairs) ?? 1
-        let hasEdgeMetadata = pairs.contains { $0.code == 72 || $0.code == 92 || $0.code == 93 }
-        let isComplexBoundary = boundaryPathCount > 1 || hasEdgeMetadata
-        guard boundary.count >= 3 else {
-            let reason = isComplexBoundary
-                ? "Complex HATCH boundary cannot be resolved by the CAD Metal PoC."
-                : "HATCH boundary cannot be resolved by the CAD Metal PoC."
-            return EntityRecord(
-                kind: .unsupported,
-                layerID: layerID(from: pairs),
-                handle: firstString(code: 5, in: pairs),
-                path: nil,
-                text: nil,
-                bounds: .empty,
-                colorARGB: colorARGB(from: pairs, defaultACI: nil),
-                lineWeight: lineWeight(from: pairs),
-                visibility: visibility(from: pairs),
-                sourceType: "HATCH",
-                diagnostics: [
-                    Kernel.CADDrawingDiagnostics.Entry(
-                        severity: .warning,
-                        code: isComplexBoundary
-                            ? "CAD_POC_HATCH_COMPLEX_BOUNDARY_UNRESOLVED"
-                            : "CAD_POC_HATCH_BOUNDARY_UNRESOLVED",
-                        message: reason,
-                        detail: firstString(code: 5, in: pairs)
-                    )
-                ],
-                unsupportedReason: reason
-            )
-        }
-
-        var elements: [Kernel.CADPath.Element] = [.move(to: boundary[0])]
-        elements.append(contentsOf: boundary.dropFirst().map { .line(to: $0) })
-        elements.append(.close)
-        let path = Kernel.CADPath(elements: elements)
-        return EntityRecord(
-            kind: .hatch,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "HATCH",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: isComplexBoundary ? .warning : .info,
-                    code: isComplexBoundary
-                        ? "CAD_POC_HATCH_COMPLEX_BOUNDARY_DEGRADED"
-                        : "CAD_POC_HATCH_SIMPLE_FILL",
-                    message: isComplexBoundary
-                        ? "Complex HATCH imported as boundary-only geometry; inner loops and fill patterns are skipped to keep rendering responsive."
-                        : "Simple closed HATCH imported as a filled polygon for the CAD Metal PoC.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeLeader(type: String, from pairs: [Pair]) -> EntityRecord? {
-        let vertices = orderedPoints(in: pairs, xCode: 10, yCode: 20)
-        guard vertices.count >= 2 else {
-            if let textRecord = makeLeaderTextOnly(type: type, from: pairs) {
-                return textRecord
-            }
-            return unsupportedRecord(
-                type: type,
-                pairs: pairs,
-                code: "CAD_POC_LEADER_GEOMETRY_UNRESOLVED",
-                reason: "\(type) vertices cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let path = makePath(from: vertices, closed: false)
-        let text = leaderTextRun(type: type, pairs: pairs, fallbackPoint: vertices.last ?? path.bounds.center)
-        let bounds = text.map { path.bounds.union(textBounds(for: $0, insertion: $0.insertionPoint, height: $0.height)) }
-            ?? path.bounds
-        return EntityRecord(
-            kind: text == nil ? .polyline : .dimension,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: text,
-            bounds: bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: text == nil
-                        ? "CAD_POC_LEADER_DEGRADED_TO_POLYLINE"
-                        : "CAD_POC_LEADER_TEXT_SIMPLIFIED",
-                    message: text == nil
-                        ? "\(type) imported as a polyline."
-                        : "\(type) imported as leader geometry with simplified annotation text.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeLeaderTextOnly(type: String, from pairs: [Pair]) -> EntityRecord? {
-        guard let text = leaderTextRun(type: type, pairs: pairs, fallbackPoint: point(in: pairs, xCode: 10, yCode: 20) ?? .zero) else {
-            return nil
-        }
-        let bounds = textBounds(for: text, insertion: text.insertionPoint, height: text.height)
-        return EntityRecord(
-            kind: .mtext,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: nil,
-            text: text,
-            bounds: bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_LEADER_TEXT_WITHOUT_GEOMETRY",
-                    message: "\(type) annotation text was imported, but leader geometry could not be resolved.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func leaderTextRun(
-        type: String,
-        pairs: [Pair],
-        fallbackPoint: Kernel.CADPoint
-    ) -> Kernel.CADTextRun? {
-        let rawText = joinedText(from: pairs, acceptedCodes: Set([1, 3, 302, 304]))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawText.isEmpty else { return nil }
-
-        let insertion = point(in: pairs, xCode: 12, yCode: 22)
-            ?? point(in: pairs, xCode: 11, yCode: 21)
-            ?? fallbackPoint
-        let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
-        let style = Kernel.CADTextStyle(id: styleName, name: styleName)
-        let height = positiveOrNil(firstDouble(code: 40, in: pairs))
-            ?? positiveOrNil(firstDouble(code: 140, in: pairs))
-            ?? 2.5
-        let boxWidth = positiveOrNil(firstDouble(code: 41, in: pairs))
-        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
-        return Kernel.CADTextEngine().makeTextRun(
-            rawText: rawText,
-            insertionPoint: insertion,
-            style: style,
-            height: height,
-            rotationRadians: rotation,
-            widthFactor: style.widthFactor,
-            boxWidth: boxWidth,
-            horizontalAlignmentCode: firstInt(code: 71, in: pairs),
-            verticalAlignmentCode: firstInt(code: 72, in: pairs)
-        )
-    }
-
-    private static func makeTableCellTexts(
-        from pairs: [Pair],
-        textStylesByID: [String: Kernel.CADTextStyle]
-    ) -> [EntityRecord] {
-        let cellTexts = tableCellTextValues(from: pairs)
-        guard !cellTexts.isEmpty else {
-            return [
-                unsupportedRecord(
-                    type: "TABLE",
-                    pairs: pairs,
-                    code: "CAD_POC_TABLE_TEXT_UNRESOLVED",
-                    reason: "TABLE cell text cannot be resolved by the CAD Metal PoC."
-                )
-            ]
-        }
-
-        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
-        let columnCount = max(firstInt(code: 90, in: pairs) ?? Int(ceil(sqrt(Double(cellTexts.count)))), 1)
-        let rowCount = max(firstInt(code: 91, in: pairs) ?? Int(ceil(Double(cellTexts.count) / Double(columnCount))), 1)
-        let widths = allDoubles(code: 142, in: pairs)
-        let heights = allDoubles(code: 141, in: pairs)
-        let defaultWidth = positiveOrNil(firstDouble(code: 41, in: pairs)) ?? 20
-        let defaultHeight = positiveOrNil(firstDouble(code: 40, in: pairs)) ?? 8
-        let rotation = (firstDouble(code: 50, in: pairs) ?? 0) * .pi / 180
-        let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
-        let style = textStylesByID[styleName] ?? Kernel.CADTextStyle(id: styleName, name: styleName)
-        let handle = firstString(code: 5, in: pairs)
-        let layer = layerID(from: pairs)
-        let color = colorARGB(from: pairs, defaultACI: nil)
-        let lineWeight = lineWeight(from: pairs)
-        let visibility = visibility(from: pairs)
-
-        var records: [EntityRecord] = []
-        records.reserveCapacity(cellTexts.count)
-        for (index, rawText) in cellTexts.enumerated() {
-            let row = min(index / columnCount, max(rowCount - 1, 0))
-            let column = index % columnCount
-            let cellWidth = positiveOrNil(widths[safe: column]) ?? defaultWidth
-            let cellHeight = positiveOrNil(heights[safe: row]) ?? defaultHeight
-            let xOffset = cumulative(widths, through: column, fallback: defaultWidth) + cellWidth * 0.08
-            let yOffset = -cumulative(heights, through: row, fallback: defaultHeight) - cellHeight * 0.55
-            let insertionPoint = Kernel.CADPoint(
-                x: insertion.x + xOffset * cos(rotation) - yOffset * sin(rotation),
-                y: insertion.y + xOffset * sin(rotation) + yOffset * cos(rotation)
-            )
-            let textHeight = max(cellHeight * 0.45, style.fixedHeight ?? 2.5)
-            let text = Kernel.CADTextEngine().makeTextRun(
-                rawText: rawText,
-                insertionPoint: insertionPoint,
-                style: style,
-                height: textHeight,
-                rotationRadians: rotation,
-                widthFactor: style.widthFactor,
-                boxWidth: cellWidth,
-                boxHeight: cellHeight,
-                horizontalAlignmentCode: firstInt(code: 170, in: pairs),
-                verticalAlignmentCode: firstInt(code: 170, in: pairs)
-            )
-            let bounds = textBounds(for: text, insertion: insertionPoint, height: textHeight)
-            records.append(
-                EntityRecord(
-                    kind: .mtext,
-                    layerID: layer,
-                    handle: handle.map { "\($0)-cell-\(index)" },
-                    path: nil,
-                    text: text,
-                    bounds: bounds,
-                    colorARGB: color,
-                    lineWeight: lineWeight,
-                    visibility: visibility,
-                    sourceType: "TABLE",
-                    diagnostics: [
-                        Kernel.CADDrawingDiagnostics.Entry(
-                            severity: .info,
-                            code: "CAD_POC_TABLE_CELL_TEXT_SIMPLIFIED",
-                            message: "TABLE cell text imported as positioned MTEXT for the CAD Metal PoC.",
-                            detail: handle
-                        )
-                    ]
-                )
-            )
-        }
-        return records
-    }
-
-    private static func tableCellTextValues(from pairs: [Pair]) -> [String] {
-        let acceptedCodes = Set([1, 3, 302, 304])
-        return pairs
-            .filter { acceptedCodes.contains($0.code) }
-            .map { $0.value.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .filter { !$0.isEmpty }
-    }
-
-    private static func cumulative(_ values: [Double], through index: Int, fallback: Double) -> Double {
-        guard index > 0 else { return 0 }
-        return (0..<index).reduce(0) { partial, current in
-            partial + (positiveOrNil(values[safe: current]) ?? fallback)
-        }
-    }
-
-    private static func makeMLine(from pairs: [Pair]) -> EntityRecord? {
-        let vertices = orderedPoints(in: pairs, xCode: 11, yCode: 21)
-        guard vertices.count >= 2 else {
-            return unsupportedRecord(
-                type: "MLINE",
-                pairs: pairs,
-                code: "CAD_POC_MLINE_GEOMETRY_UNRESOLVED",
-                reason: "MLINE vertices cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let isClosed = (firstInt(code: 70, in: pairs) ?? 0) & 2 == 2
-        let path = makePath(from: vertices, closed: isClosed)
-        return EntityRecord(
-            kind: .polyline,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: "MLINE",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .info,
-                    code: "CAD_POC_MLINE_DEGRADED_TO_CENTERLINE",
-                    message: "MLINE imported as its vertex centerline.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeFilledShape(type: String, from pairs: [Pair]) -> EntityRecord? {
-        let pointCodes: [(Int, Int)] = [(10, 20), (11, 21), (12, 22), (13, 23)]
-        let vertices = pointCodes.compactMap { point(in: pairs, xCode: $0.0, yCode: $0.1) }
-        let uniqueVertices = vertices.reduce(into: [Kernel.CADPoint]()) { partial, point in
-            guard !partial.contains(point) else { return }
-            partial.append(point)
-        }
-        guard uniqueVertices.count >= 3 else {
-            return unsupportedRecord(
-                type: type,
-                pairs: pairs,
-                code: "CAD_POC_FILLED_SHAPE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) boundary cannot be resolved by the CAD Metal PoC."
-            )
-        }
-        let path = makePath(from: uniqueVertices, closed: true)
-        return EntityRecord(
-            kind: .hatch,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_FILLED_SHAPE_DEGRADED_TO_BOUNDARY",
-                    message: "\(type) imported as a closed boundary.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ]
-        )
-    }
-
-    private static func makeImagePlaceholder(type: String, from pairs: [Pair]) -> EntityRecord? {
-        let base = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
-        let uVector = point(in: pairs, xCode: 11, yCode: 21) ?? Kernel.CADPoint(x: 1, y: 0)
-        let vVector = point(in: pairs, xCode: 12, yCode: 22) ?? Kernel.CADPoint(x: 0, y: 1)
-        let width = positiveOrNil(firstDouble(code: 13, in: pairs)) ?? positiveOrNil(firstDouble(code: 41, in: pairs)) ?? 1
-        let height = positiveOrNil(firstDouble(code: 23, in: pairs)) ?? positiveOrNil(firstDouble(code: 42, in: pairs)) ?? 1
-        let points = [
-            base,
-            Kernel.CADPoint(x: base.x + uVector.x * width, y: base.y + uVector.y * width),
-            Kernel.CADPoint(
-                x: base.x + uVector.x * width + vVector.x * height,
-                y: base.y + uVector.y * width + vVector.y * height
-            ),
-            Kernel.CADPoint(x: base.x + vVector.x * height, y: base.y + vVector.y * height)
-        ]
-        let path = makePath(from: points, closed: true)
-        return EntityRecord(
-            kind: .image,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: path,
-            text: nil,
-            bounds: path.bounds,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_IMAGE_PLACEHOLDER",
-                    message: "\(type) imported as a frame placeholder.",
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ],
-            unsupportedReason: "\(type) placeholder; referenced image or underlay content is not rendered in the CAD Metal PoC."
-        )
-    }
-
-    private static func makeWipeout(from pairs: [Pair]) -> EntityRecord? {
-        let boundary = orderedPoints(in: pairs, xCode: 14, yCode: 24)
-        if boundary.count >= 3 {
-            let path = makePath(from: boundary, closed: true)
-            return EntityRecord(
-                kind: .hatch,
-                layerID: layerID(from: pairs),
-                handle: firstString(code: 5, in: pairs),
-                path: path,
-                text: nil,
-                bounds: path.bounds,
-                colorARGB: colorARGB(from: pairs, defaultACI: nil),
-                lineWeight: lineWeight(from: pairs),
-                visibility: visibility(from: pairs),
-                sourceType: "WIPEOUT",
-                diagnostics: [
-                    Kernel.CADDrawingDiagnostics.Entry(
-                        severity: .warning,
-                        code: "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY",
-                        message: "WIPEOUT imported as a boundary frame; masking is not implemented in this PoC.",
-                        detail: firstString(code: 5, in: pairs)
-                    )
-                ]
-            )
-        }
-        return makeImagePlaceholder(type: "WIPEOUT", from: pairs)
-    }
-
-    private static func dimensionEndpoints(from pairs: [Pair]) -> (start: Kernel.CADPoint, end: Kernel.CADPoint)? {
-        if let start = point(in: pairs, xCode: 13, yCode: 23),
-           let end = point(in: pairs, xCode: 14, yCode: 24) {
-            return (start, end)
-        }
-        if let start = point(in: pairs, xCode: 10, yCode: 20),
-           let end = point(in: pairs, xCode: 11, yCode: 21),
-           distance(from: start, to: end) > 0 {
-            return (start, end)
-        }
-        return nil
-    }
-
-    private static func dimensionDisplayText(from pairs: [Pair], measurementText: String) -> String {
-        let explicitText = firstString(code: 1, in: pairs)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let explicitText, !explicitText.isEmpty else {
-            return measurementText
-        }
-        if explicitText == "<>" {
-            return measurementText
-        }
-        return explicitText.replacingOccurrences(of: "<>", with: measurementText)
-    }
-
-    private static func textBounds(
-        for text: Kernel.CADTextRun,
-        insertion: Kernel.CADPoint,
-        height: Double
-    ) -> Kernel.CADBounds {
-        let widthFactor = text.widthFactor ?? 1
-        let measuredWidth = text.boxWidth.flatMap { $0 > 0 ? $0 : nil }
-            ?? Double(text.displayText.count) * max(height * 0.6 * widthFactor, 0.6)
-        let width = max(measuredWidth, max(height, 0.6))
-        let boxHeight = max(text.boxHeight ?? height, height, 0.6)
-        let anchorX = textHorizontalOffset(width: width, text: text)
-        let anchorY = textVerticalOffset(height: boxHeight, text: text)
-        return rotatedTextBounds(
-            insertion: insertion,
-            width: width,
-            height: boxHeight,
-            anchorX: anchorX,
-            anchorY: anchorY,
-            rotationRadians: text.rotationRadians
-        )
-    }
-
-    private static func textHorizontalOffset(width: Double, text: Kernel.CADTextRun) -> Double {
-        if text.boxWidth != nil, let alignmentCode = text.horizontalAlignmentCode {
-            switch alignmentCode {
-            case 2, 5, 8:
-                return width / 2
-            case 3, 6, 9:
-                return width
-            default:
-                return 0
-            }
-        }
-
-        switch text.horizontalAlignmentCode {
-        case 1, 3, 4, 5:
-            return width / 2
-        case 2:
-            return width
-        default:
-            return 0
-        }
-    }
-
-    private static func textVerticalOffset(height: Double, text: Kernel.CADTextRun) -> Double {
-        if text.boxHeight != nil, let alignmentCode = text.verticalAlignmentCode {
-            switch alignmentCode {
-            case 1, 2, 3:
-                return height
-            case 4, 5, 6:
-                return height / 2
-            default:
-                return 0
-            }
-        }
-
-        switch text.verticalAlignmentCode {
-        case 2:
-            return height / 2
-        case 3:
-            return height
-        default:
-            return 0
-        }
-    }
-
-    private static func rotatedTextBounds(
-        insertion: Kernel.CADPoint,
-        width: Double,
-        height: Double,
-        anchorX: Double,
-        anchorY: Double,
-        rotationRadians: Double
-    ) -> Kernel.CADBounds {
-        let cosine = cos(rotationRadians)
-        let sine = sin(rotationRadians)
-        let corners = [
-            (0.0, 0.0),
-            (width, 0.0),
-            (width, height),
-            (0.0, height)
-        ].map { localX, localY in
-            let x = localX - anchorX
-            let y = localY - anchorY
-            return Kernel.CADPoint(
-                x: insertion.x + x * cosine - y * sine,
-                y: insertion.y + x * sine + y * cosine
-            )
-        }
-        return corners.reduce(Kernel.CADBounds.empty) { partial, point in
-            partial.including(point)
-        }
-    }
-
-    private static func midpoint(_ first: Kernel.CADPoint, _ second: Kernel.CADPoint) -> Kernel.CADPoint {
-        Kernel.CADPoint(x: (first.x + second.x) / 2, y: (first.y + second.y) / 2)
-    }
-
-    private static func distance(from start: Kernel.CADPoint, to end: Kernel.CADPoint) -> Double {
-        hypot(end.x - start.x, end.y - start.y)
-    }
-
-    private static func formattedMeasurement(_ value: Double) -> String {
-        let rounded = (value * 1000).rounded() / 1000
-        if abs(rounded - rounded.rounded()) < 0.0001 {
-            return String(Int(rounded.rounded()))
-        }
-        var text = String(format: "%.3f", rounded)
-        while text.last == "0" {
-            text.removeLast()
-        }
-        if text.last == "." {
-            text.removeLast()
-        }
-        return text
-    }
-
-    private static func makePath(from points: [Kernel.CADPoint], closed: Bool) -> Kernel.CADPath {
-        guard let first = points.first else { return Kernel.CADPath() }
-        var elements: [Kernel.CADPath.Element] = [.move(to: first)]
-        elements.append(contentsOf: points.dropFirst().map { .line(to: $0) })
-        if closed {
-            elements.append(.close)
-        }
-        return Kernel.CADPath(elements: elements)
-    }
-
-    private static func orderedPolylineVertices(
-        in pairs: [Pair],
-        xCode: Int,
-        yCode: Int,
-        bulgeCode: Int
-    ) -> [PolylineVertex] {
-        var vertices: [PolylineVertex] = []
-        var index = 0
-        while index < pairs.count {
-            guard pairs[index].code == xCode,
-                  let x = Double(pairs[index].value.trimmingCharacters(in: .whitespacesAndNewlines))
-            else {
-                index += 1
-                continue
-            }
-
-            var y: Double?
-            var bulge: Double = 0
-            var cursor = index + 1
-            while cursor < pairs.count, pairs[cursor].code != xCode {
-                if pairs[cursor].code == yCode {
-                    y = Double(pairs[cursor].value.trimmingCharacters(in: .whitespacesAndNewlines))
-                } else if pairs[cursor].code == bulgeCode {
-                    bulge = Double(pairs[cursor].value.trimmingCharacters(in: .whitespacesAndNewlines)) ?? 0
-                }
-                cursor += 1
-            }
-
-            if let y {
-                vertices.append(PolylineVertex(point: Kernel.CADPoint(x: x, y: y), bulge: bulge))
-            }
-            index += 1
-        }
-        return vertices
-    }
-
-    private static func tessellatedPolylinePoints(
-        vertices: [PolylineVertex],
-        closed: Bool
-    ) -> [Kernel.CADPoint] {
-        guard let first = vertices.first else { return [] }
-        var points = [first.point]
-        guard vertices.count >= 2 else { return points }
-
-        for index in 0..<(vertices.count - 1) {
-            appendBulgeSegment(
-                from: vertices[index],
-                to: vertices[index + 1].point,
-                into: &points
-            )
-        }
-        if closed, vertices.count > 2 {
-            appendBulgeSegment(
-                from: vertices[vertices.count - 1],
-                to: first.point,
-                into: &points
-            )
-        }
-        return points
-    }
-
-    private static func appendBulgeSegment(
-        from startVertex: PolylineVertex,
-        to end: Kernel.CADPoint,
-        into points: inout [Kernel.CADPoint]
-    ) {
-        let start = startVertex.point
-        let bulge = startVertex.bulge
-        guard abs(bulge) > 0.000001 else {
-            appendDistinct(end, into: &points)
-            return
-        }
-
-        let dx = end.x - start.x
-        let dy = end.y - start.y
-        let chord = hypot(dx, dy)
-        guard chord.isFinite, chord > .ulpOfOne else {
-            return
-        }
-
-        let theta = 4 * atan(bulge)
-        let radius = chord * (1 + bulge * bulge) / (4 * abs(bulge))
-        let centerOffset = chord * (1 - bulge * bulge) / (4 * bulge)
-        let midX = (start.x + end.x) / 2
-        let midY = (start.y + end.y) / 2
-        let normalX = -dy / chord
-        let normalY = dx / chord
-        let center = Kernel.CADPoint(
-            x: midX + normalX * centerOffset,
-            y: midY + normalY * centerOffset
-        )
-        guard radius.isFinite, radius > 0, center.x.isFinite, center.y.isFinite else {
-            appendDistinct(end, into: &points)
-            return
-        }
-
-        let startAngle = atan2(start.y - center.y, start.x - center.x)
-        let endAngle = atan2(end.y - center.y, end.x - center.x)
-        var sweep = endAngle - startAngle
-        if theta > 0 {
-            while sweep <= 0 {
-                sweep += 2 * .pi
-            }
-        } else {
-            while sweep >= 0 {
-                sweep -= 2 * .pi
-            }
-        }
-
-        let segmentCount = min(max(Int(ceil(abs(sweep) / (.pi / 24))), 4), 96)
-        for index in 1...segmentCount {
-            let t = Double(index) / Double(segmentCount)
-            let angle = startAngle + sweep * t
-            appendDistinct(
-                Kernel.CADPoint(
-                    x: center.x + cos(angle) * radius,
-                    y: center.y + sin(angle) * radius
-                ),
-                into: &points
-            )
-        }
-    }
-
-    private static func appendDistinct(_ point: Kernel.CADPoint, into points: inout [Kernel.CADPoint]) {
-        guard point.x.isFinite, point.y.isFinite else { return }
-        if let previous = points.last,
-           abs(previous.x - point.x) < 0.000001,
-           abs(previous.y - point.y) < 0.000001 {
-            return
-        }
-        points.append(point)
-    }
-
-    private static func unsupportedRecord(
-        type: String,
-        pairs: [Pair],
-        code: String,
-        reason: String
-    ) -> EntityRecord {
-        EntityRecord(
-            kind: .unsupported,
-            layerID: layerID(from: pairs),
-            handle: firstString(code: 5, in: pairs),
-            path: nil,
-            text: nil,
-            bounds: .empty,
-            colorARGB: colorARGB(from: pairs, defaultACI: nil),
-            lineWeight: lineWeight(from: pairs),
-            visibility: visibility(from: pairs),
-            sourceType: type,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: code,
-                    message: reason,
-                    detail: firstString(code: 5, in: pairs)
-                )
-            ],
-            unsupportedReason: reason
-        )
-    }
-
-    private static func tessellatedArcPath(
-        center: Kernel.CADPoint,
-        radius: Double,
-        startDegrees: Double,
-        endDegrees: Double,
-        closed: Bool
-    ) -> Kernel.CADPath {
-        var resolvedEnd = endDegrees
-        while resolvedEnd < startDegrees {
-            resolvedEnd += 360
-        }
-        let sweep = max(resolvedEnd - startDegrees, 0.001)
-        let segmentCount = max(8, min(96, Int(ceil(sweep / 8))))
-        let points = (0...segmentCount).map { index -> Kernel.CADPoint in
-            let t = Double(index) / Double(segmentCount)
-            let degrees = startDegrees + sweep * t
-            let radians = degrees * .pi / 180
-            return Kernel.CADPoint(
-                x: center.x + cos(radians) * radius,
-                y: center.y + sin(radians) * radius
-            )
-        }
-        guard let first = points.first else { return Kernel.CADPath() }
-        var elements: [Kernel.CADPath.Element] = [.move(to: first)]
-        elements.append(contentsOf: points.dropFirst().map { .line(to: $0) })
-        if closed {
-            elements.append(.close)
-        }
-        return Kernel.CADPath(elements: elements)
-    }
-
-    private static func expandInsertRecords(
-        _ records: [EntityRecord],
-        blocksByName: [String: BlockDefinition],
-        transform: Kernel.CADTransform = .identity,
-        inheritedLayoutID: String? = nil,
-        inheritedLayerID: String? = nil,
-        inheritedColorARGB: UInt32? = nil,
-        inheritedLineWeight: Double? = nil,
-        inheritedLineType: String? = nil,
-        activeBlocks: Set<String> = []
-    ) -> [EntityRecord] {
-        records.flatMap { record -> [EntityRecord] in
-            if record.kind == .insert {
-                guard let name = record.blockName?.trimmingCharacters(in: .whitespacesAndNewlines),
-                      !name.isEmpty else {
-                    return [
-                        unresolvedInsertRecord(
-                            for: record,
-                            transform: transform,
-                            inheritedLayoutID: inheritedLayoutID,
-                            inheritedLayerID: inheritedLayerID,
-                            inheritedColorARGB: inheritedColorARGB,
-                            inheritedLineWeight: inheritedLineWeight,
-                            inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_NAME_MISSING",
-                            reason: "INSERT has no block name.",
-                            detail: record.handle
-                        )
-                    ]
-                }
-                let normalizedBlockName = normalized(name)
-                guard !activeBlocks.contains(normalizedBlockName) else {
-                    return [
-                        unresolvedInsertRecord(
-                            for: record,
-                            transform: transform,
-                            inheritedLayoutID: inheritedLayoutID,
-                            inheritedLayerID: inheritedLayerID,
-                            inheritedColorARGB: inheritedColorARGB,
-                            inheritedLineWeight: inheritedLineWeight,
-                            inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_CYCLE",
-                            reason: "Nested block cycle detected.",
-                            detail: (Array(activeBlocks) + [normalizedBlockName]).joined(separator: " -> ")
-                        )
-                    ]
-                }
-                guard let block = blockDefinition(named: name, in: blocksByName) else {
-                    return [
-                        unresolvedInsertRecord(
-                            for: record,
-                            transform: transform,
-                            inheritedLayoutID: inheritedLayoutID,
-                            inheritedLayerID: inheritedLayerID,
-                            inheritedColorARGB: inheritedColorARGB,
-                            inheritedLineWeight: inheritedLineWeight,
-                            inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_MISSING",
-                            reason: "Referenced block is missing.",
-                            detail: name
-                        )
-                    ]
-                }
-                let insertLayoutID = record.layoutID == Kernel.CADLayout.modelSpace.id
-                    ? (inheritedLayoutID ?? record.layoutID)
-                    : record.layoutID
-                let insertLayerID = record.layerID == Kernel.CADLayer.default.id
-                    ? inheritedLayerID
-                    : record.layerID
-                let insertColorARGB = record.colorARGB ?? inheritedColorARGB
-                let insertLineWeight = record.lineWeight ?? inheritedLineWeight
-                let insertLineType = resolvedInheritedLineType(
-                    record.lineType,
-                    inheritedLineType: inheritedLineType
-                )
-                let blockBaseTransform = Kernel.CADTransform.translation(
-                    x: -block.basePoint.x,
-                    y: -block.basePoint.y
-                )
-                let attachedAttributeTags = Set(record.attachedAttributes.compactMap {
-                    $0.attributeTag.map(normalized)
-                })
-                let blockRecords = block.records.filter { blockRecord in
-                    guard normalized(blockRecord.sourceType ?? "") == "ATTDEF",
-                          let tag = blockRecord.attributeTag.map(normalized) else {
-                        return true
-                    }
-                    return !attachedAttributeTags.contains(tag)
-                }
-
-                return insertArrayTransforms(for: record).flatMap { arrayTransform in
-                    let insertTransform = arrayTransform.concatenating(blockBaseTransform)
-                    let combinedTransform = transform.concatenating(insertTransform)
-                    if block.isXref {
-                        return [
-                            xrefRecord(
-                                for: record,
-                                block: block,
-                                transform: combinedTransform,
-                                inheritedLayoutID: insertLayoutID,
-                                inheritedLayerID: insertLayerID,
-                                inheritedColorARGB: insertColorARGB,
-                                inheritedLineWeight: insertLineWeight,
-                                inheritedLineType: insertLineType
-                            )
-                        ]
-                    }
-
-                    let expandedBlockRecords = expandInsertRecords(
-                        blockRecords,
-                        blocksByName: blocksByName,
-                        transform: combinedTransform,
-                        inheritedLayoutID: insertLayoutID,
-                        inheritedLayerID: insertLayerID,
-                        inheritedColorARGB: insertColorARGB,
-                        inheritedLineWeight: insertLineWeight,
-                        inheritedLineType: insertLineType,
-                        activeBlocks: activeBlocks.union([normalizedBlockName])
-                    )
-                    let expandedAttributes = record.attachedAttributes.map {
-                        $0.applying(
-                            combinedTransform,
-                            inheritedLayoutID: insertLayoutID,
-                            inheritedLayerID: insertLayerID,
-                            inheritedColorARGB: insertColorARGB,
-                            inheritedLineWeight: insertLineWeight,
-                            inheritedLineType: insertLineType
-                        )
-                    }
-                    return expandedBlockRecords + expandedAttributes
-                }
-            }
-
-            guard record.kind != .insert else { return [] }
-            return [
-                record.applying(
-                    transform,
-                    inheritedLayoutID: inheritedLayoutID,
-                    inheritedLayerID: inheritedLayerID,
-                    inheritedColorARGB: inheritedColorARGB,
-                    inheritedLineWeight: inheritedLineWeight,
-                    inheritedLineType: inheritedLineType
-                )
-            ]
-        }
-    }
-
-    private static func xrefRecord(
-        for insert: EntityRecord,
-        block: BlockDefinition,
-        transform: Kernel.CADTransform,
-        inheritedLayoutID: String?,
-        inheritedLayerID: String?,
-        inheritedColorARGB: UInt32?,
-        inheritedLineWeight: Double?,
-        inheritedLineType: String?
-    ) -> EntityRecord {
-        let anchor = transform.apply(to: .zero)
-        let bounds = Kernel.CADBounds(
-            minX: anchor.x - 0.5,
-            minY: anchor.y - 0.5,
-            maxX: anchor.x + 0.5,
-            maxY: anchor.y + 0.5
-        )
-        let reason = "XREF \(block.name) is referenced but not loaded by the CAD Metal PoC."
-        return EntityRecord(
-            kind: .xref,
-            layerID: insert.layerID == Kernel.CADLayer.default.id
-                ? (inheritedLayerID ?? Kernel.CADLayer.default.id)
-                : insert.layerID,
-            handle: insert.handle,
-            path: nil,
-            text: nil,
-            bounds: bounds,
-            layoutID: insert.layoutID == Kernel.CADLayout.modelSpace.id
-                ? (inheritedLayoutID ?? insert.layoutID)
-                : insert.layoutID,
-            colorARGB: insert.colorARGB ?? inheritedColorARGB,
-            lineWeight: insert.lineWeight ?? inheritedLineWeight,
-            lineType: resolvedInheritedLineType(insert.lineType, inheritedLineType: inheritedLineType),
-            visibility: insert.visibility,
-            sourceType: "XREF",
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: "CAD_POC_XREF_NOT_LOADED",
-                    message: reason,
-                    detail: block.xrefPath ?? block.name
-                )
-            ],
-            unsupportedReason: reason
-        )
-    }
-
-    private static func resolvedInheritedLineType(
-        _ lineType: String?,
-        inheritedLineType: String?
-    ) -> String? {
-        let trimmed = lineType?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        if trimmed.caseInsensitiveCompare("ByBlock") == .orderedSame || trimmed.isEmpty {
-            return inheritedLineType
-        }
-        return trimmed
-    }
-
-    private static func blockDefinition(
-        named name: String,
-        in blocksByName: [String: BlockDefinition]
-    ) -> BlockDefinition? {
-        if let block = blocksByName[name] {
-            return block
-        }
-        let normalizedName = normalized(name)
-        return blocksByName.first { normalized($0.key) == normalizedName }?.value
-    }
-
-    private static func insertArrayTransforms(for record: EntityRecord) -> [Kernel.CADTransform] {
-        let base = record.insertTransform ?? .identity
-        let columnCount = max(record.insertColumnCount, 1)
-        let rowCount = max(record.insertRowCount, 1)
-        let maxExpandedInserts = 4_096
-        let requestedCount = columnCount * rowCount
-        let expandedCount = min(requestedCount, maxExpandedInserts)
-        var transforms: [Kernel.CADTransform] = []
-        transforms.reserveCapacity(expandedCount)
-
-        for row in 0..<rowCount {
-            for column in 0..<columnCount {
-                if transforms.count >= maxExpandedInserts {
-                    return transforms
-                }
-                let offset = Kernel.CADTransform.translation(
-                    x: Double(column) * record.insertColumnSpacing,
-                    y: Double(row) * record.insertRowSpacing
-                )
-                transforms.append(base.concatenating(offset))
-            }
-        }
-        return transforms.isEmpty ? [base] : transforms
-    }
-
-    private static func unresolvedInsertRecord(
-        for insert: EntityRecord,
-        transform: Kernel.CADTransform,
-        inheritedLayoutID: String?,
-        inheritedLayerID: String?,
-        inheritedColorARGB: UInt32?,
-        inheritedLineWeight: Double?,
-        inheritedLineType: String?,
-        code: String,
-        reason: String,
-        detail: String?
-    ) -> EntityRecord {
-        let insertTransform = insert.insertTransform ?? .identity
-        let combinedTransform = transform.concatenating(insertTransform)
-        let anchor = combinedTransform.apply(to: .zero)
-        let bounds = Kernel.CADBounds(
-            minX: anchor.x - 0.5,
-            minY: anchor.y - 0.5,
-            maxX: anchor.x + 0.5,
-            maxY: anchor.y + 0.5
-        )
-        return EntityRecord(
-            kind: .unsupported,
-            layerID: insert.layerID == Kernel.CADLayer.default.id
-                ? (inheritedLayerID ?? Kernel.CADLayer.default.id)
-                : insert.layerID,
-            handle: insert.handle,
-            path: nil,
-            text: nil,
-            bounds: bounds,
-            layoutID: insert.layoutID == Kernel.CADLayout.modelSpace.id
-                ? (inheritedLayoutID ?? insert.layoutID)
-                : insert.layoutID,
-            colorARGB: insert.colorARGB ?? inheritedColorARGB,
-            lineWeight: insert.lineWeight ?? inheritedLineWeight,
-            lineType: resolvedInheritedLineType(insert.lineType, inheritedLineType: inheritedLineType),
-            visibility: insert.visibility,
-            sourceType: insert.sourceType,
-            diagnostics: [
-                Kernel.CADDrawingDiagnostics.Entry(
-                    severity: .warning,
-                    code: code,
-                    message: reason,
-                    detail: detail
-                )
-            ],
-            unsupportedReason: reason
-        )
-    }
-
-    private static func rotationRadians(from transform: Kernel.CADTransform) -> Double {
-        atan2(transform.matrix.b, transform.matrix.a)
-    }
-
-    private static func orderedPoints(in pairs: [Pair], xCode: Int, yCode: Int) -> [Kernel.CADPoint] {
-        var points: [Kernel.CADPoint] = []
-        var index = 0
-        while index < pairs.count {
-            guard pairs[index].code == xCode,
-                  let x = Double(pairs[index].value.trimmingCharacters(in: .whitespacesAndNewlines))
-            else {
-                index += 1
-                continue
-            }
-
-            var y: Double?
-            var cursor = index + 1
-            while cursor < pairs.count, pairs[cursor].code != xCode {
-                if pairs[cursor].code == yCode {
-                    y = Double(pairs[cursor].value.trimmingCharacters(in: .whitespacesAndNewlines))
-                    break
-                }
-                cursor += 1
-            }
-            if let y {
-                points.append(Kernel.CADPoint(x: x, y: y))
-            }
-            index += 1
-        }
-        return points
-    }
-
-    private static func point(in pairs: [Pair], xCode: Int, yCode: Int) -> Kernel.CADPoint? {
-        guard let x = firstDouble(code: xCode, in: pairs),
-              let y = firstDouble(code: yCode, in: pairs) else {
-            return nil
-        }
-        return Kernel.CADPoint(x: x, y: y)
-    }
-
-    private static func firstInt(code: Int, in pairs: [Pair]) -> Int? {
-        guard let value = pairs.first(where: { $0.code == code })?.value else { return nil }
-        return Int(value.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private static func firstDouble(code: Int, in pairs: [Pair]) -> Double? {
-        guard let value = pairs.first(where: { $0.code == code })?.value else { return nil }
-        return Double(value.trimmingCharacters(in: .whitespacesAndNewlines))
-    }
-
-    private static func allDoubles(code: Int, in pairs: [Pair]) -> [Double] {
-        pairs.compactMap { pair in
-            guard pair.code == code else { return nil }
-            return Double(pair.value.trimmingCharacters(in: .whitespacesAndNewlines))
-        }
-    }
-
-    private static func positiveOrNil(_ value: Double?) -> Double? {
-        guard let value, value > 0 else { return nil }
-        return value
-    }
-
-    private static func lineWeight(from pairs: [Pair]) -> Double? {
-        guard let raw = firstInt(code: 370, in: pairs), raw >= 0 else { return nil }
-        return Double(raw) / 100
-    }
-
-    private static func lineType(from pairs: [Pair]) -> String? {
-        let value = firstString(code: 6, in: pairs)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let value, !value.isEmpty else { return nil }
-        return value
-    }
-
-    private static func colorARGB(from pairs: [Pair], defaultACI: Int?) -> UInt32? {
-        if let trueColor = firstInt(code: 420, in: pairs), trueColor > 0 {
-            return 0xFF000000 | UInt32(trueColor & 0x00FF_FFFF)
-        }
-        if let aci = firstInt(code: 62, in: pairs) {
-            if aci == 0 || abs(aci) == 256 {
-                return nil
-            }
-            return aciToARGB(abs(aci))
-        }
-        if let defaultACI {
-            return aciToARGB(abs(defaultACI))
-        }
-        return nil
-    }
-
-    private static func aciToARGB(_ index: Int) -> UInt32 {
-        switch index {
-        case 1:
-            return 0xFFFF0000
-        case 2:
-            return 0xFFFFFF00
-        case 3:
-            return 0xFF00FF00
-        case 4:
-            return 0xFF00FFFF
-        case 5:
-            return 0xFF0000FF
-        case 6:
-            return 0xFFFF00FF
-        case 7:
-            return 0xFF2F3437
-        case 8:
-            return 0xFF808080
-        case 9:
-            return 0xFFC0C0C0
-        default:
-            let normalized = Double((index - 1) % 24) / 24
-            let hue = normalized * 6
-            let c = 1.0
-            let x = c * (1 - abs(hue.truncatingRemainder(dividingBy: 2) - 1))
-            let rgb: (Double, Double, Double)
-            switch hue {
-            case 0..<1: rgb = (c, x, 0)
-            case 1..<2: rgb = (x, c, 0)
-            case 2..<3: rgb = (0, c, x)
-            case 3..<4: rgb = (0, x, c)
-            case 4..<5: rgb = (x, 0, c)
-            default: rgb = (c, 0, x)
-            }
-            let r = UInt32(max(0, min(255, Int(rgb.0 * 255))))
-            let g = UInt32(max(0, min(255, Int(rgb.1 * 255))))
-            let b = UInt32(max(0, min(255, Int(rgb.2 * 255))))
-            return 0xFF000000 | (r << 16) | (g << 8) | b
-        }
-    }
-
-    private static func visibility(from pairs: [Pair]) -> Kernel.CADVisibility {
-        if (firstInt(code: 60, in: pairs) ?? 0) == 1 {
-            return .hidden
-        }
-        if let aci = firstInt(code: 62, in: pairs), aci < 0 {
-            return .hidden
-        }
-        return .visible
-    }
-
-    private static func firstString(code: Int, in pairs: [Pair]) -> String? {
-        pairs.first(where: { $0.code == code })?.value
-    }
-
-    private static func joinedText(from pairs: [Pair], acceptedCodes: Set<Int>) -> String {
-        pairs
-            .filter { acceptedCodes.contains($0.code) }
-            .map(\.value)
-            .joined()
-    }
-
-    private static func attributeTag(type: String, pairs: [Pair]) -> String? {
-        guard type == "ATTRIB" || type == "ATTDEF" else { return nil }
-        let value = firstString(code: 2, in: pairs)?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return value?.isEmpty == false ? value : nil
-    }
-
-    private static func layerID(from pairs: [Pair]) -> String {
-        let layer = firstString(code: 8, in: pairs)?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (layer?.isEmpty == false ? layer : nil) ?? Kernel.CADLayer.default.id
-    }
-
-    private static func layoutID(from pairs: [Pair]) -> String? {
-        if let layoutName = firstString(code: 410, in: pairs)?
-            .trimmingCharacters(in: .whitespacesAndNewlines),
-           !layoutName.isEmpty {
-            return normalized(layoutName) == "MODEL" ? Kernel.CADLayout.modelSpace.id : layoutName
-        }
-        if (firstInt(code: 67, in: pairs) ?? 0) == 1 {
-            return "paper"
-        }
-        return nil
-    }
-
-    private static func blockName(from pairs: [Pair]) -> String? {
-        let name = (firstString(code: 2, in: pairs) ?? firstString(code: 3, in: pairs))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return name?.isEmpty == false ? name : nil
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
-    }
 }
 
 private actor CADImportResultCache {
@@ -3692,7 +1540,7 @@ private actor CADImportResultCache {
     }
 }
 
-private extension DXFBasic2DParser.EntityRecord {
+extension DXFBasic2DParser.EntityRecord {
     func applying(
         _ transform: SiteKeeperCADKernel.CADTransform,
         inheritedLayoutID: String?,
@@ -3756,6 +1604,17 @@ private extension SiteKeeperCADKernel.CADPath {
 private extension String {
     var containsUnicodeReplacementCharacter: Bool {
         unicodeScalars.contains { $0.value == 0xFFFD }
+    }
+
+    var cadContainsCJKScalars: Bool {
+        unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(scalar.value)
+                || (0x3400...0x4DBF).contains(scalar.value)
+                || (0x20000...0x2A6DF).contains(scalar.value)
+                || (0x2A700...0x2B73F).contains(scalar.value)
+                || (0x2B740...0x2B81F).contains(scalar.value)
+                || (0x2B820...0x2CEAF).contains(scalar.value)
+        }
     }
 
     var stableCADImportHash: String {

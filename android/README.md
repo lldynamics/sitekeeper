@@ -21,7 +21,7 @@ This is the native Android port workspace for Sitekeeper.
 - Project detail: opens from the project list, shows linked daily logs plus open site todos, and supports adding logs and todos locally.
 - Project detail: daily logs, site todos, and project documents can link to construction methods; linked method IDs round-trip through backup JSON.
 - Project detail: shows a generated project timeline that combines logs, todos, progress, finance, materials, documents, drawings, quotes, labor, and warehouse movements.
-- Project detail: exports a project delivery ZIP package through Android document picker with a Markdown report, file manifest, archived project documents, drawing files, and site photos.
+- Project detail: exports a project delivery ZIP package through Android document picker with a Markdown report, file manifest, archived project documents, drawing files, and site photos; before export it shows a delivery preflight with actual packaged file counts and missing-file details.
 - Project detail: supports progress tasks with start date, due date, completion, edit, delete, and done/reopen actions.
 - Project detail: supports project contacts with add, edit, delete, phone/company/note fields, and backup import/export.
 - Project detail: supports project document metadata with add, edit, delete, category/file/page/amount/note fields, private local file archive/pick/open/delete, archive status checks, missing-file warnings, and backup package import/export.
@@ -34,7 +34,7 @@ This is the native Android port workspace for Sitekeeper.
 - Project detail: supports archiving/restoring projects and confirmed deletion for logs, todos, financial records, and material items.
 - Checklist tab: aggregates todos across projects with overdue/status, priority, owner, project, and text filtering; rows support open project, edit, delete, and done/reopen.
 - Notes tab: supports local quick notes with project links, search, edit, delete, local attachment pick/open/remove, and backup import/export for quick note metadata plus attachment files.
-- Profile tab: previews backup record counts, supports merge import and replace import, keeps legacy JSON import compatibility, exports ZIP backup packages with `backup.json`, `data/backup.json`, archived project document files, archived photo files, archived drawing files, and archived quick note attachment files; preflights attachment/document/photo/drawing/quick-note attachment mismatches before import, and can report/clean orphaned document archive files.
+- Profile tab: previews backup record counts, supports merge import and replace import, keeps legacy JSON import compatibility, exports ZIP backup packages with `backup.json`, `data/backup.json`, archived project document files, archived photo files, archived drawing files, and archived quick note attachment files; preflights attachment/document/photo/drawing/quick-note attachment mismatches before import, and can run local data health checks for missing/orphaned documents, photos, drawings, and quick note attachments, including missing-item detail rows, project jump links, and project整改待办 generation for missing originals.
 
 ## Build
 

@@ -117,11 +117,25 @@ struct CADCanvasTextImportOptions: Equatable {
     var preferredTextCodePage: Int32?
     var preferredTextBigFont: Int32?
     var fontMappings: [CADRendererFontMapping]
+    var preferredDisplayFontName: String?
+
+    init(
+        preferredTextCodePage: Int32? = nil,
+        preferredTextBigFont: Int32? = nil,
+        fontMappings: [CADRendererFontMapping] = [],
+        preferredDisplayFontName: String? = nil
+    ) {
+        self.preferredTextCodePage = preferredTextCodePage
+        self.preferredTextBigFont = preferredTextBigFont
+        self.fontMappings = fontMappings
+        self.preferredDisplayFontName = preferredDisplayFontName
+    }
 
     static let automatic = CADCanvasTextImportOptions(
         preferredTextCodePage: nil,
         preferredTextBigFont: nil,
-        fontMappings: []
+        fontMappings: [],
+        preferredDisplayFontName: nil
     )
 }
 
@@ -262,7 +276,8 @@ struct CADCanvasView: UIViewRepresentable {
                 let engine = CADPoC.LibreDWGNativeImportEngine(
                     preferredTextCodePage: textImportOptions.preferredTextCodePage,
                     preferredTextBigFont: textImportOptions.preferredTextBigFont,
-                    fontMappings: textImportOptions.fontMappings
+                    fontMappings: textImportOptions.fontMappings,
+                    preferredDisplayFontName: textImportOptions.preferredDisplayFontName
                 )
                 guard engine.canImport(file: file) else {
                     self?.applyUnsupportedTrace(file: file, source: engine.id)

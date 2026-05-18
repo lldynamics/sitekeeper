@@ -30,6 +30,39 @@ internal data class ProjectDeliveryPackageExportResult(
     val missingFileCount: Int
 )
 
+internal data class ProjectDeliveryPackagePreflight(
+    val documentFileCount: Int,
+    val drawingFileCount: Int,
+    val photoFileCount: Int,
+    val missingFiles: List<String>
+) {
+    val packagedFileCount: Int
+        get() = documentFileCount + drawingFileCount + photoFileCount
+
+    val missingFileCount: Int
+        get() = missingFiles.size
+}
+
+internal suspend fun projectDeliveryPackagePreflight(
+    context: Context,
+    detail: ProjectDetail
+): ProjectDeliveryPackagePreflight =
+    withContext(Dispatchers.IO) {
+        projectDeliveryPackageFilePlan(
+            context = context,
+            detail = detail
+        ).toPreflight()
+    }
+
+internal fun projectDeliveryPackagePreflightSummaryText(
+    preflight: ProjectDeliveryPackagePreflight
+): String =
+    if (preflight.missingFileCount == 0) {
+        "交付文件齐全，可打包 ${preflight.packagedFileCount} 个原文件"
+    } else {
+        "缺失 ${preflight.missingFileCount} 个原文件，可先补齐再导出"
+    }
+
 internal suspend fun writeProjectDeliveryPackageToUri(
     context: Context,
     uri: Uri,
@@ -40,12 +73,8 @@ internal suspend fun writeProjectDeliveryPackageToUri(
             context = context,
             detail = detail
         )
-        val result = ProjectDeliveryPackageExportResult(
-            documentFileCount = filePlan.files.count { it.kind == DeliveryPackageFileKind.Document },
-            drawingFileCount = filePlan.files.count { it.kind == DeliveryPackageFileKind.Drawing },
-            photoFileCount = filePlan.files.count { it.kind == DeliveryPackageFileKind.Photo },
-            missingFileCount = filePlan.missingFiles.size
-        )
+        val preflight = filePlan.toPreflight()
+        val result = preflight.toExportResult()
         val usedEntryNames = mutableSetOf<String>()
         val reportEntryName = uniqueZipEntryName("交付报告.md", usedEntryNames)
         val manifestEntryName = uniqueZipEntryName("文件清单.md", usedEntryNames)
@@ -135,6 +164,22 @@ private enum class DeliveryPackageFileKind {
     Drawing,
     Photo
 }
+
+private fun ProjectDeliveryPackageFilePlan.toPreflight(): ProjectDeliveryPackagePreflight =
+    ProjectDeliveryPackagePreflight(
+        documentFileCount = files.count { it.kind == DeliveryPackageFileKind.Document },
+        drawingFileCount = files.count { it.kind == DeliveryPackageFileKind.Drawing },
+        photoFileCount = files.count { it.kind == DeliveryPackageFileKind.Photo },
+        missingFiles = missingFiles
+    )
+
+private fun ProjectDeliveryPackagePreflight.toExportResult(): ProjectDeliveryPackageExportResult =
+    ProjectDeliveryPackageExportResult(
+        documentFileCount = documentFileCount,
+        drawingFileCount = drawingFileCount,
+        photoFileCount = photoFileCount,
+        missingFileCount = missingFileCount
+    )
 
 private fun projectDeliveryPackageFilePlan(
     context: Context,

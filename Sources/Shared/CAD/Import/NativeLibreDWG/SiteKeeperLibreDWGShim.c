@@ -16,6 +16,7 @@
 #define SITEKEEPER_MAX_FILLED_HATCH_POINTS 64
 
 static int sitekeeper_object_matches(const Dwg_Object *object, int type);
+static SiteKeeperLibreDWGPoint sitekeeper_point_from_3bd(BITCODE_3BD point);
 
 typedef struct SiteKeeperLibreDWGTransform {
     double m11;
@@ -26,6 +27,34 @@ typedef struct SiteKeeperLibreDWGTransform {
     double ty;
     int32_t layoutSpace;
 } SiteKeeperLibreDWGTransform;
+
+static int sitekeeper_process_entity(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    SiteKeeperLibreDWGTransform transform,
+    int depth
+);
+
+static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_from_ref(
+    Dwg_Data *dwg,
+    Dwg_Object_Ref *block_ref,
+    Dwg_Object **block_object
+);
+
+static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_values(
+    BITCODE_3DPOINT ins_pt,
+    BITCODE_3DPOINT scale,
+    double rotation,
+    Dwg_Object_BLOCK_HEADER *block_header
+);
+
+static SiteKeeperLibreDWGTransform sitekeeper_compose_transform(
+    SiteKeeperLibreDWGTransform parent,
+    SiteKeeperLibreDWGTransform child
+);
 
 static SiteKeeperLibreDWGTransform sitekeeper_identity_transform(void)
 {
@@ -89,6 +118,115 @@ static double sitekeeper_transform_scale(const SiteKeeperLibreDWGTransform *tran
         return 1;
     }
     return scale;
+}
+
+static int sitekeeper_is_default_extrusion(BITCODE_BE extrusion)
+{
+    const double x = isfinite(extrusion.x) ? extrusion.x : 0;
+    const double y = isfinite(extrusion.y) ? extrusion.y : 0;
+    const double z = isfinite(extrusion.z) ? extrusion.z : 1;
+    return fabs(x) <= 0.000001
+        && fabs(y) <= 0.000001
+        && fabs(z - 1) <= 0.000001;
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_ocs_point_to_wcs_2d(
+    double x,
+    double y,
+    double z,
+    BITCODE_BE extrusion
+)
+{
+    SiteKeeperLibreDWGPoint point = {
+        isfinite(x) ? x : 0,
+        isfinite(y) ? y : 0
+    };
+    if (sitekeeper_is_default_extrusion(extrusion)) {
+        return point;
+    }
+
+    double nx = isfinite(extrusion.x) ? extrusion.x : 0;
+    double ny = isfinite(extrusion.y) ? extrusion.y : 0;
+    double nz = isfinite(extrusion.z) ? extrusion.z : 1;
+    const double normal_length = sqrt(nx * nx + ny * ny + nz * nz);
+    if (!isfinite(normal_length) || normal_length <= DBL_EPSILON) {
+        return point;
+    }
+    nx /= normal_length;
+    ny /= normal_length;
+    nz /= normal_length;
+
+    double ax = 0;
+    double ay = 0;
+    double az = 0;
+    if (fabs(nx) < 0.015625 && fabs(ny) < 0.015625) {
+        ax = nz;
+        ay = 0;
+        az = -nx;
+    } else {
+        ax = -ny;
+        ay = nx;
+        az = 0;
+    }
+    const double ax_length = sqrt(ax * ax + ay * ay + az * az);
+    if (!isfinite(ax_length) || ax_length <= DBL_EPSILON) {
+        return point;
+    }
+    ax /= ax_length;
+    ay /= ax_length;
+    az /= ax_length;
+
+    const double bx = ny * az - nz * ay;
+    const double by = nz * ax - nx * az;
+    const double resolved_z = isfinite(z) ? z : 0;
+
+    const double ox = isfinite(x) ? x : 0;
+    const double oy = isfinite(y) ? y : 0;
+    point.x = ox * ax + oy * bx + resolved_z * nx;
+    point.y = ox * ay + oy * by + resolved_z * ny;
+    return point;
+}
+
+static double sitekeeper_ocs_rotation_to_wcs_2d(double rotation, BITCODE_BE extrusion)
+{
+    const double resolved_rotation = isfinite(rotation) ? rotation : 0;
+    if (sitekeeper_is_default_extrusion(extrusion)) {
+        return resolved_rotation;
+    }
+
+    SiteKeeperLibreDWGPoint origin = sitekeeper_ocs_point_to_wcs_2d(0, 0, 0, extrusion);
+    SiteKeeperLibreDWGPoint axis = sitekeeper_ocs_point_to_wcs_2d(cos(resolved_rotation), sin(resolved_rotation), 0, extrusion);
+    const double dx = axis.x - origin.x;
+    const double dy = axis.y - origin.y;
+    if (!isfinite(dx) || !isfinite(dy) || hypot(dx, dy) <= DBL_EPSILON) {
+        return resolved_rotation;
+    }
+    return atan2(dy, dx);
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_text_anchor_point(
+    double insertion_x,
+    double insertion_y,
+    double alignment_x,
+    double alignment_y,
+    int32_t horizontal_alignment,
+    int32_t vertical_alignment
+)
+{
+    (void)horizontal_alignment;
+    (void)vertical_alignment;
+    SiteKeeperLibreDWGPoint point = { insertion_x, insertion_y };
+    const int insertion_is_missing = !isfinite(insertion_x)
+        || !isfinite(insertion_y)
+        || (fabs(insertion_x) <= DBL_EPSILON && fabs(insertion_y) <= DBL_EPSILON);
+    const int alignment_is_valid = isfinite(alignment_x)
+        && isfinite(alignment_y)
+        && (fabs(alignment_x) > DBL_EPSILON || fabs(alignment_y) > DBL_EPSILON);
+    if (insertion_is_missing && alignment_is_valid) {
+        point.x = alignment_x;
+        point.y = alignment_y;
+    }
+    return point;
 }
 
 static char *sitekeeper_copy_string(const char *value)
@@ -283,6 +421,19 @@ static Dwg_Object_STYLE *sitekeeper_style_from_ref(Dwg_Data *dwg, Dwg_Object_Ref
         return NULL;
     }
     return style_object->tio.object->tio.STYLE;
+}
+
+static Dwg_Object *sitekeeper_object_from_ref(Dwg_Data *dwg, Dwg_Object_Ref *object_ref)
+{
+    if (object_ref == NULL) {
+        return NULL;
+    }
+
+    Dwg_Object *object = object_ref->obj;
+    if (object == NULL && dwg != NULL) {
+        object = dwg_ref_object_silent(dwg, object_ref);
+    }
+    return object;
 }
 
 static Dwg_Object_DIMSTYLE *sitekeeper_dimstyle_from_ref(Dwg_Data *dwg, Dwg_Object_Ref *dimstyle_ref)
@@ -2202,6 +2353,501 @@ static int sitekeeper_append_mline(
     return appended;
 }
 
+static int sitekeeper_mleader_anchor_is_usable(SiteKeeperLibreDWGPoint point)
+{
+    return sitekeeper_point_is_finite(point)
+        && (fabs(point.x) > DBL_EPSILON || fabs(point.y) > DBL_EPSILON);
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_mleader_last_leader_point(const Dwg_MLEADER_AnnotContext *ctx)
+{
+    SiteKeeperLibreDWGPoint fallback = { 0, 0 };
+    if (ctx == NULL || ctx->leaders == NULL) {
+        return fallback;
+    }
+
+    for (BITCODE_BL leader_index = 0; leader_index < ctx->num_leaders; leader_index++) {
+        Dwg_LEADER_Node *node = &ctx->leaders[leader_index];
+        if (node->lines == NULL) {
+            continue;
+        }
+        for (BITCODE_BL line_index = 0; line_index < node->num_lines; line_index++) {
+            Dwg_LEADER_Line *line = &node->lines[line_index];
+            if (line->points == NULL || line->num_points <= 0) {
+                continue;
+            }
+            BITCODE_3DPOINT point = line->points[line->num_points - 1];
+            SiteKeeperLibreDWGPoint candidate = { point.x, point.y };
+            if (sitekeeper_mleader_anchor_is_usable(candidate)) {
+                return candidate;
+            }
+        }
+    }
+    return fallback;
+}
+
+static int sitekeeper_transform_is_usable(SiteKeeperLibreDWGTransform transform)
+{
+    const double scale_x = hypot(transform.m11, transform.m12);
+    const double scale_y = hypot(transform.m21, transform.m22);
+    return isfinite(transform.m11)
+        && isfinite(transform.m12)
+        && isfinite(transform.m21)
+        && isfinite(transform.m22)
+        && isfinite(transform.tx)
+        && isfinite(transform.ty)
+        && scale_x > DBL_EPSILON
+        && scale_y > DBL_EPSILON
+        && scale_x < 1.0e12
+        && scale_y < 1.0e12;
+}
+
+static double sitekeeper_point_distance_squared(
+    SiteKeeperLibreDWGPoint lhs,
+    SiteKeeperLibreDWGPoint rhs
+)
+{
+    const double dx = lhs.x - rhs.x;
+    const double dy = lhs.y - rhs.y;
+    return dx * dx + dy * dy;
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_transform_translation(SiteKeeperLibreDWGTransform transform)
+{
+    SiteKeeperLibreDWGPoint point = { transform.tx, transform.ty };
+    return point;
+}
+
+static int sitekeeper_mleader_matrix_transform(
+    const double *matrix,
+    SiteKeeperLibreDWGPoint expected_anchor,
+    SiteKeeperLibreDWGTransform *out
+)
+{
+    if (matrix == NULL || out == NULL) {
+        return 0;
+    }
+
+    // LibreDWG exposes AcGeMatrix3d data as a raw 16-double pointer. Builds have
+    // differed on row/column interpretation, so resolve both and choose the one
+    // whose translation matches the leader/content anchor.
+    SiteKeeperLibreDWGTransform column_major;
+    column_major.m11 = matrix[0];
+    column_major.m12 = matrix[1];
+    column_major.m21 = matrix[4];
+    column_major.m22 = matrix[5];
+    column_major.tx = matrix[12];
+    column_major.ty = matrix[13];
+    column_major.layoutSpace = 0;
+
+    SiteKeeperLibreDWGTransform row_major;
+    row_major.m11 = matrix[0];
+    row_major.m12 = matrix[4];
+    row_major.m21 = matrix[1];
+    row_major.m22 = matrix[5];
+    row_major.tx = matrix[3];
+    row_major.ty = matrix[7];
+    row_major.layoutSpace = 0;
+
+    const int column_ok = sitekeeper_transform_is_usable(column_major);
+    const int row_ok = sitekeeper_transform_is_usable(row_major);
+    if (!column_ok && !row_ok) {
+        return 0;
+    }
+    if (column_ok && !row_ok) {
+        *out = column_major;
+        return 1;
+    }
+    if (!column_ok && row_ok) {
+        *out = row_major;
+        return 1;
+    }
+
+    if (sitekeeper_mleader_anchor_is_usable(expected_anchor)) {
+        const double column_distance = sitekeeper_point_distance_squared(
+            sitekeeper_transform_translation(column_major),
+            expected_anchor
+        );
+        const double row_distance = sitekeeper_point_distance_squared(
+            sitekeeper_transform_translation(row_major),
+            expected_anchor
+        );
+        *out = column_distance <= row_distance ? column_major : row_major;
+        return 1;
+    }
+
+    *out = column_major;
+    return 1;
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_mleader_block_transform_anchor(
+    const Dwg_MLEADER_Content_Block *block,
+    SiteKeeperLibreDWGPoint fallback
+)
+{
+    if (block == NULL || block->transform == NULL) {
+        return fallback;
+    }
+    SiteKeeperLibreDWGTransform transform;
+    if (!sitekeeper_mleader_matrix_transform(block->transform, fallback, &transform)) {
+        return fallback;
+    }
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_transform_translation(transform);
+    return sitekeeper_mleader_anchor_is_usable(anchor) ? anchor : fallback;
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_mleader_content_anchor(Dwg_Entity_MULTILEADER *mleader)
+{
+    SiteKeeperLibreDWGPoint fallback = { 0, 0 };
+    if (mleader == NULL) {
+        return fallback;
+    }
+
+    Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+    SiteKeeperLibreDWGPoint candidate = { 0, 0 };
+    if (ctx->has_content_txt) {
+        candidate = sitekeeper_point_from_3bd(ctx->content.txt.location);
+        if (sitekeeper_mleader_anchor_is_usable(candidate)) {
+            return candidate;
+        }
+    }
+    if (ctx->has_content_blk) {
+        candidate = sitekeeper_point_from_3bd(ctx->content.blk.location);
+        candidate = sitekeeper_mleader_block_transform_anchor(&ctx->content.blk, candidate);
+        if (sitekeeper_mleader_anchor_is_usable(candidate)) {
+            return candidate;
+        }
+    }
+
+    candidate = sitekeeper_point_from_3bd(ctx->content_base);
+    if (sitekeeper_mleader_anchor_is_usable(candidate)) {
+        return candidate;
+    }
+
+    candidate = sitekeeper_point_from_3bd(ctx->base);
+    if (sitekeeper_mleader_anchor_is_usable(candidate)) {
+        return candidate;
+    }
+
+    return sitekeeper_mleader_last_leader_point(ctx);
+}
+
+static SiteKeeperLibreDWGPoint sitekeeper_mleader_label_anchor(
+    Dwg_Entity_MULTILEADER *mleader,
+    SiteKeeperLibreDWGPoint base,
+    BITCODE_BL label_index,
+    double text_height
+)
+{
+    SiteKeeperLibreDWGPoint point = base;
+    if (mleader == NULL || label_index == 0) {
+        return point;
+    }
+
+    Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+    double line_height = isfinite(text_height) && text_height > DBL_EPSILON
+        ? text_height * 1.25
+        : 3.125;
+
+    double vx = isfinite(ctx->base_vert.x) ? ctx->base_vert.x : 0;
+    double vy = isfinite(ctx->base_vert.y) ? ctx->base_vert.y : 0;
+    const double length = hypot(vx, vy);
+    if (isfinite(length) && length > DBL_EPSILON) {
+        vx /= length;
+        vy /= length;
+        point.x -= vx * line_height * (double)label_index;
+        point.y -= vy * line_height * (double)label_index;
+        return point;
+    }
+
+    point.y -= line_height * (double)label_index;
+    return point;
+}
+
+static int sitekeeper_mleader_block_content_transform(
+    Dwg_Object_Entity *entity,
+    Dwg_Entity_MULTILEADER *mleader,
+    const SiteKeeperLibreDWGTransform *parent_transform,
+    SiteKeeperLibreDWGTransform *out,
+    Dwg_Object **block_object_out
+)
+{
+    if (block_object_out != NULL) {
+        *block_object_out = NULL;
+    }
+    if (entity == NULL
+        || mleader == NULL
+        || out == NULL
+        || !mleader->ctx.has_content_blk) {
+        return 0;
+    }
+
+    Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+    Dwg_MLEADER_Content_Block *block = &ctx->content.blk;
+    Dwg_Object *block_object = NULL;
+    Dwg_Object_BLOCK_HEADER *block_header = sitekeeper_block_header_from_ref(
+        entity->dwg,
+        block->block_table,
+        &block_object
+    );
+    if (block_header == NULL || block_object == NULL) {
+        return 0;
+    }
+
+    BITCODE_3DPOINT insertion = block->location;
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_mleader_content_anchor(mleader);
+    if (!sitekeeper_mleader_anchor_is_usable((SiteKeeperLibreDWGPoint){ insertion.x, insertion.y })
+        && sitekeeper_mleader_anchor_is_usable(anchor)) {
+        insertion.x = anchor.x;
+        insertion.y = anchor.y;
+        insertion.z = 0;
+    }
+
+    SiteKeeperLibreDWGTransform content_transform;
+    if (!sitekeeper_mleader_matrix_transform(block->transform, anchor, &content_transform)) {
+        content_transform = sitekeeper_insert_transform_values(
+            insertion,
+            block->scale,
+            block->rotation,
+            block_header
+        );
+    }
+    *out = sitekeeper_compose_transform(
+        parent_transform != NULL ? *parent_transform : sitekeeper_identity_transform(),
+        content_transform
+    );
+    if (block_object_out != NULL) {
+        *block_object_out = block_object;
+    }
+    return 1;
+}
+
+static int sitekeeper_is_attdef_object(Dwg_Object *object)
+{
+    return object != NULL
+        && object->tio.entity != NULL
+        && sitekeeper_object_matches(object, (int)DWG_TYPE_ATTDEF)
+        && object->tio.entity->tio.ATTDEF != NULL;
+}
+
+static Dwg_Object *sitekeeper_attdef_from_block_by_index(Dwg_Object *block_object, long wanted_index)
+{
+    if (block_object == NULL || wanted_index < 0) {
+        return NULL;
+    }
+
+    long attdef_index = 0;
+    Dwg_Object *child = get_first_owned_entity(block_object);
+    while (child != NULL) {
+        if (sitekeeper_is_attdef_object(child)) {
+            if (attdef_index == wanted_index) {
+                return child;
+            }
+            attdef_index += 1;
+        }
+        child = get_next_owned_entity(block_object, child);
+    }
+    return NULL;
+}
+
+static Dwg_Object *sitekeeper_first_attdef_from_block(Dwg_Object *block_object)
+{
+    Dwg_Object *child = get_first_owned_entity(block_object);
+    while (child != NULL) {
+        if (sitekeeper_is_attdef_object(child)) {
+            return child;
+        }
+        child = get_next_owned_entity(block_object, child);
+    }
+    return NULL;
+}
+
+static Dwg_Object *sitekeeper_mleader_attdef_for_label(
+    Dwg_Data *dwg,
+    Dwg_Object *block_object,
+    Dwg_LEADER_BlockLabel *label,
+    BITCODE_BL label_index
+)
+{
+    if (label == NULL) {
+        return NULL;
+    }
+
+    Dwg_Object *attdef_object = sitekeeper_object_from_ref(dwg, label->attdef);
+    if (sitekeeper_is_attdef_object(attdef_object)) {
+        return attdef_object;
+    }
+
+    const long ui_index = (long)label->ui_index;
+    const long index = (long)label_index;
+    const long candidates[] = {
+        ui_index > 0 ? ui_index - 1 : ui_index,
+        ui_index,
+        index
+    };
+    for (size_t candidate_index = 0; candidate_index < sizeof(candidates) / sizeof(candidates[0]); candidate_index++) {
+        attdef_object = sitekeeper_attdef_from_block_by_index(block_object, candidates[candidate_index]);
+        if (sitekeeper_is_attdef_object(attdef_object)) {
+            return attdef_object;
+        }
+    }
+
+    return sitekeeper_first_attdef_from_block(block_object);
+}
+
+static int sitekeeper_append_mleader_block_label_at_attdef(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *mleader_entity,
+    Dwg_Object *mleader_object,
+    Dwg_Entity_MULTILEADER *mleader,
+    Dwg_LEADER_BlockLabel *label,
+    BITCODE_BL label_index,
+    Dwg_Object_STYLE *fallback_style,
+    const SiteKeeperLibreDWGTransform *parent_transform
+)
+{
+    if (label == NULL
+        || label->label_text == NULL
+        || label->label_text[0] == '\0'
+        || mleader_entity == NULL
+        || mleader == NULL) {
+        return 0;
+    }
+
+    SiteKeeperLibreDWGTransform content_transform;
+    Dwg_Object *block_object = NULL;
+    if (!sitekeeper_mleader_block_content_transform(
+            mleader_entity,
+            mleader,
+            parent_transform,
+            &content_transform,
+            &block_object
+        )) {
+        return 0;
+    }
+
+    Dwg_Object *attdef_object = sitekeeper_mleader_attdef_for_label(
+        mleader_entity->dwg,
+        block_object,
+        label,
+        label_index
+    );
+    if (!sitekeeper_is_attdef_object(attdef_object)) {
+        return 0;
+    }
+
+    Dwg_Entity_ATTDEF *attdef = attdef_object->tio.entity->tio.ATTDEF;
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        attdef->ins_pt.x,
+        attdef->ins_pt.y,
+        attdef->elevation,
+        attdef->extrusion
+    );
+    SiteKeeperLibreDWGPoint alignment = sitekeeper_ocs_point_to_wcs_2d(
+        attdef->alignment_pt.x,
+        attdef->alignment_pt.y,
+        attdef->elevation,
+        attdef->extrusion
+    );
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_text_anchor_point(
+        insertion.x,
+        insertion.y,
+        alignment.x,
+        alignment.y,
+        attdef->horiz_alignment,
+        attdef->vert_alignment
+    );
+
+    Dwg_Object_STYLE *style = sitekeeper_style_from_ref(mleader_entity->dwg, attdef->style);
+    if (style == NULL) {
+        style = fallback_style;
+    }
+    const double height = isfinite(attdef->height) && attdef->height > DBL_EPSILON
+        ? attdef->height
+        : (isfinite(mleader->ctx.text_height) && mleader->ctx.text_height > DBL_EPSILON ? mleader->ctx.text_height : 2.5);
+    const double box_width = isfinite(label->width) && label->width > DBL_EPSILON ? label->width : 0;
+    return sitekeeper_append_text_entity(
+        result,
+        entity_count,
+        entity_capacity,
+        mleader_entity,
+        mleader_object != NULL ? mleader_object : attdef_object,
+        SiteKeeperLibreDWGEntityKindAttrib,
+        label->label_text,
+        anchor.x,
+        anchor.y,
+        height,
+        sitekeeper_ocs_rotation_to_wcs_2d(attdef->rotation, attdef->extrusion),
+        attdef->width_factor,
+        box_width,
+        0,
+        attdef->horiz_alignment,
+        attdef->vert_alignment,
+        style,
+        &content_transform
+    );
+}
+
+static int sitekeeper_expand_mleader_block_content(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    Dwg_Entity_MULTILEADER *mleader,
+    const SiteKeeperLibreDWGTransform *parent_transform,
+    int depth
+)
+{
+    if (result == NULL
+        || entity == NULL
+        || object == NULL
+        || mleader == NULL
+        || !mleader->ctx.has_content_blk
+        || depth >= SITEKEEPER_MAX_INSERT_DEPTH) {
+        return 0;
+    }
+
+    Dwg_Object *block_object = NULL;
+    SiteKeeperLibreDWGTransform composed;
+    if (!sitekeeper_mleader_block_content_transform(
+            entity,
+            mleader,
+            parent_transform,
+            &composed,
+            &block_object
+        )
+        || block_object == NULL) {
+        return 0;
+    }
+
+    const int32_t before_count = *entity_count;
+    Dwg_Object *child = get_first_owned_entity(block_object);
+    while (child != NULL) {
+        if (child->tio.entity != NULL && sitekeeper_entity_is_visible(child->tio.entity)) {
+            if (mleader->blocklabels != NULL
+                && mleader->num_blocklabels > 0
+                && sitekeeper_object_matches(child, (int)DWG_TYPE_ATTDEF)) {
+                child = get_next_owned_entity(block_object, child);
+                continue;
+            }
+            sitekeeper_process_entity(
+                result,
+                entity_count,
+                entity_capacity,
+                child->tio.entity,
+                child,
+                composed,
+                depth + 1
+            );
+        }
+        child = get_next_owned_entity(block_object, child);
+    }
+    return *entity_count - before_count;
+}
+
 static int sitekeeper_append_multileader(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -2218,6 +2864,17 @@ static int sitekeeper_append_multileader(
     Dwg_Entity_MULTILEADER *mleader = entity->tio.MULTILEADER;
     int appended = 0;
     Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+
+    appended += sitekeeper_expand_mleader_block_content(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        mleader,
+        transform,
+        0
+    );
 
     if (ctx->leaders != NULL) {
         for (BITCODE_BL leader_index = 0; leader_index < ctx->num_leaders; leader_index++) {
@@ -2308,6 +2965,30 @@ static int sitekeeper_append_multileader(
             if (label->label_text == NULL || label->label_text[0] == '\0') {
                 continue;
             }
+            const double height = isfinite(ctx->text_height) && ctx->text_height > DBL_EPSILON
+                ? ctx->text_height
+                : 2.5;
+            int appended_from_attdef = sitekeeper_append_mleader_block_label_at_attdef(
+                result,
+                entity_count,
+                entity_capacity,
+                entity,
+                object,
+                mleader,
+                label,
+                label_index,
+                style,
+                transform
+            );
+            if (appended_from_attdef > 0) {
+                appended += appended_from_attdef;
+                continue;
+            }
+            SiteKeeperLibreDWGPoint anchor = sitekeeper_mleader_content_anchor(mleader);
+            if (!sitekeeper_mleader_anchor_is_usable(anchor)) {
+                anchor = sitekeeper_mleader_last_leader_point(ctx);
+            }
+            anchor = sitekeeper_mleader_label_anchor(mleader, anchor, label_index, height);
             appended += sitekeeper_append_text_entity(
                 result,
                 entity_count,
@@ -2316,9 +2997,9 @@ static int sitekeeper_append_multileader(
                 object,
                 SiteKeeperLibreDWGEntityKindMText,
                 label->label_text,
-                ctx->base.x,
-                ctx->base.y,
-                ctx->text_height,
+                anchor.x,
+                anchor.y,
+                height,
                 0,
                 1.0,
                 label->width,
@@ -2664,6 +3345,26 @@ static int sitekeeper_append_text(
     }
     Dwg_Entity_TEXT *text = entity->tio.TEXT;
     Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->ins_pt.x,
+        text->ins_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint alignment = sitekeeper_ocs_point_to_wcs_2d(
+        text->alignment_pt.x,
+        text->alignment_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_text_anchor_point(
+        insertion.x,
+        insertion.y,
+        alignment.x,
+        alignment.y,
+        text->horiz_alignment,
+        text->vert_alignment
+    );
     return sitekeeper_append_text_entity(
         result,
         entity_count,
@@ -2672,10 +3373,10 @@ static int sitekeeper_append_text(
         object,
         SiteKeeperLibreDWGEntityKindText,
         text->text_value,
-        text->ins_pt.x,
-        text->ins_pt.y,
+        anchor.x,
+        anchor.y,
         text->height,
-        text->rotation,
+        sitekeeper_ocs_rotation_to_wcs_2d(text->rotation, text->extrusion),
         text->width_factor,
         0,
         0,
@@ -2699,7 +3400,36 @@ static int sitekeeper_append_mtext(
         return 0;
     }
     Dwg_Entity_MTEXT *text = entity->tio.MTEXT;
-    const double rotation = atan2(text->x_axis_dir.y, text->x_axis_dir.x);
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->ins_pt.x,
+        text->ins_pt.y,
+        text->ins_pt.z,
+        text->extrusion
+    );
+    const double axis_length = sqrt(
+        text->x_axis_dir.x * text->x_axis_dir.x
+        + text->x_axis_dir.y * text->x_axis_dir.y
+        + text->x_axis_dir.z * text->x_axis_dir.z
+    );
+    double rotation = sitekeeper_ocs_rotation_to_wcs_2d(0, text->extrusion);
+    if (isfinite(axis_length) && axis_length > DBL_EPSILON) {
+        if (sitekeeper_is_default_extrusion(text->extrusion)) {
+            rotation = atan2(text->x_axis_dir.y, text->x_axis_dir.x);
+        } else {
+            SiteKeeperLibreDWGPoint axis_origin = sitekeeper_ocs_point_to_wcs_2d(0, 0, 0, text->extrusion);
+            SiteKeeperLibreDWGPoint axis_point = sitekeeper_ocs_point_to_wcs_2d(
+                text->x_axis_dir.x,
+                text->x_axis_dir.y,
+                text->x_axis_dir.z,
+                text->extrusion
+            );
+            const double dx = axis_point.x - axis_origin.x;
+            const double dy = axis_point.y - axis_origin.y;
+            if (isfinite(dx) && isfinite(dy) && hypot(dx, dy) > DBL_EPSILON) {
+                rotation = atan2(dy, dx);
+            }
+        }
+    }
     Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
     return sitekeeper_append_text_entity(
         result,
@@ -2709,8 +3439,8 @@ static int sitekeeper_append_mtext(
         object,
         SiteKeeperLibreDWGEntityKindMText,
         text->text,
-        text->ins_pt.x,
-        text->ins_pt.y,
+        insertion.x,
+        insertion.y,
         text->text_height,
         rotation,
         1.0,
@@ -2737,6 +3467,26 @@ static int sitekeeper_append_attrib(
     }
     Dwg_Entity_ATTRIB *text = entity->tio.ATTRIB;
     Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->ins_pt.x,
+        text->ins_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint alignment = sitekeeper_ocs_point_to_wcs_2d(
+        text->alignment_pt.x,
+        text->alignment_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_text_anchor_point(
+        insertion.x,
+        insertion.y,
+        alignment.x,
+        alignment.y,
+        text->horiz_alignment,
+        text->vert_alignment
+    );
     return sitekeeper_append_text_entity(
         result,
         entity_count,
@@ -2745,10 +3495,10 @@ static int sitekeeper_append_attrib(
         object,
         SiteKeeperLibreDWGEntityKindAttrib,
         text->text_value,
-        text->ins_pt.x,
-        text->ins_pt.y,
+        anchor.x,
+        anchor.y,
         text->height,
-        text->rotation,
+        sitekeeper_ocs_rotation_to_wcs_2d(text->rotation, text->extrusion),
         text->width_factor,
         0,
         0,
@@ -2773,6 +3523,26 @@ static int sitekeeper_append_attdef(
     }
     Dwg_Entity_ATTDEF *text = entity->tio.ATTDEF;
     Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->ins_pt.x,
+        text->ins_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint alignment = sitekeeper_ocs_point_to_wcs_2d(
+        text->alignment_pt.x,
+        text->alignment_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint anchor = sitekeeper_text_anchor_point(
+        insertion.x,
+        insertion.y,
+        alignment.x,
+        alignment.y,
+        text->horiz_alignment,
+        text->vert_alignment
+    );
     return sitekeeper_append_text_entity(
         result,
         entity_count,
@@ -2781,10 +3551,10 @@ static int sitekeeper_append_attdef(
         object,
         SiteKeeperLibreDWGEntityKindAttrib,
         text->default_value,
-        text->ins_pt.x,
-        text->ins_pt.y,
+        anchor.x,
+        anchor.y,
         text->height,
-        text->rotation,
+        sitekeeper_ocs_rotation_to_wcs_2d(text->rotation, text->extrusion),
         text->width_factor,
         0,
         0,
@@ -2793,6 +3563,151 @@ static int sitekeeper_append_attdef(
         style,
         transform
     );
+}
+
+static int sitekeeper_append_tolerance_text(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.TOLERANCE == NULL) {
+        return 0;
+    }
+    Dwg_Entity_TOLERANCE *tolerance = entity->tio.TOLERANCE;
+    if (tolerance->text_value == NULL || tolerance->text_value[0] == '\0') {
+        return 0;
+    }
+
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        tolerance->ins_pt.x,
+        tolerance->ins_pt.y,
+        tolerance->ins_pt.z,
+        tolerance->extrusion
+    );
+    double rotation = sitekeeper_ocs_rotation_to_wcs_2d(0, tolerance->extrusion);
+    if (isfinite(tolerance->x_direction.x) || isfinite(tolerance->x_direction.y)) {
+        const double dx = isfinite(tolerance->x_direction.x) ? tolerance->x_direction.x : 0;
+        const double dy = isfinite(tolerance->x_direction.y) ? tolerance->x_direction.y : 0;
+        if (hypot(dx, dy) > DBL_EPSILON) {
+            rotation = atan2(dy, dx);
+        }
+    }
+
+    return sitekeeper_append_text_entity(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        SiteKeeperLibreDWGEntityKindMText,
+        tolerance->text_value,
+        insertion.x,
+        insertion.y,
+        tolerance->height,
+        rotation,
+        1.0,
+        0,
+        0,
+        1,
+        2,
+        NULL,
+        transform
+    );
+}
+
+static int sitekeeper_append_leader_with_annotation(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    const int appended_leader = sitekeeper_append_leader(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        transform
+    );
+    if (entity == NULL || entity->dwg == NULL || entity->tio.LEADER == NULL) {
+        return appended_leader;
+    }
+
+    Dwg_Entity_LEADER *leader = entity->tio.LEADER;
+    if (leader->associated_annotation == NULL) {
+        return appended_leader;
+    }
+
+    Dwg_Object *annotation_object = leader->associated_annotation->obj;
+    if (annotation_object == NULL) {
+        annotation_object = dwg_ref_object_silent(entity->dwg, leader->associated_annotation);
+    }
+    if (annotation_object == NULL || annotation_object->tio.entity == NULL) {
+        return appended_leader;
+    }
+
+    Dwg_Object_Entity *annotation_entity = annotation_object->tio.entity;
+    int appended_annotation = 0;
+    if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_TEXT)) {
+        result->trace.rawTextCount += 1;
+        appended_annotation = sitekeeper_append_text(
+            result,
+            entity_count,
+            entity_capacity,
+            annotation_entity,
+            annotation_object,
+            transform
+        );
+    } else if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_MTEXT)) {
+        result->trace.rawTextCount += 1;
+        appended_annotation = sitekeeper_append_mtext(
+            result,
+            entity_count,
+            entity_capacity,
+            annotation_entity,
+            annotation_object,
+            transform
+        );
+    } else if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_ATTRIB)) {
+        result->trace.rawTextCount += 1;
+        appended_annotation = sitekeeper_append_attrib(
+            result,
+            entity_count,
+            entity_capacity,
+            annotation_entity,
+            annotation_object,
+            transform
+        );
+    } else if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_ATTDEF)) {
+        result->trace.rawTextCount += 1;
+        appended_annotation = sitekeeper_append_attdef(
+            result,
+            entity_count,
+            entity_capacity,
+            annotation_entity,
+            annotation_object,
+            transform
+        );
+    } else if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_TOLERANCE)) {
+        result->trace.rawTextCount += 1;
+        appended_annotation = sitekeeper_append_tolerance_text(
+            result,
+            entity_count,
+            entity_capacity,
+            annotation_entity,
+            annotation_object,
+            transform
+        );
+    }
+
+    return appended_leader + appended_annotation;
 }
 
 static int sitekeeper_append_dimension_path(
@@ -3401,6 +4316,36 @@ static double sitekeeper_insert_spacing(double value)
     return isfinite(value) ? value : 0.0;
 }
 
+static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_from_ref(
+    Dwg_Data *dwg,
+    Dwg_Object_Ref *block_ref,
+    Dwg_Object **block_object
+)
+{
+    if (block_object != NULL) {
+        *block_object = NULL;
+    }
+    if (dwg == NULL || block_ref == NULL) {
+        return NULL;
+    }
+
+    Dwg_Object *object = block_ref->obj;
+    if (object == NULL) {
+        object = dwg_ref_object_silent(dwg, block_ref);
+    }
+    if (object == NULL || object->tio.object == NULL || object->tio.object->tio.BLOCK_HEADER == NULL) {
+        return NULL;
+    }
+    if (!sitekeeper_object_matches(object, (int)DWG_TYPE_BLOCK_HEADER)) {
+        return NULL;
+    }
+
+    if (block_object != NULL) {
+        *block_object = object;
+    }
+    return object->tio.object->tio.BLOCK_HEADER;
+}
+
 static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_insert(
     Dwg_Data *dwg,
     Dwg_Entity_INSERT *insert,
@@ -3414,21 +4359,7 @@ static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_insert(
         return NULL;
     }
 
-    Dwg_Object *object = insert->block_header->obj;
-    if (object == NULL) {
-        object = dwg_ref_object_silent(dwg, insert->block_header);
-    }
-    if (object == NULL || object->tio.object == NULL || object->tio.object->tio.BLOCK_HEADER == NULL) {
-        return NULL;
-    }
-    if (!sitekeeper_object_matches(object, (int)DWG_TYPE_BLOCK_HEADER)) {
-        return NULL;
-    }
-
-    if (block_object != NULL) {
-        *block_object = object;
-    }
-    return object->tio.object->tio.BLOCK_HEADER;
+    return sitekeeper_block_header_from_ref(dwg, insert->block_header, block_object);
 }
 
 static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_minsert(
@@ -3444,21 +4375,7 @@ static Dwg_Object_BLOCK_HEADER *sitekeeper_block_header_for_minsert(
         return NULL;
     }
 
-    Dwg_Object *object = insert->block_header->obj;
-    if (object == NULL) {
-        object = dwg_ref_object_silent(dwg, insert->block_header);
-    }
-    if (object == NULL || object->tio.object == NULL || object->tio.object->tio.BLOCK_HEADER == NULL) {
-        return NULL;
-    }
-    if (!sitekeeper_object_matches(object, (int)DWG_TYPE_BLOCK_HEADER)) {
-        return NULL;
-    }
-
-    if (block_object != NULL) {
-        *block_object = object;
-    }
-    return object->tio.object->tio.BLOCK_HEADER;
+    return sitekeeper_block_header_from_ref(dwg, insert->block_header, block_object);
 }
 
 static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_values(
@@ -3530,6 +4447,79 @@ static SiteKeeperLibreDWGTransform sitekeeper_insert_transform_with_array_offset
     return transform;
 }
 
+static SiteKeeperLibreDWGPoint sitekeeper_attrib_anchor_point(Dwg_Object_Entity *entity)
+{
+    SiteKeeperLibreDWGPoint fallback = { 0, 0 };
+    if (entity == NULL || entity->tio.ATTRIB == NULL) {
+        return fallback;
+    }
+    Dwg_Entity_ATTRIB *text = entity->tio.ATTRIB;
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->ins_pt.x,
+        text->ins_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint alignment = sitekeeper_ocs_point_to_wcs_2d(
+        text->alignment_pt.x,
+        text->alignment_pt.y,
+        text->elevation,
+        text->extrusion
+    );
+    return sitekeeper_text_anchor_point(
+        insertion.x,
+        insertion.y,
+        alignment.x,
+        alignment.y,
+        text->horiz_alignment,
+        text->vert_alignment
+    );
+}
+
+static SiteKeeperLibreDWGTransform sitekeeper_attribute_transform_for_insert(
+    Dwg_Object_Entity *attribute_entity,
+    SiteKeeperLibreDWGTransform parent_transform,
+    SiteKeeperLibreDWGTransform insert_transform
+)
+{
+    if (attribute_entity == NULL || attribute_entity->tio.ATTRIB == NULL) {
+        return parent_transform;
+    }
+
+    SiteKeeperLibreDWGPoint raw_anchor = sitekeeper_attrib_anchor_point(attribute_entity);
+    if (!sitekeeper_point_is_finite(raw_anchor)) {
+        return parent_transform;
+    }
+
+    SiteKeeperLibreDWGPoint parent_point = sitekeeper_transform_point(&parent_transform, raw_anchor);
+    SiteKeeperLibreDWGPoint inserted_point = sitekeeper_transform_point(&insert_transform, raw_anchor);
+    SiteKeeperLibreDWGPoint insert_origin = sitekeeper_transform_translation(insert_transform);
+    if (!sitekeeper_point_is_finite(parent_point)
+        || !sitekeeper_point_is_finite(inserted_point)
+        || !sitekeeper_point_is_finite(insert_origin)) {
+        return parent_transform;
+    }
+
+    const double parent_distance = sitekeeper_point_distance(parent_point, insert_origin);
+    const double inserted_distance = sitekeeper_point_distance(inserted_point, insert_origin);
+    if (!isfinite(parent_distance) || !isfinite(inserted_distance)) {
+        return parent_transform;
+    }
+
+    // LibreDWG exposes attached ATTRIB positions differently across DWG/DXF
+    // generations. Some files store ATTRIB anchors in world space, while others
+    // keep them in block-local coordinates. If the uncomposed point is far from
+    // the INSERT but the composed point lands near it, treat it as block-local.
+    const double minimum_far_distance = 10000.0;
+    const double improvement_threshold = 0.35;
+    if (parent_distance > fmax(inserted_distance + 1000.0, minimum_far_distance)
+        && inserted_distance < parent_distance * improvement_threshold) {
+        return insert_transform;
+    }
+
+    return parent_transform;
+}
+
 static int sitekeeper_process_entity(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -3548,6 +4538,7 @@ static void sitekeeper_process_insert_attributes(
     Dwg_Object_Ref **attribs,
     BITCODE_BL num_owned,
     SiteKeeperLibreDWGTransform parent_transform,
+    SiteKeeperLibreDWGTransform insert_transform,
     int depth
 )
 {
@@ -3566,13 +4557,18 @@ static void sitekeeper_process_insert_attributes(
         if (attribute_object == NULL || attribute_object->tio.entity == NULL) {
             continue;
         }
+        SiteKeeperLibreDWGTransform attribute_transform = sitekeeper_attribute_transform_for_insert(
+            attribute_object->tio.entity,
+            parent_transform,
+            insert_transform
+        );
         sitekeeper_process_entity(
             result,
             entity_count,
             entity_capacity,
             attribute_object->tio.entity,
             attribute_object,
-            parent_transform,
+            attribute_transform,
             depth + 1
         );
     }
@@ -3666,6 +4662,10 @@ static int sitekeeper_expand_insert(
         }
     }
 
+    SiteKeeperLibreDWGTransform attribute_insert_transform = sitekeeper_compose_transform(
+        parent_transform,
+        base_insert_transform
+    );
     sitekeeper_process_insert_attributes(
         result,
         entity_count,
@@ -3674,6 +4674,7 @@ static int sitekeeper_expand_insert(
         attribute_refs,
         attribute_count,
         parent_transform,
+        attribute_insert_transform,
         depth
     );
 
@@ -3776,7 +4777,7 @@ static int sitekeeper_process_entity(
         return sitekeeper_append_3dface(result, entity_count, entity_capacity, entity, object, &transform);
     }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_LEADER)) {
-        return sitekeeper_append_leader(result, entity_count, entity_capacity, entity, object, &transform);
+        return sitekeeper_append_leader_with_annotation(result, entity_count, entity_capacity, entity, object, &transform);
     }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_MULTILEADER)) {
         result->trace.rawTextCount += 1;

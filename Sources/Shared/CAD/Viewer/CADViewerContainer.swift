@@ -72,6 +72,9 @@ struct CADMetalLibreDWGPoCEntry: View {
     @AppStorage("cad.metal.poc.rendersPlaceholders") private var rendersPlaceholders = false
     @AppStorage("cad.metal.poc.showsRendererDiagnostics") private var showsRendererDiagnostics = false
     @AppStorage("cad.metal.poc.featureDefaultsVersion") private var featureDefaultsVersion = 0
+    @AppStorage("cad.metal.poc.textDisplayFont") private var textDisplayFontRaw = CADDrawingTextDisplayFont.auto.rawValue
+    @AppStorage("cad.metal.poc.importedTextFontName") private var importedTextFontName = ""
+    @AppStorage("cad.metal.poc.importedTextFontPath") private var importedTextFontPath = ""
 
     init(
         fileURL: URL,
@@ -166,7 +169,7 @@ struct CADMetalLibreDWGPoCEntry: View {
             initialViewState: initialViewState,
             controlCommand: canvasControlCommand,
             featureOptions: featureOptions,
-            textImportOptions: textImportOptions,
+            textImportOptions: effectiveTextImportOptions,
             buildsTextSearchIndex: buildsTextSearchIndex,
             debugTextOverlays: showsRendererDiagnostics && rendersTextOverlays,
             callbacks: bridgedRendererCallbacks,
@@ -193,13 +196,22 @@ struct CADMetalLibreDWGPoCEntry: View {
             }
         }
         .overlay(alignment: .bottomLeading) {
-            if showsRendererDiagnostics,
-               let rendererPerformance,
-               rendererPerformance.hasActionableRendererFailure {
+            if Self.shouldShowRendererDiagnostics(
+                enabled: showsRendererDiagnostics,
+                sample: rendererPerformance
+            ),
+               let rendererPerformance {
                 rendererDiagnosticBadge(rendererPerformance)
                     .padding(12)
             }
         }
+    }
+
+    static func shouldShowRendererDiagnostics(
+        enabled: Bool,
+        sample: CADRendererPerformanceSnapshot?
+    ) -> Bool {
+        enabled && sample != nil
     }
 
     private var featureOptions: CADCanvasFeatureOptions {
@@ -214,6 +226,17 @@ struct CADMetalLibreDWGPoCEntry: View {
             rendersHatches: rendersHatches,
             rendersPlaceholders: rendersPlaceholders
         )
+    }
+
+    private var effectiveTextImportOptions: CADCanvasTextImportOptions {
+        var options = textImportOptions
+        let choice = CADDrawingTextDisplayFont(rawValue: textDisplayFontRaw) ?? .auto
+        options.preferredDisplayFontName = CADImportedFontRegistry.resolvedDisplayFontName(
+            for: choice,
+            importedFontName: importedTextFontName,
+            importedFontPath: importedTextFontPath
+        )
+        return options
     }
 
     private var bridgedRendererCallbacks: CADRendererCallbacks {
@@ -252,33 +275,133 @@ struct CADMetalLibreDWGPoCEntry: View {
     }
 
     private func rendererDiagnosticBadge(_ sample: CADRendererPerformanceSnapshot) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let isFailure = sample.hasActionableRendererFailure
+        let tint: Color = isFailure ? .orange : .green
+
+        return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 6) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
+                Image(systemName: isFailure ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(tint)
                 Text("渲染诊断：\(sample.rendererDiagnosticSummary)")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.primary)
             }
 
-            Text(sample.rendererFailureReason)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
+            if isFailure {
+                Text(sample.rendererFailureReason)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
 
-            Text("import \(sample.totalEntityCount) / layer \(sample.visibleLayerCount)/\(sample.totalLayerCount) / viewport \(sample.visibleEntityCount) / command \(sample.renderCommandCount) / text \(sample.textOverlayCount)/\(sample.textCommandCount) / skippedText \(sample.textOverlaySkippedCount)")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
+            ForEach(Self.rendererDiagnosticRows(for: sample), id: \.self) { row in
+                Text(row)
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .frame(maxWidth: 360, alignment: .leading)
+        .frame(maxWidth: 420, maxHeight: 156, alignment: .topLeading)
+        .clipped()
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
             RoundedRectangle(cornerRadius: 8)
-                .stroke(Color.orange.opacity(0.4), lineWidth: 1)
+                .stroke(tint.opacity(isFailure ? 0.4 : 0.3), lineWidth: 1)
         }
+    }
+
+    static func rendererDiagnosticRows(for sample: CADRendererPerformanceSnapshot) -> [String] {
+        var rows = [
+            "entity \(sample.totalEntityCount) / viewport \(sample.visibleEntityCount) / command \(sample.renderCommandCount) / draw \(sample.drawCallCount)",
+            "layer \(sample.visibleLayerCount)/\(sample.totalLayerCount) / text \(sample.textOverlayCount)/\(sample.visibleTextEntityCount) / ms \(Self.formatMilliseconds(sample.frameTimeMilliseconds))"
+        ]
+        if let overlayRow = sample.textDiagnosticRows.first(where: { row in
+            row.localizedCaseInsensitiveContains("ui text overlay")
+        }) {
+            rows.append(overlayRow)
+        }
+        if let textPreviewRow = sample.textDiagnosticRows.first(where: { row in
+            row.localizedCaseInsensitiveContains("view text")
+        }) {
+            rows.append(textPreviewRow)
+        }
+        if let proxyTextRow = sample.textDiagnosticRows.first(where: { row in
+            row.localizedCaseInsensitiveContains("proxy text")
+        }) {
+            rows.append(proxyTextRow)
+        }
+        if sample.totalTextEntityCount > 0, sample.visibleTextEntityCount == 0 {
+            rows.append(
+                "text import \(sample.totalTextEntityCount) / index \(sample.indexedTextEntityCount) / inView \(sample.viewportTextEntityCountBeforeLayerFilter)/0"
+            )
+            if let distance = sample.nearestTextDistance {
+                let preview = Self.compactTextPreview(sample.nearestTextPreview)
+                let layer = sample.nearestTextLayerID.map { " / layer \($0)" } ?? ""
+                rows.append("nearest text d \(Self.formatCADNumber(distance))\(layer) \(preview)")
+            }
+            let annotationRow = sample.textDiagnosticRows.first { row in
+                row.localizedCaseInsensitiveContains("-BZ")
+            }
+            let geometryRow = sample.textDiagnosticRows.first { row in
+                row.localizedCaseInsensitiveContains("view kinds")
+                    || row.localizedCaseInsensitiveContains("view leader")
+            }
+            if let annotationRow {
+                rows.append(annotationRow)
+            }
+            if let geometryRow, geometryRow != annotationRow {
+                rows.append(geometryRow)
+            }
+            return Array(rows.prefix(7))
+        }
+
+        guard sample.hasActionableRendererFailure else {
+            return Array(rows.prefix(5))
+        }
+
+        if let distance = sample.nearestTextDistance, sample.visibleTextEntityCount > 0 {
+            let preview = Self.compactTextPreview(sample.nearestTextPreview)
+            let layer = sample.nearestTextLayerID.map { " / layer \($0)" } ?? ""
+            rows.append("nearest text d \(Self.formatCADNumber(distance))\(layer) \(preview)")
+        }
+        rows.append(contentsOf: sample.textDiagnosticRows.prefix(2))
+        return Array(rows.prefix(5))
+    }
+
+    private static func formatMilliseconds(_ value: Double) -> String {
+        guard value.isFinite else { return "-" }
+        if value >= 100 {
+            return "\(Int(value.rounded()))"
+        }
+        return String(format: "%.1f", value)
+    }
+
+    private static func formatCADRect(_ rect: CGRect) -> String {
+        "x \(formatCADNumber(rect.minX))...\(formatCADNumber(rect.maxX)) y \(formatCADNumber(rect.minY))...\(formatCADNumber(rect.maxY))"
+    }
+
+    private static func formatCADNumber(_ value: Double) -> String {
+        guard value.isFinite else { return "-" }
+        let magnitude = abs(value)
+        if magnitude >= 10_000 || (magnitude > 0 && magnitude < 0.01) {
+            return String(format: "%.2e", value)
+        }
+        if magnitude >= 100 {
+            return String(format: "%.0f", value)
+        }
+        return String(format: "%.2f", value)
+    }
+
+    private static func compactTextPreview(_ preview: String?) -> String {
+        guard let preview, !preview.isEmpty else { return "" }
+        let collapsed = preview
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !collapsed.isEmpty else { return "" }
+        return String(collapsed.prefix(12))
     }
 
     private var zoomControls: some View {
