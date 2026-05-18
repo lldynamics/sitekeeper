@@ -80,6 +80,33 @@ class ProjectDeliveryReportTest {
         assertTrue(manifest.contains("照片：missing.jpg"))
     }
 
+    @Test
+    fun projectDeliveryPackagePreflightSummaryFlagsMissingFiles() {
+        val ready = ProjectDeliveryPackagePreflight(
+            documentFileCount = 2,
+            drawingFileCount = 1,
+            photoFileCount = 3,
+            missingFiles = emptyList()
+        )
+        val missing = ProjectDeliveryPackagePreflight(
+            documentFileCount = 1,
+            drawingFileCount = 0,
+            photoFileCount = 2,
+            missingFiles = listOf("资料：签证单", "图纸：平面图")
+        )
+
+        assertEquals(6, ready.packagedFileCount)
+        assertEquals(2, missing.missingFileCount)
+        assertEquals(
+            "交付文件齐全，可打包 6 个原文件",
+            projectDeliveryPackagePreflightSummaryText(ready)
+        )
+        assertEquals(
+            "缺失 2 个原文件，可先补齐再导出",
+            projectDeliveryPackagePreflightSummaryText(missing)
+        )
+    }
+
     private fun sampleProjectDetail(): ProjectDetail =
         ProjectDetail(
             project = ProjectSummary(

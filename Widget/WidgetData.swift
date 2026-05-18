@@ -33,7 +33,7 @@ final class WidgetDataStore {
 
     static func healthSnapshot() -> WidgetDataHealthSnapshot {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            StorageIssueLog.record(
+            WidgetStorageIssueLog.record(
                 String(format: WidgetLocalizedText.string(for: "widget_storage_app_group_unavailable_format"), suiteName)
             )
             return WidgetDataHealthSnapshot(
@@ -72,8 +72,8 @@ final class WidgetDataStore {
     }
 }
 
-private enum StorageIssueLog {
-    private static let key = "storageIssueLogEntries"
+private enum WidgetStorageIssueLog {
+    private static let localFallbackKey = WidgetSharedDefaults.storageIssueLogKey
     private static let maxEntries = 120
     private static let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -84,11 +84,14 @@ private enum StorageIssueLog {
     static func record(_ message: String) {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        var entries = UserDefaults.standard.stringArray(forKey: key) ?? []
+        if WidgetSharedStorageIssueLog.record(trimmed, source: "widget") {
+            return
+        }
+        var entries = UserDefaults.standard.stringArray(forKey: localFallbackKey) ?? []
         entries.insert("[\(timestampFormatter.string(from: Date()))] \(trimmed)", at: 0)
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
-        UserDefaults.standard.set(entries, forKey: key)
+        UserDefaults.standard.set(entries, forKey: localFallbackKey)
     }
 }

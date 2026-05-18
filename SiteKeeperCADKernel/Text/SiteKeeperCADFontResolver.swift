@@ -115,6 +115,10 @@ extension SiteKeeperCADKernel {
                 .named("Hiragino Sans GB"),
                 .named("Heiti SC"),
                 .named("Songti SC"),
+                .named("FangSong"),
+                .named("STFangsong"),
+                .named("FangSong_GB2312"),
+                .named("SimFang"),
                 .named("Noto Sans CJK SC"),
                 .named("Source Han Sans SC"),
                 .system

@@ -63,6 +63,7 @@ import com.chengjinfang.sitekeeper.backup.archivePhotoFile
 import com.chengjinfang.sitekeeper.backup.archiveQuickNoteAttachmentFile
 import com.chengjinfang.sitekeeper.backup.canOpenLocalDocument
 import com.chengjinfang.sitekeeper.backup.canOpenLocalPhoto
+import com.chengjinfang.sitekeeper.backup.cleanupOrphanLocalArchives
 import com.chengjinfang.sitekeeper.backup.cleanupOrphanProjectDocumentArchives
 import com.chengjinfang.sitekeeper.backup.defaultBackupPackageFileName
 import com.chengjinfang.sitekeeper.backup.deleteDrawingArchive
@@ -70,6 +71,9 @@ import com.chengjinfang.sitekeeper.backup.deletePhotoArchive
 import com.chengjinfang.sitekeeper.backup.deleteProjectDocumentArchive
 import com.chengjinfang.sitekeeper.backup.deleteQuickNoteAttachmentArchive
 import com.chengjinfang.sitekeeper.backup.documentArchiveUsageText
+import com.chengjinfang.sitekeeper.backup.localDataHealth
+import com.chengjinfang.sitekeeper.backup.LocalDataHealthSnapshot
+import com.chengjinfang.sitekeeper.backup.localDataHealthSummaryText
 import com.chengjinfang.sitekeeper.backup.openLocalPhoto
 import com.chengjinfang.sitekeeper.backup.openLocalDocument
 import com.chengjinfang.sitekeeper.backup.openLocalQuickNoteAttachment
@@ -94,6 +98,9 @@ import com.chengjinfang.sitekeeper.database.project.QuickNoteAttachmentSummary
 import com.chengjinfang.sitekeeper.database.project.QuickNoteSummary
 import com.chengjinfang.sitekeeper.database.project.SiteTodoPhotoTarget
 import com.chengjinfang.sitekeeper.delivery.defaultProjectDeliveryPackageFileName
+import com.chengjinfang.sitekeeper.delivery.projectDeliveryPackagePreflight
+import com.chengjinfang.sitekeeper.delivery.ProjectDeliveryPackagePreflight
+import com.chengjinfang.sitekeeper.delivery.projectDeliveryPackagePreflightSummaryText
 import com.chengjinfang.sitekeeper.delivery.writeProjectDeliveryPackageToUri
 import com.chengjinfang.sitekeeper.database.progress.ProgressTaskSummary
 import com.chengjinfang.sitekeeper.database.quote.QuoteItemSummary
@@ -261,7 +268,13 @@ private fun ModuleContent(
                     onSelectModule(RootModule.Projects)
                 }
             )
-            RootModule.Profile -> BackupScreen(projectRepository = projectRepository)
+            RootModule.Profile -> BackupScreen(
+                projectRepository = projectRepository,
+                onOpenProject = { projectId ->
+                    onSelectProject(projectId)
+                    onSelectModule(RootModule.Projects)
+                }
+            )
         }
     }
 }
@@ -305,6 +318,7 @@ private fun CalculatorScreen() {
                 CalculatorTool.Unit -> UnitConverterCard()
             }
         }
+
     }
 }
 
@@ -2615,35 +2629,49 @@ private fun ProjectSearchAndSortControls(
 }
 
 @Composable
-private fun BackupScreen(projectRepository: ProjectRepository) {
+private fun BackupScreen(
+    projectRepository: ProjectRepository,
+    onOpenProject: (String) -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var statusText by rememberSaveable { mutableStateOf("本机数据") }
     var pendingExportJson by remember { mutableStateOf<String?>(null) }
     var pendingImport by remember { mutableStateOf<PendingBackupImport?>(null) }
     var archiveUsage by remember { mutableStateOf<DocumentArchiveUsage?>(null) }
+    var dataHealth by remember { mutableStateOf<LocalDataHealthSnapshot?>(null) }
 
-    fun refreshArchiveUsage() {
+    fun refreshLocalDiagnostics() {
         scope.launch {
             runCatching {
+                val rawJson = projectRepository.exportBackupJson()
                 projectDocumentArchiveUsage(
                     context = context,
-                    rawJson = projectRepository.exportBackupJson()
+                    rawJson = rawJson
+                ) to localDataHealth(
+                    context = context,
+                    rawJson = rawJson
                 )
-            }.onSuccess { usage ->
+            }.onSuccess { (usage, health) ->
                 archiveUsage = usage
+                dataHealth = health
             }
         }
     }
 
     LaunchedEffect(projectRepository) {
         runCatching {
+            val rawJson = projectRepository.exportBackupJson()
             projectDocumentArchiveUsage(
                 context = context,
-                rawJson = projectRepository.exportBackupJson()
+                rawJson = rawJson
+            ) to localDataHealth(
+                context = context,
+                rawJson = rawJson
             )
-        }.onSuccess { usage ->
+        }.onSuccess { (usage, health) ->
             archiveUsage = usage
+            dataHealth = health
         }
     }
 
@@ -2680,7 +2708,7 @@ private fun BackupScreen(projectRepository: ProjectRepository) {
                 }
                 import.clearTempFiles()
                 pendingImport = null
-                refreshArchiveUsage()
+                refreshLocalDiagnostics()
             }.onFailure { error ->
                 statusText = "导入失败：${error.message ?: "JSON 无法解析"}"
             }
@@ -2814,7 +2842,7 @@ private fun BackupScreen(projectRepository: ProjectRepository) {
                                             } else {
                                                 "没有孤立资料文件"
                                             }
-                                            refreshArchiveUsage()
+                                            refreshLocalDiagnostics()
                                         }.onFailure { error ->
                                             statusText = "清理失败：${error.message ?: "无法删除文件"}"
                                         }
@@ -2884,6 +2912,64 @@ private fun BackupScreen(projectRepository: ProjectRepository) {
                 }
             }
         }
+
+        item {
+            DataHealthCard(
+                snapshot = dataHealth,
+                onOpenProject = onOpenProject,
+                onRefresh = {
+                    statusText = "正在重新体检"
+                    refreshLocalDiagnostics()
+                },
+                onCreateFixTodos = {
+                    val fixTodos = dataHealth?.fixTodos.orEmpty()
+                    if (fixTodos.isEmpty()) {
+                        statusText = "没有需要生成的整改待办"
+                    } else {
+                        scope.launch {
+                            statusText = "正在生成整改待办"
+                            val createdCount = fixTodos.count { todo ->
+                                projectRepository.addSiteTodoIfAbsent(
+                                    projectId = todo.projectId,
+                                    title = todo.title,
+                                    owner = "",
+                                    dueDate = todayText(),
+                                    priority = todo.priority,
+                                    issueType = todo.issueType,
+                                    note = todo.note
+                                )
+                            }
+                            statusText = if (createdCount > 0) {
+                                "已生成 $createdCount 条整改待办"
+                            } else {
+                                "整改待办已存在"
+                            }
+                            refreshLocalDiagnostics()
+                        }
+                    }
+                },
+                onCleanupOrphans = {
+                    scope.launch {
+                        statusText = "正在清理孤立文件"
+                        runCatching {
+                            cleanupOrphanLocalArchives(
+                                context = context,
+                                rawJson = projectRepository.exportBackupJson()
+                            )
+                        }.onSuccess { result ->
+                            statusText = if (result.deletedFileCount > 0) {
+                                "已清理 ${result.deletedFileCount} 个孤立文件，释放 ${dataHealthBytesText(result.deletedBytes)}"
+                            } else {
+                                "没有孤立文件"
+                            }
+                            refreshLocalDiagnostics()
+                        }.onFailure { error ->
+                            statusText = "清理失败：${error.message ?: "无法删除文件"}"
+                        }
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -2900,6 +2986,172 @@ private data class PendingBackupImport(
 ) {
     fun clearTempFiles() {
         attachmentTempDir?.deleteRecursively()
+    }
+}
+
+@Composable
+private fun DataHealthCard(
+    snapshot: LocalDataHealthSnapshot?,
+    onOpenProject: (String) -> Unit,
+    onRefresh: () -> Unit,
+    onCreateFixTodos: () -> Unit,
+    onCleanupOrphans: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "数据体检",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                TextButton(onClick = onRefresh) {
+                    Text("重新体检")
+                }
+            }
+            if (snapshot == null) {
+                Text(
+                    text = "正在读取本机数据",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = localDataHealthSummaryText(snapshot),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = if (snapshot.issueCount > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ProjectMetric(
+                        label = "记录",
+                        value = "${snapshot.recordCount}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ProjectMetric(
+                        label = "引用文件",
+                        value = "${snapshot.referencedFileCount}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ProjectMetric(
+                        label = "项目",
+                        value = "${snapshot.projectCount}",
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ProjectMetric(
+                        label = "缺失",
+                        value = "${snapshot.missingFileCount}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ProjectMetric(
+                        label = "孤立",
+                        value = "${snapshot.orphanFileCount}",
+                        modifier = Modifier.weight(1f)
+                    )
+                    ProjectMetric(
+                        label = "可释放",
+                        value = dataHealthBytesText(snapshot.orphanFileBytes),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Text(
+                    text = listOf(
+                        "资料缺失 ${snapshot.missingDocumentFileCount}",
+                        "照片缺失 ${snapshot.missingPhotoFileCount}",
+                        "图纸缺失 ${snapshot.missingDrawingFileCount}",
+                        "随手记附件缺失 ${snapshot.missingQuickNoteAttachmentCount}"
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (snapshot.fixTodos.isNotEmpty()) {
+                    Text(
+                        text = "可生成整改待办 ${snapshot.fixTodos.size} 条",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    HorizontalDivider()
+                    Text(
+                        text = "缺失明细",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    snapshot.fixTodos.take(6).forEach { todo ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                Text(
+                                    text = todo.title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = todo.note,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            TextButton(onClick = { onOpenProject(todo.projectId) }) {
+                                Text("打开项目")
+                            }
+                        }
+                    }
+                    if (snapshot.fixTodos.size > 6) {
+                        Text(
+                            text = "还有 ${snapshot.fixTodos.size - 6} 条缺失项",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    TextButton(onClick = onCreateFixTodos) {
+                        Text("生成整改待办")
+                    }
+                }
+                Text(
+                    text = listOf(
+                        "孤立资料 ${snapshot.orphanDocumentFileCount}",
+                        "孤立照片 ${snapshot.orphanPhotoFileCount}",
+                        "孤立图纸 ${snapshot.orphanDrawingFileCount}",
+                        "孤立随手记 ${snapshot.orphanQuickNoteAttachmentCount}"
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (snapshot.orphanFileCount > 0) {
+                    TextButton(onClick = onCleanupOrphans) {
+                        Text("清理孤立文件")
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -4703,6 +4955,24 @@ private fun ProjectDetailScreen(
     var photoPickerTargetKind by rememberSaveable(detail.project.id) { mutableStateOf<String?>(null) }
     var photoPickerTargetId by rememberSaveable(detail.project.id) { mutableStateOf<String?>(null) }
     var deliveryExportStatus by rememberSaveable(detail.project.id) { mutableStateOf("") }
+    var deliveryPreflight by remember(detail.project.id) { mutableStateOf<ProjectDeliveryPackagePreflight?>(null) }
+    fun refreshDeliveryPreflight() {
+        scope.launch {
+            runCatching {
+                projectDeliveryPackagePreflight(
+                    context = context,
+                    detail = detail
+                )
+            }.onSuccess { preflight ->
+                deliveryPreflight = preflight
+            }
+        }
+    }
+
+    LaunchedEffect(detail) {
+        refreshDeliveryPreflight()
+    }
+
     val deliveryExportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip")
     ) { uri ->
@@ -4721,6 +4991,7 @@ private fun ProjectDetailScreen(
                 )
             }.onSuccess { result ->
                 deliveryExportStatus = "已导出交付包，含 ${result.documentFileCount} 份资料、${result.drawingFileCount} 份图纸、${result.photoFileCount} 张照片，缺失 ${result.missingFileCount} 个文件"
+                refreshDeliveryPreflight()
             }.onFailure { error ->
                 deliveryExportStatus = "导出失败：${error.message ?: "无法写入文件"}"
             }
@@ -4856,6 +5127,7 @@ private fun ProjectDetailScreen(
         item {
             ProjectDeliveryExportCard(
                 detail = detail,
+                preflight = deliveryPreflight,
                 statusText = deliveryExportStatus,
                 onExport = {
                     deliveryExportLauncher.launch(defaultProjectDeliveryPackageFileName(detail.project.name))
@@ -6511,6 +6783,7 @@ private fun ProjectDetailMetricRow(project: ProjectSummary) {
 @Composable
 private fun ProjectDeliveryExportCard(
     detail: ProjectDetail,
+    preflight: ProjectDeliveryPackagePreflight?,
     statusText: String,
     onExport: () -> Unit
 ) {
@@ -6525,13 +6798,15 @@ private fun ProjectDeliveryExportCard(
         detail.quoteItems.size +
         detail.laborRecords.size +
         detail.warehouseMovements.size
-    val attachmentCount = detail.documents.count { it.localUri.isNotBlank() } +
+    val metadataAttachmentCount = detail.documents.count { it.localUri.isNotBlank() } +
         detail.drawings.count { it.localUri.isNotBlank() }
-    val photoCount = detail.dailyLogs.sumOf { it.photoCount } +
+    val metadataPhotoCount = detail.dailyLogs.sumOf { it.photoCount } +
         detail.siteTodos.sumOf { todo ->
             listOf(todo.rectificationBeforePhotoFileName, todo.rectificationAfterPhotoFileName)
                 .count { !it.isNullOrBlank() }
         }
+    val packagedFileCount = preflight?.packagedFileCount ?: (metadataAttachmentCount + metadataPhotoCount)
+    val missingFileCount = preflight?.missingFileCount ?: 0
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -6566,15 +6841,55 @@ private fun ProjectDeliveryExportCard(
                     modifier = Modifier.weight(1f)
                 )
                 ProjectMetric(
-                    label = "附件",
-                    value = "$attachmentCount",
+                    label = "可打包",
+                    value = "$packagedFileCount",
                     modifier = Modifier.weight(1f)
                 )
                 ProjectMetric(
-                    label = "照片",
-                    value = "$photoCount",
+                    label = "缺失",
+                    value = "$missingFileCount",
                     modifier = Modifier.weight(1f)
                 )
+            }
+            if (preflight == null) {
+                Text(
+                    text = "正在体检交付文件",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = "资料 ${preflight.documentFileCount} · 图纸 ${preflight.drawingFileCount} · 照片 ${preflight.photoFileCount}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = projectDeliveryPackagePreflightSummaryText(preflight),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (preflight.missingFileCount > 0) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+                if (preflight.missingFiles.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        preflight.missingFiles.take(5).forEach { missingFile ->
+                            Text(
+                                text = missingFile,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        if (preflight.missingFiles.size > 5) {
+                            Text(
+                                text = "还有 ${preflight.missingFiles.size - 5} 个缺失文件",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
             }
             if (statusText.isNotBlank()) {
                 Text(
@@ -7178,6 +7493,14 @@ private fun moneyText(value: Double): String =
         String.format(Locale.US, "%.0f", value)
     } else {
         String.format(Locale.US, "%.2f", value)
+    }
+
+private fun dataHealthBytesText(bytes: Long): String =
+    when {
+        bytes >= 1024L * 1024L * 1024L -> String.format(Locale.US, "%.1fGB", bytes / 1024.0 / 1024.0 / 1024.0)
+        bytes >= 1024L * 1024L -> String.format(Locale.US, "%.1fMB", bytes / 1024.0 / 1024.0)
+        bytes >= 1024L -> String.format(Locale.US, "%.1fKB", bytes / 1024.0)
+        else -> "${bytes}B"
     }
 
 private fun progressPercentText(completion: Double): String =

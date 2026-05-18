@@ -48,6 +48,7 @@ extension CADPoC {
             var skippedEntityCount = 0
             var warnings: [String] = []
             let resolvedEntityCount = totalEntityCount ?? entities.count
+            let lodEntityCount = visibleEntityCount ?? entities.count
             let renderEntities = prioritizedEntities(entities, interactionPhase: interactionPhase)
 
             for (offset, entity) in renderEntities.enumerated() {
@@ -59,7 +60,7 @@ extension CADPoC {
 
                 let decision = lodPolicy.decision(
                     for: entity,
-                    totalEntityCount: resolvedEntityCount,
+                    totalEntityCount: lodEntityCount,
                     zoomScale: zoomScale,
                     interactionPhase: interactionPhase
                 )

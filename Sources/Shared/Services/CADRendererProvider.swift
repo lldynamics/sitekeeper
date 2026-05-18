@@ -85,6 +85,18 @@ struct CADRendererPerformanceSnapshot: Equatable {
     let viewportBoundsValid: Bool
     let viewportIntersectsModel: Bool
     let vertexCount: Int
+    let totalTextEntityCount: Int
+    let indexedTextEntityCount: Int
+    let viewportTextEntityCountBeforeLayerFilter: Int
+    let visibleTextEntityCount: Int
+    let renderInputTextEntityCount: Int
+    let textWorldBounds: CGRect?
+    let visibleLayerTextWorldBounds: CGRect?
+    let nearestTextBounds: CGRect?
+    let nearestTextDistance: Double?
+    let nearestTextPreview: String?
+    let nearestTextLayerID: String?
+    let textDiagnosticRows: [String]
     let rendererFailureLayer: String
     let rendererFailureReason: String
 
@@ -112,6 +124,18 @@ struct CADRendererPerformanceSnapshot: Equatable {
         viewportBoundsValid: Bool = true,
         viewportIntersectsModel: Bool = true,
         vertexCount: Int? = nil,
+        totalTextEntityCount: Int = 0,
+        indexedTextEntityCount: Int = 0,
+        viewportTextEntityCountBeforeLayerFilter: Int = 0,
+        visibleTextEntityCount: Int = 0,
+        renderInputTextEntityCount: Int = 0,
+        textWorldBounds: CGRect? = nil,
+        visibleLayerTextWorldBounds: CGRect? = nil,
+        nearestTextBounds: CGRect? = nil,
+        nearestTextDistance: Double? = nil,
+        nearestTextPreview: String? = nil,
+        nearestTextLayerID: String? = nil,
+        textDiagnosticRows: [String] = [],
         rendererFailureLayer: String? = nil,
         rendererFailureReason: String? = nil
     ) {
@@ -136,7 +160,12 @@ struct CADRendererPerformanceSnapshot: Equatable {
             modelBoundsValid: modelBoundsValid,
             viewportBoundsValid: viewportBoundsValid,
             viewportIntersectsModel: viewportIntersectsModel,
-            vertexCount: resolvedVertexCount
+            vertexCount: resolvedVertexCount,
+            totalTextEntityCount: totalTextEntityCount,
+            indexedTextEntityCount: indexedTextEntityCount,
+            viewportTextEntityCountBeforeLayerFilter: viewportTextEntityCountBeforeLayerFilter,
+            visibleTextEntityCount: visibleTextEntityCount,
+            renderInputTextEntityCount: renderInputTextEntityCount
         )
         self.entityCountInViewport = entityCountInViewport
         self.drawCallCount = drawCallCount
@@ -161,6 +190,18 @@ struct CADRendererPerformanceSnapshot: Equatable {
         self.viewportBoundsValid = viewportBoundsValid
         self.viewportIntersectsModel = viewportIntersectsModel
         self.vertexCount = resolvedVertexCount
+        self.totalTextEntityCount = totalTextEntityCount
+        self.indexedTextEntityCount = indexedTextEntityCount
+        self.viewportTextEntityCountBeforeLayerFilter = viewportTextEntityCountBeforeLayerFilter
+        self.visibleTextEntityCount = visibleTextEntityCount
+        self.renderInputTextEntityCount = renderInputTextEntityCount
+        self.textWorldBounds = textWorldBounds
+        self.visibleLayerTextWorldBounds = visibleLayerTextWorldBounds
+        self.nearestTextBounds = nearestTextBounds
+        self.nearestTextDistance = nearestTextDistance
+        self.nearestTextPreview = nearestTextPreview
+        self.nearestTextLayerID = nearestTextLayerID
+        self.textDiagnosticRows = textDiagnosticRows
         self.rendererFailureLayer = rendererFailureLayer ?? classification.layer
         self.rendererFailureReason = rendererFailureReason ?? classification.reason
     }
@@ -189,6 +230,12 @@ struct CADRendererPerformanceSnapshot: Equatable {
             return "实体未生成 renderCommand"
         case "textOverlay":
             return "文字命令未生成可见 overlay"
+        case "textBounds":
+            return "文字 bounds 未进入索引"
+        case "textLayer":
+            return "文字被图层过滤"
+        case "textRenderCommand":
+            return "文字实体未生成命令"
         case "metal":
             return "Metal 绘制阶段没有顶点输出"
         default:
@@ -211,7 +258,12 @@ struct CADRendererPerformanceSnapshot: Equatable {
         modelBoundsValid: Bool,
         viewportBoundsValid: Bool,
         viewportIntersectsModel: Bool,
-        vertexCount: Int
+        vertexCount: Int,
+        totalTextEntityCount: Int,
+        indexedTextEntityCount: Int,
+        viewportTextEntityCountBeforeLayerFilter: Int,
+        visibleTextEntityCount: Int,
+        renderInputTextEntityCount: Int
     ) -> (layer: String, reason: String) {
         if totalEntityCount == 0 {
             return ("import", "Import produced zero renderable entities.")
@@ -242,7 +294,19 @@ struct CADRendererPerformanceSnapshot: Equatable {
         if renderCommandCount == 0 {
             return ("renderCommand", "Visible entities did not produce render commands.")
         }
-        if textCommandCount > 0, textOverlayCount < textCommandCount {
+        if totalTextEntityCount > 0, indexedTextEntityCount == 0 {
+            return ("textBounds", "Text entities were imported, but none entered the spatial index; check text bounds and insertion points.")
+        }
+        if viewportTextEntityCountBeforeLayerFilter > 0, visibleTextEntityCount == 0 {
+            return ("textLayer", "Viewport contains text before layer filtering, but no text remains visible after layer filtering.")
+        }
+        if visibleTextEntityCount > 0, renderInputTextEntityCount == 0 {
+            return ("textRenderCommand", "Text entities are visible, but text rendering is disabled by the current performance options.")
+        }
+        if renderInputTextEntityCount > 0, textCommandCount == 0 {
+            return ("textRenderCommand", "Text entities are visible, but no text render commands were produced.")
+        }
+        if textCommandCount > 0, textOverlayCount == 0 {
             return ("textOverlay", "Text render commands exist, but visible text overlays are missing or incomplete.")
         }
         if drawCallCount > 0, vertexCount == 0, textCommandCount == 0 {

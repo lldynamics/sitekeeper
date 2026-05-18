@@ -92,11 +92,64 @@ struct CADPoCLineImportTests {
             viewportIntersectsModel: true,
             vertexCount: 0
         )
+        let textBoundsMiss = CADRendererPerformanceSnapshot(
+            entityCountInViewport: 2,
+            drawCallCount: 2,
+            frameTimeMilliseconds: 1,
+            skippedEntityCount: 0,
+            visibleLayerCount: 2,
+            totalLayerCount: 2,
+            simplifiedMode: false,
+            renderCommandCount: 2,
+            textCommandCount: 0,
+            textOverlayCount: 0,
+            totalEntityCount: 8,
+            indexedEntityCount: 8,
+            viewportEntityCountBeforeLayerFilter: 2,
+            layerFilterActive: false,
+            modelBounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+            viewportBounds: CGRect(x: 0, y: 0, width: 50, height: 50),
+            modelBoundsValid: true,
+            viewportBoundsValid: true,
+            viewportIntersectsModel: true,
+            vertexCount: 12,
+            totalTextEntityCount: 2,
+            indexedTextEntityCount: 0
+        )
+        let textCommandMiss = CADRendererPerformanceSnapshot(
+            entityCountInViewport: 2,
+            drawCallCount: 2,
+            frameTimeMilliseconds: 1,
+            skippedEntityCount: 0,
+            visibleLayerCount: 2,
+            totalLayerCount: 2,
+            simplifiedMode: false,
+            renderCommandCount: 2,
+            textCommandCount: 0,
+            textOverlayCount: 0,
+            totalEntityCount: 8,
+            indexedEntityCount: 8,
+            viewportEntityCountBeforeLayerFilter: 2,
+            layerFilterActive: false,
+            modelBounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+            viewportBounds: CGRect(x: 0, y: 0, width: 50, height: 50),
+            modelBoundsValid: true,
+            viewportBoundsValid: true,
+            viewportIntersectsModel: true,
+            vertexCount: 12,
+            totalTextEntityCount: 2,
+            indexedTextEntityCount: 2,
+            viewportTextEntityCountBeforeLayerFilter: 1,
+            visibleTextEntityCount: 1,
+            renderInputTextEntityCount: 1
+        )
 
         #expect(layerFiltered.rendererFailureLayer == "layer")
         #expect(viewportMiss.rendererFailureLayer == "viewport")
         #expect(commandMiss.rendererFailureLayer == "renderCommand")
         #expect(textOverlayMiss.rendererFailureLayer == "textOverlay")
+        #expect(textBoundsMiss.rendererFailureLayer == "textBounds")
+        #expect(textCommandMiss.rendererFailureLayer == "textRenderCommand")
         #expect(layerFiltered.hasActionableRendererFailure)
         #expect(textOverlayMiss.rendererDiagnosticSummary.contains("文字"))
     }
@@ -122,11 +175,73 @@ struct CADPoCLineImportTests {
             modelBoundsValid: true,
             viewportBoundsValid: true,
             viewportIntersectsModel: true,
-            vertexCount: 12
+            vertexCount: 12,
+            totalTextEntityCount: 2,
+            indexedTextEntityCount: 2,
+            textWorldBounds: CGRect(x: 80, y: 90, width: 20, height: 10),
+            visibleLayerTextWorldBounds: CGRect(x: 80, y: 90, width: 20, height: 10),
+            nearestTextBounds: CGRect(x: 80, y: 90, width: 8, height: 4),
+            nearestTextDistance: 50,
+            nearestTextPreview: "消防泵房",
+            nearestTextLayerID: "TEXT",
+            textDiagnosticRows: [
+                "text kind total text 1 / mtext 0 / attrib 1 / dimension 0",
+                "near text total 1 / viewport 0 / d 50 / layer TEXT 消防泵房"
+            ]
         )
 
         #expect(snapshot.rendererFailureLayer == "none")
         #expect(!snapshot.hasActionableRendererFailure)
+    }
+
+    @Test func rendererDiagnosticsStayVisibleForHealthyFramesWhenEnabled() {
+        let snapshot = CADRendererPerformanceSnapshot(
+            entityCountInViewport: 2,
+            drawCallCount: 2,
+            frameTimeMilliseconds: 1,
+            skippedEntityCount: 0,
+            visibleLayerCount: 2,
+            totalLayerCount: 2,
+            simplifiedMode: false,
+            renderCommandCount: 2,
+            totalEntityCount: 2,
+            indexedEntityCount: 2,
+            viewportEntityCountBeforeLayerFilter: 2,
+            layerFilterActive: false,
+            modelBounds: CGRect(x: 0, y: 0, width: 100, height: 100),
+            viewportBounds: CGRect(x: 0, y: 0, width: 50, height: 50),
+            modelBoundsValid: true,
+            viewportBoundsValid: true,
+            viewportIntersectsModel: true,
+            vertexCount: 12,
+            totalTextEntityCount: 2,
+            indexedTextEntityCount: 2,
+            textWorldBounds: CGRect(x: 80, y: 90, width: 20, height: 10),
+            visibleLayerTextWorldBounds: CGRect(x: 80, y: 90, width: 20, height: 10),
+            nearestTextBounds: CGRect(x: 80, y: 90, width: 8, height: 4),
+            nearestTextDistance: 50,
+            nearestTextPreview: "消防泵房",
+            nearestTextLayerID: "TEXT",
+            textDiagnosticRows: [
+                "text kind total text 1 / mtext 0 / attrib 1 / dimension 0",
+                "near text total 1 / viewport 0 / d 50 / layer TEXT 消防泵房"
+            ]
+        )
+
+        #expect(snapshot.rendererFailureLayer == "none")
+        #expect(!snapshot.hasActionableRendererFailure)
+        #expect(CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: true, sample: snapshot))
+        #expect(!CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: false, sample: snapshot))
+        #expect(!CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: true, sample: nil))
+
+        let rows = CADMetalLibreDWGPoCEntry.rendererDiagnosticRows(for: snapshot)
+        #expect(rows.contains { $0.contains("entity 2") })
+        #expect(rows.contains { $0.contains("command 2") })
+        #expect(rows.contains { $0.contains("text 0/0") })
+        #expect(rows.contains { $0.contains("text import 2 / index 2 / inView 0/0") })
+        #expect(rows.contains { $0.contains("nearest text d 50") })
+        #expect(!rows.contains { $0.contains("text bounds") })
+        #expect(!rows.contains { $0.contains("text kind total") })
     }
 
     @Test func libreDWGNativePoCImportsDXFBasic2DGeometry() async throws {
@@ -695,6 +810,12 @@ struct CADPoCLineImportTests {
         #expect(displayTexts.contains("∅20"))
         #expect(displayTexts.contains("中文"))
         #expect(commands.count == 2)
+        #expect(result.database.diagnostics.entries.contains { entry in
+            entry.code == "CAD_POC_TEXT_IMPORT_SUMMARY"
+                && (entry.detail?.contains("cadTextCount=2") ?? false)
+                && (entry.detail?.contains("text=1") ?? false)
+                && (entry.detail?.contains("mtext=1") ?? false)
+        })
         #expect(commands.allSatisfy { command in
             if case .text = command {
                 return true
@@ -831,6 +952,37 @@ struct CADPoCLineImportTests {
         #expect(snapshot.vertexCount == 42)
         #expect(snapshot.atlasSize.width > 0)
         #expect(snapshot.atlasSize.height > 0)
+    }
+
+    @Test func cadMetalPoCTextAtlasFallsBackToInsertionAnchorWhenAlignmentMovesGlyphsOffscreen() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        try #require(renderer.isAvailable)
+        let textRun = SiteKeeperCADKernel.CADTextRun(
+            rawText: "消火栓",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 10,
+            boxWidth: 10_000,
+            horizontalAlignmentCode: 3
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: textRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: -1, minY: -1, maxX: 1, maxY: 1)
+        )
+        renderer.updateDrawing(entities: [entity], layers: [.default])
+        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
+            commands: commands,
+            drawableSize: CGSize(width: 800, height: 600),
+            viewSize: CGSize(width: 400, height: 300),
+            contentScale: 2
+        ))
+
+        #expect(snapshot.textCount == 1)
+        #expect(snapshot.vertexCount > 0)
+        #expect(snapshot.diagnosticRows.contains { $0.contains("text atlas anchorFallback 1") })
+        #expect(snapshot.diagnosticRows.contains { $0.contains("intersects true") })
     }
 
     @Test func cadMetalPoCUsesFontAdvanceInsteadOfRasterPaddingForGlyphSpacing() throws {
@@ -1050,6 +1202,54 @@ struct CADPoCLineImportTests {
         #expect(abs(center.y - 80) < 0.001)
     }
 
+    @Test func cadMetalPoCMTextAttachmentUsesRasterSizeInsteadOfCADBox() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        let mtext = SiteKeeperCADKernel.CADTextRun(
+            rawText: "中文",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 10,
+            boxWidth: 6_750,
+            boxHeight: 1_129,
+            horizontalAlignmentCode: 1,
+            verticalAlignmentCode: 1
+        )
+
+        let offset = renderer.textOverlayAlignmentOffsetForTesting(
+            text: mtext,
+            width: 40,
+            height: 12,
+            modelScale: 20,
+            viewScale: CGPoint(x: 2, y: 2)
+        )
+
+        #expect(abs(offset.x - 0) < 0.001)
+        #expect(abs(offset.y - 12) < 0.001)
+    }
+
+    @Test func cadMetalPoCMTextCenterAttachmentKeepsGlyphCenteredOnInsertion() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        let mtext = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 10,
+            boxWidth: 6_750,
+            boxHeight: 1_129,
+            horizontalAlignmentCode: 5,
+            verticalAlignmentCode: 5
+        )
+
+        let offset = renderer.textOverlayAlignmentOffsetForTesting(
+            text: mtext,
+            width: 40,
+            height: 12,
+            modelScale: 20,
+            viewScale: CGPoint(x: 2, y: 2)
+        )
+
+        #expect(abs(offset.x - 20) < 0.001)
+        #expect(abs(offset.y - 6) < 0.001)
+    }
+
     @Test func cadMetalPoCTextOverlayFontSizeTracksDeepZoom() throws {
         let fontSize = CADPoC.CADMetalRenderer.textOverlayFontSizeForTesting(
             textHeight: 2,
@@ -1059,6 +1259,76 @@ struct CADPoCLineImportTests {
 
         #expect(fontSize > 96)
         #expect(fontSize <= 256)
+    }
+
+    @Test func cadMetalPoCMTextUsesBoxHeightWhenLibreDWGLeavesDefaultTextHeight() throws {
+        let text = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV-5*10-SC4",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: -172_263, y: 317_941),
+            height: 2.5,
+            boxWidth: 6_750,
+            boxHeight: 1_129,
+            horizontalAlignmentCode: 1,
+            verticalAlignmentCode: 1
+        )
+
+        let resolvedHeight = CADPoC.CADMetalRenderer.textOverlayWorldHeightForTesting(text: text)
+        let fontSize = CADPoC.CADMetalRenderer.textOverlayFontSizeForTesting(
+            textHeight: resolvedHeight,
+            modelScale: 0.12,
+            contentScale: 2
+        )
+
+        #expect(resolvedHeight == 1_129)
+        #expect(fontSize > 50)
+    }
+
+    @Test func cadMetalPoCTextOverlayDoesNotAutoWrapToNarrowLibreDWGBox() throws {
+        let width = CADPoC.CADMetalRenderer.textOverlayFittingWidthForTesting(
+            cadBoxTargetWidth: 42,
+            unwrappedWidth: 380,
+            fontSize: 18
+        )
+
+        #expect(width >= 380)
+    }
+
+    @Test func cadMetalPoCTextOverlayOnlyUsesCurrentRenderTextCommands() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "TEXT",
+            colorARGB: 0xFF111827,
+            lineWidth: 1
+        )
+        let renderedText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "已渲染文字",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 2.5
+        )
+        let extraViewportText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "扩展视口补捞文字",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 100, y: 0),
+            height: 2.5
+        )
+        let renderedEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: renderedText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 10, maxY: 3)
+        )
+        let extraEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: extraViewportText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 100, minY: 0, maxX: 120, maxY: 3)
+        )
+
+        let displayTexts = renderer.textOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: [renderedEntity, extraEntity],
+            renderCommands: [.text(renderedText, style: style)]
+        )
+
+        #expect(displayTexts == ["已渲染文字"])
     }
     #endif
 
@@ -1077,6 +1347,46 @@ struct CADPoCLineImportTests {
         #expect(textRun.fontWasAvailable)
         #expect(textRun.selectedFontName.localizedCaseInsensitiveContains("Helvetica") == false)
         #expect(textRun.warnings.contains("CAD_TEXT_FONT_LACKS_GLYPHS:Helvetica"))
+    }
+
+    @Test func cadTextDisplayFontExposesFangSongCandidates() throws {
+        #expect(CADDrawingTextDisplayFont.fangSong.displayName == "仿宋")
+        #expect(CADDrawingTextDisplayFont.fangSong.candidateFontNames.contains("FangSong"))
+        #expect(CADDrawingTextDisplayFont.fangSong.candidateFontNames.contains("STFangsong"))
+        #expect(CADDrawingTextBigFont.inferredFromFontName("simfang.shx") == .hzfs)
+    }
+
+    @Test func libreDWGNativePoCAppliesPreferredDisplayFontToNativeText() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine(preferredDisplayFontName: "FangSong")
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("FONT-OVERRIDE")
+        nativeEntity.rawText = strdup("\\U+4E2D\\U+6587")
+        nativeEntity.textStyleName = strdup("HZFS")
+        nativeEntity.fontName = strdup("hzfs.shx")
+        nativeEntity.bigFontName = strdup("hzfs.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+
+        #expect(text.displayText == "中文")
+        #expect(text.selectedFontName == "FangSong")
+        #expect(text.fallbackReason == "user-display-font")
+        #expect(text.warnings.contains("CAD_TEXT_DISPLAY_FONT_OVERRIDE:FangSong"))
     }
 
     @Test func libreDWGNativePoCAggregatesDXFFontDiagnosticsFromStyleTable() async throws {
@@ -1203,6 +1513,61 @@ struct CADPoCLineImportTests {
         #expect(entity.bounds.maxY > 47.9)
         #expect(entity.bounds.width < 10.2)
         #expect(entity.bounds.height > 47.9)
+    }
+
+    @Test func libreDWGNativePoCMTextUsesAttachmentCodeInsteadOfDirectionCodes() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cad-mtext-attachment-poc-\(UUID().uuidString)")
+            .appendingPathExtension("dxf")
+        let dxf = """
+        0
+        SECTION
+        2
+        ENTITIES
+        0
+        MTEXT
+        5
+        MT1
+        8
+        NOTE
+        10
+        100
+        20
+        200
+        40
+        2.5
+        41
+        50
+        46
+        20
+        71
+        9
+        72
+        1
+        73
+        1
+        1
+        右下附着
+        0
+        ENDSEC
+        0
+        EOF
+        """
+        try dxf.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+            file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
+        )
+        let entity = try #require(result.database.entities.first)
+        let text = try #require(entity.text)
+
+        #expect(text.horizontalAlignmentCode == 9)
+        #expect(text.verticalAlignmentCode == 9)
+        #expect(abs(entity.bounds.minX - 50) < 0.001)
+        #expect(abs(entity.bounds.maxX - 100) < 0.001)
+        #expect(abs(entity.bounds.minY - 200) < 0.001)
+        #expect(abs(entity.bounds.maxY - 220) < 0.001)
     }
 
     @Test func cadTextEngineDecodesLegacyCIFAndMIFChineseText() throws {
@@ -1390,6 +1755,43 @@ struct CADPoCLineImportTests {
         #expect(entity.bounds.maxX >= 10)
         #expect(entity.bounds.minY <= 20)
         #expect(entity.bounds.maxY >= 20)
+    }
+
+    @Test func libreDWGNativePoCUsesSimplifiedBigFontAsGB18030HintForNativeTextBytes() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine(preferredTextBigFont: 1)
+        let expectedText = "钑捐翰杞╄簼"
+        let rawBytes = try #require(Self.encodedBytes(expectedText, using: Self.gb18030Encoding))
+        #expect(String(data: Data(rawBytes), encoding: .utf8) == "蕾躲轩躝")
+        let rawText = Self.nativeCString(bytes: rawBytes)
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("GB18030-BIGFONT-TEXT")
+        nativeEntity.rawText = rawText
+        nativeEntity.textStyleName = strdup("HZTXT")
+        nativeEntity.fontName = strdup("hztxt.shx")
+        nativeEntity.bigFontName = strdup("gbcbig.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            rawText.deallocate()
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+
+        #expect(text.rawText == expectedText)
+        #expect(text.displayText == expectedText)
+        #expect(text.bigFontFile == "gbcbig.shx")
+        #expect(text.rawText != "蕾躲轩躝")
     }
 
     @Test func cadTextEngineDecodesGB18030MIFBigFontBytes() throws {
@@ -1595,6 +1997,69 @@ struct CADPoCLineImportTests {
         #expect(CADPoC.CADRenderPipeline().commands(from: allWallVisible).count == 2)
         #expect(noLayerVisible.isEmpty)
         #expect(wrongLayoutVisible.isEmpty)
+    }
+
+    @Test func spatialIndexIndexesTextWithMissingImportedBounds() throws {
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防泵房",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10, y: 20),
+            style: .default,
+            height: 4
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: textRun,
+            bounds: .empty
+        )
+        let effectiveBounds = CADPoC.CADSpatialIndex.effectiveBounds(for: entity)
+        let index = CADPoC.CADSpatialIndex(entities: [entity])
+        let viewport = SiteKeeperCADKernel.CADBounds(minX: 9, minY: 19, maxX: 16, maxY: 25)
+        let visible = index.query(viewport)
+        let commands = CADPoC.CADRenderPipeline().commands(from: visible)
+
+        #expect(!effectiveBounds.isEmpty)
+        #expect(effectiveBounds.contains(textRun.insertionPoint))
+        #expect(index.indexedEntityCount == 1)
+        #expect(visible.contains { $0.id == entity.id })
+        #expect(commands.contains { command in
+            if case let .text(text, _) = command {
+                return text.displayText == "消防泵房"
+            }
+            return false
+        })
+    }
+
+    @Test func spatialIndexQueriesTextByImportedAndInsertionPointBounds() throws {
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "消防泵房",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10, y: 20),
+            style: .default,
+            height: 4
+        )
+        let wrongImportedBounds = SiteKeeperCADKernel.CADBounds(
+            minX: 1_000,
+            minY: 1_000,
+            maxX: 1_020,
+            maxY: 1_010
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "TEXT",
+            text: textRun,
+            bounds: wrongImportedBounds
+        )
+        let effectiveBounds = CADPoC.CADSpatialIndex.effectiveBounds(for: entity)
+        let index = CADPoC.CADSpatialIndex(entities: [entity])
+        let insertionViewport = SiteKeeperCADKernel.CADBounds(minX: 9, minY: 19, maxX: 16, maxY: 25)
+        let importedBoundsViewport = SiteKeeperCADKernel.CADBounds(minX: 999, minY: 999, maxX: 1_021, maxY: 1_011)
+        let middleViewport = SiteKeeperCADKernel.CADBounds(minX: 400, minY: 400, maxX: 410, maxY: 410)
+
+        #expect(effectiveBounds.contains(textRun.insertionPoint))
+        #expect(effectiveBounds.intersects(wrongImportedBounds))
+        #expect(index.query(insertionViewport).contains { $0.id == entity.id })
+        #expect(index.query(importedBoundsViewport).contains { $0.id == entity.id })
+        #expect(index.query(middleViewport).isEmpty)
     }
 
     @Test func libreDWGNativePoCImportsDXFModelAndPaperLayouts() async throws {
@@ -3411,6 +3876,66 @@ struct CADPoCLineImportTests {
         #expect(zoomedOutStableCommands.isEmpty)
     }
 
+    @Test func renderPipelineKeepsVisibleTextWhenLargeDrawingViewportIsSparse() throws {
+        let mtext = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV-5*10-SC40",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: -172_263, y: 317_941),
+            height: 2.5,
+            boxWidth: 6_750,
+            boxHeight: 1_129,
+            horizontalAlignmentCode: 1,
+            verticalAlignmentCode: 1
+        )
+        let mtextEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "-BZ",
+            text: mtext,
+            bounds: SiteKeeperCADKernel.CADBounds(
+                minX: -172_263,
+                minY: 317_941,
+                maxX: -165_513,
+                maxY: 319_070
+            )
+        )
+        let dimensionText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "26500",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: -162_397, y: 317_107),
+            height: 2.5
+        )
+        let dimensionEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .dimension,
+            layerID: "AXIS",
+            path: SiteKeeperCADKernel.CADPath(elements: [
+                .move(to: SiteKeeperCADKernel.CADPoint(x: -162_397, y: 317_107)),
+                .line(to: SiteKeeperCADKernel.CADPoint(x: -156_860, y: 317_107))
+            ]),
+            text: dimensionText,
+            bounds: SiteKeeperCADKernel.CADBounds(
+                minX: -162_397,
+                minY: 317_107,
+                maxX: -156_860,
+                maxY: 343_607
+            )
+        )
+
+        let output = CADPoC.CADRenderPipeline().renderOutput(
+            from: [mtextEntity, dimensionEntity],
+            totalEntityCount: 25_863,
+            visibleEntityCount: 34,
+            zoomScale: 0.01,
+            interactionPhase: .stable
+        )
+        let textCommandCount = output.commands.reduce(0) { count, command in
+            if case .text = command {
+                return count + 1
+            }
+            return count
+        }
+
+        #expect(textCommandCount == 2)
+        #expect(output.performance.skippedEntityCount == 0)
+    }
+
     @Test func renderPipelineStandardBudgetCoversLargeVisiblePlan() throws {
         let entityCount = 25_000
         let entities = (0..<entityCount).map { index in
@@ -3592,7 +4117,7 @@ struct CADPoCLineImportTests {
         let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(engine.canImport(file: file))
-        #expect(result.trace.importSource == "sitekeeper.poc.dwg-libredwg-ios.basic2d-v2")
+        #expect(result.trace.importSource == engine.id)
         #expect(result.trace.drawableEntityCount == 0)
         #expect(result.trace.renderCommandCount == 0)
         #expect(!result.trace.openedForRender)

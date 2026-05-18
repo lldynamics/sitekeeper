@@ -127,6 +127,41 @@ class BackupPackagePreflightTest {
         assertTrue(legacyJsonImportWarnings(backupJson()).isEmpty())
     }
 
+    @Test
+    fun localDataHealthSnapshotAggregatesMissingAndOrphanCounts() {
+        val snapshot = LocalDataHealthSnapshot(
+            projectCount = 2,
+            recordCount = 12,
+            referencedDocumentFileCount = 3,
+            referencedPhotoFileCount = 4,
+            referencedDrawingFileCount = 1,
+            referencedQuickNoteAttachmentCount = 2,
+            missingDocumentFileCount = 1,
+            missingPhotoFileCount = 2,
+            missingDrawingFileCount = 0,
+            missingQuickNoteAttachmentCount = 1,
+            orphanDocumentFileCount = 2,
+            orphanPhotoFileCount = 1,
+            orphanDrawingFileCount = 0,
+            orphanQuickNoteAttachmentCount = 1,
+            orphanFileBytes = 2048,
+            fixTodos = listOf(
+                LocalDataHealthFixTodo(
+                    projectId = "project-1",
+                    title = "补齐交付缺失资料：签证单",
+                    note = "数据体检发现项目资料原文件缺失"
+                )
+            )
+        )
+
+        assertEquals(10, snapshot.referencedFileCount)
+        assertEquals(4, snapshot.missingFileCount)
+        assertEquals(4, snapshot.orphanFileCount)
+        assertEquals(8, snapshot.issueCount)
+        assertEquals(1, snapshot.fixTodos.size)
+        assertEquals("发现 4 个缺失文件、4 个孤立文件", localDataHealthSummaryText(snapshot))
+    }
+
     private fun backupJson(vararg documentIds: String): String {
         val documents = documentIds.joinToString(",") { id ->
             """{"id":"$id"}"""

@@ -45,6 +45,10 @@ extension SiteKeeperCADKernel {
                 return zoomingDecision(for: entity, zoomScale: effectiveZoomScale)
             }
 
+            if isTextEntity(entity), totalEntityCount <= 512 {
+                return .render
+            }
+
             guard shouldSimplify(entityCount: totalEntityCount, zoomScale: effectiveZoomScale) else {
                 return .render
             }
@@ -114,6 +118,17 @@ extension SiteKeeperCADKernel {
 
         private func isDimensionEntity(_ entity: CADEntity) -> Bool {
             entity.kind == .dimension || entity.diagnostics.entries.contains { $0.code.hasPrefix("CAD_DIMENSION") }
+        }
+
+        private func isTextEntity(_ entity: CADEntity) -> Bool {
+            switch entity.kind {
+            case .text, .mtext, .attrib:
+                return entity.text != nil
+            case .dimension:
+                return entity.text != nil
+            default:
+                return false
+            }
         }
 
         private func hasDiagnostic(_ entity: CADEntity, code: String) -> Bool {

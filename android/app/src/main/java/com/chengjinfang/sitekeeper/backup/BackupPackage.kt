@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.core.content.FileProvider
 import com.chengjinfang.sitekeeper.database.project.ProjectRepository
+import com.chengjinfang.sitekeeper.model.backup.BackupSnapshot
 import com.chengjinfang.sitekeeper.model.backup.BackupSnapshotJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,11 +40,178 @@ internal data class DocumentArchiveUsage(
     val orphanFileCount: Int
 )
 
+internal data class LocalDataHealthSnapshot(
+    val projectCount: Int,
+    val recordCount: Int,
+    val referencedDocumentFileCount: Int,
+    val referencedPhotoFileCount: Int,
+    val referencedDrawingFileCount: Int,
+    val referencedQuickNoteAttachmentCount: Int,
+    val missingDocumentFileCount: Int,
+    val missingPhotoFileCount: Int,
+    val missingDrawingFileCount: Int,
+    val missingQuickNoteAttachmentCount: Int,
+    val orphanDocumentFileCount: Int,
+    val orphanPhotoFileCount: Int,
+    val orphanDrawingFileCount: Int,
+    val orphanQuickNoteAttachmentCount: Int,
+    val orphanFileBytes: Long,
+    val fixTodos: List<LocalDataHealthFixTodo> = emptyList()
+) {
+    val referencedFileCount: Int
+        get() = referencedDocumentFileCount +
+            referencedPhotoFileCount +
+            referencedDrawingFileCount +
+            referencedQuickNoteAttachmentCount
+
+    val missingFileCount: Int
+        get() = missingDocumentFileCount +
+            missingPhotoFileCount +
+            missingDrawingFileCount +
+            missingQuickNoteAttachmentCount
+
+    val orphanFileCount: Int
+        get() = orphanDocumentFileCount +
+            orphanPhotoFileCount +
+            orphanDrawingFileCount +
+            orphanQuickNoteAttachmentCount
+
+    val issueCount: Int
+        get() = missingFileCount + orphanFileCount
+}
+
+internal data class LocalDataHealthFixTodo(
+    val projectId: String,
+    val title: String,
+    val note: String,
+    val priority: String = "高",
+    val issueType: String = "资料"
+)
+
+internal data class LocalArchiveCleanupResult(
+    val deletedFileCount: Int,
+    val deletedBytes: Long
+)
+
 internal fun documentArchiveUsageText(usage: DocumentArchiveUsage): String =
     if (usage.orphanFileCount > 0) {
         "资料附件 ${usage.totalFileCount} 个，孤立 ${usage.orphanFileCount} 个"
     } else {
         "资料附件 ${usage.totalFileCount} 个"
+    }
+
+internal fun localDataHealthSummaryText(snapshot: LocalDataHealthSnapshot): String =
+    if (snapshot.issueCount > 0) {
+        "发现 ${snapshot.missingFileCount} 个缺失文件、${snapshot.orphanFileCount} 个孤立文件"
+    } else {
+        "未发现缺失或孤立文件"
+    }
+
+internal suspend fun localDataHealth(
+    context: Context,
+    rawJson: String
+): LocalDataHealthSnapshot =
+    withContext(Dispatchers.IO) {
+        val snapshot = BackupSnapshotJson.decode(rawJson)
+        val references = localFileReferences(snapshot)
+        val missingDocumentFileCount = references.documentFileDocumentIds.count { documentId ->
+            archivedProjectDocumentFiles(context, documentId).isEmpty()
+        }
+        val missingPhotoFileCount = references.photoFileNames.count { fileName ->
+            !archivedProjectPhotoFile(context, fileName).isFile
+        }
+        val missingDrawingFileCount = references.drawingFileNames.count { fileName ->
+            !archivedProjectDrawingFile(context, fileName).isFile
+        }
+        val missingQuickNoteAttachmentCount = references.quickNoteAttachmentFileNames.count { fileName ->
+            !archivedQuickNoteAttachmentFile(context, fileName).isFile
+        }
+        val orphanDocumentFiles = orphanProjectDocumentFiles(
+            context = context,
+            documentIds = references.documentIds
+        )
+        val orphanPhotoFiles = orphanFlatArchiveFiles(
+            root = photoArchiveRoot(context),
+            referencedFileNames = references.photoFileNames
+        )
+        val orphanDrawingFiles = orphanFlatArchiveFiles(
+            root = drawingArchiveRoot(context),
+            referencedFileNames = references.drawingFileNames
+        )
+        val orphanQuickNoteAttachmentFiles = orphanFlatArchiveFiles(
+            root = quickNoteAttachmentArchiveRoot(context),
+            referencedFileNames = references.quickNoteAttachmentFileNames
+        )
+
+        LocalDataHealthSnapshot(
+            projectCount = snapshot.projects.size,
+            recordCount = backupRecordCount(snapshot),
+            referencedDocumentFileCount = references.documentFileDocumentIds.size,
+            referencedPhotoFileCount = references.photoFileNames.size,
+            referencedDrawingFileCount = references.drawingFileNames.size,
+            referencedQuickNoteAttachmentCount = references.quickNoteAttachmentFileNames.size,
+            missingDocumentFileCount = missingDocumentFileCount,
+            missingPhotoFileCount = missingPhotoFileCount,
+            missingDrawingFileCount = missingDrawingFileCount,
+            missingQuickNoteAttachmentCount = missingQuickNoteAttachmentCount,
+            orphanDocumentFileCount = orphanDocumentFiles.size,
+            orphanPhotoFileCount = orphanPhotoFiles.size,
+            orphanDrawingFileCount = orphanDrawingFiles.size,
+            orphanQuickNoteAttachmentCount = orphanQuickNoteAttachmentFiles.size,
+            orphanFileBytes = (
+                orphanDocumentFiles +
+                    orphanPhotoFiles +
+                    orphanDrawingFiles +
+                    orphanQuickNoteAttachmentFiles
+                ).sumOf { file -> file.length() },
+            fixTodos = missingFileFixTodos(
+                context = context,
+                snapshot = snapshot
+            )
+        )
+    }
+
+internal suspend fun cleanupOrphanLocalArchives(
+    context: Context,
+    rawJson: String
+): LocalArchiveCleanupResult =
+    withContext(Dispatchers.IO) {
+        val references = localFileReferences(BackupSnapshotJson.decode(rawJson))
+        val orphanDocumentFiles = orphanProjectDocumentFiles(
+            context = context,
+            documentIds = references.documentIds
+        )
+        val orphanDocumentDirs = projectDocumentArchiveRoot(context)
+            .listFiles()
+            ?.filter { it.isDirectory && it.name !in references.documentIds }
+            .orEmpty()
+        val orphanFlatFiles = orphanFlatArchiveFiles(
+            root = photoArchiveRoot(context),
+            referencedFileNames = references.photoFileNames
+        ) + orphanFlatArchiveFiles(
+            root = drawingArchiveRoot(context),
+            referencedFileNames = references.drawingFileNames
+        ) + orphanFlatArchiveFiles(
+            root = quickNoteAttachmentArchiveRoot(context),
+            referencedFileNames = references.quickNoteAttachmentFileNames
+        )
+        val deletedBytes = (orphanDocumentFiles + orphanFlatFiles).sumOf { file -> file.length() }
+        var deletedFileCount = 0
+
+        orphanFlatFiles.forEach { file ->
+            if (file.delete()) {
+                deletedFileCount += 1
+            }
+        }
+        orphanDocumentDirs.forEach { dir ->
+            deletedFileCount += countArchiveFiles(dir)
+            dir.deleteRecursively()
+        }
+
+        LocalArchiveCleanupResult(
+            deletedFileCount = deletedFileCount,
+            deletedBytes = deletedBytes
+        )
     }
 
 internal suspend fun projectDocumentArchiveUsage(
@@ -182,12 +350,237 @@ internal fun archivedProjectDrawingFile(
 ): File =
     File(drawingArchiveRoot(context), safeArchiveFileName(fileName))
 
+internal fun archivedQuickNoteAttachmentFile(
+    context: Context,
+    fileName: String
+): File =
+    File(quickNoteAttachmentArchiveRoot(context), safeArchiveFileName(fileName))
+
 private fun countArchiveFiles(root: File): Int =
     if (root.exists()) {
         root.walkTopDown().count { file -> file.isFile }
     } else {
         0
     }
+
+private data class LocalFileReferences(
+    val documentIds: Set<String>,
+    val documentFileDocumentIds: Set<String>,
+    val photoFileNames: Set<String>,
+    val drawingFileNames: Set<String>,
+    val quickNoteAttachmentFileNames: Set<String>
+)
+
+private fun localFileReferences(snapshot: BackupSnapshot): LocalFileReferences =
+    LocalFileReferences(
+        documentIds = snapshot.projectDocuments
+            .map { it.id }
+            .filter(String::isNotBlank)
+            .toSet(),
+        documentFileDocumentIds = snapshot.projectDocuments
+            .filter { it.id.isNotBlank() && it.fileName.isNotBlank() }
+            .map { it.id }
+            .toSet(),
+        photoFileNames = buildSet {
+            snapshot.dailyLogs.forEach { log ->
+                log.photoFileName
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
+                log.photos
+                    .map { it.fileName }
+                    .filter(String::isNotBlank)
+                    .forEach(::add)
+            }
+            snapshot.siteTodos.forEach { todo ->
+                todo.rectificationBeforePhotoFileName
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
+                todo.rectificationAfterPhotoFileName
+                    ?.takeIf(String::isNotBlank)
+                    ?.let(::add)
+            }
+        },
+        drawingFileNames = snapshot.projectDrawings
+            .map { it.fileName }
+            .filter(String::isNotBlank)
+            .toSet(),
+        quickNoteAttachmentFileNames = snapshot.quickNotes
+            .flatMap { note -> note.attachments }
+            .map { attachment -> attachment.fileName }
+            .filter(String::isNotBlank)
+            .toSet()
+    )
+
+private fun missingFileFixTodos(
+    context: Context,
+    snapshot: BackupSnapshot
+): List<LocalDataHealthFixTodo> =
+    buildList {
+        snapshot.projectDocuments.forEach { document ->
+            if (
+                document.projectId.isNotBlank() &&
+                document.id.isNotBlank() &&
+                document.fileName.isNotBlank() &&
+                archivedProjectDocumentFiles(context, document.id).isEmpty()
+            ) {
+                val title = document.title.ifBlank { document.fileName }
+                add(
+                    LocalDataHealthFixTodo(
+                        projectId = document.projectId,
+                        title = "补齐交付缺失资料：$title",
+                        note = listOf(
+                            "数据体检发现项目资料原文件缺失",
+                            document.category.takeIf(String::isNotBlank),
+                            document.fileName.takeIf(String::isNotBlank)
+                        ).filterNotNull().joinToString("；")
+                    )
+                )
+            }
+        }
+
+        snapshot.projectDrawings.forEach { drawing ->
+            if (
+                drawing.projectId.isNotBlank() &&
+                drawing.fileName.isNotBlank() &&
+                !archivedProjectDrawingFile(context, drawing.fileName).isFile
+            ) {
+                val title = drawing.name.ifBlank { drawing.fileName }
+                add(
+                    LocalDataHealthFixTodo(
+                        projectId = drawing.projectId,
+                        title = "补齐交付缺失图纸：$title",
+                        note = listOf(
+                            "数据体检发现项目图纸原文件缺失",
+                            drawing.fileName.takeIf(String::isNotBlank),
+                            drawing.version.takeIf(String::isNotBlank)
+                        ).filterNotNull().joinToString("；"),
+                        issueType = "图纸"
+                    )
+                )
+            }
+        }
+
+        snapshot.dailyLogs.forEach { log ->
+            val projectId = log.projectId?.takeIf(String::isNotBlank) ?: return@forEach
+            val photoNames = buildList {
+                log.photoFileName?.takeIf(String::isNotBlank)?.let(::add)
+                log.photos.map { it.fileName }.filter(String::isNotBlank).forEach(::add)
+            }.distinct()
+            photoNames.forEach { fileName ->
+                if (!archivedProjectPhotoFile(context, fileName).isFile) {
+                    add(
+                        LocalDataHealthFixTodo(
+                            projectId = projectId,
+                            title = "补齐施工日志缺失照片：${log.date.ifBlank { fileName }}",
+                            note = listOf(
+                                "数据体检发现施工日志照片缺失",
+                                log.date.takeIf(String::isNotBlank),
+                                fileName,
+                                log.content.take(40).takeIf(String::isNotBlank)
+                            ).filterNotNull().joinToString("；"),
+                            issueType = "现场"
+                        )
+                    )
+                }
+            }
+        }
+
+        snapshot.siteTodos.forEach { todo ->
+            val projectId = todo.projectId?.takeIf(String::isNotBlank) ?: return@forEach
+            listOf(
+                "整改前照片" to todo.rectificationBeforePhotoFileName,
+                "整改后照片" to todo.rectificationAfterPhotoFileName
+            ).forEach { (label, fileName) ->
+                val normalizedFileName = fileName?.takeIf(String::isNotBlank) ?: return@forEach
+                if (!archivedProjectPhotoFile(context, normalizedFileName).isFile) {
+                    add(
+                        LocalDataHealthFixTodo(
+                            projectId = projectId,
+                            title = "补齐${label}：${todo.title.ifBlank { normalizedFileName }}",
+                            note = listOf(
+                                "数据体检发现待办整改照片缺失",
+                                label,
+                                normalizedFileName,
+                                todo.note.take(40).takeIf(String::isNotBlank)
+                            ).filterNotNull().joinToString("；"),
+                            issueType = todo.issueType.ifBlank { "现场" }
+                        )
+                    )
+                }
+            }
+        }
+
+        snapshot.quickNotes.forEach { note ->
+            val projectId = note.projectId?.takeIf(String::isNotBlank) ?: return@forEach
+            note.attachments.forEach { attachment ->
+                if (
+                    attachment.fileName.isNotBlank() &&
+                    !archivedQuickNoteAttachmentFile(context, attachment.fileName).isFile
+                ) {
+                    val title = attachment.originalName
+                        .ifBlank { attachment.fileName }
+                    add(
+                        LocalDataHealthFixTodo(
+                            projectId = projectId,
+                            title = "补齐随手记缺失附件：$title",
+                            note = listOf(
+                                "数据体检发现随手记附件缺失",
+                                note.title.takeIf(String::isNotBlank),
+                                attachment.fileName
+                            ).filterNotNull().joinToString("；")
+                        )
+                    )
+                }
+            }
+        }
+    }
+        .distinctBy { todo -> "${todo.projectId}|${todo.title}|${todo.note}" }
+
+private fun orphanProjectDocumentFiles(
+    context: Context,
+    documentIds: Set<String>
+): List<File> =
+    projectDocumentArchiveRoot(context)
+        .listFiles()
+        ?.filter { file -> file.isDirectory && file.name !in documentIds }
+        ?.flatMap { dir ->
+            dir.walkTopDown()
+                .filter { file -> file.isFile && file.canRead() }
+                .toList()
+        }
+        .orEmpty()
+
+private fun orphanFlatArchiveFiles(
+    root: File,
+    referencedFileNames: Set<String>
+): List<File> =
+    root
+        .listFiles()
+        ?.filter { file ->
+            file.isFile &&
+                file.canRead() &&
+                file.name !in referencedFileNames
+        }
+        ?.sortedBy { it.name }
+        .orEmpty()
+
+private fun backupRecordCount(snapshot: BackupSnapshot): Int =
+    snapshot.projects.size +
+        snapshot.dailyLogs.size +
+        snapshot.siteTodos.size +
+        snapshot.projectFinancialRecords.size +
+        snapshot.materialItems.size +
+        snapshot.quickNotes.size +
+        snapshot.projectContacts.size +
+        snapshot.projectDocuments.size +
+        snapshot.progressTasks.size +
+        snapshot.projectDrawings.size +
+        snapshot.quoteItems.size +
+        snapshot.laborRecords.size +
+        snapshot.projectWarehouseMovements.size +
+        snapshot.materialPriceEntries.size +
+        snapshot.supplierProfiles.size +
+        snapshot.constructionMethods.size
 
 internal data class BackupPackageExportResult(
     val documentFileCount: Int,

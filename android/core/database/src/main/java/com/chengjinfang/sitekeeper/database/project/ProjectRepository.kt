@@ -810,6 +810,7 @@ class ProjectRepository(
         dueDate: String,
         priority: String,
         issueType: String,
+        note: String = "",
         linkedConstructionMethodIds: List<String> = emptyList()
     ) {
         siteTodoDao.upsertSiteTodos(
@@ -824,13 +825,50 @@ class ProjectRepository(
                     issueType = issueType.trim().ifBlank { "现场" },
                     isDone = false,
                     completedAt = null,
-                    note = "",
+                    note = note.trim(),
                     rectificationBeforePhotoFileName = null,
                     rectificationAfterPhotoFileName = null,
                     linkedConstructionMethodIdsJson = BackupSnapshotJson.encodeStringList(linkedConstructionMethodIds)
                 )
             )
         )
+    }
+
+    suspend fun addSiteTodoIfAbsent(
+        projectId: String,
+        title: String,
+        owner: String,
+        dueDate: String,
+        priority: String,
+        issueType: String,
+        note: String = "",
+        linkedConstructionMethodIds: List<String> = emptyList()
+    ): Boolean {
+        val normalizedTitle = title.trim()
+        val normalizedNote = note.trim()
+        if (projectId.isBlank() || normalizedTitle.isBlank()) {
+            return false
+        }
+        val exists = siteTodoDao.getSiteTodos().any { todo ->
+            todo.projectId == projectId &&
+                !todo.isDone &&
+                todo.title == normalizedTitle &&
+                todo.note == normalizedNote
+        }
+        if (exists) {
+            return false
+        }
+        addSiteTodo(
+            projectId = projectId,
+            title = normalizedTitle,
+            owner = owner,
+            dueDate = dueDate,
+            priority = priority,
+            issueType = issueType,
+            note = normalizedNote,
+            linkedConstructionMethodIds = linkedConstructionMethodIds
+        )
+        return true
     }
 
     suspend fun updateSiteTodo(

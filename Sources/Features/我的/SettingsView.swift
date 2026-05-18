@@ -3,17 +3,12 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
-    @State private var showSampleImportConfirm = false
     @State private var showClearLocalDataBackupGate = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
     @State private var clearLocalDataFlowStartedAt = 0.0
     @State private var clearLocalDataPhase = ""
     @State private var clearLocalDataPreview = ClearLocalDataImpactPreview.empty
-
-    private var allowsSampleDataImport: Bool {
-        AppFeatureFlags.allowsSampleDataImport
-    }
 
     var body: some View {
         Form {
@@ -22,18 +17,6 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-#if DEBUG
-            if allowsSampleDataImport {
-                Section(String(localized: "示例数据")) {
-                    Text(String(localized: "默认不预置示例项目和记录。如需演示，可手动导入示例数据。"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Button(String(localized: "导入示例数据（覆盖当前本地数据）"), role: .destructive) {
-                        showSampleImportConfirm = true
-                    }
-                }
-            }
-#endif
             Section(String(localized: "数据管理")) {
                 Stepper(value: $backupHealthReminderDays, in: 1 ... 30) {
                     LabeledContent(
@@ -77,20 +60,6 @@ struct SettingsView: View {
             }
         }
         .navigationTitle(String(localized: "设置")).navigationBarTitleDisplayMode(.inline)
-#if DEBUG
-        .alert(String(localized: "导入示例数据？"), isPresented: $showSampleImportConfirm) {
-            Button(String(localized: "取消"), role: .cancel) {}
-            Button(String(localized: "覆盖并导入"), role: .destructive) {
-                store.importSampleData(replacingExisting: true)
-            }
-        } message: {
-            if store.hasAnyBusinessData {
-                Text(String(localized: "将清空当前本地数据并写入示例项目、日志、报价和材料。此操作不可撤销。"))
-            } else {
-                Text(String(localized: "将写入示例项目、日志、报价和材料，便于演示功能。"))
-            }
-        }
-#endif
         .sheet(isPresented: $showClearLocalDataBackupGate) {
             ClearLocalDataBackupGateSheet(flowStartedAt: clearLocalDataFlowStartedAt) {
                 showClearLocalDataBackupGate = false

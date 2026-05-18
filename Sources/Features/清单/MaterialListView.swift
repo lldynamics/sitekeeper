@@ -210,7 +210,7 @@ struct MaterialListView: View {
                                 Text(item.displayName).tag(item)
                             }
                         }
-                        TextField(String(localized: "进场日期（yyyy-MM-dd）"), text: $newArrivalDate)
+                        OptionalProjectDatePicker(String(localized: "进场日期"), text: $newArrivalDate)
                     }
                     Section(String(localized: "归属项目")) {
                         Picker(String(localized: "归属项目"), selection: $newProjectId) {
@@ -501,7 +501,7 @@ struct MaterialListView: View {
                 brand: newBrand,
                 supplier: newSupplier,
                 purchaseStatus: newPurchaseStatus,
-                arrivalDate: newArrivalDate,
+                arrivalDate: ProjectDateInput.normalizedStorageText(newArrivalDate),
                 projectId: newProjectId
             )
         )
