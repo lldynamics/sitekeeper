@@ -10,6 +10,9 @@ ALLOWED_FILES=(
   "Sources/Shared/Services/DataStoreDeletionPolicy.swift"
   "Sources/Shared/Services/PhotoStorage.swift"
   "Sources/Shared/Services/DocumentStorage.swift"
+  "Sources/Shared/Services/ProjectDocumentStorage.swift"
+  "Sources/Shared/Services/DrawingStorage.swift"
+  "Sources/Shared/Services/QuickNoteAttachmentStorage.swift"
 )
 
 MATCHES="$(

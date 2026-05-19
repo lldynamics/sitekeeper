@@ -12,11 +12,6 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
-            Section(String(localized: "显示")) {
-                Text(String(localized: "公制单位、自动保存、主题、配色和语言已放到“我的”首页快捷设置。"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
             Section(String(localized: "数据管理")) {
                 Stepper(value: $backupHealthReminderDays, in: 1 ... 30) {
                     LabeledContent(

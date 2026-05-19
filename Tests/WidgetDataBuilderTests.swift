@@ -65,7 +65,14 @@ struct WidgetDataBuilderTests {
 
     @Test func dataHealthUsesSharedWidgetDefaultsKeys() throws {
         let root = try Self.repositoryRoot()
-        let source = try Self.sourceText(root, "Sources/Features/我的/DataHealthView.swift")
+        let source = try [
+            "Sources/Features/我的/DataHealthView.swift",
+            "Sources/Features/我的/DataHealthViewActions.swift",
+            "Sources/Features/我的/DataHealthViewIssues.swift",
+            "Sources/Features/我的/DataHealthSupport.swift"
+        ]
+        .map { try Self.sourceText(root, $0) }
+        .joined(separator: "\n")
 
         #expect(source.contains("WidgetSharedDefaults.suiteName"))
         #expect(source.contains("WidgetSharedDefaults.dataKey"))
