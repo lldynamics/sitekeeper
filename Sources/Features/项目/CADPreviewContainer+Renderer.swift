@@ -95,7 +95,7 @@ extension CADPreviewContainer {
                         visibleLayerIDs: nativeCADVisibleLayerIDs,
                         onLayoutsChanged: { layouts in
                             nativeCADLayouts = layouts
-                            let nextLayoutID = CADMetalLibreDWGPoCEntry.defaultLayoutID(layouts)
+                            let nextLayoutID = NativeCADViewerEntry.defaultLayoutID(layouts)
                             if let current = nativeCADCurrentLayoutID,
                                layouts.contains(where: { $0.id == current }) {
                                 return
@@ -226,7 +226,7 @@ extension CADPreviewContainer {
         AppHaptics.impact(.light, intensity: 0.55)
     }
 
-    func migrateCADPoCFeatureDefaultsIfNeeded() {
+    func migrateNativeCADFeatureDefaultsIfNeeded() {
         guard cadFeatureDefaultsVersion < 2 else { return }
         if cadFeatureDefaultsVersion < 1 {
             rendersCADTextOverlays = true

@@ -68,14 +68,14 @@ struct CADPreviewContainer: View {
     @State var nativeCenterSnapPoints: [CGPoint] = []
     @State var nativeSnapSourcePoints: [CADNativeSnapSourcePoint] = []
     @State var nativeSnapPointBuckets = CADNativeSnapPointBuckets()
-    @State var nativeCADLayouts: [CADPoC.CADLayout] = []
+    @State var nativeCADLayouts: [NativeCAD.CADLayout] = []
     @State var nativeCADCurrentLayoutID: String?
-    @State var nativeCADLayers: [CADPoC.CADLayer] = []
+    @State var nativeCADLayers: [NativeCAD.CADLayer] = []
     @State var nativeCADVisibleLayerIDs: Set<String>?
     @State var enabledSnapModes: Set<CADSnapMode> = Set(CADSnapMode.allCases)
     @State var cadPreviewReloadToken = UUID()
     @State var lastRendererPerformance: CADRendererPerformanceSnapshot?
-    @State var lastCADOpenTrace: CADPoC.CADOpenTrace?
+    @State var lastCADOpenTrace: NativeCAD.CADOpenTrace?
     @State var forceFallbackForPerformance = false
     @State var forceFallbackReason: String?
     @State var alertMessage = ""
@@ -90,22 +90,22 @@ struct CADPreviewContainer: View {
         )
     )
     @AppStorage("cadViewerMode") var cadViewerModeRaw = CADViewerMode.auto.rawValue
-    @AppStorage("cad.metal.poc.showsOverviewMap") var showsCADOverviewMap = false
-    @AppStorage("cad.metal.poc.rendersTextOverlays") var rendersCADTextOverlays = true
-    @AppStorage("cad.metal.poc.rendersLineTypes") var rendersCADLineTypes = false
-    @AppStorage("cad.metal.poc.rendersLineWeights") var rendersCADLineWeights = false
-    @AppStorage("cad.metal.poc.rendersDimensionDetails") var rendersCADDimensionDetails = false
-    @AppStorage("cad.metal.poc.buildsTextSearchIndex") var buildsCADTextSearchIndex = false
-    @AppStorage("cad.metal.poc.publishesSnapPoints") var publishesCADSnapPoints = false
-    @AppStorage("cad.metal.poc.publishesSnapIntersections") var publishesCADSnapIntersections = false
-    @AppStorage("cad.metal.poc.rendersHatchBoundaries") var rendersCADHatchBoundaries = false
-    @AppStorage("cad.metal.poc.rendersHatches") var rendersCADHatches = false
-    @AppStorage("cad.metal.poc.rendersPlaceholders") var rendersCADPlaceholders = false
-    @AppStorage("cad.metal.poc.showsRendererDiagnostics") var showsCADRendererDiagnostics = false
-    @AppStorage("cad.metal.poc.featureDefaultsVersion") var cadFeatureDefaultsVersion = 0
-    @AppStorage("cad.metal.poc.textDisplayFont") var cadTextDisplayFontRaw = CADDrawingTextDisplayFont.auto.rawValue
-    @AppStorage("cad.metal.poc.importedTextFontName") var cadImportedTextFontName = ""
-    @AppStorage("cad.metal.poc.importedTextFontPath") var cadImportedTextFontPath = ""
+    @AppStorage("cad.native.showsOverviewMap") var showsCADOverviewMap = false
+    @AppStorage("cad.native.rendersTextOverlays") var rendersCADTextOverlays = true
+    @AppStorage("cad.native.rendersLineTypes") var rendersCADLineTypes = false
+    @AppStorage("cad.native.rendersLineWeights") var rendersCADLineWeights = false
+    @AppStorage("cad.native.rendersDimensionDetails") var rendersCADDimensionDetails = false
+    @AppStorage("cad.native.buildsTextSearchIndex") var buildsCADTextSearchIndex = false
+    @AppStorage("cad.native.publishesSnapPoints") var publishesCADSnapPoints = false
+    @AppStorage("cad.native.publishesSnapIntersections") var publishesCADSnapIntersections = false
+    @AppStorage("cad.native.rendersHatchBoundaries") var rendersCADHatchBoundaries = false
+    @AppStorage("cad.native.rendersHatches") var rendersCADHatches = false
+    @AppStorage("cad.native.rendersPlaceholders") var rendersCADPlaceholders = false
+    @AppStorage("cad.native.showsRendererDiagnostics") var showsCADRendererDiagnostics = false
+    @AppStorage("cad.native.featureDefaultsVersion") var cadFeatureDefaultsVersion = 0
+    @AppStorage("cad.native.textDisplayFont") var cadTextDisplayFontRaw = CADDrawingTextDisplayFont.auto.rawValue
+    @AppStorage("cad.native.importedTextFontName") var cadImportedTextFontName = ""
+    @AppStorage("cad.native.importedTextFontPath") var cadImportedTextFontPath = ""
     let overlaySnapTolerance: CGFloat = 14
     let activeStrokeSamplingCanvasDistance: CGFloat = 3
     let activeStrokePointLimit = 4096

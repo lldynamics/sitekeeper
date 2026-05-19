@@ -1,6 +1,6 @@
 import Foundation
 
-extension CADPoC {
+extension NativeCAD {
     struct CADRenderPipeline {
         var lodPolicy: SiteKeeperCADKernel.CADLODPolicy
         var featureOptions: CADCanvasFeatureOptions
@@ -54,7 +54,7 @@ extension CADPoC {
             for (offset, entity) in renderEntities.enumerated() {
                 if commands.count >= renderBudget.maxRenderCommands {
                     skippedEntityCount += renderEntities.count - offset
-                    warnings.append("CAD_POC_RENDER_BUDGET_EXCEEDED")
+                    warnings.append("CAD_NATIVE_RENDER_BUDGET_EXCEEDED")
                     break
                 }
 
@@ -81,7 +81,7 @@ extension CADPoC {
                 } else {
                     commands.append(contentsOf: entityCommands.prefix(remainingBudget))
                     skippedEntityCount += renderEntities.count - offset
-                    warnings.append("CAD_POC_RENDER_BUDGET_EXCEEDED")
+                    warnings.append("CAD_NATIVE_RENDER_BUDGET_EXCEEDED")
                     break
                 }
             }
@@ -137,7 +137,7 @@ extension CADPoC {
                     .imagePlaceholder(
                         entityID: entity.id.uuidString,
                         bounds: entity.bounds,
-                        reason: entity.unsupportedReason ?? "Image rendering is not implemented in the CAD Metal PoC."
+                        reason: entity.unsupportedReason ?? "Image rendering is not implemented in the Native CAD Renderer."
                     )
                 )
                 return commands
@@ -248,13 +248,13 @@ extension CADPoC {
             }
 
             let boundaryOnlyCodes: Set<String> = [
-                "CAD_POC_HATCH_BOUNDARY_ONLY",
-                "CAD_POC_HATCH_COMPLEX_BOUNDARY_DEGRADED",
-                "CAD_POC_HATCH_BOUNDARY_UNRESOLVED",
-                "CAD_POC_HATCH_COMPLEX_BOUNDARY_UNRESOLVED",
+                "CAD_NATIVE_HATCH_BOUNDARY_ONLY",
+                "CAD_NATIVE_HATCH_COMPLEX_BOUNDARY_DEGRADED",
+                "CAD_NATIVE_HATCH_BOUNDARY_UNRESOLVED",
+                "CAD_NATIVE_HATCH_COMPLEX_BOUNDARY_UNRESOLVED",
                 "CAD_HATCH_DEGRADED_TO_BOUNDARY",
                 "CAD_LOD_COMPLEX_HATCH_SKIPPED",
-                "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY"
+                "CAD_NATIVE_WIPEOUT_DEGRADED_TO_BOUNDARY"
             ]
             let diagnosticCodes = Set(entity.diagnostics.entries.map(\.code))
             guard diagnosticCodes.isDisjoint(with: boundaryOnlyCodes) else {

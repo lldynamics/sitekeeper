@@ -200,7 +200,7 @@ extension CADPreviewContainer {
         isDWGFile && !nativeCADLayouts.isEmpty
     }
 
-    var nativeCADCurrentLayout: CADPoC.CADLayout? {
+    var nativeCADCurrentLayout: NativeCAD.CADLayout? {
         nativeCADLayouts.first { $0.id == nativeCADCurrentLayoutID }
             ?? nativeCADLayouts.first(where: \.isModelSpace)
             ?? nativeCADLayouts.first
@@ -269,7 +269,7 @@ extension CADPreviewContainer {
         }
     }
 
-    func nativeCADLayoutDisplayName(_ layout: CADPoC.CADLayout) -> String {
+    func nativeCADLayoutDisplayName(_ layout: NativeCAD.CADLayout) -> String {
         if layout.isModelSpace {
             return String(localized: "模型")
         }
@@ -277,7 +277,7 @@ extension CADPreviewContainer {
         return trimmed.isEmpty ? layout.id : trimmed
     }
 
-    func nativeCADLayoutIcon(_ layout: CADPoC.CADLayout) -> String {
+    func nativeCADLayoutIcon(_ layout: NativeCAD.CADLayout) -> String {
         layout.isModelSpace ? "cube.transparent" : "rectangle.on.rectangle"
     }
 
@@ -485,7 +485,7 @@ extension CADPreviewContainer {
         }
     }
 
-    func isNativeCADLayerVisible(_ layer: CADPoC.CADLayer) -> Bool {
+    func isNativeCADLayerVisible(_ layer: NativeCAD.CADLayer) -> Bool {
         nativeCADVisibleLayerIDs?.contains(layer.id) ?? layer.isVisible
     }
 

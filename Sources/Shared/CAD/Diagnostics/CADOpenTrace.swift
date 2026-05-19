@@ -1,6 +1,6 @@
 import Foundation
 
-extension CADPoC {
+extension NativeCAD {
     struct CADDiagnosticLogEntry: Equatable, Codable {
         let timestamp: String
         let category: String

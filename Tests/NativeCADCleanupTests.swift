@@ -2,12 +2,12 @@ import Foundation
 import Testing
 @testable import sitekeeper
 
-struct CADPoCCleanupTests {
-    @Test func productionCADRouteUsesMetalLibreDWGPoC() throws {
+struct NativeCADCleanupTests {
+    @Test func productionCADRouteUsesNativeCADViewerEntry() throws {
         let root = try Self.repositoryRoot()
         let routeSource = try Self.sourceText(root, "Sources/Features/项目/CADViewerRoute.swift")
         #expect(routeSource.contains("struct CADViewerRoute"))
-        #expect(routeSource.contains("CADMetalLibreDWGPoCEntry("))
+        #expect(routeSource.contains("NativeCADViewerEntry("))
     }
 
     @Test func productionCADTargetsDoNotReferenceRemovedPreviewRoutes() throws {
@@ -37,7 +37,7 @@ struct CADPoCCleanupTests {
         #expect(toolbarSource.contains("下载原图"))
     }
 
-    @Test func cadPoCOptionalDetailFeaturesDefaultToPerformanceMode() throws {
+    @Test func nativeCADOptionalDetailFeaturesDefaultToPerformanceMode() throws {
         let defaults = CADCanvasFeatureOptions.performanceDefault
         #expect(defaults.rendersTextOverlays == true)
         #expect(defaults.publishesSnapPoints == false)
@@ -98,14 +98,14 @@ struct CADPoCCleanupTests {
     }
 
     @Test func cadDiagnosticEventsUseStructuredRuntimeLogInsteadOfPrint() throws {
-        CADPoC.CADDiagnosticLog.removeAllForTesting()
-        CADPoC.CADDiagnosticLog.recordEncoded(
+        NativeCAD.CADDiagnosticLog.removeAllForTesting()
+        NativeCAD.CADDiagnosticLog.recordEncoded(
             category: "cad.test",
             message: "structured diagnostic event",
             payload: ["stage": "render", "state": "captured"]
         )
 
-        let entry = try #require(CADPoC.CADDiagnosticLog.recentEntries(limit: 1).first)
+        let entry = try #require(NativeCAD.CADDiagnosticLog.recentEntries(limit: 1).first)
         #expect(entry.category == "cad.test")
         #expect(entry.message == "structured diagnostic event")
         #expect(entry.payloadJSON?.contains("\"stage\":\"render\"") == true)
@@ -124,7 +124,7 @@ struct CADPoCCleanupTests {
 
     @Test func cadCoreRendererAndImportMinimumPathRemainUsable() async throws {
         let file = SiteKeeperCADKernel.CADFile(
-            url: URL(fileURLWithPath: "/tmp/cad-poc.json"),
+            url: URL(fileURLWithPath: "/tmp/cad-native.json"),
             format: .intermediateJSON
         )
         var database = SiteKeeperCADKernel.CADDatabase(file: file)
@@ -140,11 +140,11 @@ struct CADPoCCleanupTests {
             )
         )
 
-        let commands = CADPoC.CADRenderPipeline().commands(from: database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: database.entities)
         #expect(commands.isEmpty == false)
 
         let dxfURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0

@@ -894,8 +894,8 @@ static char *sitekeeper_proxy_reason(const Dwg_Object *object, int is_tianzheng)
         sizeof(buffer),
         "%s; name=%s; dxfname=%s; app=%s; cpp=%s; class=%s; type=%d; fixedtype=%d; classId=%ld; proxyDataBytes=%ld; entityDataBytes=%ld%s%.180s",
         is_tianzheng
-            ? "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the CAD Metal PoC."
-            : "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the CAD Metal PoC.",
+            ? "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the Native CAD Renderer."
+            : "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the Native CAD Renderer.",
         sitekeeper_safe_string(object != NULL ? object->name : NULL),
         sitekeeper_safe_string(object != NULL ? object->dxfname : NULL),
         sitekeeper_safe_string(object != NULL && object->klass != NULL ? object->klass->appname : NULL),

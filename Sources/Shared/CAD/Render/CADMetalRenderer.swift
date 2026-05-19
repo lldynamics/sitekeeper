@@ -8,7 +8,7 @@ import simd
 import UIKit
 #endif
 
-extension CADPoC {
+extension NativeCAD {
     final class CADMetalRenderer: NSObject, MTKViewDelegate {
         typealias Kernel = SiteKeeperCADKernel
 
@@ -86,7 +86,7 @@ extension CADPoC {
         }
 
         private struct FrameRenderPlan {
-            var output: CADPoC.CADRenderPipeline.Output
+            var output: NativeCAD.CADRenderPipeline.Output
             var needsContinuation: Bool
         }
 
@@ -696,7 +696,7 @@ extension CADPoC {
                 let remainingCommandCapacity = max(progressiveCommandCacheLimit - state.commands.count, 0)
                 if remainingCommandCapacity == 0 {
                     state.completed = true
-                    state.warnings.insert("CAD_POC_PROGRESSIVE_COMMAND_CACHE_LIMIT")
+                    state.warnings.insert("CAD_NATIVE_PROGRESSIVE_COMMAND_CACHE_LIMIT")
                 } else {
                     let batchEnd = min(
                         state.nextEntityOffset + progressiveEntityBatchSize,
@@ -721,7 +721,7 @@ extension CADPoC {
                     state.warnings.formUnion(batchOutput.performance.warnings)
                     if batchOutput.commands.count >= remainingCommandCapacity {
                         state.completed = true
-                        state.warnings.insert("CAD_POC_PROGRESSIVE_COMMAND_CACHE_LIMIT")
+                        state.warnings.insert("CAD_NATIVE_PROGRESSIVE_COMMAND_CACHE_LIMIT")
                     }
                 }
             }
@@ -732,7 +732,7 @@ extension CADPoC {
 
             let needsContinuation = !state.completed
             if needsContinuation {
-                state.warnings.insert("CAD_POC_PROGRESSIVE_RENDERING")
+                state.warnings.insert("CAD_NATIVE_PROGRESSIVE_RENDERING")
             }
             progressiveRenderState = state
 
@@ -754,7 +754,7 @@ extension CADPoC {
                 warnings: Array(state.warnings).sorted()
             )
             return FrameRenderPlan(
-                output: CADPoC.CADRenderPipeline.Output(commands: commands, performance: trace),
+                output: NativeCAD.CADRenderPipeline.Output(commands: commands, performance: trace),
                 needsContinuation: needsContinuation
             )
         }
@@ -1296,7 +1296,7 @@ extension CADPoC {
         }
 
         private func logFrameTrace(_ trace: Kernel.CADPerformanceTrace) {
-            CADPoC.CADDiagnosticLog.recordEncoded(
+            NativeCAD.CADDiagnosticLog.recordEncoded(
                 category: "cad.frameTrace",
                 message: "CAD renderer frame trace captured.",
                 payload: trace,
@@ -1342,8 +1342,8 @@ extension CADPoC {
                 callbacks.onOpenQualityChange(
                     CADOpenQualitySnapshot(
                         level: "ready",
-                        title: "CAD Metal PoC",
-                        summary: "当前图纸已由 Metal PoC 渲染。",
+                        title: "Native CAD Renderer",
+                        summary: "当前图纸已由原生 CAD 渲染器渲染。",
                         primaryAction: "",
                         detailLines: [],
                         allowsMarkup: true,
@@ -1751,7 +1751,7 @@ private extension Array where Element == String {
     }
 }
 
-private extension CADPoC.CADMetalRenderer {
+private extension NativeCAD.CADMetalRenderer {
     struct CADMetalVertex {
         var position: SIMD2<Float>
         var color: SIMD4<Float>
@@ -1804,13 +1804,13 @@ private extension CADPoC.CADMetalRenderer {
         do {
             let library = try device.makeLibrary(source: shaderSource, options: nil)
             let descriptor = MTLRenderPipelineDescriptor()
-            descriptor.label = "CAD Metal PoC Pipeline"
+            descriptor.label = "Native CAD Renderer Pipeline"
             descriptor.vertexFunction = library.makeFunction(name: "cad_vertex_main")
             descriptor.fragmentFunction = library.makeFunction(name: "cad_fragment_main")
             descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
             return try device.makeRenderPipelineState(descriptor: descriptor)
         } catch {
-            assertionFailure("CAD Metal pipeline failed: \(error)")
+            assertionFailure("Native CAD renderer pipeline failed: \(error)")
             return nil
         }
     }
@@ -1823,7 +1823,7 @@ private extension CADPoC.CADMetalRenderer {
         do {
             let library = try device.makeLibrary(source: shaderSource, options: nil)
             let descriptor = MTLRenderPipelineDescriptor()
-            descriptor.label = "CAD Metal PoC Text Atlas Pipeline"
+            descriptor.label = "Native CAD Renderer Text Atlas Pipeline"
             descriptor.vertexFunction = library.makeFunction(name: "cad_text_vertex_main")
             descriptor.fragmentFunction = library.makeFunction(name: "cad_text_fragment_main")
             descriptor.colorAttachments[0].pixelFormat = colorPixelFormat
@@ -1836,7 +1836,7 @@ private extension CADPoC.CADMetalRenderer {
             descriptor.colorAttachments[0].destinationAlphaBlendFactor = .oneMinusSourceAlpha
             return try device.makeRenderPipelineState(descriptor: descriptor)
         } catch {
-            assertionFailure("CAD Metal text atlas pipeline failed: \(error)")
+            assertionFailure("Native CAD renderer text atlas pipeline failed: \(error)")
             return nil
         }
     }
@@ -1972,7 +1972,7 @@ private extension CADPoC.CADMetalRenderer {
 
     func fitModelBounds(for entities: [Kernel.CADEntity]) -> Kernel.CADBounds {
         let finiteBounds = entities.compactMap { entity -> (Kernel.CADEntity, Kernel.CADBounds)? in
-            let bounds = CADPoC.CADSpatialIndex.effectiveBounds(for: entity)
+            let bounds = NativeCAD.CADSpatialIndex.effectiveBounds(for: entity)
             guard bounds.isFiniteForCADDisplay else { return nil }
             return (entity, bounds)
         }
@@ -1989,7 +1989,7 @@ private extension CADPoC.CADMetalRenderer {
             return true
         }
         return entity.diagnostics.entries.contains { entry in
-            entry.code == "CAD_POC_INFINITE_LINE_CLIPPED"
+            entry.code == "CAD_NATIVE_INFINITE_LINE_CLIPPED"
         }
     }
 
@@ -4130,7 +4130,7 @@ private struct CADTextAtlasTextureCache {
 
     struct Entry {
         var texture: MTLTexture
-        var packedGlyphs: [CADTextRasterCache.Key: CADPoC.CADMetalRenderer.CADPackedTextGlyph]
+        var packedGlyphs: [CADTextRasterCache.Key: NativeCAD.CADMetalRenderer.CADPackedTextGlyph]
         var size: (width: Int, height: Int)
         var uniqueTextureCount: Int
     }
@@ -4178,7 +4178,7 @@ private struct CADTextAtlasTextureCache {
     }
 }
 
-extension CADPoC.CADMetalRenderer {
+extension NativeCAD.CADMetalRenderer {
     struct CADTextAtlasSnapshot {
         var textCount: Int
         var skippedTextCount: Int
@@ -4431,7 +4431,7 @@ extension CADPoC.CADMetalRenderer {
         viewportBounds: Kernel.CADBounds,
         zoomScale: Double,
         phase: Kernel.CADRenderInteractionPhase
-    ) -> CADPoC.CADRenderPipeline.Output {
+    ) -> NativeCAD.CADRenderPipeline.Output {
         setInteractionPhase(phase)
         return renderOutputForFrame(
             visibleEntities: visibleEntities,
@@ -4675,7 +4675,7 @@ private extension SiteKeeperCADKernel.CADPath {
 }
 
 #else
-extension CADPoC {
+extension NativeCAD {
     final class CADMetalRenderer {
         let deviceName: String? = nil
         var isAvailable: Bool { false }

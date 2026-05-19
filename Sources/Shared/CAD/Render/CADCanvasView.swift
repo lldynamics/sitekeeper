@@ -154,8 +154,8 @@ struct CADCanvasView: UIViewRepresentable {
     let buildsTextSearchIndex: Bool
     let debugTextOverlays: Bool
     let callbacks: CADRendererCallbacks
-    let onLayoutsChanged: ([CADPoC.CADLayout]) -> Void
-    let onLayersChanged: ([CADPoC.CADLayer]) -> Void
+    let onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void
+    let onLayersChanged: ([NativeCAD.CADLayer]) -> Void
     let onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void
 
     init(
@@ -169,8 +169,8 @@ struct CADCanvasView: UIViewRepresentable {
         buildsTextSearchIndex: Bool = false,
         debugTextOverlays: Bool = false,
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
-        onLayoutsChanged: @escaping ([CADPoC.CADLayout]) -> Void = { _ in },
-        onLayersChanged: @escaping ([CADPoC.CADLayer]) -> Void = { _ in },
+        onLayoutsChanged: @escaping ([NativeCAD.CADLayout]) -> Void = { _ in },
+        onLayersChanged: @escaping ([NativeCAD.CADLayer]) -> Void = { _ in },
         onSearchIndexChanged: @escaping (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
     ) {
         self.fileURL = fileURL
@@ -243,7 +243,7 @@ struct CADCanvasView: UIViewRepresentable {
     }
 
     final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        let renderer = CADPoC.CADMetalRenderer()
+        let renderer = NativeCAD.CADMetalRenderer()
         weak var view: MTKView?
         private struct LoadedImportKey: Equatable {
             var fileURL: URL
@@ -252,14 +252,14 @@ struct CADCanvasView: UIViewRepresentable {
 
         private var loadedImportKey: LoadedImportKey?
         private var importTask: Task<Void, Never>?
-        private var lastTrace: CADPoC.CADOpenTrace?
+        private var lastTrace: NativeCAD.CADOpenTrace?
         private var lastDatabase: SiteKeeperCADKernel.CADDatabase?
         private var lastPinchLocation: CGPoint?
         private var lastControlCommandID: UUID?
         private var buildsTextSearchIndex = false
         var callbacks = CADRendererCallbacks()
-        var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
-        var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
+        var onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void = { _ in }
+        var onLayersChanged: ([NativeCAD.CADLayer]) -> Void = { _ in }
         var onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
 
         deinit {
@@ -273,7 +273,7 @@ struct CADCanvasView: UIViewRepresentable {
             importTask?.cancel()
             importTask = Task { [weak self] in
                 let file = SiteKeeperCADKernel.CADFile(url: fileURL)
-                let engine = CADPoC.LibreDWGNativeImportEngine(
+                let engine = NativeCAD.LibreDWGNativeImportEngine(
                     preferredTextCodePage: textImportOptions.preferredTextCodePage,
                     preferredTextBigFont: textImportOptions.preferredTextBigFont,
                     fontMappings: textImportOptions.fontMappings,
@@ -294,7 +294,7 @@ struct CADCanvasView: UIViewRepresentable {
         }
 
         @MainActor
-        private func applyImportResult(_ result: CADPoC.CADImportResult) {
+        private func applyImportResult(_ result: NativeCAD.CADImportResult) {
             lastTrace = result.trace
             lastDatabase = result.database
             renderer.setOpenTrace(result.trace)
@@ -315,7 +315,7 @@ struct CADCanvasView: UIViewRepresentable {
 
         @MainActor
         private func applyUnsupportedTrace(file: SiteKeeperCADKernel.CADFile, source: String) {
-            let trace = CADPoC.CADOpenTrace.unsupported(fileName: file.displayName, importSource: source)
+            let trace = NativeCAD.CADOpenTrace.unsupported(fileName: file.displayName, importSource: source)
             lastTrace = trace
             lastDatabase = nil
             renderer.setOpenTrace(trace)
@@ -383,8 +383,8 @@ struct CADCanvasView: UIViewRepresentable {
             view.setNeedsDisplay()
         }
 
-        private func logTrace(_ trace: CADPoC.CADOpenTrace) {
-            CADPoC.CADDiagnosticLog.recordEncoded(
+        private func logTrace(_ trace: NativeCAD.CADOpenTrace) {
+            NativeCAD.CADDiagnosticLog.recordEncoded(
                 category: "cad.openTrace",
                 message: "CAD open trace captured.",
                 payload: trace
@@ -423,7 +423,7 @@ struct CADCanvasView: UIViewRepresentable {
                 )
             }
 
-            CADPoC.CADDiagnosticLog.recordEncoded(
+            NativeCAD.CADDiagnosticLog.recordEncoded(
                 category: "cad.textTrace",
                 message: "CAD text trace captured.",
                 payload: samples,
@@ -519,8 +519,8 @@ struct CADCanvasView: View {
     var buildsTextSearchIndex: Bool = false
     var debugTextOverlays: Bool = false
     var callbacks: CADRendererCallbacks = CADRendererCallbacks()
-    var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
-    var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
+    var onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void = { _ in }
+    var onLayersChanged: ([NativeCAD.CADLayer]) -> Void = { _ in }
     var onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
 
     var body: some View {

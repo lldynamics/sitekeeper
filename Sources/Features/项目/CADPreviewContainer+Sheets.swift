@@ -351,7 +351,7 @@ extension CADPreviewContainer {
             lines.append("## \(String(localized: "内核报告"))")
             lines.append(rendererReport)
         }
-        let runtimeLog = CADPoC.CADDiagnosticLog.recentEntries(limit: 24)
+        let runtimeLog = NativeCAD.CADDiagnosticLog.recentEntries(limit: 24)
         if !runtimeLog.isEmpty {
             lines.append("")
             lines.append("## CAD runtime log")
@@ -476,14 +476,14 @@ extension CADPreviewContainer {
             kernelTrace: kernelTrace.map(CADDiagnosticMachineTrace.KernelTrace.init),
             nativeTrace: nativeTrace.map(CADDiagnosticMachineTrace.NativeTrace.init),
             diagnostics: diagnostics,
-            runtimeLog: CADPoC.CADDiagnosticLog.recentEntries(limit: 50),
+            runtimeLog: NativeCAD.CADDiagnosticLog.recentEntries(limit: 50),
             notes: diagnosticNotes(pipeline: pipeline, diagnostics: diagnostics)
         )
     }
 
     private func diagnosticPipeline(
         kernelTrace: SiteKeeperCADKernel.DWGOpenPipelineTrace? = nil,
-        nativeTrace: CADPoC.CADOpenTrace? = nil
+        nativeTrace: NativeCAD.CADOpenTrace? = nil
     ) -> CADDiagnosticMachineTrace.Pipeline {
         if let kernelTrace {
             let failureLayer = diagnosticFailureLayer(kernelTrace)
@@ -553,7 +553,7 @@ extension CADPreviewContainer {
 
     private func diagnosticCounts(
         kernelTrace: SiteKeeperCADKernel.DWGOpenPipelineTrace?,
-        nativeTrace: CADPoC.CADOpenTrace?
+        nativeTrace: NativeCAD.CADOpenTrace?
     ) -> CADDiagnosticMachineTrace.Counts {
         if let kernelTrace {
             return CADDiagnosticMachineTrace.Counts(
@@ -612,7 +612,7 @@ extension CADPreviewContainer {
         return "unknown"
     }
 
-    private func diagnosticFailureLayer(_ trace: CADPoC.CADOpenTrace) -> String {
+    private func diagnosticFailureLayer(_ trace: NativeCAD.CADOpenTrace) -> String {
         if trace.openedForRender {
             return "none"
         }

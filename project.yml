@@ -24,11 +24,11 @@ targets:
           - "$(SRCROOT)/Sources"
           - "$(SRCROOT)/SiteKeeperCADKernel"
         basedOnDependencyAnalysis: false
-      - name: CAD PoC Cleanup Guard
+      - name: Native CAD Cleanup Guard
         script: |
-          "${SRCROOT}/scripts/release/check_cad_poc_clean.sh"
+          "${SRCROOT}/scripts/release/check_native_cad_clean.sh"
         inputFiles:
-          - "$(SRCROOT)/scripts/release/check_cad_poc_clean.sh"
+          - "$(SRCROOT)/scripts/release/check_native_cad_clean.sh"
           - "$(SRCROOT)/project.yml"
           - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
           - "$(SRCROOT)/Sources"

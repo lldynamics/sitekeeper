@@ -1,3 +1,3 @@
-extension CADPoC {
+extension NativeCAD {
     typealias CADLayout = SiteKeeperCADKernel.CADLayout
 }

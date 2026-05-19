@@ -1,3 +1,3 @@
-extension CADPoC {
+extension NativeCAD {
     typealias CADTextEngine = SiteKeeperCADKernel.CADTextEngine
 }

@@ -1,3 +1,3 @@
-extension CADPoC {
+extension NativeCAD {
     typealias DXFImportEngine = SiteKeeperCADKernel.DXFImportEngine
 }

@@ -1,7 +1,7 @@
 import Foundation
 
-enum CADPoC {}
+enum NativeCAD {}
 
-extension CADPoC {
+extension NativeCAD {
     typealias CADEntity = SiteKeeperCADKernel.CADEntity
 }

@@ -323,7 +323,7 @@ struct CADRendererCallbacks {
     var onSnapPointsChange: ([CADRendererSnapPointPayload]) -> Void = { _ in }
     var onTextAutoDetectionChange: (CADTextAutoDetectionResult) -> Void = { _ in }
     var onOpenQualityChange: (CADOpenQualitySnapshot) -> Void = { _ in }
-    var onOpenTraceChange: (CADPoC.CADOpenTrace) -> Void = { _ in }
+    var onOpenTraceChange: (NativeCAD.CADOpenTrace) -> Void = { _ in }
     var onPerformanceSample: (CADRendererPerformanceSnapshot) -> Void = { _ in }
     var onFallbackRecommendation: (String) -> Void = { _ in }
 }

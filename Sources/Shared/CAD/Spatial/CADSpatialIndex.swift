@@ -1,6 +1,6 @@
 import Foundation
 
-extension CADPoC {
+extension NativeCAD {
     struct CADSpatialIndex {
         typealias Kernel = SiteKeeperCADKernel
 

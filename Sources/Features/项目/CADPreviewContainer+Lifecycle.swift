@@ -179,7 +179,7 @@ extension CADPreviewContainer {
     }
 
     private func prepareForCurrentRequest() {
-        migrateCADPoCFeatureDefaultsIfNeeded()
+        migrateNativeCADFeatureDefaultsIfNeeded()
         snapshot = restoredSnapshot(for: activeRequest)
         snapshot.normalizeMeasurementScale()
         applyOverlayDisplayPreferences(from: snapshot)
