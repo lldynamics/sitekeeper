@@ -44,7 +44,7 @@ if [[ -n "$MATCHES" ]]; then
   echo "[native-cad-clean] FAIL: production target contains retired Native CAD paths:"
   echo "$MATCHES"
   echo
-  echo "Allowed locations for these terms are Deprecated/CAD/, docs/, or build reports only."
+  echo "Allowed locations for these terms are docs/ or build reports only."
   exit 1
 fi
 
