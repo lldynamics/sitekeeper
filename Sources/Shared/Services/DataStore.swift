@@ -158,24 +158,24 @@ final class DataStore {
     var searchIndexVersion = 0
     var dataVersion = UUID()
 
-    private let primaryStoreURL: URL
-    private let legacyStoreURL: URL
-    private let storeURL: URL
-    private let persistenceActor: DataStorePersistenceActor
-    private var latestPersistToken = 0
-    private var persistTask: Task<Void, Never>?
-    private var initialLoadTask: Task<Void, Never>?
-    private var needsSaveAfterInitialLoad = false
-    private var scheduledSaveTask: Task<Void, Never>?
-    private let autosaveClock = ContinuousClock()
-    private var autosaveFirstMutationAt: ContinuousClock.Instant?
-    private var autosaveLastMutationAt: ContinuousClock.Instant?
-    private let autosaveDebounceInterval: Duration = .milliseconds(500)
-    private let autosaveMaxLatency: Duration = .seconds(3)
+    let primaryStoreURL: URL
+    let legacyStoreURL: URL
+    let storeURL: URL
+    let persistenceActor: DataStorePersistenceActor
+    var latestPersistToken = 0
+    var persistTask: Task<Void, Never>?
+    var initialLoadTask: Task<Void, Never>?
+    var needsSaveAfterInitialLoad = false
+    var scheduledSaveTask: Task<Void, Never>?
+    let autosaveClock = ContinuousClock()
+    var autosaveFirstMutationAt: ContinuousClock.Instant?
+    var autosaveLastMutationAt: ContinuousClock.Instant?
+    let autosaveDebounceInterval: Duration = .milliseconds(500)
+    let autosaveMaxLatency: Duration = .seconds(3)
     private let historyRecordMaxTotalCount = 200
     private let historyRecordMaxCountPerTool = 50
 
-    private static func recordIssue(
+    static func recordIssue(
         _ event: String,
         details: [String: String] = [:],
         error: Error? = nil
@@ -199,17 +199,6 @@ final class DataStore {
         return FileManager.default.temporaryDirectory
     }
 
-    private static func resolveLoadURL(primaryStoreURL: URL, legacyStoreURL: URL) -> URL? {
-        let fileManager = FileManager.default
-        if fileManager.fileExists(atPath: primaryStoreURL.path) {
-            return primaryStoreURL
-        }
-        if fileManager.fileExists(atPath: legacyStoreURL.path) {
-            return legacyStoreURL
-        }
-        return nil
-    }
-
     init(storageDirectory: URL? = nil) {
         let documentsDirectory = storageDirectory ?? Self.defaultDocumentsDirectory
         primaryStoreURL = documentsDirectory.appendingPathComponent("sitekeeper.json")
@@ -218,254 +207,6 @@ final class DataStore {
         persistenceActor = DataStorePersistenceActor(storeURL: storeURL)
         loadAsync()
         publishWidgetData()
-    }
-
-    private func loadAsync() {
-        initialLoadTask?.cancel()
-        let primaryStoreURL = self.primaryStoreURL
-        let legacyStoreURL = self.legacyStoreURL
-        let storeURL = self.storeURL
-        let persistenceActor = self.persistenceActor
-        initialLoadTask = Task { [weak self] in
-            guard let self else { return }
-            do {
-                guard let snapshot = try await persistenceActor.loadSnapshot(primaryStoreURL: primaryStoreURL, legacyStoreURL: legacyStoreURL) else {
-                    initialLoadTask = nil
-                    flushDeferredSaveIfNeededAfterInitialLoad()
-                    return
-                }
-                guard !Task.isCancelled else { return }
-                applyLoadedSnapshot(snapshot)
-                initialLoadTask = nil
-                flushDeferredSaveIfNeededAfterInitialLoad()
-            } catch let decodeError as DataStorePersistenceActor.LoadDecodeError {
-                guard !Task.isCancelled else { return }
-                let backupName = "sitekeeper_corrupt_\(Formatters.now().replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: " ", with: "_")).json"
-                let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
-                do {
-                    try decodeError.rawData.write(to: backupURL, options: .atomic)
-                } catch {
-                    Self.recordIssue(
-                        "datastore.corrupt_backup_write_failed",
-                        details: ["file": backupName],
-                        error: error
-                    )
-                }
-                persistenceErrorMessage = String(
-                    format: String(localized: "本地数据解析失败，已保留异常文件：%@。可从备份页重新导入最近备份。"),
-                    backupName
-                )
-                initialLoadTask = nil
-                flushDeferredSaveIfNeededAfterInitialLoad()
-            } catch {
-                guard !Task.isCancelled else { return }
-                persistenceErrorMessage = String(
-                    format: String(localized: "读取本地数据失败：%@"),
-                    error.localizedDescription
-                )
-                initialLoadTask = nil
-                flushDeferredSaveIfNeededAfterInitialLoad()
-            }
-        }
-    }
-
-    private func applyLoadedSnapshot(_ snapshot: BackupSnapshot) {
-        let migratedLegacyRecords = Self.migrateLegacyPaymentRecords(
-            snapshot.legacyPaymentRecords,
-            projects: snapshot.projects
-        )
-        materialItems = snapshot.materialItems
-        quoteItems = snapshot.quoteItems
-        laborRecords = snapshot.laborRecords
-        projects = snapshot.projects
-        dailyLogs = snapshot.dailyLogs
-        historyRecords = snapshot.historyRecords
-        progressTasks = snapshot.progressTasks
-        lightingCircuitPlans = snapshot.lightingCircuitPlans
-        siteTodos = snapshot.siteTodos
-        projectDrawings = snapshot.projectDrawings
-        projectContacts = snapshot.projectContacts
-        projectFinancialRecords = Self.mergeFinancialRecords(
-            existing: snapshot.projectFinancialRecords,
-            incoming: migratedLegacyRecords
-        )
-        projectDocuments = snapshot.projectDocuments
-        quickNotes = snapshot.quickNotes
-        projectWarehouseMovements = snapshot.projectWarehouseMovements
-        templates = snapshot.templates
-        materialPriceEntries = snapshot.materialPriceEntries
-        materialSheetDrafts = snapshot.materialSheetDrafts
-        supplierProfiles = snapshot.supplierProfiles
-        constructionMethods = snapshot.constructionMethods
-        favoriteMaterialKeys = snapshot.favoriteMaterialKeys
-        recentMaterialKeys = snapshot.recentMaterialKeys
-        userMaterials = snapshot.userMaterials
-        deletedUserMaterials = snapshot.deletedUserMaterials
-        hiddenPresetKeys = snapshot.hiddenPresetKeys
-        if !snapshot.legacyPaymentRecords.isEmpty {
-            Self.recordIssue(
-                "datastore.legacy_payment_records_migrated",
-                details: [
-                    "recordCount": String(snapshot.legacyPaymentRecords.count),
-                    "target": "project_financial_records"
-                ]
-            )
-            needsSaveAfterInitialLoad = true
-        }
-        refreshSearchIndexVersion()
-        dataVersion = UUID()
-        publishWidgetData()
-    }
-
-    func makeSnapshot(includePhotoFiles: Bool) -> BackupSnapshot {
-        BackupSnapshot(
-            materialItems: materialItems,
-            quoteItems: quoteItems,
-            laborRecords: laborRecords,
-            projects: projects,
-            dailyLogs: dailyLogs,
-            historyRecords: historyRecords,
-            progressTasks: progressTasks,
-            lightingCircuitPlans: lightingCircuitPlans,
-            siteTodos: siteTodos,
-            projectDrawings: projectDrawings,
-            projectContacts: projectContacts,
-            projectFinancialRecords: projectFinancialRecords,
-            projectDocuments: projectDocuments,
-            quickNotes: quickNotes,
-            projectWarehouseMovements: projectWarehouseMovements,
-            templates: templates,
-            materialPriceEntries: materialPriceEntries,
-            materialSheetDrafts: materialSheetDrafts,
-            supplierProfiles: supplierProfiles,
-            constructionMethods: constructionMethods,
-            favoriteMaterialKeys: favoriteMaterialKeys,
-            recentMaterialKeys: recentMaterialKeys,
-            userMaterials: userMaterials,
-            deletedUserMaterials: deletedUserMaterials,
-            hiddenPresetKeys: hiddenPresetKeys,
-            photoFiles: includePhotoFiles ? (PhotoStorage.backupFiles(for: dailyLogs) + PhotoStorage.backupFiles(for: siteTodos)) : [],
-            drawingFiles: includePhotoFiles ? DrawingStorage.backupFiles(for: projectDrawings) : [],
-            documentFiles: includePhotoFiles ? ProjectDocumentStorage.backupFiles(for: projectDocuments) : [],
-            quickNoteAttachmentFiles: includePhotoFiles
-                ? QuickNoteAttachmentStorage.backupFiles(
-                    for: quickNotes,
-                    extraAttachments: constructionMethods.flatMap(\.attachments) + constructionMethods.flatMap(\.tutorialAttachments)
-                )
-                : []
-        )
-    }
-
-    func flushSave() async {
-        cancelScheduledSave()
-        persistTask?.cancel()
-        await awaitInitialLoad()
-        let snapshot = makeSnapshot(includePhotoFiles: false)
-        do {
-            try await persistenceActor.persist(snapshot: snapshot)
-        } catch {
-            persistenceErrorMessage = String(
-                format: String(localized: "保存本地数据失败：%@"),
-                error.localizedDescription
-            )
-        }
-        publishWidgetData()
-    }
-
-    func save(includePhotoFiles: Bool = false) {
-        if let initialLoadTask, !initialLoadTask.isCancelled {
-            needsSaveAfterInitialLoad = true
-            return
-        }
-        let snapshot = makeSnapshot(includePhotoFiles: includePhotoFiles)
-        latestPersistToken += 1
-        let persistToken = latestPersistToken
-        let persistenceActor = self.persistenceActor
-
-        persistTask?.cancel()
-        persistTask = Task(priority: .utility) {
-            do {
-                try await persistenceActor.persist(snapshot: snapshot)
-            } catch {
-                guard !Task.isCancelled else { return }
-                await MainActor.run { [weak self] in
-                    guard let self,
-                          persistToken == self.latestPersistToken else { return }
-                    self.persistenceErrorMessage = String(
-                        format: String(localized: "保存本地数据失败：%@"),
-                        error.localizedDescription
-                    )
-                }
-            }
-        }
-        publishWidgetData()
-    }
-
-    func scheduleSave() {
-        refreshSearchIndexVersion()
-        dataVersion = UUID()
-        guard UserPreferences.bool(UserPreferenceKeys.autoSave, default: true) else { return }
-        let now = autosaveClock.now
-        autosaveLastMutationAt = now
-        if autosaveFirstMutationAt == nil {
-            autosaveFirstMutationAt = now
-        }
-        guard scheduledSaveTask == nil else { return }
-        scheduledSaveTask = Task { [weak self] in
-            await self?.runScheduledSaveLoop()
-        }
-    }
-
-    func awaitInitialLoad() async {
-        await initialLoadTask?.value
-    }
-
-    private func flushDeferredSaveIfNeededAfterInitialLoad() {
-        guard needsSaveAfterInitialLoad else { return }
-        needsSaveAfterInitialLoad = false
-        save(includePhotoFiles: false)
-    }
-
-    private func runScheduledSaveLoop() async {
-        defer { scheduledSaveTask = nil }
-        let minimumPollInterval: Duration = .milliseconds(120)
-        while !Task.isCancelled {
-            guard let firstMutationAt = autosaveFirstMutationAt,
-                  let lastMutationAt = autosaveLastMutationAt else {
-                return
-            }
-            let now = autosaveClock.now
-            let idleElapsed = now - lastMutationAt
-            let totalElapsed = now - firstMutationAt
-            if idleElapsed >= autosaveDebounceInterval || totalElapsed >= autosaveMaxLatency {
-                break
-            }
-
-            let idleRemaining = autosaveDebounceInterval - idleElapsed
-            let maxRemaining = autosaveMaxLatency - totalElapsed
-            var sleepDuration = idleRemaining < maxRemaining ? idleRemaining : maxRemaining
-            if sleepDuration < minimumPollInterval {
-                sleepDuration = minimumPollInterval
-            }
-            do {
-                try await Task.sleep(for: sleepDuration)
-            } catch {
-                return
-            }
-        }
-        guard !Task.isCancelled else { return }
-        let hadPendingChanges = autosaveLastMutationAt != nil
-        autosaveFirstMutationAt = nil
-        autosaveLastMutationAt = nil
-        guard hadPendingChanges else { return }
-        save(includePhotoFiles: false)
-    }
-
-    private func cancelScheduledSave() {
-        scheduledSaveTask?.cancel()
-        scheduledSaveTask = nil
-        autosaveFirstMutationAt = nil
-        autosaveLastMutationAt = nil
     }
 
     var hasAnyBusinessData: Bool {
@@ -1728,22 +1469,6 @@ final class DataStore {
         constructionMethods = deletion.restoredItems(current: constructionMethods, id: \.id)
     }
 
-    func importSampleData(replacingExisting: Bool) {
-#if DEBUG
-        guard AppFeatureFlags.allowsSampleDataImport else {
-            persistenceErrorMessage = String(localized: "当前发布环境已关闭示例数据导入。")
-            return
-        }
-        if replacingExisting {
-            clearAllBusinessData(deleteStoredFiles: true)
-        }
-        seedDefaults()
-        save(includePhotoFiles: false)
-#else
-        persistenceErrorMessage = String(localized: "当前发布环境已关闭示例数据导入。")
-#endif
-    }
-
     func appendCalculationHistory(tool: String, input: String, result: String, date: String = Formatters.now()) {
         let record = HistoryRecord(tool: tool, input: input, result: result, date: date)
         historyRecords = [record] + historyRecords
@@ -2122,36 +1847,8 @@ final class DataStore {
         publishWidgetData()
     }
 
-    private func refreshSearchIndexVersion() {
+    func refreshSearchIndexVersion() {
         searchIndexVersion &+= 1
-    }
-
-    private static func migrateLegacyPaymentRecords(
-        _ legacyRecords: [LegacyPaymentRecord],
-        projects: [Project]
-    ) -> [ProjectFinancialRecord] {
-        guard !legacyRecords.isEmpty else { return [] }
-        let counterpartyByProjectID = Dictionary(
-            uniqueKeysWithValues: projects.map { ($0.id, $0.customerName) }
-        )
-        return legacyRecords.map { legacy in
-            legacy.migratedFinancialRecord(
-                counterparty: counterpartyByProjectID[legacy.projectId] ?? ""
-            )
-        }
-    }
-
-    private static func mergeFinancialRecords(
-        existing: [ProjectFinancialRecord],
-        incoming: [ProjectFinancialRecord]
-    ) -> [ProjectFinancialRecord] {
-        guard !incoming.isEmpty else { return existing }
-        var merged = existing
-        var knownIDs = Set(existing.map(\.id))
-        for record in incoming where knownIDs.insert(record.id).inserted {
-            merged.append(record)
-        }
-        return merged
     }
 
     func publishWidgetData() {
@@ -2307,93 +2004,5 @@ final class DataStore {
             toolCounts[record.tool] = count + 1
         }
         return kept
-    }
-}
-
-actor DataStorePersistenceActor {
-    private let storeURL: URL
-
-    private static func recordIssue(
-        _ event: String,
-        details: [String: String] = [:],
-        error: Error? = nil
-    ) {
-        StorageIssueLog.recordEvent(
-            event,
-            category: .dataStore,
-            details: details,
-            error: error
-        )
-    }
-
-    struct LoadDecodeError: Error {
-        let rawData: Data
-    }
-
-    init(storeURL: URL) {
-        self.storeURL = storeURL
-    }
-
-    func loadSnapshot(primaryStoreURL: URL, legacyStoreURL: URL) throws -> BackupSnapshot? {
-        let fileManager = FileManager.default
-        let sourceURL: URL
-        if fileManager.fileExists(atPath: primaryStoreURL.path) {
-            sourceURL = primaryStoreURL
-        } else if fileManager.fileExists(atPath: legacyStoreURL.path) {
-            sourceURL = legacyStoreURL
-        } else {
-            return nil
-        }
-
-        let data = try Data(contentsOf: sourceURL, options: [.mappedIfSafe])
-        let snapshot: BackupSnapshot
-        do {
-            snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
-        } catch {
-            throw LoadDecodeError(rawData: data)
-        }
-
-        if sourceURL == legacyStoreURL {
-            do {
-                try data.write(to: primaryStoreURL, options: .atomic)
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: legacyStoreURL,
-                        context: .init(
-                            event: "datastore.legacy_store_cleanup",
-                            category: .dataStore,
-                            source: "DataStore.loadSnapshotFromDisk"
-                        )
-                    )
-                } catch {
-                    Self.recordIssue(
-                        "datastore.legacy_store_cleanup_failed",
-                        details: [
-                            "file": legacyStoreURL.lastPathComponent,
-                            "target": primaryStoreURL.lastPathComponent
-                        ],
-                        error: error
-                    )
-                }
-            } catch {
-                Self.recordIssue(
-                    "datastore.legacy_store_migration_failed",
-                    details: [
-                        "source": legacyStoreURL.lastPathComponent,
-                        "target": primaryStoreURL.lastPathComponent
-                    ],
-                    error: error
-                )
-            }
-        }
-        return snapshot
-    }
-
-    func persist(snapshot: BackupSnapshot) throws {
-        guard !Task.isCancelled else { return }
-        let encoder = JSONEncoder()
-        let data = try encoder.encode(snapshot)
-        guard !Task.isCancelled else { return }
-        try data.write(to: storeURL, options: .atomic)
     }
 }
