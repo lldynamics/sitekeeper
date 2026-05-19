@@ -177,7 +177,7 @@ struct CADDiagnosticMachineTrace: Codable {
     let kernelTrace: KernelTrace?
     let nativeTrace: NativeTrace?
     let diagnostics: [String]
-    let runtimeLog: [CADPoC.CADDiagnosticLogEntry]
+    let runtimeLog: [NativeCAD.CADDiagnosticLogEntry]
     let notes: [String]
 }
 
@@ -224,7 +224,7 @@ extension CADDiagnosticMachineTrace.KernelTrace {
 }
 
 extension CADDiagnosticMachineTrace.NativeTrace {
-    init(_ trace: CADPoC.CADOpenTrace) {
+    init(_ trace: NativeCAD.CADOpenTrace) {
         let rawCounts = RawEntityCounts(
             line: trace.rawLineCount,
             polyline: trace.rawPolylineCount,

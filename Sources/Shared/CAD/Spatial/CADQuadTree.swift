@@ -1,4 +1,4 @@
-extension CADPoC {
+extension NativeCAD {
     struct CADQuadTree<Element> {
         fileprivate typealias Bounds = SiteKeeperCADKernel.CADBounds
 
@@ -76,13 +76,13 @@ extension CADPoC {
     }
 }
 
-private extension CADPoC.CADQuadTree.Node {
+private extension NativeCAD.CADQuadTree.Node {
     var entryCount: Int {
         entries.count + (children ?? []).reduce(0) { $0 + $1.entryCount }
     }
 
     func insert(
-        _ entry: CADPoC.CADQuadTree<Element>.Entry,
+        _ entry: NativeCAD.CADQuadTree<Element>.Entry,
         capacity: Int,
         maxDepth: Int
     ) {
@@ -127,7 +127,7 @@ private extension CADPoC.CADQuadTree.Node {
         let midX = (bounds.minX + bounds.maxX) / 2
         let midY = (bounds.minY + bounds.maxY) / 2
         children = [
-            CADPoC.CADQuadTree<Element>.Node(
+            NativeCAD.CADQuadTree<Element>.Node(
                 bounds: SiteKeeperCADKernel.CADBounds(
                     minX: bounds.minX,
                     minY: bounds.minY,
@@ -136,7 +136,7 @@ private extension CADPoC.CADQuadTree.Node {
                 ),
                 depth: depth + 1
             ),
-            CADPoC.CADQuadTree<Element>.Node(
+            NativeCAD.CADQuadTree<Element>.Node(
                 bounds: SiteKeeperCADKernel.CADBounds(
                     minX: midX,
                     minY: bounds.minY,
@@ -145,7 +145,7 @@ private extension CADPoC.CADQuadTree.Node {
                 ),
                 depth: depth + 1
             ),
-            CADPoC.CADQuadTree<Element>.Node(
+            NativeCAD.CADQuadTree<Element>.Node(
                 bounds: SiteKeeperCADKernel.CADBounds(
                     minX: bounds.minX,
                     minY: midY,
@@ -154,7 +154,7 @@ private extension CADPoC.CADQuadTree.Node {
                 ),
                 depth: depth + 1
             ),
-            CADPoC.CADQuadTree<Element>.Node(
+            NativeCAD.CADQuadTree<Element>.Node(
                 bounds: SiteKeeperCADKernel.CADBounds(
                     minX: midX,
                     minY: midY,
@@ -180,7 +180,7 @@ private extension CADPoC.CADQuadTree.Node {
         }
     }
 
-    private func child(containing entryBounds: SiteKeeperCADKernel.CADBounds) -> CADPoC.CADQuadTree<Element>.Node? {
+    private func child(containing entryBounds: SiteKeeperCADKernel.CADBounds) -> NativeCAD.CADQuadTree<Element>.Node? {
         children?.first { child in
             child.bounds.fullyContains(entryBounds)
         }

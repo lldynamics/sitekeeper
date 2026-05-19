@@ -6,7 +6,7 @@ import UIKit
 import AppKit
 #endif
 
-extension CADPoC {
+extension NativeCAD {
     typealias CADFontResolver = SiteKeeperCADKernel.CADFontResolver
 }
 

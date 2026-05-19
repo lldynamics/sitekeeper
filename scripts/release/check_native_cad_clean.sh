@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
-# Guard the production CAD PoC route against retired preview/import paths.
+# Guard the production Native CAD route against retired preview/import paths.
 FORBIDDEN_PATTERNS=(
   "CAD""TileViewer"
   "CAD""ConversionPipeline"
@@ -35,17 +35,17 @@ for target in "${TARGETS[@]}"; do
 done
 
 if [[ ${#EXISTING_TARGETS[@]} -eq 0 ]]; then
-  echo "[cad-poc-clean] FAIL: no production targets found to scan."
+  echo "[native-cad-clean] FAIL: no production targets found to scan."
   exit 1
 fi
 
 MATCHES="$(rg "${RG_ARGS[@]}" "${EXISTING_TARGETS[@]}" || true)"
 if [[ -n "$MATCHES" ]]; then
-  echo "[cad-poc-clean] FAIL: production target contains retired CAD PoC paths:"
+  echo "[native-cad-clean] FAIL: production target contains retired Native CAD paths:"
   echo "$MATCHES"
   echo
   echo "Allowed locations for these terms are Deprecated/CAD/, docs/, or build reports only."
   exit 1
 fi
 
-echo "[cad-poc-clean] PASS: production CAD PoC path is clean."
+echo "[native-cad-clean] PASS: production Native CAD path is clean."

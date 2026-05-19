@@ -14,7 +14,7 @@ usage() {
 Usage:
   scripts/cad/build_libredwg_ios_xcframework.sh [libredwg-source-dir] [output-xcframework]
 
-Builds LibreDWG as a static iOS XCFramework for the in-app CAD PoC.
+Builds LibreDWG as a static iOS XCFramework for the in-app Native CAD renderer.
 The default output is Vendor/LibreDWG/CLibreDWG.xcframework.
 USAGE
 }

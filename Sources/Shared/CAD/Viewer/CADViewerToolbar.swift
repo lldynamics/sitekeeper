@@ -3,9 +3,9 @@ import SwiftUI
 struct CADViewerToolbar: View {
     let fileURL: URL
     let displayName: String
-    let layouts: [CADPoC.CADLayout]
+    let layouts: [NativeCAD.CADLayout]
     let currentLayoutID: String?
-    let layers: [CADPoC.CADLayer]
+    let layers: [NativeCAD.CADLayer]
     let visibleLayerIDs: Set<String>?
     let supportsTextSearch: Bool
     let searchResultCount: Int
@@ -253,11 +253,11 @@ struct CADViewerToolbar: View {
         .accessibilityLabel("关闭")
     }
 
-    private func isLayerVisible(_ layer: CADPoC.CADLayer) -> Bool {
+    private func isLayerVisible(_ layer: NativeCAD.CADLayer) -> Bool {
         visibleLayerIDs?.contains(layer.id) ?? layer.isVisible
     }
 
-    private var currentLayout: CADPoC.CADLayout? {
+    private var currentLayout: NativeCAD.CADLayout? {
         layouts.first { $0.id == currentLayoutID } ?? layouts.first(where: \.isModelSpace) ?? layouts.first
     }
 
@@ -270,11 +270,11 @@ struct CADViewerToolbar: View {
         currentLayout.map(layoutIcon) ?? "rectangle.3.group"
     }
 
-    private func layoutIcon(_ layout: CADPoC.CADLayout) -> String {
+    private func layoutIcon(_ layout: NativeCAD.CADLayout) -> String {
         layout.isModelSpace ? "cube.transparent" : "rectangle.on.rectangle"
     }
 
-    private func layoutDisplayName(_ layout: CADPoC.CADLayout) -> String {
+    private func layoutDisplayName(_ layout: NativeCAD.CADLayout) -> String {
         let trimmed = layout.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if layout.isModelSpace {
             return "模型"

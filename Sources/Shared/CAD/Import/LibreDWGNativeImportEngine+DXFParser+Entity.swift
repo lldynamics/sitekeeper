@@ -61,8 +61,8 @@ extension DXFBasic2DParser {
             record = unsupportedRecord(
                 type: type,
                 pairs: pairs,
-                code: "CAD_POC_DXF_UNSUPPORTED_ENTITY",
-                reason: "\(type) is not supported by the CAD Metal PoC."
+                code: "CAD_NATIVE_DXF_UNSUPPORTED_ENTITY",
+                reason: "\(type) is not supported by the Native CAD Renderer."
             )
         }
         guard var record else {
@@ -106,8 +106,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "POINT",
                 pairs: pairs,
-                code: "CAD_POC_POINT_GEOMETRY_UNRESOLVED",
-                reason: "POINT geometry cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_POINT_GEOMETRY_UNRESOLVED",
+                reason: "POINT geometry cannot be resolved by the Native CAD Renderer."
             )
         }
         let bounds = Kernel.CADBounds(
@@ -141,8 +141,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: type,
                 pairs: pairs,
-                code: "CAD_POC_INFINITE_LINE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) geometry cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_INFINITE_LINE_GEOMETRY_UNRESOLVED",
+                reason: "\(type) geometry cannot be resolved by the Native CAD Renderer."
             )
         }
         let length = hypot(direction.x, direction.y)
@@ -150,8 +150,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: type,
                 pairs: pairs,
-                code: "CAD_POC_INFINITE_LINE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) direction cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_INFINITE_LINE_GEOMETRY_UNRESOLVED",
+                reason: "\(type) direction cannot be resolved by the Native CAD Renderer."
             )
         }
         let dx = direction.x / length
@@ -181,7 +181,7 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_INFINITE_LINE_CLIPPED",
+                    code: "CAD_NATIVE_INFINITE_LINE_CLIPPED",
                     message: "\(type) imported as a finite preview segment.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -213,7 +213,7 @@ extension DXFBasic2DParser {
             diagnostics: hasBulge ? [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_LWPOLYLINE_BULGE_TESSELLATED",
+                    code: "CAD_NATIVE_LWPOLYLINE_BULGE_TESSELLATED",
                     message: "LWPOLYLINE bulge arcs were tessellated into polyline segments.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -247,7 +247,7 @@ extension DXFBasic2DParser {
             diagnostics: hasBulge ? [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_POLYLINE_BULGE_TESSELLATED",
+                    code: "CAD_NATIVE_POLYLINE_BULGE_TESSELLATED",
                     message: "POLYLINE vertex bulge arcs were tessellated into polyline segments.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -326,8 +326,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "ELLIPSE",
                 pairs: pairs,
-                code: "CAD_POC_ELLIPSE_GEOMETRY_UNRESOLVED",
-                reason: "ELLIPSE geometry cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_ELLIPSE_GEOMETRY_UNRESOLVED",
+                reason: "ELLIPSE geometry cannot be resolved by the Native CAD Renderer."
             )
         }
 
@@ -337,8 +337,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "ELLIPSE",
                 pairs: pairs,
-                code: "CAD_POC_ELLIPSE_GEOMETRY_UNRESOLVED",
-                reason: "ELLIPSE geometry cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_ELLIPSE_GEOMETRY_UNRESOLVED",
+                reason: "ELLIPSE geometry cannot be resolved by the Native CAD Renderer."
             )
         }
 
@@ -385,8 +385,8 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_ELLIPSE_TESSELLATED",
-                    message: "ELLIPSE imported as tessellated polyline for the CAD Metal PoC.",
+                    code: "CAD_NATIVE_ELLIPSE_TESSELLATED",
+                    message: "ELLIPSE imported as tessellated polyline for the Native CAD Renderer.",
                     detail: firstString(code: 5, in: pairs)
                 )
             ]
@@ -404,8 +404,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "SPLINE",
                 pairs: pairs,
-                code: "CAD_POC_SPLINE_POINTS_UNRESOLVED",
-                reason: "SPLINE control points cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_SPLINE_POINTS_UNRESOLVED",
+                reason: "SPLINE control points cannot be resolved by the Native CAD Renderer."
             )
         }
 
@@ -425,8 +425,8 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_SPLINE_DEGRADED_TO_POLYLINE",
-                    message: "SPLINE imported as control-point polyline for the CAD Metal PoC.",
+                    code: "CAD_NATIVE_SPLINE_DEGRADED_TO_POLYLINE",
+                    message: "SPLINE imported as control-point polyline for the Native CAD Renderer.",
                     detail: firstString(code: 5, in: pairs)
                 )
             ]
@@ -443,8 +443,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "DIMENSION",
                 pairs: pairs,
-                code: "CAD_POC_DIMENSION_GEOMETRY_UNRESOLVED",
-                reason: "DIMENSION geometry cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_DIMENSION_GEOMETRY_UNRESOLVED",
+                reason: "DIMENSION geometry cannot be resolved by the Native CAD Renderer."
             )
         }
 
@@ -500,13 +500,13 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_DIMENSION_SIMPLIFIED",
-                    message: "DIMENSION imported with extension lines, dimension line, arrowheads, positioned text, and simplified scale style for the CAD Metal PoC.",
+                    code: "CAD_NATIVE_DIMENSION_SIMPLIFIED",
+                    message: "DIMENSION imported with extension lines, dimension line, arrowheads, positioned text, and simplified scale style for the Native CAD Renderer.",
                     detail: firstString(code: 5, in: pairs)
                 ),
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_DIMENSION_STYLE_SIMPLIFIED",
+                    code: "CAD_NATIVE_DIMENSION_STYLE_SIMPLIFIED",
                     message: "DIMENSION style was simplified to text height, arrow scale, and line color.",
                     detail: styleName
                 )
@@ -623,8 +623,8 @@ extension DXFBasic2DParser {
         let isComplexBoundary = boundaryPathCount > 1 || hasEdgeMetadata
         guard boundary.count >= 3 else {
             let reason = isComplexBoundary
-                ? "Complex HATCH boundary cannot be resolved by the CAD Metal PoC."
-                : "HATCH boundary cannot be resolved by the CAD Metal PoC."
+                ? "Complex HATCH boundary cannot be resolved by the Native CAD Renderer."
+                : "HATCH boundary cannot be resolved by the Native CAD Renderer."
             return EntityRecord(
                 kind: .unsupported,
                 layerID: layerID(from: pairs),
@@ -640,8 +640,8 @@ extension DXFBasic2DParser {
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
                         code: isComplexBoundary
-                            ? "CAD_POC_HATCH_COMPLEX_BOUNDARY_UNRESOLVED"
-                            : "CAD_POC_HATCH_BOUNDARY_UNRESOLVED",
+                            ? "CAD_NATIVE_HATCH_COMPLEX_BOUNDARY_UNRESOLVED"
+                            : "CAD_NATIVE_HATCH_BOUNDARY_UNRESOLVED",
                         message: reason,
                         detail: firstString(code: 5, in: pairs)
                     )
@@ -669,11 +669,11 @@ extension DXFBasic2DParser {
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: isComplexBoundary ? .warning : .info,
                     code: isComplexBoundary
-                        ? "CAD_POC_HATCH_COMPLEX_BOUNDARY_DEGRADED"
-                        : "CAD_POC_HATCH_SIMPLE_FILL",
+                        ? "CAD_NATIVE_HATCH_COMPLEX_BOUNDARY_DEGRADED"
+                        : "CAD_NATIVE_HATCH_SIMPLE_FILL",
                     message: isComplexBoundary
                         ? "Complex HATCH imported as boundary-only geometry; inner loops and fill patterns are skipped to keep rendering responsive."
-                        : "Simple closed HATCH imported as a filled polygon for the CAD Metal PoC.",
+                        : "Simple closed HATCH imported as a filled polygon for the Native CAD Renderer.",
                     detail: firstString(code: 5, in: pairs)
                 )
             ]
@@ -690,8 +690,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: type,
                 pairs: pairs,
-                code: "CAD_POC_LEADER_GEOMETRY_UNRESOLVED",
-                reason: "\(type) vertices cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_LEADER_GEOMETRY_UNRESOLVED",
+                reason: "\(type) vertices cannot be resolved by the Native CAD Renderer."
             )
         }
         let path = makePath(from: vertices, closed: false)
@@ -713,8 +713,8 @@ extension DXFBasic2DParser {
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
                     code: text == nil
-                        ? "CAD_POC_LEADER_DEGRADED_TO_POLYLINE"
-                        : "CAD_POC_LEADER_TEXT_SIMPLIFIED",
+                        ? "CAD_NATIVE_LEADER_DEGRADED_TO_POLYLINE"
+                        : "CAD_NATIVE_LEADER_TEXT_SIMPLIFIED",
                     message: text == nil
                         ? "\(type) imported as a polyline."
                         : "\(type) imported as leader geometry with simplified annotation text.",
@@ -744,7 +744,7 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_LEADER_TEXT_WITHOUT_GEOMETRY",
+                    code: "CAD_NATIVE_LEADER_TEXT_WITHOUT_GEOMETRY",
                     message: "\(type) annotation text was imported, but leader geometry could not be resolved.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -796,8 +796,8 @@ extension DXFBasic2DParser {
                 unsupportedRecord(
                     type: "TABLE",
                     pairs: pairs,
-                    code: "CAD_POC_TABLE_TEXT_UNRESOLVED",
-                    reason: "TABLE cell text cannot be resolved by the CAD Metal PoC."
+                    code: "CAD_NATIVE_TABLE_TEXT_UNRESOLVED",
+                    reason: "TABLE cell text cannot be resolved by the Native CAD Renderer."
                 )
             ]
         }
@@ -864,8 +864,8 @@ extension DXFBasic2DParser {
                     diagnostics: [
                         Kernel.CADDrawingDiagnostics.Entry(
                             severity: .info,
-                            code: "CAD_POC_TABLE_CELL_TEXT_SIMPLIFIED",
-                            message: "TABLE cell text imported as positioned MTEXT for the CAD Metal PoC.",
+                            code: "CAD_NATIVE_TABLE_CELL_TEXT_SIMPLIFIED",
+                            message: "TABLE cell text imported as positioned MTEXT for the Native CAD Renderer.",
                             detail: handle
                         )
                     ]
@@ -902,8 +902,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: "MLINE",
                 pairs: pairs,
-                code: "CAD_POC_MLINE_GEOMETRY_UNRESOLVED",
-                reason: "MLINE vertices cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_MLINE_GEOMETRY_UNRESOLVED",
+                reason: "MLINE vertices cannot be resolved by the Native CAD Renderer."
             )
         }
         let isClosed = (firstInt(code: 70, in: pairs) ?? 0) & 2 == 2
@@ -922,7 +922,7 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_MLINE_DEGRADED_TO_CENTERLINE",
+                    code: "CAD_NATIVE_MLINE_DEGRADED_TO_CENTERLINE",
                     message: "MLINE imported as its vertex centerline.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -942,8 +942,8 @@ extension DXFBasic2DParser {
             return unsupportedRecord(
                 type: type,
                 pairs: pairs,
-                code: "CAD_POC_FILLED_SHAPE_GEOMETRY_UNRESOLVED",
-                reason: "\(type) boundary cannot be resolved by the CAD Metal PoC."
+                code: "CAD_NATIVE_FILLED_SHAPE_GEOMETRY_UNRESOLVED",
+                reason: "\(type) boundary cannot be resolved by the Native CAD Renderer."
             )
         }
         let path = makePath(from: uniqueVertices, closed: true)
@@ -961,7 +961,7 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_FILLED_SHAPE_DEGRADED_TO_BOUNDARY",
+                    code: "CAD_NATIVE_FILLED_SHAPE_DEGRADED_TO_BOUNDARY",
                     message: "\(type) imported as a closed boundary.",
                     detail: firstString(code: 5, in: pairs)
                 )
@@ -1000,12 +1000,12 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_IMAGE_PLACEHOLDER",
+                    code: "CAD_NATIVE_IMAGE_PLACEHOLDER",
                     message: "\(type) imported as a frame placeholder.",
                     detail: firstString(code: 5, in: pairs)
                 )
             ],
-            unsupportedReason: "\(type) placeholder; referenced image or underlay content is not rendered in the CAD Metal PoC."
+            unsupportedReason: "\(type) placeholder; referenced image or underlay content is not rendered in the Native CAD Renderer."
         )
     }
 
@@ -1028,8 +1028,8 @@ extension DXFBasic2DParser {
                 diagnostics: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY",
-                        message: "WIPEOUT imported as a boundary frame; masking is not implemented in this PoC.",
+                        code: "CAD_NATIVE_WIPEOUT_DEGRADED_TO_BOUNDARY",
+                        message: "WIPEOUT imported as a boundary frame; masking is not implemented in the native CAD renderer.",
                         detail: firstString(code: 5, in: pairs)
                     )
                 ]
@@ -1090,7 +1090,7 @@ extension DXFBasic2DParser {
                             inheritedColorARGB: inheritedColorARGB,
                             inheritedLineWeight: inheritedLineWeight,
                             inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_NAME_MISSING",
+                            code: "CAD_NATIVE_INSERT_BLOCK_NAME_MISSING",
                             reason: "INSERT has no block name.",
                             detail: record.handle
                         )
@@ -1107,7 +1107,7 @@ extension DXFBasic2DParser {
                             inheritedColorARGB: inheritedColorARGB,
                             inheritedLineWeight: inheritedLineWeight,
                             inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_CYCLE",
+                            code: "CAD_NATIVE_INSERT_BLOCK_CYCLE",
                             reason: "Nested block cycle detected.",
                             detail: (Array(activeBlocks) + [normalizedBlockName]).joined(separator: " -> ")
                         )
@@ -1123,7 +1123,7 @@ extension DXFBasic2DParser {
                             inheritedColorARGB: inheritedColorARGB,
                             inheritedLineWeight: inheritedLineWeight,
                             inheritedLineType: inheritedLineType,
-                            code: "CAD_POC_INSERT_BLOCK_MISSING",
+                            code: "CAD_NATIVE_INSERT_BLOCK_MISSING",
                             reason: "Referenced block is missing.",
                             detail: name
                         )
@@ -1231,7 +1231,7 @@ extension DXFBasic2DParser {
             maxX: anchor.x + 0.5,
             maxY: anchor.y + 0.5
         )
-        let reason = "XREF \(block.name) is referenced but not loaded by the CAD Metal PoC."
+        let reason = "XREF \(block.name) is referenced but not loaded by the Native CAD Renderer."
         return EntityRecord(
             kind: .xref,
             layerID: insert.layerID == Kernel.CADLayer.default.id
@@ -1252,7 +1252,7 @@ extension DXFBasic2DParser {
             diagnostics: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_XREF_NOT_LOADED",
+                    code: "CAD_NATIVE_XREF_NOT_LOADED",
                     message: reason,
                     detail: block.xrefPath ?? block.name
                 )

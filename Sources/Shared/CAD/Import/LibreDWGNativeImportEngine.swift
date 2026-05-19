@@ -1,7 +1,7 @@
 import Foundation
 import CoreFoundation
 
-extension CADPoC {
+extension NativeCAD {
     struct CADImportResult: Codable {
         var database: SiteKeeperCADKernel.CADDatabase
         var trace: CADOpenTrace
@@ -11,7 +11,7 @@ extension CADPoC {
         typealias Kernel = SiteKeeperCADKernel
 
         private static let nativePaperLayoutID = "paper"
-        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v14"
+        private let baseID = "sitekeeper.native.dwg-libredwg-ios.basic2d-v14"
         var preferredTextCodePage: Int32?
         var preferredTextBigFont: Int32?
         var fontMappings: [CADRendererFontMapping]
@@ -137,7 +137,7 @@ extension CADPoC {
             diagnostics.append(
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_LIBREDWG_IOS_NATIVE_USED",
+                    code: "CAD_NATIVE_LIBREDWG_IOS_NATIVE_USED",
                     message: "LibreDWG was called inside the iOS process and converted basic 2D geometry into CADEntity.",
                     detail: "status=\(status), preferredTextCodePage=\(nativeTextCodePage), libredwgTextCodePage=\(Int(nativeResult.trace.libredwgTextCodePage)), nativeTextDecodeEnabled=\(Int(nativeResult.trace.nativeTextDecodeEnabled)), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawMLeaderCount=\(rawMLeaderCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedMLeaderTextCount=\(exportedMLeaderTextCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
                 )
@@ -145,8 +145,8 @@ extension CADPoC {
             diagnostics.append(
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_TEXT_IMPORT_SUMMARY",
-                    message: "CAD text import summary for LibreDWG native PoC.",
+                    code: "CAD_NATIVE_TEXT_IMPORT_SUMMARY",
+                    message: "CAD text import summary for the native LibreDWG importer.",
                     detail: importedTextSummary
                 )
             )
@@ -154,7 +154,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_TEXT_RAW_BUT_NOT_IMPORTED",
+                        code: "CAD_NATIVE_TEXT_RAW_BUT_NOT_IMPORTED",
                         message: "LibreDWG reported raw text objects, but no text entities reached CADDatabase.",
                         detail: "rawTextCount=\(rawTextCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount))"
                     )
@@ -164,7 +164,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .info,
-                        code: "CAD_POC_LIBREDWG_MLEADER_TEXT_TRACE",
+                        code: "CAD_NATIVE_LIBREDWG_MLEADER_TEXT_TRACE",
                         message: "LibreDWG MLEADER text exposure was counted before CADDatabase conversion.",
                         detail: "rawMLeaderCount=\(rawMLeaderCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), exportedMLeaderTextCount=\(exportedMLeaderTextCount)"
                     )
@@ -174,7 +174,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_MLEADER_TEXT_NOT_EXPORTED",
+                        code: "CAD_NATIVE_MLEADER_TEXT_NOT_EXPORTED",
                         message: "LibreDWG exposed MLEADER text candidates that did not become CAD text entities.",
                         detail: "mleaderTextCandidateCount=\(mleaderTextCandidateCount), exportedMLeaderTextCount=\(exportedMLeaderTextCount)"
                     )
@@ -184,7 +184,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_MLEADER_NO_TEXT_FIELDS_EXPOSED",
+                        code: "CAD_NATIVE_MLEADER_NO_TEXT_FIELDS_EXPOSED",
                         message: "LibreDWG exposed MLEADER objects, but no standard MLEADER text fields were available to the shim.",
                         detail: "rawMLeaderCount=\(rawMLeaderCount)"
                     )
@@ -194,7 +194,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_READ_WARNING",
+                        code: "CAD_NATIVE_LIBREDWG_READ_WARNING",
                         message: "LibreDWG returned a non-zero read status.",
                         detail: "\(status)"
                     )
@@ -204,8 +204,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_NO_SUPPORTED_BASIC_2D_ENTITY",
-                        message: "LibreDWG parsed entities, but this PoC only exports LINE, POINT, XLINE, RAY, LWPOLYLINE, POLYLINE, CIRCLE, ARC, ELLIPSE, SPLINE, SOLID, TRACE, 3DFACE, LEADER, MLINE, TEXT, MTEXT, ATTRIB, ATTDEF, simplified DIMENSION, degraded HATCH/WIPEOUT boundaries, IMAGE/UNDERLAY placeholders, and INSERT/BLOCK-expanded basic geometry.",
+                        code: "CAD_NATIVE_LIBREDWG_NO_SUPPORTED_BASIC_2D_ENTITY",
+                        message: "LibreDWG parsed entities, but the native CAD importer currently exports LINE, POINT, XLINE, RAY, LWPOLYLINE, POLYLINE, CIRCLE, ARC, ELLIPSE, SPLINE, SOLID, TRACE, 3DFACE, LEADER, MLINE, TEXT, MTEXT, ATTRIB, ATTDEF, simplified DIMENSION, degraded HATCH/WIPEOUT boundaries, IMAGE/UNDERLAY placeholders, and INSERT/BLOCK-expanded basic geometry.",
                         detail: "rawEntityCount=\(rawEntityCount)"
                     )
                 )
@@ -214,8 +214,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_ELLIPSE_PARTIALLY_UNSUPPORTED",
-                        message: "Some DWG ELLIPSE entities could not be tessellated by the native LibreDWG PoC importer.",
+                        code: "CAD_NATIVE_LIBREDWG_ELLIPSE_PARTIALLY_UNSUPPORTED",
+                        message: "Some DWG ELLIPSE entities could not be tessellated by the native LibreDWG importer.",
                         detail: "rawEllipseCount=\(rawEllipseCount), exportedEllipseCount=\(exportedEllipseCount)"
                     )
                 )
@@ -224,7 +224,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_ELLIPSE_TESSELLATED",
+                        code: "CAD_NATIVE_LIBREDWG_ELLIPSE_TESSELLATED",
                         message: "DWG ELLIPSE entities were imported as tessellated polylines.",
                         detail: "exportedEllipseCount=\(exportedEllipseCount)"
                     )
@@ -234,8 +234,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_SPLINE_PARTIALLY_UNSUPPORTED",
-                        message: "Some DWG SPLINE entities could not be degraded by the native LibreDWG PoC importer.",
+                        code: "CAD_NATIVE_LIBREDWG_SPLINE_PARTIALLY_UNSUPPORTED",
+                        message: "Some DWG SPLINE entities could not be degraded by the native LibreDWG importer.",
                         detail: "rawSplineCount=\(rawSplineCount), exportedSplineCount=\(exportedSplineCount)"
                     )
                 )
@@ -244,7 +244,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_SPLINE_DEGRADED_TO_POLYLINE",
+                        code: "CAD_NATIVE_LIBREDWG_SPLINE_DEGRADED_TO_POLYLINE",
                         message: "DWG SPLINE entities were imported as fit/control-point polylines.",
                         detail: "exportedSplineCount=\(exportedSplineCount)"
                     )
@@ -254,8 +254,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_FILLED_SHAPE_PARTIALLY_UNSUPPORTED",
-                        message: "Some DWG SOLID, TRACE, or 3DFACE entities could not be degraded by the native LibreDWG PoC importer.",
+                        code: "CAD_NATIVE_LIBREDWG_FILLED_SHAPE_PARTIALLY_UNSUPPORTED",
+                        message: "Some DWG SOLID, TRACE, or 3DFACE entities could not be degraded by the native LibreDWG importer.",
                         detail: "rawFilledShapeCount=\(rawFilledShapeCount), exportedFilledShapeCount=\(exportedFilledShapeCount)"
                     )
                 )
@@ -264,7 +264,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_FILLED_SHAPE_DEGRADED_TO_BOUNDARY",
+                        code: "CAD_NATIVE_LIBREDWG_FILLED_SHAPE_DEGRADED_TO_BOUNDARY",
                         message: "DWG SOLID, TRACE, and 3DFACE entities were imported as closed boundary paths.",
                         detail: "exportedFilledShapeCount=\(exportedFilledShapeCount)"
                     )
@@ -274,8 +274,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_DIMENSION_PARTIALLY_UNSUPPORTED",
-                        message: "Some DWG DIMENSION entities could not be simplified by the native LibreDWG PoC importer.",
+                        code: "CAD_NATIVE_LIBREDWG_DIMENSION_PARTIALLY_UNSUPPORTED",
+                        message: "Some DWG DIMENSION entities could not be simplified by the native LibreDWG importer.",
                         detail: "rawDimensionCount=\(rawDimensionCount), exportedDimensionCount=\(exportedDimensionCount)"
                     )
                 )
@@ -284,7 +284,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_DIMENSION_SIMPLIFIED",
+                        code: "CAD_NATIVE_LIBREDWG_DIMENSION_SIMPLIFIED",
                         message: "DWG DIMENSION entities were imported as simplified dimension lines and text.",
                         detail: "exportedDimensionCount=\(exportedDimensionCount)"
                     )
@@ -294,8 +294,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_HATCH_PARTIALLY_UNSUPPORTED",
-                        message: "Some DWG HATCH entities could not be converted to safe fill or boundary geometry by the native LibreDWG PoC importer.",
+                        code: "CAD_NATIVE_LIBREDWG_HATCH_PARTIALLY_UNSUPPORTED",
+                        message: "Some DWG HATCH entities could not be converted to safe fill or boundary geometry by the native LibreDWG importer.",
                         detail: "rawHatchCount=\(rawHatchCount), exportedHatchCount=\(exportedHatchCount)"
                     )
                 )
@@ -304,7 +304,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_HATCH_SAFE_RENDERING",
+                        code: "CAD_NATIVE_LIBREDWG_HATCH_SAFE_RENDERING",
                         message: "DWG HATCH entities use simple fills only when safe; complex HATCH entities render as boundary-only geometry.",
                         detail: "exportedHatchCount=\(exportedHatchCount)"
                     )
@@ -314,7 +314,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_PROXY_ENTITY_PRESERVED",
+                        code: "CAD_NATIVE_LIBREDWG_PROXY_ENTITY_PRESERVED",
                         message: "DWG proxy entities were preserved as diagnostics and are not counted as drawable geometry.",
                         detail: "rawProxyEntityCount=\(rawProxyEntityCount), exportedProxyEntityCount=\(exportedProxyEntityCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount)"
                     )
@@ -324,7 +324,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_PROXY_TEXT_CANDIDATE_SUMMARY",
+                        code: "CAD_NATIVE_PROXY_TEXT_CANDIDATE_SUMMARY",
                         message: "Proxy/Tianzheng custom objects contain possible text bytes; they are diagnostic-only until geometry and anchors are decoded.",
                         detail: proxyTextCandidateSummary
                     )
@@ -334,8 +334,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_TIANZHENG_PROXY_PRESERVED",
-                        message: "Tianzheng/TCH proxy entities were preserved as diagnostics; custom object geometry is not decoded by the CAD Metal PoC.",
+                        code: "CAD_NATIVE_LIBREDWG_TIANZHENG_PROXY_PRESERVED",
+                        message: "Tianzheng/TCH proxy entities were preserved as diagnostics; custom object geometry is not decoded by the Native CAD Renderer.",
                         detail: "rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
                     )
                 )
@@ -344,7 +344,7 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_NO_RAW_ENTITIES",
+                        code: "CAD_NATIVE_LIBREDWG_NO_RAW_ENTITIES",
                         message: "LibreDWG did not return drawable entities for this DWG.",
                         detail: file.displayName
                     )
@@ -355,8 +355,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_LIBREDWG_NO_DRAWABLE_GEOMETRY",
-                        message: "LibreDWG returned entities, but none were drawable by the CAD Metal PoC.",
+                        code: "CAD_NATIVE_LIBREDWG_NO_DRAWABLE_GEOMETRY",
+                        message: "LibreDWG returned entities, but none were drawable by the Native CAD Renderer.",
                         detail: "rawEntityCount=\(rawEntityCount), exportedEntityCount=\(entityCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount)"
                     )
                 )
@@ -627,8 +627,8 @@ extension CADPoC {
                     diagnostics: Kernel.CADDrawingDiagnostics(entries: [
                         Kernel.CADDrawingDiagnostics.Entry(
                             severity: .warning,
-                            code: "CAD_POC_DIMENSION_SIMPLIFIED",
-                            message: "DWG DIMENSION imported as a simplified dimension line and text for the CAD Metal PoC.",
+                            code: "CAD_NATIVE_DIMENSION_SIMPLIFIED",
+                            message: "DWG DIMENSION imported as a simplified dimension line and text for the Native CAD Renderer.",
                             detail: sourceHandle
                         )
                     ])
@@ -669,8 +669,8 @@ extension CADPoC {
                 ?? "DWG proxy entity preserved as diagnostic metadata."
             let isTianzheng = UInt32(nativeEntity.kind) == SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue
             let code = isTianzheng
-                ? "CAD_POC_LIBREDWG_TIANZHENG_PROXY_ENTITY"
-                : "CAD_POC_LIBREDWG_PROXY_ENTITY"
+                ? "CAD_NATIVE_LIBREDWG_TIANZHENG_PROXY_ENTITY"
+                : "CAD_NATIVE_LIBREDWG_PROXY_ENTITY"
             let message = isTianzheng
                 ? "Tianzheng/TCH proxy object was preserved as non-renderable diagnostic metadata."
                 : "DWG proxy object was preserved as non-renderable diagnostic metadata."
@@ -719,7 +719,7 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .info,
-                        code: "CAD_POC_INFINITE_LINE_CLIPPED",
+                        code: "CAD_NATIVE_INFINITE_LINE_CLIPPED",
                         message: "DWG XLINE/RAY imported as a finite preview segment.",
                         detail: sourceHandle
                     )
@@ -728,7 +728,7 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .info,
-                        code: "CAD_POC_LEADER_DEGRADED_TO_POLYLINE",
+                        code: "CAD_NATIVE_LEADER_DEGRADED_TO_POLYLINE",
                         message: "DWG LEADER imported as a polyline.",
                         detail: sourceHandle
                     )
@@ -737,7 +737,7 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .info,
-                        code: "CAD_POC_MLINE_DEGRADED_TO_CENTERLINE",
+                        code: "CAD_NATIVE_MLINE_DEGRADED_TO_CENTERLINE",
                         message: "DWG MLINE imported as its vertex centerline.",
                         detail: sourceHandle
                     )
@@ -750,7 +750,7 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: canFill ? .info : .warning,
-                        code: canFill ? "CAD_POC_HATCH_SIMPLE_FILL" : "CAD_POC_HATCH_BOUNDARY_ONLY",
+                        code: canFill ? "CAD_NATIVE_HATCH_SIMPLE_FILL" : "CAD_NATIVE_HATCH_BOUNDARY_ONLY",
                         message: canFill
                             ? "DWG HATCH imported as a simple filled polygon."
                             : "DWG HATCH imported as boundary-only geometry to avoid expensive or inaccurate fill rendering.",
@@ -762,7 +762,7 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_IMAGE_PLACEHOLDER",
+                        code: "CAD_NATIVE_IMAGE_PLACEHOLDER",
                         message: "DWG IMAGE/UNDERLAY imported as a frame placeholder.",
                         detail: sourceHandle
                     )
@@ -771,8 +771,8 @@ extension CADPoC {
                 return Kernel.CADDrawingDiagnostics(entries: [
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .warning,
-                        code: "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY",
-                        message: "DWG WIPEOUT imported as a boundary frame; masking is not implemented in this PoC.",
+                        code: "CAD_NATIVE_WIPEOUT_DEGRADED_TO_BOUNDARY",
+                        message: "DWG WIPEOUT imported as a boundary frame; masking is not implemented in the native CAD renderer.",
                         detail: sourceHandle
                     )
                 ])
@@ -804,13 +804,13 @@ extension CADPoC {
         private func nativeUnsupportedReason(for nativeKind: Int32) -> String? {
             switch UInt32(nativeKind) {
             case SiteKeeperLibreDWGEntityKindImage.rawValue:
-                return "Image placeholder; raster image drawing is not implemented in the CAD Metal PoC."
+                return "Image placeholder; raster image drawing is not implemented in the Native CAD Renderer."
             case SiteKeeperLibreDWGEntityKindUnderlay.rawValue:
-                return "Underlay placeholder; referenced PDF/DWF/DGN drawing is not rendered in the CAD Metal PoC."
+                return "Underlay placeholder; referenced PDF/DWF/DGN drawing is not rendered in the Native CAD Renderer."
             case SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue:
-                return "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the CAD Metal PoC."
+                return "Tianzheng/TCH proxy object preserved as diagnostic metadata; custom object geometry is not decoded by the Native CAD Renderer."
             case SiteKeeperLibreDWGEntityKindProxy.rawValue:
-                return "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the CAD Metal PoC."
+                return "DWG proxy entity preserved as diagnostic metadata; proxy graphics are not decoded by the Native CAD Renderer."
             default:
                 return nil
             }
@@ -1201,8 +1201,8 @@ extension CADPoC {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
                         severity: .info,
-                        code: "CAD_POC_DWG_CONVERTED_DXF_USED",
-                        message: "The CAD Metal PoC used a LibreDWG-generated DXF artifact.",
+                        code: "CAD_NATIVE_DWG_CONVERTED_DXF_USED",
+                        message: "The Native CAD Renderer used a LibreDWG-generated DXF artifact.",
                         detail: dxfURL.path
                     )
                 )
@@ -1210,8 +1210,8 @@ extension CADPoC {
             diagnostics.append(
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .info,
-                    code: "CAD_POC_TEXT_IMPORT_SUMMARY",
-                    message: "CAD text import summary for LibreDWG native PoC.",
+                    code: "CAD_NATIVE_TEXT_IMPORT_SUMMARY",
+                    message: "CAD text import summary for the native LibreDWG importer.",
                     detail: Self.importedTextSummary(entities: entities, traces: textTrace)
                 )
             )
@@ -1492,8 +1492,8 @@ extension CADPoC {
             Kernel.CADDrawingDiagnostics(entries: [
                 Kernel.CADDrawingDiagnostics.Entry(
                     severity: .warning,
-                    code: "CAD_POC_NO_BASIC_2D_ENTITIES",
-                    message: "The CAD Metal PoC imported no supported 2D CAD entities.",
+                    code: "CAD_NATIVE_NO_BASIC_2D_ENTITIES",
+                    message: "The Native CAD Renderer imported no supported 2D CAD entities.",
                     detail: file.displayName
                 )
             ])
@@ -1560,7 +1560,7 @@ enum DXFBasic2DParser {
 private actor CADImportResultCache {
     static let shared = CADImportResultCache()
 
-    private var memory: [String: CADPoC.CADImportResult] = [:]
+    private var memory: [String: NativeCAD.CADImportResult] = [:]
     private let fileManager = FileManager.default
     private lazy var cacheDirectory: URL = {
         let root = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -1568,7 +1568,7 @@ private actor CADImportResultCache {
         return root.appendingPathComponent("sitekeeper-cad-import-cache", isDirectory: true)
     }()
 
-    func result(for file: SiteKeeperCADKernel.CADFile, engineID: String) -> CADPoC.CADImportResult? {
+    func result(for file: SiteKeeperCADKernel.CADFile, engineID: String) -> NativeCAD.CADImportResult? {
         let key = cacheKey(for: file, engineID: engineID)
         if let cached = memory[key] {
             return cached
@@ -1576,14 +1576,14 @@ private actor CADImportResultCache {
 
         let url = cacheURL(for: key)
         guard let data = try? Data(contentsOf: url),
-              let result = try? JSONDecoder().decode(CADPoC.CADImportResult.self, from: data) else {
+              let result = try? JSONDecoder().decode(NativeCAD.CADImportResult.self, from: data) else {
             return nil
         }
         memory[key] = result
         return result
     }
 
-    func store(_ result: CADPoC.CADImportResult, for file: SiteKeeperCADKernel.CADFile, engineID: String) {
+    func store(_ result: NativeCAD.CADImportResult, for file: SiteKeeperCADKernel.CADFile, engineID: String) {
         let key = cacheKey(for: file, engineID: engineID)
         memory[key] = result
         let url = cacheURL(for: key)
@@ -1592,7 +1592,7 @@ private actor CADImportResultCache {
             let data = try JSONEncoder().encode(result)
             try data.write(to: url, options: [.atomic])
         } catch {
-            CADPoC.CADDiagnosticLog.recordEncoded(
+            NativeCAD.CADDiagnosticLog.recordEncoded(
                 category: "cad.importCache",
                 message: "CAD import result cache store failed.",
                 payload: [

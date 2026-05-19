@@ -19,7 +19,7 @@ struct CADViewerContainer: View {
     }
 
     var body: some View {
-        CADMetalLibreDWGPoCEntry(
+        NativeCADViewerEntry(
             fileURL: fileURL,
             displayName: displayName,
             showsToolbar: true,
@@ -31,7 +31,7 @@ struct CADViewerContainer: View {
     }
 }
 
-struct CADMetalLibreDWGPoCEntry: View {
+struct NativeCADViewerEntry: View {
     let fileURL: URL
     let displayName: String
     let textImportOptions: CADCanvasTextImportOptions
@@ -40,14 +40,14 @@ struct CADMetalLibreDWGPoCEntry: View {
     let callbacks: CADRendererCallbacks
     let externalCurrentLayoutID: String?
     let externalVisibleLayerIDs: Set<String>?
-    let onLayoutsChangedExternal: ([CADPoC.CADLayout]) -> Void
+    let onLayoutsChangedExternal: ([NativeCAD.CADLayout]) -> Void
     let onCurrentLayoutIDChangedExternal: (String?) -> Void
-    let onLayersChangedExternal: ([CADPoC.CADLayer]) -> Void
+    let onLayersChangedExternal: ([NativeCAD.CADLayer]) -> Void
     let onVisibleLayerIDsChangedExternal: (Set<String>?) -> Void
     let onClose: () -> Void
     let onReportIssue: () -> Void
-    @State private var layers: [CADPoC.CADLayer] = []
-    @State private var layouts: [CADPoC.CADLayout] = []
+    @State private var layers: [NativeCAD.CADLayer] = []
+    @State private var layouts: [NativeCAD.CADLayout] = []
     @State private var currentLayoutID: String?
     @State private var visibleLayerIDs: Set<String>?
     @State private var canvasControlCommand: CADCanvasControlCommand?
@@ -59,22 +59,22 @@ struct CADMetalLibreDWGPoCEntry: View {
     @State private var selectedSearchResultIndex: Int?
     @State private var showsSearchPanel = false
     @State private var rendererPerformance: CADRendererPerformanceSnapshot?
-    @AppStorage("cad.metal.poc.showsOverviewMap") private var showsOverviewMap = false
-    @AppStorage("cad.metal.poc.rendersTextOverlays") private var rendersTextOverlays = true
-    @AppStorage("cad.metal.poc.rendersLineTypes") private var rendersLineTypes = false
-    @AppStorage("cad.metal.poc.rendersLineWeights") private var rendersLineWeights = false
-    @AppStorage("cad.metal.poc.rendersDimensionDetails") private var rendersDimensionDetails = false
-    @AppStorage("cad.metal.poc.buildsTextSearchIndex") private var buildsTextSearchIndex = false
-    @AppStorage("cad.metal.poc.publishesSnapPoints") private var publishesSnapPoints = false
-    @AppStorage("cad.metal.poc.publishesSnapIntersections") private var publishesSnapIntersections = false
-    @AppStorage("cad.metal.poc.rendersHatchBoundaries") private var rendersHatchBoundaries = false
-    @AppStorage("cad.metal.poc.rendersHatches") private var rendersHatches = false
-    @AppStorage("cad.metal.poc.rendersPlaceholders") private var rendersPlaceholders = false
-    @AppStorage("cad.metal.poc.showsRendererDiagnostics") private var showsRendererDiagnostics = false
-    @AppStorage("cad.metal.poc.featureDefaultsVersion") private var featureDefaultsVersion = 0
-    @AppStorage("cad.metal.poc.textDisplayFont") private var textDisplayFontRaw = CADDrawingTextDisplayFont.auto.rawValue
-    @AppStorage("cad.metal.poc.importedTextFontName") private var importedTextFontName = ""
-    @AppStorage("cad.metal.poc.importedTextFontPath") private var importedTextFontPath = ""
+    @AppStorage("cad.native.showsOverviewMap") private var showsOverviewMap = false
+    @AppStorage("cad.native.rendersTextOverlays") private var rendersTextOverlays = true
+    @AppStorage("cad.native.rendersLineTypes") private var rendersLineTypes = false
+    @AppStorage("cad.native.rendersLineWeights") private var rendersLineWeights = false
+    @AppStorage("cad.native.rendersDimensionDetails") private var rendersDimensionDetails = false
+    @AppStorage("cad.native.buildsTextSearchIndex") private var buildsTextSearchIndex = false
+    @AppStorage("cad.native.publishesSnapPoints") private var publishesSnapPoints = false
+    @AppStorage("cad.native.publishesSnapIntersections") private var publishesSnapIntersections = false
+    @AppStorage("cad.native.rendersHatchBoundaries") private var rendersHatchBoundaries = false
+    @AppStorage("cad.native.rendersHatches") private var rendersHatches = false
+    @AppStorage("cad.native.rendersPlaceholders") private var rendersPlaceholders = false
+    @AppStorage("cad.native.showsRendererDiagnostics") private var showsRendererDiagnostics = false
+    @AppStorage("cad.native.featureDefaultsVersion") private var featureDefaultsVersion = 0
+    @AppStorage("cad.native.textDisplayFont") private var textDisplayFontRaw = CADDrawingTextDisplayFont.auto.rawValue
+    @AppStorage("cad.native.importedTextFontName") private var importedTextFontName = ""
+    @AppStorage("cad.native.importedTextFontPath") private var importedTextFontPath = ""
 
     init(
         fileURL: URL,
@@ -85,9 +85,9 @@ struct CADMetalLibreDWGPoCEntry: View {
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
         externalCurrentLayoutID: String? = nil,
         externalVisibleLayerIDs: Set<String>? = nil,
-        onLayoutsChangedExternal: @escaping ([CADPoC.CADLayout]) -> Void = { _ in },
+        onLayoutsChangedExternal: @escaping ([NativeCAD.CADLayout]) -> Void = { _ in },
         onCurrentLayoutIDChangedExternal: @escaping (String?) -> Void = { _ in },
-        onLayersChangedExternal: @escaping ([CADPoC.CADLayer]) -> Void = { _ in },
+        onLayersChangedExternal: @escaping ([NativeCAD.CADLayer]) -> Void = { _ in },
         onVisibleLayerIDsChangedExternal: @escaping (Set<String>?) -> Void = { _ in },
         onClose: @escaping () -> Void,
         onReportIssue: @escaping () -> Void
@@ -157,7 +157,7 @@ struct CADMetalLibreDWGPoCEntry: View {
         }
         .background(Color(.systemBackground))
         .onAppear {
-            migrateCADPoCFeatureDefaultsIfNeeded()
+            migrateNativeCADFeatureDefaultsIfNeeded()
         }
     }
 
@@ -615,7 +615,7 @@ struct CADMetalLibreDWGPoCEntry: View {
         return Self.defaultLayoutID(layouts)
     }
 
-    private func handleLayoutsChanged(_ importedLayouts: [CADPoC.CADLayout]) {
+    private func handleLayoutsChanged(_ importedLayouts: [NativeCAD.CADLayout]) {
         layouts = importedLayouts
         onLayoutsChangedExternal(importedLayouts)
         let requestedLayoutID = externalCurrentLayoutID ?? currentLayoutID
@@ -634,7 +634,7 @@ struct CADMetalLibreDWGPoCEntry: View {
         refreshSearchResults()
     }
 
-    private func handleLayersChanged(_ importedLayers: [CADPoC.CADLayer]) {
+    private func handleLayersChanged(_ importedLayers: [NativeCAD.CADLayer]) {
         layers = importedLayers
         onLayersChangedExternal(importedLayers)
         let requested = externalVisibleLayerIDs ?? visibleLayerIDs
@@ -716,7 +716,7 @@ struct CADMetalLibreDWGPoCEntry: View {
 
     static func reconciledVisibleLayerIDs(
         requested: Set<String>?,
-        importedLayers: [CADPoC.CADLayer]
+        importedLayers: [NativeCAD.CADLayer]
     ) -> Set<String>? {
         guard let requested else { return nil }
         guard !importedLayers.isEmpty else { return requested }
@@ -732,13 +732,13 @@ struct CADMetalLibreDWGPoCEntry: View {
         return visibleImportedIDs.isEmpty ? importedIDs : visibleImportedIDs
     }
 
-    static func defaultVisibleLayerIDs(_ importedLayers: [CADPoC.CADLayer]) -> Set<String>? {
+    static func defaultVisibleLayerIDs(_ importedLayers: [NativeCAD.CADLayer]) -> Set<String>? {
         guard !importedLayers.isEmpty else { return nil }
         let visibleImportedIDs = Set(importedLayers.filter(\.isVisible).map(\.id))
         return visibleImportedIDs.isEmpty ? Set(importedLayers.map(\.id)) : visibleImportedIDs
     }
 
-    static func defaultLayoutID(_ importedLayouts: [CADPoC.CADLayout]) -> String? {
+    static func defaultLayoutID(_ importedLayouts: [NativeCAD.CADLayout]) -> String? {
         importedLayouts.first(where: \.isModelSpace)?.id ?? importedLayouts.first?.id
     }
 
@@ -768,7 +768,7 @@ struct CADMetalLibreDWGPoCEntry: View {
         onVisibleLayerIDsChangedExternal(nextVisible)
     }
 
-    private func migrateCADPoCFeatureDefaultsIfNeeded() {
+    private func migrateNativeCADFeatureDefaultsIfNeeded() {
         guard featureDefaultsVersion < 2 else { return }
         if featureDefaultsVersion < 1 {
             rendersTextOverlays = true

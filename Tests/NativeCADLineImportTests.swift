@@ -8,7 +8,7 @@ import UIKit
 #endif
 
 @Suite(.serialized)
-struct CADPoCLineImportTests {
+struct NativeCADLineImportTests {
     @Test func rendererFrameDiagnosticsIdentifyWhiteScreenFailureLayer() {
         let layerFiltered = CADRendererPerformanceSnapshot(
             entityCountInViewport: 0,
@@ -234,11 +234,11 @@ struct CADPoCLineImportTests {
 
         #expect(snapshot.rendererFailureLayer == "none")
         #expect(!snapshot.hasActionableRendererFailure)
-        #expect(CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: true, sample: snapshot))
-        #expect(!CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: false, sample: snapshot))
-        #expect(!CADMetalLibreDWGPoCEntry.shouldShowRendererDiagnostics(enabled: true, sample: nil))
+        #expect(NativeCADViewerEntry.shouldShowRendererDiagnostics(enabled: true, sample: snapshot))
+        #expect(!NativeCADViewerEntry.shouldShowRendererDiagnostics(enabled: false, sample: snapshot))
+        #expect(!NativeCADViewerEntry.shouldShowRendererDiagnostics(enabled: true, sample: nil))
 
-        let rows = CADMetalLibreDWGPoCEntry.rendererDiagnosticRows(for: snapshot)
+        let rows = NativeCADViewerEntry.rendererDiagnosticRows(for: snapshot)
         #expect(rows.contains { $0.contains("entity 2") })
         #expect(rows.contains { $0.contains("command 2") })
         #expect(rows.contains { $0.contains("text 0/0") })
@@ -250,9 +250,9 @@ struct CADPoCLineImportTests {
         #expect(!rows.contains { $0.contains("text kind total") })
     }
 
-    @Test func libreDWGNativePoCImportsDXFBasic2DGeometry() async throws {
+    @Test func libreDWGNativeCADImportsDXFBasic2DGeometry() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-line-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-line-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -327,7 +327,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         let result = try await engine.importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
@@ -348,13 +348,13 @@ struct CADPoCLineImportTests {
         #expect(result.database.entities.contains { $0.kind == .arc })
         #expect(result.database.extents == SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 200, maxY: 80))
 
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
         #expect(commands.count == 4)
     }
 
-    @Test func libreDWGNativePoCImportsLegacyPolylineVertices() async throws {
+    @Test func libreDWGNativeCADImportsLegacyPolylineVertices() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-polyline-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-polyline-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -397,7 +397,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
 
@@ -407,12 +407,12 @@ struct CADPoCLineImportTests {
         #expect(result.database.entities.first?.kind == .polyline)
         #expect(result.database.entities.first?.layerID == "WALL")
         #expect(result.database.extents == SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 100, maxY: 40))
-        #expect(CADPoC.CADRenderPipeline().commands(from: result.database.entities).count == 1)
+        #expect(NativeCAD.CADRenderPipeline().commands(from: result.database.entities).count == 1)
     }
 
-    @Test func libreDWGNativePoCTessellatesPolylineBulgeArcs() async throws {
+    @Test func libreDWGNativeCADTessellatesPolylineBulgeArcs() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-polyline-bulge-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-polyline-bulge-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -467,7 +467,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entitiesByHandle = Dictionary(uniqueKeysWithValues: result.database.entities.compactMap { entity in
@@ -477,7 +477,7 @@ struct CADPoCLineImportTests {
         let legacyPolyline = try #require(entitiesByHandle["B2"])
         let lwPoints = try #require(lwPolyline.path?.points)
         let legacyPoints = try #require(legacyPolyline.path?.points)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawPolylineCount == 2)
         #expect(result.trace.drawableEntityCount == 2)
@@ -487,14 +487,14 @@ struct CADPoCLineImportTests {
         #expect(legacyPoints.count > 8)
         #expect(lwPolyline.bounds.maxY > 49)
         #expect(legacyPolyline.bounds.maxY > 49)
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_LWPOLYLINE_BULGE_TESSELLATED" })
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_POLYLINE_BULGE_TESSELLATED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_LWPOLYLINE_BULGE_TESSELLATED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_POLYLINE_BULGE_TESSELLATED" })
         #expect(commands.count == 2)
     }
 
-    @Test func libreDWGNativePoCCoversCommonAuxiliary2DEntities() async throws {
+    @Test func libreDWGNativeCADCoversCommonAuxiliary2DEntities() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-aux-entities-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-aux-entities-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -651,10 +651,10 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.entityCount == 9)
         #expect(result.trace.drawableEntityCount == 7)
@@ -662,9 +662,9 @@ struct CADPoCLineImportTests {
         #expect(result.database.entities.contains { $0.kind == .point })
         #expect(result.database.entities.contains { $0.sourceHandle == "IMG1" && $0.kind == .image })
         #expect(result.database.entities.contains { $0.sourceHandle == "PX1" && $0.kind == .unsupported })
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_IMAGE_PLACEHOLDER" })
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_WIPEOUT_DEGRADED_TO_BOUNDARY" })
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_DXF_UNSUPPORTED_ENTITY" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_IMAGE_PLACEHOLDER" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_WIPEOUT_DEGRADED_TO_BOUNDARY" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_DXF_UNSUPPORTED_ENTITY" })
         #expect(commands.contains { command in
             if case .marker = command { return true }
             return false
@@ -676,7 +676,7 @@ struct CADPoCLineImportTests {
     }
 
     @Test func libreDWGNativeShimMapsProxyAndTianzhengProxyAsNonDrawableDiagnostics() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         #expect(engine.entityKindForNativeKindForTesting(Int32(SiteKeeperLibreDWGEntityKindProxy.rawValue)) == .proxy)
         #expect(engine.entityKindForNativeKindForTesting(Int32(SiteKeeperLibreDWGEntityKindTianzhengProxy.rawValue)) == .proxy)
 
@@ -700,8 +700,8 @@ struct CADPoCLineImportTests {
             file: SiteKeeperCADKernel.CADFile(url: URL(fileURLWithPath: "/tmp/proxy.dwg"), format: .dwg),
             entities: [entity]
         )
-        let renderCommandCount = CADPoC.CADRenderPipeline().commands(from: database.entities).count
-        let trace = CADPoC.CADOpenTrace(
+        let renderCommandCount = NativeCAD.CADRenderPipeline().commands(from: database.entities).count
+        let trace = NativeCAD.CADOpenTrace(
             fileName: "proxy.dwg",
             importSource: engine.id,
             rawProxyEntityCount: 1,
@@ -722,7 +722,7 @@ struct CADPoCLineImportTests {
         #expect(entity.layerID == "TCH_LAYER")
         #expect(entity.sourceHandle == "PX-TCH")
         #expect(entity.unsupportedReason?.contains("Tianzheng") == true)
-        #expect(entity.diagnostics.entries.contains { $0.code == "CAD_POC_LIBREDWG_TIANZHENG_PROXY_ENTITY" })
+        #expect(entity.diagnostics.entries.contains { $0.code == "CAD_NATIVE_LIBREDWG_TIANZHENG_PROXY_ENTITY" })
         #expect(engine.proxyTextCandidateSummaryForTesting(entities: [entity])?.contains("proxyTextCandidateCount=1") == true)
         let machineTrace = CADDiagnosticMachineTrace.NativeTrace(trace)
         #expect(machineTrace.rawEntityCounts.mleader == 2)
@@ -742,7 +742,7 @@ struct CADPoCLineImportTests {
     }
 
     @Test func libreDWGNativeShimPreservesPaperSpaceLayoutOnImportedEntities() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         let points = UnsafeMutablePointer<SiteKeeperLibreDWGPoint>.allocate(capacity: 2)
         points.initialize(to: SiteKeeperLibreDWGPoint(x: 0, y: 0))
         points.advanced(by: 1).initialize(to: SiteKeeperLibreDWGPoint(x: 10, y: 0))
@@ -772,9 +772,9 @@ struct CADPoCLineImportTests {
         #expect(entity.bounds.maxX == 10)
     }
 
-    @Test func libreDWGNativePoCImportsTextThroughTextEngine() async throws {
+    @Test func libreDWGNativeCADImportsTextThroughTextEngine() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-text-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-text-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -817,11 +817,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let displayTexts = result.database.entities.compactMap(\.displayText)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawTextCount == 2)
         #expect(result.trace.entityCount == 2)
@@ -831,7 +831,7 @@ struct CADPoCLineImportTests {
         #expect(displayTexts.contains("中文"))
         #expect(commands.count == 2)
         #expect(result.database.diagnostics.entries.contains { entry in
-            entry.code == "CAD_POC_TEXT_IMPORT_SUMMARY"
+            entry.code == "CAD_NATIVE_TEXT_IMPORT_SUMMARY"
                 && (entry.detail?.contains("cadTextCount=2") ?? false)
                 && (entry.detail?.contains("text=1") ?? false)
                 && (entry.detail?.contains("mtext=1") ?? false)
@@ -844,7 +844,7 @@ struct CADPoCLineImportTests {
         })
     }
 
-    @Test func cadMetalPoCRenderPipelineKeepsChineseTextInStableOverview() async throws {
+    @Test func cadMetalNativeCADRenderPipelineKeepsChineseTextInStableOverview() async throws {
         let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "\\U+4E2D\\U+6587",
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10, y: 10),
@@ -858,7 +858,7 @@ struct CADPoCLineImportTests {
             text: textRun,
             bounds: SiteKeeperCADKernel.CADBounds(minX: 10, minY: 10, maxX: 20, maxY: 13)
         )
-        let output = CADPoC.CADRenderPipeline(
+        let output = NativeCAD.CADRenderPipeline(
             lodPolicy: SiteKeeperCADKernel.CADLODPolicy(minTextHeightOnScreen: 2)
         ).renderOutput(
             from: [entity],
@@ -879,9 +879,9 @@ struct CADPoCLineImportTests {
     }
 
     #if os(iOS)
-    @Test func cadMetalPoCRasterizesChineseTextOverlayPixels() throws {
+    @Test func cadMetalNativeCADRasterizesChineseTextOverlayPixels() throws {
         let font = UIFont(name: "PingFangSC-Regular", size: 24) ?? .systemFont(ofSize: 24)
-        let image = try #require(CADPoC.CADMetalRenderer.makeTextOverlayRasterImage(
+        let image = try #require(NativeCAD.CADMetalRenderer.makeTextOverlayRasterImage(
             displayText: "中文123",
             font: font,
             textColor: .black,
@@ -911,9 +911,9 @@ struct CADPoCLineImportTests {
         #expect(hasTextPixels)
     }
 
-    @Test func cadMetalPoCRasterizesChineseWhenPreferredFontIsLatinOnly() throws {
+    @Test func cadMetalNativeCADRasterizesChineseWhenPreferredFontIsLatinOnly() throws {
         let font = UIFont(name: "Helvetica", size: 24) ?? .systemFont(ofSize: 24)
-        let image = try #require(CADPoC.CADMetalRenderer.makeTextOverlayRasterImage(
+        let image = try #require(NativeCAD.CADMetalRenderer.makeTextOverlayRasterImage(
             displayText: "消防水泵123",
             font: font,
             textColor: .black,
@@ -943,8 +943,8 @@ struct CADPoCLineImportTests {
         #expect(nonTransparentPixels > 40)
     }
 
-    @Test func cadMetalPoCBuildsTextureAtlasForChineseText() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADBuildsTextureAtlasForChineseText() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "消防水泵123",
@@ -959,7 +959,7 @@ struct CADPoCLineImportTests {
             bounds: SiteKeeperCADKernel.CADBounds(minX: 10, minY: 10, maxX: 40, maxY: 16)
         )
         renderer.updateDrawing(entities: [entity], layers: [.default])
-        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let commands = NativeCAD.CADRenderPipeline().commands(from: [entity])
         let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
             commands: commands,
             drawableSize: CGSize(width: 800, height: 600),
@@ -974,8 +974,8 @@ struct CADPoCLineImportTests {
         #expect(snapshot.atlasSize.height > 0)
     }
 
-    @Test func cadMetalPoCTextAtlasFallsBackToInsertionAnchorWhenAlignmentMovesGlyphsOffscreen() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADTextAtlasFallsBackToInsertionAnchorWhenAlignmentMovesGlyphsOffscreen() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let textRun = SiteKeeperCADKernel.CADTextRun(
             rawText: "消火栓",
@@ -991,7 +991,7 @@ struct CADPoCLineImportTests {
             bounds: SiteKeeperCADKernel.CADBounds(minX: -1, minY: -1, maxX: 1, maxY: 1)
         )
         renderer.updateDrawing(entities: [entity], layers: [.default])
-        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let commands = NativeCAD.CADRenderPipeline().commands(from: [entity])
         let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
             commands: commands,
             drawableSize: CGSize(width: 800, height: 600),
@@ -1005,20 +1005,20 @@ struct CADPoCLineImportTests {
         #expect(snapshot.diagnosticRows.contains { $0.contains("intersects true") })
     }
 
-    @Test func cadMetalPoCUsesFontAdvanceInsteadOfRasterPaddingForGlyphSpacing() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADUsesFontAdvanceInsteadOfRasterPaddingForGlyphSpacing() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let font = UIFont(name: "PingFangSC-Regular", size: 24) ?? .systemFont(ofSize: 24)
         let text = "消防水泵"
         let singleGlyphImageWidths = text.compactMap { character in
-            CADPoC.CADMetalRenderer.makeTextOverlayRasterImage(
+            NativeCAD.CADMetalRenderer.makeTextOverlayRasterImage(
                 displayText: String(character),
                 font: font,
                 textColor: .black,
                 scale: 2
             )?.size.width
         }.reduce(CGFloat(0), +)
-        let expectedAdvance = CADPoC.CADMetalRenderer.textAdvanceWidthForTesting(text: text, font: font)
+        let expectedAdvance = NativeCAD.CADMetalRenderer.textAdvanceWidthForTesting(text: text, font: font)
         let atlasLayoutWidth = renderer.textAtlasLayoutWidthForTesting(
             displayText: text,
             font: font,
@@ -1030,8 +1030,8 @@ struct CADPoCLineImportTests {
         #expect(abs(atlasLayoutWidth - expectedAdvance) < 8)
     }
 
-    @Test func cadMetalPoCPrioritizesLargeVisibleTextWhenAtlasIsFull() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADPrioritizesLargeVisibleTextWhenAtlasIsFull() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "TEXT",
@@ -1074,8 +1074,8 @@ struct CADPoCLineImportTests {
         #expect(skippedCount == 1)
     }
 
-    @Test func cadMetalPoCReusesGlyphsForRepeatedText() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADReusesGlyphsForRepeatedText() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let first = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "中文",
@@ -1104,7 +1104,7 @@ struct CADPoCLineImportTests {
             )
         ]
         renderer.updateDrawing(entities: entities, layers: [.default])
-        let commands = CADPoC.CADRenderPipeline().commands(from: entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: entities)
         let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
             commands: commands,
             drawableSize: CGSize(width: 800, height: 600),
@@ -1117,8 +1117,8 @@ struct CADPoCLineImportTests {
         #expect(snapshot.vertexCount == 24)
     }
 
-    @Test func cadMetalPoCReusesSharedChineseGlyphsAcrossDifferentTextRuns() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADReusesSharedChineseGlyphsAcrossDifferentTextRuns() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let first = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "消防水泵",
@@ -1147,7 +1147,7 @@ struct CADPoCLineImportTests {
             )
         ]
         renderer.updateDrawing(entities: entities, layers: [.default])
-        let commands = CADPoC.CADRenderPipeline().commands(from: entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: entities)
         let snapshot = try #require(renderer.textAtlasSnapshotForTesting(
             commands: commands,
             drawableSize: CGSize(width: 800, height: 600),
@@ -1160,8 +1160,8 @@ struct CADPoCLineImportTests {
         #expect(snapshot.vertexCount == 48)
     }
 
-    @Test func cadMetalPoCReusesAtlasTextureAcrossFrames() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADReusesAtlasTextureAcrossFrames() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
             rawText: "消防泵房",
@@ -1176,7 +1176,7 @@ struct CADPoCLineImportTests {
             bounds: SiteKeeperCADKernel.CADBounds(minX: 12, minY: 18, maxX: 28, maxY: 24)
         )
         renderer.updateDrawing(entities: [entity], layers: [.default])
-        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let commands = NativeCAD.CADRenderPipeline().commands(from: [entity])
 
         let first = try #require(renderer.textAtlasSnapshotForTesting(
             commands: commands,
@@ -1197,8 +1197,8 @@ struct CADPoCLineImportTests {
         #expect(second.vertexCount == first.vertexCount)
     }
 
-    @Test func cadMetalPoCTextOverlayUsesDrawableToViewScaleForCoordinates() throws {
-        let point = CADPoC.CADMetalRenderer.textOverlayViewPointForTesting(
+    @Test func cadMetalNativeCADTextOverlayUsesDrawableToViewScaleForCoordinates() throws {
+        let point = NativeCAD.CADMetalRenderer.textOverlayViewPointForTesting(
             drawablePoint: SIMD2<Double>(150, 100),
             drawableSize: CGSize(width: 300, height: 200),
             viewSize: CGSize(width: 100, height: 100),
@@ -1209,8 +1209,8 @@ struct CADPoCLineImportTests {
         #expect(abs(point.y - 50) < 0.001)
     }
 
-    @Test func cadMetalPoCTextOverlayCenterRotatesAroundInsertionPoint() throws {
-        let center = CADPoC.CADMetalRenderer.textOverlayCenterForTesting(
+    @Test func cadMetalNativeCADTextOverlayCenterRotatesAroundInsertionPoint() throws {
+        let center = NativeCAD.CADMetalRenderer.textOverlayCenterForTesting(
             insertionScreen: CGPoint(x: 100, y: 100),
             width: 40,
             height: 10,
@@ -1222,8 +1222,8 @@ struct CADPoCLineImportTests {
         #expect(abs(center.y - 80) < 0.001)
     }
 
-    @Test func cadMetalPoCMTextAttachmentUsesRasterSizeInsteadOfCADBox() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADMTextAttachmentUsesRasterSizeInsteadOfCADBox() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let mtext = SiteKeeperCADKernel.CADTextRun(
             rawText: "中文",
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
@@ -1246,8 +1246,8 @@ struct CADPoCLineImportTests {
         #expect(abs(offset.y - 12) < 0.001)
     }
 
-    @Test func cadMetalPoCMTextCenterAttachmentKeepsGlyphCenteredOnInsertion() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADMTextCenterAttachmentKeepsGlyphCenteredOnInsertion() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let mtext = SiteKeeperCADKernel.CADTextRun(
             rawText: "YJV",
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
@@ -1270,8 +1270,8 @@ struct CADPoCLineImportTests {
         #expect(abs(offset.y - 6) < 0.001)
     }
 
-    @Test func cadMetalPoCTextOverlayFontSizeTracksDeepZoom() throws {
-        let fontSize = CADPoC.CADMetalRenderer.textOverlayFontSizeForTesting(
+    @Test func cadMetalNativeCADTextOverlayFontSizeTracksDeepZoom() throws {
+        let fontSize = NativeCAD.CADMetalRenderer.textOverlayFontSizeForTesting(
             textHeight: 2,
             modelScale: 180,
             contentScale: 2
@@ -1281,7 +1281,7 @@ struct CADPoCLineImportTests {
         #expect(fontSize <= 256)
     }
 
-    @Test func cadMetalPoCMTextUsesBoxHeightWhenLibreDWGLeavesDefaultTextHeight() throws {
+    @Test func cadMetalNativeCADMTextUsesBoxHeightWhenLibreDWGLeavesDefaultTextHeight() throws {
         let text = SiteKeeperCADKernel.CADTextRun(
             rawText: "YJV-5*10-SC4",
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: -172_263, y: 317_941),
@@ -1292,8 +1292,8 @@ struct CADPoCLineImportTests {
             verticalAlignmentCode: 1
         )
 
-        let resolvedHeight = CADPoC.CADMetalRenderer.textOverlayWorldHeightForTesting(text: text)
-        let fontSize = CADPoC.CADMetalRenderer.textOverlayFontSizeForTesting(
+        let resolvedHeight = NativeCAD.CADMetalRenderer.textOverlayWorldHeightForTesting(text: text)
+        let fontSize = NativeCAD.CADMetalRenderer.textOverlayFontSizeForTesting(
             textHeight: resolvedHeight,
             modelScale: 0.12,
             contentScale: 2
@@ -1303,8 +1303,8 @@ struct CADPoCLineImportTests {
         #expect(fontSize > 50)
     }
 
-    @Test func cadMetalPoCTextOverlayDoesNotAutoWrapToNarrowLibreDWGBox() throws {
-        let width = CADPoC.CADMetalRenderer.textOverlayFittingWidthForTesting(
+    @Test func cadMetalNativeCADTextOverlayDoesNotAutoWrapToNarrowLibreDWGBox() throws {
+        let width = NativeCAD.CADMetalRenderer.textOverlayFittingWidthForTesting(
             cadBoxTargetWidth: 42,
             unwrappedWidth: 380,
             fontSize: 18
@@ -1313,8 +1313,8 @@ struct CADPoCLineImportTests {
         #expect(width >= 380)
     }
 
-    @Test func cadMetalPoCTextOverlayUsesCurrentRenderInputTextEntities() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADTextOverlayUsesCurrentRenderInputTextEntities() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "TEXT",
             colorARGB: 0xFF111827,
@@ -1351,8 +1351,8 @@ struct CADPoCLineImportTests {
         #expect(displayTexts == ["已渲染文字", "当前视口文字"])
     }
 
-    @Test func cadMetalPoCTextOverlayDeduplicatesOverlappingLogicalText() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADTextOverlayDeduplicatesOverlappingLogicalText() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "AXIS",
             colorARGB: 0xFF111827,
@@ -1395,8 +1395,8 @@ struct CADPoCLineImportTests {
         #expect(displayTexts == ["26500"])
     }
 
-    @Test func cadMetalPoCTextOverlayKeepsSeparatedRepeatedText() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADTextOverlayKeepsSeparatedRepeatedText() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "TEXT",
             colorARGB: 0xFF111827,
@@ -1437,8 +1437,8 @@ struct CADPoCLineImportTests {
         #expect(displayTexts == ["AL1", "AL1"])
     }
 
-    @Test func cadMetalPoCVisibleTextOverlaySuppressesScreenDuplicate() {
-        let isSuppressed = CADPoC.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
+    @Test func cadMetalNativeCADVisibleTextOverlaySuppressesScreenDuplicate() {
+        let isSuppressed = NativeCAD.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
             candidateText: "AL1:n6",
             candidateRect: CGRect(x: 104, y: 101, width: 84, height: 18),
             kept: [
@@ -1452,8 +1452,8 @@ struct CADPoCLineImportTests {
         #expect(isSuppressed)
     }
 
-    @Test func cadMetalPoCVisibleTextOverlayKeepsSeparatedSameText() {
-        let isSuppressed = CADPoC.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
+    @Test func cadMetalNativeCADVisibleTextOverlayKeepsSeparatedSameText() {
+        let isSuppressed = NativeCAD.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
             candidateText: "AL1:n6",
             candidateRect: CGRect(x: 240, y: 100, width: 84, height: 18),
             kept: [
@@ -1492,8 +1492,8 @@ struct CADPoCLineImportTests {
         #expect(CADDrawingTextBigFont.inferredFromFontName("simfang.shx") == .hzfs)
     }
 
-    @Test func libreDWGNativePoCAppliesPreferredDisplayFontToNativeText() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine(preferredDisplayFontName: "FangSong")
+    @Test func libreDWGNativeCADAppliesPreferredDisplayFontToNativeText() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine(preferredDisplayFontName: "FangSong")
         var nativeEntity = SiteKeeperLibreDWGEntity()
         nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
         nativeEntity.layerName = strdup("TEXT")
@@ -1525,9 +1525,9 @@ struct CADPoCLineImportTests {
         #expect(text.warnings.contains("CAD_TEXT_DISPLAY_FONT_OVERRIDE:FangSong"))
     }
 
-    @Test func libreDWGNativePoCAggregatesDXFFontDiagnosticsFromStyleTable() async throws {
+    @Test func libreDWGNativeCADAggregatesDXFFontDiagnosticsFromStyleTable() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-font-diagnostics-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-font-diagnostics-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -1582,7 +1582,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let text = try #require(result.database.entities.first?.text)
@@ -1600,9 +1600,9 @@ struct CADPoCLineImportTests {
         #expect(diagnosticCodes.contains("CAD_TEXT_FONT_FALLBACK_USED"))
     }
 
-    @Test func libreDWGNativePoCTextBoundsIncludeRotationAndWidthFactor() async throws {
+    @Test func libreDWGNativeCADTextBoundsIncludeRotationAndWidthFactor() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-rotated-text-bounds-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-rotated-text-bounds-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -1635,7 +1635,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
@@ -1651,9 +1651,9 @@ struct CADPoCLineImportTests {
         #expect(entity.bounds.height > 47.9)
     }
 
-    @Test func libreDWGNativePoCMTextUsesAttachmentCodeInsteadOfDirectionCodes() async throws {
+    @Test func libreDWGNativeCADMTextUsesAttachmentCodeInsteadOfDirectionCodes() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-mtext-attachment-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-mtext-attachment-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -1692,7 +1692,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
@@ -1855,8 +1855,8 @@ struct CADPoCLineImportTests {
         #expect(!textRun.warnings.contains("CAD_TEXT_SHX_BIGFONT_BARE_HEX_DECODED"))
     }
 
-    @Test func libreDWGNativePoCDefaultsNativeTextImportToCP936() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+    @Test func libreDWGNativeCADDefaultsNativeTextImportToCP936() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         #expect(engine.effectiveNativeTextCodePageForTesting == 936)
         #expect(engine.nativeTextEncodingLabelsForTesting.first == "cp936")
 
@@ -1890,8 +1890,8 @@ struct CADPoCLineImportTests {
         #expect(text.displayText == "中文")
     }
 
-    @Test func libreDWGNativePoCDoesNotReDecodeNativeUTF8TextAsCP936() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+    @Test func libreDWGNativeCADDoesNotReDecodeNativeUTF8TextAsCP936() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         var nativeEntity = SiteKeeperLibreDWGEntity()
         nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
         nativeEntity.layerName = strdup("TEXT")
@@ -1921,8 +1921,8 @@ struct CADPoCLineImportTests {
         #expect(text.displayText == "中文")
     }
 
-    @Test func libreDWGNativePoCUsesPreferredBig5CodePageForNativeTextBytes() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine(preferredTextCodePage: 950)
+    @Test func libreDWGNativeCADUsesPreferredBig5CodePageForNativeTextBytes() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine(preferredTextCodePage: 950)
         let rawBytes = try #require(Self.encodedBytes("中文", using: Self.big5Encoding))
         let rawText = Self.nativeCString(bytes: rawBytes)
         var nativeEntity = SiteKeeperLibreDWGEntity()
@@ -1959,8 +1959,8 @@ struct CADPoCLineImportTests {
         #expect(entity.bounds.maxY >= 20)
     }
 
-    @Test func libreDWGNativePoCUsesSimplifiedBigFontAsGB18030HintForNativeTextBytes() throws {
-        let engine = CADPoC.LibreDWGNativeImportEngine(preferredTextBigFont: 1)
+    @Test func libreDWGNativeCADUsesSimplifiedBigFontAsGB18030HintForNativeTextBytes() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine(preferredTextBigFont: 1)
         let expectedText = "钑捐翰杞╄簼"
         let rawBytes = try #require(Self.encodedBytes(expectedText, using: Self.gb18030Encoding))
         #expect(String(data: Data(rawBytes), encoding: .utf8) == "蕾躲轩躝")
@@ -2077,7 +2077,7 @@ struct CADPoCLineImportTests {
             bounds: SiteKeeperCADKernel.CADBounds(minX: 10, minY: 10, maxX: 16, maxY: 13)
         )
 
-        let output = CADPoC.CADRenderPipeline().renderOutput(
+        let output = NativeCAD.CADRenderPipeline().renderOutput(
             from: lineEntities + [textEntity],
             zoomScale: 10,
             interactionPhase: .stable,
@@ -2130,7 +2130,7 @@ struct CADPoCLineImportTests {
     }
 
     #if os(iOS)
-    @Test func cadMetalPoCSearchFocusProducesVisibleHighlight() throws {
+    @Test func cadMetalNativeCADSearchFocusProducesVisibleHighlight() throws {
         let line = Self.lineEntity(
             from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
             to: SiteKeeperCADKernel.CADPoint(x: 1_000, y: 0)
@@ -2147,7 +2147,7 @@ struct CADPoCLineImportTests {
             bounds: targetBounds,
             sourceHandle: "SEARCH-L1"
         )
-        let renderer = CADPoC.CADMetalRenderer()
+        let renderer = NativeCAD.CADMetalRenderer()
         renderer.updateDrawing(entities: [line, target], layers: [.default])
 
         renderer.focusSearchResult(
@@ -2169,17 +2169,17 @@ struct CADPoCLineImportTests {
 
     @Test func spatialIndexQueriesViewportLayerAndLayout() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-spatial-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-spatial-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         try Self.basic2DGeometryDXF.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         let result = try await engine.importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
 
-        let index = CADPoC.CADSpatialIndex(entities: result.database.entities)
+        let index = NativeCAD.CADSpatialIndex(entities: result.database.entities)
         let viewport = SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 110, maxY: 60)
         let visible = index.query(viewport)
         let wallVisible = index.query(viewport, layerIDs: ["WALL"])
@@ -2196,7 +2196,7 @@ struct CADPoCLineImportTests {
         #expect(wallVisible.count == 1)
         #expect(wallVisible.first?.kind == .line)
         #expect(allWallVisible.count == 2)
-        #expect(CADPoC.CADRenderPipeline().commands(from: allWallVisible).count == 2)
+        #expect(NativeCAD.CADRenderPipeline().commands(from: allWallVisible).count == 2)
         #expect(noLayerVisible.isEmpty)
         #expect(wrongLayoutVisible.isEmpty)
     }
@@ -2214,11 +2214,11 @@ struct CADPoCLineImportTests {
             text: textRun,
             bounds: .empty
         )
-        let effectiveBounds = CADPoC.CADSpatialIndex.effectiveBounds(for: entity)
-        let index = CADPoC.CADSpatialIndex(entities: [entity])
+        let effectiveBounds = NativeCAD.CADSpatialIndex.effectiveBounds(for: entity)
+        let index = NativeCAD.CADSpatialIndex(entities: [entity])
         let viewport = SiteKeeperCADKernel.CADBounds(minX: 9, minY: 19, maxX: 16, maxY: 25)
         let visible = index.query(viewport)
-        let commands = CADPoC.CADRenderPipeline().commands(from: visible)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: visible)
 
         #expect(!effectiveBounds.isEmpty)
         #expect(effectiveBounds.contains(textRun.insertionPoint))
@@ -2251,8 +2251,8 @@ struct CADPoCLineImportTests {
             text: textRun,
             bounds: wrongImportedBounds
         )
-        let effectiveBounds = CADPoC.CADSpatialIndex.effectiveBounds(for: entity)
-        let index = CADPoC.CADSpatialIndex(entities: [entity])
+        let effectiveBounds = NativeCAD.CADSpatialIndex.effectiveBounds(for: entity)
+        let index = NativeCAD.CADSpatialIndex(entities: [entity])
         let insertionViewport = SiteKeeperCADKernel.CADBounds(minX: 9, minY: 19, maxX: 16, maxY: 25)
         let importedBoundsViewport = SiteKeeperCADKernel.CADBounds(minX: 999, minY: 999, maxX: 1_021, maxY: 1_011)
         let middleViewport = SiteKeeperCADKernel.CADBounds(minX: 400, minY: 400, maxX: 410, maxY: 410)
@@ -2264,9 +2264,9 @@ struct CADPoCLineImportTests {
         #expect(index.query(middleViewport).isEmpty)
     }
 
-    @Test func libreDWGNativePoCImportsDXFModelAndPaperLayouts() async throws {
+    @Test func libreDWGNativeCADImportsDXFModelAndPaperLayouts() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-layout-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-layout-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -2315,7 +2315,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
 
@@ -2323,7 +2323,7 @@ struct CADPoCLineImportTests {
         let entitiesByHandle = Dictionary(uniqueKeysWithValues: result.database.entities.compactMap { entity in
             entity.sourceHandle.map { ($0, entity) }
         })
-        let index = CADPoC.CADSpatialIndex(entities: result.database.entities)
+        let index = NativeCAD.CADSpatialIndex(entities: result.database.entities)
         let paperViewport = SiteKeeperCADKernel.CADBounds(minX: 990, minY: 990, maxX: 1110, maxY: 1010)
         let paperEntities = index.query(paperViewport, layoutID: "Layout1")
         let modelEntitiesInPaper = index.query(paperViewport, layoutID: SiteKeeperCADKernel.CADLayout.modelSpace.id)
@@ -2336,7 +2336,7 @@ struct CADPoCLineImportTests {
         #expect(modelEntitiesInPaper.isEmpty)
 
         #if canImport(MetalKit)
-        let renderer = CADPoC.CADMetalRenderer()
+        let renderer = NativeCAD.CADMetalRenderer()
         renderer.updateDrawing(entities: result.database.entities, layers: result.database.layers)
         #expect(renderer.renderableEntityCountForTesting() == 2)
         renderer.setSelectedLayoutID("Layout1")
@@ -2384,7 +2384,7 @@ struct CADPoCLineImportTests {
             bounds: SiteKeeperCADKernel.CADBounds(minX: 80, minY: 80, maxX: 120, maxY: 120)
         )
 
-        let payloads = CADPoC.CADMetalRenderer.makeSnapPointPayloads(for: [horizontal, vertical, circle])
+        let payloads = NativeCAD.CADMetalRenderer.makeSnapPointPayloads(for: [horizontal, vertical, circle])
 
         #expect(payloads.containsSnap(kind: "endpoint", x: 0, y: 0))
         #expect(payloads.containsSnap(kind: "endpoint", x: 100, y: 0))
@@ -2396,14 +2396,14 @@ struct CADPoCLineImportTests {
 
     @Test func cadViewerReconcilesStaleSavedLayerVisibility() throws {
         let layers = [
-            CADPoC.CADLayer(id: "WALL", name: "WALL", isVisible: true),
-            CADPoC.CADLayer(id: "GRID", name: "GRID", isVisible: false)
+            NativeCAD.CADLayer(id: "WALL", name: "WALL", isVisible: true),
+            NativeCAD.CADLayer(id: "GRID", name: "GRID", isVisible: false)
         ]
 
-        #expect(CADMetalLibreDWGPoCEntry.defaultVisibleLayerIDs(layers) == Set(["WALL"]))
-        #expect(CADMetalLibreDWGPoCEntry.reconciledVisibleLayerIDs(requested: Set(["OLD"]), importedLayers: layers) == Set(["WALL"]))
-        #expect(CADMetalLibreDWGPoCEntry.reconciledVisibleLayerIDs(requested: Set(["OLD", "GRID"]), importedLayers: layers) == Set(["GRID"]))
-        #expect(CADMetalLibreDWGPoCEntry.reconciledVisibleLayerIDs(requested: Set<String>(), importedLayers: layers) == Set<String>())
+        #expect(NativeCADViewerEntry.defaultVisibleLayerIDs(layers) == Set(["WALL"]))
+        #expect(NativeCADViewerEntry.reconciledVisibleLayerIDs(requested: Set(["OLD"]), importedLayers: layers) == Set(["WALL"]))
+        #expect(NativeCADViewerEntry.reconciledVisibleLayerIDs(requested: Set(["OLD", "GRID"]), importedLayers: layers) == Set(["GRID"]))
+        #expect(NativeCADViewerEntry.reconciledVisibleLayerIDs(requested: Set<String>(), importedLayers: layers) == Set<String>())
     }
 
     @Test func cadOverlaySnapshotConvertsLegacyCanvasAnnotationsToDrawingCoordinates() throws {
@@ -2484,9 +2484,9 @@ struct CADPoCLineImportTests {
         #expect(snapshot.issueMarkers[0].normalizedPoint.y <= 1)
     }
 
-    @Test func libreDWGNativePoCImportsLayerTableVisibilityAndColors() async throws {
+    @Test func libreDWGNativeCADImportsLayerTableVisibilityAndColors() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-layer-table-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-layer-table-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -2563,7 +2563,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let layersByID = Dictionary(uniqueKeysWithValues: result.database.layers.map { ($0.id, $0) })
@@ -2571,9 +2571,9 @@ struct CADPoCLineImportTests {
             entity.sourceHandle.map { ($0, entity) }
         })
         let visibleLayerIDs = Set(result.database.layers.filter(\.isVisible).map(\.id))
-        let visibleEntities = CADPoC.CADSpatialIndex(entities: result.database.entities)
+        let visibleEntities = NativeCAD.CADSpatialIndex(entities: result.database.entities)
             .query(result.database.extents, layerIDs: visibleLayerIDs)
-        let commands = CADPoC.CADRenderPipeline().commands(from: visibleEntities, layersByID: layersByID)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: visibleEntities, layersByID: layersByID)
 
         #expect(result.trace.rawLineCount == 2)
         #expect(result.trace.drawableEntityCount == 2)
@@ -2598,8 +2598,8 @@ struct CADPoCLineImportTests {
     }
 
     #if os(iOS)
-    @Test func cadMetalPoCRendersDashedLayerLineTypeAsSeparatedSegments() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADRendersDashedLayerLineTypeAsSeparatedSegments() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         renderer.setFeatureOptions(.fullDetail)
         let path = SiteKeeperCADKernel.CADPath(elements: [
             .move(to: SiteKeeperCADKernel.CADPoint(x: 0, y: 0)),
@@ -2623,7 +2623,7 @@ struct CADPoCLineImportTests {
         )
         renderer.updateDrawing(entities: [entity], layers: [layer])
 
-        let commands = CADPoC.CADRenderPipeline().commands(
+        let commands = NativeCAD.CADRenderPipeline().commands(
             from: [entity],
             layersByID: [layer.id: layer]
         )
@@ -2663,8 +2663,8 @@ struct CADPoCLineImportTests {
         #expect(dashedVertexCount > continuousVertexCount)
     }
 
-    @Test func cadMetalPoCPerformanceSwitchesDisableLineTypeExpansion() throws {
-        let renderer = CADPoC.CADMetalRenderer()
+    @Test func cadMetalNativeCADPerformanceSwitchesDisableLineTypeExpansion() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
         let command = SiteKeeperCADKernel.CADRenderCommand.polyline(
             [
                 SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
@@ -2700,9 +2700,9 @@ struct CADPoCLineImportTests {
     }
     #endif
 
-    @Test func libreDWGNativePoCExpandsBlockInsertIntoRenderableEntities() async throws {
+    @Test func libreDWGNativeCADExpandsBlockInsertIntoRenderableEntities() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-block-insert-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-block-insert-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -2765,12 +2765,12 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
         let points = try #require(entity.path?.points)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawLineCount == 1)
         #expect(result.trace.entityCount == 1)
@@ -2787,9 +2787,9 @@ struct CADPoCLineImportTests {
         #expect(commands.count == 1)
     }
 
-    @Test func libreDWGNativePoCExpandsNestedBlockInsert() async throws {
+    @Test func libreDWGNativeCADExpandsNestedBlockInsert() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-nested-block-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-nested-block-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -2868,7 +2868,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
@@ -2882,9 +2882,9 @@ struct CADPoCLineImportTests {
         #expect(abs(points[1].y - 0) < 0.0001)
     }
 
-    @Test func libreDWGNativePoCTransformsInsertAttributesAndInheritsStyle() async throws {
+    @Test func libreDWGNativeCADTransformsInsertAttributesAndInheritsStyle() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-insert-attrib-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-insert-attrib-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -2965,7 +2965,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entitiesByHandle = Dictionary(uniqueKeysWithValues: result.database.entities.compactMap { entity in
@@ -2989,7 +2989,7 @@ struct CADPoCLineImportTests {
         #expect(abs(text.insertionPoint.x - 100) < 0.0001)
         #expect(abs(text.insertionPoint.y - 52) < 0.0001)
         #expect(abs(text.rotationRadians - Double.pi / 2) < 0.0001)
-        #expect(CADPoC.CADRenderPipeline().commands(from: result.database.entities).contains {
+        #expect(NativeCAD.CADRenderPipeline().commands(from: result.database.entities).contains {
             if case let .text(text, _) = $0 {
                 return text.displayText == "A-101"
             }
@@ -2997,9 +2997,9 @@ struct CADPoCLineImportTests {
         })
     }
 
-    @Test func libreDWGNativePoCRendersATTDEFDefaultWhenInsertHasNoOverride() async throws {
+    @Test func libreDWGNativeCADRendersATTDEFDefaultWhenInsertHasNoOverride() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-insert-attdef-default-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-insert-attdef-default-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3062,7 +3062,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
@@ -3076,12 +3076,12 @@ struct CADPoCLineImportTests {
         #expect(abs(text.insertionPoint.x - 10) < 0.0001)
         #expect(abs(text.insertionPoint.y - 20) < 0.0001)
         #expect(abs(text.rotationRadians - Double.pi / 2) < 0.0001)
-        #expect(CADPoC.CADRenderPipeline().commands(from: result.database.entities).count == 1)
+        #expect(NativeCAD.CADRenderPipeline().commands(from: result.database.entities).count == 1)
     }
 
-    @Test func libreDWGNativePoCAttachedATTRIBOverridesMatchingATTDEF() async throws {
+    @Test func libreDWGNativeCADAttachedATTRIBOverridesMatchingATTDEF() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-insert-attrib-overrides-attdef-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-insert-attrib-overrides-attdef-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3158,7 +3158,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let texts = result.database.entities.compactMap(\.text)
@@ -3170,9 +3170,9 @@ struct CADPoCLineImportTests {
         #expect(result.database.entities.first?.sourceHandle == "AT2")
     }
 
-    @Test func libreDWGNativePoCExpandsMInsertArray() async throws {
+    @Test func libreDWGNativeCADExpandsMInsertArray() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-minsert-array-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-minsert-array-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3237,7 +3237,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let starts = result.database.entities.compactMap { $0.path?.points.first }
@@ -3254,9 +3254,9 @@ struct CADPoCLineImportTests {
         #expect(result.database.extents.maxY == 40)
     }
 
-    @Test func libreDWGNativePoCReportsMissingBlockInsertAsUnsupported() async throws {
+    @Test func libreDWGNativeCADReportsMissingBlockInsertAsUnsupported() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-missing-block-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-missing-block-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3283,7 +3283,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
@@ -3294,12 +3294,12 @@ struct CADPoCLineImportTests {
         #expect(!result.trace.openedForRender)
         #expect(entity.kind == .unsupported)
         #expect(entity.unsupportedReason == "Referenced block is missing.")
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_INSERT_BLOCK_MISSING" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_INSERT_BLOCK_MISSING" })
     }
 
-    @Test func libreDWGNativePoCReportsXrefInsertWithoutCountingDrawableGeometry() async throws {
+    @Test func libreDWGNativeCADReportsXrefInsertWithoutCountingDrawableGeometry() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-xref-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-xref-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3346,11 +3346,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.entityCount == 1)
         #expect(result.trace.drawableEntityCount == 0)
@@ -3359,13 +3359,13 @@ struct CADPoCLineImportTests {
         #expect(entity.kind == .xref)
         #expect(entity.layerID == "XREF_LAYER")
         #expect(entity.unsupportedReason?.contains("XREF SITE_XREF") == true)
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_XREF_NOT_LOADED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_XREF_NOT_LOADED" })
         #expect(commands.isEmpty)
     }
 
-    @Test func libreDWGNativePoCRendersSimpleHatchFill() async throws {
+    @Test func libreDWGNativeCADRendersSimpleHatchFill() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-hatch-fill-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-hatch-fill-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3402,11 +3402,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawHatchCount == 1)
         #expect(result.trace.drawableEntityCount == 1)
@@ -3414,7 +3414,7 @@ struct CADPoCLineImportTests {
         #expect(entity.kind == .hatch)
         #expect(entity.path?.points.count == 4)
         #expect(result.database.extents == SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 50, maxY: 30))
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_HATCH_SIMPLE_FILL" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_HATCH_SIMPLE_FILL" })
         #expect(commands.count == 1)
         if case let .hatch(path, _)? = commands.first {
             let points = path.points
@@ -3428,9 +3428,9 @@ struct CADPoCLineImportTests {
         }
     }
 
-    @Test func libreDWGNativePoCShowsComplexHatchBoundaryOnly() async throws {
+    @Test func libreDWGNativeCADShowsComplexHatchBoundaryOnly() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-hatch-complex-boundary-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-hatch-complex-boundary-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3471,18 +3471,18 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawHatchCount == 1)
         #expect(result.trace.drawableEntityCount == 1)
         #expect(result.trace.openedForRender)
         #expect(entity.kind == .hatch)
         #expect(entity.path?.points.count == 4)
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_HATCH_COMPLEX_BOUNDARY_DEGRADED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_HATCH_COMPLEX_BOUNDARY_DEGRADED" })
         #expect(commands.count == 1)
         if case let .polyline(points, closed, _)? = commands.first {
             #expect(points.count == 4)
@@ -3510,7 +3510,7 @@ struct CADPoCLineImportTests {
             bounds: path.bounds
         )
 
-        let commands = CADPoC.CADRenderPipeline().commands(from: [entity])
+        let commands = NativeCAD.CADRenderPipeline().commands(from: [entity])
 
         #expect(commands.count == 1)
         if case let .polyline(polylinePoints, closed, _)? = commands.first {
@@ -3535,7 +3535,7 @@ struct CADPoCLineImportTests {
             path: path,
             bounds: path.bounds
         )
-        let boundaryOnly = CADPoC.CADRenderPipeline(
+        let boundaryOnly = NativeCAD.CADRenderPipeline(
             featureOptions: CADCanvasFeatureOptions(
                 rendersTextOverlays: true,
                 rendersLineTypes: false,
@@ -3548,7 +3548,7 @@ struct CADPoCLineImportTests {
                 rendersPlaceholders: false
             )
         ).commands(from: [entity])
-        let hidden = CADPoC.CADRenderPipeline(
+        let hidden = NativeCAD.CADRenderPipeline(
             featureOptions: CADCanvasFeatureOptions(
                 rendersTextOverlays: true,
                 rendersLineTypes: false,
@@ -3566,9 +3566,9 @@ struct CADPoCLineImportTests {
         #expect(hidden.isEmpty)
     }
 
-    @Test func libreDWGNativePoCKeepsUnresolvedHatchUnsupported() async throws {
+    @Test func libreDWGNativeCADKeepsUnresolvedHatchUnsupported() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-hatch-unsupported-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-hatch-unsupported-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3589,11 +3589,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawHatchCount == 1)
         #expect(result.trace.entityCount == 1)
@@ -3601,14 +3601,14 @@ struct CADPoCLineImportTests {
         #expect(result.trace.renderCommandCount == 0)
         #expect(!result.trace.openedForRender)
         #expect(entity.kind == .unsupported)
-        #expect(entity.unsupportedReason == "HATCH boundary cannot be resolved by the CAD Metal PoC.")
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_HATCH_BOUNDARY_UNRESOLVED" })
+        #expect(entity.unsupportedReason == "HATCH boundary cannot be resolved by the Native CAD Renderer.")
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_HATCH_BOUNDARY_UNRESOLVED" })
         #expect(commands.isEmpty)
     }
 
-    @Test func libreDWGNativePoCTessellatesEllipseToRenderablePath() async throws {
+    @Test func libreDWGNativeCADTessellatesEllipseToRenderablePath() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-ellipse-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-ellipse-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3643,12 +3643,12 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
         let points = try #require(entity.path?.points)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawEllipseCount == 1)
         #expect(result.trace.drawableEntityCount == 1)
@@ -3659,7 +3659,7 @@ struct CADPoCLineImportTests {
         #expect(abs(entity.bounds.maxX - 120) < 0.0001)
         #expect(abs(entity.bounds.minY - 40) < 0.0001)
         #expect(abs(entity.bounds.maxY - 60) < 0.0001)
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_ELLIPSE_TESSELLATED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_ELLIPSE_TESSELLATED" })
         #expect(commands.count == 1)
         if case let .polyline(points, closed, _)? = commands.first {
             #expect(points.count >= 16)
@@ -3669,9 +3669,9 @@ struct CADPoCLineImportTests {
         }
     }
 
-    @Test func libreDWGNativePoCDegradesSplineToPolyline() async throws {
+    @Test func libreDWGNativeCADDegradesSplineToPolyline() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-spline-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-spline-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3706,19 +3706,19 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
         let points = try #require(entity.path?.points)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawSplineCount == 1)
         #expect(result.trace.drawableEntityCount == 1)
         #expect(entity.kind == .spline)
         #expect(points.count == 3)
         #expect(result.database.extents == SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 40, maxY: 10))
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_SPLINE_DEGRADED_TO_POLYLINE" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_SPLINE_DEGRADED_TO_POLYLINE" })
         #expect(commands.count == 1)
         if case let .polyline(points, closed, _)? = commands.first {
             #expect(points.count == 3)
@@ -3728,9 +3728,9 @@ struct CADPoCLineImportTests {
         }
     }
 
-    @Test func libreDWGNativePoCKeepsUnresolvedSplineUnsupported() async throws {
+    @Test func libreDWGNativeCADKeepsUnresolvedSplineUnsupported() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-spline-unsupported-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-spline-unsupported-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3751,11 +3751,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawSplineCount == 1)
         #expect(result.trace.entityCount == 1)
@@ -3763,14 +3763,14 @@ struct CADPoCLineImportTests {
         #expect(result.trace.renderCommandCount == 0)
         #expect(!result.trace.openedForRender)
         #expect(entity.kind == .unsupported)
-        #expect(entity.unsupportedReason == "SPLINE control points cannot be resolved by the CAD Metal PoC.")
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_SPLINE_POINTS_UNRESOLVED" })
+        #expect(entity.unsupportedReason == "SPLINE control points cannot be resolved by the Native CAD Renderer.")
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_SPLINE_POINTS_UNRESOLVED" })
         #expect(commands.isEmpty)
     }
 
-    @Test func libreDWGNativePoCSimplifiesDimensionToLineAndText() async throws {
+    @Test func libreDWGNativeCADSimplifiesDimensionToLineAndText() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-dimension-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-dimension-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -3809,12 +3809,12 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
         let points = try #require(entity.path?.points)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawDimensionCount == 1)
         #expect(result.trace.entityCount == 1)
@@ -3830,7 +3830,7 @@ struct CADPoCLineImportTests {
         #expect(result.database.extents.minX == 0)
         #expect(result.database.extents.maxX >= 100)
         #expect(result.database.extents.maxY >= 12.5)
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_DIMENSION_SIMPLIFIED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_DIMENSION_SIMPLIFIED" })
         #expect(commands.count == 4)
         #expect(commands.contains { command in
             if case .polyline = command {
@@ -3857,7 +3857,7 @@ struct CADPoCLineImportTests {
             return false
         })
 
-        let performanceCommands = CADPoC.CADRenderPipeline(
+        let performanceCommands = NativeCAD.CADRenderPipeline(
             featureOptions: .performanceDefault
         ).commands(from: result.database.entities)
         #expect(performanceCommands.count == 2)
@@ -3903,7 +3903,7 @@ struct CADPoCLineImportTests {
             sourceHandle: "D1"
         )
 
-        let commands = CADPoC.CADRenderPipeline().commands(from: [dimensionEntity, textEntity])
+        let commands = NativeCAD.CADRenderPipeline().commands(from: [dimensionEntity, textEntity])
         let renderedTexts = commands.compactMap { command -> String? in
             if case let .text(text, _) = command {
                 return text.displayText
@@ -3921,9 +3921,9 @@ struct CADPoCLineImportTests {
         #expect(!renderedTexts.contains("100"))
     }
 
-    @Test func libreDWGNativePoCImportsLeaderMLeaderAndTableText() async throws {
+    @Test func libreDWGNativeCADImportsLeaderMLeaderAndTableText() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-leader-table-text-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-leader-table-text-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -4006,11 +4006,11 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let displayTexts = result.database.entities.compactMap(\.displayText)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
         let renderedTexts = commands.compactMap { command -> String? in
             if case let .text(text, _) = command {
                 return text.displayText
@@ -4025,17 +4025,17 @@ struct CADPoCLineImportTests {
         #expect(displayTexts.contains("多重引线"))
         #expect(displayTexts.contains("房间"))
         #expect(displayTexts.contains("面积"))
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_LEADER_TEXT_SIMPLIFIED" })
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_TABLE_CELL_TEXT_SIMPLIFIED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_LEADER_TEXT_SIMPLIFIED" })
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_TABLE_CELL_TEXT_SIMPLIFIED" })
         #expect(renderedTexts.contains("引线文字"))
         #expect(renderedTexts.contains("多重引线"))
         #expect(renderedTexts.contains("房间"))
         #expect(renderedTexts.contains("面积"))
     }
 
-    @Test func libreDWGNativePoCKeepsUnresolvedDimensionUnsupported() async throws {
+    @Test func libreDWGNativeCADKeepsUnresolvedDimensionUnsupported() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-dimension-unsupported-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-dimension-unsupported-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -4058,19 +4058,19 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let result = try await CADPoC.LibreDWGNativeImportEngine().importDrawingWithTrace(
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
             file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         )
         let entity = try #require(result.database.entities.first)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(result.trace.rawDimensionCount == 1)
         #expect(result.trace.entityCount == 1)
         #expect(result.trace.drawableEntityCount == 0)
         #expect(!result.trace.openedForRender)
         #expect(entity.kind == .unsupported)
-        #expect(entity.unsupportedReason == "DIMENSION geometry cannot be resolved by the CAD Metal PoC.")
-        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_POC_DIMENSION_GEOMETRY_UNRESOLVED" })
+        #expect(entity.unsupportedReason == "DIMENSION geometry cannot be resolved by the Native CAD Renderer.")
+        #expect(result.database.diagnostics.entries.contains { $0.code == "CAD_NATIVE_DIMENSION_GEOMETRY_UNRESOLVED" })
         #expect(commands.isEmpty)
     }
 
@@ -4083,7 +4083,7 @@ struct CADPoCLineImportTests {
             from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
             to: SiteKeeperCADKernel.CADPoint(x: 100, y: 0)
         )
-        let pipeline = CADPoC.CADRenderPipeline()
+        let pipeline = NativeCAD.CADRenderPipeline()
 
         let stableCommands = pipeline.commands(
             from: [tinyLine, mainLine],
@@ -4105,7 +4105,7 @@ struct CADPoCLineImportTests {
             from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
             to: SiteKeeperCADKernel.CADPoint(x: 0.01, y: 0)
         )
-        let pipeline = CADPoC.CADRenderPipeline()
+        let pipeline = NativeCAD.CADRenderPipeline()
 
         let zoomedInStableCommands = pipeline.commands(
             from: [microLine],
@@ -4166,7 +4166,7 @@ struct CADPoCLineImportTests {
             )
         )
 
-        let output = CADPoC.CADRenderPipeline().renderOutput(
+        let output = NativeCAD.CADRenderPipeline().renderOutput(
             from: [mtextEntity, dimensionEntity],
             totalEntityCount: 25_863,
             visibleEntityCount: 34,
@@ -4193,7 +4193,7 @@ struct CADPoCLineImportTests {
             )
         }
 
-        let output = CADPoC.CADRenderPipeline().renderOutput(from: entities)
+        let output = NativeCAD.CADRenderPipeline().renderOutput(from: entities)
 
         #expect(output.commands.count == entityCount)
         #expect(output.performance.renderCommandCount == entityCount)
@@ -4201,7 +4201,7 @@ struct CADPoCLineImportTests {
     }
 
     #if os(iOS)
-    @Test func cadMetalPoCProgressivelyRendersLargeVisibleViewport() throws {
+    @Test func cadMetalNativeCADProgressivelyRendersLargeVisibleViewport() throws {
         let entityCount = 2_500
         let entities = (0..<entityCount).map { index in
             Self.lineEntity(
@@ -4210,9 +4210,9 @@ struct CADPoCLineImportTests {
             )
         }
         let viewport = entities.reduce(SiteKeeperCADKernel.CADBounds.empty) {
-            $0.union(CADPoC.CADSpatialIndex.effectiveBounds(for: $1))
+            $0.union(NativeCAD.CADSpatialIndex.effectiveBounds(for: $1))
         }
-        let renderer = CADPoC.CADMetalRenderer()
+        let renderer = NativeCAD.CADMetalRenderer()
         renderer.updateDrawing(entities: entities, layers: [.default])
 
         let firstFrame = renderer.progressiveRenderOutputForTesting(
@@ -4231,10 +4231,10 @@ struct CADPoCLineImportTests {
         #expect(firstFrame.commands.count < entityCount)
         #expect(secondFrame.commands.count > firstFrame.commands.count)
         #expect(firstFrame.performance.skippedEntityCount > 0)
-        #expect(firstFrame.performance.warnings.contains("CAD_POC_PROGRESSIVE_RENDERING"))
+        #expect(firstFrame.performance.warnings.contains("CAD_NATIVE_PROGRESSIVE_RENDERING"))
     }
 
-    @Test func cadMetalPoCProgressiveRendererDoesNotStarveVisibleText() throws {
+    @Test func cadMetalNativeCADProgressiveRendererDoesNotStarveVisibleText() throws {
         let lineEntities = (0..<2_500).map { index in
             Self.lineEntity(
                 from: SiteKeeperCADKernel.CADPoint(x: 0, y: Double(index)),
@@ -4255,9 +4255,9 @@ struct CADPoCLineImportTests {
         )
         let entities = lineEntities + [textEntity]
         let viewport = entities.reduce(SiteKeeperCADKernel.CADBounds.empty) {
-            $0.union(CADPoC.CADSpatialIndex.effectiveBounds(for: $1))
+            $0.union(NativeCAD.CADSpatialIndex.effectiveBounds(for: $1))
         }
-        let renderer = CADPoC.CADMetalRenderer()
+        let renderer = NativeCAD.CADMetalRenderer()
         renderer.updateDrawing(entities: entities, layers: [.default])
 
         let firstFrame = renderer.progressiveRenderOutputForTesting(
@@ -4295,7 +4295,7 @@ struct CADPoCLineImportTests {
                 to: SiteKeeperCADKernel.CADPoint(x: 100, y: 20)
             )
         ]
-        let output = CADPoC.CADRenderPipeline().renderOutput(
+        let output = NativeCAD.CADRenderPipeline().renderOutput(
             from: entities,
             renderBudget: SiteKeeperCADKernel.CADRenderBudget(maxRenderCommands: 2)
         )
@@ -4306,12 +4306,12 @@ struct CADPoCLineImportTests {
         #expect(output.performance.renderCommandCount == 2)
         #expect(output.performance.drawCallCount == 2)
         #expect(output.performance.skippedEntityCount == 1)
-        #expect(output.performance.warnings.contains("CAD_POC_RENDER_BUDGET_EXCEEDED"))
+        #expect(output.performance.warnings.contains("CAD_NATIVE_RENDER_BUDGET_EXCEEDED"))
     }
 
-    @Test func libreDWGNativePoCReusesParsedImportCacheForSecondOpen() async throws {
+    @Test func libreDWGNativeCADReusesParsedImportCacheForSecondOpen() async throws {
         let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("cad-dxf-cache-poc-\(UUID().uuidString)")
+            .appendingPathComponent("cad-dxf-cache-native-\(UUID().uuidString)")
             .appendingPathExtension("dxf")
         let dxf = """
         0
@@ -4340,7 +4340,7 @@ struct CADPoCLineImportTests {
         try dxf.write(to: url, atomically: true, encoding: .utf8)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         let file = SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
         let first = try await engine.importDrawingWithTrace(file: file)
         let second = try await engine.importDrawingWithTrace(file: file)
@@ -4352,17 +4352,17 @@ struct CADPoCLineImportTests {
         #expect(second.database.entities.map(\.sourceHandle) == first.database.entities.map(\.sourceHandle))
     }
 
-    @Test func libreDWGNativePoCUsesInAppLibreDWGForDWGAndDoesNotPromoteEmptyGeometry() async throws {
+    @Test func libreDWGNativeCADUsesInAppLibreDWGForDWGAndDoesNotPromoteEmptyGeometry() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("cad-dwg-native-invalid-\(UUID().uuidString)")
             .appendingPathExtension("dwg")
         try Data("AC1032\n".utf8).write(to: url)
         defer { try? FileManager.default.removeItem(at: url) }
 
-        let engine = CADPoC.LibreDWGNativeImportEngine()
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
         let file = SiteKeeperCADKernel.CADFile(url: url, format: .dwg)
         let result = try await engine.importDrawingWithTrace(file: file)
-        let commands = CADPoC.CADRenderPipeline().commands(from: result.database.entities)
+        let commands = NativeCAD.CADRenderPipeline().commands(from: result.database.entities)
 
         #expect(engine.canImport(file: file))
         #expect(result.trace.importSource == engine.id)
@@ -4374,7 +4374,7 @@ struct CADPoCLineImportTests {
         #expect(result.database.entities.isEmpty)
         #expect(commands.isEmpty)
         #expect(result.database.diagnostics.entries.contains {
-            $0.code == "CAD_POC_LIBREDWG_IOS_NATIVE_USED"
+            $0.code == "CAD_NATIVE_LIBREDWG_IOS_NATIVE_USED"
         })
     }
 

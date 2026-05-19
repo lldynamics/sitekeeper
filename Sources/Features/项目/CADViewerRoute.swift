@@ -7,15 +7,15 @@ struct CADViewerRoute: View {
     var callbacks = CADRendererCallbacks()
     var selectedLayoutID: String? = nil
     var visibleLayerIDs: Set<String>? = nil
-    var onLayoutsChanged: ([CADPoC.CADLayout]) -> Void = { _ in }
+    var onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void = { _ in }
     var onSelectedLayoutIDChanged: (String?) -> Void = { _ in }
-    var onLayersChanged: ([CADPoC.CADLayer]) -> Void = { _ in }
+    var onLayersChanged: ([NativeCAD.CADLayer]) -> Void = { _ in }
     var onVisibleLayerIDsChanged: (Set<String>?) -> Void = { _ in }
     let onClose: () -> Void
     let onReportIssue: () -> Void
 
     var body: some View {
-        CADMetalLibreDWGPoCEntry(
+        NativeCADViewerEntry(
             fileURL: request.fileURL,
             displayName: request.displayName,
             textImportOptions: CADCanvasTextImportOptions(
