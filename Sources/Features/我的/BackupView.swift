@@ -85,7 +85,6 @@ struct BackupView: View {
         hasher.combine(store.dailyLogs.count)
         hasher.combine(store.historyRecords.count)
         hasher.combine(store.progressTasks.count)
-        hasher.combine(store.lightingCircuitPlans.count)
         hasher.combine(store.siteTodos.count)
         hasher.combine(store.projectDrawings.count)
         hasher.combine(store.projectContacts.count)

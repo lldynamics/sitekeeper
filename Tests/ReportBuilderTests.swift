@@ -114,7 +114,6 @@ struct ReportBuilderTests {
         options.includeProjectDrawings = false
         options.includeWarehouseMovements = false
         options.includeQuickNotes = false
-        options.includeLightingCircuits = false
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
         let text = try #require(String(data: csv, encoding: .utf8))
@@ -367,23 +366,6 @@ struct ReportBuilderTests {
         store.replaceQuickNotes([
             QuickNote(title: "随手记测试", content: "现场备注", projectId: projectId)
         ])
-        store.replaceLightingCircuitPlans([
-            LightingCircuitPlan(
-                name: "照明方案测试",
-                projectId: projectId,
-                supplyType: .singlePhase,
-                voltage: "220",
-                powerFactor: "0.9",
-                demandFactor: "0.8",
-                breakerFactor: "1.25",
-                wireFactor: "1.15",
-                isCopper: true,
-                loads: [
-                    LightingCircuitLoad(name: "走廊", powerKW: "1.5")
-                ],
-                updatedAt: "2026-05-04 10:00"
-            )
-        ])
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
         var options = ExportContentOptions()
@@ -391,7 +373,6 @@ struct ReportBuilderTests {
         options.includeProjectDrawings = true
         options.includeWarehouseMovements = true
         options.includeQuickNotes = true
-        options.includeLightingCircuits = true
         options.includeProjectFinance = true
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
@@ -400,12 +381,10 @@ struct ReportBuilderTests {
         #expect(csvText.contains("[project_drawings]"))
         #expect(csvText.contains("[warehouse_movements]"))
         #expect(csvText.contains("[quick_notes]"))
-        #expect(csvText.contains("[lighting_circuit_plans]"))
         #expect(csvText.contains("[project_financial_records]"))
         #expect(csvText.contains("[project_document_checklist]"))
         #expect(csvText.contains("\"role_key\",\"role_display\""))
         #expect(csvText.contains("\"movement_type_key\",\"movement_type_display\""))
-        #expect(csvText.contains("\"supply_type_key\",\"supply_type_display\""))
         #expect(csvText.contains("\"project_id\",\"project_name\",\"category_key\",\"category_display\",\"status_raw\",\"status_display\""))
         #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"version_number\",\"version_state\""))
         #expect(csvText.contains("\"replaces_document_id\",\"replaced_by_document_id\",\"submission_status_raw\""))
@@ -416,7 +395,6 @@ struct ReportBuilderTests {
         #expect(htmlText.contains("图纸索引"))
         #expect(htmlText.contains("仓库流水"))
         #expect(htmlText.contains("随手记"))
-        #expect(htmlText.contains("照明回路"))
         #expect(htmlText.contains("项目财务流水"))
         #expect(htmlText.contains("施工资料清单"))
 
@@ -426,7 +404,6 @@ struct ReportBuilderTests {
         #expect(extractedPDFText.contains("图纸索引"))
         #expect(extractedPDFText.contains("仓库流水"))
         #expect(extractedPDFText.contains("随手记"))
-        #expect(extractedPDFText.contains("照明回路"))
         #expect(extractedPDFText.contains("项目财务流水"))
         #expect(extractedPDFText.contains("施工资料清单"))
     }

@@ -23,7 +23,6 @@ extension DataStore {
         replaceDailyLogs(snapshot.dailyLogs)
         replaceHistoryRecords(snapshot.historyRecords)
         replaceProgressTasks(snapshot.progressTasks)
-        replaceLightingCircuitPlans(snapshot.lightingCircuitPlans)
         replaceSiteTodos(snapshot.siteTodos)
         replaceProjectDrawings(snapshot.projectDrawings)
         replaceProjectDocuments(snapshot.projectDocuments)

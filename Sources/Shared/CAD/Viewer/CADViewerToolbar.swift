@@ -111,7 +111,7 @@ struct CADViewerToolbar: View {
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
-            .accessibilityLabel("选择模型或布局")
+            .accessibilityLabel(String(localized: "选择模型或布局"))
         }
     }
 
@@ -120,7 +120,7 @@ struct CADViewerToolbar: View {
         if !layers.isEmpty {
             Menu {
                 Button(action: onShowAllLayers) {
-                    Label("显示全部图层", systemImage: "eye")
+                    Label(String(localized: "显示全部图层"), systemImage: "eye")
                 }
 
                 Divider()
@@ -133,7 +133,7 @@ struct CADViewerToolbar: View {
                     }
                 }
             } label: {
-                Label("图层", systemImage: "square.3.layers.3d")
+                Label(String(localized: "图层"), systemImage: "square.3.layers.3d")
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
@@ -144,42 +144,42 @@ struct CADViewerToolbar: View {
     private var performanceMenu: some View {
         Menu {
             Button(action: onToggleTextOverlays) {
-                Label("文字显示", systemImage: rendersTextOverlays ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "文字显示"), systemImage: rendersTextOverlays ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleTextSearchIndex) {
-                Label("文字搜索索引", systemImage: buildsTextSearchIndex ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "文字搜索索引"), systemImage: buildsTextSearchIndex ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleLineTypes) {
-                Label("虚线/点划线", systemImage: rendersLineTypes ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "虚线/点划线"), systemImage: rendersLineTypes ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleLineWeights) {
-                Label("线宽", systemImage: rendersLineWeights ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "线宽"), systemImage: rendersLineWeights ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleDimensionDetails) {
-                Label("标注箭头", systemImage: rendersDimensionDetails ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "标注箭头"), systemImage: rendersDimensionDetails ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleSnapPoints) {
-                Label("吸附点", systemImage: publishesSnapPoints ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "吸附点"), systemImage: publishesSnapPoints ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleSnapIntersections) {
-                Label("交点吸附", systemImage: publishesSnapIntersections ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "交点吸附"), systemImage: publishesSnapIntersections ? "checkmark.circle.fill" : "circle")
             }
             .disabled(!publishesSnapPoints)
             Button(action: onToggleHatchBoundaries) {
-                Label("填充细节", systemImage: rendersHatchBoundaries ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "填充细节"), systemImage: rendersHatchBoundaries ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleHatches) {
-                Label("填充实体", systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "填充实体"), systemImage: rendersHatches ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onTogglePlaceholders) {
-                Label("占位对象", systemImage: rendersPlaceholders ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "占位对象"), systemImage: rendersPlaceholders ? "checkmark.circle.fill" : "circle")
             }
             Button(action: onToggleOverviewMap) {
-                Label("全局小窗", systemImage: showsOverviewMap ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "全局小窗"), systemImage: showsOverviewMap ? "checkmark.circle.fill" : "circle")
             }
             Divider()
             Button(action: onToggleRendererDiagnostics) {
-                Label("渲染诊断", systemImage: showsRendererDiagnostics ? "checkmark.circle.fill" : "circle")
+                Label(String(localized: "渲染诊断"), systemImage: showsRendererDiagnostics ? "checkmark.circle.fill" : "circle")
             }
         } label: {
             Label(performanceMenuLabel, systemImage: "speedometer")
@@ -187,7 +187,7 @@ struct CADViewerToolbar: View {
         .buttonStyle(.bordered)
         .controlSize(.regular)
         .tint(performanceOptionEnabledCount > 0 ? .appPrimaryAction : .secondary)
-        .accessibilityLabel("CAD 性能和显示开关")
+        .accessibilityLabel(String(localized: "CAD 性能和显示开关"))
     }
 
     private var performanceOptionEnabledCount: Int {
@@ -208,7 +208,9 @@ struct CADViewerToolbar: View {
     }
 
     private var performanceMenuLabel: String {
-        performanceOptionEnabledCount == 0 ? "性能优先" : "细节 \(performanceOptionEnabledCount)"
+        performanceOptionEnabledCount == 0
+            ? String(localized: "性能优先")
+            : String(format: String(localized: "细节 %lld"), Int64(performanceOptionEnabledCount))
     }
 
     @ViewBuilder
@@ -216,20 +218,20 @@ struct CADViewerToolbar: View {
         if supportsTextSearch {
             Button(action: onSearchTapped) {
                 if searchResultCount > 0 {
-                    Label("搜索 \(searchResultCount)", systemImage: "magnifyingglass")
+                    Label(String(format: String(localized: "搜索 %lld"), Int64(searchResultCount)), systemImage: "magnifyingglass")
                 } else {
-                    Label("搜索", systemImage: "magnifyingglass")
+                    Label(String(localized: "搜索"), systemImage: "magnifyingglass")
                 }
             }
             .buttonStyle(.bordered)
             .controlSize(.regular)
-            .accessibilityLabel("搜索图纸文字")
+            .accessibilityLabel(String(localized: "搜索图纸文字"))
         }
     }
 
     private var downloadButton: some View {
         ShareLink(item: fileURL) {
-            Label("下载原图", systemImage: "square.and.arrow.down")
+            Label(String(localized: "下载原图"), systemImage: "square.and.arrow.down")
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
@@ -237,7 +239,7 @@ struct CADViewerToolbar: View {
 
     private var reportButton: some View {
         Button(action: onReportIssue) {
-            Label("反馈问题", systemImage: "exclamationmark.bubble")
+            Label(String(localized: "反馈问题"), systemImage: "exclamationmark.bubble")
         }
         .buttonStyle(.bordered)
         .controlSize(.regular)
@@ -245,12 +247,12 @@ struct CADViewerToolbar: View {
 
     private var closeButton: some View {
         Button(action: onClose) {
-            Label("关闭", systemImage: "xmark")
+            Label(String(localized: "关闭"), systemImage: "xmark")
                 .labelStyle(.iconOnly)
         }
         .buttonStyle(.bordered)
         .controlSize(.regular)
-        .accessibilityLabel("关闭")
+        .accessibilityLabel(String(localized: "关闭"))
     }
 
     private func isLayerVisible(_ layer: NativeCAD.CADLayer) -> Bool {
@@ -262,8 +264,8 @@ struct CADViewerToolbar: View {
     }
 
     private var currentLayoutLabel: String {
-        guard let layout = currentLayout else { return "模型/布局" }
-        return layout.isModelSpace ? "模型" : layoutDisplayName(layout)
+        guard let layout = currentLayout else { return String(localized: "模型/布局") }
+        return layout.isModelSpace ? String(localized: "模型") : layoutDisplayName(layout)
     }
 
     private var currentLayoutIcon: String {
@@ -277,7 +279,7 @@ struct CADViewerToolbar: View {
     private func layoutDisplayName(_ layout: NativeCAD.CADLayout) -> String {
         let trimmed = layout.name.trimmingCharacters(in: .whitespacesAndNewlines)
         if layout.isModelSpace {
-            return "模型"
+            return String(localized: "模型")
         }
         return trimmed.isEmpty ? layout.id : trimmed
     }

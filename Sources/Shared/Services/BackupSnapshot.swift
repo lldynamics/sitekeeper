@@ -40,7 +40,6 @@ struct BackupSnapshot: Codable {
     var dailyLogs: [DailyLog]
     var historyRecords: [HistoryRecord]
     var progressTasks: [ProgressTask]
-    var lightingCircuitPlans: [LightingCircuitPlan]
     var siteTodos: [SiteTodo]
     /// 旧版 `paymentRecords` 兼容字段：仅用于导入历史备份并迁移到 ProjectFinancialRecord。
     var legacyPaymentRecords: [LegacyPaymentRecord]
@@ -77,7 +76,6 @@ struct BackupSnapshot: Codable {
         dailyLogs: [DailyLog],
         historyRecords: [HistoryRecord],
         progressTasks: [ProgressTask] = [],
-        lightingCircuitPlans: [LightingCircuitPlan] = [],
         siteTodos: [SiteTodo] = [],
         legacyPaymentRecords: [LegacyPaymentRecord] = [],
         projectDrawings: [ProjectDrawing] = [],
@@ -112,7 +110,6 @@ struct BackupSnapshot: Codable {
         self.dailyLogs = dailyLogs
         self.historyRecords = historyRecords
         self.progressTasks = progressTasks
-        self.lightingCircuitPlans = lightingCircuitPlans
         self.siteTodos = siteTodos
         self.legacyPaymentRecords = legacyPaymentRecords
         self.projectDrawings = projectDrawings
@@ -140,7 +137,7 @@ struct BackupSnapshot: Codable {
     enum CodingKeys: String, CodingKey {
         case schemaVersion, appVersion, appBuild, backupCreatedAt
         case materialItems, quoteItems, laborRecords, projects, dailyLogs, historyRecords
-        case progressTasks, lightingCircuitPlans, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
+        case progressTasks, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
         case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
@@ -160,7 +157,6 @@ struct BackupSnapshot: Codable {
         dailyLogs = try container.decodeIfPresent([DailyLog].self, forKey: .dailyLogs) ?? []
         historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
         progressTasks = try container.decodeIfPresent([ProgressTask].self, forKey: .progressTasks) ?? []
-        lightingCircuitPlans = try container.decodeIfPresent([LightingCircuitPlan].self, forKey: .lightingCircuitPlans) ?? []
         siteTodos = try container.decodeIfPresent([SiteTodo].self, forKey: .siteTodos) ?? []
         legacyPaymentRecords = try container.decodeIfPresent([LegacyPaymentRecord].self, forKey: .legacyPaymentRecords) ?? []
         projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []
@@ -198,7 +194,6 @@ struct BackupSnapshot: Codable {
         try container.encode(dailyLogs, forKey: .dailyLogs)
         try container.encode(historyRecords, forKey: .historyRecords)
         try container.encode(progressTasks, forKey: .progressTasks)
-        try container.encode(lightingCircuitPlans, forKey: .lightingCircuitPlans)
         try container.encode(siteTodos, forKey: .siteTodos)
         try container.encode(projectDrawings, forKey: .projectDrawings)
         try container.encode(projectContacts, forKey: .projectContacts)

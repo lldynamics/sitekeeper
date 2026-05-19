@@ -23,6 +23,36 @@ struct CADCanvasControlCommand: Equatable, Identifiable {
     }
 }
 
+struct CADCanvasImportCancelCommand: Equatable, Identifiable {
+    let id: UUID
+
+    init(id: UUID = UUID()) {
+        self.id = id
+    }
+}
+
+struct CADCanvasImportState: Equatable {
+    enum Phase: Equatable {
+        case idle
+        case importing
+        case completed
+        case failed
+        case cancelled
+    }
+
+    var phase: Phase
+    var fileName: String
+    var message: String
+    var isCancellable: Bool
+
+    static let idle = CADCanvasImportState(
+        phase: .idle,
+        fileName: "",
+        message: "",
+        isCancellable: false
+    )
+}
+
 struct CADCanvasFeatureOptions: Equatable {
     var rendersTextOverlays: Bool
     var rendersLineTypes: Bool
@@ -149,6 +179,7 @@ struct CADCanvasView: UIViewRepresentable {
     let visibleLayerIDs: Set<String>?
     let initialViewState: CADRendererViewState?
     let controlCommand: CADCanvasControlCommand?
+    let cancelImportCommand: CADCanvasImportCancelCommand?
     let featureOptions: CADCanvasFeatureOptions
     let textImportOptions: CADCanvasTextImportOptions
     let buildsTextSearchIndex: Bool
@@ -157,6 +188,7 @@ struct CADCanvasView: UIViewRepresentable {
     let onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void
     let onLayersChanged: ([NativeCAD.CADLayer]) -> Void
     let onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void
+    let onImportStateChanged: (CADCanvasImportState) -> Void
 
     init(
         fileURL: URL,
@@ -164,6 +196,7 @@ struct CADCanvasView: UIViewRepresentable {
         visibleLayerIDs: Set<String>? = nil,
         initialViewState: CADRendererViewState? = nil,
         controlCommand: CADCanvasControlCommand? = nil,
+        cancelImportCommand: CADCanvasImportCancelCommand? = nil,
         featureOptions: CADCanvasFeatureOptions = .performanceDefault,
         textImportOptions: CADCanvasTextImportOptions = .automatic,
         buildsTextSearchIndex: Bool = false,
@@ -171,13 +204,15 @@ struct CADCanvasView: UIViewRepresentable {
         callbacks: CADRendererCallbacks = CADRendererCallbacks(),
         onLayoutsChanged: @escaping ([NativeCAD.CADLayout]) -> Void = { _ in },
         onLayersChanged: @escaping ([NativeCAD.CADLayer]) -> Void = { _ in },
-        onSearchIndexChanged: @escaping (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
+        onSearchIndexChanged: @escaping (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in },
+        onImportStateChanged: @escaping (CADCanvasImportState) -> Void = { _ in }
     ) {
         self.fileURL = fileURL
         self.selectedLayoutID = selectedLayoutID
         self.visibleLayerIDs = visibleLayerIDs
         self.initialViewState = initialViewState
         self.controlCommand = controlCommand
+        self.cancelImportCommand = cancelImportCommand
         self.featureOptions = featureOptions
         self.textImportOptions = textImportOptions
         self.buildsTextSearchIndex = buildsTextSearchIndex
@@ -186,6 +221,7 @@ struct CADCanvasView: UIViewRepresentable {
         self.onLayoutsChanged = onLayoutsChanged
         self.onLayersChanged = onLayersChanged
         self.onSearchIndexChanged = onSearchIndexChanged
+        self.onImportStateChanged = onImportStateChanged
     }
 
     func makeCoordinator() -> Coordinator {
@@ -229,6 +265,7 @@ struct CADCanvasView: UIViewRepresentable {
         context.coordinator.onLayoutsChanged = onLayoutsChanged
         context.coordinator.onLayersChanged = onLayersChanged
         context.coordinator.onSearchIndexChanged = onSearchIndexChanged
+        context.coordinator.onImportStateChanged = onImportStateChanged
         context.coordinator.callbacks = callbacks
         context.coordinator.renderer.callbacks = callbacks
         context.coordinator.renderer.setSelectedLayoutID(selectedLayoutID)
@@ -238,6 +275,7 @@ struct CADCanvasView: UIViewRepresentable {
         context.coordinator.renderer.setDebugTextOverlays(debugTextOverlays)
         context.coordinator.renderer.applyInitialViewStateIfNeeded(initialViewState, contentScale: uiView.contentScaleFactor)
         context.coordinator.applyControlCommandIfNeeded(controlCommand, in: uiView)
+        context.coordinator.cancelImportIfNeeded(cancelImportCommand)
         context.coordinator.loadIfNeeded(fileURL: fileURL, textImportOptions: textImportOptions)
         uiView.setNeedsDisplay()
     }
@@ -252,26 +290,56 @@ struct CADCanvasView: UIViewRepresentable {
 
         private var loadedImportKey: LoadedImportKey?
         private var importTask: Task<Void, Never>?
+        private var activeImportGeneration = 0
+        private var isImportCancelled = false
+        private var memoryWarningObserver: NSObjectProtocol?
         private var lastTrace: NativeCAD.CADOpenTrace?
         private var lastDatabase: SiteKeeperCADKernel.CADDatabase?
         private var lastPinchLocation: CGPoint?
         private var lastControlCommandID: UUID?
+        private var lastImportCancelCommandID: UUID?
         private var buildsTextSearchIndex = false
         var callbacks = CADRendererCallbacks()
         var onLayoutsChanged: ([NativeCAD.CADLayout]) -> Void = { _ in }
         var onLayersChanged: ([NativeCAD.CADLayer]) -> Void = { _ in }
         var onSearchIndexChanged: (SiteKeeperCADKernel.CADTextSearchIndex?) -> Void = { _ in }
+        var onImportStateChanged: (CADCanvasImportState) -> Void = { _ in }
+
+        override init() {
+            super.init()
+            memoryWarningObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didReceiveMemoryWarningNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                self?.renderer.purgeVolatileTextCaches()
+                Task {
+                    await NativeCAD.LibreDWGNativeImportEngine.purgeImportResultCache()
+                }
+            }
+        }
 
         deinit {
-            importTask?.cancel()
+            if let memoryWarningObserver {
+                NotificationCenter.default.removeObserver(memoryWarningObserver)
+            }
+            cancelActiveImportTask()
         }
 
         func loadIfNeeded(fileURL: URL, textImportOptions: CADCanvasTextImportOptions) {
             let importKey = LoadedImportKey(fileURL: fileURL, textImportOptions: textImportOptions)
             guard loadedImportKey != importKey else { return }
             loadedImportKey = importKey
-            importTask?.cancel()
-            importTask = Task { [weak self] in
+            cancelActiveImportTask()
+            isImportCancelled = false
+            let importGeneration = activeImportGeneration
+            publishImportState(
+                phase: .importing,
+                fileName: fileURL.lastPathComponent,
+                message: String(localized: "正在导入 DWG 图纸…"),
+                isCancellable: true
+            )
+            importTask = Task.detached(priority: .userInitiated) { [weak self] in
                 let file = SiteKeeperCADKernel.CADFile(url: fileURL)
                 let engine = NativeCAD.LibreDWGNativeImportEngine(
                     preferredTextCodePage: textImportOptions.preferredTextCodePage,
@@ -279,18 +347,148 @@ struct CADCanvasView: UIViewRepresentable {
                     fontMappings: textImportOptions.fontMappings,
                     preferredDisplayFontName: textImportOptions.preferredDisplayFontName
                 )
-                guard engine.canImport(file: file) else {
-                    self?.applyUnsupportedTrace(file: file, source: engine.id)
-                    return
-                }
 
                 do {
+                    try Task.checkCancellation()
+                    guard engine.canImport(file: file) else {
+                        try Task.checkCancellation()
+                        await self?.applyUnsupportedTraceIfCurrent(
+                            file: file,
+                            source: engine.id,
+                            importGeneration: importGeneration,
+                            failureMessage: Self.unsupportedFormatMessage(for: file)
+                        )
+                        return
+                    }
+
                     let result = try await engine.importDrawingWithTrace(file: file)
-                    self?.applyImportResult(result)
+                    try Task.checkCancellation()
+                    await self?.applyImportResultIfCurrent(
+                        result,
+                        importGeneration: importGeneration
+                    )
+                } catch is CancellationError {
+                    return
                 } catch {
-                    self?.applyUnsupportedTrace(file: file, source: engine.id)
+                    guard !Task.isCancelled else { return }
+                    await self?.applyUnsupportedTraceIfCurrent(
+                        file: file,
+                        source: engine.id,
+                        importGeneration: importGeneration,
+                        failureMessage: Self.importFailureMessage(for: error)
+                    )
                 }
             }
+        }
+
+        func cancelImportIfNeeded(_ command: CADCanvasImportCancelCommand?) {
+            guard let command, command.id != lastImportCancelCommandID else { return }
+            lastImportCancelCommandID = command.id
+            cancelActiveImportTask(publishesCancellation: true)
+        }
+
+        private func cancelActiveImportTask(publishesCancellation: Bool = false) {
+            isImportCancelled = true
+            activeImportGeneration += 1
+            importTask?.cancel()
+            if publishesCancellation {
+                publishImportState(
+                    phase: .cancelled,
+                    fileName: loadedImportKey?.fileURL.lastPathComponent ?? "",
+                    message: String(localized: "已取消导入。"),
+                    isCancellable: false
+                )
+            }
+        }
+
+        @MainActor
+        private func applyImportResultIfCurrent(
+            _ result: NativeCAD.CADImportResult,
+            importGeneration: Int
+        ) {
+            guard canApplyImportResult(importGeneration: importGeneration) else { return }
+            applyImportResult(result)
+        }
+
+        @MainActor
+        private func applyUnsupportedTraceIfCurrent(
+            file: SiteKeeperCADKernel.CADFile,
+            source: String,
+            importGeneration: Int,
+            failureMessage: String?
+        ) {
+            guard canApplyImportResult(importGeneration: importGeneration) else { return }
+            applyUnsupportedTrace(file: file, source: source, failureMessage: failureMessage)
+            publishImportState(
+                phase: .failed,
+                fileName: file.displayName,
+                message: failureMessage ?? String(localized: "图纸导入失败。"),
+                isCancellable: false
+            )
+        }
+
+        @MainActor
+        private func canApplyImportResult(importGeneration: Int) -> Bool {
+            importGeneration == activeImportGeneration && !isImportCancelled
+        }
+
+        private func publishImportState(
+            phase: CADCanvasImportState.Phase,
+            fileName: String,
+            message: String,
+            isCancellable: Bool
+        ) {
+            onImportStateChanged(
+                CADCanvasImportState(
+                    phase: phase,
+                    fileName: fileName,
+                    message: message,
+                    isCancellable: isCancellable
+                )
+            )
+        }
+
+        private static func importFailureMessage(for error: Error) -> String {
+            let localizedError = error as? LocalizedError
+            let components = [
+                localizedError?.errorDescription,
+                localizedError?.failureReason,
+                localizedError?.recoverySuggestion
+            ]
+                .compactMap { sanitizedFailureComponent($0) }
+
+            if !components.isEmpty {
+                return components.joined(separator: "\n")
+            }
+
+            let nsError = error as NSError
+            let description = sanitizedFailureComponent(nsError.localizedDescription)
+            let underlying = (nsError.userInfo[NSUnderlyingErrorKey] as? Error)
+                .flatMap { sanitizedFailureComponent($0.localizedDescription) }
+
+            let message = [description, underlying]
+                .compactMap { $0 }
+                .joined(separator: "\n")
+            if !message.isEmpty {
+                return message
+            }
+            return String(localized: "图纸导入失败。")
+        }
+
+        private static func unsupportedFormatMessage(for file: SiteKeeperCADKernel.CADFile) -> String {
+            String(
+                localized: "当前文件格式暂不支持原生 CAD 导入：\(file.format.rawValue.uppercased())"
+            )
+        }
+
+        private static func sanitizedFailureComponent(_ value: String?) -> String? {
+            guard let value else { return nil }
+            let lines = value
+                .split(whereSeparator: \.isNewline)
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let message = lines.joined(separator: "\n")
+            return message.isEmpty ? nil : message
         }
 
         @MainActor
@@ -304,18 +502,37 @@ struct CADCanvasView: UIViewRepresentable {
             onLayoutsChanged(result.database.layouts)
             onLayersChanged(result.database.layers)
             publishSearchIndex()
+            publishImportState(
+                phase: .completed,
+                fileName: result.trace.fileName,
+                message: String(localized: "图纸导入完成。"),
+                isCancellable: false
+            )
             guard result.trace.openedForRender else {
                 renderer.updateDrawing(entities: [], layers: [])
                 view?.setNeedsDisplay()
                 return
             }
-            renderer.updateDrawing(entities: result.database.entities, layers: result.database.layers)
+            renderer.updateDrawing(
+                entities: result.database.entities,
+                layers: result.database.layers,
+                layouts: result.database.layouts,
+                viewports: result.database.viewports
+            )
             view?.setNeedsDisplay()
         }
 
         @MainActor
-        private func applyUnsupportedTrace(file: SiteKeeperCADKernel.CADFile, source: String) {
-            let trace = NativeCAD.CADOpenTrace.unsupported(fileName: file.displayName, importSource: source)
+        private func applyUnsupportedTrace(
+            file: SiteKeeperCADKernel.CADFile,
+            source: String,
+            failureMessage: String?
+        ) {
+            let trace = NativeCAD.CADOpenTrace.unsupported(
+                fileName: file.displayName,
+                importSource: source,
+                failureMessage: failureMessage
+            )
             lastTrace = trace
             lastDatabase = nil
             renderer.setOpenTrace(trace)

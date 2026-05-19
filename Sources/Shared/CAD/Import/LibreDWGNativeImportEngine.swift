@@ -2,14 +2,18 @@ import Foundation
 import CoreFoundation
 
 extension NativeCAD {
-    struct CADImportResult: Codable {
+    struct CADImportResult: Codable, @unchecked Sendable {
         var database: SiteKeeperCADKernel.CADDatabase
         var trace: CADOpenTrace
     }
 
-    struct LibreDWGNativeImportEngine: SiteKeeperCADKernel.CADImportEngine {
+    struct LibreDWGNativeImportEngine: SiteKeeperCADKernel.CADImportEngine, @unchecked Sendable {
         typealias Kernel = SiteKeeperCADKernel
 
+        private static let nativeDWGImportSoftTimeoutSeconds: TimeInterval = 45
+        private static let nativeDWGImportSoftTimeoutNanoseconds: UInt64 = 45 * 1_000_000_000
+        private static let nativeDWGMaximumEntityCount = 500_000
+        private static let nativeDWGEntityLimitExceededStatus: Int32 = -4
         private static let nativePaperLayoutID = "paper"
         private let baseID = "sitekeeper.native.dwg-libredwg-ios.basic2d-v14"
         var preferredTextCodePage: Int32?
@@ -50,6 +54,10 @@ extension NativeCAD {
             try await importDrawingWithTrace(file: file).database
         }
 
+        static func purgeImportResultCache() async {
+            await CADImportResultCache.shared.purge()
+        }
+
         func importDrawingWithTrace(file: Kernel.CADFile) async throws -> CADImportResult {
             if var cached = await CADImportResultCache.shared.result(for: file, engineID: id) {
                 cached.trace.importCacheHit = true
@@ -68,7 +76,7 @@ extension NativeCAD {
                     convertedFromDWG: nil
                 )
             case .dwg:
-                result = try importNativeDWGBasic2DGeometry(file: file)
+                result = try await importNativeDWGBasic2DGeometry(file: file)
             case .intermediateJSON, .unknown:
                 throw Kernel.CADImportError.unsupportedFormat(file.format)
             }
@@ -80,7 +88,56 @@ extension NativeCAD {
             return tracedResult
         }
 
-        private func importNativeDWGBasic2DGeometry(file: Kernel.CADFile) throws -> CADImportResult {
+        private func importNativeDWGBasic2DGeometry(file: Kernel.CADFile) async throws -> CADImportResult {
+            let worker = Task.detached(priority: .userInitiated) {
+                try Task.checkCancellation()
+                return try self.importNativeDWGBasic2DGeometryBlocking(file: file)
+            }
+            let completion = CADImportResultContinuationBox()
+            return try await withTaskCancellationHandler {
+                try await withCheckedThrowingContinuation { continuation in
+                    completion.install(continuation)
+                    Task {
+                        do {
+                            let result = try await worker.value
+                            _ = completion.resume(with: .success(result))
+                        } catch {
+                            _ = completion.resume(with: .failure(error))
+                        }
+                    }
+                    Task {
+                        do {
+                            try await Task.sleep(nanoseconds: Self.nativeDWGImportSoftTimeoutNanoseconds)
+                        } catch {
+                            return
+                        }
+                        worker.cancel()
+                        if completion.resume(with: .failure(Self.nativeDWGImportTimeoutError(file: file))) {
+                            NativeCAD.CADDiagnosticLog.recordEncoded(
+                                category: "cad.importTimeout",
+                                message: "Native DWG import exceeded the soft timeout.",
+                                payload: [
+                                    "fileName": file.displayName,
+                                    "timeoutSeconds": "\(Int(Self.nativeDWGImportSoftTimeoutSeconds))",
+                                    "importSource": id
+                                ]
+                            )
+                        }
+                    }
+                }
+            } onCancel: {
+                worker.cancel()
+                _ = completion.resume(with: .failure(CancellationError()))
+            }
+        }
+
+        private static func nativeDWGImportTimeoutError(file: Kernel.CADFile) -> Kernel.CADImportError {
+            Kernel.CADImportError.importerNotReady(
+                "DWG 导入超过 \(Int(nativeDWGImportSoftTimeoutSeconds)) 秒，已停止等待。LibreDWG 的底层 C 读取无法被强制中断，后台线程会在系统返回后释放资源。文件：\(file.displayName)"
+            )
+        }
+
+        private func importNativeDWGBasic2DGeometryBlocking(file: Kernel.CADFile) throws -> CADImportResult {
             var nativeResult = SiteKeeperLibreDWGEntityResult()
             let nativeTextCodePage = effectiveNativeTextCodePage
             let status = file.url.path.withCString { path in
@@ -101,13 +158,21 @@ extension NativeCAD {
             let rawEllipseCount = Int(nativeResult.trace.rawEllipseCount)
             let rawSplineCount = Int(nativeResult.trace.rawSplineCount)
             let rawFilledShapeCount = Int(nativeResult.trace.rawFilledShapeCount)
+            let rawTextEntityCount = Int(nativeResult.trace.rawTextEntityCount)
+            let rawMTextEntityCount = Int(nativeResult.trace.rawMTextEntityCount)
+            let rawAttribEntityCount = Int(nativeResult.trace.rawAttribEntityCount)
+            let rawAttdefEntityCount = Int(nativeResult.trace.rawAttdefEntityCount)
             let rawProxyEntityCount = Int(nativeResult.trace.rawProxyEntityCount)
             let rawTianzhengProxyCount = Int(nativeResult.trace.rawTianzhengProxyCount)
             let rawMLeaderCount = Int(nativeResult.trace.rawMLeaderCount)
+            let rawViewportCount = Int(nativeResult.trace.rawViewportCount)
             let mleaderTextCandidateCount = Int(nativeResult.trace.mleaderTextCandidateCount)
             let proxyTextCandidateCount = Int(nativeResult.trace.proxyTextCandidateCount)
             let tianzhengTextCandidateCount = Int(nativeResult.trace.tianzhengTextCandidateCount)
             let expandedInsertEntityCount = Int(nativeResult.trace.exportedInsertEntityCount)
+            let exportedTextEntityCount = Int(nativeResult.trace.exportedTextEntityCount)
+            let exportedMTextEntityCount = Int(nativeResult.trace.exportedMTextEntityCount)
+            let exportedAttribEntityCount = Int(nativeResult.trace.exportedAttribEntityCount)
             let exportedMLeaderTextCount = Int(nativeResult.trace.exportedMLeaderTextCount)
             let exportedDimensionCount = Int(nativeResult.trace.exportedDimensionCount)
             let exportedHatchCount = Int(nativeResult.trace.exportedHatchCount)
@@ -116,21 +181,36 @@ extension NativeCAD {
             let exportedFilledShapeCount = Int(nativeResult.trace.exportedFilledShapeCount)
             let exportedProxyEntityCount = Int(nativeResult.trace.exportedProxyEntityCount)
             let exportedTianzhengProxyCount = Int(nativeResult.trace.exportedTianzhengProxyCount)
+            let exportedViewportCount = Int(nativeResult.trace.exportedViewportCount)
+            let skippedViewportCount = Int(nativeResult.trace.skippedViewportCount)
             let rawEntityCount = Int(nativeResult.trace.rawEntityCount)
             let entityCount = Int(nativeResult.entityCount)
+            if status == Self.nativeDWGEntityLimitExceededStatus {
+                throw Kernel.CADImportError.importerNotReady(
+                    "DWG 图纸实体数量超过安全上限（最多 \(Self.nativeDWGMaximumEntityCount) 个）。原始实体数：\(rawEntityCount)。"
+                )
+            }
             let nativeEntities = UnsafeBufferPointer(
                 start: nativeResult.entities,
                 count: max(0, entityCount)
             )
+            let nativeViewports = UnsafeBufferPointer(
+                start: nativeResult.viewports,
+                count: max(0, Int(nativeResult.viewportCount))
+            )
 
             let entities: [Kernel.CADEntity] = nativeEntities.compactMap { nativeEntity in
                 makeNativeEntity(nativeEntity)
+            }
+            let viewports: [Kernel.CADViewport] = nativeViewports.compactMap { nativeViewport in
+                makeNativeViewport(nativeViewport)
             }
             let textTrace = Self.textTraces(from: entities)
             let importedTextSummary = Self.importedTextSummary(
                 entities: entities,
                 traces: textTrace
             )
+            let importedTextSamples = Self.importedTextSamples(entities: entities)
             let proxyTextCandidateSummary = Self.proxyTextCandidateSummary(entities: entities)
 
             var diagnostics = Kernel.CADDrawingDiagnostics()
@@ -139,7 +219,15 @@ extension NativeCAD {
                     severity: .info,
                     code: "CAD_NATIVE_LIBREDWG_IOS_NATIVE_USED",
                     message: "LibreDWG was called inside the iOS process and converted basic 2D geometry into CADEntity.",
-                    detail: "status=\(status), preferredTextCodePage=\(nativeTextCodePage), libredwgTextCodePage=\(Int(nativeResult.trace.libredwgTextCodePage)), nativeTextDecodeEnabled=\(Int(nativeResult.trace.nativeTextDecodeEnabled)), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawMLeaderCount=\(rawMLeaderCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedMLeaderTextCount=\(exportedMLeaderTextCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
+                    detail: "status=\(status), preferredTextCodePage=\(nativeTextCodePage), libredwgTextCodePage=\(Int(nativeResult.trace.libredwgTextCodePage)), nativeTextDecodeEnabled=\(Int(nativeResult.trace.nativeTextDecodeEnabled)), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawTextEntityCount=\(rawTextEntityCount), rawMTextEntityCount=\(rawMTextEntityCount), rawAttribEntityCount=\(rawAttribEntityCount), rawAttdefEntityCount=\(rawAttdefEntityCount), rawMLeaderCount=\(rawMLeaderCount), rawViewportCount=\(rawViewportCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedTextEntityCount=\(exportedTextEntityCount), exportedMTextEntityCount=\(exportedMTextEntityCount), exportedAttribEntityCount=\(exportedAttribEntityCount), exportedMLeaderTextCount=\(exportedMLeaderTextCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount), exportedViewportCount=\(exportedViewportCount), skippedViewportCount=\(skippedViewportCount)"
+                )
+            )
+            diagnostics.append(
+                Kernel.CADDrawingDiagnostics.Entry(
+                    severity: .info,
+                    code: "CAD_NATIVE_LIBREDWG_RAW_TEXT_BREAKDOWN",
+                    message: "LibreDWG raw text extraction breakdown before renderer filtering.",
+                    detail: "raw TEXT=\(rawTextEntityCount), MTEXT=\(rawMTextEntityCount), ATTRIB=\(rawAttribEntityCount), ATTDEF=\(rawAttdefEntityCount), MLEADER=\(rawMLeaderCount); exported TEXT=\(exportedTextEntityCount), MTEXT=\(exportedMTextEntityCount), ATTRIB=\(exportedAttribEntityCount), MLEADER_TEXT=\(exportedMLeaderTextCount), proxyCandidates=\(proxyTextCandidateCount), tianzhengCandidates=\(tianzhengTextCandidateCount)"
                 )
             )
             diagnostics.append(
@@ -150,6 +238,16 @@ extension NativeCAD {
                     detail: importedTextSummary
                 )
             )
+            if !importedTextSamples.isEmpty {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .info,
+                        code: "CAD_NATIVE_LIBREDWG_TEXT_SAMPLES",
+                        message: "Sample text extracted by the native LibreDWG shim before rendering.",
+                        detail: importedTextSamples
+                    )
+                )
+            }
             if rawTextCount > 0, textTrace.isEmpty {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
@@ -351,6 +449,13 @@ extension NativeCAD {
                 )
             }
             Self.appendTextDiagnostics(from: textTrace, to: &diagnostics)
+            Self.appendViewportDiagnostics(
+                rawViewportCount: rawViewportCount,
+                exportedViewportCount: exportedViewportCount,
+                skippedViewportCount: skippedViewportCount,
+                viewports: viewports,
+                to: &diagnostics
+            )
             if rawEntityCount > 0, !entities.contains(where: \.isRenderable) {
                 diagnostics.append(
                     Kernel.CADDrawingDiagnostics.Entry(
@@ -375,13 +480,14 @@ extension NativeCAD {
                     )
                 }
 
-            let layouts = Self.nativeLayouts(from: entities)
+            let layouts = Self.nativeLayouts(from: entities, viewports: viewports)
             var database = Kernel.CADDatabase(
                 file: file,
                 extents: bounds,
                 layers: layers,
                 layouts: layouts,
                 entities: entities,
+                viewports: viewports,
                 diagnostics: diagnostics,
                 importSource: id,
                 textTrace: textTrace
@@ -411,16 +517,26 @@ extension NativeCAD {
                 rawDimensionCount: rawDimensionCount,
                 rawHatchCount: rawHatchCount,
                 rawTextCount: rawTextCount,
+                rawTextEntityCount: rawTextEntityCount,
+                rawMTextEntityCount: rawMTextEntityCount,
+                rawAttribEntityCount: rawAttribEntityCount,
+                rawAttdefEntityCount: rawAttdefEntityCount,
                 rawProxyEntityCount: rawProxyEntityCount,
                 rawTianzhengProxyCount: rawTianzhengProxyCount,
                 rawMLeaderCount: rawMLeaderCount,
+                rawViewportCount: rawViewportCount,
                 mleaderTextCandidateCount: mleaderTextCandidateCount,
                 proxyTextCandidateCount: proxyTextCandidateCount,
                 tianzhengTextCandidateCount: tianzhengTextCandidateCount,
                 expandedInsertEntityCount: expandedInsertEntityCount,
+                exportedTextEntityCount: exportedTextEntityCount,
+                exportedMTextEntityCount: exportedMTextEntityCount,
+                exportedAttribEntityCount: exportedAttribEntityCount,
                 exportedProxyEntityCount: exportedProxyEntityCount,
                 exportedTianzhengProxyCount: exportedTianzhengProxyCount,
                 exportedMLeaderTextCount: exportedMLeaderTextCount,
+                exportedViewportCount: exportedViewportCount,
+                skippedViewportCount: skippedViewportCount,
                 entityCount: database.entityCount,
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
@@ -496,6 +612,26 @@ extension NativeCAD {
             nativeTextEncodings.map { nativeTextEncodingLabel($0) }
         }
 
+        func nativeTextRunForTesting(
+            rawText: String,
+            rawTextBytesHex: String?,
+            style: Kernel.CADTextStyle = .default
+        ) -> Kernel.CADTextRun {
+            nativeTextRun(
+                rawText: rawText,
+                rawTextBytesHex: rawTextBytesHex,
+                insertionPoint: Kernel.CADPoint(x: 0, y: 0),
+                style: style,
+                height: style.fixedHeight ?? 2.5,
+                rotationRadians: 0,
+                widthFactor: style.widthFactor,
+                boxWidth: nil,
+                boxHeight: nil,
+                horizontalAlignmentCode: nil,
+                verticalAlignmentCode: nil
+            )
+        }
+
         func proxyTextCandidateSummaryForTesting(entities: [Kernel.CADEntity]) -> String? {
             Self.proxyTextCandidateSummary(entities: entities)
         }
@@ -541,9 +677,9 @@ extension NativeCAD {
                     bigFontName: bigFontName,
                     widthFactor: nativeTextWidthFactor(nativeEntity)
                 )
-                let text = applyPreferredDisplayFont(
-                    to: Kernel.CADTextEngine().makeTextRun(
+                let text = nativeTextRun(
                     rawText: rawText,
+                    rawTextBytesHex: decodedNativeString(nativeEntity.rawTextBytesHex, forceUTF8: true),
                     insertionPoint: insertion,
                     style: style,
                     height: height,
@@ -553,7 +689,6 @@ extension NativeCAD {
                     boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                     horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
                     verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
-                    )
                 )
                 let bounds = nativeTextBounds(for: text, insertion: insertion, height: height)
                 return Kernel.CADEntity(
@@ -594,9 +729,9 @@ extension NativeCAD {
                         bigFontName: bigFontName,
                         widthFactor: nativeTextWidthFactor(nativeEntity)
                     )
-                    text = applyPreferredDisplayFont(
-                        to: Kernel.CADTextEngine().makeTextRun(
+                    text = nativeTextRun(
                         rawText: rawText,
+                        rawTextBytesHex: decodedNativeString(nativeEntity.rawTextBytesHex, forceUTF8: true),
                         insertionPoint: insertion,
                         style: style,
                         height: height,
@@ -606,7 +741,6 @@ extension NativeCAD {
                         boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                         horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
                         verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
-                        )
                     )
                     bounds = bounds.union(nativeTextBounds(for: text!, insertion: insertion, height: height))
                 }
@@ -700,10 +834,65 @@ extension NativeCAD {
             nativeEntity.layoutSpace == 1 ? Self.nativePaperLayoutID : Kernel.CADLayout.modelSpace.id
         }
 
-        private static func nativeLayouts(from entities: [Kernel.CADEntity]) -> [Kernel.CADLayout] {
+        private func makeNativeViewport(_ nativeViewport: SiteKeeperLibreDWGViewport) -> Kernel.CADViewport? {
+            guard nativeViewport.onOff != 0,
+                  nativeViewport.width.isFinite,
+                  nativeViewport.height.isFinite,
+                  nativeViewport.viewHeight.isFinite,
+                  nativeViewport.width > 0,
+                  nativeViewport.height > 0,
+                  nativeViewport.viewHeight > 0 else {
+                return nil
+            }
+
+            let layoutID = nativeViewport.layoutSpace == 1
+                ? Self.nativePaperLayoutID
+                : Kernel.CADLayout.modelSpace.id
+            guard layoutID != Kernel.CADLayout.modelSpace.id else {
+                return nil
+            }
+
+            let sourceHandle = decodedNativeString(nativeViewport.sourceHandle)
+            let id = sourceHandle?.isEmpty == false
+                ? sourceHandle!
+                : "viewport-\(layoutID)-\(Int(nativeViewport.viewportID))"
+            let paperBounds = Kernel.CADBounds(
+                minX: nativeViewport.centerX - nativeViewport.width / 2,
+                minY: nativeViewport.centerY - nativeViewport.height / 2,
+                maxX: nativeViewport.centerX + nativeViewport.width / 2,
+                maxY: nativeViewport.centerY + nativeViewport.height / 2
+            )
+            return Kernel.CADViewport(
+                id: id,
+                layoutID: layoutID,
+                viewCenter: Kernel.CADPoint(
+                    x: nativeViewport.viewCenterX,
+                    y: nativeViewport.viewCenterY
+                ),
+                viewHeight: nativeViewport.viewHeight,
+                twistRadians: nativeViewport.twistRadians,
+                clipBounds: paperBounds
+            )
+        }
+
+        private static func nativeLayouts(from entities: [Kernel.CADEntity], viewports: [Kernel.CADViewport]) -> [Kernel.CADLayout] {
             var layouts: [Kernel.CADLayout] = [.modelSpace]
-            if entities.contains(where: { $0.layoutID == nativePaperLayoutID }) {
-                layouts.append(Kernel.CADLayout(id: nativePaperLayoutID, name: "Paper", isModelSpace: false))
+            if entities.contains(where: { $0.layoutID == nativePaperLayoutID })
+                || viewports.contains(where: { $0.layoutID == nativePaperLayoutID }) {
+                let paperEntityBounds = entities
+                    .filter { $0.layoutID == nativePaperLayoutID }
+                    .reduce(Kernel.CADBounds.empty) { $0.union($1.bounds) }
+                let paperViewports = viewports.filter { $0.layoutID == nativePaperLayoutID }
+                let viewportBounds = paperViewports.reduce(Kernel.CADBounds.empty) { $0.union($1.clipBounds) }
+                layouts.append(
+                    Kernel.CADLayout(
+                        id: nativePaperLayoutID,
+                        name: "Paper",
+                        isModelSpace: false,
+                        paperBounds: paperEntityBounds.union(viewportBounds),
+                        viewportIDs: paperViewports.map(\.id)
+                    )
+                )
             }
             return layouts
         }
@@ -820,6 +1009,190 @@ extension NativeCAD {
             nativeEntity.textWidthFactor.isFinite && nativeEntity.textWidthFactor > 0
                 ? nativeEntity.textWidthFactor
                 : 1
+        }
+
+        private func nativeTextRun(
+            rawText: String,
+            rawTextBytesHex: String?,
+            insertionPoint: Kernel.CADPoint,
+            style: Kernel.CADTextStyle,
+            height: Double,
+            rotationRadians: Double,
+            widthFactor: Double?,
+            boxWidth: Double?,
+            boxHeight: Double?,
+            horizontalAlignmentCode: Int?,
+            verticalAlignmentCode: Int?
+        ) -> Kernel.CADTextRun {
+            let text = Kernel.CADTextEngine().makeTextRun(
+                rawText: rawText,
+                insertionPoint: insertionPoint,
+                style: style,
+                height: height,
+                rotationRadians: rotationRadians,
+                widthFactor: widthFactor,
+                boxWidth: boxWidth,
+                boxHeight: boxHeight,
+                horizontalAlignmentCode: horizontalAlignmentCode,
+                verticalAlignmentCode: verticalAlignmentCode
+            )
+
+            let fallbackText = rawByteFallbackText(
+                currentText: text,
+                rawTextBytesHex: rawTextBytesHex
+            )
+            guard let fallbackText else {
+                return applyPreferredDisplayFont(to: text)
+            }
+
+            var fallback = Kernel.CADTextEngine().makeTextRun(
+                rawText: fallbackText,
+                insertionPoint: insertionPoint,
+                style: style,
+                height: height,
+                rotationRadians: rotationRadians,
+                widthFactor: widthFactor,
+                boxWidth: boxWidth,
+                boxHeight: boxHeight,
+                horizontalAlignmentCode: horizontalAlignmentCode,
+                verticalAlignmentCode: verticalAlignmentCode,
+                warnings: text.warnings + ["CAD_TEXT_RAW_BYTE_FALLBACK_USED"]
+            )
+            fallback.decodedText = fallbackText
+            fallback.normalizedText = fallback.displayText
+            if !fallback.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED") {
+                fallback.warnings.append("CAD_TEXT_RAW_BYTE_FALLBACK_USED")
+            }
+            return applyPreferredDisplayFont(to: fallback)
+        }
+
+        private func rawByteFallbackText(
+            currentText: Kernel.CADTextRun,
+            rawTextBytesHex: String?
+        ) -> String? {
+            let current = currentText.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+            var candidates: [String] = [currentText.rawText, currentText.decodedText, currentText.normalizedText]
+
+            if let rawTextBytesHex,
+               let data = Self.data(fromHexString: rawTextBytesHex) {
+                for encoding in nativeTextEncodings {
+                    guard let decoded = String(data: data, encoding: encoding),
+                          !decoded.containsUnicodeReplacementCharacter else {
+                        continue
+                    }
+                    candidates.append(decoded)
+                }
+            }
+
+            let uniqueCandidates = Self.uniqueTextCandidates(candidates)
+            let currentScore = Self.textRecoveryScore(current)
+            let best = uniqueCandidates
+                .map { (text: $0, score: Self.textRecoveryScore($0)) }
+                .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .max { lhs, rhs in
+                    if lhs.score == rhs.score {
+                        return lhs.text.count < rhs.text.count
+                    }
+                    return lhs.score < rhs.score
+                }
+
+            guard let best else { return nil }
+            if Self.isLikelyControlOnlyText(current), best.score > currentScore {
+                return best.text
+            }
+            if best.score >= currentScore + 40 {
+                return best.text
+            }
+            return nil
+        }
+
+        private static func uniqueTextCandidates(_ candidates: [String]) -> [String] {
+            var seen = Set<String>()
+            var result: [String] = []
+            for candidate in candidates {
+                let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+                result.append(trimmed)
+            }
+            return result
+        }
+
+        private static func data(fromHexString hex: String) -> Data? {
+            let compact = hex.filter { !$0.isWhitespace }
+            guard compact.count >= 2, compact.count.isMultiple(of: 2) else { return nil }
+            var bytes: [UInt8] = []
+            bytes.reserveCapacity(compact.count / 2)
+            var index = compact.startIndex
+            while index < compact.endIndex {
+                let next = compact.index(index, offsetBy: 2)
+                guard let byte = UInt8(compact[index..<next], radix: 16) else { return nil }
+                bytes.append(byte)
+                index = next
+            }
+            return Data(bytes)
+        }
+
+        private static func textRecoveryScore(_ value: String) -> Int {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return -10_000 }
+            var score = 0
+            for scalar in trimmed.unicodeScalars {
+                switch scalar.value {
+                case 0x3400...0x4DBF,
+                     0x4E00...0x9FFF,
+                     0xF900...0xFAFF,
+                     0x20000...0x2A6DF,
+                     0x2A700...0x2B73F,
+                     0x2B740...0x2B81F,
+                     0x2B820...0x2CEAF:
+                    score += isSuspiciousCADMojibakeScalar(scalar) ? -90 : 100
+                case 0x30...0x39, 0x41...0x5A, 0x61...0x7A:
+                    score += 10
+                case 0x00A0...0x024F:
+                    score += 4
+                case 0xFFFD:
+                    score -= 160
+                case 0x5C, 0x7C, 0x7B, 0x7D, 0x3B:
+                    score -= 12
+                default:
+                    if CharacterSet.controlCharacters.contains(scalar) {
+                        score -= 80
+                    } else if CharacterSet.punctuationCharacters.contains(scalar) {
+                        score -= 2
+                    } else {
+                        score += 1
+                    }
+                }
+            }
+            if isLikelyControlOnlyText(trimmed) {
+                score -= 160
+            }
+            return score
+        }
+
+        private static func isSuspiciousCADMojibakeScalar(_ scalar: UnicodeScalar) -> Bool {
+            "甯傛斂搴滄柦宸ュ浘娴嬭瘯鏂囧瓧鍥剧焊绠＄嚎閰嶇數钃戣娂胕芼".unicodeScalars.contains(scalar)
+        }
+
+        private static func isLikelyControlOnlyText(_ value: String) -> Bool {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return true }
+            let meaningfulSymbols = Set(["±", "∅", "°", "%"])
+            var hasMeaningfulScalar = false
+            var hasControlMarker = false
+            for scalar in trimmed.unicodeScalars {
+                let string = String(scalar)
+                if string == "\\" || string == "|" || string == "{" || string == "}" || string == ";" {
+                    hasControlMarker = true
+                }
+                if meaningfulSymbols.contains(string) || scalar.properties.isAlphabetic {
+                    hasMeaningfulScalar = true
+                }
+                if (0x30...0x39).contains(scalar.value) || trimmed.cadContainsCJKScalars {
+                    hasMeaningfulScalar = true
+                }
+            }
+            return hasControlMarker && !hasMeaningfulScalar
         }
 
         private func nativeTextBounds(
@@ -1216,6 +1589,13 @@ extension NativeCAD {
                 )
             )
             Self.appendTextDiagnostics(from: textTrace, to: &diagnostics)
+            Self.appendViewportDiagnostics(
+                rawViewportCount: parsed.viewports.count,
+                exportedViewportCount: parsed.viewports.count,
+                skippedViewportCount: 0,
+                viewports: parsed.viewports,
+                to: &diagnostics
+            )
 
             var database = Kernel.CADDatabase(
                 file: sourceFile,
@@ -1226,6 +1606,7 @@ extension NativeCAD {
                 textStyles: parsed.textStylesByID.isEmpty
                     ? [.default]
                     : parsed.textStylesByID.values.sorted { $0.id < $1.id },
+                viewports: parsed.viewports,
                 diagnostics: diagnostics,
                 importSource: importSource,
                 textTrace: textTrace
@@ -1253,6 +1634,8 @@ extension NativeCAD {
                 rawDimensionCount: records.filter { $0.kind == .dimension || $0.sourceType == "DIMENSION" }.count,
                 rawHatchCount: records.filter { $0.sourceType == "HATCH" }.count,
                 rawTextCount: records.filter { $0.kind == .text || $0.kind == .mtext || $0.kind == .attrib }.count,
+                rawViewportCount: parsed.viewports.count,
+                exportedViewportCount: parsed.viewports.count,
                 entityCount: database.entityCount,
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
@@ -1354,6 +1737,25 @@ extension NativeCAD {
             return "\(collapsed.prefix(24))..."
         }
 
+        private static func importedTextSamples(entities: [Kernel.CADEntity]) -> String {
+            let orderedKinds: [Kernel.CADEntityKind] = [.text, .mtext, .attrib, .dimension, .table]
+            let sections = orderedKinds.compactMap { kind -> String? in
+                let samples = entities
+                    .filter { $0.kind == kind && $0.text != nil }
+                    .prefix(3)
+                    .compactMap { entity -> String? in
+                        guard let text = entity.text else { return nil }
+                        let handle = entity.sourceHandle.map { "#\($0)" } ?? "#-"
+                        let raw = compactDiagnosticText(text.rawText)
+                        let display = compactDiagnosticText(text.displayText)
+                        return "\(handle):raw=\(raw),display=\(display)"
+                    }
+                guard !samples.isEmpty else { return nil }
+                return "\(kind.rawValue)=\(samples.joined(separator: " || "))"
+            }
+            return sections.joined(separator: " | ")
+        }
+
         private static func proxyTextCandidateSummary(entities: [Kernel.CADEntity]) -> String? {
             let proxyEntities = entities.filter { $0.kind == .proxy }
             let candidates = proxyEntities.compactMap { entity -> (entity: Kernel.CADEntity, preview: String)? in
@@ -1398,6 +1800,57 @@ extension NativeCAD {
                 return nil
             }
             return compactDiagnosticText(trimmed)
+        }
+
+        private static func appendViewportDiagnostics(
+            rawViewportCount: Int,
+            exportedViewportCount: Int,
+            skippedViewportCount: Int,
+            viewports: [Kernel.CADViewport],
+            to diagnostics: inout Kernel.CADDrawingDiagnostics
+        ) {
+            guard rawViewportCount > 0 || exportedViewportCount > 0 || !viewports.isEmpty else {
+                return
+            }
+
+            diagnostics.append(
+                Kernel.CADDrawingDiagnostics.Entry(
+                    severity: exportedViewportCount > 0 ? .info : .warning,
+                    code: "CAD_NATIVE_VIEWPORT_IMPORT_SUMMARY",
+                    message: "LibreDWG viewport extraction summary for paper/layout rendering.",
+                    detail: [
+                        "rawViewportCount=\(rawViewportCount)",
+                        "exportedViewportCount=\(exportedViewportCount)",
+                        "skippedViewportCount=\(skippedViewportCount)",
+                        "databaseViewportCount=\(viewports.count)",
+                        "samples=\(viewportDiagnosticSamples(viewports))"
+                    ].joined(separator: ", ")
+                )
+            )
+        }
+
+        private static func viewportDiagnosticSamples(_ viewports: [Kernel.CADViewport]) -> String {
+            guard !viewports.isEmpty else { return "" }
+            return viewports.prefix(4).map { viewport in
+                let clip = viewport.clipBounds
+                return [
+                    "id=\(viewport.id)",
+                    "layout=\(viewport.layoutID)",
+                    "paper=(\(formatDiagnosticNumber(clip.minX)),\(formatDiagnosticNumber(clip.minY))-\(formatDiagnosticNumber(clip.maxX)),\(formatDiagnosticNumber(clip.maxY)))",
+                    "center=(\(formatDiagnosticNumber(viewport.viewCenter.x)),\(formatDiagnosticNumber(viewport.viewCenter.y)))",
+                    "height=\(formatDiagnosticNumber(viewport.viewHeight))",
+                    "twist=\(formatDiagnosticNumber(viewport.twistRadians))"
+                ].joined(separator: " ")
+            }.joined(separator: " | ")
+        }
+
+        private static func formatDiagnosticNumber(_ value: Double) -> String {
+            guard value.isFinite else { return "\(value)" }
+            let rounded = value.rounded()
+            if abs(value - rounded) < 0.0001 {
+                return "\(Int(rounded))"
+            }
+            return String(format: "%.3f", value)
         }
 
         private static func appendTextDiagnostics(
@@ -1513,6 +1966,7 @@ enum DXFBasic2DParser {
         var records: [EntityRecord]
         var layersByID: [String: Kernel.CADLayer]
         var layouts: [Kernel.CADLayout]
+        var viewports: [Kernel.CADViewport]
         var textStylesByID: [String: Kernel.CADTextStyle]
         var diagnostics: [Kernel.CADDrawingDiagnostics.Entry]
     }
@@ -1557,10 +2011,69 @@ enum DXFBasic2DParser {
 
 }
 
+private final class CADImportResultContinuationBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<NativeCAD.CADImportResult, Error>?
+    private var pendingResult: Result<NativeCAD.CADImportResult, Error>?
+    private var didResume = false
+
+    func install(_ continuation: CheckedContinuation<NativeCAD.CADImportResult, Error>) {
+        lock.lock()
+        if let pendingResult {
+            self.pendingResult = nil
+            lock.unlock()
+            continuation.resume(with: pendingResult)
+            return
+        }
+        guard !didResume else {
+            lock.unlock()
+            continuation.resume(throwing: CancellationError())
+            return
+        }
+        self.continuation = continuation
+        lock.unlock()
+    }
+
+    @discardableResult
+    func resume(with result: Result<NativeCAD.CADImportResult, Error>) -> Bool {
+        lock.lock()
+        guard !didResume else {
+            lock.unlock()
+            return false
+        }
+        didResume = true
+        if let continuation {
+            self.continuation = nil
+            lock.unlock()
+            continuation.resume(with: result)
+        } else {
+            pendingResult = result
+            lock.unlock()
+        }
+        return true
+    }
+}
+
 private actor CADImportResultCache {
     static let shared = CADImportResultCache()
+    private static let maxMemoryEntryCount = 3
+    private static let maxDiskCacheBytes: Int64 = 300 * 1024 * 1024
+    private static let diskEntryTimeToLive: TimeInterval = 7 * 24 * 60 * 60
+    private static let diskPruneInterval: TimeInterval = 5 * 60
 
-    private var memory: [String: NativeCAD.CADImportResult] = [:]
+    private struct MemoryEntry {
+        var result: NativeCAD.CADImportResult
+        var lastAccess: Date
+    }
+
+    private struct DiskEntry {
+        var url: URL
+        var byteCount: Int64
+        var modificationDate: Date
+    }
+
+    private var memory: [String: MemoryEntry] = [:]
+    private var lastDiskPruneDate: Date?
     private let fileManager = FileManager.default
     private lazy var cacheDirectory: URL = {
         let root = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
@@ -1569,28 +2082,42 @@ private actor CADImportResultCache {
     }()
 
     func result(for file: SiteKeeperCADKernel.CADFile, engineID: String) -> NativeCAD.CADImportResult? {
+        let now = Date()
         let key = cacheKey(for: file, engineID: engineID)
-        if let cached = memory[key] {
-            return cached
+        if var cached = memory[key] {
+            cached.lastAccess = now
+            memory[key] = cached
+            return cached.result
         }
 
+        pruneDiskCacheIfNeeded(now: now)
         let url = cacheURL(for: key)
-        guard let data = try? Data(contentsOf: url),
-              let result = try? JSONDecoder().decode(NativeCAD.CADImportResult.self, from: data) else {
+        guard let entry = diskEntry(at: url) else { return nil }
+        guard !isExpired(entry, now: now) else {
+            try? fileManager.removeItem(at: url)
             return nil
         }
-        memory[key] = result
+        guard let data = try? Data(contentsOf: url),
+              let result = try? JSONDecoder().decode(NativeCAD.CADImportResult.self, from: data) else {
+            try? fileManager.removeItem(at: url)
+            return nil
+        }
+        storeInMemory(result, for: key, now: now)
+        touchDiskEntry(at: url, now: now)
         return result
     }
 
     func store(_ result: NativeCAD.CADImportResult, for file: SiteKeeperCADKernel.CADFile, engineID: String) {
+        let now = Date()
         let key = cacheKey(for: file, engineID: engineID)
-        memory[key] = result
+        storeInMemory(result, for: key, now: now)
         let url = cacheURL(for: key)
         do {
             try fileManager.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
             let data = try JSONEncoder().encode(result)
             try data.write(to: url, options: [.atomic])
+            touchDiskEntry(at: url, now: now)
+            pruneDiskCacheIfNeeded(now: now, force: true)
         } catch {
             NativeCAD.CADDiagnosticLog.recordEncoded(
                 category: "cad.importCache",
@@ -1603,12 +2130,95 @@ private actor CADImportResultCache {
         }
     }
 
+    func purge() {
+        memory.removeAll(keepingCapacity: false)
+    }
+
     #if DEBUG
     func removeAllForTesting() {
         memory.removeAll()
+        lastDiskPruneDate = nil
         try? fileManager.removeItem(at: cacheDirectory)
     }
     #endif
+
+    private func storeInMemory(_ result: NativeCAD.CADImportResult, for key: String, now: Date) {
+        memory[key] = MemoryEntry(result: result, lastAccess: now)
+        enforceMemoryLimit()
+    }
+
+    private func enforceMemoryLimit() {
+        while memory.count > Self.maxMemoryEntryCount {
+            guard let oldestKey = memory.min(by: { lhs, rhs in
+                lhs.value.lastAccess < rhs.value.lastAccess
+            })?.key else {
+                return
+            }
+            memory.removeValue(forKey: oldestKey)
+        }
+    }
+
+    private func pruneDiskCacheIfNeeded(now: Date, force: Bool = false) {
+        if !force,
+           let lastDiskPruneDate,
+           now.timeIntervalSince(lastDiskPruneDate) < Self.diskPruneInterval {
+            return
+        }
+        lastDiskPruneDate = now
+
+        let entries = diskEntries()
+        guard !entries.isEmpty else { return }
+
+        var retainedEntries: [DiskEntry] = []
+        var retainedBytes: Int64 = 0
+        for entry in entries {
+            if isExpired(entry, now: now) {
+                try? fileManager.removeItem(at: entry.url)
+            } else {
+                retainedEntries.append(entry)
+                retainedBytes += entry.byteCount
+            }
+        }
+
+        guard retainedBytes > Self.maxDiskCacheBytes else { return }
+        for entry in retainedEntries.sorted(by: { lhs, rhs in
+            lhs.modificationDate < rhs.modificationDate
+        }) {
+            try? fileManager.removeItem(at: entry.url)
+            retainedBytes -= entry.byteCount
+            if retainedBytes <= Self.maxDiskCacheBytes { break }
+        }
+    }
+
+    private func diskEntries() -> [DiskEntry] {
+        guard fileManager.fileExists(atPath: cacheDirectory.path),
+              let urls = try? fileManager.contentsOfDirectory(
+                at: cacheDirectory,
+                includingPropertiesForKeys: nil
+              ) else {
+            return []
+        }
+        return urls
+            .filter { $0.pathExtension == "json" }
+            .compactMap { diskEntry(at: $0) }
+    }
+
+    private func diskEntry(at url: URL) -> DiskEntry? {
+        guard let attributes = try? fileManager.attributesOfItem(atPath: url.path) else {
+            return nil
+        }
+        let byteCount = (attributes[.size] as? NSNumber)?.int64Value ?? 0
+        let modificationDate = (attributes[.modificationDate] as? Date) ?? .distantPast
+        return DiskEntry(url: url, byteCount: byteCount, modificationDate: modificationDate)
+    }
+
+    private func isExpired(_ entry: DiskEntry, now: Date) -> Bool {
+        now.timeIntervalSince(entry.modificationDate) > Self.diskEntryTimeToLive
+    }
+
+    private func touchDiskEntry(at url: URL, now: Date) {
+        try? fileManager.setAttributes([.modificationDate: now], ofItemAtPath: url.path)
+    }
 
     private func cacheURL(for key: String) -> URL {
         cacheDirectory.appendingPathComponent(Self.fnv1a64Hex(key), isDirectory: false)

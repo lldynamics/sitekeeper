@@ -59,6 +59,8 @@ struct NativeCADViewerEntry: View {
     @State private var selectedSearchResultIndex: Int?
     @State private var showsSearchPanel = false
     @State private var rendererPerformance: CADRendererPerformanceSnapshot?
+    @State private var importState = CADCanvasImportState.idle
+    @State private var importCancelCommand: CADCanvasImportCancelCommand?
     @AppStorage("cad.native.showsOverviewMap") private var showsOverviewMap = false
     @AppStorage("cad.native.rendersTextOverlays") private var rendersTextOverlays = true
     @AppStorage("cad.native.rendersLineTypes") private var rendersLineTypes = false
@@ -168,6 +170,7 @@ struct NativeCADViewerEntry: View {
             visibleLayerIDs: effectiveVisibleLayerIDs,
             initialViewState: initialViewState,
             controlCommand: canvasControlCommand,
+            cancelImportCommand: importCancelCommand,
             featureOptions: featureOptions,
             textImportOptions: effectiveTextImportOptions,
             buildsTextSearchIndex: buildsTextSearchIndex,
@@ -175,7 +178,8 @@ struct NativeCADViewerEntry: View {
             callbacks: bridgedRendererCallbacks,
             onLayoutsChanged: handleLayoutsChanged,
             onLayersChanged: handleLayersChanged,
-            onSearchIndexChanged: handleSearchIndexChanged
+            onSearchIndexChanged: handleSearchIndexChanged,
+            onImportStateChanged: handleImportStateChanged
         )
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .overlay(alignment: .topLeading) {
@@ -204,6 +208,82 @@ struct NativeCADViewerEntry: View {
                 rendererDiagnosticBadge(rendererPerformance)
                     .padding(12)
             }
+        }
+        .overlay {
+            if importState.phase == .importing || importState.phase == .failed {
+                cadImportStateOverlay(importState)
+            }
+        }
+    }
+
+    private func handleImportStateChanged(_ state: CADCanvasImportState) {
+        DispatchQueue.main.async {
+            importState = state
+        }
+    }
+
+    @ViewBuilder
+    private func cadImportStateOverlay(_ state: CADCanvasImportState) -> some View {
+        VStack(spacing: 10) {
+            switch state.phase {
+            case .importing:
+                ProgressView()
+                    .controlSize(.large)
+            case .failed:
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.title3)
+                    .foregroundStyle(.orange)
+            case .idle, .completed, .cancelled:
+                EmptyView()
+            }
+            VStack(spacing: 3) {
+                Text(state.message)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(4)
+                if !state.fileName.isEmpty {
+                    Text(state.fileName)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.72)
+                }
+            }
+            if state.isCancellable {
+                Button(role: .destructive) {
+                    importCancelCommand = CADCanvasImportCancelCommand()
+                } label: {
+                    Label(String(localized: "取消导入"), systemImage: "xmark.circle")
+                }
+                .buttonStyle(.bordered)
+            }
+            if state.phase == .failed {
+                HStack(spacing: 8) {
+                    Button {
+                        onReportIssue()
+                    } label: {
+                        Label(String(localized: "导出诊断"), systemImage: "square.and.arrow.up")
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button {
+                        importState = .idle
+                    } label: {
+                        Label(String(localized: "关闭"), systemImage: "xmark")
+                    }
+                    .buttonStyle(.bordered)
+                }
+                .font(.caption)
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 16)
+        .frame(maxWidth: 320)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
         }
     }
 

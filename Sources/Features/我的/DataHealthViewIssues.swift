@@ -405,16 +405,6 @@ extension DataHealthView {
                 route: .quickNote(noteId: item.id)
             )
         }
-        issues += store.lightingCircuitPlans.compactMap { item in
-            guard let id = item.projectId, !projectIdSet.contains(id) else { return nil }
-            return invalidProjectIssue(
-                id: "invalid-circuit-project-\(item.id.uuidString)",
-                title: l("照明回路项目关联无效"),
-                detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
-                systemImage: "bolt.square",
-                route: nil as DataHealthIssueRoute?
-            )
-        }
         return issues
     }
 

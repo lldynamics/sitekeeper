@@ -813,12 +813,12 @@ private struct DXFParser {
             text: textRun,
             blockName: nil,
             transform: .identity,
-            bounds: textRun == nil ? path.bounds : path.bounds.union(
+            bounds: path.bounds.union(
                 Kernel.CADBounds(
-                    minX: textRun!.insertionPoint.x,
-                    minY: textRun!.insertionPoint.y,
-                    maxX: textRun!.insertionPoint.x,
-                    maxY: textRun!.insertionPoint.y
+                    minX: textRun?.insertionPoint.x ?? path.bounds.minX,
+                    minY: textRun?.insertionPoint.y ?? path.bounds.minY,
+                    maxX: textRun?.insertionPoint.x ?? path.bounds.maxX,
+                    maxY: textRun?.insertionPoint.y ?? path.bounds.maxY
                 )
             ),
             diagnostics: Kernel.CADDrawingDiagnostics(entries: [entry])

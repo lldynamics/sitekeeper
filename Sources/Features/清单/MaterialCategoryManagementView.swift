@@ -48,24 +48,30 @@ struct MaterialCategoryManagementView: View {
     var body: some View {
         List {
             if categoryUsage.isEmpty {
-                ContentUnavailableView("暂无可管理分类", systemImage: "tag")
+                ContentUnavailableView(String(localized: "暂无可管理分类"), systemImage: "tag")
             } else {
-                Section("现有分类") {
+                Section(String(localized: "现有分类")) {
                     ForEach(categoryUsage) { usage in
                         VStack(alignment: .leading, spacing: 6) {
                             Text(usage.name)
                                 .font(.body.weight(.semibold))
-                            Text("自定义材料 \(usage.userMaterialCount) 条 · 价格条目 \(usage.priceEntryCount) 条")
+                            Text(
+                                String(
+                                    format: String(localized: "自定义材料 %lld 条 · 价格条目 %lld 条"),
+                                    Int64(usage.userMaterialCount),
+                                    Int64(usage.priceEntryCount)
+                                )
+                            )
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button("删除", role: .destructive) {
+                            Button(String(localized: "删除"), role: .destructive) {
                                 state.deleteSource = usage.name
                                 state.deleteTarget = defaultDeleteTarget(for: usage.name)
                                 state.showDeleteSheet = true
                             }
-                            Button("重命名") {
+                            Button(String(localized: "重命名")) {
                                 state.renameSource = usage.name
                                 state.renameTarget = usage.name
                                 state.showRenameSheet = true
@@ -76,29 +82,29 @@ struct MaterialCategoryManagementView: View {
                 }
             }
         }
-        .navigationTitle("分类管理")
+        .navigationTitle(String(localized: "分类管理"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("完成") { dismiss() }
+                Button(String(localized: "完成")) { dismiss() }
             }
         }
         .sheet(isPresented: $state.showRenameSheet) {
             NavigationStack {
                 Form {
-                    Section("重命名分类") {
-                        LabeledContent("原分类", value: state.renameSource)
-                        TextField("新分类名称", text: $state.renameTarget)
+                    Section(String(localized: "重命名分类")) {
+                        LabeledContent(String(localized: "原分类"), value: state.renameSource)
+                        TextField(String(localized: "新分类名称"), text: $state.renameTarget)
                     }
                 }
-                .navigationTitle("重命名")
+                .navigationTitle(String(localized: "重命名"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { state.showRenameSheet = false }
+                        Button(String(localized: "取消")) { state.showRenameSheet = false }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") {
+                        Button(String(localized: "保存")) {
                             renameCategory(from: state.renameSource, to: state.renameTarget)
                             state.showRenameSheet = false
                         }
@@ -113,24 +119,24 @@ struct MaterialCategoryManagementView: View {
         .sheet(isPresented: $state.showDeleteSheet) {
             NavigationStack {
                 Form {
-                    Section("删除分类并迁移") {
-                        Text("分类“\(state.deleteSource)”将被移除。")
+                    Section(String(localized: "删除分类并迁移")) {
+                        Text(String(format: String(localized: "分类“%@”将被移除。"), state.deleteSource))
                             .font(.subheadline)
-                        Picker("迁移到", selection: $state.deleteTarget) {
+                        Picker(String(localized: "迁移到"), selection: $state.deleteTarget) {
                             ForEach(migrationTargets.filter { $0 != state.deleteSource }, id: \.self) { name in
                                 Text(name).tag(name)
                             }
                         }
                     }
                 }
-                .navigationTitle("删除分类")
+                .navigationTitle(String(localized: "删除分类"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { state.showDeleteSheet = false }
+                        Button(String(localized: "取消")) { state.showDeleteSheet = false }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("删除并迁移", role: .destructive) {
+                        Button(String(localized: "删除并迁移"), role: .destructive) {
                             migrateCategory(from: state.deleteSource, to: state.deleteTarget)
                             state.showDeleteSheet = false
                         }

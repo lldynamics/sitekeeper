@@ -14,21 +14,6 @@ struct BackupImportExportTests {
             projects: [Project(name: "测试项目", location: "测试地点", status: .active)],
             dailyLogs: [],
             historyRecords: [HistoryRecord(tool: "电流计算", input: "10kW", result: "45A", date: "2026-05-01 10:00")],
-            lightingCircuitPlans: [
-                LightingCircuitPlan(
-                    name: "测试照明方案",
-                    projectId: nil,
-                    supplyType: .singlePhase,
-                    voltage: "220",
-                    powerFactor: "0.9",
-                    demandFactor: "0.9",
-                    breakerFactor: "1.25",
-                    wireFactor: "1.15",
-                    isCopper: true,
-                    loads: [LightingCircuitLoad(name: "回路1", powerKW: "3")],
-                    updatedAt: "2026-05-01 10:00"
-                )
-            ],
             templates: [],
             favoriteMaterialKeys: ["key1"],
             recentMaterialKeys: ["key2"]
@@ -40,7 +25,6 @@ struct BackupImportExportTests {
         #expect(restored.materialItems.count == 1)
         #expect(restored.projects.count == 1)
         #expect(restored.historyRecords.count == 1)
-        #expect(restored.lightingCircuitPlans.count == 1)
         #expect(restored.favoriteMaterialKeys == ["key1"])
     }
 

@@ -16,7 +16,7 @@ struct ConduitFillView: View {
             requirement: .requiredPositive,
             min: 6,
             max: 10_000,
-            rangeMessage: calculatorLoc("请输入 6–10000")
+            rangeMessage: calculatorLoc(String(localized: "请输入 6–10000"))
         )
     }
 
@@ -26,7 +26,7 @@ struct ConduitFillView: View {
             requirement: .requiredPositive,
             min: 0.5,
             max: 100,
-            rangeMessage: calculatorLoc("请输入 0.5–100")
+            rangeMessage: calculatorLoc(String(localized: "请输入 0.5–100"))
         )
     }
 
@@ -36,9 +36,9 @@ struct ConduitFillView: View {
             requirement: .requiredPositive,
             min: 1,
             max: 500,
-            rangeMessage: calculatorLoc("请输入 1–500"),
+            rangeMessage: calculatorLoc(String(localized: "请输入 1–500")),
             wholeNumberOnly: true,
-            wholeNumberMessage: calculatorLoc("请输入整数")
+            wholeNumberMessage: calculatorLoc(String(localized: "请输入整数"))
         )
     }
 
@@ -56,9 +56,9 @@ struct ConduitFillView: View {
 
     var body: some View {
         Form {
-            Section("参数") {
+            Section(String(localized: "参数")) {
                 CalculatorValidatedNumericField(
-                    title: "线管内径",
+                    title: String(localized: "线管内径"),
                     placeholder: "16",
                     unit: "mm",
                     text: $conduitInnerDia,
@@ -66,9 +66,9 @@ struct ConduitFillView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用管径", options: ["16", "20", "25", "32", "40", "50"], selection: $conduitInnerDia)
+                CalculatorPresetChips(title: String(localized: "常用管径"), options: ["16", "20", "25", "32", "40", "50"], selection: $conduitInnerDia)
                 CalculatorValidatedNumericField(
-                    title: "单根导线外径",
+                    title: String(localized: "单根导线外径"),
                     placeholder: "2.5",
                     unit: "mm",
                     text: $wireDia,
@@ -76,24 +76,24 @@ struct ConduitFillView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用线径", options: ["2.5", "4", "6", "10", "16"], selection: $wireDia)
+                CalculatorPresetChips(title: String(localized: "常用线径"), options: ["2.5", "4", "6", "10", "16"], selection: $wireDia)
                 CalculatorValidatedNumericField(
-                    title: "导线根数",
+                    title: String(localized: "导线根数"),
                     placeholder: "3",
-                    unit: "根",
+                    unit: String(localized: "根"),
                     text: $wireCount,
                     rule: wireCountRule,
                     keyboardType: .numberPad,
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用根数", options: ["2", "3", "4", "6", "8", "12"], selection: $wireCount)
+                CalculatorPresetChips(title: String(localized: "常用根数"), options: ["2", "3", "4", "6", "8", "12"], selection: $wireCount)
             }
-            Section("参考") {
-                Text("规范要求穿线率 ≤ 40%").font(.caption).foregroundStyle(.secondary)
+            Section(String(localized: "参考")) {
+                Text(String(localized: "规范要求穿线率 ≤ 40%")).font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Button("计算") {
+                Button(String(localized: "计算")) {
                     isInputFocused = false
                     didAttemptSubmit = true
                     calc()
@@ -102,15 +102,15 @@ struct ConduitFillView: View {
                 .fontWeight(.semibold)
             }
             if let resultModel {
-                Section("结果") {
+                Section(String(localized: "结果")) {
                     CalculatorResultCard(
-                        title: "线管穿线率",
+                        title: String(localized: "线管穿线率"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("线管穿线率").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "线管穿线率")).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
                 isInputFocused = false
@@ -141,25 +141,45 @@ struct ConduitFillView: View {
         let recommended = EngineeringCalculations.recommendedConduitDiameter(wireDiameter: wd, wireCount: wc)
         let pass = rate <= 40
         resultModel = .singleSection(
-            headline: "穿线率 \(fmt(rate))%",
-            formula: "穿线率 = (导线总截面积 ÷ 线管截面积)×100%",
+            headline: String(format: String(localized: "穿线率 %@%%"), fmt(rate)),
+            formula: String(localized: "穿线率 = (导线总截面积 ÷ 线管截面积)×100%"),
             items: [
-                CalculationResult.item("线管截面积", "\(fmt(conduitArea)) mm²"),
-                CalculationResult.item("导线总截面积", "\(fmt(wireArea)) mm²"),
-                CalculationResult.item("规范校核", pass ? "符合规范（≤40%）" : "已超出规范（>40%）", status: pass ? .pass : .warning),
-                CalculationResult.item("推荐管内径", recommended.map { "Φ\(fmt($0)) mm" } ?? "超出常用规格", status: pass ? .normal : .warning),
+                CalculationResult.item(
+                    String(localized: "线管截面积"),
+                    String(format: String(localized: "%@ mm²"), fmt(conduitArea))
+                ),
+                CalculationResult.item(
+                    String(localized: "导线总截面积"),
+                    String(format: String(localized: "%@ mm²"), fmt(wireArea))
+                ),
+                CalculationResult.item(
+                    String(localized: "规范校核"),
+                    pass ? String(localized: "符合规范（≤40%）") : String(localized: "已超出规范（>40%）"),
+                    status: pass ? .pass : .warning
+                ),
+                CalculationResult.item(
+                    String(localized: "推荐管内径"),
+                    recommended.map { String(format: String(localized: "Φ%@ mm"), fmt($0)) } ?? String(localized: "超出常用规格"),
+                    status: pass ? .normal : .warning
+                ),
             ]
         )
+        let recommendedText = recommended.map { String(format: String(localized: "Φ%@ mm"), fmt($0)) } ?? String(localized: "超出常用规格")
         result = """
-        线管截面积: \(fmt(conduitArea)) mm²
-        导线总截面积: \(fmt(wireArea)) mm²
-        穿线率: \(fmt(rate)) %
-        \(rate <= 40 ? "符合规范" : "超过 40%，请增大管径或减少根数")
-        推荐管内径: \(recommended.map { "Φ\(fmt($0)) mm" } ?? "超出常用规格")
+        \(String(format: String(localized: "线管截面积: %@ mm²"), fmt(conduitArea)))
+        \(String(format: String(localized: "导线总截面积: %@ mm²"), fmt(wireArea)))
+        \(String(format: String(localized: "穿线率: %@ %%"), fmt(rate)))
+        \(rate <= 40 ? String(localized: "符合规范") : String(localized: "超过 40%，请增大管径或减少根数"))
+        \(String(format: String(localized: "推荐管内径: %@"), recommendedText))
         """
         store.appendCalculationHistory(
-            tool: "线管穿线率",
-            input: "Φ\(conduitInnerDia)mm, Φ\(wireDia)mm × \(wireCount)根",
+            tool: String(localized: "线管穿线率"),
+            input: String(
+                format: String(localized: "Φ%@mm, Φ%@mm × %@根"),
+                conduitInnerDia,
+                wireDia,
+                wireCount
+            ),
             result: "\(fmt(rate))%"
         )
         conduitInnerDia = NumericInputSupport.normalizedStorageText(conduitInnerDia, kind: .quantity, preservingInvalid: false)

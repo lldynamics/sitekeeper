@@ -144,6 +144,13 @@ struct CADDiagnosticMachineTrace: Codable {
         }
 
         struct TextExposure: Codable {
+            let rawTextEntityCount: Int
+            let rawMTextEntityCount: Int
+            let rawAttribEntityCount: Int
+            let rawAttdefEntityCount: Int
+            let exportedTextEntityCount: Int
+            let exportedMTextEntityCount: Int
+            let exportedAttribEntityCount: Int
             let mleaderTextCandidateCount: Int
             let exportedMLeaderTextCount: Int
             let proxyTextCandidateCount: Int
@@ -160,6 +167,7 @@ struct CADDiagnosticMachineTrace: Codable {
         let renderCommandCount: Int
         let bounds: Bounds?
         let openedForRender: Bool
+        let failureMessage: String?
     }
 
     let schemaVersion: Int
@@ -254,6 +262,13 @@ extension CADDiagnosticMachineTrace.NativeTrace {
                 + trace.rawProxyEntityCount
         )
         let textExposure = TextExposure(
+            rawTextEntityCount: trace.rawTextEntityCount,
+            rawMTextEntityCount: trace.rawMTextEntityCount,
+            rawAttribEntityCount: trace.rawAttribEntityCount,
+            rawAttdefEntityCount: trace.rawAttdefEntityCount,
+            exportedTextEntityCount: trace.exportedTextEntityCount,
+            exportedMTextEntityCount: trace.exportedMTextEntityCount,
+            exportedAttribEntityCount: trace.exportedAttribEntityCount,
             mleaderTextCandidateCount: trace.mleaderTextCandidateCount,
             exportedMLeaderTextCount: trace.exportedMLeaderTextCount,
             proxyTextCandidateCount: trace.proxyTextCandidateCount,
@@ -269,7 +284,8 @@ extension CADDiagnosticMachineTrace.NativeTrace {
             drawableEntityCount: trace.drawableEntityCount,
             renderCommandCount: trace.renderCommandCount,
             bounds: CADDiagnosticMachineTrace.Bounds(trace.bounds),
-            openedForRender: trace.openedForRender
+            openedForRender: trace.openedForRender,
+            failureMessage: trace.failureMessage
         )
     }
 }

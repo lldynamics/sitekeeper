@@ -105,6 +105,8 @@ extension NativeCAD {
             let width = max(abs(text.boxWidth ?? 0), estimatedWidth, height)
             let boxHeight = max(abs(text.boxHeight ?? 0), height)
             let origin = text.insertionPoint
+            let anchorX = textHorizontalOffset(width: width, text: text)
+            let anchorY = textVerticalOffset(height: boxHeight, text: text)
             let corners = [
                 Kernel.CADPoint(x: 0, y: 0),
                 Kernel.CADPoint(x: width, y: 0),
@@ -116,12 +118,58 @@ extension NativeCAD {
             let sinValue = Darwin.sin(angle)
 
             return corners.reduce(Kernel.CADBounds.empty) { partial, point in
+                let localX = point.x - anchorX
+                let localY = point.y - anchorY
                 let rotated = Kernel.CADPoint(
-                    x: origin.x + point.x * cosValue - point.y * sinValue,
-                    y: origin.y + point.x * sinValue + point.y * cosValue
+                    x: origin.x + localX * cosValue - localY * sinValue,
+                    y: origin.y + localX * sinValue + localY * cosValue
                 )
                 return partial.including(rotated)
             }.expanded(by: max(height * 0.1, 0.01))
+        }
+
+        private static func textHorizontalOffset(width: Double, text: Kernel.CADTextRun) -> Double {
+            if text.boxWidth != nil, let alignmentCode = text.horizontalAlignmentCode {
+                switch alignmentCode {
+                case 2, 5, 8:
+                    return width / 2
+                case 3, 6, 9:
+                    return width
+                default:
+                    return 0
+                }
+            }
+
+            switch text.horizontalAlignmentCode {
+            case 1, 3, 4, 5:
+                return width / 2
+            case 2:
+                return width
+            default:
+                return 0
+            }
+        }
+
+        private static func textVerticalOffset(height: Double, text: Kernel.CADTextRun) -> Double {
+            if text.boxHeight != nil, let alignmentCode = text.verticalAlignmentCode {
+                switch alignmentCode {
+                case 1, 2, 3:
+                    return height
+                case 4, 5, 6:
+                    return height / 2
+                default:
+                    return 0
+                }
+            }
+
+            switch text.verticalAlignmentCode {
+            case 2:
+                return height / 2
+            case 3:
+                return height
+            default:
+                return 0
+            }
         }
     }
 }

@@ -169,7 +169,6 @@ struct BackupImportPreviewView: View {
                     LabeledContent(String(localized: "报价"), value: "\(snapshot.quoteItems.count) 条")
                     LabeledContent(String(localized: "人工记录"), value: "\(snapshot.laborRecords.count) 条")
                     LabeledContent(String(localized: "项目"), value: "\(snapshot.projects.count) 个")
-                    LabeledContent(String(localized: "回路方案"), value: "\(snapshot.lightingCircuitPlans.count) 条")
                     LabeledContent(String(localized: "现场待办"), value: "\(snapshot.siteTodos.count) 条")
                     LabeledContent(String(localized: "项目图纸"), value: "\(snapshot.projectDrawings.count) 份")
                     LabeledContent(String(localized: "项目联系人"), value: "\(snapshot.projectContacts.count) 位")

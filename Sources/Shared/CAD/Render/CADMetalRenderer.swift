@@ -23,6 +23,8 @@ extension NativeCAD {
         private var allRenderableEntities: [Kernel.CADEntity]
         private var entities: [Kernel.CADEntity]
         private var layersByID: [String: Kernel.CADLayer]
+        private var layoutsByID: [String: Kernel.CADLayout]
+        private var viewportsByLayoutID: [String: [Kernel.CADViewport]]
         private var spatialIndex: CADSpatialIndex
         private var modelBounds: Kernel.CADBounds
         private var progressiveRenderState: ProgressiveRenderState?
@@ -52,6 +54,8 @@ extension NativeCAD {
         private let progressiveEntityBatchSize = 1_000
         private let progressiveCommandCacheLimit = 80_000
         private let snapVisibleEntityLimit = 4_000
+        private let maximumTextRasterCacheEntryCount = 200
+        private let maximumTextAtlasTextureCacheEntryCount = 16
         var callbacks = CADRendererCallbacks()
         private var didApplyInitialViewState = false
         private var debugTextOverlays = false
@@ -111,6 +115,7 @@ extension NativeCAD {
 
         private struct VisibleTextOverlayFrame {
             var text: String
+            var sourceHandle: String?
             var rect: CGRect
             var rotationRadians: Double
         }
@@ -123,6 +128,8 @@ extension NativeCAD {
             self.allRenderableEntities = []
             self.entities = []
             self.layersByID = [:]
+            self.layoutsByID = [:]
+            self.viewportsByLayoutID = [:]
             self.spatialIndex = CADSpatialIndex()
             self.modelBounds = .empty
             self.renderPipelineState = Self.makeRenderPipelineState(
@@ -161,7 +168,18 @@ extension NativeCAD {
         }
 
         func updateDrawing(entities importedEntities: [Kernel.CADEntity], layers: [Kernel.CADLayer]) {
+            updateDrawing(entities: importedEntities, layers: layers, layouts: [], viewports: [])
+        }
+
+        func updateDrawing(
+            entities importedEntities: [Kernel.CADEntity],
+            layers: [Kernel.CADLayer],
+            layouts: [Kernel.CADLayout],
+            viewports: [Kernel.CADViewport]
+        ) {
             layersByID = Dictionary(uniqueKeysWithValues: layers.map { ($0.id, $0) })
+            layoutsByID = Dictionary(uniqueKeysWithValues: layouts.map { ($0.id, $0) })
+            viewportsByLayoutID = Dictionary(grouping: viewports, by: \.layoutID)
             totalLayerCount = max(layersByID.count, 1)
             allRenderableEntities = importedEntities.filter { entity in
                 switch entity.kind {
@@ -201,7 +219,359 @@ extension NativeCAD {
 
         private func entitiesForSelectedLayout() -> [Kernel.CADEntity] {
             guard let selectedLayoutID else { return allRenderableEntities }
-            return allRenderableEntities.filter { $0.layoutID == selectedLayoutID }
+            let directLayoutEntities = allRenderableEntities.filter { $0.layoutID == selectedLayoutID }
+            guard selectedLayoutID != Kernel.CADLayout.modelSpace.id else {
+                return directLayoutEntities
+            }
+
+            let modelEntities = allRenderableEntities.filter { $0.layoutID == Kernel.CADLayout.modelSpace.id }
+            guard !modelEntities.isEmpty else {
+                return directLayoutEntities
+            }
+
+            let resolvedViewportEntities = resolvedModelEntitiesForPaperViewports(
+                layoutID: selectedLayoutID,
+                paperEntities: directLayoutEntities,
+                modelEntities: modelEntities
+            )
+            if !resolvedViewportEntities.isEmpty {
+                return directLayoutEntities + resolvedViewportEntities
+            }
+
+            let fallbackModelEntities = modelEntitiesMissingFromPaperLayout(
+                paperEntities: directLayoutEntities,
+                modelEntities: modelEntities
+            )
+            guard !fallbackModelEntities.isEmpty else { return directLayoutEntities }
+
+            return directLayoutEntities + projectedModelEntitiesForPaperLayout(
+                paperEntities: directLayoutEntities,
+                modelEntities: fallbackModelEntities,
+                layoutID: selectedLayoutID
+            )
+        }
+
+        private func resolvedModelEntitiesForPaperViewports(
+            layoutID: String,
+            paperEntities: [Kernel.CADEntity],
+            modelEntities: [Kernel.CADEntity]
+        ) -> [Kernel.CADEntity] {
+            guard let viewports = viewportsByLayoutID[layoutID], !viewports.isEmpty else {
+                return []
+            }
+            let candidateModelEntities = modelEntitiesMissingFromPaperLayout(
+                paperEntities: paperEntities,
+                modelEntities: modelEntities
+            )
+            guard !candidateModelEntities.isEmpty else { return [] }
+
+            var resolved: [Kernel.CADEntity] = []
+            for viewport in viewports where !viewport.clipBounds.isEmpty && viewport.viewHeight > 0 {
+                let transform = modelToPaperViewportTransform(viewport)
+                let modelClip = modelClipBounds(for: viewport)
+                let viewportEntities = candidateModelEntities.filter { entity in
+                    let bounds = CADSpatialIndex.effectiveBounds(for: entity)
+                    return modelClip.isEmpty || bounds.isEmpty || bounds.intersects(modelClip)
+                }
+                resolved.append(contentsOf: viewportEntities.flatMap {
+                    paperLayoutCopies(
+                        $0,
+                        layoutID: layoutID,
+                        transform: transform,
+                        clipBounds: viewport.clipBounds
+                    )
+                })
+            }
+            return resolved
+        }
+
+        private func modelToPaperViewportTransform(_ viewport: Kernel.CADViewport) -> Kernel.CADTransform {
+            let paperBounds = viewport.clipBounds
+            let paperHeight = max(paperBounds.height, 0.000001)
+            let scale = paperHeight / max(viewport.viewHeight, 0.000001)
+            guard scale.isFinite, scale > 0 else { return .identity }
+
+            return Kernel.CADTransform.translation(x: paperBounds.center.x, y: paperBounds.center.y)
+                .concatenating(.scale(scale))
+                .concatenating(.rotation(-viewport.twistRadians))
+                .concatenating(.translation(x: -viewport.viewCenter.x, y: -viewport.viewCenter.y))
+        }
+
+        private func modelClipBounds(for viewport: Kernel.CADViewport) -> Kernel.CADBounds {
+            let paperBounds = viewport.clipBounds
+            guard !paperBounds.isEmpty, paperBounds.height > 0, viewport.viewHeight > 0 else {
+                return .empty
+            }
+            let aspect = max(paperBounds.width / paperBounds.height, 0.000001)
+            let modelHeight = viewport.viewHeight
+            let modelWidth = modelHeight * aspect
+            return Kernel.CADBounds(
+                minX: viewport.viewCenter.x - modelWidth / 2,
+                minY: viewport.viewCenter.y - modelHeight / 2,
+                maxX: viewport.viewCenter.x + modelWidth / 2,
+                maxY: viewport.viewCenter.y + modelHeight / 2
+            )
+        }
+
+        private func modelEntitiesMissingFromPaperLayout(
+            paperEntities: [Kernel.CADEntity],
+            modelEntities: [Kernel.CADEntity]
+        ) -> [Kernel.CADEntity] {
+            let paperSourceHandles = Set(paperEntities.compactMap(\.sourceHandle))
+            guard !paperSourceHandles.isEmpty else { return modelEntities }
+            return modelEntities.filter { entity in
+                guard let sourceHandle = entity.sourceHandle else { return true }
+                return !paperSourceHandles.contains(sourceHandle)
+            }
+        }
+
+        private func projectedModelEntitiesForPaperLayout(
+            paperEntities: [Kernel.CADEntity],
+            modelEntities: [Kernel.CADEntity],
+            layoutID: String
+        ) -> [Kernel.CADEntity] {
+            let sourceBounds = fitModelBounds(for: modelEntities)
+            guard !sourceBounds.isEmpty else { return [] }
+
+            let targetBounds = fitModelBounds(for: paperEntities)
+            guard !targetBounds.isEmpty else {
+                return modelEntities.map { paperLayoutCopy($0, layoutID: layoutID) }
+            }
+
+            let transform = modelToPaperFallbackTransform(
+                modelBounds: sourceBounds,
+                paperBounds: targetBounds
+            )
+            return modelEntities.map {
+                paperLayoutCopy($0, layoutID: layoutID, transform: transform)
+            }
+        }
+
+        private func modelToPaperFallbackTransform(
+            modelBounds: Kernel.CADBounds,
+            paperBounds: Kernel.CADBounds
+        ) -> Kernel.CADTransform {
+            let sourceSpanX = max(modelBounds.width, 0.000001)
+            let sourceSpanY = max(modelBounds.height, 0.000001)
+            let targetSpanX = max(paperBounds.width * 0.92, 0.000001)
+            let targetSpanY = max(paperBounds.height * 0.92, 0.000001)
+            let scale = min(targetSpanX / sourceSpanX, targetSpanY / sourceSpanY)
+            guard scale.isFinite, scale > 0 else { return .identity }
+
+            return Kernel.CADTransform.translation(x: paperBounds.center.x, y: paperBounds.center.y)
+                .concatenating(.scale(scale))
+                .concatenating(.translation(x: -modelBounds.center.x, y: -modelBounds.center.y))
+        }
+
+        private func paperLayoutCopy(
+            _ entity: Kernel.CADEntity,
+            layoutID: String,
+            transform: Kernel.CADTransform? = nil
+        ) -> Kernel.CADEntity {
+            var copy = entity
+            copy.layoutID = layoutID
+
+            guard let transform else {
+                return copy
+            }
+
+            if let path = copy.path {
+                let transformedPath = path.applying(transform)
+                copy.path = transformedPath
+                copy.bounds = transformedPath.bounds
+            } else {
+                copy.bounds = copy.bounds.applying(transform)
+            }
+
+            if var text = copy.text {
+                text.insertionPoint = transform.apply(to: text.insertionPoint)
+                text.height *= transform.approximateScale
+                if let boxWidth = text.boxWidth {
+                    text.boxWidth = boxWidth * transform.approximateScale
+                }
+                if let boxHeight = text.boxHeight {
+                    text.boxHeight = boxHeight * transform.approximateScale
+                }
+                text.rotationRadians += transform.rotationRadians
+                copy.text = text
+            }
+
+            return copy
+        }
+
+        private func paperLayoutCopies(
+            _ entity: Kernel.CADEntity,
+            layoutID: String,
+            transform: Kernel.CADTransform,
+            clipBounds: Kernel.CADBounds
+        ) -> [Kernel.CADEntity] {
+            guard !clipBounds.isEmpty else {
+                return [paperLayoutCopy(entity, layoutID: layoutID, transform: transform)]
+            }
+
+            let transformed = paperLayoutCopy(entity, layoutID: layoutID, transform: transform)
+            var copies: [Kernel.CADEntity] = []
+
+            if let path = transformed.path {
+                for clippedPath in clippedLineSegmentPaths(from: path, to: clipBounds) {
+                    guard !clippedPath.bounds.isEmpty else { continue }
+                    var pathCopy = transformed
+                    pathCopy.id = UUID()
+                    pathCopy.path = clippedPath
+                    pathCopy.bounds = clippedPath.bounds
+                    if transformed.text != nil {
+                        pathCopy.text = nil
+                    }
+                    copies.append(pathCopy)
+                }
+            }
+
+            if let text = transformed.text {
+                let textBounds = paperTextBounds(for: text, fallbackBounds: transformed.bounds)
+                if textBounds.expanded(by: max(text.height, 1)).intersects(clipBounds) ||
+                    clipBounds.contains(text.insertionPoint) {
+                    var textCopy = transformed
+                    if transformed.path != nil {
+                        textCopy.id = UUID()
+                    }
+                    textCopy.path = nil
+                    textCopy.bounds = textBounds
+                    copies.append(textCopy)
+                }
+            } else if transformed.path == nil,
+                      transformed.bounds.intersects(clipBounds) || transformed.bounds.isEmpty {
+                copies.append(transformed)
+            }
+
+            return copies
+        }
+
+        private func clippedLineSegmentPaths(
+            from path: Kernel.CADPath,
+            to clipBounds: Kernel.CADBounds
+        ) -> [Kernel.CADPath] {
+            var paths: [Kernel.CADPath] = []
+            var currentPoint: Kernel.CADPoint?
+            var subpathStart: Kernel.CADPoint?
+
+            func appendSegment(from start: Kernel.CADPoint, to end: Kernel.CADPoint) {
+                guard let clipped = clippedLineSegment(from: start, to: end, bounds: clipBounds) else {
+                    return
+                }
+                paths.append(
+                    Kernel.CADPath(elements: [
+                        .move(to: clipped.start),
+                        .line(to: clipped.end)
+                    ])
+                )
+            }
+
+            for element in path.elements {
+                switch element {
+                case let .move(point):
+                    currentPoint = point
+                    subpathStart = point
+                case let .line(point):
+                    if let currentPoint {
+                        appendSegment(from: currentPoint, to: point)
+                    }
+                    currentPoint = point
+                case let .curve(point, control1, control2):
+                    let curvePoints = [control1, control2, point]
+                    var start = currentPoint
+                    for next in curvePoints {
+                        if let start {
+                            appendSegment(from: start, to: next)
+                        }
+                        start = next
+                    }
+                    currentPoint = point
+                case .close:
+                    if let currentPoint, let subpathStart {
+                        appendSegment(from: currentPoint, to: subpathStart)
+                    }
+                    currentPoint = subpathStart
+                }
+            }
+
+            return paths
+        }
+
+        private func clippedLineSegment(
+            from start: Kernel.CADPoint,
+            to end: Kernel.CADPoint,
+            bounds: Kernel.CADBounds
+        ) -> (start: Kernel.CADPoint, end: Kernel.CADPoint)? {
+            guard !bounds.isEmpty,
+                  start.x.isFinite,
+                  start.y.isFinite,
+                  end.x.isFinite,
+                  end.y.isFinite else {
+                return nil
+            }
+
+            let dx = end.x - start.x
+            let dy = end.y - start.y
+            var t0 = 0.0
+            var t1 = 1.0
+
+            func clip(_ p: Double, _ q: Double) -> Bool {
+                if abs(p) < 0.000000000001 {
+                    return q >= 0
+                }
+                let r = q / p
+                if p < 0 {
+                    if r > t1 { return false }
+                    if r > t0 { t0 = r }
+                } else {
+                    if r < t0 { return false }
+                    if r < t1 { t1 = r }
+                }
+                return true
+            }
+
+            guard clip(-dx, start.x - bounds.minX),
+                  clip(dx, bounds.maxX - start.x),
+                  clip(-dy, start.y - bounds.minY),
+                  clip(dy, bounds.maxY - start.y),
+                  t0 <= t1 else {
+                return nil
+            }
+
+            return (
+                start: Kernel.CADPoint(x: start.x + t0 * dx, y: start.y + t0 * dy),
+                end: Kernel.CADPoint(x: start.x + t1 * dx, y: start.y + t1 * dy)
+            )
+        }
+
+        private func paperTextBounds(
+            for text: Kernel.CADTextRun,
+            fallbackBounds: Kernel.CADBounds
+        ) -> Kernel.CADBounds {
+            if !fallbackBounds.isEmpty,
+               fallbackBounds.width.isFinite,
+               fallbackBounds.height.isFinite,
+               fallbackBounds.width > 0,
+               fallbackBounds.height > 0,
+               fallbackBounds.width < max(text.height, 1) * 2_000,
+               fallbackBounds.height < max(text.height, 1) * 2_000 {
+                return fallbackBounds
+            }
+
+            let height = max(text.boxHeight ?? text.height, text.height, 0.000001)
+            let widthFactor = max(text.widthFactor ?? 1, 0.01)
+            let estimatedWidth = max(
+                text.boxWidth ?? 0,
+                Double(max(text.displayText.count, 1)) * height * 0.62 * widthFactor,
+                height
+            )
+            let origin = text.insertionPoint
+            return Kernel.CADBounds(
+                minX: origin.x,
+                minY: origin.y,
+                maxX: origin.x + estimatedWidth,
+                maxY: origin.y + height
+            )
         }
 
         func applyInitialViewStateIfNeeded(_ state: CADRendererViewState?, contentScale: CGFloat) {
@@ -356,6 +726,15 @@ extension NativeCAD {
             #endif
         }
 
+        func purgeVolatileTextCaches() {
+            #if os(iOS)
+            textRasterCache.removeAll(keepingCapacity: false)
+            textAtlasTextureCache.removeAll(keepingCapacity: false)
+            currentTextAtlasTextCount = 0
+            currentTextAtlasSkippedTextCount = 0
+            #endif
+        }
+
         func setOpenTrace(_ trace: CADOpenTrace?) {
             guard let trace else {
                 openTraceDiagnosticRows = []
@@ -363,6 +742,14 @@ extension NativeCAD {
             }
 
             var rows: [String] = []
+            if trace.rawTextCount > 0 {
+                rows.append(
+                    "libredwg text raw T \(trace.rawTextEntityCount) / M \(trace.rawMTextEntityCount) / A \(trace.rawAttribEntityCount) / AD \(trace.rawAttdefEntityCount)"
+                )
+                rows.append(
+                    "libredwg text exported T \(trace.exportedTextEntityCount) / M \(trace.exportedMTextEntityCount) / A \(trace.exportedAttribEntityCount)"
+                )
+            }
             if trace.rawMLeaderCount > 0
                 || trace.mleaderTextCandidateCount > 0
                 || trace.exportedMLeaderTextCount > 0 {
@@ -2670,7 +3057,11 @@ private extension NativeCAD.CADMetalRenderer {
                 return nil
             }
             atlas = packedAtlas
-            textAtlasTextureCache.insert(packedAtlas, for: cacheKey, limit: 16)
+            textAtlasTextureCache.insert(
+                packedAtlas,
+                for: cacheKey,
+                limit: maximumTextAtlasTextureCacheEntryCount
+            )
         }
 
         let vertexBuild = makeTextAtlasVertices(
@@ -2868,14 +3259,18 @@ private extension NativeCAD.CADMetalRenderer {
                 colorARGB: colorKey,
                 scaleBucket: scaleBucket
             )
-            guard let image = textRasterCache.image(for: cacheKey, limit: 2_048, makeImage: {
-                Self.makeTextOverlayRasterImage(
-                    displayText: glyphText,
-                    font: glyphFont,
-                    textColor: textColor,
-                    scale: contentScale
-                )
-            }) else {
+            guard let image = textRasterCache.image(
+                for: cacheKey,
+                limit: maximumTextRasterCacheEntryCount,
+                makeImage: {
+                    Self.makeTextOverlayRasterImage(
+                        displayText: glyphText,
+                        font: glyphFont,
+                        textColor: textColor,
+                        scale: contentScale
+                    )
+                }
+            ) else {
                 continue
             }
 
@@ -3370,6 +3765,7 @@ private extension NativeCAD.CADMetalRenderer {
             if isVisible {
                 let visibleFrame = VisibleTextOverlayFrame(
                     text: Self.normalizedTextOverlayFingerprint(text.displayText),
+                    sourceHandle: entity.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
                     rect: label.frame,
                     rotationRadians: text.rotationRadians
                 )
@@ -3472,16 +3868,16 @@ private extension NativeCAD.CADMetalRenderer {
 
         let sameSourceHandle = lhs.sourceHandle?.isEmpty == false
             && lhs.sourceHandle == rhs.sourceHandle
-        if sameSourceHandle,
-           distanceBetween(lhs.insertionPoint, rhs.insertionPoint) <= max(tolerance, 1.0) {
-            return true
+        if sameSourceHandle {
+            if distanceBetween(lhs.insertionPoint, rhs.insertionPoint) <= max(tolerance, 1.0) {
+                return true
+            }
+            if textOverlayBoundsOverlap(lhs.bounds, rhs.bounds, tolerance: tolerance) {
+                return true
+            }
         }
 
         if distanceBetween(lhs.insertionPoint, rhs.insertionPoint) <= tolerance {
-            return true
-        }
-
-        if textOverlayBoundsOverlap(lhs.bounds, rhs.bounds, tolerance: tolerance) {
             return true
         }
 
@@ -3546,8 +3942,28 @@ private extension NativeCAD.CADMetalRenderer {
         return keptFrames.contains { kept in
             guard kept.text == candidate.text else { return false }
             guard textOverlayRotationMatches(kept.rotationRadians, candidate.rotationRadians) else { return false }
+            guard textOverlaySourceHandlesMayRepresentSameEntity(candidate.sourceHandle, kept.sourceHandle) else {
+                return false
+            }
             return textOverlayScreenRectsOverlap(kept.rect, candidate.rect)
         }
+    }
+
+    private static func textOverlaySourceHandlesMayRepresentSameEntity(
+        _ lhs: String?,
+        _ rhs: String?
+    ) -> Bool {
+        let left = lhs?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let right = rhs?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasLeft = left?.isEmpty == false
+        let hasRight = right?.isEmpty == false
+        if hasLeft && hasRight {
+            return left == right
+        }
+        if !hasLeft && !hasRight {
+            return true
+        }
+        return false
     }
 
     private static func textOverlayScreenRectsOverlap(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
@@ -4079,27 +4495,38 @@ private struct CADTextRasterCache {
 
     mutating func image(for key: Key, limit: Int, makeImage: () -> UIImage?) -> UIImage? {
         if let cached = images[key] {
+            touch(key)
             return cached
         }
         guard let image = makeImage() else {
             return nil
         }
         images[key] = image
-        order.append(key)
+        touch(key)
         trim(to: limit)
         return image
     }
 
-    mutating func removeAll() {
-        images.removeAll(keepingCapacity: true)
-        order.removeAll(keepingCapacity: true)
+    mutating func removeAll(keepingCapacity: Bool = true) {
+        images.removeAll(keepingCapacity: keepingCapacity)
+        order.removeAll(keepingCapacity: keepingCapacity)
+    }
+
+    private mutating func touch(_ key: Key) {
+        order.removeAll { $0 == key }
+        order.append(key)
     }
 
     private mutating func trim(to limit: Int) {
-        let safeLimit = max(limit, 32)
+        let safeLimit = max(limit, 1)
         while images.count > safeLimit, let oldest = order.first {
             order.removeFirst()
             images.removeValue(forKey: oldest)
+        }
+        if images.count > safeLimit {
+            let retainedKeys = Set(order.suffix(safeLimit))
+            images = images.filter { retainedKeys.contains($0.key) }
+            order = order.filter { images[$0] != nil }
         }
     }
 }
@@ -4158,9 +4585,9 @@ private struct CADTextAtlasTextureCache {
         trim(to: limit)
     }
 
-    mutating func removeAll() {
-        entries.removeAll(keepingCapacity: true)
-        order.removeAll(keepingCapacity: true)
+    mutating func removeAll(keepingCapacity: Bool = true) {
+        entries.removeAll(keepingCapacity: keepingCapacity)
+        order.removeAll(keepingCapacity: keepingCapacity)
         hitCount = 0
     }
 
@@ -4174,6 +4601,11 @@ private struct CADTextAtlasTextureCache {
         while entries.count > safeLimit, let oldest = order.first {
             order.removeFirst()
             entries.removeValue(forKey: oldest)
+        }
+        if entries.count > safeLimit {
+            let retainedKeys = Set(order.suffix(safeLimit))
+            entries = entries.filter { retainedKeys.contains($0.key) }
+            order = order.filter { entries[$0] != nil }
         }
     }
 }
@@ -4381,18 +4813,21 @@ extension NativeCAD.CADMetalRenderer {
     static func suppressesVisibleTextOverlayForTesting(
         candidateText: String,
         candidateRect: CGRect,
-        kept: [(text: String, rect: CGRect)],
+        candidateSourceHandle: String? = nil,
+        kept: [(text: String, rect: CGRect, sourceHandle: String?)],
         rotationRadians: Double = 0
     ) -> Bool {
         shouldSuppressVisibleTextOverlay(
             VisibleTextOverlayFrame(
                 text: normalizedTextOverlayFingerprint(candidateText),
+                sourceHandle: candidateSourceHandle,
                 rect: candidateRect,
                 rotationRadians: rotationRadians
             ),
             keptFrames: kept.map {
                 VisibleTextOverlayFrame(
                     text: normalizedTextOverlayFingerprint($0.text),
+                    sourceHandle: $0.sourceHandle,
                     rect: $0.rect,
                     rotationRadians: rotationRadians
                 )
@@ -4420,6 +4855,10 @@ extension NativeCAD.CADMetalRenderer {
 
     func renderableEntityCountForTesting() -> Int {
         entities.count
+    }
+
+    func renderableEntitiesForTesting() -> [Kernel.CADEntity] {
+        entities
     }
 
     func modelBoundsForTesting() -> Kernel.CADBounds {
