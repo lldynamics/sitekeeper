@@ -22,6 +22,6 @@ enum CADRendererBootstrap {
             )
         }
         SiteKeeperCADKernel.CADDWGGeometryAdapterRegistry.reset()
-        CADViewerEngineRegistry.configure(engine: SiteKeeperCADKernelAppViewerEngine())
+        CADViewerEngineRegistry.resetToUnavailable()
     }
 }

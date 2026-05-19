@@ -8,6 +8,9 @@
 #include <stdio.h>
 #include <string.h>
 
+extern char *bit_TV_to_utf8(const char *restrict src, const BITCODE_RS codepage);
+extern int dwg_codepage_int(const char *s);
+
 #ifndef SITEKEEPER_PI
 #define SITEKEEPER_PI 3.14159265358979323846264338327950288
 #endif
@@ -256,6 +259,71 @@ static char *sitekeeper_copy_optional_string(const char *value)
     }
     memcpy(copy, value, length + 1);
     return copy;
+}
+
+static BITCODE_RS sitekeeper_libredwg_codepage_for_windows_codepage(int32_t code_page)
+{
+    switch (code_page) {
+    case 936:
+        return dwg_codepage_int("ANSI_936");
+    case 950:
+        return dwg_codepage_int("ANSI_950");
+    case 932:
+        return dwg_codepage_int("ANSI_932");
+    case 949:
+        return dwg_codepage_int("ANSI_949");
+    case 1252:
+        return dwg_codepage_int("ANSI_1252");
+    default:
+        return 0;
+    }
+}
+
+static void sitekeeper_configure_text_code_page(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t preferred_text_code_page
+)
+{
+    if (result == NULL) {
+        return;
+    }
+
+    result->trace.preferredTextCodePage = preferred_text_code_page > 0
+        ? preferred_text_code_page
+        : 936;
+    result->trace.libredwgTextCodePage = (int32_t)sitekeeper_libredwg_codepage_for_windows_codepage(
+        result->trace.preferredTextCodePage
+    );
+    result->trace.nativeTextDecodeEnabled = result->trace.libredwgTextCodePage > 0 ? 1 : 0;
+}
+
+static char *sitekeeper_copy_text_string(
+    const SiteKeeperLibreDWGEntityResult *result,
+    const char *value,
+    int32_t *is_utf8
+)
+{
+    if (is_utf8 != NULL) {
+        *is_utf8 = 0;
+    }
+    if (value == NULL || value[0] == '\0') {
+        return NULL;
+    }
+
+    if (result != NULL
+        && result->trace.nativeTextDecodeEnabled != 0
+        && result->trace.libredwgTextCodePage > 0) {
+        char *converted = bit_TV_to_utf8(value, (BITCODE_RS)result->trace.libredwgTextCodePage);
+        if (converted != NULL && converted[0] != '\0') {
+            if (is_utf8 != NULL) {
+                *is_utf8 = 1;
+            }
+            return converted;
+        }
+        free(converted);
+    }
+
+    return sitekeeper_copy_optional_string(value);
 }
 
 static void sitekeeper_reset_result(SiteKeeperLibreDWGEntityResult *result)
@@ -763,6 +831,17 @@ static char *sitekeeper_proxy_text_candidate(const Dwg_Object *object)
     return sitekeeper_copy_ascii_candidate(proxy->proxy_data, proxy->proxy_data_size);
 }
 
+static int sitekeeper_proxy_has_text_candidate(const Dwg_Object *object)
+{
+    char *candidate = sitekeeper_proxy_text_candidate(object);
+    if (candidate == NULL || candidate[0] == '\0') {
+        free(candidate);
+        return 0;
+    }
+    free(candidate);
+    return 1;
+}
+
 static char *sitekeeper_object_display_name(const Dwg_Object *object)
 {
     if (object == NULL) {
@@ -986,7 +1065,8 @@ static int sitekeeper_append_text_entity(
         return 0;
     }
 
-    char *text_copy = sitekeeper_copy_optional_string(raw_text);
+    int32_t raw_text_is_utf8 = 0;
+    char *text_copy = sitekeeper_copy_text_string(result, raw_text, &raw_text_is_utf8);
     if (text_copy == NULL) {
         return 0;
     }
@@ -1003,6 +1083,7 @@ static int sitekeeper_append_text_entity(
     out->layerName = sitekeeper_layer_name(entity);
     out->sourceHandle = sitekeeper_handle_string(object);
     out->rawText = text_copy;
+    out->rawTextIsUTF8 = raw_text_is_utf8;
     out->textStyleName = sitekeeper_copy_string(sitekeeper_style_name(style));
     out->fontName = sitekeeper_copy_optional_string(sitekeeper_style_font_file(style));
     out->bigFontName = sitekeeper_copy_optional_string(sitekeeper_style_bigfont_file(style));
@@ -1024,6 +1105,31 @@ static int sitekeeper_append_text_entity(
     return 1;
 }
 
+static void sitekeeper_reassign_source_handle_range(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t start_index,
+    int32_t end_index,
+    const Dwg_Object *source_object
+)
+{
+    if (result == NULL
+        || result->entities == NULL
+        || source_object == NULL
+        || start_index < 0
+        || end_index <= start_index) {
+        return;
+    }
+
+    for (int32_t index = start_index; index < end_index; index++) {
+        char *source_handle = sitekeeper_handle_string(source_object);
+        if (source_handle == NULL) {
+            continue;
+        }
+        free(result->entities[index].sourceHandle);
+        result->entities[index].sourceHandle = source_handle;
+    }
+}
+
 static int sitekeeper_append_proxy_entity(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -1042,6 +1148,7 @@ static int sitekeeper_append_proxy_entity(
     }
 
     const int is_tianzheng = kind == SiteKeeperLibreDWGEntityKindTianzhengProxy;
+    const int has_text_candidate = sitekeeper_proxy_has_text_candidate(object);
     SiteKeeperLibreDWGEntity *out = &result->entities[*entity_count];
     out->kind = kind;
     out->points = NULL;
@@ -1057,8 +1164,14 @@ static int sitekeeper_append_proxy_entity(
 
     *entity_count += 1;
     result->trace.exportedProxyEntityCount += 1;
+    if (has_text_candidate) {
+        result->trace.proxyTextCandidateCount += 1;
+    }
     if (is_tianzheng) {
         result->trace.exportedTianzhengProxyCount += 1;
+        if (has_text_candidate) {
+            result->trace.tianzhengTextCandidateCount += 1;
+        }
     }
     return 1;
 }
@@ -1251,10 +1364,12 @@ static int sitekeeper_attach_text_to_entity(
     }
 
     SiteKeeperLibreDWGEntity *out = &result->entities[entity_index];
-    out->rawText = sitekeeper_copy_optional_string(raw_text);
+    int32_t raw_text_is_utf8 = 0;
+    out->rawText = sitekeeper_copy_text_string(result, raw_text, &raw_text_is_utf8);
     if (out->rawText == NULL) {
         return 0;
     }
+    out->rawTextIsUTF8 = raw_text_is_utf8;
     out->textStyleName = sitekeeper_copy_string(sitekeeper_style_name(style));
     out->fontName = sitekeeper_copy_optional_string(sitekeeper_style_font_file(style));
     out->bigFontName = sitekeeper_copy_optional_string(sitekeeper_style_bigfont_file(style));
@@ -2790,6 +2905,125 @@ static int sitekeeper_append_mleader_block_label_at_attdef(
     );
 }
 
+static int sitekeeper_exported_kind_is_text(int32_t kind)
+{
+    return kind == SiteKeeperLibreDWGEntityKindText
+        || kind == SiteKeeperLibreDWGEntityKindMText
+        || kind == SiteKeeperLibreDWGEntityKindAttrib;
+}
+
+static int32_t sitekeeper_count_text_entities_in_range(
+    const SiteKeeperLibreDWGEntityResult *result,
+    int32_t start_index,
+    int32_t end_index
+)
+{
+    if (result == NULL || result->entities == NULL || start_index < 0 || end_index <= start_index) {
+        return 0;
+    }
+    int32_t count = 0;
+    for (int32_t index = start_index; index < end_index; index++) {
+        if (sitekeeper_exported_kind_is_text(result->entities[index].kind)) {
+            count += 1;
+        }
+    }
+    return count;
+}
+
+static int sitekeeper_raw_text_entity_has_value(const Dwg_Object *object)
+{
+    if (object == NULL || object->tio.entity == NULL) {
+        return 0;
+    }
+    Dwg_Object_Entity *entity = object->tio.entity;
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_TEXT)) {
+        return entity->tio.TEXT != NULL
+            && entity->tio.TEXT->text_value != NULL
+            && entity->tio.TEXT->text_value[0] != '\0';
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_MTEXT)) {
+        return entity->tio.MTEXT != NULL
+            && entity->tio.MTEXT->text != NULL
+            && entity->tio.MTEXT->text[0] != '\0';
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_ATTRIB)) {
+        return entity->tio.ATTRIB != NULL
+            && entity->tio.ATTRIB->text_value != NULL
+            && entity->tio.ATTRIB->text_value[0] != '\0';
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_ATTDEF)) {
+        return entity->tio.ATTDEF != NULL
+            && entity->tio.ATTDEF->default_value != NULL
+            && entity->tio.ATTDEF->default_value[0] != '\0';
+    }
+    return 0;
+}
+
+static int32_t sitekeeper_mleader_block_text_candidate_count(
+    Dwg_Object_Entity *entity,
+    Dwg_Entity_MULTILEADER *mleader
+)
+{
+    if (entity == NULL || mleader == NULL || !mleader->ctx.has_content_blk) {
+        return 0;
+    }
+
+    Dwg_Object *block_object = NULL;
+    Dwg_Object_BLOCK_HEADER *block_header = sitekeeper_block_header_from_ref(
+        entity->dwg,
+        mleader->ctx.content.blk.block_table,
+        &block_object
+    );
+    if (block_header == NULL || block_object == NULL) {
+        return 0;
+    }
+
+    int32_t count = 0;
+    Dwg_Object *child = get_first_owned_entity(block_object);
+    while (child != NULL) {
+        if (child->tio.entity != NULL
+            && sitekeeper_entity_is_visible(child->tio.entity)
+            && sitekeeper_raw_text_entity_has_value(child)) {
+            if (mleader->blocklabels != NULL
+                && mleader->num_blocklabels > 0
+                && sitekeeper_object_matches(child, (int)DWG_TYPE_ATTDEF)) {
+                child = get_next_owned_entity(block_object, child);
+                continue;
+            }
+            count += 1;
+        }
+        child = get_next_owned_entity(block_object, child);
+    }
+    return count;
+}
+
+static int32_t sitekeeper_mleader_text_candidate_count(
+    Dwg_Object_Entity *entity,
+    Dwg_Entity_MULTILEADER *mleader
+)
+{
+    if (mleader == NULL) {
+        return 0;
+    }
+
+    int32_t count = 0;
+    Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+    if (ctx->has_content_txt
+        && ctx->content.txt.default_text != NULL
+        && ctx->content.txt.default_text[0] != '\0') {
+        count += 1;
+    }
+    if (mleader->blocklabels != NULL) {
+        for (BITCODE_BL label_index = 0; label_index < mleader->num_blocklabels; label_index++) {
+            Dwg_LEADER_BlockLabel *label = &mleader->blocklabels[label_index];
+            if (label->label_text != NULL && label->label_text[0] != '\0') {
+                count += 1;
+            }
+        }
+    }
+    return count + sitekeeper_mleader_block_text_candidate_count(entity, mleader);
+}
+
 static int sitekeeper_expand_mleader_block_content(
     SiteKeeperLibreDWGEntityResult *result,
     int32_t *entity_count,
@@ -2845,6 +3079,7 @@ static int sitekeeper_expand_mleader_block_content(
         }
         child = get_next_owned_entity(block_object, child);
     }
+    sitekeeper_reassign_source_handle_range(result, before_count, *entity_count, object);
     return *entity_count - before_count;
 }
 
@@ -2864,6 +3099,8 @@ static int sitekeeper_append_multileader(
     Dwg_Entity_MULTILEADER *mleader = entity->tio.MULTILEADER;
     int appended = 0;
     Dwg_MLEADER_AnnotContext *ctx = &mleader->ctx;
+    const int32_t before_count = *entity_count;
+    const int32_t text_candidate_count = sitekeeper_mleader_text_candidate_count(entity, mleader);
 
     appended += sitekeeper_expand_mleader_block_content(
         result,
@@ -3012,6 +3249,12 @@ static int sitekeeper_append_multileader(
         }
     }
 
+    result->trace.mleaderTextCandidateCount += text_candidate_count;
+    result->trace.exportedMLeaderTextCount += sitekeeper_count_text_entities_in_range(
+        result,
+        before_count,
+        *entity_count
+    );
     return appended;
 }
 
@@ -3655,6 +3898,7 @@ static int sitekeeper_append_leader_with_annotation(
 
     Dwg_Object_Entity *annotation_entity = annotation_object->tio.entity;
     int appended_annotation = 0;
+    const int32_t annotation_start = *entity_count;
     if (sitekeeper_object_matches(annotation_object, (int)DWG_TYPE_TEXT)) {
         result->trace.rawTextCount += 1;
         appended_annotation = sitekeeper_append_text(
@@ -3706,8 +3950,100 @@ static int sitekeeper_append_leader_with_annotation(
             transform
         );
     }
+    if (appended_annotation > 0) {
+        sitekeeper_reassign_source_handle_range(result, annotation_start, *entity_count, object);
+    }
 
     return appended_leader + appended_annotation;
+}
+
+static int sitekeeper_append_dimension_block_texts(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *dimension_entity,
+    Dwg_Object *dimension_object,
+    Dwg_Object_Ref *dimension_block,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (result == NULL
+        || entity_count == NULL
+        || entity_capacity == NULL
+        || dimension_entity == NULL
+        || dimension_block == NULL) {
+        return 0;
+    }
+
+    Dwg_Object *block_object = NULL;
+    Dwg_Object_BLOCK_HEADER *block_header = sitekeeper_block_header_from_ref(
+        dimension_entity->dwg,
+        dimension_block,
+        &block_object
+    );
+    if (block_header == NULL || block_object == NULL) {
+        return 0;
+    }
+
+    const int32_t before_count = *entity_count;
+    Dwg_Object *child = get_first_owned_entity(block_object);
+    while (child != NULL) {
+        if (child->tio.entity != NULL && sitekeeper_entity_is_visible(child->tio.entity)) {
+            Dwg_Object_Entity *child_entity = child->tio.entity;
+            if (sitekeeper_object_matches(child, (int)DWG_TYPE_TEXT)) {
+                result->trace.rawTextCount += 1;
+                sitekeeper_append_text(
+                    result,
+                    entity_count,
+                    entity_capacity,
+                    child_entity,
+                    child,
+                    transform
+                );
+            } else if (sitekeeper_object_matches(child, (int)DWG_TYPE_MTEXT)) {
+                result->trace.rawTextCount += 1;
+                sitekeeper_append_mtext(
+                    result,
+                    entity_count,
+                    entity_capacity,
+                    child_entity,
+                    child,
+                    transform
+                );
+            } else if (sitekeeper_object_matches(child, (int)DWG_TYPE_ATTRIB)) {
+                result->trace.rawTextCount += 1;
+                sitekeeper_append_attrib(
+                    result,
+                    entity_count,
+                    entity_capacity,
+                    child_entity,
+                    child,
+                    transform
+                );
+            } else if (sitekeeper_object_matches(child, (int)DWG_TYPE_ATTDEF)) {
+                result->trace.rawTextCount += 1;
+                sitekeeper_append_attdef(
+                    result,
+                    entity_count,
+                    entity_capacity,
+                    child_entity,
+                    child,
+                    transform
+                );
+            }
+        }
+        child = get_next_owned_entity(block_object, child);
+    }
+
+    if (*entity_count > before_count) {
+        sitekeeper_reassign_source_handle_range(
+            result,
+            before_count,
+            *entity_count,
+            dimension_object
+        );
+    }
+    return *entity_count - before_count;
 }
 
 static int sitekeeper_append_dimension_path(
@@ -3727,6 +4063,7 @@ static int sitekeeper_append_dimension_path(
     double measurement,
     double text_rotation,
     double text_height,
+    Dwg_Object_Ref *dimension_block,
     const SiteKeeperLibreDWGTransform *transform
 )
 {
@@ -3767,27 +4104,38 @@ static int sitekeeper_append_dimension_path(
         return 0;
     }
 
-    char text_buffer[256];
-    const char *raw_text = sitekeeper_dimension_text(
-        user_text,
-        measurement,
-        text_buffer,
-        sizeof(text_buffer)
-    );
-    sitekeeper_attach_text_to_entity(
+    const int block_text_count = sitekeeper_append_dimension_block_texts(
         result,
-        before_count,
-        raw_text,
-        text_point.x,
-        text_point.y,
-        text_height,
-        text_rotation,
-        1.0,
-        1,
-        2,
-        NULL,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        dimension_block,
         transform
     );
+    if (block_text_count <= 0) {
+        char text_buffer[256];
+        const char *raw_text = sitekeeper_dimension_text(
+            user_text,
+            measurement,
+            text_buffer,
+            sizeof(text_buffer)
+        );
+        sitekeeper_attach_text_to_entity(
+            result,
+            before_count,
+            raw_text,
+            text_point.x,
+            text_point.y,
+            text_height,
+            text_rotation,
+            1.0,
+            1,
+            2,
+            NULL,
+            transform
+        );
+    }
     result->trace.exportedDimensionCount += 1;
     return 1;
 }
@@ -3831,6 +4179,7 @@ static int sitekeeper_append_dimension_linear(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -3874,6 +4223,7 @@ static int sitekeeper_append_dimension_aligned(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -3916,6 +4266,7 @@ static int sitekeeper_append_dimension_radius(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -3958,6 +4309,7 @@ static int sitekeeper_append_dimension_diameter(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -4000,6 +4352,7 @@ static int sitekeeper_append_dimension_ordinate(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -4042,6 +4395,7 @@ static int sitekeeper_append_dimension_ang3pt(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -4084,6 +4438,7 @@ static int sitekeeper_append_dimension_ang2ln(
         dimension->act_measurement,
         dimension->text_rotation,
         sitekeeper_dimstyle_text_height(dimstyle),
+        dimension->block,
         transform
     );
 }
@@ -4780,6 +5135,7 @@ static int sitekeeper_process_entity(
         return sitekeeper_append_leader_with_annotation(result, entity_count, entity_capacity, entity, object, &transform);
     }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_MULTILEADER)) {
+        result->trace.rawMLeaderCount += 1;
         result->trace.rawTextCount += 1;
         return sitekeeper_append_multileader(result, entity_count, entity_capacity, entity, object, &transform);
     }
@@ -4925,10 +5281,20 @@ static int sitekeeper_process_entity(
 
 int32_t SiteKeeperLibreDWGReadBasic2D(const char *path, SiteKeeperLibreDWGEntityResult *result)
 {
+    return SiteKeeperLibreDWGReadBasic2DWithTextCodePage(path, 936, result);
+}
+
+int32_t SiteKeeperLibreDWGReadBasic2DWithTextCodePage(
+    const char *path,
+    int32_t preferredTextCodePage,
+    SiteKeeperLibreDWGEntityResult *result
+)
+{
     if (result == NULL) {
         return -1;
     }
     sitekeeper_reset_result(result);
+    sitekeeper_configure_text_code_page(result, preferredTextCodePage);
 
     if (path == NULL || path[0] == '\0') {
         return -2;

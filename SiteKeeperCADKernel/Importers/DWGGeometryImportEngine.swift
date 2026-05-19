@@ -19,12 +19,10 @@ extension SiteKeeperCADKernel {
 
         init(
             preferredAdapter: (any CADDWGGeometryAdapter)? = nil,
-            extraAdapters: [any CADDWGGeometryAdapter] = [],
-            sidecarJSONAdapter: DWGSidecarJSONGeometryAdapter? = DWGSidecarJSONGeometryAdapter()
+            extraAdapters: [any CADDWGGeometryAdapter] = []
         ) {
             self.sourceResolver = DWGGeometrySourceResolver(
                 preferredAdapter: preferredAdapter,
-                sidecarJSONAdapter: sidecarJSONAdapter,
                 extraAdapters: extraAdapters
             )
         }

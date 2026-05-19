@@ -297,6 +297,7 @@ struct CADCanvasView: UIViewRepresentable {
         private func applyImportResult(_ result: CADPoC.CADImportResult) {
             lastTrace = result.trace
             lastDatabase = result.database
+            renderer.setOpenTrace(result.trace)
             callbacks.onOpenTraceChange(result.trace)
             logTrace(result.trace)
             logTextTrace(result.database.textTrace, fileName: result.trace.fileName)
@@ -317,6 +318,7 @@ struct CADCanvasView: UIViewRepresentable {
             let trace = CADPoC.CADOpenTrace.unsupported(fileName: file.displayName, importSource: source)
             lastTrace = trace
             lastDatabase = nil
+            renderer.setOpenTrace(trace)
             callbacks.onOpenTraceChange(trace)
             logTrace(trace)
             onLayoutsChanged([])

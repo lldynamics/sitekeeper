@@ -246,20 +246,85 @@ extension SiteKeeperCADKernel {
             textStyle: CADTextStyle?,
             warnings: inout [String]
         ) -> String {
-            guard !value.containsCJKScalars,
-                  value.unicodeScalars.contains(where: { (0x80...0xFF).contains($0.value) }),
-                  let data = value.singleByteData,
-                  let decoded = decodeTextBytes(data, textStyle: textStyle),
-                  decoded.text.containsCJKScalars else {
-                return value
+            // Phase 1: pure single-byte mojibake (no CJK yet, all bytes < 0x100)
+            if !value.containsCJKScalars,
+               value.unicodeScalars.contains(where: { (0x80...0xFF).contains($0.value) }),
+               let data = value.singleByteData,
+               let decoded = decodeTextBytes(data, textStyle: textStyle),
+               decoded.text.containsCJKScalars {
+                warnings.appendOnce("CAD_TEXT_GBK_MOJIBAKE_REPAIRED")
+                if textStyle?.usesSHXOrBigFont == true {
+                    warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BYTES_DECODED")
+                    warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BYTES_REPAIRED")
+                }
+                appendEncodingWarning(decoded.encodingName, warnings: &warnings)
+                return decoded.text
             }
-            warnings.appendOnce("CAD_TEXT_GBK_MOJIBAKE_REPAIRED")
-            if textStyle?.usesSHXOrBigFont == true {
-                warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BYTES_DECODED")
-                warnings.appendOnce("CAD_TEXT_SHX_BIGFONT_BYTES_REPAIRED")
+
+            // Phase 2: partial mojibake — the classic "部分文字显示" pattern.
+            // LibreDWG decoded GBK text bytes as UTF-8.  Valid UTF-8 sequences
+            // became real CJK characters; invalid sequences became U+FFFD.
+            //
+            // Strategy: walk the string, collect the bytes of CJK characters
+            // via their UTF-8 encoding, and also collect the Latin-1-range bytes.
+            // Re-decode the entire byte stream as GBK, compare replacement-char
+            // counts, and use the result if it improves the output.
+            if value.unicodeScalars.contains(where: { $0.value == 0xFFFD }) {
+                if let repaired = repairPartialMojibake(value, textStyle: textStyle, warnings: &warnings) {
+                    return repaired
+                }
             }
-            appendEncodingWarning(decoded.encodingName, warnings: &warnings)
-            return decoded.text
+
+            return value
+        }
+
+        /// Attempt to repair a string that has a mix of valid CJK (from accidental
+        /// valid UTF-8 subsequences in a GBK byte stream) and U+FFFD replacement
+        /// characters (from invalid UTF-8 subsequences).
+        private func repairPartialMojibake(
+            _ value: String,
+            textStyle: CADTextStyle?,
+            warnings: inout [String]
+        ) -> String? {
+            // Approach: encode the *entire* string as UTF-8, then re-interpret
+            // those UTF-8 bytes as GBK/GB18030/GB2312.  Although this round-trip
+            // is lossy (the original GBK bytes are gone), the actual GBK codepoints
+            // that survived as valid UTF-8 *tend* to map to nearby CJK codepoints
+            // under the reverse transformation.  More importantly, U+FFFD (3-byte
+            // UTF-8: EF BF BD) decodes under GBK as the well-known "锟斤拷"
+            // placeholder, which is at least recognisable CJK instead of �.
+            guard let utf8Data = value.data(using: .utf8) else { return nil }
+
+            let replacementBefore = value.unicodeScalars.filter { $0.value == 0xFFFD }.count
+            var best: (text: String, encoding: String, replacements: Int)?
+
+            for candidate in Self.byteDecodeCandidates(for: textStyle) {
+                guard let decoded = String(data: utf8Data, encoding: candidate.encoding),
+                      !decoded.isEmpty else {
+                    continue
+                }
+                let decodedReplacements = decoded.unicodeScalars.filter { $0.value == 0xFFFD }.count
+                if decodedReplacements < replacementBefore,
+                   decoded.containsCJKScalars {
+                    if decodedReplacements < (best?.replacements ?? Int.max) {
+                        best = (decoded, candidate.name, decodedReplacements)
+                    }
+                }
+            }
+
+            guard let best else { return nil }
+
+            // Safety: only accept if the repair reduced replacement characters
+            // by at least 20% of the original count (avoid false positives).
+            guard best.replacements < replacementBefore,
+                  (replacementBefore - best.replacements) >= max(1, replacementBefore / 5) else {
+                return nil
+            }
+
+            warnings.appendOnce("CAD_TEXT_MIXED_MOJIBAKE_REPAIRED")
+            warnings.appendOnce("CAD_TEXT_MIXED_\(best.encoding)_FALLBACK")
+            appendEncodingWarning(best.encoding, warnings: &warnings)
+            return best.text
         }
 
         private func decodeHexBytes(

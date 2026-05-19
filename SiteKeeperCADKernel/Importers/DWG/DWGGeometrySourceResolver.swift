@@ -4,18 +4,15 @@ extension SiteKeeperCADKernel {
     struct DWGGeometrySourceResolver {
         var preferredAdapter: (any DWGGeometrySource)?
         var registeredAdapter: (CADFile) -> (any DWGGeometrySource)?
-        var sidecarJSONAdapter: DWGSidecarJSONGeometryAdapter?
         var extraAdapters: [any DWGGeometrySource]
 
         init(
             preferredAdapter: (any DWGGeometrySource)? = nil,
             registeredAdapter: @escaping (CADFile) -> (any DWGGeometrySource)? = { CADDWGGeometryAdapterRegistry.adapter(for: $0) },
-            sidecarJSONAdapter: DWGSidecarJSONGeometryAdapter? = DWGSidecarJSONGeometryAdapter(),
             extraAdapters: [any DWGGeometrySource] = []
         ) {
             self.preferredAdapter = preferredAdapter
             self.registeredAdapter = registeredAdapter
-            self.sidecarJSONAdapter = sidecarJSONAdapter
             self.extraAdapters = extraAdapters
         }
 
@@ -31,7 +28,6 @@ extension SiteKeeperCADKernel {
             }
 
             append(preferredAdapter)
-            append(sidecarJSONAdapter)
             append(registeredAdapter(file))
             extraAdapters.forEach(append)
             return resolved

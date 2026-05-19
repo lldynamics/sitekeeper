@@ -47,6 +47,7 @@ typedef struct SiteKeeperLibreDWGEntity {
     char *layerName;
     char *sourceHandle;
     char *rawText;
+    int32_t rawTextIsUTF8;
     char *textStyleName;
     char *fontName;
     char *bigFontName;
@@ -82,12 +83,17 @@ typedef struct SiteKeeperLibreDWGTrace {
     int32_t rawFilledShapeCount;
     int32_t rawProxyEntityCount;
     int32_t rawTianzhengProxyCount;
+    int32_t rawMLeaderCount;
+    int32_t mleaderTextCandidateCount;
+    int32_t proxyTextCandidateCount;
+    int32_t tianzhengTextCandidateCount;
     int32_t exportedLineCount;
     int32_t exportedPolylineCount;
     int32_t exportedCircleCount;
     int32_t exportedArcCount;
     int32_t exportedInsertEntityCount;
     int32_t exportedTextCount;
+    int32_t exportedMLeaderTextCount;
     int32_t exportedDimensionCount;
     int32_t exportedHatchCount;
     int32_t exportedEllipseCount;
@@ -95,6 +101,9 @@ typedef struct SiteKeeperLibreDWGTrace {
     int32_t exportedFilledShapeCount;
     int32_t exportedProxyEntityCount;
     int32_t exportedTianzhengProxyCount;
+    int32_t preferredTextCodePage;
+    int32_t libredwgTextCodePage;
+    int32_t nativeTextDecodeEnabled;
     double minX;
     double minY;
     double maxX;
@@ -108,6 +117,11 @@ typedef struct SiteKeeperLibreDWGEntityResult {
 } SiteKeeperLibreDWGEntityResult;
 
 int32_t SiteKeeperLibreDWGReadBasic2D(const char *path, SiteKeeperLibreDWGEntityResult *result);
+int32_t SiteKeeperLibreDWGReadBasic2DWithTextCodePage(
+    const char *path,
+    int32_t preferredTextCodePage,
+    SiteKeeperLibreDWGEntityResult *result
+);
 void SiteKeeperLibreDWGFreeBasic2D(SiteKeeperLibreDWGEntityResult *result);
 
 #ifdef __cplusplus

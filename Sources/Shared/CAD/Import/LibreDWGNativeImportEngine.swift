@@ -11,7 +11,7 @@ extension CADPoC {
         typealias Kernel = SiteKeeperCADKernel
 
         private static let nativePaperLayoutID = "paper"
-        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v13"
+        private let baseID = "sitekeeper.poc.dwg-libredwg-ios.basic2d-v14"
         var preferredTextCodePage: Int32?
         var preferredTextBigFont: Int32?
         var fontMappings: [CADRendererFontMapping]
@@ -82,8 +82,9 @@ extension CADPoC {
 
         private func importNativeDWGBasic2DGeometry(file: Kernel.CADFile) throws -> CADImportResult {
             var nativeResult = SiteKeeperLibreDWGEntityResult()
+            let nativeTextCodePage = effectiveNativeTextCodePage
             let status = file.url.path.withCString { path in
-                SiteKeeperLibreDWGReadBasic2D(path, &nativeResult)
+                SiteKeeperLibreDWGReadBasic2DWithTextCodePage(path, nativeTextCodePage, &nativeResult)
             }
             defer {
                 SiteKeeperLibreDWGFreeBasic2D(&nativeResult)
@@ -102,7 +103,12 @@ extension CADPoC {
             let rawFilledShapeCount = Int(nativeResult.trace.rawFilledShapeCount)
             let rawProxyEntityCount = Int(nativeResult.trace.rawProxyEntityCount)
             let rawTianzhengProxyCount = Int(nativeResult.trace.rawTianzhengProxyCount)
+            let rawMLeaderCount = Int(nativeResult.trace.rawMLeaderCount)
+            let mleaderTextCandidateCount = Int(nativeResult.trace.mleaderTextCandidateCount)
+            let proxyTextCandidateCount = Int(nativeResult.trace.proxyTextCandidateCount)
+            let tianzhengTextCandidateCount = Int(nativeResult.trace.tianzhengTextCandidateCount)
             let expandedInsertEntityCount = Int(nativeResult.trace.exportedInsertEntityCount)
+            let exportedMLeaderTextCount = Int(nativeResult.trace.exportedMLeaderTextCount)
             let exportedDimensionCount = Int(nativeResult.trace.exportedDimensionCount)
             let exportedHatchCount = Int(nativeResult.trace.exportedHatchCount)
             let exportedEllipseCount = Int(nativeResult.trace.exportedEllipseCount)
@@ -133,7 +139,7 @@ extension CADPoC {
                     severity: .info,
                     code: "CAD_POC_LIBREDWG_IOS_NATIVE_USED",
                     message: "LibreDWG was called inside the iOS process and converted basic 2D geometry into CADEntity.",
-                    detail: "status=\(status), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
+                    detail: "status=\(status), preferredTextCodePage=\(nativeTextCodePage), libredwgTextCodePage=\(Int(nativeResult.trace.libredwgTextCodePage)), nativeTextDecodeEnabled=\(Int(nativeResult.trace.nativeTextDecodeEnabled)), rawEntityCount=\(rawEntityCount), rawInsertCount=\(rawInsertCount), rawTextCount=\(rawTextCount), rawMLeaderCount=\(rawMLeaderCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), rawEllipseCount=\(rawEllipseCount), rawSplineCount=\(rawSplineCount), rawFilledShapeCount=\(rawFilledShapeCount), rawDimensionCount=\(rawDimensionCount), rawHatchCount=\(rawHatchCount), rawProxyEntityCount=\(rawProxyEntityCount), rawTianzhengProxyCount=\(rawTianzhengProxyCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount), exportedEntityCount=\(entityCount), expandedInsertEntityCount=\(expandedInsertEntityCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount)), exportedMLeaderTextCount=\(exportedMLeaderTextCount), exportedEllipseCount=\(exportedEllipseCount), exportedSplineCount=\(exportedSplineCount), exportedFilledShapeCount=\(exportedFilledShapeCount), exportedDimensionCount=\(exportedDimensionCount), exportedHatchCount=\(exportedHatchCount), exportedProxyEntityCount=\(exportedProxyEntityCount), exportedTianzhengProxyCount=\(exportedTianzhengProxyCount)"
                 )
             )
             diagnostics.append(
@@ -151,6 +157,36 @@ extension CADPoC {
                         code: "CAD_POC_TEXT_RAW_BUT_NOT_IMPORTED",
                         message: "LibreDWG reported raw text objects, but no text entities reached CADDatabase.",
                         detail: "rawTextCount=\(rawTextCount), exportedTextCount=\(Int(nativeResult.trace.exportedTextCount))"
+                    )
+                )
+            }
+            if rawMLeaderCount > 0 {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .info,
+                        code: "CAD_POC_LIBREDWG_MLEADER_TEXT_TRACE",
+                        message: "LibreDWG MLEADER text exposure was counted before CADDatabase conversion.",
+                        detail: "rawMLeaderCount=\(rawMLeaderCount), mleaderTextCandidateCount=\(mleaderTextCandidateCount), exportedMLeaderTextCount=\(exportedMLeaderTextCount)"
+                    )
+                )
+            }
+            if mleaderTextCandidateCount > exportedMLeaderTextCount {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_MLEADER_TEXT_NOT_EXPORTED",
+                        message: "LibreDWG exposed MLEADER text candidates that did not become CAD text entities.",
+                        detail: "mleaderTextCandidateCount=\(mleaderTextCandidateCount), exportedMLeaderTextCount=\(exportedMLeaderTextCount)"
+                    )
+                )
+            }
+            if rawMLeaderCount > 0, mleaderTextCandidateCount == 0 {
+                diagnostics.append(
+                    Kernel.CADDrawingDiagnostics.Entry(
+                        severity: .warning,
+                        code: "CAD_POC_MLEADER_NO_TEXT_FIELDS_EXPOSED",
+                        message: "LibreDWG exposed MLEADER objects, but no standard MLEADER text fields were available to the shim.",
+                        detail: "rawMLeaderCount=\(rawMLeaderCount)"
                     )
                 )
             }
@@ -280,7 +316,7 @@ extension CADPoC {
                         severity: .warning,
                         code: "CAD_POC_LIBREDWG_PROXY_ENTITY_PRESERVED",
                         message: "DWG proxy entities were preserved as diagnostics and are not counted as drawable geometry.",
-                        detail: "rawProxyEntityCount=\(rawProxyEntityCount), exportedProxyEntityCount=\(exportedProxyEntityCount)"
+                        detail: "rawProxyEntityCount=\(rawProxyEntityCount), exportedProxyEntityCount=\(exportedProxyEntityCount), proxyTextCandidateCount=\(proxyTextCandidateCount), tianzhengTextCandidateCount=\(tianzhengTextCandidateCount)"
                     )
                 )
             }
@@ -377,9 +413,14 @@ extension CADPoC {
                 rawTextCount: rawTextCount,
                 rawProxyEntityCount: rawProxyEntityCount,
                 rawTianzhengProxyCount: rawTianzhengProxyCount,
+                rawMLeaderCount: rawMLeaderCount,
+                mleaderTextCandidateCount: mleaderTextCandidateCount,
+                proxyTextCandidateCount: proxyTextCandidateCount,
+                tianzhengTextCandidateCount: tianzhengTextCandidateCount,
                 expandedInsertEntityCount: expandedInsertEntityCount,
                 exportedProxyEntityCount: exportedProxyEntityCount,
                 exportedTianzhengProxyCount: exportedTianzhengProxyCount,
+                exportedMLeaderTextCount: exportedMLeaderTextCount,
                 entityCount: database.entityCount,
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
@@ -447,6 +488,14 @@ extension CADPoC {
             makeNativeEntity(nativeEntity)
         }
 
+        var effectiveNativeTextCodePageForTesting: Int32 {
+            effectiveNativeTextCodePage
+        }
+
+        var nativeTextEncodingLabelsForTesting: [String] {
+            nativeTextEncodings.map { nativeTextEncodingLabel($0) }
+        }
+
         func proxyTextCandidateSummaryForTesting(entities: [Kernel.CADEntity]) -> String? {
             Self.proxyTextCandidateSummary(entities: entities)
         }
@@ -470,7 +519,10 @@ extension CADPoC {
                 )
             case .text, .mtext, .attrib:
                 guard let rawTextPointer = nativeEntity.rawText else { return nil }
-                let rawText = decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
+                let rawText = decodedNativeString(
+                    rawTextPointer,
+                    forceUTF8: nativeEntity.rawTextIsUTF8 != 0
+                ) ?? String(cString: rawTextPointer)
                 let styleName = decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
                 let fontName = decodedNativeString(nativeEntity.fontName)
                 let bigFontName = resolvedBigFontName(
@@ -520,7 +572,10 @@ extension CADPoC {
                 var text: Kernel.CADTextRun?
                 var bounds = path?.bounds ?? .empty
                 if let rawTextPointer = nativeEntity.rawText {
-                    let rawText = decodedNativeString(rawTextPointer) ?? String(cString: rawTextPointer)
+                    let rawText = decodedNativeString(
+                        rawTextPointer,
+                        forceUTF8: nativeEntity.rawTextIsUTF8 != 0
+                    ) ?? String(cString: rawTextPointer)
                     let styleName = decodedNativeString(nativeEntity.textStyleName) ?? Kernel.CADTextStyle.default.name
                     let fontName = decodedNativeString(nativeEntity.fontName)
                     let bigFontName = resolvedBigFontName(
@@ -886,13 +941,14 @@ extension CADPoC {
             return colors
         }
 
-        private func decodedNativeString(_ pointer: UnsafePointer<CChar>?) -> String? {
+        private func decodedNativeString(_ pointer: UnsafePointer<CChar>?, forceUTF8: Bool = false) -> String? {
             guard let pointer else { return nil }
             let length = strlen(pointer)
             guard length > 0 else { return nil }
 
             let data = Data(bytes: pointer, count: length)
-            for encoding in nativeTextEncodings {
+            let encodings = forceUTF8 ? forceUTF8NativeTextEncodings : nativeTextEncodings
+            for encoding in encodings {
                 guard let decoded = String(data: data, encoding: encoding),
                       !decoded.containsUnicodeReplacementCharacter else {
                     continue
@@ -1015,12 +1071,14 @@ extension CADPoC {
             var encodings: [String.Encoding] = []
             if let preferred = preferredNativeTextEncoding {
                 encodings.append(preferred)
+            } else {
+                encodings.append(Self.gbkEncoding)
             }
             encodings.append(contentsOf: [
-                .utf8,
-                Self.gb18030Encoding,
                 Self.gbkEncoding,
+                Self.gb18030Encoding,
                 Self.gb2312Encoding,
+                .utf8,
                 Self.big5Encoding,
                 .isoLatin1
             ])
@@ -1028,6 +1086,37 @@ extension CADPoC {
             return encodings.filter { encoding in
                 seen.insert(encoding.rawValue).inserted
             }
+        }
+
+        private var forceUTF8NativeTextEncodings: [String.Encoding] {
+            var encodings: [String.Encoding] = [.utf8]
+            encodings.append(contentsOf: nativeTextEncodings)
+            var seen = Set<UInt>()
+            return encodings.filter { encoding in
+                seen.insert(encoding.rawValue).inserted
+            }
+        }
+
+        private func nativeTextEncodingLabel(_ encoding: String.Encoding) -> String {
+            if encoding == Self.gbkEncoding {
+                return "cp936"
+            }
+            if encoding == Self.gb18030Encoding {
+                return "gb18030"
+            }
+            if encoding == Self.gb2312Encoding {
+                return "gb2312"
+            }
+            if encoding == Self.big5Encoding {
+                return "big5"
+            }
+            if encoding == .utf8 {
+                return "utf8"
+            }
+            if encoding == .isoLatin1 {
+                return "isoLatin1"
+            }
+            return "encoding-\(encoding.rawValue)"
         }
 
         private var preferredNativeTextEncoding: String.Encoding? {
@@ -1049,6 +1138,16 @@ extension CADPoC {
                 }
                 return nil
             }
+        }
+
+        private var effectiveNativeTextCodePage: Int32 {
+            if let preferredTextCodePage, preferredTextCodePage > 0 {
+                return preferredTextCodePage
+            }
+            if preferredTextBigFont == 4 {
+                return 950
+            }
+            return 936
         }
 
         private var textOptionCacheKey: String {

@@ -328,6 +328,16 @@ struct CADMetalLibreDWGPoCEntry: View {
         }) {
             rows.append(textPreviewRow)
         }
+        if let mleaderTextRow = sample.textDiagnosticRows.first(where: { row in
+            row.localizedCaseInsensitiveContains("mleader text")
+        }) {
+            rows.append(mleaderTextRow)
+        }
+        if let customTextRow = sample.textDiagnosticRows.first(where: { row in
+            row.localizedCaseInsensitiveContains("custom text")
+        }) {
+            rows.append(customTextRow)
+        }
         if let proxyTextRow = sample.textDiagnosticRows.first(where: { row in
             row.localizedCaseInsensitiveContains("proxy text")
         }) {

@@ -30,6 +30,7 @@ extension CADPoC {
         private var totalLayerCount = 0
         private var totalTextEntityCount = 0
         private var indexedTextEntityCount = 0
+        private var openTraceDiagnosticRows: [String] = []
         private var featureOptions: CADCanvasFeatureOptions = .performanceDefault
 
         private var userZoom: Double = 1
@@ -97,6 +98,21 @@ extension CADPoC {
             var nearestTextPreview: String?
             var nearestTextLayerID: String?
             var detailRows: [String] = []
+        }
+
+        private struct TextOverlayFingerprint {
+            var text: String
+            var layerID: String
+            var sourceHandle: String?
+            var insertionPoint: Kernel.CADPoint
+            var bounds: Kernel.CADBounds
+            var rotationRadians: Double
+        }
+
+        private struct VisibleTextOverlayFrame {
+            var text: String
+            var rect: CGRect
+            var rotationRadians: Double
         }
 
         override init() {
@@ -340,6 +356,30 @@ extension CADPoC {
             #endif
         }
 
+        func setOpenTrace(_ trace: CADOpenTrace?) {
+            guard let trace else {
+                openTraceDiagnosticRows = []
+                return
+            }
+
+            var rows: [String] = []
+            if trace.rawMLeaderCount > 0
+                || trace.mleaderTextCandidateCount > 0
+                || trace.exportedMLeaderTextCount > 0 {
+                rows.append(
+                    "mleader text raw \(trace.rawMLeaderCount) / candidate \(trace.mleaderTextCandidateCount) / exported \(trace.exportedMLeaderTextCount)"
+                )
+            }
+            if trace.rawProxyEntityCount > 0
+                || trace.rawTianzhengProxyCount > 0
+                || trace.proxyTextCandidateCount > 0 {
+                rows.append(
+                    "custom text proxy \(trace.proxyTextCandidateCount)/\(trace.rawProxyEntityCount) / tch \(trace.tianzhengTextCandidateCount)/\(trace.rawTianzhengProxyCount)"
+                )
+            }
+            openTraceDiagnosticRows = rows
+        }
+
         func setDebugTextOverlays(_ enabled: Bool) {
             debugTextOverlays = enabled
         }
@@ -470,29 +510,45 @@ extension CADPoC {
                 viewSize: view.bounds.size,
                 contentScale: view.contentScaleFactor
             )
-            let uiTextOverlayStats = self.syncTextOverlayLabels(
-                entities: featureOptions.rendersTextOverlays ? textOverlaySourceEntities : [],
-                view: view,
-                drawableSize: view.drawableSize,
-                viewSize: view.bounds.size,
-                contentScale: view.contentScaleFactor
-            )
-            let textAtlasPlan: CADTextAtlasRenderPlan? = nil
-            currentTextAtlasTextCount = 0
-            currentTextAtlasSkippedTextCount = 0
-            if featureOptions.rendersTextOverlays, uiTextOverlayStats.source > 0 {
-                textViewportDiagnostics.detailRows.append(
-                    "ui text overlay \(uiTextOverlayStats.visible) / source \(uiTextOverlayStats.source) / skipped \(uiTextOverlayStats.skipped)"
+            let textAtlasPlan = usesMetalTextAtlasForLiveRendering && featureOptions.rendersTextOverlays
+                ? makeTextAtlasRenderPlan(
+                    commands: pipelineOutput.commands,
+                    drawableSize: view.drawableSize,
+                    viewSize: view.bounds.size,
+                    contentScale: view.contentScaleFactor
                 )
-                if uiTextOverlayStats.overlapSkipped > 0 {
+                : nil
+            currentTextAtlasTextCount = textAtlasPlan?.textCount ?? 0
+            currentTextAtlasSkippedTextCount = textAtlasPlan?.skippedTextCount ?? 0
+
+            if let textAtlasPlan {
+                clearTextOverlayLabels()
+                textViewportDiagnostics.detailRows.append(
+                    "metal text atlas \(textAtlasPlan.textCount) / command \(textCommandCount) / skipped \(textAtlasPlan.skippedTextCount)"
+                )
+                textViewportDiagnostics.detailRows.append(contentsOf: textAtlasPlan.diagnosticRows)
+            } else {
+                let uiTextOverlayStats = self.syncTextOverlayLabels(
+                    entities: featureOptions.rendersTextOverlays ? textOverlaySourceEntities : [],
+                    view: view,
+                    drawableSize: view.drawableSize,
+                    viewSize: view.bounds.size,
+                    contentScale: view.contentScaleFactor
+                )
+                if featureOptions.rendersTextOverlays, uiTextOverlayStats.source > 0 {
                     textViewportDiagnostics.detailRows.append(
-                        "ui text overlap hidden \(uiTextOverlayStats.overlapSkipped)"
+                        "ui text overlay \(uiTextOverlayStats.visible) / source \(uiTextOverlayStats.source) / skipped \(uiTextOverlayStats.skipped)"
                     )
-                }
-                if uiTextOverlayStats.rawSource > uiTextOverlayStats.source {
-                    textViewportDiagnostics.detailRows.append(
-                        "ui text dedup \(uiTextOverlayStats.rawSource - uiTextOverlayStats.source) / raw \(uiTextOverlayStats.rawSource)"
-                    )
+                    if uiTextOverlayStats.overlapSkipped > 0 {
+                        textViewportDiagnostics.detailRows.append(
+                            "ui text overlap hidden \(uiTextOverlayStats.overlapSkipped)"
+                        )
+                    }
+                    if uiTextOverlayStats.rawSource > uiTextOverlayStats.source {
+                        textViewportDiagnostics.detailRows.append(
+                            "ui text dedup \(uiTextOverlayStats.rawSource - uiTextOverlayStats.source) / raw \(uiTextOverlayStats.rawSource)"
+                        )
+                    }
                 }
             }
             #else
@@ -837,8 +893,10 @@ extension CADPoC {
                 visibleLayerIDs: visibleLayerIDs,
                 viewportBounds: viewportBounds
             )
+            let sourceRows = openTraceDiagnosticRows
             let textEntities = entities.filter(Self.isTextEntity)
             guard !textEntities.isEmpty else {
+                diagnostics.detailRows.append(contentsOf: sourceRows)
                 diagnostics.detailRows.append(contentsOf: proxyRows)
                 return diagnostics
             }
@@ -878,6 +936,7 @@ extension CADPoC {
                 layerVisibleTextEntities: layerVisibleTextEntities,
                 viewportBounds: viewportBounds
             ))
+            diagnostics.detailRows.append(contentsOf: sourceRows)
             diagnostics.detailRows.append(contentsOf: proxyRows)
             return diagnostics
         }
@@ -3206,8 +3265,9 @@ private extension CADPoC.CADMetalRenderer {
         return ok ? pixels : nil
     }
 
-    private var maximumTextAtlasCommandCount: Int { 4_096 }
-    private var maximumUIKitTextOverlayCount: Int { 512 }
+    private var maximumTextAtlasCommandCount: Int { 8_192 }
+    private var maximumUIKitTextOverlayCount: Int { 2_048 }
+    private var usesMetalTextAtlasForLiveRendering: Bool { false }
 
     private func syncDebugTextMarkers(
         commands: [Kernel.CADRenderCommand],
@@ -3280,6 +3340,9 @@ private extension CADPoC.CADMetalRenderer {
         let maxLabelCount = maximumUIKitTextOverlayCount
         var activeKeys = Set<String>()
         var visibleCount = 0
+        var overlapSkippedCount = 0
+        var visibleTextFrames: [VisibleTextOverlayFrame] = []
+        visibleTextFrames.reserveCapacity(min(textEntities.count, maxLabelCount))
         var skippedCount = max(rawTextEntityCount - textEntities.count, 0)
             + max(textEntities.count - maxLabelCount, 0)
 
@@ -3305,6 +3368,18 @@ private extension CADPoC.CADMetalRenderer {
                 contentScale: contentScale
             )
             if isVisible {
+                let visibleFrame = VisibleTextOverlayFrame(
+                    text: Self.normalizedTextOverlayFingerprint(text.displayText),
+                    rect: label.frame,
+                    rotationRadians: text.rotationRadians
+                )
+                if Self.shouldSuppressVisibleTextOverlay(visibleFrame, keptFrames: visibleTextFrames) {
+                    label.isHidden = true
+                    skippedCount += 1
+                    overlapSkippedCount += 1
+                    continue
+                }
+                visibleTextFrames.append(visibleFrame)
                 visibleCount += 1
                 view.bringSubviewToFront(label)
             } else {
@@ -3320,7 +3395,7 @@ private extension CADPoC.CADMetalRenderer {
 
         currentUIKitTextLabelCount = visibleCount
         currentUIKitTextLabelSkippedCount = skippedCount
-        return (visibleCount, textEntities.count, rawTextEntityCount, skippedCount, 0)
+        return (visibleCount, textEntities.count, rawTextEntityCount, skippedCount, overlapSkippedCount)
     }
 
     private func textOverlaySourceEntities(
@@ -3328,42 +3403,8 @@ private extension CADPoC.CADMetalRenderer {
         renderCommands: [Kernel.CADRenderCommand]
     ) -> [Kernel.CADEntity] {
         guard featureOptions.rendersTextOverlays else { return [] }
-
-        let commandTexts = renderCommands.compactMap { command -> Kernel.CADTextRun? in
-            guard case let .text(text, _) = command else { return nil }
-            return text
-        }
-        guard !commandTexts.isEmpty else { return [] }
-
-        var unmatchedEntities = renderInputEntities.filter(Self.isTextEntity)
-        var matchedEntities: [Kernel.CADEntity] = []
-        matchedEntities.reserveCapacity(min(commandTexts.count, unmatchedEntities.count))
-
-        for commandText in commandTexts {
-            guard let entityIndex = unmatchedEntities.firstIndex(where: { entity in
-                Self.textOverlayEntity(entity, matches: commandText)
-            }) else {
-                continue
-            }
-            matchedEntities.append(unmatchedEntities.remove(at: entityIndex))
-        }
-
-        return matchedEntities
-    }
-
-    private static func textOverlayEntity(
-        _ entity: Kernel.CADEntity,
-        matches commandText: Kernel.CADTextRun
-    ) -> Bool {
-        guard let entityText = entity.text else { return false }
-        if entityText == commandText {
-            return true
-        }
-
-        return entityText.displayText == commandText.displayText
-            && distanceBetween(entityText.insertionPoint, commandText.insertionPoint) <= 0.000001
-            && abs(entityText.height - commandText.height) <= 0.000001
-            && abs(entityText.rotationRadians - commandText.rotationRadians) <= 0.000001
+        _ = renderCommands
+        return renderInputEntities.filter(Self.isTextEntity)
     }
 
     private func prioritizedTextOverlayEntities(
@@ -3391,23 +3432,74 @@ private extension CADPoC.CADMetalRenderer {
     ) -> [Kernel.CADEntity] {
         let worldTolerance = max(10.0 / max(modelScale, 0.000001), 0.01)
         var kept: [Kernel.CADEntity] = []
-        var fingerprints: [(text: String, point: Kernel.CADPoint)] = []
+        var fingerprints: [TextOverlayFingerprint] = []
 
         for entity in entities {
             guard let text = entity.text else { continue }
             let displayText = Self.normalizedTextOverlayFingerprint(text.displayText)
             guard !displayText.isEmpty else { continue }
-            let point = text.insertionPoint
+            let fingerprint = TextOverlayFingerprint(
+                text: displayText,
+                layerID: entity.layerID,
+                sourceHandle: entity.sourceHandle?.trimmingCharacters(in: .whitespacesAndNewlines),
+                insertionPoint: text.insertionPoint,
+                bounds: entity.bounds,
+                rotationRadians: text.rotationRadians
+            )
             let isDuplicate = fingerprints.contains { existing in
-                existing.text == displayText
-                    && Self.distanceBetween(existing.point, point) <= worldTolerance
+                Self.textOverlayFingerprintsOverlap(
+                    existing,
+                    fingerprint,
+                    tolerance: worldTolerance
+                )
             }
             guard !isDuplicate else { continue }
             kept.append(entity)
-            fingerprints.append((displayText, point))
+            fingerprints.append(fingerprint)
         }
 
         return kept
+    }
+
+    private static func textOverlayFingerprintsOverlap(
+        _ lhs: TextOverlayFingerprint,
+        _ rhs: TextOverlayFingerprint,
+        tolerance: Double
+    ) -> Bool {
+        guard lhs.text == rhs.text else { return false }
+        guard lhs.layerID == rhs.layerID else { return false }
+        guard textOverlayRotationMatches(lhs.rotationRadians, rhs.rotationRadians) else { return false }
+
+        let sameSourceHandle = lhs.sourceHandle?.isEmpty == false
+            && lhs.sourceHandle == rhs.sourceHandle
+        if sameSourceHandle,
+           distanceBetween(lhs.insertionPoint, rhs.insertionPoint) <= max(tolerance, 1.0) {
+            return true
+        }
+
+        if distanceBetween(lhs.insertionPoint, rhs.insertionPoint) <= tolerance {
+            return true
+        }
+
+        if textOverlayBoundsOverlap(lhs.bounds, rhs.bounds, tolerance: tolerance) {
+            return true
+        }
+
+        return false
+    }
+
+    private static func textOverlayRotationMatches(_ lhs: Double, _ rhs: Double) -> Bool {
+        let delta = abs(lhs - rhs).truncatingRemainder(dividingBy: .pi * 2)
+        return min(delta, .pi * 2 - delta) <= 0.01
+    }
+
+    private static func textOverlayBoundsOverlap(
+        _ lhs: Kernel.CADBounds,
+        _ rhs: Kernel.CADBounds,
+        tolerance: Double
+    ) -> Bool {
+        guard !lhs.isEmpty, !rhs.isEmpty else { return false }
+        return lhs.expanded(by: max(tolerance, 0.01)).intersects(rhs)
     }
 
     private func textOverlayEntityPriority(
@@ -3442,6 +3534,29 @@ private extension CADPoC.CADMetalRenderer {
             .split(whereSeparator: \.isWhitespace)
             .joined(separator: " ")
             .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private static func shouldSuppressVisibleTextOverlay(
+        _ candidate: VisibleTextOverlayFrame,
+        keptFrames: [VisibleTextOverlayFrame]
+    ) -> Bool {
+        guard !candidate.text.isEmpty, !candidate.rect.isNull, !candidate.rect.isEmpty else {
+            return false
+        }
+        return keptFrames.contains { kept in
+            guard kept.text == candidate.text else { return false }
+            guard textOverlayRotationMatches(kept.rotationRadians, candidate.rotationRadians) else { return false }
+            return textOverlayScreenRectsOverlap(kept.rect, candidate.rect)
+        }
+    }
+
+    private static func textOverlayScreenRectsOverlap(_ lhs: CGRect, _ rhs: CGRect) -> Bool {
+        guard !lhs.isNull, !rhs.isNull, !lhs.isEmpty, !rhs.isEmpty else { return false }
+        let intersection = lhs.intersection(rhs)
+        guard !intersection.isNull, !intersection.isEmpty else { return false }
+        let smallerArea = min(lhs.width * lhs.height, rhs.width * rhs.height)
+        guard smallerArea > 0 else { return false }
+        return (intersection.width * intersection.height) / smallerArea >= 0.70
     }
 
     private func rendererStyle(for entity: Kernel.CADEntity) -> Kernel.CADRenderStyle {
@@ -4247,6 +4362,42 @@ extension CADPoC.CADMetalRenderer {
             renderInputEntities: renderInputEntities,
             renderCommands: renderCommands
         ).compactMap(\.text?.displayText)
+    }
+
+    func deduplicatedTextOverlaySourceDisplayTextsForTesting(
+        renderInputEntities: [Kernel.CADEntity],
+        renderCommands: [Kernel.CADRenderCommand],
+        modelScale: Double
+    ) -> [String] {
+        prioritizedTextOverlayEntities(
+            textOverlaySourceEntities(
+                renderInputEntities: renderInputEntities,
+                renderCommands: renderCommands
+            ),
+            modelScale: modelScale
+        ).compactMap(\.text?.displayText)
+    }
+
+    static func suppressesVisibleTextOverlayForTesting(
+        candidateText: String,
+        candidateRect: CGRect,
+        kept: [(text: String, rect: CGRect)],
+        rotationRadians: Double = 0
+    ) -> Bool {
+        shouldSuppressVisibleTextOverlay(
+            VisibleTextOverlayFrame(
+                text: normalizedTextOverlayFingerprint(candidateText),
+                rect: candidateRect,
+                rotationRadians: rotationRadians
+            ),
+            keptFrames: kept.map {
+                VisibleTextOverlayFrame(
+                    text: normalizedTextOverlayFingerprint($0.text),
+                    rect: $0.rect,
+                    rotationRadians: rotationRadians
+                )
+            }
+        )
     }
 
     func textAtlasSkippedTextCountForTesting(
