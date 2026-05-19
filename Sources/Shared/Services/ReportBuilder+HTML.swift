@@ -77,11 +77,6 @@ extension ReportBuilder {
                 [$0.title, $0.content, $0.createdAt, $0.updatedAt, "\($0.attachments.count)", $0.projectId?.uuidString ?? ""]
             })
         }
-        if options.includeLightingCircuits {
-            table(loc("照明回路"), headers: ["方案名称", "供电类型", "电压", "功率因数", "需用系数", "断路器裕量", "线径裕量", "铜导线", "负荷数", "更新时间", "项目ID"], rows: snapshot.lightingCircuitPlans.map {
-                [$0.name, $0.supplyType.displayName, $0.voltage, $0.powerFactor, $0.demandFactor, $0.breakerFactor, $0.wireFactor, $0.isCopper ? locYes : locNo, "\($0.loads.count)", $0.updatedAt, $0.projectId?.uuidString ?? ""]
-            })
-        }
         if options.includeOperationAuditLogs {
             table(
                 loc("操作审计日志"),

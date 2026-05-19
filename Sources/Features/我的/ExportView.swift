@@ -23,7 +23,6 @@ struct ExportView: View {
     @State private var includeProjectDrawings = true
     @State private var includeWarehouseMovements = true
     @State private var includeQuickNotes = true
-    @State private var includeLightingCircuits = true
     @State private var includeOperationAuditLogs = false
     @State private var filterProjectId: UUID?
     @State private var enableDateFilter = false
@@ -270,7 +269,6 @@ struct ExportView: View {
             Toggle(String(localized: "图纸索引"), isOn: $includeProjectDrawings)
             Toggle(String(localized: "仓库流水"), isOn: $includeWarehouseMovements)
             Toggle(String(localized: "随手记"), isOn: $includeQuickNotes)
-            Toggle(String(localized: "照明回路"), isOn: $includeLightingCircuits)
             Toggle(String(localized: "操作审计日志"), isOn: $includeOperationAuditLogs)
             if includeOperationAuditLogs {
                 Text(String(localized: "审计日志仅随本次数据导出写入文件，不会进入默认备份。"))
@@ -311,7 +309,6 @@ struct ExportView: View {
             LabeledContent(String(localized: "图纸条数"), value: includeProjectDrawings ? "\(snapshot.projectDrawings.count)" : "-")
             LabeledContent(String(localized: "仓库流水条数"), value: includeWarehouseMovements ? "\(snapshot.projectWarehouseMovements.count)" : "-")
             LabeledContent(String(localized: "随手记条数"), value: includeQuickNotes ? "\(snapshot.quickNotes.count)" : "-")
-            LabeledContent(String(localized: "回路方案数"), value: includeLightingCircuits ? "\(snapshot.lightingCircuitPlans.count)" : "-")
             LabeledContent(String(localized: "审计日志条数"), value: includeOperationAuditLogs ? "\(filteredOperationAuditEntries.count)" : "-")
             LabeledContent(String(localized: "日期格式异常"), value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
             LabeledContent(String(localized: "文件名"), value: previewFilename)
@@ -341,7 +338,7 @@ struct ExportView: View {
     // MARK: - 导出逻辑
 
     private var hasSelectedContent: Bool {
-        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeLightingCircuits || includeOperationAuditLogs
+        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeOperationAuditLogs
     }
 
     private var options: ExportContentOptions {
@@ -358,7 +355,6 @@ struct ExportView: View {
             includeProjectDrawings: includeProjectDrawings,
             includeWarehouseMovements: includeWarehouseMovements,
             includeQuickNotes: includeQuickNotes,
-            includeLightingCircuits: includeLightingCircuits,
             includeOperationAuditLogs: includeOperationAuditLogs,
             operationAuditEntries: includeOperationAuditLogs ? filteredOperationAuditEntries : [],
             currencyDisplayMode: currencyDisplayMode
@@ -443,7 +439,6 @@ struct ExportView: View {
             snapshot.laborRecords = snapshot.laborRecords.filter { $0.projectId == pid }
             snapshot.dailyLogs = snapshot.dailyLogs.filter { $0.projectId == pid }
             snapshot.progressTasks = snapshot.progressTasks.filter { $0.projectId == pid }
-            snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter { $0.projectId == pid }
             snapshot.siteTodos = snapshot.siteTodos.filter { $0.projectId == pid }
             snapshot.projectContacts = snapshot.projectContacts.filter { $0.projectId == pid }
             snapshot.projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId == pid }
@@ -488,9 +483,6 @@ struct ExportView: View {
             isWithinDateRange($0.date, format: Formatters.date, invalidDateCount: &invalidDateCount)
         }
         snapshot.quickNotes = snapshot.quickNotes.filter {
-            isWithinDateRange($0.updatedAt, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)
-        }
-        snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter {
             isWithinDateRange($0.updatedAt, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)
         }
         return FilteredExportResult(snapshot: snapshot, invalidDateCount: invalidDateCount)

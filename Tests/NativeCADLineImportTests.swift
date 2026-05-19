@@ -704,12 +704,19 @@ struct NativeCADLineImportTests {
         let trace = NativeCAD.CADOpenTrace(
             fileName: "proxy.dwg",
             importSource: engine.id,
+            rawTextEntityCount: 4,
+            rawMTextEntityCount: 5,
+            rawAttribEntityCount: 6,
+            rawAttdefEntityCount: 7,
             rawProxyEntityCount: 1,
             rawTianzhengProxyCount: 1,
             rawMLeaderCount: 2,
             mleaderTextCandidateCount: 3,
             proxyTextCandidateCount: 1,
             tianzhengTextCandidateCount: 1,
+            exportedTextEntityCount: 8,
+            exportedMTextEntityCount: 9,
+            exportedAttribEntityCount: 10,
             exportedProxyEntityCount: 1,
             exportedTianzhengProxyCount: 1,
             exportedMLeaderTextCount: 2,
@@ -728,6 +735,13 @@ struct NativeCADLineImportTests {
         #expect(machineTrace.rawEntityCounts.mleader == 2)
         #expect(machineTrace.rawEntityCounts.proxy == 1)
         #expect(machineTrace.rawEntityCounts.tianzhengProxy == 1)
+        #expect(machineTrace.textExposure.rawTextEntityCount == 4)
+        #expect(machineTrace.textExposure.rawMTextEntityCount == 5)
+        #expect(machineTrace.textExposure.rawAttribEntityCount == 6)
+        #expect(machineTrace.textExposure.rawAttdefEntityCount == 7)
+        #expect(machineTrace.textExposure.exportedTextEntityCount == 8)
+        #expect(machineTrace.textExposure.exportedMTextEntityCount == 9)
+        #expect(machineTrace.textExposure.exportedAttribEntityCount == 10)
         #expect(machineTrace.textExposure.mleaderTextCandidateCount == 3)
         #expect(machineTrace.textExposure.exportedMLeaderTextCount == 2)
         #expect(machineTrace.textExposure.proxyTextCandidateCount == 1)
@@ -842,6 +856,71 @@ struct NativeCADLineImportTests {
             }
             return false
         })
+    }
+
+    @Test func libreDWGNativeCADUsesDXFTextAlignmentPointForSpatialIndex() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cad-text-alignment-anchor-native-\(UUID().uuidString)")
+            .appendingPathExtension("dxf")
+        let dxf = """
+        0
+        SECTION
+        2
+        ENTITIES
+        0
+        TEXT
+        5
+        ALIGNED-TEXT
+        8
+        TEXT
+        10
+        0
+        20
+        0
+        11
+        100
+        21
+        50
+        40
+        8
+        72
+        1
+        73
+        2
+        1
+        对齐文字
+        0
+        ENDSEC
+        0
+        EOF
+        """
+        try dxf.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
+            file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
+        )
+        let entity = try #require(result.database.entities.first)
+        let text = try #require(entity.text)
+        let index = NativeCAD.CADSpatialIndex(entities: result.database.entities)
+        let alignedViewport = SiteKeeperCADKernel.CADBounds(
+            minX: 96,
+            minY: 46,
+            maxX: 104,
+            maxY: 54
+        )
+        let originViewport = SiteKeeperCADKernel.CADBounds(
+            minX: -4,
+            minY: -4,
+            maxX: 4,
+            maxY: 4
+        )
+
+        #expect(text.displayText == "对齐文字")
+        #expect(abs(text.insertionPoint.x - 100) < 0.0001)
+        #expect(abs(text.insertionPoint.y - 50) < 0.0001)
+        #expect(index.query(alignedViewport).contains { $0.sourceHandle == "ALIGNED-TEXT" })
+        #expect(!index.query(originViewport).contains { $0.sourceHandle == "ALIGNED-TEXT" })
     }
 
     @Test func cadMetalNativeCADRenderPipelineKeepsChineseTextInStableOverview() async throws {
@@ -974,7 +1053,7 @@ struct NativeCADLineImportTests {
         #expect(snapshot.atlasSize.height > 0)
     }
 
-    @Test func cadMetalNativeCADTextAtlasFallsBackToInsertionAnchorWhenAlignmentMovesGlyphsOffscreen() throws {
+    @Test func cadMetalNativeCADTextAtlasKeepsAlignedGlyphsInViewport() throws {
         let renderer = NativeCAD.CADMetalRenderer()
         try #require(renderer.isAvailable)
         let textRun = SiteKeeperCADKernel.CADTextRun(
@@ -1001,8 +1080,8 @@ struct NativeCADLineImportTests {
 
         #expect(snapshot.textCount == 1)
         #expect(snapshot.vertexCount > 0)
-        #expect(snapshot.diagnosticRows.contains { $0.contains("text atlas anchorFallback 1") })
         #expect(snapshot.diagnosticRows.contains { $0.contains("intersects true") })
+        #expect(!snapshot.diagnosticRows.contains { $0.contains("offscreen 1") })
     }
 
     @Test func cadMetalNativeCADUsesFontAdvanceInsteadOfRasterPaddingForGlyphSpacing() throws {
@@ -1437,6 +1516,50 @@ struct NativeCADLineImportTests {
         #expect(displayTexts == ["AL1", "AL1"])
     }
 
+    @Test func cadMetalNativeCADTextOverlayKeepsRepeatedLabelsWithDifferentHandles() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "-BZ",
+            colorARGB: 0xFF111827,
+            lineWidth: 1
+        )
+        let firstText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV-5*10-SC40-FC/WS",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 2.5
+        )
+        let secondText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV-5*10-SC40-FC/WS",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 14, y: 0),
+            height: 2.5
+        )
+        let firstEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "-BZ",
+            text: firstText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 120, maxY: 5),
+            sourceHandle: "126745"
+        )
+        let secondEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "-BZ",
+            text: secondText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 14, minY: 0, maxX: 134, maxY: 5),
+            sourceHandle: "126E54"
+        )
+
+        let displayTexts = renderer.deduplicatedTextOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: [firstEntity, secondEntity],
+            renderCommands: [
+                .text(firstText, style: style),
+                .text(secondText, style: style)
+            ],
+            modelScale: 1_000
+        )
+
+        #expect(displayTexts == ["YJV-5*10-SC40-FC/WS", "YJV-5*10-SC40-FC/WS"])
+    }
+
     @Test func cadMetalNativeCADVisibleTextOverlaySuppressesScreenDuplicate() {
         let isSuppressed = NativeCAD.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
             candidateText: "AL1:n6",
@@ -1444,7 +1567,8 @@ struct NativeCADLineImportTests {
             kept: [
                 (
                     text: "AL1:n6",
-                    rect: CGRect(x: 100, y: 100, width: 84, height: 18)
+                    rect: CGRect(x: 100, y: 100, width: 84, height: 18),
+                    sourceHandle: nil
                 )
             ]
         )
@@ -1459,7 +1583,25 @@ struct NativeCADLineImportTests {
             kept: [
                 (
                     text: "AL1:n6",
-                    rect: CGRect(x: 100, y: 100, width: 84, height: 18)
+                    rect: CGRect(x: 100, y: 100, width: 84, height: 18),
+                    sourceHandle: nil
+                )
+            ]
+        )
+
+        #expect(!isSuppressed)
+    }
+
+    @Test func cadMetalNativeCADVisibleTextOverlayKeepsOverlappingDifferentHandles() {
+        let isSuppressed = NativeCAD.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
+            candidateText: "YJV-5*10-SC40-FC/WS",
+            candidateRect: CGRect(x: 104, y: 101, width: 160, height: 18),
+            candidateSourceHandle: "126E54",
+            kept: [
+                (
+                    text: "YJV-5*10-SC40-FC/WS",
+                    rect: CGRect(x: 100, y: 100, width: 160, height: 18),
+                    sourceHandle: "126745"
                 )
             ]
         )
@@ -1921,6 +2063,25 @@ struct NativeCADLineImportTests {
         #expect(text.displayText == "中文")
     }
 
+    @Test func libreDWGNativeCADUsesRawTextBytesWhenDecodedTextIsControlFragment() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        let rawBytes = try #require(Self.encodedBytes("阀门编号", using: Self.gb18030Encoding))
+        let rawTextBytesHex = rawBytes.map { String(format: "%02X", $0) }.joined()
+        let textRun = engine.nativeTextRunForTesting(
+            rawText: "\\|",
+            rawTextBytesHex: rawTextBytesHex,
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "gbcbig",
+                name: "GBCBIG",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "阀门编号")
+        #expect(textRun.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED"))
+    }
+
     @Test func libreDWGNativeCADUsesPreferredBig5CodePageForNativeTextBytes() throws {
         let engine = NativeCAD.LibreDWGNativeImportEngine(preferredTextCodePage: 950)
         let rawBytes = try #require(Self.encodedBytes("中文", using: Self.big5Encoding))
@@ -2026,6 +2187,42 @@ struct NativeCADLineImportTests {
         #expect(textRun.displayText == "中文123")
         #expect(textRun.decodeMethod == "encodingRepair")
         #expect(textRun.warnings.contains("CAD_TEXT_GBK_MOJIBAKE_REPAIRED"))
+    }
+
+    @Test func cadTextEngineRepairsUTF8ChineseDecodedAsGBKText() throws {
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "甯傛斂搴滄柦宸ュ浘",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: .default
+        )
+
+        #expect(textRun.displayText == "市政府施工图")
+        #expect(textRun.decodeMethod == "encodingRepair")
+        #expect(textRun.warnings.contains("CAD_TEXT_UTF8_MOJIBAKE_REPAIRED"))
+    }
+
+    @Test func libreDWGNativeCADRepairsUTF8OverGBKMojibakeFromNativeText() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine(preferredTextCodePage: 936)
+        let utf8Bytes = Array("市政府施工图".utf8)
+        let rawTextBytesHex = utf8Bytes.map { String(format: "%02X", $0) }.joined()
+        let gbkMojibake = "甯傛斂搴滄柦宸ュ浘"
+
+        let textRun = engine.nativeTextRunForTesting(
+            rawText: gbkMojibake,
+            rawTextBytesHex: rawTextBytesHex,
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "gbcbig",
+                name: "GBCBIG",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "市政府施工图")
+        #expect(
+            textRun.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED") ||
+            textRun.warnings.contains("CAD_TEXT_UTF8_MOJIBAKE_REPAIRED")
+        )
     }
 
     @Test func cadTextEngineRepairsGB18030BigFontMojibakeText() throws {
@@ -2264,6 +2461,46 @@ struct NativeCADLineImportTests {
         #expect(index.query(middleViewport).isEmpty)
     }
 
+    @Test func spatialIndexIndexesAlignedTextByVisualBounds() throws {
+        let rightAlignedText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1:n6",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 100, y: 20),
+            height: 5,
+            boxWidth: 40,
+            boxHeight: 5,
+            horizontalAlignmentCode: 3,
+            verticalAlignmentCode: 1
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: rightAlignedText,
+            bounds: .empty,
+            sourceHandle: "RIGHT-ALIGNED-TEXT"
+        )
+        let effectiveBounds = NativeCAD.CADSpatialIndex.effectiveBounds(for: entity)
+        let index = NativeCAD.CADSpatialIndex(entities: [entity])
+        let visualViewport = SiteKeeperCADKernel.CADBounds(
+            minX: 62,
+            minY: 15,
+            maxX: 98,
+            maxY: 20
+        )
+        let wrongPositiveViewport = SiteKeeperCADKernel.CADBounds(
+            minX: 102,
+            minY: 20,
+            maxX: 138,
+            maxY: 25
+        )
+
+        #expect(effectiveBounds.minX < rightAlignedText.insertionPoint.x)
+        #expect(effectiveBounds.maxX <= rightAlignedText.insertionPoint.x + 1)
+        #expect(effectiveBounds.minY < rightAlignedText.insertionPoint.y)
+        #expect(effectiveBounds.maxY <= rightAlignedText.insertionPoint.y + 1)
+        #expect(index.query(visualViewport).contains { $0.sourceHandle == "RIGHT-ALIGNED-TEXT" })
+        #expect(!index.query(wrongPositiveViewport).contains { $0.sourceHandle == "RIGHT-ALIGNED-TEXT" })
+    }
+
     @Test func libreDWGNativeCADImportsDXFModelAndPaperLayouts() async throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("cad-layout-native-\(UUID().uuidString)")
@@ -2340,11 +2577,214 @@ struct NativeCADLineImportTests {
         renderer.updateDrawing(entities: result.database.entities, layers: result.database.layers)
         #expect(renderer.renderableEntityCountForTesting() == 2)
         renderer.setSelectedLayoutID("Layout1")
-        #expect(renderer.renderableEntityCountForTesting() == 1)
+        #expect(renderer.renderableEntityCountForTesting() == 2)
+        #expect(renderer.renderableEntitiesForTesting().contains { entity in
+            entity.sourceHandle == "M1" && entity.layoutID == "Layout1"
+        })
         #expect(renderer.modelBoundsForTesting().minX == 1000)
         #expect(renderer.modelBoundsForTesting().maxX == 1100)
         #endif
     }
+
+    #if canImport(MetalKit)
+    @Test func cadMetalRendererKeepsModelViewportFallbackWhenPaperLayoutHasSheetEntities() throws {
+        var modelLine = Self.lineEntity(
+            from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            to: SiteKeeperCADKernel.CADPoint(x: 200, y: 0)
+        )
+        modelLine.sourceHandle = "MODEL-LINE"
+        modelLine.layoutID = SiteKeeperCADKernel.CADLayout.modelSpace.id
+
+        let paperLines = (0..<40).map { index -> SiteKeeperCADKernel.CADEntity in
+            var entity = Self.lineEntity(
+                from: SiteKeeperCADKernel.CADPoint(x: 1_000, y: 1_000 + Double(index)),
+                to: SiteKeeperCADKernel.CADPoint(x: 1_400, y: 1_000 + Double(index))
+            )
+            entity.sourceHandle = "PAPER-\(index)"
+            entity.layoutID = "Layout1"
+            return entity
+        }
+
+        let renderer = NativeCAD.CADMetalRenderer()
+        renderer.updateDrawing(entities: [modelLine] + paperLines, layers: [.default])
+        renderer.setSelectedLayoutID("Layout1")
+
+        let renderableEntities = renderer.renderableEntitiesForTesting()
+        #expect(renderableEntities.count == 41)
+        #expect(renderableEntities.contains { entity in
+            entity.sourceHandle == "MODEL-LINE" && entity.layoutID == "Layout1"
+        })
+        #expect(renderer.modelBoundsForTesting().minX <= 1_000)
+        #expect(renderer.modelBoundsForTesting().maxX >= 1_400)
+    }
+    #endif
+
+    @Test func libreDWGNativeCADUsesDXFViewportForPaperLayoutModelContent() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cad-layout-viewport-native-\(UUID().uuidString)")
+            .appendingPathExtension("dxf")
+        let dxf = """
+        0
+        SECTION
+        2
+        ENTITIES
+        0
+        LINE
+        5
+        M1
+        8
+        MODEL-WALL
+        410
+        Model
+        10
+        0
+        20
+        0
+        11
+        100
+        21
+        0
+        0
+        LINE
+        5
+        P1
+        8
+        PAPER-FRAME
+        67
+        1
+        410
+        Layout1
+        10
+        900
+        20
+        950
+        11
+        1100
+        21
+        950
+        0
+        VIEWPORT
+        5
+        VP1
+        8
+        VIEWPORTS
+        67
+        1
+        410
+        Layout1
+        10
+        1000
+        20
+        1000
+        40
+        200
+        41
+        100
+        68
+        1
+        69
+        2
+        12
+        50
+        22
+        0
+        45
+        100
+        51
+        0
+        0
+        ENDSEC
+        0
+        EOF
+        """
+        try dxf.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
+            file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
+        )
+        let layout = try #require(result.database.layouts.first { $0.id == "Layout1" })
+        let viewport = try #require(result.database.viewports.first)
+
+        #expect(layout.viewportIDs == ["VP1"])
+        #expect(viewport.layoutID == "Layout1")
+        #expect(viewport.clipBounds.minX == 900)
+        #expect(viewport.clipBounds.maxX == 1100)
+        #expect(viewport.viewCenter.x == 50)
+        #expect(viewport.viewHeight == 100)
+        #expect(result.trace.rawViewportCount == 1)
+        #expect(result.trace.exportedViewportCount == 1)
+        #expect(result.trace.skippedViewportCount == 0)
+        #expect(result.database.diagnostics.entries.contains { entry in
+            let detail = entry.detail ?? ""
+            return entry.code == "CAD_NATIVE_VIEWPORT_IMPORT_SUMMARY"
+                && detail.contains("rawViewportCount=1")
+                && detail.contains("id=VP1")
+                && detail.contains("center=(50,0)")
+        })
+
+        #if canImport(MetalKit)
+        let renderer = NativeCAD.CADMetalRenderer()
+        renderer.updateDrawing(
+            entities: result.database.entities,
+            layers: result.database.layers,
+            layouts: result.database.layouts,
+            viewports: result.database.viewports
+        )
+        renderer.setSelectedLayoutID("Layout1")
+        let projectedModel = try #require(renderer.renderableEntitiesForTesting().first { entity in
+            entity.sourceHandle == "M1" && entity.layoutID == "Layout1"
+        })
+        #expect(projectedModel.bounds.minX == 950)
+        #expect(projectedModel.bounds.maxX == 1050)
+        #expect(projectedModel.bounds.minY == 1000)
+        #expect(projectedModel.bounds.maxY == 1000)
+        #endif
+    }
+
+    #if canImport(MetalKit)
+    @Test func cadMetalRendererClipsProjectedModelContentToPaperViewport() throws {
+        var modelLine = Self.lineEntity(
+            from: SiteKeeperCADKernel.CADPoint(x: -1_000, y: 0),
+            to: SiteKeeperCADKernel.CADPoint(x: 1_000, y: 0)
+        )
+        modelLine.sourceHandle = "OVERFLOW-MODEL-LINE"
+        modelLine.layoutID = SiteKeeperCADKernel.CADLayout.modelSpace.id
+
+        let layout = SiteKeeperCADKernel.CADLayout(
+            id: "Layout1",
+            name: "Paper",
+            paperBounds: SiteKeeperCADKernel.CADBounds(minX: 900, minY: 900, maxX: 1_100, maxY: 1_100),
+            viewportIDs: ["VP1"]
+        )
+        let viewport = SiteKeeperCADKernel.CADViewport(
+            id: "VP1",
+            layoutID: "Layout1",
+            viewCenter: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            viewHeight: 100,
+            clipBounds: SiteKeeperCADKernel.CADBounds(minX: 950, minY: 950, maxX: 1_050, maxY: 1_050)
+        )
+
+        let renderer = NativeCAD.CADMetalRenderer()
+        renderer.updateDrawing(
+            entities: [modelLine],
+            layers: [.default],
+            layouts: [.modelSpace, layout],
+            viewports: [viewport]
+        )
+        renderer.setSelectedLayoutID("Layout1")
+
+        let projectedModel = try #require(renderer.renderableEntitiesForTesting().first { entity in
+            entity.sourceHandle == "OVERFLOW-MODEL-LINE" && entity.layoutID == "Layout1"
+        })
+        #expect(projectedModel.bounds.minX == 950)
+        #expect(projectedModel.bounds.maxX == 1050)
+        #expect(projectedModel.bounds.minY == 1000)
+        #expect(projectedModel.bounds.maxY == 1000)
+        #expect(renderer.modelBoundsForTesting().minX >= 950)
+        #expect(renderer.modelBoundsForTesting().maxX <= 1050)
+    }
+    #endif
 
     @Test func cadMetalRendererExtractsNativeSnapPrimitives() throws {
         let horizontal = SiteKeeperCADKernel.CADEntity(
@@ -4586,6 +5026,14 @@ struct NativeCADLineImportTests {
         String.Encoding(
             rawValue: CFStringConvertEncodingToNSStringEncoding(
                 CFStringEncoding(CFStringEncodings.GB_18030_2000.rawValue)
+            )
+        )
+    }
+
+    private static var gbkEncoding: String.Encoding {
+        String.Encoding(
+            rawValue: CFStringConvertEncodingToNSStringEncoding(
+                CFStringEncoding(CFStringEncodings.GBK_95.rawValue)
             )
         )
     }

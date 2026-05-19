@@ -531,7 +531,6 @@ extension DXFBasic2DParser {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !rawText.isEmpty else { return nil }
 
-        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
         let styleName = firstString(code: 7, in: pairs) ?? Kernel.CADTextStyle.default.id
         let style = textStylesByID[styleName] ?? Kernel.CADTextStyle(id: styleName, name: styleName)
         let height = positiveOrNil(firstDouble(code: 40, in: pairs)) ?? style.fixedHeight ?? 2.5
@@ -553,6 +552,12 @@ extension DXFBasic2DParser {
             horizontalAlignmentCode = firstInt(code: 72, in: pairs)
             verticalAlignmentCode = firstInt(code: 73, in: pairs)
         }
+        let insertion = textAnchorPoint(
+            type: type,
+            pairs: pairs,
+            horizontalAlignmentCode: horizontalAlignmentCode,
+            verticalAlignmentCode: verticalAlignmentCode
+        )
         let text = Kernel.CADTextEngine().makeTextRun(
             rawText: rawText,
             insertionPoint: insertion,
@@ -582,6 +587,25 @@ extension DXFBasic2DParser {
             attributeTag: attributeTag(type: type, pairs: pairs),
             sourceType: type
         )
+    }
+
+
+    private static func textAnchorPoint(
+        type: String,
+        pairs: [Pair],
+        horizontalAlignmentCode: Int?,
+        verticalAlignmentCode: Int?
+    ) -> Kernel.CADPoint {
+        let insertion = point(in: pairs, xCode: 10, yCode: 20) ?? .zero
+        guard type != "MTEXT" else { return insertion }
+        guard let alignment = point(in: pairs, xCode: 11, yCode: 21) else {
+            return insertion
+        }
+
+        let insertionIsMissing = abs(insertion.x) <= 0.000001 && abs(insertion.y) <= 0.000001
+        let alignmentIsValid = abs(alignment.x) > 0.000001 || abs(alignment.y) > 0.000001
+        let usesAlignmentAnchor = (horizontalAlignmentCode ?? 0) != 0 || (verticalAlignmentCode ?? 0) != 0
+        return alignmentIsValid && (insertionIsMissing || usesAlignmentAnchor) ? alignment : insertion
     }
 
 

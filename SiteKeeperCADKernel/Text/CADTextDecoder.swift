@@ -275,6 +275,14 @@ extension SiteKeeperCADKernel {
                 }
             }
 
+            // Phase 3: valid-looking CJK mojibake. This happens when UTF-8 text
+            // has already been decoded as GBK/GB18030 before reaching us, for
+            // example "市政府施工图" becoming "甯傛斂搴滄柦宸ュ浘".
+            if value.containsCJKScalars,
+               let repaired = repairUTF8DecodedAsLegacyChinese(value, textStyle: textStyle, warnings: &warnings) {
+                return repaired
+            }
+
             return value
         }
 
@@ -324,6 +332,36 @@ extension SiteKeeperCADKernel {
             warnings.appendOnce("CAD_TEXT_MIXED_MOJIBAKE_REPAIRED")
             warnings.appendOnce("CAD_TEXT_MIXED_\(best.encoding)_FALLBACK")
             appendEncodingWarning(best.encoding, warnings: &warnings)
+            return best.text
+        }
+
+        private func repairUTF8DecodedAsLegacyChinese(
+            _ value: String,
+            textStyle: CADTextStyle?,
+            warnings: inout [String]
+        ) -> String? {
+            let originalScore = Self.textRecoveryScore(value)
+            var best: (text: String, encoding: String, score: Int)?
+
+            for candidate in Self.byteDecodeCandidates(for: textStyle) where candidate.name != "UTF8" {
+                guard let bytes = value.data(using: candidate.encoding),
+                      let decoded = String(data: bytes, encoding: .utf8),
+                      !decoded.isEmpty,
+                      decoded.containsCJKScalars,
+                      !decoded.containsUnicodeReplacementCharacter else {
+                    continue
+                }
+
+                let score = Self.textRecoveryScore(decoded)
+                if score >= originalScore + 80,
+                   score > (best?.score ?? Int.min) {
+                    best = (decoded, candidate.name, score)
+                }
+            }
+
+            guard let best else { return nil }
+            warnings.appendOnce("CAD_TEXT_UTF8_MOJIBAKE_REPAIRED")
+            warnings.appendOnce("CAD_TEXT_UTF8_MOJIBAKE_FROM_\(best.encoding)")
             return best.text
         }
 
@@ -438,6 +476,41 @@ extension SiteKeeperCADKernel {
             return candidates.filter { candidate in
                 seen.insert(candidate.encoding.rawValue).inserted
             }
+        }
+
+        private static func textRecoveryScore(_ value: String) -> Int {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return -10_000 }
+            var score = 0
+            for scalar in trimmed.unicodeScalars {
+                switch scalar.value {
+                case 0x3400...0x4DBF,
+                     0x4E00...0x9FFF,
+                     0xF900...0xFAFF,
+                     0x20000...0x2A6DF,
+                     0x2A700...0x2B73F,
+                     0x2B740...0x2B81F,
+                     0x2B820...0x2CEAF:
+                    score += Self.isSuspiciousCADMojibakeScalar(scalar) ? -90 : 100
+                case 0x30...0x39, 0x41...0x5A, 0x61...0x7A:
+                    score += 10
+                case 0xFFFD:
+                    score -= 160
+                case 0x5C, 0x7C, 0x7B, 0x7D, 0x3B:
+                    score -= 12
+                default:
+                    if CharacterSet.controlCharacters.contains(scalar) {
+                        score -= 80
+                    } else {
+                        score += 1
+                    }
+                }
+            }
+            return score
+        }
+
+        private static func isSuspiciousCADMojibakeScalar(_ scalar: UnicodeScalar) -> Bool {
+            "甯傛斂搴滄柦宸ュ浘娴嬭瘯鏂囧瓧鍥剧焊绠＄嚎閰嶇數钃戣娂胕芼".unicodeScalars.contains(scalar)
         }
     }
 }

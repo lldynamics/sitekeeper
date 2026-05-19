@@ -859,41 +859,6 @@ struct ProgressTask: Identifiable, Codable {
     }
 }
 
-enum CircuitSupplyType: String, CaseIterable, Codable {
-    case singlePhase = "单相回路"
-    case threePhase = "三相回路"
-
-    var displayName: String { rawValue }
-
-    var defaultVoltage: String {
-        switch self {
-        case .singlePhase: return "220"
-        case .threePhase: return "380"
-        }
-    }
-}
-
-struct LightingCircuitLoad: Identifiable, Codable {
-    var id = UUID()
-    var name: String
-    var powerKW: String
-}
-
-struct LightingCircuitPlan: Identifiable, Codable {
-    var id = UUID()
-    var name: String
-    var projectId: UUID?
-    var supplyType: CircuitSupplyType
-    var voltage: String
-    var powerFactor: String
-    var demandFactor: String
-    var breakerFactor: String
-    var wireFactor: String
-    var isCopper: Bool
-    var loads: [LightingCircuitLoad]
-    var updatedAt: String
-}
-
 enum TemplateCategory: String, CaseIterable, Codable {
     case quotation = "报价模板"
     case dailyLog = "日志模板"

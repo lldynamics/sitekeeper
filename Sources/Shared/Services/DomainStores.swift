@@ -67,11 +67,6 @@ final class ProjectStore {
             rebuildProjectActivityIndex()
         }
     }
-    private(set) var lightingCircuitPlans: [LightingCircuitPlan] = [] {
-        didSet {
-            lightingCircuitPlansByProjectID = Self.groupedByProjectID(lightingCircuitPlans) { $0.projectId }
-        }
-    }
     private(set) var siteTodos: [SiteTodo] = [] {
         didSet {
             siteTodosByProjectID = Self.groupedByProjectID(siteTodos) { $0.projectId }
@@ -123,7 +118,6 @@ final class ProjectStore {
     private(set) var projectDocumentsByProjectID: [UUID: [ProjectDocument]] = [:]
     private(set) var quickNotesByProjectID: [UUID: [QuickNote]] = [:]
     private(set) var projectWarehouseMovementsByProjectID: [UUID: [ProjectWarehouseMovement]] = [:]
-    private(set) var lightingCircuitPlansByProjectID: [UUID: [LightingCircuitPlan]] = [:]
     private(set) var activeOrPausedProjectIDs: Set<UUID> = []
     private(set) var activeOrPausedProjectCount = 0
     private(set) var missingTodayLogActiveProjectCount = 0
@@ -200,10 +194,6 @@ final class ProjectStore {
 
     func projectWarehouseMovements(for projectId: UUID) -> [ProjectWarehouseMovement] {
         projectWarehouseMovementsByProjectID[projectId] ?? []
-    }
-
-    func lightingCircuitPlans(for projectId: UUID) -> [LightingCircuitPlan] {
-        lightingCircuitPlansByProjectID[projectId] ?? []
     }
 
     func hasTodayLog(for projectId: UUID) -> Bool {
@@ -380,7 +370,6 @@ final class ProjectStore {
     func setDailyLogs(_ value: [DailyLog]) { dailyLogs = value }
     func setHistoryRecords(_ value: [HistoryRecord]) { historyRecords = value }
     func setProgressTasks(_ value: [ProgressTask]) { progressTasks = value }
-    func setLightingCircuitPlans(_ value: [LightingCircuitPlan]) { lightingCircuitPlans = value }
     func setSiteTodos(_ value: [SiteTodo]) { siteTodos = value }
     func setProjectDrawings(_ value: [ProjectDrawing]) { projectDrawings = value }
     func setProjectContacts(_ value: [ProjectContact]) { projectContacts = value }

@@ -28,9 +28,9 @@ extension CADPreviewContainer {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .joined(separator: " ")
         guard !searchable.isEmpty else { return false }
-        return searchable.localizedStandardContains("疑似") ||
-            searchable.localizedStandardContains("乱码") ||
-            searchable.localizedStandardContains("未匹配")
+        return searchable.localizedStandardContains(String(localized: "疑似")) ||
+            searchable.localizedStandardContains(String(localized: "乱码")) ||
+            searchable.localizedStandardContains(String(localized: "未匹配"))
     }
 
     var projectFontMappingRows: [CADProjectFontMapping] {
@@ -120,10 +120,10 @@ extension CADPreviewContainer {
     var currentCADDisplayFontStatus: String {
         let choice = selectedCADDisplayFont
         if choice == .auto {
-            return "自动"
+            return String(localized: "自动")
         }
         if choice == .system {
-            return "系统默认"
+            return String(localized: "系统默认")
         }
         let resolved = CADImportedFontRegistry.resolvedDisplayFontName(
             for: choice,
@@ -134,9 +134,12 @@ extension CADPreviewContainer {
             return resolved
         }
         if choice == .imported {
-            return "未导入字体"
+            return String(localized: "未导入字体")
         }
-        return "未找到可用的\(choice.displayName)，会回到自动字体"
+        return String(
+            format: String(localized: "未找到可用的 %@，会回到自动字体"),
+            choice.displayName
+        )
     }
 
     var cadDisplayFontImportTypes: [UTType] {
@@ -150,12 +153,12 @@ extension CADPreviewContainer {
     var textOptionsSheet: some View {
         NavigationStack {
             Form {
-                Section("文字修复") {
+                Section(String(localized: "文字修复")) {
                     Label {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(textRepairStatusTitle)
                                 .font(.subheadline.weight(.semibold))
-                            Text("当前：\(currentTextSchemeTitle)")
+                            Text(String(format: String(localized: "当前：%@"), currentTextSchemeTitle))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -169,14 +172,14 @@ extension CADPreviewContainer {
                         .foregroundStyle(.secondary)
                 }
 
-                Section("推荐操作") {
+                Section(String(localized: "推荐操作")) {
                     Button {
                         Task {
                             await autoDetectTextOptions()
                         }
                     } label: {
                         Label(
-                            isAutoDetectingText ? "正在自动修复…" : "自动修复中文",
+                            isAutoDetectingText ? String(localized: "正在自动修复…") : String(localized: "自动修复中文"),
                             systemImage: "sparkles"
                         )
                     }
@@ -186,11 +189,11 @@ extension CADPreviewContainer {
                         applyRecommendedChineseTextRepair()
                         showTextEncodingDialog = false
                     } label: {
-                        Label("推荐中文组合", systemImage: "character.book.closed")
+                        Label(String(localized: "推荐中文组合"), systemImage: "character.book.closed")
                     }
                     .disabled(!canUseCADTextRepair)
 
-                    Text("推荐：\(recommendedChineseTextRepairTitle)")
+                    Text(String(format: String(localized: "推荐：%@"), recommendedChineseTextRepairTitle))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
@@ -198,13 +201,13 @@ extension CADPreviewContainer {
                         applyTextPreset(encoding: .auto, bigFont: .auto, resetAutoDetectScore: true)
                         showTextEncodingDialog = false
                     } label: {
-                        Label("恢复自动识别", systemImage: "arrow.counterclockwise")
+                        Label(String(localized: "恢复自动识别"), systemImage: "arrow.counterclockwise")
                     }
                     .disabled(!canUseCADTextRepair)
                 }
 
-                Section("文字显示字体") {
-                    Picker("显示字体", selection: $cadTextDisplayFontRaw) {
+                Section(String(localized: "文字显示字体")) {
+                    Picker(String(localized: "显示字体"), selection: $cadTextDisplayFontRaw) {
                         ForEach(CADDrawingTextDisplayFont.allCases) { option in
                             Text(option.displayName).tag(option.rawValue)
                         }
@@ -214,7 +217,7 @@ extension CADPreviewContainer {
                         reloadCurrentCADPreview()
                     }
 
-                    LabeledContent("当前字体") {
+                    LabeledContent(String(localized: "当前字体")) {
                         Text(currentCADDisplayFontStatus)
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -226,7 +229,7 @@ extension CADPreviewContainer {
                         Button {
                             applyCADDisplayFont(.fangSong)
                         } label: {
-                            Label("试用仿宋", systemImage: "textformat")
+                            Label(String(localized: "试用仿宋"), systemImage: "textformat")
                         }
                         .disabled(!canUseCADTextRepair)
 
@@ -235,31 +238,31 @@ extension CADPreviewContainer {
                         Button {
                             showCADDisplayFontImporter = true
                         } label: {
-                            Label("导入字体", systemImage: "square.and.arrow.down")
+                            Label(String(localized: "导入字体"), systemImage: "square.and.arrow.down")
                         }
                         .disabled(!canUseCADTextRepair)
                     }
 
-                    Text("这里控制已解码文字的显示字体；SHX/BigFont 解码仍由上方编码和大字体方案决定。SHX 文件不能当作系统字体直接导入。")
+                    Text(String(localized: "这里控制已解码文字的显示字体；SHX/BigFont 解码仍由上方编码和大字体方案决定。SHX 文件不能当作系统字体直接导入。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
 
                 if hasFontResolutionFeedback {
-                    Section("字体状态") {
+                    Section(String(localized: "字体状态")) {
                         fontResolutionFeedbackView
                     }
                 }
 
                 if shouldShowProjectFontMappingSection {
-                    Section("字体替代表") {
+                    Section(String(localized: "字体替代表")) {
                         if let candidate = currentProjectFontMappingCandidate {
-                            LabeledContent("图纸字体") {
+                            LabeledContent(String(localized: "图纸字体")) {
                                 Text(candidate.pattern)
                                     .font(.caption.monospaced())
                                     .textSelection(.enabled)
                             }
-                            Picker("替代表", selection: $projectFontMappingBigFont) {
+                            Picker(String(localized: "替代表"), selection: $projectFontMappingBigFont) {
                                 ForEach(projectFontMappingTargetOptions, id: \.self) { profile in
                                     Text(profile.displayName).tag(profile)
                                 }
@@ -267,11 +270,11 @@ extension CADPreviewContainer {
                             Button {
                                 saveProjectFontMappingCandidate(candidate)
                             } label: {
-                                Label("保存当前字体替代", systemImage: "tray.and.arrow.down")
+                                Label(String(localized: "保存当前字体替代"), systemImage: "tray.and.arrow.down")
                             }
                             .disabled(!canUseCADTextRepair)
                         } else {
-                            Text("检测到未匹配 SHX/大字体时，这里会出现可保存的项目替代表。")
+                            Text(String(localized: "检测到未匹配 SHX/大字体时，这里会出现可保存的项目替代表。"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -288,17 +291,17 @@ extension CADPreviewContainer {
                         }
                         .onDelete(perform: deleteProjectFontMappings)
 
-                        Text("替代表只保存到项目数据，用来辅助 DWG 文字解析，不会修改 CAD 原文件。")
+                        Text(String(localized: "替代表只保存到项目数据，用来辅助 DWG 文字解析，不会修改 CAD 原文件。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                 }
             }
-            .navigationTitle("文字修复")
+            .navigationTitle(String(localized: "文字修复"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") {
+                    Button(String(localized: "关闭")) {
                         showTextEncodingDialog = false
                     }
                 }
@@ -334,7 +337,7 @@ extension CADPreviewContainer {
                 Image(systemName: "exclamationmark.triangle")
                     .foregroundStyle(Color.appWarning)
             }
-            Text("如果自动修复后仍乱码，可在“字体替代表”保存当前缺失字体到项目数据。")
+            Text(String(localized: "如果自动修复后仍乱码，可在“字体替代表”保存当前缺失字体到项目数据。"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -385,7 +388,10 @@ extension CADPreviewContainer {
                 cadImportedTextFontPath = font.filePath
                 cadTextDisplayFontRaw = CADDrawingTextDisplayFont.imported.rawValue
                 reloadCurrentCADPreview()
-                alertMessage = String(localized: "字体已导入并应用：\(font.fontName)")
+                alertMessage = String(
+                    format: String(localized: "字体已导入并应用：%@"),
+                    font.fontName
+                )
                 showAlert = true
             } catch {
                 alertMessage = cadFontImportErrorMessage(

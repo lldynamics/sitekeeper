@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum CalculatorDestination: CaseIterable {
-    case current, voltageDrop, conduitFill, trayFill, breakerSelect, lightingPlanner, lightingCalc, concrete, rebar, tile, wallArea, unitConverter
+    case current, voltageDrop, conduitFill, trayFill, breakerSelect, lightingCalc, concrete, rebar, tile, wallArea, unitConverter
 
     var icon: String {
         switch self {
@@ -10,7 +10,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "circle.grid.cross"
         case .trayFill: "rectangle.grid.1x2"
         case .breakerSelect: "switch.2"
-        case .lightingPlanner: "tablecells.fill"
         case .lightingCalc: "lightbulb.fill"
         case .concrete: "cube.fill"
         case .rebar: "ruler.fill"
@@ -27,7 +26,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "线管穿线率"
         case .trayFill: "桥架填充率"
         case .breakerSelect: "空开/漏保选型"
-        case .lightingPlanner: "照明回路表"
         case .lightingCalc: "照明估算"
         case .concrete: "混凝土算量"
         case .rebar: "钢筋重量"
@@ -44,7 +42,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "管内导线截面积占比"
         case .trayFill: "桥架内电缆总截面积"
         case .breakerSelect: "按电流选断路器规格"
-        case .lightingPlanner: "回路负荷、断路器与线径建议"
         case .lightingCalc: "房间面积 → 灯具数量"
         case .concrete: "方量 + 水泥砂石估算"
         case .rebar: "每米重 / 总重 / 吨位"
@@ -56,7 +53,7 @@ enum CalculatorDestination: CaseIterable {
 
     var section: String {
         switch self {
-        case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect, .lightingPlanner: "电气"
+        case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect: "电气"
         case .lightingCalc: "照明"
         case .concrete, .rebar, .tile, .wallArea: "土建"
         case .unitConverter: "通用"
@@ -71,7 +68,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: ConduitFillView()
         case .trayFill: TrayFillView()
         case .breakerSelect: BreakerSelectView()
-        case .lightingPlanner: LightingCircuitPlannerView()
         case .lightingCalc: LightingCalcView()
         case .concrete: ConcreteCalcView()
         case .rebar: RebarCalcView()

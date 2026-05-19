@@ -10,7 +10,6 @@ extension DataStore {
             dailyLogs: dailyLogs,
             historyRecords: historyRecords,
             progressTasks: progressTasks,
-            lightingCircuitPlans: lightingCircuitPlans,
             siteTodos: siteTodos,
             projectDrawings: projectDrawings,
             projectContacts: projectContacts,

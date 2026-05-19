@@ -87,16 +87,26 @@ extension NativeCAD {
         var rawDimensionCount: Int
         var rawHatchCount: Int
         var rawTextCount: Int
+        var rawTextEntityCount: Int
+        var rawMTextEntityCount: Int
+        var rawAttribEntityCount: Int
+        var rawAttdefEntityCount: Int
         var rawProxyEntityCount: Int
         var rawTianzhengProxyCount: Int
         var rawMLeaderCount: Int
+        var rawViewportCount: Int
         var mleaderTextCandidateCount: Int
         var proxyTextCandidateCount: Int
         var tianzhengTextCandidateCount: Int
         var expandedInsertEntityCount: Int
+        var exportedTextEntityCount: Int
+        var exportedMTextEntityCount: Int
+        var exportedAttribEntityCount: Int
         var exportedProxyEntityCount: Int
         var exportedTianzhengProxyCount: Int
         var exportedMLeaderTextCount: Int
+        var exportedViewportCount: Int
+        var skippedViewportCount: Int
         var entityCount: Int
         var drawableEntityCount: Int
         var renderCommandCount: Int
@@ -104,6 +114,7 @@ extension NativeCAD {
         var openedForRender: Bool
         var importCacheHit: Bool
         var importMilliseconds: Double
+        var failureMessage: String?
 
         init(
             fileName: String,
@@ -119,23 +130,34 @@ extension NativeCAD {
             rawDimensionCount: Int = 0,
             rawHatchCount: Int = 0,
             rawTextCount: Int = 0,
+            rawTextEntityCount: Int = 0,
+            rawMTextEntityCount: Int = 0,
+            rawAttribEntityCount: Int = 0,
+            rawAttdefEntityCount: Int = 0,
             rawProxyEntityCount: Int = 0,
             rawTianzhengProxyCount: Int = 0,
             rawMLeaderCount: Int = 0,
+            rawViewportCount: Int = 0,
             mleaderTextCandidateCount: Int = 0,
             proxyTextCandidateCount: Int = 0,
             tianzhengTextCandidateCount: Int = 0,
             expandedInsertEntityCount: Int = 0,
+            exportedTextEntityCount: Int = 0,
+            exportedMTextEntityCount: Int = 0,
+            exportedAttribEntityCount: Int = 0,
             exportedProxyEntityCount: Int = 0,
             exportedTianzhengProxyCount: Int = 0,
             exportedMLeaderTextCount: Int = 0,
+            exportedViewportCount: Int = 0,
+            skippedViewportCount: Int = 0,
             entityCount: Int = 0,
             drawableEntityCount: Int = 0,
             renderCommandCount: Int = 0,
             bounds: SiteKeeperCADKernel.CADBounds = .empty,
             openedForRender: Bool? = nil,
             importCacheHit: Bool = false,
-            importMilliseconds: Double = 0
+            importMilliseconds: Double = 0,
+            failureMessage: String? = nil
         ) {
             self.fileName = fileName
             self.importSource = importSource
@@ -150,16 +172,26 @@ extension NativeCAD {
             self.rawDimensionCount = rawDimensionCount
             self.rawHatchCount = rawHatchCount
             self.rawTextCount = rawTextCount
+            self.rawTextEntityCount = rawTextEntityCount
+            self.rawMTextEntityCount = rawMTextEntityCount
+            self.rawAttribEntityCount = rawAttribEntityCount
+            self.rawAttdefEntityCount = rawAttdefEntityCount
             self.rawProxyEntityCount = rawProxyEntityCount
             self.rawTianzhengProxyCount = rawTianzhengProxyCount
             self.rawMLeaderCount = rawMLeaderCount
+            self.rawViewportCount = rawViewportCount
             self.mleaderTextCandidateCount = mleaderTextCandidateCount
             self.proxyTextCandidateCount = proxyTextCandidateCount
             self.tianzhengTextCandidateCount = tianzhengTextCandidateCount
             self.expandedInsertEntityCount = expandedInsertEntityCount
+            self.exportedTextEntityCount = exportedTextEntityCount
+            self.exportedMTextEntityCount = exportedMTextEntityCount
+            self.exportedAttribEntityCount = exportedAttribEntityCount
             self.exportedProxyEntityCount = exportedProxyEntityCount
             self.exportedTianzhengProxyCount = exportedTianzhengProxyCount
             self.exportedMLeaderTextCount = exportedMLeaderTextCount
+            self.exportedViewportCount = exportedViewportCount
+            self.skippedViewportCount = skippedViewportCount
             self.entityCount = entityCount
             self.drawableEntityCount = drawableEntityCount
             self.renderCommandCount = renderCommandCount
@@ -167,9 +199,14 @@ extension NativeCAD {
             self.openedForRender = openedForRender ?? (drawableEntityCount > 0 && renderCommandCount > 0)
             self.importCacheHit = importCacheHit
             self.importMilliseconds = importMilliseconds
+            self.failureMessage = failureMessage
         }
 
-        static func unsupported(fileName: String, importSource: String) -> CADOpenTrace {
+        static func unsupported(
+            fileName: String,
+            importSource: String,
+            failureMessage: String? = nil
+        ) -> CADOpenTrace {
             CADOpenTrace(
                 fileName: fileName,
                 importSource: importSource,
@@ -187,7 +224,8 @@ extension NativeCAD {
                 drawableEntityCount: 0,
                 renderCommandCount: 0,
                 bounds: .empty,
-                openedForRender: false
+                openedForRender: false,
+                failureMessage: failureMessage
             )
         }
     }

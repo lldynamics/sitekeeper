@@ -98,13 +98,6 @@ enum ReportBuilderPDFSections {
             lines.append(String(localized: "随手记"))
             lines += snapshot.quickNotes.map { "- \($0.title)  \($0.updatedAt)  附件\($0.attachments.count)个" }
         }
-        if options.includeLightingCircuits && !snapshot.lightingCircuitPlans.isEmpty {
-            lines.append("")
-            lines.append(String(localized: "照明回路"))
-            lines += snapshot.lightingCircuitPlans.map {
-                "- \($0.name) [\($0.supplyType.displayName)] \($0.voltage)V  \($0.loads.count)个负荷"
-            }
-        }
         if options.includeOperationAuditLogs && !options.operationAuditEntries.isEmpty {
             lines.append("")
             lines.append(String(localized: "操作审计日志"))

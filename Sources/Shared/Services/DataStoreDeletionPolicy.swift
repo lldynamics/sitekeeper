@@ -175,7 +175,6 @@ struct DataStoreProjectDeletionSnapshot {
     let laborRecords: [LaborRecord]
     let dailyLogs: [DailyLog]
     let progressTasks: [ProgressTask]
-    let lightingCircuitPlans: [LightingCircuitPlan]
     let siteTodos: [SiteTodo]
     let projectDrawings: [ProjectDrawing]
     let projectContacts: [ProjectContact]

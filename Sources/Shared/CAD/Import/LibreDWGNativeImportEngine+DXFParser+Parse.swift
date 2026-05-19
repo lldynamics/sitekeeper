@@ -9,13 +9,15 @@ extension DXFBasic2DParser {
         let blocksByName = parseBlocks(from: blocksSection(from: pairs), textStylesByID: textStylesByID)
         let entityPairs = entitiesSection(from: pairs)
         let rawRecords = parseEntityRecords(from: entityPairs, textStylesByID: textStylesByID)
+        let viewports = parseViewports(from: entityPairs)
         let records = expandInsertRecords(rawRecords, blocksByName: blocksByName)
         let diagnostics = records.flatMap(\.diagnostics)
-        let layouts = buildLayouts(from: records)
+        let layouts = buildLayouts(from: records, viewports: viewports)
         return ParseResult(
             records: records,
             layersByID: layersByID,
             layouts: layouts,
+            viewports: viewports,
             textStylesByID: textStylesByID,
             diagnostics: diagnostics
         )
@@ -47,6 +49,8 @@ extension DXFBasic2DParser {
             if type == "POLYLINE" {
                 let vertexPairs = consumePolylineVertices(from: entityPairs, index: &index)
                 parsedRecords = makePolyline(from: recordPairs, vertexPairs: vertexPairs).map { [$0] } ?? []
+            } else if type == "VIEWPORT" {
+                parsedRecords = []
             } else if type == "INSERT" || type == "MINSERT" {
                 if var insert = makeInsert(type: type, from: recordPairs) {
                     insert.attachedAttributes = consumeInsertAttributes(
@@ -362,9 +366,72 @@ extension DXFBasic2DParser {
     }
 
 
-    static func buildLayouts(from records: [EntityRecord]) -> [Kernel.CADLayout] {
+    static func parseViewports(from entityPairs: [Pair]) -> [Kernel.CADViewport] {
+        var viewports: [Kernel.CADViewport] = []
+        var index = 0
+        while index < entityPairs.count {
+            let pair = entityPairs[index]
+            guard pair.code == 0 else {
+                index += 1
+                continue
+            }
+
+            let type = pair.value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+            index += 1
+            var recordPairs: [Pair] = []
+            while index < entityPairs.count, entityPairs[index].code != 0 {
+                recordPairs.append(entityPairs[index])
+                index += 1
+            }
+
+            guard type == "VIEWPORT", let viewport = makeViewport(from: recordPairs) else {
+                continue
+            }
+            viewports.append(viewport)
+        }
+        return viewports
+    }
+
+
+    static func makeViewport(from pairs: [Pair]) -> Kernel.CADViewport? {
+        let onOff = firstInt(code: 68, in: pairs) ?? 1
+        guard onOff != 0,
+              let center = point(in: pairs, xCode: 10, yCode: 20),
+              let paperWidth = positiveOrNil(firstDouble(code: 40, in: pairs)),
+              let paperHeight = positiveOrNil(firstDouble(code: 41, in: pairs)),
+              let modelViewHeight = positiveOrNil(firstDouble(code: 45, in: pairs)) else {
+            return nil
+        }
+
+        let layoutID = layoutID(from: pairs) ?? "paper"
+        let viewCenter = point(in: pairs, xCode: 12, yCode: 22) ?? .zero
+        let twist = (firstDouble(code: 51, in: pairs) ?? 0) * .pi / 180
+        let handle = firstString(code: 5, in: pairs)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let viewportID = firstInt(code: 69, in: pairs).map { "\($0)" }
+        let id = handle?.isEmpty == false ? handle! : "viewport-\(layoutID)-\(viewportID ?? UUID().uuidString)"
+        let paperBounds = Kernel.CADBounds(
+            minX: center.x - paperWidth / 2,
+            minY: center.y - paperHeight / 2,
+            maxX: center.x + paperWidth / 2,
+            maxY: center.y + paperHeight / 2
+        )
+
+        return Kernel.CADViewport(
+            id: id,
+            layoutID: layoutID,
+            viewCenter: viewCenter,
+            viewHeight: modelViewHeight,
+            twistRadians: twist,
+            clipBounds: paperBounds
+        )
+    }
+
+
+    static func buildLayouts(from records: [EntityRecord], viewports: [Kernel.CADViewport] = []) -> [Kernel.CADLayout] {
         let layoutIDs = records
             .map(\.layoutID)
+            + viewports.map(\.layoutID)
             .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         var seen = Set<String>()
         var layouts: [Kernel.CADLayout] = []
@@ -374,7 +441,19 @@ extension DXFBasic2DParser {
             if normalizedID == normalized(Kernel.CADLayout.modelSpace.id) {
                 layouts.append(.modelSpace)
             } else {
-                layouts.append(Kernel.CADLayout(id: layoutID, name: layoutID, isModelSpace: false))
+                let layoutRecords = records.filter { normalized($0.layoutID) == normalizedID }
+                let paperEntityBounds = layoutRecords.reduce(Kernel.CADBounds.empty) { $0.union($1.bounds) }
+                let layoutViewports = viewports.filter { normalized($0.layoutID) == normalizedID }
+                let viewportBounds = layoutViewports.reduce(Kernel.CADBounds.empty) { $0.union($1.clipBounds) }
+                layouts.append(
+                    Kernel.CADLayout(
+                        id: layoutID,
+                        name: layoutID,
+                        isModelSpace: false,
+                        paperBounds: paperEntityBounds.union(viewportBounds),
+                        viewportIDs: layoutViewports.map(\.id)
+                    )
+                )
             }
         }
         return layouts.isEmpty ? [.modelSpace] : layouts

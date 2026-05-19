@@ -115,7 +115,6 @@ struct ProjectFinancialMetricsTests {
         options.includeProjectDrawings = false
         options.includeWarehouseMovements = false
         options.includeQuickNotes = false
-        options.includeLightingCircuits = false
         options.includeProjectFinance = true
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)

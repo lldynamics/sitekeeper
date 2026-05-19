@@ -203,7 +203,6 @@ extension BackupSnapshot {
             snapshot.projects = []
             snapshot.dailyLogs = []
             snapshot.progressTasks = []
-            snapshot.lightingCircuitPlans = []
             snapshot.siteTodos = []
             snapshot.projectContacts = []
             snapshot.projectFinancialRecords = []
@@ -409,7 +408,6 @@ private extension BackupSnapshot {
         !dailyLogs.isEmpty ||
         !historyRecords.isEmpty ||
         !progressTasks.isEmpty ||
-        !lightingCircuitPlans.isEmpty ||
         !siteTodos.isEmpty ||
         !projectDrawings.isEmpty ||
         !projectContacts.isEmpty ||

@@ -140,7 +140,6 @@ struct DataStoreTests {
         #expect(!testStore.laborRecords.contains { $0.projectId == pid })
         #expect(!testStore.dailyLogs.contains { $0.projectId == pid })
         #expect(!testStore.progressTasks.contains { $0.projectId == pid })
-        #expect(!testStore.lightingCircuitPlans.contains { $0.projectId == pid })
         #expect(!testStore.siteTodos.contains { $0.projectId == pid })
         #expect(!testStore.projectDrawings.contains { $0.projectId == pid })
         #expect(!testStore.projectContacts.contains { $0.projectId == pid })
@@ -308,19 +307,6 @@ struct DataStoreTests {
             completion: 0.3,
             note: ""
         )
-        let plan = LightingCircuitPlan(
-            name: "照明",
-            projectId: projectA.id,
-            supplyType: .singlePhase,
-            voltage: "220",
-            powerFactor: "0.9",
-            demandFactor: "1",
-            breakerFactor: "1",
-            wireFactor: "1",
-            isCopper: true,
-            loads: [],
-            updatedAt: "2026-05-16 10:00"
-        )
         let todo = SiteTodo(title: "待办", projectId: projectA.id)
         let drawing = ProjectDrawing(projectId: projectA.id, name: "图纸", fileName: "restore-drawing.pdf", fileType: "pdf")
         let financial = ProjectFinancialRecord(projectId: projectA.id, amount: "100")
@@ -336,7 +322,6 @@ struct DataStoreTests {
         testStore.replaceLaborRecords([labor])
         testStore.replaceDailyLogs([log])
         testStore.replaceProgressTasks([progress])
-        testStore.replaceLightingCircuitPlans([plan])
         testStore.replaceSiteTodos([todo])
         testStore.replaceProjectDrawings([drawing])
         testStore.replaceProjectFinancialRecords([financial])
@@ -360,7 +345,6 @@ struct DataStoreTests {
         #expect(testStore.laborRecords.contains { $0.id == labor.id })
         #expect(testStore.dailyLogs.contains { $0.id == log.id })
         #expect(testStore.progressTasks.contains { $0.id == progress.id })
-        #expect(testStore.lightingCircuitPlans.contains { $0.id == plan.id })
         #expect(testStore.siteTodos.contains { $0.id == todo.id })
         #expect(testStore.projectDrawings.contains { $0.id == drawing.id })
         #expect(testStore.projectFinancialRecords.contains { $0.id == financial.id })

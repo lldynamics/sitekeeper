@@ -313,27 +313,6 @@ extension ReportBuilder {
             }
             rows.append("")
         }
-        if options.includeLightingCircuits {
-            rows.append(csvMachineSection("lighting_circuit_plans"))
-            rows.append(csv(["plan_name", "supply_type_key", "supply_type_display", "voltage", "power_factor", "demand_factor", "breaker_factor", "wire_factor", "is_copper", "load_count", "updated_at", "project_id"]))
-            rows += snapshot.lightingCircuitPlans.map { plan in
-                csv([
-                    plan.name,
-                    plan.supplyType.exportKey,
-                    plan.supplyType.displayName,
-                    plan.voltage,
-                    plan.powerFactor,
-                    plan.demandFactor,
-                    plan.breakerFactor,
-                    plan.wireFactor,
-                    machineBool(plan.isCopper),
-                    "\(plan.loads.count)",
-                    plan.updatedAt,
-                    plan.projectId?.uuidString ?? ""
-                ])
-            }
-            rows.append("")
-        }
         if options.includeOperationAuditLogs {
             rows.append(csvMachineSection("operation_audit_log"))
             rows.append(csv(["timestamp", "action_key", "action_display", "outcome_key", "outcome_display", "summary", "detail", "source", "id"]))
@@ -581,15 +560,6 @@ private extension WarehouseMovementType {
         switch self {
         case .inbound: "inbound"
         case .outbound: "outbound"
-        }
-    }
-}
-
-private extension CircuitSupplyType {
-    var exportKey: String {
-        switch self {
-        case .singlePhase: "single_phase"
-        case .threePhase: "three_phase"
         }
     }
 }

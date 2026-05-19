@@ -111,14 +111,6 @@ extension DataHealthView {
             quickNotes[index].projectId = nil
         }
         store.replaceQuickNotes(quickNotes)
-        var lightingCircuitPlans = store.lightingCircuitPlans
-        for index in lightingCircuitPlans.indices where invalidOptionalProjectId(
-            lightingCircuitPlans[index].projectId,
-            validProjectIds: validProjectIds
-        ) {
-            lightingCircuitPlans[index].projectId = nil
-        }
-        store.replaceLightingCircuitPlans(lightingCircuitPlans)
 
         store.scheduleSave()
         let afterCount = referenceIssueCount

@@ -14,7 +14,6 @@ struct ExportContentOptions {
     var includeProjectDrawings = true
     var includeWarehouseMovements = true
     var includeQuickNotes = true
-    var includeLightingCircuits = true
     var includeOperationAuditLogs = false
     var operationAuditEntries: [OperationAuditEntry] = []
     var currencyDisplayMode = ExportCurrencyDisplayMode.defaultMode
