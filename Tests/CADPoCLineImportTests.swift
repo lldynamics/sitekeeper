@@ -185,6 +185,8 @@ struct CADPoCLineImportTests {
             nearestTextPreview: "消防泵房",
             nearestTextLayerID: "TEXT",
             textDiagnosticRows: [
+                "mleader text raw 2 / candidate 3 / exported 1",
+                "custom text proxy 4/12 / tch 2/6",
                 "text kind total text 1 / mtext 0 / attrib 1 / dimension 0",
                 "near text total 1 / viewport 0 / d 50 / layer TEXT 消防泵房"
             ]
@@ -223,6 +225,8 @@ struct CADPoCLineImportTests {
             nearestTextPreview: "消防泵房",
             nearestTextLayerID: "TEXT",
             textDiagnosticRows: [
+                "mleader text raw 2 / candidate 3 / exported 1",
+                "custom text proxy 4/12 / tch 2/6",
                 "text kind total text 1 / mtext 0 / attrib 1 / dimension 0",
                 "near text total 1 / viewport 0 / d 50 / layer TEXT 消防泵房"
             ]
@@ -238,6 +242,8 @@ struct CADPoCLineImportTests {
         #expect(rows.contains { $0.contains("entity 2") })
         #expect(rows.contains { $0.contains("command 2") })
         #expect(rows.contains { $0.contains("text 0/0") })
+        #expect(rows.contains { $0.contains("mleader text raw 2") })
+        #expect(rows.contains { $0.contains("custom text proxy 4/12") })
         #expect(rows.contains { $0.contains("text import 2 / index 2 / inView 0/0") })
         #expect(rows.contains { $0.contains("nearest text d 50") })
         #expect(!rows.contains { $0.contains("text bounds") })
@@ -679,7 +685,7 @@ struct CADPoCLineImportTests {
         nativeEntity.layerName = strdup("TCH_LAYER")
         nativeEntity.sourceHandle = strdup("PX-TCH")
         nativeEntity.objectName = strdup("TCH_WALL")
-        nativeEntity.unsupportedReason = strdup("Tianzheng/TCH proxy object preserved as diagnostic metadata.")
+        nativeEntity.unsupportedReason = strdup("Tianzheng/TCH proxy object preserved as diagnostic metadata; textCandidate=喷淋立管")
         nativeEntity.colorARGB = 0xFF22AAFF
         nativeEntity.lineWeight = 2
         defer {
@@ -700,8 +706,13 @@ struct CADPoCLineImportTests {
             importSource: engine.id,
             rawProxyEntityCount: 1,
             rawTianzhengProxyCount: 1,
+            rawMLeaderCount: 2,
+            mleaderTextCandidateCount: 3,
+            proxyTextCandidateCount: 1,
+            tianzhengTextCandidateCount: 1,
             exportedProxyEntityCount: 1,
             exportedTianzhengProxyCount: 1,
+            exportedMLeaderTextCount: 2,
             entityCount: database.entityCount,
             drawableEntityCount: database.drawableEntityCount,
             renderCommandCount: renderCommandCount
@@ -712,6 +723,15 @@ struct CADPoCLineImportTests {
         #expect(entity.sourceHandle == "PX-TCH")
         #expect(entity.unsupportedReason?.contains("Tianzheng") == true)
         #expect(entity.diagnostics.entries.contains { $0.code == "CAD_POC_LIBREDWG_TIANZHENG_PROXY_ENTITY" })
+        #expect(engine.proxyTextCandidateSummaryForTesting(entities: [entity])?.contains("proxyTextCandidateCount=1") == true)
+        let machineTrace = CADDiagnosticMachineTrace.NativeTrace(trace)
+        #expect(machineTrace.rawEntityCounts.mleader == 2)
+        #expect(machineTrace.rawEntityCounts.proxy == 1)
+        #expect(machineTrace.rawEntityCounts.tianzhengProxy == 1)
+        #expect(machineTrace.textExposure.mleaderTextCandidateCount == 3)
+        #expect(machineTrace.textExposure.exportedMLeaderTextCount == 2)
+        #expect(machineTrace.textExposure.proxyTextCandidateCount == 1)
+        #expect(machineTrace.textExposure.tianzhengTextCandidateCount == 1)
         #expect(!entity.isRenderable)
         #expect(database.entityCount == 1)
         #expect(database.drawableEntityCount == 0)
@@ -1032,7 +1052,7 @@ struct CADPoCLineImportTests {
         )
         var commands = Array(
             repeating: SiteKeeperCADKernel.CADRenderCommand.text(smallText, style: style),
-            count: 4_096
+            count: 8_192
         )
         commands.append(.text(importantText, style: style))
 
@@ -1049,7 +1069,7 @@ struct CADPoCLineImportTests {
             contentScale: 2
         )
 
-        #expect(renderedTexts.count == 4_096)
+        #expect(renderedTexts.count == 8_192)
         #expect(renderedTexts.contains("重要文字"))
         #expect(skippedCount == 1)
     }
@@ -1293,7 +1313,7 @@ struct CADPoCLineImportTests {
         #expect(width >= 380)
     }
 
-    @Test func cadMetalPoCTextOverlayOnlyUsesCurrentRenderTextCommands() throws {
+    @Test func cadMetalPoCTextOverlayUsesCurrentRenderInputTextEntities() throws {
         let renderer = CADPoC.CADMetalRenderer()
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "TEXT",
@@ -1305,8 +1325,8 @@ struct CADPoCLineImportTests {
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
             height: 2.5
         )
-        let extraViewportText = SiteKeeperCADKernel.CADTextRun(
-            rawText: "扩展视口补捞文字",
+        let commandSkippedText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "当前视口文字",
             insertionPoint: SiteKeeperCADKernel.CADPoint(x: 100, y: 0),
             height: 2.5
         )
@@ -1316,19 +1336,135 @@ struct CADPoCLineImportTests {
             text: renderedText,
             bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 10, maxY: 3)
         )
-        let extraEntity = SiteKeeperCADKernel.CADEntity(
+        let commandSkippedEntity = SiteKeeperCADKernel.CADEntity(
             kind: .text,
             layerID: "TEXT",
-            text: extraViewportText,
+            text: commandSkippedText,
             bounds: SiteKeeperCADKernel.CADBounds(minX: 100, minY: 0, maxX: 120, maxY: 3)
         )
 
         let displayTexts = renderer.textOverlaySourceDisplayTextsForTesting(
-            renderInputEntities: [renderedEntity, extraEntity],
+            renderInputEntities: [renderedEntity, commandSkippedEntity],
             renderCommands: [.text(renderedText, style: style)]
         )
 
-        #expect(displayTexts == ["已渲染文字"])
+        #expect(displayTexts == ["已渲染文字", "当前视口文字"])
+    }
+
+    @Test func cadMetalPoCTextOverlayDeduplicatesOverlappingLogicalText() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "AXIS",
+            colorARGB: 0xFF111827,
+            lineWidth: 1
+        )
+        let primaryText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "26500",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 2.5
+        )
+        let duplicateText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "26500",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 12, y: 1),
+            height: 2.5
+        )
+        let primaryEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "AXIS",
+            text: primaryText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 48, maxY: 8),
+            sourceHandle: "A1"
+        )
+        let duplicateEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .dimension,
+            layerID: "AXIS",
+            text: duplicateText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 2, minY: 0, maxX: 50, maxY: 8),
+            sourceHandle: "A1"
+        )
+
+        let displayTexts = renderer.deduplicatedTextOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: [primaryEntity, duplicateEntity],
+            renderCommands: [
+                .text(primaryText, style: style),
+                .text(duplicateText, style: style)
+            ],
+            modelScale: 1_000
+        )
+
+        #expect(displayTexts == ["26500"])
+    }
+
+    @Test func cadMetalPoCTextOverlayKeepsSeparatedRepeatedText() throws {
+        let renderer = CADPoC.CADMetalRenderer()
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "TEXT",
+            colorARGB: 0xFF111827,
+            lineWidth: 1
+        )
+        let firstText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 2.5
+        )
+        let secondText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 200, y: 0),
+            height: 2.5
+        )
+        let firstEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: firstText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: 0, maxX: 16, maxY: 4)
+        )
+        let secondEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: secondText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 200, minY: 0, maxX: 216, maxY: 4)
+        )
+
+        let displayTexts = renderer.deduplicatedTextOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: [firstEntity, secondEntity],
+            renderCommands: [
+                .text(firstText, style: style),
+                .text(secondText, style: style)
+            ],
+            modelScale: 1_000
+        )
+
+        #expect(displayTexts == ["AL1", "AL1"])
+    }
+
+    @Test func cadMetalPoCVisibleTextOverlaySuppressesScreenDuplicate() {
+        let isSuppressed = CADPoC.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
+            candidateText: "AL1:n6",
+            candidateRect: CGRect(x: 104, y: 101, width: 84, height: 18),
+            kept: [
+                (
+                    text: "AL1:n6",
+                    rect: CGRect(x: 100, y: 100, width: 84, height: 18)
+                )
+            ]
+        )
+
+        #expect(isSuppressed)
+    }
+
+    @Test func cadMetalPoCVisibleTextOverlayKeepsSeparatedSameText() {
+        let isSuppressed = CADPoC.CADMetalRenderer.suppressesVisibleTextOverlayForTesting(
+            candidateText: "AL1:n6",
+            candidateRect: CGRect(x: 240, y: 100, width: 84, height: 18),
+            kept: [
+                (
+                    text: "AL1:n6",
+                    rect: CGRect(x: 100, y: 100, width: 84, height: 18)
+                )
+            ]
+        )
+
+        #expect(!isSuppressed)
     }
     #endif
 
@@ -1717,6 +1853,72 @@ struct CADPoCLineImportTests {
         #expect(textRun.displayText == "20240517")
         #expect(textRun.decodeMethod == "rawString")
         #expect(!textRun.warnings.contains("CAD_TEXT_SHX_BIGFONT_BARE_HEX_DECODED"))
+    }
+
+    @Test func libreDWGNativePoCDefaultsNativeTextImportToCP936() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine()
+        #expect(engine.effectiveNativeTextCodePageForTesting == 936)
+        #expect(engine.nativeTextEncodingLabelsForTesting.first == "cp936")
+
+        let rawBytes: [UInt8] = [0xD6, 0xD0, 0xCE, 0xC4]
+        let rawText = Self.nativeCString(bytes: rawBytes)
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("CP936-TEXT")
+        nativeEntity.rawText = rawText
+        nativeEntity.textStyleName = strdup("HZTXT")
+        nativeEntity.fontName = strdup("hztxt.shx")
+        nativeEntity.bigFontName = strdup("gbcbig.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            rawText.deallocate()
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+        #expect(text.rawText == "中文")
+        #expect(text.displayText == "中文")
+    }
+
+    @Test func libreDWGNativePoCDoesNotReDecodeNativeUTF8TextAsCP936() throws {
+        let engine = CADPoC.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("UTF8-TEXT")
+        nativeEntity.rawText = strdup("中文")
+        nativeEntity.rawTextIsUTF8 = 1
+        nativeEntity.textStyleName = strdup("HZTXT")
+        nativeEntity.fontName = strdup("hztxt.shx")
+        nativeEntity.bigFontName = strdup("gbcbig.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+        #expect(text.rawText == "中文")
+        #expect(text.displayText == "中文")
     }
 
     @Test func libreDWGNativePoCUsesPreferredBig5CodePageForNativeTextBytes() throws {
@@ -3671,6 +3873,52 @@ struct CADPoCLineImportTests {
             }
             return false
         })
+    }
+
+    @Test func renderPipelineDrawsDimensionAnonymousBlockTextEntity() {
+        let dimensionPath = SiteKeeperCADKernel.CADPath(elements: [
+            .move(to: SiteKeeperCADKernel.CADPoint(x: 0, y: 0)),
+            .line(to: SiteKeeperCADKernel.CADPoint(x: 0, y: 10)),
+            .line(to: SiteKeeperCADKernel.CADPoint(x: 100, y: 10)),
+            .line(to: SiteKeeperCADKernel.CADPoint(x: 100, y: 0))
+        ])
+        let dimensionEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .dimension,
+            layerID: "DIM",
+            path: dimensionPath,
+            bounds: dimensionPath.bounds,
+            sourceHandle: "D1"
+        )
+        let blockText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "标注块文字",
+            displayText: "标注块文字",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 50, y: 12),
+            height: 3
+        )
+        let textEntity = SiteKeeperCADKernel.CADEntity(
+            kind: .text,
+            layerID: "DIMTXT",
+            text: blockText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 50, minY: 12, maxX: 68, maxY: 15),
+            sourceHandle: "D1"
+        )
+
+        let commands = CADPoC.CADRenderPipeline().commands(from: [dimensionEntity, textEntity])
+        let renderedTexts = commands.compactMap { command -> String? in
+            if case let .text(text, _) = command {
+                return text.displayText
+            }
+            return nil
+        }
+
+        #expect(commands.contains { command in
+            if case .polyline = command {
+                return true
+            }
+            return false
+        })
+        #expect(renderedTexts == ["标注块文字"])
+        #expect(!renderedTexts.contains("100"))
     }
 
     @Test func libreDWGNativePoCImportsLeaderMLeaderAndTableText() async throws {

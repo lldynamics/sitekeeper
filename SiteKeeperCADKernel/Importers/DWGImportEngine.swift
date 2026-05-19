@@ -7,6 +7,27 @@ extension SiteKeeperCADKernel {
         func canImportDWG(file: CADFile) -> Bool
         func importDWG(file: CADFile) async throws -> CADExternalSDKDrawing
     }
+
+    enum CADDWGGeometryAdapterRegistry {
+        private static var adapters: [any CADDWGGeometryAdapter] = []
+
+        static func register(_ adapter: any CADDWGGeometryAdapter) {
+            adapters.removeAll { $0.id == adapter.id }
+            adapters.append(adapter)
+        }
+
+        static func reset() {
+            adapters = []
+        }
+
+        static func registeredAdapterIDs() -> [String] {
+            adapters.map(\.id)
+        }
+
+        static func adapter(for file: CADFile) -> (any CADDWGGeometryAdapter)? {
+            adapters.first { $0.canImportDWG(file: file) }
+        }
+    }
 }
 
 extension SiteKeeperCADKernel.CADDWGGeometryAdapter {

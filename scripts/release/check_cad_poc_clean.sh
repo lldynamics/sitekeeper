@@ -12,6 +12,9 @@ FORBIDDEN_PATTERNS=(
   "DWG""DiagnosticImportEngine"
   "diagnostic""Only"
   "CAD""FallbackViewer"
+  "CAD""Canvas2DRenderer"
+  "Unsupported""CADImportEngine"
+  "SiteKeeper""CADKernelAppViewerEngine"
 )
 
 TARGETS=(

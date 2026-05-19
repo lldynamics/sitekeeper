@@ -137,12 +137,23 @@ struct CADDiagnosticMachineTrace: Codable {
             let dimension: Int
             let hatch: Int
             let text: Int
+            let mleader: Int
+            let proxy: Int
+            let tianzhengProxy: Int
             let total: Int
+        }
+
+        struct TextExposure: Codable {
+            let mleaderTextCandidateCount: Int
+            let exportedMLeaderTextCount: Int
+            let proxyTextCandidateCount: Int
+            let tianzhengTextCandidateCount: Int
         }
 
         let fileName: String
         let importSource: String
         let rawEntityCounts: RawEntityCounts
+        let textExposure: TextExposure
         let expandedInsertEntityCount: Int
         let entityCount: Int
         let drawableEntityCount: Int
@@ -226,6 +237,9 @@ extension CADDiagnosticMachineTrace.NativeTrace {
             dimension: trace.rawDimensionCount,
             hatch: trace.rawHatchCount,
             text: trace.rawTextCount,
+            mleader: trace.rawMLeaderCount,
+            proxy: trace.rawProxyEntityCount,
+            tianzhengProxy: trace.rawTianzhengProxyCount,
             total: trace.rawLineCount
                 + trace.rawPolylineCount
                 + trace.rawCircleCount
@@ -237,11 +251,19 @@ extension CADDiagnosticMachineTrace.NativeTrace {
                 + trace.rawDimensionCount
                 + trace.rawHatchCount
                 + trace.rawTextCount
+                + trace.rawProxyEntityCount
+        )
+        let textExposure = TextExposure(
+            mleaderTextCandidateCount: trace.mleaderTextCandidateCount,
+            exportedMLeaderTextCount: trace.exportedMLeaderTextCount,
+            proxyTextCandidateCount: trace.proxyTextCandidateCount,
+            tianzhengTextCandidateCount: trace.tianzhengTextCandidateCount
         )
         self.init(
             fileName: trace.fileName,
             importSource: trace.importSource,
             rawEntityCounts: rawCounts,
+            textExposure: textExposure,
             expandedInsertEntityCount: trace.expandedInsertEntityCount,
             entityCount: trace.entityCount,
             drawableEntityCount: trace.drawableEntityCount,

@@ -89,9 +89,14 @@ extension CADPoC {
         var rawTextCount: Int
         var rawProxyEntityCount: Int
         var rawTianzhengProxyCount: Int
+        var rawMLeaderCount: Int
+        var mleaderTextCandidateCount: Int
+        var proxyTextCandidateCount: Int
+        var tianzhengTextCandidateCount: Int
         var expandedInsertEntityCount: Int
         var exportedProxyEntityCount: Int
         var exportedTianzhengProxyCount: Int
+        var exportedMLeaderTextCount: Int
         var entityCount: Int
         var drawableEntityCount: Int
         var renderCommandCount: Int
@@ -116,9 +121,14 @@ extension CADPoC {
             rawTextCount: Int = 0,
             rawProxyEntityCount: Int = 0,
             rawTianzhengProxyCount: Int = 0,
+            rawMLeaderCount: Int = 0,
+            mleaderTextCandidateCount: Int = 0,
+            proxyTextCandidateCount: Int = 0,
+            tianzhengTextCandidateCount: Int = 0,
             expandedInsertEntityCount: Int = 0,
             exportedProxyEntityCount: Int = 0,
             exportedTianzhengProxyCount: Int = 0,
+            exportedMLeaderTextCount: Int = 0,
             entityCount: Int = 0,
             drawableEntityCount: Int = 0,
             renderCommandCount: Int = 0,
@@ -142,9 +152,14 @@ extension CADPoC {
             self.rawTextCount = rawTextCount
             self.rawProxyEntityCount = rawProxyEntityCount
             self.rawTianzhengProxyCount = rawTianzhengProxyCount
+            self.rawMLeaderCount = rawMLeaderCount
+            self.mleaderTextCandidateCount = mleaderTextCandidateCount
+            self.proxyTextCandidateCount = proxyTextCandidateCount
+            self.tianzhengTextCandidateCount = tianzhengTextCandidateCount
             self.expandedInsertEntityCount = expandedInsertEntityCount
             self.exportedProxyEntityCount = exportedProxyEntityCount
             self.exportedTianzhengProxyCount = exportedTianzhengProxyCount
+            self.exportedMLeaderTextCount = exportedMLeaderTextCount
             self.entityCount = entityCount
             self.drawableEntityCount = drawableEntityCount
             self.renderCommandCount = renderCommandCount

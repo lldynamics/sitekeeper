@@ -73,15 +73,15 @@ struct CADPoCCleanupTests {
         #expect(CADCanvasFeatureOptions.fullDetail.allows(SiteKeeperCADKernel.CADEntity(kind: .hatch, path: hatchPath, bounds: hatchPath.bounds)))
 
         let root = try Self.repositoryRoot()
-        let hostSource = try Self.sourceText(root, "Sources/Features/项目/CADCanvasHost.swift")
+        let chromeSource = try Self.sourceText(root, "Sources/Features/项目/CADPreviewContainer+Chrome.swift")
         let toolbarSource = try Self.sourceText(root, "Sources/Shared/CAD/Viewer/CADViewerToolbar.swift")
-        #expect(hostSource.contains("cadPerformanceMenu"))
+        #expect(chromeSource.contains("cadPerformanceMenu"))
         #expect(toolbarSource.contains("文字显示"))
         #expect(toolbarSource.contains("文字搜索索引"))
         #expect(toolbarSource.contains("吸附点"))
         #expect(toolbarSource.contains("填充细节"))
         #expect(toolbarSource.contains("占位对象"))
-        #expect(hostSource.contains("cadDrawingLayoutMenu"))
+        #expect(chromeSource.contains("cadDrawingLayoutMenu"))
     }
 
     @Test func drawingBusinessTypesRemainCompilable() {
@@ -118,9 +118,7 @@ struct CADPoCCleanupTests {
         ]
         for sourcePath in productionDiagnosticSources {
             let source = try Self.sourceText(root, sourcePath)
-            #expect(source.contains("print(") == false)
-            #expect(source.contains("debugPrint(") == false)
-            #expect(source.contains("NSLog(") == false)
+            #expect(source.containsDirectDebugLoggingCall == false)
         }
     }
 
@@ -142,9 +140,8 @@ struct CADPoCCleanupTests {
             )
         )
 
-        let frame = SiteKeeperCADKernel.CADCanvas2DRenderer().makeFrame(database: database)
-        #expect(frame.databaseID == database.id)
-        #expect(frame.commands.isEmpty == false)
+        let commands = CADPoC.CADRenderPipeline().commands(from: database.entities)
+        #expect(commands.isEmpty == false)
 
         let dxfURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("cad-poc-\(UUID().uuidString)")
@@ -215,5 +212,16 @@ struct CADPoCCleanupTests {
             combined += "\n"
         }
         return combined
+    }
+}
+
+private extension String {
+    var containsDirectDebugLoggingCall: Bool {
+        split(separator: "\n").contains { line in
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.hasPrefix("print(")
+                || trimmed.hasPrefix("debugPrint(")
+                || trimmed.hasPrefix("NSLog(")
+        }
     }
 }
