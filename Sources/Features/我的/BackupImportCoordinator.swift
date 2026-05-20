@@ -39,8 +39,6 @@ enum BackupImportCoordinator {
             store.mergeProjectDrawingsByID(snapshot.projectDrawings)
             store.mergeProjectContactsByID(snapshot.projectContacts)
             store.mergeProjectFinancialRecordsByID(snapshot.projectFinancialRecords)
-            let migratedLegacyRecords = migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: store.projects)
-            store.mergeProjectFinancialRecordsByID(migratedLegacyRecords)
             store.mergeProjectDocumentsByID(snapshot.projectDocuments)
             store.mergeQuickNotesByID(snapshot.quickNotes)
             store.mergeProjectWarehouseMovementsByID(snapshot.projectWarehouseMovements)
@@ -64,10 +62,7 @@ enum BackupImportCoordinator {
             store.replaceSiteTodos(snapshot.siteTodos)
             store.replaceProjectDrawings(snapshot.projectDrawings)
             store.replaceProjectContacts(snapshot.projectContacts)
-            store.replaceProjectFinancialRecords(mergeUniqueByID(
-                snapshot.projectFinancialRecords,
-                migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: snapshot.projects)
-            ))
+            store.replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
             store.replaceProjectDocuments(snapshot.projectDocuments)
             store.replaceQuickNotes(snapshot.quickNotes)
             store.replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
@@ -80,9 +75,6 @@ enum BackupImportCoordinator {
             store.replaceUserMaterials(snapshot.userMaterials)
             store.replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
             store.hiddenPresetKeys = snapshot.hiddenPresetKeys
-        }
-        if !snapshot.legacyPaymentRecords.isEmpty {
-            StorageIssueLog.record("导入备份时已迁移旧收款记录 \(snapshot.legacyPaymentRecords.count) 条到财务流水")
         }
         store.enforceCalculationHistoryRetention()
         sanitizeMaterialProjectReferences(in: store)
@@ -170,30 +162,6 @@ enum BackupImportCoordinator {
             seen.insert(key)
         }
         return merged
-    }
-
-    private static func mergeUniqueByID<T: Identifiable>(_ primary: [T], _ secondary: [T]) -> [T] where T.ID: Hashable {
-        var merged = primary
-        var knownIDs = Set(primary.map(\.id))
-        for item in secondary where knownIDs.insert(item.id).inserted {
-            merged.append(item)
-        }
-        return merged
-    }
-
-    private static func migratedLegacyPaymentRecords(
-        _ records: [LegacyPaymentRecord],
-        projects: [Project]
-    ) -> [ProjectFinancialRecord] {
-        guard !records.isEmpty else { return [] }
-        let counterpartyByProjectID = Dictionary(
-            uniqueKeysWithValues: projects.map { ($0.id, $0.customerName) }
-        )
-        return records.map { record in
-            record.migratedFinancialRecord(
-                counterparty: counterpartyByProjectID[record.projectId] ?? ""
-            )
-        }
     }
 
     @MainActor

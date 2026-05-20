@@ -26,30 +26,6 @@ extension LaborRecord {
     var unitRateValue: QuantityValue { QuantityValue(text: unitRate) }
 }
 
-extension LegacyPaymentRecord {
-    var amountValue: MoneyValue { MoneyValue(text: amount) }
-
-    func migratedFinancialRecord(counterparty: String = "") -> ProjectFinancialRecord {
-        let noteParts = [
-            normalizedMethodDisplayName,
-            note.trimmingCharacters(in: .whitespacesAndNewlines)
-        ].filter { !$0.isEmpty }
-
-        return ProjectFinancialRecord(
-            id: id,
-            projectId: projectId,
-            date: date,
-            direction: .income,
-            category: .collection,
-            amount: amount,
-            counterparty: counterparty,
-            invoiceNumber: isInvoiced ? "已开票" : "",
-            status: .active,
-            note: noteParts.joined(separator: " · ")
-        )
-    }
-}
-
 extension ProjectFinancialRecord {
     var amountValue: MoneyValue { MoneyValue(text: amount) }
 }

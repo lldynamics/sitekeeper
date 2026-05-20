@@ -25,7 +25,7 @@ Reference docs:
 - `Sources/Shared/Services/BackupSnapshot.swift` is the best cross-platform exchange root.
 - `Sources/Shared/Services/DataStore.swift` persists `sitekeeper.json` and still migrates the legacy `construction_toolbox.json`.
 - `Sources/Shared/Services/ProjectModels.swift`, `ProjectDomainTypes.swift`, and `FinanceModels.swift` hold most portable domain models.
-- `SiteKeeperCADKernel/` and `Sources/Shared/CADKernel/` are high-risk for Android and should not block the first Android release.
+- Native CAD viewing/rendering code has been removed from the shared codebase; DWG/DXF files should remain project attachments opened in external professional viewers.
 
 ## MVP Scope
 

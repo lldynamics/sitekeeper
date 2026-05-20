@@ -269,8 +269,8 @@ struct ChecklistTabView: View {
             ProjectContactDatabaseView()
         case .methods:
             ConstructionMethodLibraryView()
-        case .cadViewer:
-            CADViewerToolView()
+        case .drawingLibrary:
+            DrawingLibraryToolView()
         }
     }
 }

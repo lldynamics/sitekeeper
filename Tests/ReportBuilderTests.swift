@@ -358,7 +358,17 @@ struct ReportBuilderTests {
             ProjectContact(projectId: projectId, name: "联系人测试", role: .owner, phone: "13800138000")
         ])
         store.replaceProjectDrawings([
-            ProjectDrawing(projectId: projectId, name: "图纸测试", fileName: "drawing.pdf", fileType: "PDF")
+            ProjectDrawing(
+                projectId: projectId,
+                name: "图纸测试",
+                drawingNumber: "A-101",
+                discipline: "建筑",
+                floorArea: "一层",
+                fileName: "drawing.pdf",
+                fileType: "PDF",
+                issuedAt: "2026-05-04",
+                receiver: "张工"
+            )
         ])
         store.replaceProjectWarehouseMovements([
             ProjectWarehouseMovement(projectId: projectId, date: "2026-05-04", movementType: .inbound, materialName: "材料测试", quantity: "1")
@@ -388,11 +398,14 @@ struct ReportBuilderTests {
         #expect(csvText.contains("\"project_id\",\"project_name\",\"category_key\",\"category_display\",\"status_raw\",\"status_display\""))
         #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"version_number\",\"version_state\""))
         #expect(csvText.contains("\"replaces_document_id\",\"replaced_by_document_id\",\"submission_status_raw\""))
+        #expect(csvText.contains("\"drawing_number\",\"discipline\",\"floor_area\""))
+        #expect(csvText.contains("\"A-101\""))
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
         let htmlText = String(data: html, encoding: .utf8) ?? ""
         #expect(htmlText.contains("项目联系人"))
         #expect(htmlText.contains("图纸索引"))
+        #expect(htmlText.contains("A-101"))
         #expect(htmlText.contains("仓库流水"))
         #expect(htmlText.contains("随手记"))
         #expect(htmlText.contains("项目财务流水"))
@@ -402,6 +415,7 @@ struct ReportBuilderTests {
         let extractedPDFText = pdfText(pdf)
         #expect(extractedPDFText.contains("项目联系人"))
         #expect(extractedPDFText.contains("图纸索引"))
+        #expect(extractedPDFText.contains("A-101"))
         #expect(extractedPDFText.contains("仓库流水"))
         #expect(extractedPDFText.contains("随手记"))
         #expect(extractedPDFText.contains("项目财务流水"))

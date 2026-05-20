@@ -100,6 +100,10 @@ extension ProjectDetailContainer {
             unsettledFinancialCount: snapshot.unsettledFinancialCount,
             unsettledFinancialAmount: unsettledFinancialAmount(snapshot: snapshot),
             openTodoCount: snapshot.openTodoCount,
+            openDrawingIssueCount: openDrawingIssueCount(
+                drawings: snapshot.relatedDrawings,
+                todos: snapshot.relatedTodos
+            ),
             backupState: ProjectDeliveryBackupState.current(),
             missingOriginalEntries: ProjectDetailImportExportActions.missingProjectPackageFiles(
                 documents: snapshot.relatedDocuments,
@@ -139,6 +143,19 @@ extension ProjectDetailContainer {
             return name.isEmpty ? drawing.fileName : name
         }
         .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    func openDrawingIssueCount(drawings: [ProjectDrawing], todos: [SiteTodo]) -> Int {
+        let todosByID = Dictionary(uniqueKeysWithValues: todos.map { ($0.id, $0) })
+        return drawings.filter { drawing in
+            let linkedOpenTodoExists = drawing.linkedTodoIDs
+                .compactMap { todosByID[$0] }
+                .contains { !$0.isDone }
+            let hasOpenDrawingStatus = drawing.issueStatus == .open
+                || drawing.issueStatus == .inProgress
+                || (drawing.issueStatus != .closed && !drawing.issueNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            return linkedOpenTodoExists || hasOpenDrawingStatus
+        }.count
     }
 
     func deliveryLogExpectation(project: Project, logs: [DailyLog]) -> (expectedCount: Int, missingCount: Int, samples: [String]) {

@@ -410,7 +410,7 @@ private enum LaborSettlementFilter: String, CaseIterable {
     }
 }
 
-private struct FlowTagLine: View {
+struct FlowTagLine: View {
     let tags: [String]
 
     var body: some View {
@@ -469,7 +469,7 @@ struct ProjectDrawingSectionView: View {
                 ProjectInlineEmptyState(
                     String(localized: "还没有图纸"),
                     systemImage: "doc.viewfinder",
-                    detail: String(localized: "可上传 DWG、DXF、PDF；当前版本可下载原图查看。")
+                    detail: String(localized: "可上传 DWG、DXF、PDF；PDF 可系统预览，CAD 原件可分享给外部看图软件。")
                 )
                 Button(action: onImportDrawing) {
                     Label(String(localized: "导图纸"), systemImage: "doc.viewfinder.fill")
@@ -529,9 +529,10 @@ struct ProjectDrawingSectionView: View {
                     .foregroundStyle(Color.appDoc)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(drawing.name)
+                        Text(drawingDisplayName(for: drawing))
                             .font(.callout.weight(.medium))
                             .foregroundStyle(.primary)
+                            .lineLimit(1)
                         Text(drawing.version)
                             .font(.caption2.weight(.semibold))
                             .padding(.horizontal, 6)
@@ -550,16 +551,18 @@ struct ProjectDrawingSectionView: View {
                     Text("\(drawing.fileType.uppercased()) · \(drawing.importedAt)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                    if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
-                        let status = previewStatus(for: drawing)
-                        if let statusText = status.text {
-                            Text(statusText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
-                        }
-                        Text(String(format: String(localized: "文字：%@ / %@"), drawing.textEncoding.displayName, drawing.textBigFont.displayName))
+                    FlowTagLine(tags: drawingLedgerTags(for: drawing))
+                    if let linkSummary = drawingLinkSummary(for: drawing) {
+                        Text(linkSummary)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.appPrimaryAction)
+                            .lineLimit(1)
+                    }
+                    let status = openStatus(for: drawing)
+                    if let statusText = status.text {
+                        Text(statusText)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
                     }
                     if !drawing.relatedLogDate.isEmpty {
                         Text(String(format: String(localized: "关联日志: %@"), drawing.relatedLogDate))
@@ -601,7 +604,7 @@ struct ProjectDrawingSectionView: View {
             Button {
                 onPreview(drawing)
             } label: {
-                Label(String(localized: "预览图纸"), systemImage: "eye")
+                Label(String(localized: "用专业看图软件打开"), systemImage: "square.and.arrow.up")
             }
         }
         .swipeActions(edge: .trailing) {
@@ -615,24 +618,49 @@ struct ProjectDrawingSectionView: View {
             Button {
                 onPreview(drawing)
             } label: {
-                Label(String(localized: "预览"), systemImage: "eye")
+                Label(String(localized: "专业看图"), systemImage: "square.and.arrow.up")
             }
             .tint(Color.appDoc)
         }
     }
 
-    private func previewStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
+    private func drawingDisplayName(for drawing: ProjectDrawing) -> String {
+        let trimmed = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty {
+            return trimmed
+        }
+        return drawing.fileName
+    }
+
+    private func drawingLedgerTags(for drawing: ProjectDrawing) -> [String] {
+        [
+            drawing.drawingNumber.isEmpty ? "" : String(format: String(localized: "图号: %@"), drawing.drawingNumber),
+            drawing.discipline.isEmpty ? "" : String(format: String(localized: "专业: %@"), drawing.discipline),
+            drawing.floorArea.isEmpty ? "" : String(format: String(localized: "楼层/区域: %@"), drawing.floorArea),
+            drawing.issuedAt.isEmpty ? "" : String(format: String(localized: "出图: %@"), drawing.issuedAt),
+            drawing.receiver.isEmpty ? "" : String(format: String(localized: "接收: %@"), drawing.receiver)
+        ]
+        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    }
+
+    private func drawingLinkSummary(for drawing: ProjectDrawing) -> String? {
+        let parts = [
+            drawing.linkedTodoIDs.isEmpty ? "" : String(format: String(localized: "待办 %lld"), Int64(drawing.linkedTodoIDs.count)),
+            drawing.linkedLogIDs.isEmpty ? "" : String(format: String(localized: "日志 %lld"), Int64(drawing.linkedLogIDs.count)),
+            drawing.linkedDocumentIDs.isEmpty ? "" : String(format: String(localized: "资料 %lld"), Int64(drawing.linkedDocumentIDs.count))
+        ]
+        .filter { !$0.isEmpty }
+        guard !parts.isEmpty else { return nil }
+        return String(format: String(localized: "关联: %@"), parts.joined(separator: " · "))
+    }
+
+    private func openStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
-        if fileType == "dxf" {
-            let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
-            return (ready ? String(localized: "CAD 本机查看可用") : nil, ready)
-        }
         if fileType == "pdf" {
-            return (String(localized: "PDF 附件"), true)
+            return (String(localized: "PDF 可预览"), true)
         }
-        if fileType == "dwg" {
-            let ready = CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
-            return (ready ? String(localized: "DWG 本机查看") : nil, ready)
+        if ProjectDetailDrawingHelper.isCADSource(fileType) {
+            return (String(localized: "用专业看图软件打开"), true)
         }
         return (String(localized: "文件独立打开"), true)
     }

@@ -148,7 +148,7 @@ struct ExportDateFilterTests {
         #expect(filteredByDate[0].counterparty == "A")
     }
 
-    @Test func legacyPaymentRecordsAreDecodeOnly() throws {
+    @Test func legacyPaymentRecordsFieldIsIgnored() throws {
         let projectId = UUID()
         let data = """
         {
@@ -166,8 +166,7 @@ struct ExportDateFilterTests {
         """.data(using: .utf8)!
 
         let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
-        #expect(snapshot.legacyPaymentRecords.count == 1)
-        #expect(Formatters.date.date(from: snapshot.legacyPaymentRecords[0].date) != nil)
+        #expect(snapshot.projectFinancialRecords.isEmpty)
 
         let encoded = try JSONEncoder().encode(snapshot)
         let encodedText = String(data: encoded, encoding: .utf8) ?? ""

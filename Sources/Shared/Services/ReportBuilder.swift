@@ -41,6 +41,9 @@ enum ReportBuilder {
         static let contactDirectory = "05-contacts"
         static let checklistFileName = "delivery_checklist.txt"
         static let documentChecklistFileName = "document_checklist.tsv"
+        static let currentDrawingRegisterFileName = "current_drawings.tsv"
+        static let drawingMissingCheckFileName = "drawing_missing_check.tsv"
+        static let openDrawingIssuesFileName = "open_drawing_issues.tsv"
         static let quickNotesFileName = "quick_notes.tsv"
         static let contactsFileName = "contacts.tsv"
 
@@ -185,6 +188,18 @@ enum ReportBuilder {
             case .originals:
                 return missingOriginalEntries.isEmpty
             }
+        }
+    }
+
+    private struct ProjectDrawingOpenIssueRow {
+        let drawing: ProjectDrawing
+        let openTodos: [SiteTodo]
+
+        var summary: String {
+            let note = drawing.issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !note.isEmpty { return note }
+            let titles = openTodos.map(\.title).filter { !$0.isEmpty }
+            return titles.isEmpty ? ReportBuilder.loc("关联待办未关闭") : titles.joined(separator: ReportBuilder.loc("、"))
         }
     }
 
@@ -908,6 +923,9 @@ enum ReportBuilder {
             documents: documents,
             requiredCategories: project.requiredDocumentCategories
         )
+        let currentDrawings = currentProjectPackageDrawings(drawings)
+        let missingDrawingOriginalEntries = projectPackageMissingDrawingEntries(drawings)
+        let openDrawingIssues = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos)
         var stagedRawBytes = 0
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -934,6 +952,10 @@ enum ReportBuilder {
             tsv(["delivery_health_backup_fresh", deliveryHealth.backupState.isFresh ? "true" : "false"]),
             tsv(["delivery_health_latest_backup_at", deliveryHealth.backupState.latestBackupExportValue]),
             tsv(["delivery_health_missing_originals", "\(deliveryHealth.missingOriginalEntries.count)"]),
+            tsv(["drawing_register_current_count", "\(currentDrawings.count)"]),
+            tsv(["drawing_original_count", "\(drawings.count)"]),
+            tsv(["drawing_missing_original_count", "\(missingDrawingOriginalEntries.count)"]),
+            tsv(["drawing_open_issue_count", "\(openDrawingIssues.count)"]),
             tsv(["document_checklist_required_categories", "\(documentChecklist.requiredCount)"]),
             tsv(["document_checklist_covered_categories", "\(documentChecklist.coveredCount)"]),
             tsv(["document_checklist_missing_categories", "\(documentChecklist.missingCount)"]),
@@ -946,6 +968,9 @@ enum ReportBuilder {
             tsv(["\(deliveryDirectory)/\(pdfName)", "project_delivery_pdf", loc("项目交付包 PDF")]),
             tsv(["\(deliveryDirectory)/\(checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", "document_checklist", loc("施工资料清单")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)", "current_drawing_register", loc("当前版图纸清单")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)", "drawing_missing_check", loc("缺失图纸检查")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.openDrawingIssuesFileName)", "open_drawing_issues", loc("未关闭图纸问题")]),
             tsv(["\(documentDirectory)/", "source_documents", loc("票据/资料原始文件")]),
             tsv(["\(drawingDirectory)/", "source_drawings", loc("图纸原始文件")]),
             tsv(["\(photoDirectory)/", "source_site_photos", loc("日志和整改照片文件")]),
@@ -988,6 +1013,33 @@ enum ReportBuilder {
             stagedRawBytes: &stagedRawBytes
         )
         reportProgress(loc("写入施工资料清单"))
+
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(projectCurrentDrawingRegisterTSVText(drawings).utf8),
+            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress(loc("写入当前版图纸清单"))
+
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(projectDrawingMissingCheckTSVText(drawings).utf8),
+            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress(loc("写入缺失图纸检查"))
+
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(projectOpenDrawingIssuesTSVText(drawings: drawings, todos: todos).utf8),
+            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.openDrawingIssuesFileName)",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress(loc("写入未关闭图纸问题"))
 
         for document in documents {
             try failIfCancelled()
@@ -1122,6 +1174,9 @@ enum ReportBuilder {
     ) -> String {
         let logExpectation = projectDeliveryLogExpectation(project: project, logs: logs)
         let drawingsWithoutCurrent = projectDrawingGroupsWithoutCurrentVersion(drawings)
+        let currentDrawings = currentProjectPackageDrawings(drawings)
+        let missingDrawingOriginalEntries = projectPackageMissingDrawingEntries(drawings)
+        let openDrawingIssues = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos)
         let missingReceipts = projectFinancialRecordsMissingReceipts(
             financialRecords: financialRecords,
             documents: documents
@@ -1148,6 +1203,7 @@ enum ReportBuilder {
         let advisoryWarningCount = [
             !logExpectation.missingDates.isEmpty,
             !drawingsWithoutCurrent.isEmpty,
+            !openDrawingIssues.isEmpty,
             contacts.isEmpty,
             !unsettledRecords.isEmpty,
             documentChecklist.hasAttention
@@ -1193,7 +1249,10 @@ enum ReportBuilder {
         lines += [
             "",
             loc("2. 图纸当前版"),
-            locFormat("   - 图纸数量: %lld 份", Int64(drawings.count))
+            locFormat("   - 图纸数量: %lld 份", Int64(drawings.count)),
+            locFormat("   - 当前版图纸: %lld 份", Int64(currentDrawings.count)),
+            locFormat("   - 图纸原件: %lld 份", Int64(drawings.count)),
+            locFormat("   - 缺失图纸原件: %lld 项", Int64(missingDrawingOriginalEntries.count))
         ]
         if drawings.isEmpty {
             lines.append(loc("   - 结果: 未上传图纸"))
@@ -1202,6 +1261,9 @@ enum ReportBuilder {
         } else {
             lines.append(locFormat("   - 结果: %lld 组图纸未标记当前版", Int64(drawingsWithoutCurrent.count)))
             lines.append(locFormat("   - 图纸组: %@", drawingsWithoutCurrent.prefix(20).joined(separator: loc("、"))))
+        }
+        if !missingDrawingOriginalEntries.isEmpty {
+            lines.append(locFormat("   - 缺失图纸: %@", missingDrawingOriginalEntries.prefix(20).joined(separator: loc("、"))))
         }
 
         lines += [
@@ -1226,14 +1288,24 @@ enum ReportBuilder {
 
         lines += [
             "",
-            loc("5. 联系人"),
+            loc("5. 未关闭图纸问题"),
+            locFormat("   - 未关闭问题: %lld 项", Int64(openDrawingIssues.count)),
+            openDrawingIssues.isEmpty ? loc("   - 结果: 无未关闭图纸问题") : loc("   - 结果: 仍有图纸问题未关闭")
+        ]
+        lines += openDrawingIssues.prefix(20).map { issue in
+            "   - \(drawingDisplayName(issue.drawing)) \(issue.drawing.version): \(issue.summary)"
+        }
+
+        lines += [
+            "",
+            loc("6. 联系人"),
             locFormat("   - 联系人数量: %lld 位", Int64(contacts.count)),
             contacts.isEmpty ? loc("   - 结果: 缺少项目联系人") : loc("   - 结果: 已维护联系人")
         ]
 
         lines += [
             "",
-            loc("6. 未结清账目"),
+            loc("7. 未结清账目"),
             locFormat("   - 未结清笔数: %lld 笔", Int64(unsettledRecords.count)),
             locFormat("   - 未结清金额: %@", money(unsettledAmount)),
             unsettledRecords.isEmpty ? loc("   - 结果: 无未结清账目") : loc("   - 结果: 仍有未结清账目，建议交付前确认")
@@ -1362,6 +1434,67 @@ enum ReportBuilder {
             return name.isEmpty ? drawing.fileName : name
         }
         .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    private static func currentProjectPackageDrawings(_ drawings: [ProjectDrawing]) -> [ProjectDrawing] {
+        projectPackageSortedDrawings(drawings.filter(\.isCurrentVersion))
+    }
+
+    private static func projectPackageSortedDrawings(_ drawings: [ProjectDrawing]) -> [ProjectDrawing] {
+        drawings.sorted { lhs, rhs in
+            let lhsKey = [
+                lhs.discipline,
+                lhs.floorArea,
+                lhs.drawingNumber,
+                drawingDisplayName(lhs),
+                lhs.version,
+                lhs.fileName
+            ].joined(separator: "\u{1F}")
+            let rhsKey = [
+                rhs.discipline,
+                rhs.floorArea,
+                rhs.drawingNumber,
+                drawingDisplayName(rhs),
+                rhs.version,
+                rhs.fileName
+            ].joined(separator: "\u{1F}")
+            return lhsKey.localizedStandardCompare(rhsKey) == .orderedAscending
+        }
+    }
+
+    private static func projectPackageMissingDrawingEntries(_ drawings: [ProjectDrawing]) -> [String] {
+        projectPackageSortedDrawings(drawings).compactMap { drawing in
+            DrawingStorage.exists(fileName: drawing.fileName) ? nil : drawingDisplayName(drawing)
+        }
+    }
+
+    private static func projectPackageOpenDrawingIssueRows(
+        drawings: [ProjectDrawing],
+        todos: [SiteTodo]
+    ) -> [ProjectDrawingOpenIssueRow] {
+        let todosByID = Dictionary(uniqueKeysWithValues: todos.map { ($0.id, $0) })
+        return projectPackageSortedDrawings(drawings).compactMap { drawing in
+            let openTodos = drawing.linkedTodoIDs.compactMap { todosByID[$0] }.filter { !$0.isDone }
+            let hasOpenDrawingStatus = drawing.issueStatus == .open
+                || drawing.issueStatus == .inProgress
+                || (drawing.issueStatus != .closed && !drawing.issueNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            guard hasOpenDrawingStatus || !openTodos.isEmpty else { return nil }
+            return ProjectDrawingOpenIssueRow(drawing: drawing, openTodos: openTodos)
+        }
+    }
+
+    private static func drawingDisplayName(_ drawing: ProjectDrawing) -> String {
+        let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? drawing.fileName : name
+    }
+
+    private static func drawingIssueStatusKey(_ status: DrawingIssueStatus) -> String {
+        switch status {
+        case .none: "none"
+        case .open: "open"
+        case .inProgress: "in_progress"
+        case .closed: "closed"
+        }
     }
 
     private static func normalizedProjectDrawingFamilyKey(_ raw: String) -> String {
@@ -1553,6 +1686,129 @@ enum ReportBuilder {
         return ([header] + rows).joined(separator: "\n")
     }
 
+    private static func projectCurrentDrawingRegisterTSVText(_ drawings: [ProjectDrawing]) -> String {
+        let header = tsv([
+            "drawing_id",
+            "drawing_number",
+            "name",
+            "discipline",
+            "floor_area",
+            "version",
+            "issued_at",
+            "receiver",
+            "file_type",
+            "file_name",
+            "file_exists",
+            "issue_status_raw",
+            "issue_status_display",
+            "linked_todo_count",
+            "linked_log_count",
+            "linked_document_count",
+            "imported_at",
+            "note"
+        ])
+        let rows = currentProjectPackageDrawings(drawings).map { drawing in
+            tsv([
+                drawing.id.uuidString,
+                drawing.drawingNumber,
+                drawingDisplayName(drawing),
+                drawing.discipline,
+                drawing.floorArea,
+                drawing.version,
+                drawing.issuedAt,
+                drawing.receiver,
+                drawing.fileType,
+                drawing.fileName,
+                DrawingStorage.exists(fileName: drawing.fileName) ? "true" : "false",
+                drawingIssueStatusKey(drawing.issueStatus),
+                drawing.issueStatus.displayName,
+                "\(drawing.linkedTodoIDs.count)",
+                "\(drawing.linkedLogIDs.count)",
+                "\(drawing.linkedDocumentIDs.count)",
+                drawing.importedAt,
+                drawing.note
+            ])
+        }
+        return ([header] + rows).joined(separator: "\n")
+    }
+
+    private static func projectDrawingMissingCheckTSVText(_ drawings: [ProjectDrawing]) -> String {
+        let header = tsv([
+            "drawing_id",
+            "drawing_number",
+            "name",
+            "discipline",
+            "floor_area",
+            "version",
+            "is_current",
+            "file_type",
+            "file_name",
+            "file_exists",
+            "status_raw",
+            "status_display",
+            "imported_at"
+        ])
+        let rows = projectPackageSortedDrawings(drawings).map { drawing in
+            let exists = DrawingStorage.exists(fileName: drawing.fileName)
+            return tsv([
+                drawing.id.uuidString,
+                drawing.drawingNumber,
+                drawingDisplayName(drawing),
+                drawing.discipline,
+                drawing.floorArea,
+                drawing.version,
+                drawing.isCurrentVersion ? "true" : "false",
+                drawing.fileType,
+                drawing.fileName,
+                exists ? "true" : "false",
+                exists ? "present" : "missing",
+                exists ? loc("原件存在") : loc("原件缺失"),
+                drawing.importedAt
+            ])
+        }
+        return ([header] + rows).joined(separator: "\n")
+    }
+
+    private static func projectOpenDrawingIssuesTSVText(drawings: [ProjectDrawing], todos: [SiteTodo]) -> String {
+        let header = tsv([
+            "drawing_id",
+            "drawing_number",
+            "name",
+            "discipline",
+            "floor_area",
+            "version",
+            "issue_status_raw",
+            "issue_status_display",
+            "issue_note",
+            "open_todo_count",
+            "open_todo_titles",
+            "owners",
+            "due_dates",
+            "linked_todo_ids",
+            "file_name"
+        ])
+        let rows = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos).map { issue in
+            tsv([
+                issue.drawing.id.uuidString,
+                issue.drawing.drawingNumber,
+                drawingDisplayName(issue.drawing),
+                issue.drawing.discipline,
+                issue.drawing.floorArea,
+                issue.drawing.version,
+                drawingIssueStatusKey(issue.drawing.issueStatus),
+                issue.drawing.issueStatus == .none ? loc("关联待办未关闭") : issue.drawing.issueStatus.displayName,
+                issue.drawing.issueNote,
+                "\(issue.openTodos.count)",
+                issue.openTodos.map(\.title).joined(separator: "；"),
+                issue.openTodos.map(\.owner).filter { !$0.isEmpty }.joined(separator: "；"),
+                issue.openTodos.map(\.dueDate).filter { !$0.isEmpty }.joined(separator: "；"),
+                issue.openTodos.map { $0.id.uuidString }.joined(separator: ";"),
+                issue.drawing.fileName
+            ])
+        }
+        return ([header] + rows).joined(separator: "\n")
+    }
+
     private static func estimatedProjectPackageStepCount(
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
@@ -1560,7 +1816,7 @@ enum ReportBuilder {
         quickNotes: [QuickNote],
         contacts: [ProjectContact]
     ) -> Int {
-        var total = 4 // PDF + README + delivery checklist + document checklist
+        var total = 7 // PDF + README + delivery checklist + document checklist + drawing TSV files
         total += documents.count
         total += drawings.count
         total += logs.reduce(0) { $0 + $1.photoAttachments.count }

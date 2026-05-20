@@ -41,8 +41,6 @@ struct BackupSnapshot: Codable {
     var historyRecords: [HistoryRecord]
     var progressTasks: [ProgressTask]
     var siteTodos: [SiteTodo]
-    /// 旧版 `paymentRecords` 兼容字段：仅用于导入历史备份并迁移到 ProjectFinancialRecord。
-    var legacyPaymentRecords: [LegacyPaymentRecord]
     var projectDrawings: [ProjectDrawing]
     var projectContacts: [ProjectContact]
     var projectFinancialRecords: [ProjectFinancialRecord]
@@ -77,7 +75,6 @@ struct BackupSnapshot: Codable {
         historyRecords: [HistoryRecord],
         progressTasks: [ProgressTask] = [],
         siteTodos: [SiteTodo] = [],
-        legacyPaymentRecords: [LegacyPaymentRecord] = [],
         projectDrawings: [ProjectDrawing] = [],
         projectContacts: [ProjectContact] = [],
         projectFinancialRecords: [ProjectFinancialRecord] = [],
@@ -111,7 +108,6 @@ struct BackupSnapshot: Codable {
         self.historyRecords = historyRecords
         self.progressTasks = progressTasks
         self.siteTodos = siteTodos
-        self.legacyPaymentRecords = legacyPaymentRecords
         self.projectDrawings = projectDrawings
         self.projectContacts = projectContacts
         self.projectFinancialRecords = projectFinancialRecords
@@ -137,7 +133,7 @@ struct BackupSnapshot: Codable {
     enum CodingKeys: String, CodingKey {
         case schemaVersion, appVersion, appBuild, backupCreatedAt
         case materialItems, quoteItems, laborRecords, projects, dailyLogs, historyRecords
-        case progressTasks, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
+        case progressTasks, siteTodos, projectDrawings
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
         case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
@@ -158,7 +154,6 @@ struct BackupSnapshot: Codable {
         historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
         progressTasks = try container.decodeIfPresent([ProgressTask].self, forKey: .progressTasks) ?? []
         siteTodos = try container.decodeIfPresent([SiteTodo].self, forKey: .siteTodos) ?? []
-        legacyPaymentRecords = try container.decodeIfPresent([LegacyPaymentRecord].self, forKey: .legacyPaymentRecords) ?? []
         projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []
         projectContacts = try container.decodeIfPresent([ProjectContact].self, forKey: .projectContacts) ?? []
         projectFinancialRecords = try container.decodeIfPresent([ProjectFinancialRecord].self, forKey: .projectFinancialRecords) ?? []
@@ -215,6 +210,5 @@ struct BackupSnapshot: Codable {
         try container.encode(drawingFiles, forKey: .drawingFiles)
         try container.encode(documentFiles, forKey: .documentFiles)
         try container.encode(quickNoteAttachmentFiles, forKey: .quickNoteAttachmentFiles)
-        // legacyPaymentRecords is decode-only for old backups and must not appear in new exports.
     }
 }

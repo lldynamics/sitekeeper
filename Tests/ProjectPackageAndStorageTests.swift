@@ -481,6 +481,100 @@ struct ProjectPackageAndStorageTests {
         #expect(documentChecklistText.contains("construction_technical"))
     }
 
+    @Test func projectPackageOutputsDrawingDeliveryFiles() throws {
+        let project = Project(name: "图纸交付测试", location: "工地", status: .active)
+        var currentDrawing = try DrawingStorage.saveImportedDataOrThrow(
+            data: Data([0x01, 0x02, 0x03]),
+            sourceFileName: "A-101.pdf",
+            projectId: project.id
+        )
+        var historicalDrawing = try DrawingStorage.saveImportedDataOrThrow(
+            data: Data([0x04, 0x05]),
+            sourceFileName: "A-101-old.pdf",
+            projectId: project.id
+        )
+        defer {
+            DrawingStorage.delete(fileName: currentDrawing.fileName)
+            DrawingStorage.delete(fileName: historicalDrawing.fileName)
+        }
+
+        let todo = SiteTodo(
+            title: "确认洞口尺寸",
+            owner: "李工",
+            dueDate: "2026-05-20",
+            priority: .high,
+            issueType: .quality,
+            projectId: project.id
+        )
+        currentDrawing.name = "一层平面"
+        currentDrawing.drawingNumber = "A-101"
+        currentDrawing.discipline = "建筑"
+        currentDrawing.floorArea = "一层"
+        currentDrawing.version = "V2"
+        currentDrawing.isCurrentVersion = true
+        currentDrawing.issueStatus = .open
+        currentDrawing.issueNote = "洞口尺寸需确认"
+        currentDrawing.linkedTodoIDs = [todo.id]
+        historicalDrawing.name = "一层平面"
+        historicalDrawing.drawingNumber = "A-101"
+        historicalDrawing.discipline = "建筑"
+        historicalDrawing.floorArea = "一层"
+        historicalDrawing.version = "V1"
+        historicalDrawing.isCurrentVersion = false
+        let missingDrawing = ProjectDrawing(
+            projectId: project.id,
+            name: "缺失图纸",
+            fileName: "missing-drawing-\(UUID().uuidString).pdf",
+            fileType: "pdf",
+            version: "V1",
+            isCurrentVersion: true
+        )
+
+        let archiveURL = try ReportBuilder.makeProjectPackageZIP(
+            project: project,
+            materials: [],
+            quotes: [],
+            labor: [],
+            logs: [],
+            tasks: [],
+            todos: [todo],
+            drawings: [historicalDrawing, currentDrawing, missingDrawing]
+        )
+        defer { try? FileManager.default.removeItem(at: archiveURL) }
+
+        let entries = try SimpleZipArchiveReader.read(Data(contentsOf: archiveURL))
+        let folder = "图纸交付测试"
+        let readmeEntry = try #require(entries.first { $0.path == "\(folder)/README.txt" })
+        let readmeText = try #require(String(data: readmeEntry.data, encoding: .utf8))
+        #expect(readmeText.contains("drawing_register_current_count\t2"))
+        #expect(readmeText.contains("drawing_original_count\t3"))
+        #expect(readmeText.contains("drawing_missing_original_count\t1"))
+        #expect(readmeText.contains("drawing_open_issue_count\t1"))
+        #expect(readmeText.contains("00-delivery/current_drawings.tsv\tcurrent_drawing_register\t"))
+        #expect(readmeText.contains("00-delivery/drawing_missing_check.tsv\tdrawing_missing_check\t"))
+        #expect(readmeText.contains("00-delivery/open_drawing_issues.tsv\topen_drawing_issues\t"))
+
+        let currentEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/current_drawings.tsv" })
+        let currentText = try #require(String(data: currentEntry.data, encoding: .utf8))
+        #expect(currentText.contains("drawing_id\tdrawing_number\tname\tdiscipline\tfloor_area\tversion"))
+        #expect(currentText.contains("A-101\t一层平面\t建筑\t一层\tV2"))
+        #expect(!currentText.contains(historicalDrawing.fileName))
+
+        let missingEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/drawing_missing_check.tsv" })
+        let missingText = try #require(String(data: missingEntry.data, encoding: .utf8))
+        #expect(missingText.contains("缺失图纸"))
+        #expect(missingText.contains("\tmissing\t原件缺失\t"))
+
+        let issueEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/open_drawing_issues.tsv" })
+        let issueText = try #require(String(data: issueEntry.data, encoding: .utf8))
+        #expect(issueText.contains("洞口尺寸需确认"))
+        #expect(issueText.contains("确认洞口尺寸"))
+        #expect(issueText.contains("李工"))
+
+        #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(currentDrawing.fileName)" })
+        #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(historicalDrawing.fileName)" })
+    }
+
     @Test func projectPackageAuxiliaryTSVUsesMachineAndDisplayColumns() throws {
         let project = Project(name: "交付字段测试", location: "工地", status: .active)
         let contact = ProjectContact(projectId: project.id, name: "张工", role: .owner, company: "甲方", phone: "13800000000")

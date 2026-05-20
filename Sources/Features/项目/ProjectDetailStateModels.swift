@@ -45,7 +45,7 @@ struct ProjectDetailAssetState {
     var timelineContext: DrawingTimelineContext?
     var selectedPhotoContext: ProjectPhotoContext?
     var quickLookURL: URL?
-    var cadPreviewRequest: ProjectCADPreviewRequest?
+    var drawingShareURL: URL?
     var showDrawingImporter = false
     var pendingDrawingImportURLs: [URL] = []
     var drawingImportConflictNames: [String] = []

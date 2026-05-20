@@ -287,7 +287,12 @@ struct ProjectFileItemRow: View {
                         Label("预览", systemImage: "eye")
                     }
                     ShareLink(item: item.url) {
-                        Label("分享/打开", systemImage: "square.and.arrow.up")
+                        Label(
+                            item.category == .drawings
+                                ? String(localized: "用专业看图软件打开")
+                                : String(localized: "分享/打开"),
+                            systemImage: "square.and.arrow.up"
+                        )
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle").visibleIconStyle()

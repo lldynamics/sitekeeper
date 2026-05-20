@@ -764,7 +764,12 @@ struct ProjectFileBrowserView: View {
                                 }
                                 .buttonStyle(.appProminent())
                                 ShareLink(item: item.url) {
-                                    Label(String(localized: "分享/打开"), systemImage: "square.and.arrow.up")
+                                    Label(
+                                        item.category == .drawings
+                                            ? String(localized: "用专业看图软件打开")
+                                            : String(localized: "分享/打开"),
+                                        systemImage: "square.and.arrow.up"
+                                    )
                                 }
                             } else {
                                 Text(String(localized: "该文件在本地已缺失，请回到项目详情重新导入。"))

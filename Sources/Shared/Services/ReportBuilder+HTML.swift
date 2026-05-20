@@ -63,8 +63,28 @@ extension ReportBuilder {
             })
         }
         if options.includeProjectDrawings {
-            table(loc("图纸索引"), headers: ["名称", "类型", "版本", "文件名", "问题状态", "问题备注", "导入时间", "关联日志日期", "备注", "项目ID"], rows: snapshot.projectDrawings.map {
-                [$0.name, $0.fileType, $0.version, $0.fileName, $0.issueStatus.displayName, $0.issueNote, $0.importedAt, $0.relatedLogDate, $0.note, $0.projectId.uuidString]
+            table(loc("图纸索引"), headers: ["名称", "图号", "专业", "楼层/区域", "类型", "版本", "当前版", "出图日期", "接收人", "文件名", "问题状态", "问题备注", "关联待办", "关联日志", "关联资料", "导入时间", "关联日志日期", "备注", "项目ID"], rows: snapshot.projectDrawings.map {
+                [
+                    $0.name,
+                    $0.drawingNumber,
+                    $0.discipline,
+                    $0.floorArea,
+                    $0.fileType,
+                    $0.version,
+                    $0.isCurrentVersion ? loc("是") : loc("否"),
+                    $0.issuedAt,
+                    $0.receiver,
+                    $0.fileName,
+                    $0.issueStatus.displayName,
+                    $0.issueNote,
+                    "\($0.linkedTodoIDs.count)",
+                    "\($0.linkedLogIDs.count)",
+                    "\($0.linkedDocumentIDs.count)",
+                    $0.importedAt,
+                    $0.relatedLogDate,
+                    $0.note,
+                    $0.projectId.uuidString
+                ]
             })
         }
         if options.includeWarehouseMovements {

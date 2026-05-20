@@ -246,6 +246,7 @@ struct ProjectDeliveryGuideData {
     let unsettledFinancialCount: Int
     let unsettledFinancialAmount: Double
     let openTodoCount: Int
+    let openDrawingIssueCount: Int
     let backupState: ProjectDeliveryBackupState
     let missingOriginalEntries: [String]
     let estimatedPackageBytes: Int
@@ -272,6 +273,7 @@ struct ProjectDeliveryGuideData {
         missingLogDateCount > 0
             || drawingCount == 0
             || drawingWithoutCurrentCount > 0
+            || openDrawingIssueCount > 0
             || contactCount == 0
             || missingReceiptCount > 0
             || unsettledFinancialCount > 0
@@ -282,6 +284,7 @@ struct ProjectDeliveryGuideData {
         deliveryHealth.failedIssues.count + [
             missingLogDateCount > 0,
             drawingCount > 0 && drawingWithoutCurrentCount > 0,
+            openDrawingIssueCount > 0,
             contactCount == 0,
             unsettledFinancialCount > 0
         ].filter { $0 }.count
@@ -340,6 +343,15 @@ struct ProjectDeliveryGuideView: View {
                         title: String(localized: "图纸当前版检查"),
                         detail: drawingCurrentVersionDetail,
                         status: drawingCurrentVersionStatus
+                    ) {
+                        onOpenMode(.assets)
+                    }
+                    guideRow(
+                        title: String(localized: "未关闭图纸问题"),
+                        detail: data.openDrawingIssueCount == 0
+                            ? String(localized: "没有未关闭图纸问题")
+                            : String(format: String(localized: "还有 %lld 项未关闭"), Int64(data.openDrawingIssueCount)),
+                        status: data.openDrawingIssueCount == 0 ? .ok : .warning
                     ) {
                         onOpenMode(.assets)
                     }

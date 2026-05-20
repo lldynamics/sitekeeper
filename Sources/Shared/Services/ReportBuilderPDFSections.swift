@@ -84,7 +84,26 @@ enum ReportBuilderPDFSections {
         if options.includeProjectDrawings && !snapshot.projectDrawings.isEmpty {
             lines.append("")
             lines.append(String(localized: "图纸索引"))
-            lines += snapshot.projectDrawings.map { "- \($0.name) \($0.fileType) v\($0.version) [\($0.issueStatus.displayName)]" }
+            lines += snapshot.projectDrawings.map { drawing in
+                let linkParts = [
+                    drawing.linkedTodoIDs.isEmpty ? "" : String(format: String(localized: "待办 %lld"), Int64(drawing.linkedTodoIDs.count)),
+                    drawing.linkedLogIDs.isEmpty ? "" : String(format: String(localized: "日志 %lld"), Int64(drawing.linkedLogIDs.count)),
+                    drawing.linkedDocumentIDs.isEmpty ? "" : String(format: String(localized: "资料 %lld"), Int64(drawing.linkedDocumentIDs.count))
+                ]
+                .filter { !$0.isEmpty }
+                let register = [
+                    drawing.drawingNumber.isEmpty ? "" : String(format: String(localized: "图号: %@"), drawing.drawingNumber),
+                    drawing.discipline,
+                    drawing.floorArea,
+                    drawing.isCurrentVersion ? String(localized: "当前版") : String(localized: "历史版"),
+                    drawing.issuedAt.isEmpty ? "" : String(format: String(localized: "出图: %@"), drawing.issuedAt),
+                    drawing.receiver.isEmpty ? "" : String(format: String(localized: "接收: %@"), drawing.receiver),
+                    linkParts.isEmpty ? "" : String(format: String(localized: "关联: %@"), linkParts.joined(separator: " · "))
+                ]
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .joined(separator: " · ")
+                return "- \(drawing.name) \(drawing.fileType) v\(drawing.version) [\(drawing.issueStatus.displayName)]  \(register)"
+            }
         }
         if options.includeWarehouseMovements && !snapshot.projectWarehouseMovements.isEmpty {
             lines.append("")
