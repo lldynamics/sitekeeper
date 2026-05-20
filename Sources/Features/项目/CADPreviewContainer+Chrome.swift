@@ -657,7 +657,7 @@ extension CADPreviewContainer {
         Button {
             showShareSheet = true
         } label: {
-            Label(String(localized: "分享原 CAD 文件"), systemImage: "square.and.arrow.up")
+            Label(String(localized: "用其他软件打开"), systemImage: "square.and.arrow.up")
         }
         if shouldUseCADKernelRenderer {
             Button {

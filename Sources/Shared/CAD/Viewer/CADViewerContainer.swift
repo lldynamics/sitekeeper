@@ -163,7 +163,8 @@ struct NativeCADViewerEntry: View {
         }
     }
 
-    private var canvasLayer: some View {
+    @ViewBuilder
+    private var cadCanvasSurface: some View {
         CADCanvasView(
             fileURL: fileURL,
             selectedLayoutID: effectiveCurrentLayoutID,
@@ -181,39 +182,43 @@ struct NativeCADViewerEntry: View {
             onSearchIndexChanged: handleSearchIndexChanged,
             onImportStateChanged: handleImportStateChanged
         )
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .overlay(alignment: .topLeading) {
-            if showsSearchPanel {
-                searchPanel
+    }
+
+    private var canvasLayer: some View {
+        cadCanvasSurface
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay(alignment: .topLeading) {
+                if showsSearchPanel {
+                    searchPanel
+                        .padding(12)
+                }
+            }
+            .overlay(alignment: .topTrailing) {
+                zoomControls
                     .padding(12)
             }
-        }
-        .overlay(alignment: .topTrailing) {
-            zoomControls
-                .padding(12)
-        }
-        .overlay(alignment: .bottomTrailing) {
-            if showsOverviewMap, let canvasTransform {
-                CADOverviewMiniMap(transform: canvasTransform)
-                    .frame(width: 150, height: 112)
-                    .padding(12)
+            .overlay(alignment: .bottomTrailing) {
+                if showsOverviewMap, let canvasTransform {
+                    CADOverviewMiniMap(transform: canvasTransform)
+                        .frame(width: 150, height: 112)
+                        .padding(12)
+                }
             }
-        }
-        .overlay(alignment: .bottomLeading) {
-            if Self.shouldShowRendererDiagnostics(
-                enabled: showsRendererDiagnostics,
-                sample: rendererPerformance
-            ),
-               let rendererPerformance {
-                rendererDiagnosticBadge(rendererPerformance)
-                    .padding(12)
+            .overlay(alignment: .bottomLeading) {
+                if Self.shouldShowRendererDiagnostics(
+                    enabled: showsRendererDiagnostics,
+                    sample: rendererPerformance
+                ),
+                   let rendererPerformance {
+                    rendererDiagnosticBadge(rendererPerformance)
+                        .padding(12)
+                }
             }
-        }
-        .overlay {
-            if importState.phase == .importing || importState.phase == .failed {
-                cadImportStateOverlay(importState)
+            .overlay {
+                if importState.phase == .importing || importState.phase == .failed {
+                    cadImportStateOverlay(importState)
+                }
             }
-        }
     }
 
     private func handleImportStateChanged(_ state: CADCanvasImportState) {

@@ -157,10 +157,29 @@ struct CADDiagnosticMachineTrace: Codable {
             let tianzhengTextCandidateCount: Int
         }
 
+        struct TextSample: Codable {
+            let entityId: String
+            let entityType: String
+            let layerID: String
+            let layoutID: String
+            let sourceHandle: String?
+            let rawText: String
+            let decodedText: String
+            let displayText: String
+            let attributeTag: String?
+            let rawTextBytesHex: String?
+            let textStyleName: String
+            let selectedFontName: String
+            let fallbackReason: String?
+            let warnings: [String]
+            let bounds: Bounds?
+        }
+
         let fileName: String
         let importSource: String
         let rawEntityCounts: RawEntityCounts
         let textExposure: TextExposure
+        let textSamples: [TextSample]
         let expandedInsertEntityCount: Int
         let entityCount: Int
         let drawableEntityCount: Int
@@ -279,6 +298,25 @@ extension CADDiagnosticMachineTrace.NativeTrace {
             importSource: trace.importSource,
             rawEntityCounts: rawCounts,
             textExposure: textExposure,
+            textSamples: trace.textSamples.prefix(24).map { sample in
+                TextSample(
+                    entityId: sample.entityId,
+                    entityType: sample.entityType,
+                    layerID: sample.layerID,
+                    layoutID: sample.layoutID,
+                    sourceHandle: sample.sourceHandle,
+                    rawText: sample.rawText,
+                    decodedText: sample.decodedText,
+                    displayText: sample.displayText,
+                    attributeTag: sample.attributeTag,
+                    rawTextBytesHex: sample.rawTextBytesHex,
+                    textStyleName: sample.textStyleName,
+                    selectedFontName: sample.selectedFontName,
+                    fallbackReason: sample.fallbackReason,
+                    warnings: sample.warnings,
+                    bounds: CADDiagnosticMachineTrace.Bounds(sample.bounds)
+                )
+            },
             expandedInsertEntityCount: trace.expandedInsertEntityCount,
             entityCount: trace.entityCount,
             drawableEntityCount: trace.drawableEntityCount,

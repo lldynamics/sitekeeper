@@ -822,6 +822,8 @@
 "比例设置" = "Scale";
 "半自动算量" = "Semi-Auto Quantity";
 "分享图纸" = "Share Drawing";
+"用其他软件打开" = "Open in Other App";
+"用其他软件打开 CAD 文件" = "Open CAD File in Other App";
 "清空覆盖层" = "Clear Overlay";
 "清空批注和测量？" = "Clear annotations and measurements?";
 "清空全部" = "Clear All";

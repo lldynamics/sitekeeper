@@ -190,8 +190,11 @@ extension SiteKeeperCADKernel {
 
             if let text = copy.text {
                 var transformedText = text
+                let textScale = geometryTransform.approximateScale
                 transformedText.insertionPoint = geometryTransform.apply(to: text.insertionPoint)
-                transformedText.height = text.height * geometryTransform.approximateScale
+                transformedText.height = text.height * textScale
+                transformedText.boxWidth = text.boxWidth.map { abs($0 * textScale) }
+                transformedText.boxHeight = text.boxHeight.map { abs($0 * textScale) }
                 transformedText.rotationRadians = text.rotationRadians + geometryTransform.rotationRadians
                 copy.text = transformedText
                 if copy.bounds.isEmpty {

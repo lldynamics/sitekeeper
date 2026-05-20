@@ -755,6 +755,49 @@ struct NativeCADLineImportTests {
         #expect(!trace.openedForRender)
     }
 
+    @Test func libreDWGNativeShimExportedNonStandardTextReachesCADDatabaseAsMText() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindMText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("RTEXT-1")
+        nativeEntity.rawText = strdup("AL1:n1-N6首层引入")
+        nativeEntity.rawTextIsUTF8 = 1
+        nativeEntity.textStyleName = strdup("RTEXT")
+        nativeEntity.fontName = strdup("txt.shx")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = -172_263
+        nativeEntity.textY = 317_941
+        nativeEntity.textHeight = 350
+        nativeEntity.textRotation = 0
+        nativeEntity.textWidthFactor = 1
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let database = SiteKeeperCADKernel.CADDatabase(
+            file: SiteKeeperCADKernel.CADFile(url: URL(fileURLWithPath: "/tmp/rtext.dwg"), format: .dwg),
+            entities: [entity]
+        )
+        let commands = NativeCAD.CADRenderPipeline().commands(from: database.entities)
+
+        #expect(entity.kind == .mtext)
+        #expect(entity.text?.displayText == "AL1:n1-N6首层引入")
+        #expect(entity.isRenderable)
+        #expect(database.entityCount == 1)
+        #expect(database.drawableEntityCount == 1)
+        #expect(commands.contains { command in
+            if case .text = command { return true }
+            return false
+        })
+    }
+
     @Test func libreDWGNativeShimPreservesPaperSpaceLayoutOnImportedEntities() throws {
         let engine = NativeCAD.LibreDWGNativeImportEngine()
         let points = UnsafeMutablePointer<SiteKeeperLibreDWGPoint>.allocate(capacity: 2)
@@ -1301,6 +1344,26 @@ struct NativeCADLineImportTests {
         #expect(abs(center.y - 80) < 0.001)
     }
 
+    @Test func cadMetalNativeCADTextOverlayCanAnchorToVisibleBoundsWhenInsertionPointIsWrong() throws {
+        let text = SiteKeeperCADKernel.CADTextRun(
+            rawText: "YJV-5*10",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: -1_000_000, y: -1_000_000),
+            height: 2.5,
+            boxWidth: 6_750,
+            boxHeight: 1_129,
+            horizontalAlignmentCode: 1,
+            verticalAlignmentCode: 1
+        )
+        let center = NativeCAD.CADMetalRenderer.textOverlayCenterFromBoundsForTesting(
+            boundsRect: CGRect(x: 80, y: 120, width: 240, height: 48),
+            text: text,
+            labelSize: CGSize(width: 90, height: 20)
+        )
+
+        #expect(abs(center.x - 125) < 0.001)
+        #expect(abs(center.y - 130) < 0.001)
+    }
+
     @Test func cadMetalNativeCADMTextAttachmentUsesRasterSizeInsteadOfCADBox() throws {
         let renderer = NativeCAD.CADMetalRenderer()
         let mtext = SiteKeeperCADKernel.CADTextRun(
@@ -1349,6 +1412,29 @@ struct NativeCADLineImportTests {
         #expect(abs(offset.y - 6) < 0.001)
     }
 
+    @Test func cadMetalNativeCADTextDoesNotDoubleApplyResolvedNativeAlignmentAnchor() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
+        let text = SiteKeeperCADKernel.CADTextRun(
+            rawText: "R1",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            height: 10,
+            horizontalAlignmentCode: 2,
+            verticalAlignmentCode: 3
+        )
+
+        let offset = renderer.textOverlayAlignmentOffsetForTesting(
+            text: text,
+            entityKind: .text,
+            width: 40,
+            height: 12,
+            modelScale: 20,
+            viewScale: CGPoint(x: 2, y: 2)
+        )
+
+        #expect(abs(offset.x) < 0.001)
+        #expect(abs(offset.y) < 0.001)
+    }
+
     @Test func cadMetalNativeCADTextOverlayFontSizeTracksDeepZoom() throws {
         let fontSize = NativeCAD.CADMetalRenderer.textOverlayFontSizeForTesting(
             textHeight: 2,
@@ -1392,7 +1478,7 @@ struct NativeCADLineImportTests {
         #expect(width >= 380)
     }
 
-    @Test func cadMetalNativeCADTextOverlayUsesCurrentRenderInputTextEntities() throws {
+    @Test func cadMetalNativeCADTextOverlayUsesCurrentRenderCommandTextEntitiesOnly() throws {
         let renderer = NativeCAD.CADMetalRenderer()
         let style = SiteKeeperCADKernel.CADRenderStyle(
             layerID: "TEXT",
@@ -1427,7 +1513,155 @@ struct NativeCADLineImportTests {
             renderCommands: [.text(renderedText, style: style)]
         )
 
-        #expect(displayTexts == ["已渲染文字", "当前视口文字"])
+        #expect(displayTexts == ["已渲染文字"])
+    }
+
+    @Test func cadMetalNativeCADTextOverlayKeepsCommandTextWhenEntityFingerprintDrifts() throws {
+        let renderer = NativeCAD.CADMetalRenderer()
+        let style = SiteKeeperCADKernel.CADRenderStyle(
+            layerID: "TEXT",
+            colorARGB: 0xFF111827,
+            lineWidth: 1
+        )
+        let importedEntityText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1:n6",
+            displayText: "AL1:n6",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10, y: 20),
+            height: 2.5
+        )
+        let currentCommandText = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1:n6",
+            displayText: "AL1:n6",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10.002, y: 20),
+            height: 2.5
+        )
+        let entity = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: importedEntityText,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 10, minY: 20, maxX: 40, maxY: 24),
+            sourceHandle: "MT1"
+        )
+
+        let displayTexts = renderer.textOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: [entity],
+            renderCommands: [.text(currentCommandText, style: style)]
+        )
+
+        #expect(displayTexts == ["AL1:n6"])
+    }
+
+    @Test func cadMetalNativeCADRenderInputIncludesNearViewportTextOnce() throws {
+        var line = Self.lineEntity(
+            from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            to: SiteKeeperCADKernel.CADPoint(x: 100, y: 0)
+        )
+        line.sourceHandle = "VISIBLE-LINE"
+
+        let nearTextRun = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1:n6",
+            displayText: "AL1:n6",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 112, y: 8),
+            height: 2.5
+        )
+        let nearText = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: nearTextRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 112, minY: 8, maxX: 140, maxY: 12),
+            sourceHandle: "NEAR-TEXT"
+        )
+        let farTextRun = SiteKeeperCADKernel.CADTextRun(
+            rawText: "FAR",
+            displayText: "FAR",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 250, y: 8),
+            height: 2.5
+        )
+        let farText = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "TEXT",
+            text: farTextRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 250, minY: 8, maxX: 270, maxY: 12),
+            sourceHandle: "FAR-TEXT"
+        )
+
+        let renderer = NativeCAD.CADMetalRenderer()
+        renderer.updateDrawing(
+            entities: [line, nearText, farText],
+            layers: [.default, SiteKeeperCADKernel.CADLayer(id: "TEXT", name: "TEXT")]
+        )
+
+        let handles = renderer.visibleEntitySourceHandlesForTesting(
+            viewportBounds: SiteKeeperCADKernel.CADBounds(minX: 0, minY: -10, maxX: 100, maxY: 20),
+            drawableSize: CGSize(width: 1_000, height: 1_000),
+            viewSize: CGSize(width: 500, height: 500)
+        )
+
+        #expect(handles.contains("VISIBLE-LINE"))
+        #expect(handles.contains("NEAR-TEXT"))
+        #expect(!handles.contains("FAR-TEXT"))
+        #expect(handles.filter { $0 == "NEAR-TEXT" }.count == 1)
+    }
+
+    @Test func cadMetalNativeCADRenderInputAnchorsSameSourceTextWhenImportedCoordinatesAreWrong() throws {
+        var leaderLine = Self.lineEntity(
+            from: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            to: SiteKeeperCADKernel.CADPoint(x: 120, y: 0)
+        )
+        leaderLine.layerID = "BZ"
+        leaderLine.sourceHandle = "MLEADER-1"
+
+        let wrongTextRun = SiteKeeperCADKernel.CADTextRun(
+            rawText: "AL1:n1-N6首层引入",
+            displayText: "AL1:n1-N6首层引入",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 10_000, y: 10_000),
+            height: 2.5
+        )
+        let wrongText = SiteKeeperCADKernel.CADEntity(
+            kind: .mtext,
+            layerID: "BZ",
+            text: wrongTextRun,
+            bounds: SiteKeeperCADKernel.CADBounds(minX: 10_000, minY: 10_000, maxX: 10_080, maxY: 10_006),
+            sourceHandle: "MLEADER-1"
+        )
+
+        let renderer = NativeCAD.CADMetalRenderer()
+        renderer.updateDrawing(
+            entities: [leaderLine, wrongText],
+            layers: [.default, SiteKeeperCADKernel.CADLayer(id: "BZ", name: "BZ")]
+        )
+
+        let viewport = SiteKeeperCADKernel.CADBounds(minX: -10, minY: -10, maxX: 130, maxY: 20)
+        let visible = renderer.visibleEntitiesForTesting(viewportBounds: viewport)
+        let anchoredTexts = visible.filter {
+            $0.sourceHandle == "MLEADER-1" && $0.text?.displayText == "AL1:n1-N6首层引入"
+        }
+
+        #expect(anchoredTexts.count == 1)
+        let anchoredText = try #require(anchoredTexts.first?.text)
+        #expect(anchoredText.warnings.contains("CAD_TEXT_SOURCE_HANDLE_ANCHORED"))
+        #expect(anchoredText.insertionPoint.x < 500)
+        #expect(anchoredText.insertionPoint.y < 500)
+
+        let output = renderer.progressiveRenderOutputForTesting(
+            visibleEntities: visible,
+            viewportBounds: viewport,
+            zoomScale: 1,
+            phase: .stable
+        )
+        let textCommandCount = output.commands.reduce(0) { count, command in
+            if case .text = command {
+                return count + 1
+            }
+            return count
+        }
+        #expect(textCommandCount == 1)
+
+        let overlayTexts = renderer.textOverlaySourceDisplayTextsForTesting(
+            renderInputEntities: visible,
+            renderCommands: output.commands
+        )
+        #expect(overlayTexts == ["AL1:n1-N6首层引入"])
     }
 
     @Test func cadMetalNativeCADTextOverlayDeduplicatesOverlappingLogicalText() throws {
@@ -1634,6 +1868,38 @@ struct NativeCADLineImportTests {
         #expect(CADDrawingTextBigFont.inferredFromFontName("simfang.shx") == .hzfs)
     }
 
+    @Test func cadSHXFontMappingMatchesPathsSuffixlessNamesAndCommonAliases() throws {
+        #expect(
+            SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: #"C:\CAD\Fonts\tssdchn.SHX"#)?.sourceName == "tssdchn.shx"
+        )
+        #expect(SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: "HZFS1")?.replacementFamily == "FangSong")
+        #expect(SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: "gbcbiggb")?.sourceName == "gbcbiggb.shx")
+        #expect(SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: "simsun")?.replacementFamily == "Songti SC")
+        #expect(SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: "chineset")?.languageHint == "zh-Hant")
+        #expect(CADDrawingTextBigFont.inferredFromFontName(#"C:\CAD\Fonts\tssdchn.SHX"#) == .gbcbig)
+        #expect(CADDrawingTextBigFont.inferredFromFontName("HZFS2") == .hzfs)
+        #expect(CADDrawingTextBigFont.inferredFromFontName("gbcbiggb") == .gbcbig)
+        #expect(CADDrawingTextBigFont.inferredFromFontName("chineset.shx") == .big5)
+    }
+
+    @Test func cadTextEngineUsesMappedSHXAsDisplayFallbackNotGlyphBranchForChinese() throws {
+        let textRun = SiteKeeperCADKernel.CADTextEngine().makeTextRun(
+            rawText: "中文",
+            insertionPoint: SiteKeeperCADKernel.CADPoint(x: 0, y: 0),
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "hzfs",
+                name: "HZFS",
+                fontName: #"C:\CAD\Fonts\hzfs1.SHX"#,
+                bigFontName: nil
+            )
+        )
+
+        #expect(textRun.displayText == "中文")
+        #expect(textRun.fallbackReason == "unicode-cjk-shx-bypassed")
+        #expect(textRun.warnings.contains("CAD_TEXT_SHX_SKIPPED_FOR_UNICODE"))
+        #expect(textRun.warnings.contains { $0.hasPrefix("CAD_TEXT_SHX_FONT_MAPPED:hzfs1.shx->") })
+    }
+
     @Test func libreDWGNativeCADAppliesPreferredDisplayFontToNativeText() throws {
         let engine = NativeCAD.LibreDWGNativeImportEngine(preferredDisplayFontName: "FangSong")
         var nativeEntity = SiteKeeperLibreDWGEntity()
@@ -1665,6 +1931,67 @@ struct NativeCADLineImportTests {
         #expect(text.selectedFontName == "FangSong")
         #expect(text.fallbackReason == "user-display-font")
         #expect(text.warnings.contains("CAD_TEXT_DISPLAY_FONT_OVERRIDE:FangSong"))
+    }
+
+    @Test func libreDWGNativeCADTextBoundsDoNotDoubleApplyResolvedAlignmentAnchor() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("TEXT-ALIGN-ANCHOR")
+        nativeEntity.rawText = strdup("R1")
+        nativeEntity.rawTextIsUTF8 = 1
+        nativeEntity.textStyleName = strdup("STANDARD")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 100
+        nativeEntity.textY = 200
+        nativeEntity.textHeight = 10
+        nativeEntity.textHorizontalAlignment = 2
+        nativeEntity.textVerticalAlignment = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+
+        #expect(entity.bounds.minX >= 99.999)
+        #expect(entity.bounds.minY >= 199.999)
+        #expect(entity.bounds.maxX > 100)
+        #expect(entity.bounds.maxY > 200)
+    }
+
+    @Test func libreDWGNativeCADInfersBigFontFromSHXFontNameWhenNativeBigFontMissing() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindText.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("BIGFONT-INFER")
+        nativeEntity.rawText = strdup("D6D0CEC4")
+        nativeEntity.textStyleName = strdup("TSSD")
+        nativeEntity.fontName = strdup(#"C:\CAD\Fonts\tssdchn.SHX"#)
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+
+        #expect(text.bigFontFile == "gbcbig.shx")
+        #expect(text.displayText == "中文")
+        #expect(text.warnings.contains { $0.hasPrefix("CAD_TEXT_SHX_FONT_MAPPED:tssdchn.shx->") })
     }
 
     @Test func libreDWGNativeCADAggregatesDXFFontDiagnosticsFromStyleTable() async throws {
@@ -2061,6 +2388,123 @@ struct NativeCADLineImportTests {
         let text = try #require(entity.text)
         #expect(text.rawText == "中文")
         #expect(text.displayText == "中文")
+    }
+
+    @Test func libreDWGNativeCADUsesShortAttributeTagWhenAttributeValueIsKnownMojibake() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindAttrib.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("ATTR-TAG-R1")
+        nativeEntity.rawText = strdup("蕾跬扦胕")
+        nativeEntity.rawTextIsUTF8 = 1
+        nativeEntity.textStyleName = strdup("HZTXT")
+        nativeEntity.fontName = strdup("hztxt.shx")
+        nativeEntity.bigFontName = strdup("gbcbig.shx")
+        nativeEntity.attributeTag = strdup("R1")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+            free(nativeEntity.attributeTag)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+        #expect(entity.kind == .attrib)
+        #expect(text.rawText == "蕾跬扦胕")
+        #expect(text.displayText == "R1")
+        #expect(text.attributeTag == "R1")
+        #expect(text.fallbackReason == "attribute-tag-for-suspicious-value")
+        #expect(text.warnings.contains("CAD_TEXT_ATTRIBUTE_TAG_USED_FOR_SUSPICIOUS_VALUE"))
+
+        let samples = engine.textImportSamplesForTesting(entities: [entity])
+        let sample = try #require(samples.first)
+        #expect(sample.entityType == "attrib")
+        #expect(sample.layerID == "TEXT")
+        #expect(sample.sourceHandle == "ATTR-TAG-R1")
+        #expect(sample.rawText == "蕾跬扦胕")
+        #expect(sample.displayText == "R1")
+        #expect(sample.attributeTag == "R1")
+        #expect(sample.fallbackReason == "attribute-tag-for-suspicious-value")
+
+        let trace = NativeCAD.CADOpenTrace(
+            fileName: "attribute.dwg",
+            importSource: engine.id,
+            rawTextCount: 1,
+            rawAttribEntityCount: 1,
+            exportedAttribEntityCount: 1,
+            entityCount: 1,
+            drawableEntityCount: 1,
+            renderCommandCount: 1,
+            bounds: entity.bounds,
+            textSamples: samples
+        )
+        let machineTrace = CADDiagnosticMachineTrace.NativeTrace(trace)
+        #expect(machineTrace.textSamples.first?.sourceHandle == "ATTR-TAG-R1")
+        #expect(machineTrace.textSamples.first?.attributeTag == "R1")
+        #expect(machineTrace.textSamples.first?.displayText == "R1")
+    }
+
+    @Test func libreDWGNativeCADKeepsNormalChineseAttributeValueOverShortTag() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        var nativeEntity = SiteKeeperLibreDWGEntity()
+        nativeEntity.kind = Int32(SiteKeeperLibreDWGEntityKindAttrib.rawValue)
+        nativeEntity.layerName = strdup("TEXT")
+        nativeEntity.sourceHandle = strdup("ATTR-NORMAL-CJK")
+        nativeEntity.rawText = strdup("房间")
+        nativeEntity.rawTextIsUTF8 = 1
+        nativeEntity.textStyleName = strdup("HZTXT")
+        nativeEntity.fontName = strdup("hztxt.shx")
+        nativeEntity.bigFontName = strdup("gbcbig.shx")
+        nativeEntity.attributeTag = strdup("R1")
+        nativeEntity.colorARGB = 0xFF111111
+        nativeEntity.lineWeight = 2
+        nativeEntity.textX = 10
+        nativeEntity.textY = 20
+        nativeEntity.textHeight = 3
+        defer {
+            free(nativeEntity.layerName)
+            free(nativeEntity.sourceHandle)
+            free(nativeEntity.rawText)
+            free(nativeEntity.textStyleName)
+            free(nativeEntity.fontName)
+            free(nativeEntity.bigFontName)
+            free(nativeEntity.attributeTag)
+        }
+
+        let entity = try #require(engine.makeNativeEntityForTesting(nativeEntity))
+        let text = try #require(entity.text)
+        #expect(text.rawText == "房间")
+        #expect(text.displayText == "房间")
+        #expect(!text.warnings.contains("CAD_TEXT_ATTRIBUTE_TAG_USED_FOR_SUSPICIOUS_VALUE"))
+    }
+
+    @Test func libreDWGNativeCADRawByteFallbackDoesNotReplaceShortASCIIAttributeLabels() throws {
+        let engine = NativeCAD.LibreDWGNativeImportEngine()
+        let rawBytes = try #require(Self.encodedBytes("蕾跬扦胕", using: Self.gb18030Encoding))
+        let rawTextBytesHex = rawBytes.map { String(format: "%02X", $0) }.joined()
+        let textRun = engine.nativeTextRunForTesting(
+            rawText: "R1",
+            rawTextBytesHex: rawTextBytesHex,
+            style: SiteKeeperCADKernel.CADTextStyle(
+                id: "gbcbig",
+                name: "GBCBIG",
+                fontName: "hztxt.shx",
+                bigFontName: "gbcbig.shx"
+            )
+        )
+
+        #expect(textRun.displayText == "R1")
+        #expect(!textRun.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED"))
     }
 
     @Test func libreDWGNativeCADUsesRawTextBytesWhenDecodedTextIsControlFragment() throws {
@@ -3435,6 +3879,92 @@ struct NativeCADLineImportTests {
             }
             return false
         })
+    }
+
+    @Test func libreDWGNativeCADScalesBlockTextBoxForOverlayBounds() async throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("cad-insert-mtext-box-native-\(UUID().uuidString)")
+            .appendingPathExtension("dxf")
+        let dxf = """
+        0
+        SECTION
+        2
+        BLOCKS
+        0
+        BLOCK
+        2
+        TEXT_BOX
+        10
+        0
+        20
+        0
+        0
+        MTEXT
+        5
+        MB1
+        8
+        0
+        10
+        0
+        20
+        0
+        40
+        2.5
+        41
+        100
+        46
+        20
+        71
+        1
+        1
+        BOX
+        0
+        ENDBLK
+        0
+        ENDSEC
+        0
+        SECTION
+        2
+        ENTITIES
+        0
+        INSERT
+        5
+        IMB1
+        8
+        TEXT_LAYER
+        2
+        TEXT_BOX
+        10
+        10
+        20
+        20
+        41
+        2
+        42
+        2
+        0
+        ENDSEC
+        0
+        EOF
+        """
+        try dxf.write(to: url, atomically: true, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let result = try await NativeCAD.LibreDWGNativeImportEngine().importDrawingWithTrace(
+            file: SiteKeeperCADKernel.CADFile(url: url, format: .dxf)
+        )
+        let entity = try #require(result.database.entities.first { $0.sourceHandle == "MB1" })
+        let text = try #require(entity.text)
+
+        #expect(entity.kind == .mtext)
+        #expect(text.displayText == "BOX")
+        #expect(abs(text.insertionPoint.x - 10) < 0.0001)
+        #expect(abs(text.insertionPoint.y - 20) < 0.0001)
+        #expect(abs(text.height - 5) < 0.0001)
+        #expect(abs((text.boxWidth ?? 0) - 200) < 0.0001)
+        #expect(abs((text.boxHeight ?? 0) - 40) < 0.0001)
+        #expect(entity.bounds.width >= 190)
+        #expect(entity.bounds.height >= 30)
     }
 
     @Test func libreDWGNativeCADRendersATTDEFDefaultWhenInsertHasNoOverride() async throws {
@@ -5097,7 +5627,6 @@ struct NativeCADLineImportTests {
             return SiteKeeperCADKernel.CADExternalSDKDrawing(database: database)
     }
 }
-
     private static let basic2DGeometryDXF = """
     0
     SECTION

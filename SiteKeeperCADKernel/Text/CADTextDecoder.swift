@@ -521,6 +521,7 @@ private extension SiteKeeperCADKernel.CADTextStyle {
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
             .contains { value in
                 value.hasSuffix(".shx")
+                    || SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: value) != nil
                     || value.contains("bigfont")
                     || value.contains("hztxt")
                     || value.contains("hzfs")
@@ -544,6 +545,7 @@ private extension SiteKeeperCADKernel.CADTextStyle {
                 value.contains("big5")
                     || value.contains("chineset")
                     || value.contains("traditional")
+                    || SiteKeeperCADKernel.CADSHXFontMapping.mapping(for: value)?.languageHint == "zh-Hant"
             }
     }
 }

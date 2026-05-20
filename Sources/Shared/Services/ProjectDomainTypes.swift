@@ -146,18 +146,34 @@ extension CADDrawingTextBigFont {
                 .filter { !$0.isEmpty }
         )
 
-        let big5Aliases: Set<String> = ["big5", "chineset", "chinese_t", "cht", "mingliu", "pmingliu", "kaiu", "msung", "bkai"]
+        let big5Aliases: Set<String> = [
+            "big5", "chineset", "chinese_t", "cht", "mingliu", "pmingliu",
+            "kaiu", "msung", "bkai", "traditional"
+        ]
         let hzfsAliases: Set<String> = [
             "hzfs", "hzfs1", "hzfs2", "hzfangsong", "fs", "fs1", "fs2",
-            "simfang", "fangsong", "fangsonggb2312", "fangsong_gb2312", "stfangsong"
+            "simfang", "fangsong", "fangsonggb2312", "fangsong_gb2312",
+            "stfangsong", "gbhzfs", "gbfs", "gbkfs"
         ]
-        let hztxtAliases: Set<String> = ["hztxt", "hztxt1", "hztxt2", "hztext", "txt", "simplex", "romans", "romanc", "romand", "isocp"]
-        let gbcbigAliases: Set<String> = ["gbcbig", "gbcbiggb", "gbtxt", "gbenor", "gbeitc", "gbhz", "gbfs", "tssdeng", "tssdchn", "tssd", "chinesegb"]
+        let hztxtAliases: Set<String> = [
+            "hztxt", "hztxt1", "hztxt2", "hztext", "txt", "simplex",
+            "romans", "romanc", "romand", "isocp", "isoct"
+        ]
+        let gbcbigAliases: Set<String> = [
+            "gbcbig", "gbcbiggb", "gbtxt", "gbenor", "gbeitc", "gbhz",
+            "gbk", "gbksong", "gbhzdx", "hzdx", "tssdeng", "tssdchn",
+            "tssd", "hztssd", "chinesegb", "chineses", "gb2312", "gb18030"
+        ]
+        let styleAliases: Set<String> = [
+            "hzst", "song", "songti", "simsun", "hzkai", "kaiti", "simkai",
+            "hzhei", "simhei", "gbhei", "gbst"
+        ]
 
         if !tokens.isDisjoint(with: big5Aliases) { return .big5 }
         if !tokens.isDisjoint(with: hzfsAliases) { return .hzfs }
         if !tokens.isDisjoint(with: hztxtAliases) { return .hztxt }
         if !tokens.isDisjoint(with: gbcbigAliases) { return .gbcbig }
+        if !tokens.isDisjoint(with: styleAliases) { return .gbcbig }
         return .auto
     }
 }

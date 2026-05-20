@@ -73,6 +73,27 @@ extension NativeCAD {
         #endif
     }
 
+    struct CADTextImportSample: Equatable, Codable {
+        var entityId: String
+        var entityType: String
+        var layerID: String
+        var layoutID: String
+        var sourceHandle: String?
+        var rawText: String
+        var decodedText: String
+        var normalizedText: String
+        var displayText: String
+        var attributeTag: String?
+        var rawTextBytesHex: String?
+        var textStyleName: String
+        var fontFile: String?
+        var bigFontFile: String?
+        var selectedFontName: String
+        var fallbackReason: String?
+        var warnings: [String]
+        var bounds: SiteKeeperCADKernel.CADBounds
+    }
+
     struct CADOpenTrace: Equatable, Codable {
         var fileName: String
         var importSource: String
@@ -115,6 +136,7 @@ extension NativeCAD {
         var importCacheHit: Bool
         var importMilliseconds: Double
         var failureMessage: String?
+        var textSamples: [CADTextImportSample]
 
         init(
             fileName: String,
@@ -157,7 +179,8 @@ extension NativeCAD {
             openedForRender: Bool? = nil,
             importCacheHit: Bool = false,
             importMilliseconds: Double = 0,
-            failureMessage: String? = nil
+            failureMessage: String? = nil,
+            textSamples: [CADTextImportSample] = []
         ) {
             self.fileName = fileName
             self.importSource = importSource
@@ -200,6 +223,7 @@ extension NativeCAD {
             self.importCacheHit = importCacheHit
             self.importMilliseconds = importMilliseconds
             self.failureMessage = failureMessage
+            self.textSamples = textSamples
         }
 
         static func unsupported(

@@ -51,6 +51,8 @@ extension SiteKeeperCADKernel {
         var boxHeight: Double?
         var horizontalAlignmentCode: Int?
         var verticalAlignmentCode: Int?
+        var attributeTag: String?
+        var rawTextBytesHex: String?
 
         init(
             rawText: String,
@@ -73,7 +75,9 @@ extension SiteKeeperCADKernel {
             boxWidth: Double? = nil,
             boxHeight: Double? = nil,
             horizontalAlignmentCode: Int? = nil,
-            verticalAlignmentCode: Int? = nil
+            verticalAlignmentCode: Int? = nil,
+            attributeTag: String? = nil,
+            rawTextBytesHex: String? = nil
         ) {
             self.rawText = rawText
             self.decodedText = decodedText ?? rawText
@@ -96,6 +100,8 @@ extension SiteKeeperCADKernel {
             self.boxHeight = boxHeight
             self.horizontalAlignmentCode = horizontalAlignmentCode
             self.verticalAlignmentCode = verticalAlignmentCode
+            self.attributeTag = attributeTag
+            self.rawTextBytesHex = rawTextBytesHex
         }
 
         var styleID: String {
@@ -117,6 +123,8 @@ extension SiteKeeperCADKernel {
                 selectedFontName: selectedFontName,
                 fontWasAvailable: fontWasAvailable,
                 fallbackReason: fallbackReason,
+                attributeTag: attributeTag,
+                rawTextBytesHex: rawTextBytesHex,
                 warnings: warnings
             )
         }

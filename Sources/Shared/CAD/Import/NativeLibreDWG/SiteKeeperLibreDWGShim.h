@@ -55,6 +55,7 @@ typedef struct SiteKeeperLibreDWGEntity {
     char *textStyleName;
     char *fontName;
     char *bigFontName;
+    char *attributeTag;
     char *objectName;
     char *unsupportedReason;
     uint32_t colorARGB;

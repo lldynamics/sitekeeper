@@ -15,7 +15,7 @@ extension NativeCAD {
         private static let nativeDWGMaximumEntityCount = 500_000
         private static let nativeDWGEntityLimitExceededStatus: Int32 = -4
         private static let nativePaperLayoutID = "paper"
-        private let baseID = "sitekeeper.native.dwg-libredwg-ios.basic2d-v14"
+        private let baseID = "sitekeeper.native.dwg-libredwg-ios.basic2d-v16"
         var preferredTextCodePage: Int32?
         var preferredTextBigFont: Int32?
         var fontMappings: [CADRendererFontMapping]
@@ -210,6 +210,7 @@ extension NativeCAD {
                 entities: entities,
                 traces: textTrace
             )
+            let textSamples = Self.textImportSamples(from: entities)
             let importedTextSamples = Self.importedTextSamples(entities: entities)
             let proxyTextCandidateSummary = Self.proxyTextCandidateSummary(entities: entities)
 
@@ -541,7 +542,8 @@ extension NativeCAD {
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
                 bounds: database.extents,
-                openedForRender: database.geometryParsed && database.drawableEntityCount > 0 && renderCommandCount > 0
+                openedForRender: database.geometryParsed && database.drawableEntityCount > 0 && renderCommandCount > 0,
+                textSamples: textSamples
             )
             return CADImportResult(database: database, trace: trace)
         }
@@ -615,7 +617,8 @@ extension NativeCAD {
         func nativeTextRunForTesting(
             rawText: String,
             rawTextBytesHex: String?,
-            style: Kernel.CADTextStyle = .default
+            style: Kernel.CADTextStyle = .default,
+            attributeTag: String? = nil
         ) -> Kernel.CADTextRun {
             nativeTextRun(
                 rawText: rawText,
@@ -628,12 +631,17 @@ extension NativeCAD {
                 boxWidth: nil,
                 boxHeight: nil,
                 horizontalAlignmentCode: nil,
-                verticalAlignmentCode: nil
+                verticalAlignmentCode: nil,
+                attributeTag: attributeTag
             )
         }
 
         func proxyTextCandidateSummaryForTesting(entities: [Kernel.CADEntity]) -> String? {
             Self.proxyTextCandidateSummary(entities: entities)
+        }
+
+        func textImportSamplesForTesting(entities: [Kernel.CADEntity]) -> [CADTextImportSample] {
+            Self.textImportSamples(from: entities)
         }
 
         private func makeNativeEntity(_ nativeEntity: SiteKeeperLibreDWGEntity) -> Kernel.CADEntity? {
@@ -666,6 +674,7 @@ extension NativeCAD {
                     fontName: fontName,
                     styleName: styleName
                 )
+                let attributeTag = decodedNativeString(nativeEntity.attributeTag)
                 let height = nativeEntity.textHeight.isFinite && nativeEntity.textHeight > 0
                     ? nativeEntity.textHeight
                     : 2.5
@@ -688,9 +697,10 @@ extension NativeCAD {
                     boxWidth: nativeEntity.textBoxWidth > 0 ? nativeEntity.textBoxWidth : nil,
                     boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                     horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
-                    verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
+                    verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment),
+                    attributeTag: kind == .attrib ? attributeTag : nil
                 )
-                let bounds = nativeTextBounds(for: text, insertion: insertion, height: height)
+                let bounds = nativeTextBounds(for: text, insertion: insertion, height: height, kind: kind)
                 return Kernel.CADEntity(
                     kind: kind,
                     layerID: normalizedLayerID,
@@ -740,9 +750,10 @@ extension NativeCAD {
                         boxWidth: nativeEntity.textBoxWidth > 0 ? nativeEntity.textBoxWidth : nil,
                         boxHeight: nativeEntity.textBoxHeight > 0 ? nativeEntity.textBoxHeight : nil,
                         horizontalAlignmentCode: Int(nativeEntity.textHorizontalAlignment),
-                        verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment)
+                        verticalAlignmentCode: Int(nativeEntity.textVerticalAlignment),
+                        attributeTag: nil
                     )
-                    bounds = bounds.union(nativeTextBounds(for: text!, insertion: insertion, height: height))
+                    bounds = bounds.union(nativeTextBounds(for: text!, insertion: insertion, height: height, kind: .dimension))
                 }
                 guard path != nil || text != nil else {
                     return nil
@@ -1022,7 +1033,8 @@ extension NativeCAD {
             boxWidth: Double?,
             boxHeight: Double?,
             horizontalAlignmentCode: Int?,
-            verticalAlignmentCode: Int?
+            verticalAlignmentCode: Int?,
+            attributeTag: String?
         ) -> Kernel.CADTextRun {
             let text = Kernel.CADTextEngine().makeTextRun(
                 rawText: rawText,
@@ -1041,29 +1053,39 @@ extension NativeCAD {
                 currentText: text,
                 rawTextBytesHex: rawTextBytesHex
             )
-            guard let fallbackText else {
-                return applyPreferredDisplayFont(to: text)
+            let resolved: Kernel.CADTextRun
+            if let fallbackText {
+                var fallback = Kernel.CADTextEngine().makeTextRun(
+                    rawText: fallbackText,
+                    insertionPoint: insertionPoint,
+                    style: style,
+                    height: height,
+                    rotationRadians: rotationRadians,
+                    widthFactor: widthFactor,
+                    boxWidth: boxWidth,
+                    boxHeight: boxHeight,
+                    horizontalAlignmentCode: horizontalAlignmentCode,
+                    verticalAlignmentCode: verticalAlignmentCode,
+                    warnings: text.warnings + ["CAD_TEXT_RAW_BYTE_FALLBACK_USED"]
+                )
+                fallback.decodedText = fallbackText
+                fallback.normalizedText = fallback.displayText
+                if !fallback.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED") {
+                    fallback.warnings.append("CAD_TEXT_RAW_BYTE_FALLBACK_USED")
+                }
+                resolved = fallback
+            } else {
+                resolved = text
             }
 
-            var fallback = Kernel.CADTextEngine().makeTextRun(
-                rawText: fallbackText,
-                insertionPoint: insertionPoint,
-                style: style,
-                height: height,
-                rotationRadians: rotationRadians,
-                widthFactor: widthFactor,
-                boxWidth: boxWidth,
-                boxHeight: boxHeight,
-                horizontalAlignmentCode: horizontalAlignmentCode,
-                verticalAlignmentCode: verticalAlignmentCode,
-                warnings: text.warnings + ["CAD_TEXT_RAW_BYTE_FALLBACK_USED"]
-            )
-            fallback.decodedText = fallbackText
-            fallback.normalizedText = fallback.displayText
-            if !fallback.warnings.contains("CAD_TEXT_RAW_BYTE_FALLBACK_USED") {
-                fallback.warnings.append("CAD_TEXT_RAW_BYTE_FALLBACK_USED")
+            var tagged = applyAttributeTagFallback(to: resolved, attributeTag: attributeTag)
+            if let tag = attributeTag?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !tag.isEmpty {
+                tagged.attributeTag = tag
             }
-            return applyPreferredDisplayFont(to: fallback)
+            tagged.rawTextBytesHex = rawTextBytesHex
+
+            return applyPreferredDisplayFont(to: tagged)
         }
 
         private func rawByteFallbackText(
@@ -1071,6 +1093,9 @@ extension NativeCAD {
             rawTextBytesHex: String?
         ) -> String? {
             let current = currentText.displayText.trimmingCharacters(in: .whitespacesAndNewlines)
+            if Self.isLikelyCADAttributeDisplayTag(current) {
+                return nil
+            }
             var candidates: [String] = [currentText.rawText, currentText.decodedText, currentText.normalizedText]
 
             if let rawTextBytesHex,
@@ -1104,6 +1129,29 @@ extension NativeCAD {
                 return best.text
             }
             return nil
+        }
+
+        private func applyAttributeTagFallback(
+            to text: Kernel.CADTextRun,
+            attributeTag: String?
+        ) -> Kernel.CADTextRun {
+            guard let tag = attributeTag?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !tag.isEmpty,
+                  Self.isLikelyCADAttributeDisplayTag(tag),
+                  Self.isLikelySuspiciousShortAttributeText(text.displayText) else {
+                return text
+            }
+
+            var next = text
+            next.decodedText = tag
+            next.normalizedText = tag
+            next.displayText = tag
+            next.fallbackReason = "attribute-tag-for-suspicious-value"
+            let warning = "CAD_TEXT_ATTRIBUTE_TAG_USED_FOR_SUSPICIOUS_VALUE"
+            if !next.warnings.contains(warning) {
+                next.warnings.append(warning)
+            }
+            return next
         }
 
         private static func uniqueTextCandidates(_ candidates: [String]) -> [String] {
@@ -1170,8 +1218,36 @@ extension NativeCAD {
             return score
         }
 
+        private static func isLikelyCADAttributeDisplayTag(_ value: String) -> Bool {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard (1...16).contains(trimmed.count) else { return false }
+
+            var hasAlphanumeric = false
+            var hasDigit = false
+            for scalar in trimmed.unicodeScalars {
+                switch scalar.value {
+                case 0x30...0x39:
+                    hasAlphanumeric = true
+                    hasDigit = true
+                case 0x41...0x5A, 0x61...0x7A:
+                    hasAlphanumeric = true
+                case 0x2D, 0x2E, 0x2F, 0x3A, 0x5C, 0x5F, 0x23:
+                    continue
+                default:
+                    return false
+                }
+            }
+            return hasAlphanumeric && (hasDigit || trimmed.count <= 3)
+        }
+
+        private static func isLikelySuspiciousShortAttributeText(_ value: String) -> Bool {
+            let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, trimmed.count <= 12 else { return false }
+            return trimmed.unicodeScalars.contains(where: isSuspiciousCADMojibakeScalar)
+        }
+
         private static func isSuspiciousCADMojibakeScalar(_ scalar: UnicodeScalar) -> Bool {
-            "甯傛斂搴滄柦宸ュ浘娴嬭瘯鏂囧瓧鍥剧焊绠＄嚎閰嶇數钃戣娂胕芼".unicodeScalars.contains(scalar)
+            "甯傛斂搴滄柦宸ュ浘娴嬭瘯鏂囧瓧鍥剧焊绠＄嚎閰嶇數钃戣娂胕芼蕾跬扦".unicodeScalars.contains(scalar)
         }
 
         private static func isLikelyControlOnlyText(_ value: String) -> Bool {
@@ -1198,15 +1274,23 @@ extension NativeCAD {
         private func nativeTextBounds(
             for text: Kernel.CADTextRun,
             insertion: Kernel.CADPoint,
-            height: Double
+            height: Double,
+            kind: Kernel.CADEntityKind
         ) -> Kernel.CADBounds {
             let widthFactor = text.widthFactor ?? 1
             let measuredWidth = text.boxWidth.flatMap { $0 > 0 ? $0 : nil }
                 ?? Double(text.displayText.count) * max(height * 0.6 * widthFactor, 0.6)
             let width = max(measuredWidth, max(height, 0.6))
             let boxHeight = max(text.boxHeight ?? height, height, 0.6)
-            let anchorX = nativeHorizontalTextOffset(width: width, text: text)
-            let anchorY = nativeVerticalTextOffset(height: boxHeight, text: text)
+            let anchorX: Double
+            let anchorY: Double
+            if nativeTextInsertionIsResolvedAnchor(kind: kind, text: text) {
+                anchorX = 0
+                anchorY = 0
+            } else {
+                anchorX = nativeHorizontalTextOffset(width: width, text: text)
+                anchorY = nativeVerticalTextOffset(height: boxHeight, text: text)
+            }
             return rotatedTextBounds(
                 insertion: insertion,
                 width: width,
@@ -1215,6 +1299,19 @@ extension NativeCAD {
                 anchorY: anchorY,
                 rotationRadians: text.rotationRadians
             )
+        }
+
+        private func nativeTextInsertionIsResolvedAnchor(
+            kind: Kernel.CADEntityKind,
+            text: Kernel.CADTextRun
+        ) -> Bool {
+            guard text.boxWidth == nil, text.boxHeight == nil else { return false }
+            switch kind {
+            case .text, .attrib, .dimension:
+                return true
+            default:
+                return false
+            }
         }
 
         private func rotatedTextBounds(
@@ -1352,7 +1449,18 @@ extension NativeCAD {
             if let preferred = bigFontName(forBridgeCode: preferredTextBigFont) {
                 return preferred
             }
-            return nativeBigFontName
+            if let inferred = inferredBigFontName(
+                nativeBigFontName: nativeBigFontName,
+                fontName: fontName,
+                styleName: styleName
+            ) {
+                return inferred
+            }
+            if let nativeBigFontName,
+               !nativeBigFontName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return nativeBigFontName
+            }
+            return nil
         }
 
         private func mappedBigFontName(
@@ -1381,6 +1489,22 @@ extension NativeCAD {
                 }
                 guard candidate.localizedCaseInsensitiveContains(pattern),
                       let bigFont = bigFontName(forBridgeCode: mapping.bigFont) else {
+                    continue
+                }
+                return bigFont
+            }
+            return nil
+        }
+
+        private func inferredBigFontName(
+            nativeBigFontName: String?,
+            fontName: String?,
+            styleName: String
+        ) -> String? {
+            for candidate in [nativeBigFontName, fontName, styleName].compactMap({ $0 }) {
+                let inferred = CADDrawingTextBigFont.inferredFromFontName(candidate)
+                guard inferred != .auto,
+                      let bigFont = bigFontName(forBridgeCode: inferred.bridgeCode) else {
                     continue
                 }
                 return bigFont
@@ -1566,6 +1690,7 @@ extension NativeCAD {
             let layerByID = Dictionary(uniqueKeysWithValues: layers.map { ($0.id, $0) })
             let entities = records.map { makeEntity(record: $0, layer: layerByID[$0.layerID]) }
             let textTrace = Self.textTraces(from: entities)
+            let textSamples = Self.textImportSamples(from: entities)
             let bounds = entities.reduce(Kernel.CADBounds.empty) { $0.union($1.bounds) }
             var diagnostics = records.isEmpty
                 ? noDrawableDiagnostics(file: sourceFile)
@@ -1640,7 +1765,8 @@ extension NativeCAD {
                 drawableEntityCount: database.drawableEntityCount,
                 renderCommandCount: renderCommandCount,
                 bounds: database.extents,
-                openedForRender: database.drawableEntityCount > 0 && renderCommandCount > 0
+                openedForRender: database.drawableEntityCount > 0 && renderCommandCount > 0,
+                textSamples: textSamples
             )
             return CADImportResult(database: database, trace: trace)
         }
@@ -1727,6 +1853,37 @@ extension NativeCAD {
                 "sampleType=\($0.entityType), raw=\(Self.compactDiagnosticText($0.rawText)), display=\(Self.compactDiagnosticText($0.displayText)), style=\($0.textStyleName), font=\($0.fontFile ?? "-"), bigFont=\($0.bigFontFile ?? "-")"
             } ?? "sample=-"
             return "cadTextCount=\(traces.count), kinds=\(countSummary), emptyDisplay=\(emptyDisplayCount), replacement=\(replacementCount), warnings=\(warningCount), \(sampleSummary)"
+        }
+
+        private static func textImportSamples(
+            from entities: [Kernel.CADEntity],
+            limit: Int = 24
+        ) -> [CADTextImportSample] {
+            entities.compactMap { entity -> CADTextImportSample? in
+                guard let text = entity.text else { return nil }
+                return CADTextImportSample(
+                    entityId: entity.sourceHandle ?? entity.id.uuidString,
+                    entityType: entity.kind.rawValue,
+                    layerID: entity.layerID,
+                    layoutID: entity.layoutID,
+                    sourceHandle: entity.sourceHandle,
+                    rawText: text.rawText,
+                    decodedText: text.decodedText,
+                    normalizedText: text.normalizedText,
+                    displayText: text.displayText,
+                    attributeTag: text.attributeTag,
+                    rawTextBytesHex: text.rawTextBytesHex,
+                    textStyleName: text.styleName,
+                    fontFile: text.fontFile,
+                    bigFontFile: text.bigFontFile,
+                    selectedFontName: text.selectedFontName,
+                    fallbackReason: text.fallbackReason,
+                    warnings: text.warnings,
+                    bounds: entity.bounds
+                )
+            }
+            .prefix(limit)
+            .map { $0 }
         }
 
         private static func compactDiagnosticText(_ value: String) -> String {
@@ -2284,8 +2441,11 @@ extension DXFBasic2DParser.EntityRecord {
         }
 
         if var text {
+            let textScale = transform.approximateScale
             text.insertionPoint = transform.apply(to: text.insertionPoint)
-            text.height *= transform.approximateScale
+            text.height *= textScale
+            text.boxWidth = text.boxWidth.map { abs($0 * textScale) }
+            text.boxHeight = text.boxHeight.map { abs($0 * textScale) }
             text.rotationRadians += DXFBasic2DParser.rotationRadians(from: transform)
             copy.text = text
             let transformedTextBounds = DXFBasic2DParser.textBounds(
