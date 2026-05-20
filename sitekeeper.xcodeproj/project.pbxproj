@@ -138,6 +138,7 @@
 		67249F2E77B93CF444AB2A4C /* SearchableFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3AD084787DBF24842A6B094 /* SearchableFilter.swift */; };
 		6761AF114F59B12DFEA2C89E /* DataStore+MaterialLibraryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1909F961EAFB3BDF02496B1 /* DataStore+MaterialLibraryState.swift */; };
 		695D570AD81443234CF3F7CE /* DataStore+HistoryOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536042BAA7F2CC77123F9085 /* DataStore+HistoryOps.swift */; };
+		6A3BF1156110EB62575A1B3A /* LaborRecordSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */; };
 		6A90A2285E4F5C1BD52C523E /* ActivityShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19927017F6DFC6A0C5518223 /* ActivityShareSheet.swift */; };
 		6ADDB3C7E96AF9526B4B0F94 /* DataStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54CE9C936E4195975DF82B0A /* DataStore.swift */; };
 		6BFA36B4AC36D8EFF1606155 /* ProjectDetailImportExportActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 336009C801B064E5717D6864 /* ProjectDetailImportExportActions.swift */; };
@@ -647,6 +648,7 @@
 		E20ED318315B0CB65F0D2DB4 /* ProjectDetailContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailContentView.swift; sourceTree = "<group>"; };
 		E3EB7B84F57B933891E2486A /* QuickNoteFilePreviewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteFilePreviewController.swift; sourceTree = "<group>"; };
 		E402EBA7AFC783AC384C2F89 /* WallAreaView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WallAreaView.swift; sourceTree = "<group>"; };
+		E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaborRecordSupportViews.swift; sourceTree = "<group>"; };
 		E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraTests.swift; sourceTree = "<group>"; };
 		E9C2C3E3653013CC92112615 /* BackupExportCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupExportCoordinator.swift; sourceTree = "<group>"; };
 		EA6AFC907D853376FDB27375 /* BackupTaskStateReducer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupTaskStateReducer.swift; sourceTree = "<group>"; };
@@ -1004,6 +1006,7 @@
 				003D5EFD1015285B84FA2C71 /* DrawingListViewModel.swift */,
 				33CB248275FBF23523E1B3D3 /* DrawingRow.swift */,
 				DE60813EDFD1BD3212A389CA /* EngineeringDatabaseViews.swift */,
+				E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */,
 				4352DA57CB946000FEB04D19 /* LaborRecordView.swift */,
 				F751A3B1DB72A3E46620E102 /* MaterialCategoryManagementView.swift */,
 				451BEF8A91226A73956E9A05 /* MaterialCenterView.swift */,
@@ -1478,6 +1481,7 @@
 				F0352B97EB9C56AE5B963C06 /* Formatters.swift in Sources */,
 				23BCE63E650C7632B0CACD1E /* HistoryView.swift in Sources */,
 				CEC5B6DFCA12B2B145DA2D54 /* ImportLimitPolicy.swift in Sources */,
+				6A3BF1156110EB62575A1B3A /* LaborRecordSupportViews.swift in Sources */,
 				BCF179337A85F91A8F7FBF55 /* LaborRecordView.swift in Sources */,
 				7A17788A6AA90BE810976C34 /* LegalPolicyDocument.swift in Sources */,
 				CED810E4219414097B98A87B /* MaterialCategoryManagementView.swift in Sources */,

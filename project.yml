@@ -52,11 +52,7 @@ targets:
         INFOPLIST_KEY_NSMicrophoneUsageDescription: 用于在随手记中录制现场语音。
         INFOPLIST_KEY_NSPhotoLibraryUsageDescription: 用于从相册选择项目照片、票据、施工资料和随手记素材。
         INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription: 用于将水印现场照片保存到系统相册。
-        INFOPLIST_KEY_CFBundleURLTypes:
-          - CFBundleTypeRole: Editor
-            CFBundleURLName: com.chengjinfang.sitekeeper
-            CFBundleURLSchemes:
-              - sitekeeper
+        INFOPLIST_KEY_CFBundleURLTypes: "[[\"CFBundleURLName\": \"com.chengjinfang.sitekeeper\", \"CFBundleTypeRole\": \"Editor\", \"CFBundleURLSchemes\": [\"sitekeeper\"]]]"
         INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES
         INFOPLIST_KEY_UILaunchScreen_Generation: NO
         INFOPLIST_KEY_UILaunchStoryboardName: LaunchScreen
