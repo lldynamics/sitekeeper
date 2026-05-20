@@ -32,6 +32,18 @@ if find "$ROOT_DIR" -name ".DS_Store" -print -quit | grep -q .; then
   exit 6
 fi
 
+echo "==> Checking untracked Swift sources"
+UNTRACKED_SWIFT_FILES="$(git -c core.quotePath=false ls-files --others --exclude-standard -- '*.swift')"
+if [[ -n "$UNTRACKED_SWIFT_FILES" ]]; then
+  echo "ERROR: Found untracked Swift source files. Add, remove, or ignore them before release preflight." >&2
+  printf '%s\n' "$UNTRACKED_SWIFT_FILES" | sed -n '1,80p' | sed 's/^/  /' >&2
+  UNTRACKED_SWIFT_COUNT="$(printf '%s\n' "$UNTRACKED_SWIFT_FILES" | wc -l | tr -d ' ')"
+  if [[ "$UNTRACKED_SWIFT_COUNT" -gt 80 ]]; then
+    echo "  ... and $((UNTRACKED_SWIFT_COUNT - 80)) more" >&2
+  fi
+  exit 7
+fi
+
 if [[ "$ALLOW_DIRTY" -ne 1 ]]; then
   if [[ -n "$(git status --porcelain)" ]]; then
     echo "ERROR: Working tree is dirty. Commit or stash changes before release preflight." >&2
@@ -47,6 +59,9 @@ fi
 
 echo "==> Running xcodegen generate"
 xcodegen generate
+if ! git diff --quiet -- sitekeeper.xcodeproj project.yml; then
+  sleep 5
+fi
 
 if ! git diff --quiet -- sitekeeper.xcodeproj project.yml; then
   echo "ERROR: xcodegen produced uncommitted project changes. Commit regenerated files before release." >&2
