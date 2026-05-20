@@ -1,429 +1,75 @@
 import Foundation
 
-enum CADDrawingTextEncoding: String, CaseIterable, Codable {
-    case auto
-    case gbk936
-    case gb18030
-    case big5950
-
-    var displayName: String {
-        switch self {
-        case .auto:
-            return "自动（推荐）"
-        case .gbk936:
-            return "简中 GBK（CP936）"
-        case .gb18030:
-            return "简中 GB18030（54936）"
-        case .big5950:
-            return "繁中 Big5（CP950）"
-        }
-    }
-
-    var codePageOverride: Int32? {
-        switch self {
-        case .auto:
-            return nil
-        case .gbk936:
-            return 936
-        case .gb18030:
-            return 54936
-        case .big5950:
-            return 950
-        }
-    }
-}
-
-enum CADDrawingTextBigFont: String, CaseIterable, Codable, Sendable {
-    case auto
-    case gbcbig
-    case hztxt
-    case hzfs
-    case big5
-
-    var displayName: String {
-        switch self {
-        case .auto:
-            return "自动 SHX/大字体"
-        case .gbcbig:
-            return "简中 GBCBIG（含 tssdeng/tssdchn）"
-        case .hztxt:
-            return "简中 HZTXT（含 simplex/txt）"
-        case .hzfs:
-            return "仿宋 HZFS（含 simfang）"
-        case .big5:
-            return "繁中 Big5"
-        }
-    }
-
-    var bridgeCode: Int32? {
-        switch self {
-        case .auto:
-            return 0
-        case .gbcbig:
-            return 1
-        case .hztxt:
-            return 2
-        case .hzfs:
-            return 3
-        case .big5:
-            return 4
-        }
-    }
-}
-
-enum CADDrawingTextDisplayFont: String, CaseIterable, Codable, Sendable, Identifiable {
-    case auto
-    case pingFangSC
-    case songtiSC
-    case fangSong
-    case kaiTi
-    case system
-    case imported
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .auto:
-            return "自动字体"
-        case .pingFangSC:
-            return "苹方"
-        case .songtiSC:
-            return "宋体"
-        case .fangSong:
-            return "仿宋"
-        case .kaiTi:
-            return "楷体"
-        case .system:
-            return "系统字体"
-        case .imported:
-            return "导入字体"
-        }
-    }
-
-    var candidateFontNames: [String] {
-        switch self {
-        case .auto:
-            return []
-        case .pingFangSC:
-            return ["PingFangSC-Regular", "PingFang SC"]
-        case .songtiSC:
-            return ["STSongti-SC-Regular", "Songti SC", "STSong", "SimSun", "NSimSun"]
-        case .fangSong:
-            return [
-                "FangSong",
-                "STFangsong",
-                "FangSong_GB2312",
-                "SimFang",
-                "FZFSJW--GB1-0",
-                "FZFangSong-Z02S"
-            ]
-        case .kaiTi:
-            return ["Kaiti SC", "STKaiti", "KaiTi", "KaiTi_GB2312", "SimKai"]
-        case .system:
-            return []
-        case .imported:
-            return []
-        }
-    }
-
-    var isImportedFont: Bool {
-        self == .imported
-    }
-}
-
-extension CADDrawingTextBigFont {
-    static func inferredFromFontName(_ rawName: String) -> CADDrawingTextBigFont {
-        let normalized = rawName
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .lowercased()
-            .replacingOccurrences(of: "\\.(shx|shp|fon)$", with: "", options: .regularExpression)
-
-        let tokens = Set(
-            [normalized] +
-            normalized.components(separatedBy: CharacterSet(charactersIn: "/\\._- ()[]{}<>+"))
-                .filter { !$0.isEmpty }
-        )
-
-        let big5Aliases: Set<String> = [
-            "big5", "chineset", "chinese_t", "cht", "mingliu", "pmingliu",
-            "kaiu", "msung", "bkai", "traditional"
-        ]
-        let hzfsAliases: Set<String> = [
-            "hzfs", "hzfs1", "hzfs2", "hzfangsong", "fs", "fs1", "fs2",
-            "simfang", "fangsong", "fangsonggb2312", "fangsong_gb2312",
-            "stfangsong", "gbhzfs", "gbfs", "gbkfs"
-        ]
-        let hztxtAliases: Set<String> = [
-            "hztxt", "hztxt1", "hztxt2", "hztext", "txt", "simplex",
-            "romans", "romanc", "romand", "isocp", "isoct"
-        ]
-        let gbcbigAliases: Set<String> = [
-            "gbcbig", "gbcbiggb", "gbtxt", "gbenor", "gbeitc", "gbhz",
-            "gbk", "gbksong", "gbhzdx", "hzdx", "tssdeng", "tssdchn",
-            "tssd", "hztssd", "chinesegb", "chineses", "gb2312", "gb18030"
-        ]
-        let styleAliases: Set<String> = [
-            "hzst", "song", "songti", "simsun", "hzkai", "kaiti", "simkai",
-            "hzhei", "simhei", "gbhei", "gbst"
-        ]
-
-        if !tokens.isDisjoint(with: big5Aliases) { return .big5 }
-        if !tokens.isDisjoint(with: hzfsAliases) { return .hzfs }
-        if !tokens.isDisjoint(with: hztxtAliases) { return .hztxt }
-        if !tokens.isDisjoint(with: gbcbigAliases) { return .gbcbig }
-        if !tokens.isDisjoint(with: styleAliases) { return .gbcbig }
-        return .auto
-    }
-}
-
-enum CADProjectFontMappingSource: String, CaseIterable, Codable, Identifiable, Sendable {
-    case bigFontFile = "bigfont"
-    case fontFile = "font"
-    case styleName = "style"
-    case any = "any"
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .bigFontFile:
-            return "大字体文件"
-        case .fontFile:
-            return "字体文件"
-        case .styleName:
-            return "文字样式"
-        case .any:
-            return "任意匹配"
-        }
-    }
-}
-
-struct CADProjectFontMapping: Identifiable, Codable, Equatable, Sendable {
-    var id: UUID
-    var source: CADProjectFontMappingSource
-    var pattern: String
-    var bigFont: CADDrawingTextBigFont
-
-    init(
-        id: UUID = UUID(),
-        source: CADProjectFontMappingSource = .bigFontFile,
-        pattern: String,
-        bigFont: CADDrawingTextBigFont = .gbcbig
-    ) {
-        self.id = id
-        self.source = source
-        self.pattern = pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-        self.bigFont = bigFont
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id, source, pattern, bigFont
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
-        source = try container.decodeStringEnum(
-            CADProjectFontMappingSource.self,
-            forKey: .source,
-            default: .bigFontFile
-        )
-        pattern = try container.decodeIfPresent(String.self, forKey: .pattern) ?? ""
-        bigFont = try container.decodeStringEnum(
-            CADDrawingTextBigFont.self,
-            forKey: .bigFont,
-            default: .gbcbig
-        )
-    }
-
-    var normalizedPattern: String {
-        pattern.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    var isUsable: Bool {
-        !normalizedPattern.isEmpty && bigFont.bridgeCode != nil && bigFont != .auto
-    }
-
-    var deduplicationKey: String {
-        let folded = normalizedPattern
-            .folding(options: [.caseInsensitive, .widthInsensitive, .diacriticInsensitive], locale: Locale(identifier: "en_US_POSIX"))
-            .lowercased()
-        return "\(source.rawValue)|\(folded)"
-    }
-}
-
-struct CADDrawingTextSchemeSnapshot: Codable, Equatable {
-    var codePage: Int32?
-    var bigFont: Int32?
-    var styleName: String?
-    var fontFile: String?
-    var bigFontFile: String?
-    var autoDetectScore: Int?
-    var styleSummary: String?
-    var matchedFontSummary: String?
-    var unresolvedFontSummary: String?
-    var fontResolutionSummary: String?
-    var rawTextBytesHexSample: String?
-    var detectionSummary: String?
-
-    init(
-        codePage: Int32? = nil,
-        bigFont: Int32? = nil,
-        styleName: String? = nil,
-        fontFile: String? = nil,
-        bigFontFile: String? = nil,
-        autoDetectScore: Int? = nil,
-        styleSummary: String? = nil,
-        matchedFontSummary: String? = nil,
-        unresolvedFontSummary: String? = nil,
-        fontResolutionSummary: String? = nil,
-        rawTextBytesHexSample: String? = nil,
-        detectionSummary: String? = nil
-    ) {
-        self.codePage = codePage
-        self.bigFont = bigFont
-        self.styleName = styleName
-        self.fontFile = fontFile
-        self.bigFontFile = bigFontFile
-        self.autoDetectScore = autoDetectScore
-        self.styleSummary = styleSummary
-        self.matchedFontSummary = matchedFontSummary
-        self.unresolvedFontSummary = unresolvedFontSummary
-        self.fontResolutionSummary = fontResolutionSummary
-        self.rawTextBytesHexSample = rawTextBytesHexSample
-        self.detectionSummary = detectionSummary
-    }
-}
-
-struct CADDrawingViewState: Codable, Equatable {
-    var zoomScale: Double
-    var panOffsetX: Double
-    var panOffsetY: Double
-    var viewportCenterX: Double?
-    var viewportCenterY: Double?
-    var usesSavedVisibleLayers: Bool
-    var visibleLayerNames: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case zoomScale
-        case panOffsetX
-        case panOffsetY
-        case viewportCenterX
-        case viewportCenterY
-        case usesSavedVisibleLayers
-        case visibleLayerNames
-    }
-
-    init(
-        zoomScale: Double = 1,
-        panOffsetX: Double = 0,
-        panOffsetY: Double = 0,
-        viewportCenterX: Double? = nil,
-        viewportCenterY: Double? = nil,
-        usesSavedVisibleLayers: Bool = false,
-        visibleLayerNames: [String] = []
-    ) {
-        self.zoomScale = zoomScale
-        self.panOffsetX = panOffsetX
-        self.panOffsetY = panOffsetY
-        self.viewportCenterX = viewportCenterX
-        self.viewportCenterY = viewportCenterY
-        self.usesSavedVisibleLayers = usesSavedVisibleLayers
-        self.visibleLayerNames = visibleLayerNames
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        zoomScale = try container.decodeIfPresent(Double.self, forKey: .zoomScale) ?? 1
-        panOffsetX = try container.decodeIfPresent(Double.self, forKey: .panOffsetX) ?? 0
-        panOffsetY = try container.decodeIfPresent(Double.self, forKey: .panOffsetY) ?? 0
-        viewportCenterX = try container.decodeIfPresent(Double.self, forKey: .viewportCenterX)
-        viewportCenterY = try container.decodeIfPresent(Double.self, forKey: .viewportCenterY)
-        visibleLayerNames = try container.decodeIfPresent([String].self, forKey: .visibleLayerNames) ?? []
-        usesSavedVisibleLayers = try container.decodeIfPresent(Bool.self, forKey: .usesSavedVisibleLayers) ?? !visibleLayerNames.isEmpty
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(zoomScale, forKey: .zoomScale)
-        try container.encode(panOffsetX, forKey: .panOffsetX)
-        try container.encode(panOffsetY, forKey: .panOffsetY)
-        try container.encodeIfPresent(viewportCenterX, forKey: .viewportCenterX)
-        try container.encodeIfPresent(viewportCenterY, forKey: .viewportCenterY)
-        try container.encode(usesSavedVisibleLayers, forKey: .usesSavedVisibleLayers)
-        try container.encode(visibleLayerNames, forKey: .visibleLayerNames)
-    }
-
-    var hasSavedViewport: Bool {
-        zoomScale > 1.0001 ||
-        abs(panOffsetX) > 0.5 ||
-        abs(panOffsetY) > 0.5 ||
-        (viewportCenterX != nil && viewportCenterY != nil) ||
-        usesSavedVisibleLayers
-    }
-}
-
 struct ProjectDrawing: Identifiable, Codable {
     var id = UUID()
     var projectId: UUID
     var name: String
+    var drawingNumber: String
+    var discipline: String
+    var floorArea: String
     var fileName: String
     var fileType: String
     var version: String
     var isCurrentVersion: Bool
+    var issuedAt: String
+    var receiver: String
     var relatedLogDate: String
+    var linkedTodoIDs: [UUID]
+    var linkedLogIDs: [UUID]
+    var linkedDocumentIDs: [UUID]
     var issueStatus: DrawingIssueStatus
     var issueNote: String
-    var textEncoding: CADDrawingTextEncoding
-    var textBigFont: CADDrawingTextBigFont
-    var textSchemeSnapshot: CADDrawingTextSchemeSnapshot
-    var cadViewState: CADDrawingViewState
     var importedAt: String
     var note: String
-    var cadOverlaySnapshotData: String
 
     init(
         id: UUID = UUID(),
         projectId: UUID,
         name: String,
+        drawingNumber: String = "",
+        discipline: String = "",
+        floorArea: String = "",
         fileName: String,
         fileType: String,
         version: String = "V1",
         isCurrentVersion: Bool = true,
+        issuedAt: String = "",
+        receiver: String = "",
         relatedLogDate: String = "",
+        linkedTodoIDs: [UUID] = [],
+        linkedLogIDs: [UUID] = [],
+        linkedDocumentIDs: [UUID] = [],
         issueStatus: DrawingIssueStatus = .none,
         issueNote: String = "",
-        textEncoding: CADDrawingTextEncoding = .auto,
-        textBigFont: CADDrawingTextBigFont = .auto,
-        textSchemeSnapshot: CADDrawingTextSchemeSnapshot = .init(),
-        cadViewState: CADDrawingViewState = .init(),
         importedAt: String = Formatters.now(),
-        note: String = "",
-        cadOverlaySnapshotData: String = ""
+        note: String = ""
     ) {
         self.id = id
         self.projectId = projectId
         self.name = name
+        self.drawingNumber = drawingNumber
+        self.discipline = discipline
+        self.floorArea = floorArea
         self.fileName = fileName
         self.fileType = fileType
         self.version = version
         self.isCurrentVersion = isCurrentVersion
+        self.issuedAt = issuedAt
+        self.receiver = receiver
         self.relatedLogDate = relatedLogDate
+        self.linkedTodoIDs = linkedTodoIDs
+        self.linkedLogIDs = linkedLogIDs
+        self.linkedDocumentIDs = linkedDocumentIDs
         self.issueStatus = issueStatus
         self.issueNote = issueNote
-        self.textEncoding = textEncoding
-        self.textBigFont = textBigFont
-        self.textSchemeSnapshot = textSchemeSnapshot
-        self.cadViewState = cadViewState
         self.importedAt = importedAt
         self.note = note
-        self.cadOverlaySnapshotData = cadOverlaySnapshotData
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, projectId, name, fileName, fileType, version, isCurrentVersion, relatedLogDate, issueStatus, issueNote, textEncoding, textBigFont, textSchemeSnapshot, cadViewState, importedAt, note, cadOverlaySnapshotData
+        case id, projectId, name, drawingNumber, discipline, floorArea, fileName, fileType, version, isCurrentVersion
+        case issuedAt, receiver, relatedLogDate, linkedTodoIDs, linkedLogIDs, linkedDocumentIDs
+        case issueStatus, issueNote, importedAt, note
     }
 
     init(from decoder: Decoder) throws {
@@ -431,32 +77,27 @@ struct ProjectDrawing: Identifiable, Codable {
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         projectId = try container.decode(UUID.self, forKey: .projectId)
         name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        drawingNumber = try container.decodeIfPresent(String.self, forKey: .drawingNumber) ?? ""
+        discipline = try container.decodeIfPresent(String.self, forKey: .discipline) ?? ""
+        floorArea = try container.decodeIfPresent(String.self, forKey: .floorArea) ?? ""
         fileName = try container.decodeIfPresent(String.self, forKey: .fileName) ?? ""
         fileType = try container.decodeIfPresent(String.self, forKey: .fileType) ?? ""
         version = try container.decodeIfPresent(String.self, forKey: .version) ?? "V1"
         isCurrentVersion = try container.decodeIfPresent(Bool.self, forKey: .isCurrentVersion) ?? true
+        issuedAt = try container.decodeIfPresent(String.self, forKey: .issuedAt) ?? ""
+        receiver = try container.decodeIfPresent(String.self, forKey: .receiver) ?? ""
         relatedLogDate = try container.decodeIfPresent(String.self, forKey: .relatedLogDate) ?? ""
+        linkedTodoIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedTodoIDs) ?? []
+        linkedLogIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedLogIDs) ?? []
+        linkedDocumentIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedDocumentIDs) ?? []
         issueStatus = try container.decodeStringEnum(
             DrawingIssueStatus.self,
             forKey: .issueStatus,
             default: .none
         )
         issueNote = try container.decodeIfPresent(String.self, forKey: .issueNote) ?? ""
-        textEncoding = try container.decodeStringEnum(
-            CADDrawingTextEncoding.self,
-            forKey: .textEncoding,
-            default: .auto
-        )
-        textBigFont = try container.decodeStringEnum(
-            CADDrawingTextBigFont.self,
-            forKey: .textBigFont,
-            default: .auto
-        )
-        textSchemeSnapshot = try container.decodeIfPresent(CADDrawingTextSchemeSnapshot.self, forKey: .textSchemeSnapshot) ?? .init()
-        cadViewState = try container.decodeIfPresent(CADDrawingViewState.self, forKey: .cadViewState) ?? .init()
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
-        cadOverlaySnapshotData = try container.decodeIfPresent(String.self, forKey: .cadOverlaySnapshotData) ?? ""
     }
 
     static let allowedFileExtensions: Set<String> = ["pdf", "dwg", "dxf"]

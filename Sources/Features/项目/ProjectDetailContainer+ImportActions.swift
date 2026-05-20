@@ -102,7 +102,7 @@ extension ProjectDetailContainer {
                             drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
                             importDrawing(drawing)
                         } catch {
-                            StorageIssueLog.record("CAD ZIP 图纸导入失败：\(entry.path)，\(error.localizedDescription)")
+                            StorageIssueLog.record("图纸 ZIP 导入失败：\(entry.path)，\(error.localizedDescription)")
                             failedNames.append("\(entry.path)（\(error.localizedDescription)）")
                         }
                     }
@@ -110,7 +110,7 @@ extension ProjectDetailContainer {
                         failedNames.append("\(url.lastPathComponent)（ZIP 内没有可导入的图纸）")
                     }
                 } catch {
-                    StorageIssueLog.record("CAD ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.record("图纸 ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                     failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
                 }
                 continue
@@ -120,7 +120,7 @@ extension ProjectDetailContainer {
                 let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
                 importDrawing(drawing)
             } catch {
-                StorageIssueLog.record("CAD 图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.record("图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                 failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
             }
         }
@@ -159,76 +159,15 @@ extension ProjectDetailContainer {
     func previewDrawing(_ drawing: ProjectDrawing) {
         switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
         case .success(let url):
-            assetState.cadPreviewRequest = ProjectCADPreviewRequest(
-                projectId: drawing.projectId,
-                drawingID: drawing.id,
-                fileURL: url,
-                displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
-                fileType: drawing.fileType,
-                importedAt: drawing.importedAt,
-                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
-                textEncoding: drawing.textEncoding,
-                textBigFont: drawing.textBigFont,
-                textSchemeSnapshot: drawing.textSchemeSnapshot,
-                cadViewState: drawing.cadViewState,
-                projectFontMappings: projectStore.projects.first(where: { $0.id == drawing.projectId })?.cadFontMappings ?? [],
-                overlaySnapshotData: drawing.cadOverlaySnapshotData,
-                onOverlaySnapshotChange: { drawingID, snapshotData in
-                    updateDrawingOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
-                },
-                onViewStateChange: { drawingID, viewState in
-                    updateDrawingCADViewState(drawingID: drawingID, viewState: viewState)
-                },
-                onTextEncodingChange: { drawingID, encoding in
-                    updateDrawingTextEncoding(drawingID: drawingID, encoding: encoding)
-                },
-                onTextBigFontChange: { drawingID, profile in
-                    updateDrawingTextBigFont(drawingID: drawingID, profile: profile)
-                },
-                onTextSchemeSnapshotChange: { drawingID, snapshot in
-                    updateDrawingTextSchemeSnapshot(drawingID: drawingID, snapshot: snapshot)
-                },
-                onProjectFontMappingsChange: { projectID, mappings in
-                    updateProjectCADFontMappings(projectID: projectID, mappings: mappings)
-                }
-            )
+            if drawing.fileType.lowercased() == "pdf" {
+                assetState.quickLookURL = url
+            } else {
+                assetState.drawingShareURL = url
+            }
         case .failure(let message):
-            StorageIssueLog.record("CAD 图纸打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
+            StorageIssueLog.record("图纸原件打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
             presentImportError(message)
         }
-    }
-
-    func updateDrawingOverlaySnapshot(drawingID: UUID, snapshotData: String) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.cadOverlaySnapshotData = snapshotData }) else { return }
-        store.scheduleSave()
-    }
-
-    func updateDrawingCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.cadViewState = viewState }) else { return }
-        store.scheduleSave()
-    }
-
-    func updateDrawingTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textEncoding = encoding }) else { return }
-        store.scheduleSave()
-    }
-
-    func updateDrawingTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textBigFont = profile }) else { return }
-        store.scheduleSave()
-    }
-
-    func updateDrawingTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textSchemeSnapshot = snapshot }) else { return }
-        store.scheduleSave()
-    }
-
-    func updateProjectCADFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
-        guard let index = projectStore.projects.firstIndex(where: { $0.id == projectID }) else { return }
-        var project = projectStore.projects[index]
-        project.cadFontMappings = mappings
-        guard store.updateProject(project) else { return }
-        store.scheduleSave()
     }
 
     func importProjectDocuments(

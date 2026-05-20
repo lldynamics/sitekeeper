@@ -96,6 +96,17 @@ struct ProjectDetailContainer: View {
     }()
     private static let documentImportTypes: [UTType] = [.item]
 
+    private var drawingShareSheetPresented: Binding<Bool> {
+        Binding(
+            get: { assetState.drawingShareURL != nil },
+            set: { isPresented in
+                if !isPresented {
+                    assetState.drawingShareURL = nil
+                }
+            }
+        )
+    }
+
     private var project: Project? { projectStore.projects.first { $0.id == projectId } }
     private var projectSnapshot: ProjectDetailSnapshot? {
         guard let project else { return nil }
@@ -397,6 +408,7 @@ struct ProjectDetailContainer: View {
                 projects: projectStore.projects,
                 constructionMethods: store.constructionMethods,
                 relatedLogs: snapshot.relatedLogs,
+                relatedTodos: snapshot.relatedTodos,
                 relatedDrawings: snapshot.relatedDrawings,
                 relatedFinancialRecords: snapshot.relatedFinancialRecords,
                 relatedDocuments: snapshot.relatedDocuments,
@@ -465,8 +477,12 @@ struct ProjectDetailContainer: View {
             showImportError: $assetState.showImportError,
             importErrorMessage: $assetState.importErrorMessage
         )
-        .fullScreenCover(item: $assetState.cadPreviewRequest) { request in
-            CADPreviewContainer(request: request)
+        .sheet(isPresented: drawingShareSheetPresented) {
+            if let drawingShareURL = assetState.drawingShareURL {
+                ActivityShareSheet(activityItems: [drawingShareURL], onComplete: { _ in
+                    assetState.drawingShareURL = nil
+                })
+            }
         }
         .onAppear {
             handleOnAppear(snapshot: snapshot)

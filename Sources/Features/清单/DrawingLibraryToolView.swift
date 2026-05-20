@@ -1,10 +1,12 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import QuickLook
 
-struct CADViewerToolView: View {
+struct DrawingLibraryToolView: View {
     @Environment(DataStore.self) private var store
     @State private var selectedProjectID: UUID?
-    @State private var previewRequest: ProjectCADPreviewRequest?
+    @State private var quickLookURL: URL?
+    @State private var shareURL: URL?
     @State private var operationMessage: String?
     @State private var showDrawingImporter = false
     @State private var pendingImportURLs: [URL] = []
@@ -13,7 +15,8 @@ struct CADViewerToolView: View {
     @State private var pendingImportConflictNames: [String] = []
     @State private var showImportStrategyDialog = false
     @State private var searchText = ""
-    @AppStorage(UserPreferenceKeys.cadViewerRecentDrawingIDs) private var recentDrawingIDsRaw = ""
+    @State private var showHistoricalDrawings = false
+    @AppStorage(UserPreferenceKeys.drawingLibraryRecentDrawingIDs) private var recentDrawingIDsRaw = ""
 
     private static let drawingImportTypes: [UTType] = {
         var types: [UTType] = [.pdf, .zip]
@@ -54,6 +57,14 @@ struct CADViewerToolView: View {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private var currentFilteredDrawings: [ProjectDrawing] {
+        filteredDrawings.filter(\.isCurrentVersion)
+    }
+
+    private var historicalFilteredDrawings: [ProjectDrawing] {
+        filteredDrawings.filter { !$0.isCurrentVersion }
+    }
+
     private var recentDrawingIDs: [UUID] {
         recentDrawingIDsRaw
             .split(separator: "\n")
@@ -66,10 +77,6 @@ struct CADViewerToolView: View {
         }
     }
 
-    private var isCADKernelReady: Bool {
-        CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
-    }
-
     private var importStrategyMessage: String {
         guard !pendingImportConflictNames.isEmpty else {
             return "检测到同名图纸，请选择导入策略。"
@@ -79,6 +86,17 @@ struct CADViewerToolView: View {
             return "检测到同名图纸：\(preview) 等 \(pendingImportConflictNames.count) 项，请选择导入策略。"
         }
         return "检测到同名图纸：\(preview)，请选择导入策略。"
+    }
+
+    private var shareSheetPresented: Binding<Bool> {
+        Binding(
+            get: { shareURL != nil },
+            set: { isPresented in
+                if !isPresented {
+                    shareURL = nil
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -96,7 +114,7 @@ struct CADViewerToolView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("搜索图纸名称、项目", text: $searchText)
+                    TextField("搜索名称、图号、专业、楼层、项目", text: $searchText)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                     if !searchText.isEmpty {
@@ -125,21 +143,42 @@ struct CADViewerToolView: View {
                 }
             }
 
-            Section(selectedProjectID == nil ? "全部图纸" : "项目图纸") {
+            Section(selectedProjectID == nil ? "图纸台账" : "项目图纸") {
                 if filteredDrawings.isEmpty {
                     ContentUnavailableView(
-                        "暂无 CAD 图纸",
+                        "暂无图纸",
                         systemImage: "doc.viewfinder",
-                        description: Text("先在项目详情里导入 DWG / DXF 图纸；PDF 图纸会作为附件打开。")
+                        description: Text("先导入 DWG / DXF / PDF 图纸原件，后续按项目、版本和当前版管理。")
                     )
                 } else {
-                    ForEach(filteredDrawings) { drawing in
+                    ForEach(currentFilteredDrawings) { drawing in
                         drawingRow(drawing, showsProject: selectedProjectID == nil)
+                    }
+                    if !historicalFilteredDrawings.isEmpty {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showHistoricalDrawings.toggle()
+                            }
+                        } label: {
+                            HStack {
+                                Label("历史版本 (\(historicalFilteredDrawings.count))", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                Spacer()
+                                Image(systemName: showHistoricalDrawings ? "chevron.up" : "chevron.down")
+                                    .font(.caption2.weight(.semibold))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        .buttonStyle(.plain)
+                        if showHistoricalDrawings {
+                            ForEach(historicalFilteredDrawings) { drawing in
+                                drawingRow(drawing, showsProject: selectedProjectID == nil)
+                            }
+                        }
                     }
                 }
             }
         }
-        .navigationTitle("CAD 看图")
+        .navigationTitle("图纸管理")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -160,7 +199,7 @@ struct CADViewerToolView: View {
             case .success(let urls):
                 handleImportedDrawings(urls)
             case .failure(let error):
-                StorageIssueLog.record("CAD 看图导入失败：\(error.localizedDescription)")
+                StorageIssueLog.record("图纸管理导入失败：\(error.localizedDescription)")
                 operationMessage = "图纸导入失败：\(error.localizedDescription)"
             }
         }
@@ -188,8 +227,13 @@ struct CADViewerToolView: View {
         } message: {
             Text(importStrategyMessage)
         }
-        .fullScreenCover(item: $previewRequest) { request in
-            CADPreviewContainer(request: request)
+        .quickLookPreview($quickLookURL)
+        .sheet(isPresented: shareSheetPresented) {
+            if let shareURL {
+                ActivityShareSheet(activityItems: [shareURL], onComplete: { _ in
+                    self.shareURL = nil
+                })
+            }
         }
         .operationToast(message: $operationMessage)
     }
@@ -222,13 +266,11 @@ struct CADViewerToolView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(2)
-                    if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
-                        let status = previewStatus(for: drawing)
-                        if let statusText = status.text {
-                            Text(statusText)
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
-                        }
+                    let status = openStatus(for: drawing)
+                    if let statusText = status.text {
+                        Text(statusText)
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
                     }
                 }
                 Spacer(minLength: AppSpacing.tight)
@@ -239,48 +281,20 @@ struct CADViewerToolView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("预览图纸 \(drawing.name.isEmpty ? drawing.fileName : drawing.name)")
+        .accessibilityLabel("用专业看图软件打开 \(drawing.name.isEmpty ? drawing.fileName : drawing.name)")
     }
 
     private func openDrawing(_ drawing: ProjectDrawing) {
         switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
         case .success(let url):
             recordRecentDrawing(drawing.id)
-            previewRequest = ProjectCADPreviewRequest(
-                projectId: drawing.projectId,
-                drawingID: drawing.id,
-                fileURL: url,
-                displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
-                fileType: drawing.fileType,
-                importedAt: drawing.importedAt,
-                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
-                textEncoding: drawing.textEncoding,
-                textBigFont: drawing.textBigFont,
-                textSchemeSnapshot: drawing.textSchemeSnapshot,
-                cadViewState: drawing.cadViewState,
-                projectFontMappings: store.projects.first(where: { $0.id == drawing.projectId })?.cadFontMappings ?? [],
-                overlaySnapshotData: drawing.cadOverlaySnapshotData,
-                onOverlaySnapshotChange: { drawingID, snapshotData in
-                    updateOverlaySnapshot(drawingID: drawingID, snapshotData: snapshotData)
-                },
-                onViewStateChange: { drawingID, viewState in
-                    updateCADViewState(drawingID: drawingID, viewState: viewState)
-                },
-                onTextEncodingChange: { drawingID, encoding in
-                    updateTextEncoding(drawingID: drawingID, encoding: encoding)
-                },
-                onTextBigFontChange: { drawingID, profile in
-                    updateTextBigFont(drawingID: drawingID, profile: profile)
-                },
-                onTextSchemeSnapshotChange: { drawingID, snapshot in
-                    updateTextSchemeSnapshot(drawingID: drawingID, snapshot: snapshot)
-                },
-                onProjectFontMappingsChange: { projectID, mappings in
-                    updateProjectFontMappings(projectID: projectID, mappings: mappings)
-                }
-            )
+            if drawing.fileType.lowercased() == "pdf" {
+                quickLookURL = url
+            } else {
+                shareURL = url
+            }
         case .failure(let message):
-            StorageIssueLog.record("CAD 图纸打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
+            StorageIssueLog.record("图纸原件打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
             operationMessage = message
         }
     }
@@ -344,7 +358,6 @@ struct CADViewerToolView: View {
         var importedCount = 0
         var replacedCount = 0
         var failedNames: [String] = []
-        var importedDrawings: [ProjectDrawing] = []
         var currentDrawings = store.projectDrawings.filter { $0.projectId == projectId }
 
         func importDrawing(_ drawing: ProjectDrawing) {
@@ -362,7 +375,7 @@ struct CADViewerToolView: View {
                     ids: Set([replacement.id]),
                     deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
                         [replacement.fileName],
-                        summary: "cadViewer.importReplacement"
+                        summary: "drawingLibrary.importReplacement"
                     ),
                     recordsAuditImmediately: true
                 )
@@ -382,7 +395,6 @@ struct CADViewerToolView: View {
             }
             store.appendProjectDrawing(versioned)
             currentDrawings.append(versioned)
-            importedDrawings.append(versioned)
             importedCount += 1
         }
 
@@ -404,7 +416,7 @@ struct CADViewerToolView: View {
                             drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
                             importDrawing(drawing)
                         } catch {
-                            StorageIssueLog.record("CAD ZIP 图纸导入失败：\(entry.path)，\(error.localizedDescription)")
+                            StorageIssueLog.record("图纸 ZIP 导入失败：\(entry.path)，\(error.localizedDescription)")
                             failedNames.append("\(entry.path)（\(error.localizedDescription)）")
                         }
                     }
@@ -412,7 +424,7 @@ struct CADViewerToolView: View {
                         failedNames.append("\(url.lastPathComponent)（ZIP 内没有可导入的图纸）")
                     }
                 } catch {
-                    StorageIssueLog.record("CAD ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.record("图纸 ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                     failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
                 }
                 continue
@@ -422,7 +434,7 @@ struct CADViewerToolView: View {
                 let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
                 importDrawing(drawing)
             } catch {
-                StorageIssueLog.record("CAD 图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                StorageIssueLog.record("图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
                 failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
             }
         }
@@ -439,54 +451,14 @@ struct CADViewerToolView: View {
             if !replaceHint.isEmpty {
                 operationMessage = "已导入 \(importedCount) 份图纸\(replaceHint)\(previewHint)"
             }
-            openFirstImportedDrawing(importedDrawings)
             return
         }
         if importedCount > 0, !failedNames.isEmpty {
             let replaceHint = replacedCount > 0 ? "，已替换 \(replacedCount) 份同格式旧文件" : ""
             operationMessage = "已导入 \(importedCount) 份，\(failedNames.count) 份失败\(replaceHint)\(previewHint)"
-            openFirstImportedDrawing(importedDrawings)
             return
         }
         operationMessage = "没有可导入的图纸文件，请选择 DWG / DXF / PDF / ZIP。"
-    }
-
-    private func openFirstImportedDrawing(_ importedDrawings: [ProjectDrawing]) {
-        guard let firstDrawing = importedDrawings.first else { return }
-        openDrawing(firstDrawing)
-    }
-
-    private func updateOverlaySnapshot(drawingID: UUID, snapshotData: String) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.cadOverlaySnapshotData = snapshotData }) else { return }
-        store.scheduleSave()
-    }
-
-    private func updateCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.cadViewState = viewState }) else { return }
-        store.scheduleSave()
-    }
-
-    private func updateTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textEncoding = encoding }) else { return }
-        store.scheduleSave()
-    }
-
-    private func updateTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textBigFont = profile }) else { return }
-        store.scheduleSave()
-    }
-
-    private func updateTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
-        guard store.mutateProjectDrawing(id: drawingID, { $0.textSchemeSnapshot = snapshot }) else { return }
-        store.scheduleSave()
-    }
-
-    private func updateProjectFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
-        guard let index = store.projects.firstIndex(where: { $0.id == projectID }) else { return }
-        var project = store.projects[index]
-        project.cadFontMappings = mappings
-        guard store.updateProject(project) else { return }
-        store.scheduleSave()
     }
 
     private func recordRecentDrawing(_ drawingID: UUID) {
@@ -501,10 +473,29 @@ struct CADViewerToolView: View {
         if showsProject {
             parts.append(projectName(for: drawing.projectId))
         }
+        if !drawing.drawingNumber.isEmpty {
+            parts.append("图号 \(drawing.drawingNumber)")
+        }
+        if !drawing.discipline.isEmpty {
+            parts.append(drawing.discipline)
+        }
+        if !drawing.floorArea.isEmpty {
+            parts.append(drawing.floorArea)
+        }
         parts.append(drawing.version)
+        if !drawing.issuedAt.isEmpty {
+            parts.append("出图 \(drawing.issuedAt)")
+        }
+        if !drawing.receiver.isEmpty {
+            parts.append("接收 \(drawing.receiver)")
+        }
         parts.append(drawing.fileType.uppercased())
         if !drawing.importedAt.isEmpty {
             parts.append("导入 \(drawing.importedAt)")
+        }
+        let linkCount = drawing.linkedTodoIDs.count + drawing.linkedLogIDs.count + drawing.linkedDocumentIDs.count
+        if linkCount > 0 {
+            parts.append("关联 \(linkCount)")
         }
         return parts.joined(separator: " · ")
     }
@@ -517,9 +508,16 @@ struct CADViewerToolView: View {
         let query = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
         let fields = [
             drawing.name,
+            drawing.drawingNumber,
+            drawing.discipline,
+            drawing.floorArea,
             drawing.fileName,
             drawing.version,
+            drawing.issuedAt,
+            drawing.receiver,
             drawing.fileType,
+            drawing.issueStatus.displayName,
+            drawing.issueNote,
             drawing.note,
             projectName(for: drawing.projectId),
             ProjectDetailDrawingHelper.zipEntryPath(for: drawing) ?? "",
@@ -545,16 +543,13 @@ struct CADViewerToolView: View {
         }
     }
 
-    private func previewStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
+    private func openStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
-        if fileType == "dxf" {
-            return isCADKernelReady ? ("CAD 本机查看可用", true) : (nil, false)
-        }
         if fileType == "pdf" {
-            return ("PDF 附件", true)
+            return ("PDF 可预览", true)
         }
-        if fileType == "dwg" {
-            return isCADKernelReady ? ("DWG 本机查看", true) : (nil, false)
+        if ProjectDetailDrawingHelper.isCADSource(fileType) {
+            return ("用专业看图软件打开", true)
         }
         return ("文件独立打开", true)
     }

@@ -259,16 +259,46 @@ extension ReportBuilder {
         }
         if options.includeProjectDrawings {
             rows.append(csvMachineSection("project_drawings"))
-            rows.append(csv(["name", "file_type", "version", "file_name", "issue_status_key", "issue_status_display", "issue_note", "imported_at", "related_log_date", "note", "project_id"]))
+            rows.append(csv([
+                "name",
+                "drawing_number",
+                "discipline",
+                "floor_area",
+                "file_type",
+                "version",
+                "is_current_version",
+                "issued_at",
+                "receiver",
+                "file_name",
+                "issue_status_key",
+                "issue_status_display",
+                "issue_note",
+                "linked_todo_ids",
+                "linked_log_ids",
+                "linked_document_ids",
+                "imported_at",
+                "related_log_date",
+                "note",
+                "project_id"
+            ]))
             rows += snapshot.projectDrawings.map { drawing in
                 csv([
                     drawing.name,
+                    drawing.drawingNumber,
+                    drawing.discipline,
+                    drawing.floorArea,
                     drawing.fileType,
                     drawing.version,
+                    drawing.isCurrentVersion ? "true" : "false",
+                    drawing.issuedAt,
+                    drawing.receiver,
                     drawing.fileName,
                     drawing.issueStatus.exportKey,
                     drawing.issueStatus.displayName,
                     drawing.issueNote,
+                    drawing.linkedTodoIDs.map(\.uuidString).joined(separator: ";"),
+                    drawing.linkedLogIDs.map(\.uuidString).joined(separator: ";"),
+                    drawing.linkedDocumentIDs.map(\.uuidString).joined(separator: ";"),
                     drawing.importedAt,
                     drawing.relatedLogDate,
                     drawing.note,

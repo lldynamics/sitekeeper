@@ -37,7 +37,7 @@ enum UserPreferenceKeys {
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
-    static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
+    static let drawingLibraryRecentDrawingIDs = "drawing.library.recentDrawingIDs"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
     static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
     static let materialLibraryPromptAfterAdd = "materialLibrary.promptAfterAdd"

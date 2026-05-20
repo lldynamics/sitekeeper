@@ -12,28 +12,7 @@ targets:
     platform: iOS
     sources:
       - path: Sources
-      - path: SiteKeeperCADKernel
     preBuildScripts:
-      - name: CAD Legacy Bridge Guard
-        script: |
-          "${SRCROOT}/scripts/release/check_no_legacy_cad_bridge.sh"
-        inputFiles:
-          - "$(SRCROOT)/scripts/release/check_no_legacy_cad_bridge.sh"
-          - "$(SRCROOT)/project.yml"
-          - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
-          - "$(SRCROOT)/Sources"
-          - "$(SRCROOT)/SiteKeeperCADKernel"
-        basedOnDependencyAnalysis: false
-      - name: Native CAD Cleanup Guard
-        script: |
-          "${SRCROOT}/scripts/release/check_native_cad_clean.sh"
-        inputFiles:
-          - "$(SRCROOT)/scripts/release/check_native_cad_clean.sh"
-          - "$(SRCROOT)/project.yml"
-          - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
-          - "$(SRCROOT)/Sources"
-          - "$(SRCROOT)/SiteKeeperCADKernel"
-        basedOnDependencyAnalysis: false
       - name: File Deletion Policy Guard
         script: |
           "${SRCROOT}/scripts/release/check_file_deletion_policy.sh"
@@ -46,12 +25,9 @@ targets:
     dependencies:
       - target: sitekeeperWidgetExtension
         embed: true
-      - framework: Vendor/LibreDWG/CLibreDWG.xcframework
-        embed: false
     settings:
       base:
         SWIFT_VERSION: "5.0"
-        SWIFT_OBJC_BRIDGING_HEADER: Sources/Shared/CAD/Import/NativeLibreDWG/SiteKeeperCAD-Bridging-Header.h
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         PRODUCT_NAME: 工地掌柜
         PRODUCT_MODULE_NAME: sitekeeper

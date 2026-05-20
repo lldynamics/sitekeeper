@@ -4,7 +4,7 @@ import Foundation
 
 @MainActor
 struct BackupContractCompatibilityTests {
-    @Test func legacyBackupImportMigratesPaymentRecordsAndKeepsDrawingReference() throws {
+    @Test func legacyBackupImportIgnoresPaymentRecordsAndKeepsDrawingReference() throws {
         let projectID = UUID()
         let drawingID = UUID()
         let legacyJSON = """
@@ -40,7 +40,6 @@ struct BackupContractCompatibilityTests {
 
         let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: Data(legacyJSON.utf8))
         #expect(snapshot.schemaVersion == BackupSnapshot.legacySchemaVersion)
-        #expect(snapshot.legacyPaymentRecords.count == 1)
 
         let store = makeStore()
         store.applyLoadedSnapshot(snapshot)
@@ -48,11 +47,7 @@ struct BackupContractCompatibilityTests {
         #expect(store.projects.count == 1)
         #expect(store.projectDrawings.count == 1)
         #expect(store.projectDrawings.first?.fileName == "legacy-plan.pdf")
-        #expect(store.projectFinancialRecords.count == 1)
-        let record = try #require(store.projectFinancialRecords.first)
-        #expect(record.direction == .income)
-        #expect(record.amount == "100")
-        #expect(record.note.contains("转账"))
+        #expect(store.projectFinancialRecords.isEmpty)
     }
 
     @Test func backupImportIgnoresFutureFieldsAndPreservesKnownDrawingFields() throws {
@@ -108,6 +103,14 @@ struct BackupContractCompatibilityTests {
         #expect(drawing.projectId == projectID)
         #expect(drawing.fileName == "p0-floor.dwg")
         #expect(drawing.fileType == "dwg")
+        #expect(drawing.drawingNumber.isEmpty)
+        #expect(drawing.discipline.isEmpty)
+        #expect(drawing.floorArea.isEmpty)
+        #expect(drawing.issuedAt.isEmpty)
+        #expect(drawing.receiver.isEmpty)
+        #expect(drawing.linkedTodoIDs.isEmpty)
+        #expect(drawing.linkedLogIDs.isEmpty)
+        #expect(drawing.linkedDocumentIDs.isEmpty)
     }
 
     @Test func overwriteImportReplacesDrawingFileReferences() {
