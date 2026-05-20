@@ -29,10 +29,9 @@ extension SiteKeeperCADKernel {
             let fontName = cleaned(style.fontName)
             let bigFontName = cleaned(style.bigFontName)
             let containsCJK = displayText.containsCJKScalars
-            let usesSHXFont = isSHXFont(fontName)
-            let mapped = shxMappings.first {
-                $0.sourceName.caseInsensitiveCompare(fontName ?? "") == .orderedSame
-            }
+            let mapped = shxMapping(for: fontName)
+            let bigFontMapping = shxMapping(for: bigFontName)
+            let usesSHXFont = isSHXFont(fontName) || mapped != nil || bigFontMapping != nil
             let runtimeProbe = CADRuntimeFontProbe()
             var missingFonts: [String] = []
             var missingBigFonts: [String] = []
@@ -52,18 +51,25 @@ extension SiteKeeperCADKernel {
                 warnings.append("CAD_TEXT_BIGFONT_UNAVAILABLE:\(bigFontName)")
             }
 
+            if let mapped {
+                warnings.append("CAD_TEXT_SHX_FONT_MAPPED:\(mapped.sourceName)->\(mapped.replacementFamily)")
+            }
+
+            if let bigFontMapping {
+                warnings.append("CAD_TEXT_BIGFONT_MAPPED:\(bigFontMapping.sourceName)->\(bigFontMapping.replacementFamily)")
+            }
+
             var candidates: [CADRuntimeFontProbe.FontCandidate] = []
             if usesSHXFont {
                 if containsCJK {
                     warnings.append("CAD_TEXT_SHX_SKIPPED_FOR_UNICODE")
                     fallbackReason = "unicode-cjk-shx-bypassed"
-                    candidates = cjkFallbackCandidates()
+                    candidates = mappedFallbackCandidates([bigFontMapping, mapped])
+                    candidates.append(contentsOf: cjkFallbackCandidates())
                 } else {
                     warnings.append("CAD_TEXT_SHX_MAPPED_TO_SYSTEM_FONT")
                     fallbackReason = "shx-font-mapped"
-                    if let mappedFamily = cleaned(mapped?.replacementFamily) {
-                        candidates.append(.named(mappedFamily))
-                    }
+                    candidates = mappedFallbackCandidates([mapped, bigFontMapping])
                     candidates.append(.system)
                 }
             } else if let fontName {
@@ -123,6 +129,15 @@ extension SiteKeeperCADKernel {
                 .named("Source Han Sans SC"),
                 .system
             ]
+        }
+
+        private func mappedFallbackCandidates(_ mappings: [CADSHXFontMapping?]) -> [CADRuntimeFontProbe.FontCandidate] {
+            mappings.compactMap { mapping in
+                guard let family = cleaned(mapping?.replacementFamily) else {
+                    return nil
+                }
+                return .named(family)
+            }
         }
 
         private func dedupe(_ candidates: [CADRuntimeFontProbe.FontCandidate]) -> [CADRuntimeFontProbe.FontCandidate] {
@@ -188,9 +203,11 @@ extension SiteKeeperCADKernel {
         private func isSHXFont(_ value: String?) -> Bool {
             guard let value else { return false }
             let lowercased = value.lowercased()
-            return lowercased.hasSuffix(".shx") || shxMappings.contains {
-                $0.sourceName.caseInsensitiveCompare(value) == .orderedSame
-            }
+            return lowercased.hasSuffix(".shx") || shxMapping(for: value) != nil
+        }
+
+        private func shxMapping(for value: String?) -> CADSHXFontMapping? {
+            CADSHXFontMapping.mapping(for: value, in: shxMappings)
         }
     }
 

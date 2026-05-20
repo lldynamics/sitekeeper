@@ -14,6 +14,8 @@ extension SiteKeeperCADKernel {
         var selectedFontName: String
         var fontWasAvailable: Bool
         var fallbackReason: String?
+        var attributeTag: String?
+        var rawTextBytesHex: String?
         var warnings: [String]
 
         enum CodingKeys: String, CodingKey {
@@ -29,6 +31,8 @@ extension SiteKeeperCADKernel {
             case selectedFontName
             case fontWasAvailable
             case fallbackReason
+            case attributeTag
+            case rawTextBytesHex
             case warnings
         }
 
@@ -45,6 +49,8 @@ extension SiteKeeperCADKernel {
             selectedFontName: String,
             fontWasAvailable: Bool = true,
             fallbackReason: String? = nil,
+            attributeTag: String? = nil,
+            rawTextBytesHex: String? = nil,
             warnings: [String] = []
         ) {
             self.entityId = entityId
@@ -59,6 +65,8 @@ extension SiteKeeperCADKernel {
             self.selectedFontName = selectedFontName
             self.fontWasAvailable = fontWasAvailable
             self.fallbackReason = fallbackReason
+            self.attributeTag = attributeTag
+            self.rawTextBytesHex = rawTextBytesHex
             self.warnings = warnings
         }
 
@@ -95,6 +103,16 @@ extension SiteKeeperCADKernel {
             } else {
                 try container.encodeNil(forKey: .fallbackReason)
             }
+            if let attributeTag {
+                try container.encode(attributeTag, forKey: .attributeTag)
+            } else {
+                try container.encodeNil(forKey: .attributeTag)
+            }
+            if let rawTextBytesHex {
+                try container.encode(rawTextBytesHex, forKey: .rawTextBytesHex)
+            } else {
+                try container.encodeNil(forKey: .rawTextBytesHex)
+            }
             try container.encode(warnings, forKey: .warnings)
         }
 
@@ -112,6 +130,8 @@ extension SiteKeeperCADKernel {
             selectedFontName = try container.decode(String.self, forKey: .selectedFontName)
             fontWasAvailable = try container.decodeIfPresent(Bool.self, forKey: .fontWasAvailable) ?? true
             fallbackReason = try container.decodeIfPresent(String.self, forKey: .fallbackReason)
+            attributeTag = try container.decodeIfPresent(String.self, forKey: .attributeTag)
+            rawTextBytesHex = try container.decodeIfPresent(String.self, forKey: .rawTextBytesHex)
             warnings = try container.decodeIfPresent([String].self, forKey: .warnings) ?? []
         }
     }

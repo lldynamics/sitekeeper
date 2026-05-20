@@ -1316,6 +1316,7 @@ static int sitekeeper_append_text_entity(
     double box_height,
     int32_t horizontal_alignment,
     int32_t vertical_alignment,
+    const char *attribute_tag,
     Dwg_Object_STYLE *style,
     const SiteKeeperLibreDWGTransform *transform
 )
@@ -1350,6 +1351,7 @@ static int sitekeeper_append_text_entity(
     out->textStyleName = sitekeeper_copy_string(sitekeeper_style_name(style));
     out->fontName = sitekeeper_copy_optional_string(sitekeeper_style_font_file(style));
     out->bigFontName = sitekeeper_copy_optional_string(sitekeeper_style_bigfont_file(style));
+    out->attributeTag = sitekeeper_copy_optional_string(attribute_tag);
     out->colorARGB = sitekeeper_entity_color_argb(entity);
     out->lineWeight = sitekeeper_line_weight(entity);
     out->textX = insertion.x;
@@ -1633,6 +1635,7 @@ static int sitekeeper_attach_text_to_entity(
     int32_t raw_text_is_utf8 = 0;
     free(out->rawText);
     free(out->rawTextBytesHex);
+    free(out->attributeTag);
     out->rawText = sitekeeper_copy_text_string(result, raw_text, &raw_text_is_utf8);
     if (out->rawText == NULL) {
         return 0;
@@ -1642,6 +1645,7 @@ static int sitekeeper_attach_text_to_entity(
     out->textStyleName = sitekeeper_copy_string(sitekeeper_style_name(style));
     out->fontName = sitekeeper_copy_optional_string(sitekeeper_style_font_file(style));
     out->bigFontName = sitekeeper_copy_optional_string(sitekeeper_style_bigfont_file(style));
+    out->attributeTag = NULL;
 
     SiteKeeperLibreDWGPoint insertion = { insertion_x, insertion_y };
     insertion = sitekeeper_transform_point(transform, insertion);
@@ -3169,6 +3173,7 @@ static int sitekeeper_append_mleader_block_label_at_attdef(
         0,
         attdef->horiz_alignment,
         attdef->vert_alignment,
+        attdef->tag,
         style,
         &content_transform
     );
@@ -3459,6 +3464,7 @@ static int sitekeeper_append_multileader(
             0,
             text->alignment,
             ctx->text_alignment,
+            NULL,
             style,
             transform
         );
@@ -3512,6 +3518,7 @@ static int sitekeeper_append_multileader(
                 0,
                 1,
                 2,
+                NULL,
                 style,
                 transform
             );
@@ -3680,6 +3687,7 @@ static int sitekeeper_append_table(
             cell_height,
             cell->cell_alignment,
             cell->cell_alignment,
+            NULL,
             sitekeeper_table_cell_style(entity->dwg, table, cell, row),
             transform
         );
@@ -3894,6 +3902,7 @@ static int sitekeeper_append_text(
         0,
         text->horiz_alignment,
         text->vert_alignment,
+        NULL,
         style,
         transform
     );
@@ -3960,9 +3969,147 @@ static int sitekeeper_append_mtext(
         text->rect_height > 0 ? text->rect_height : text->extents_height,
         text->attachment,
         text->attachment,
+        NULL,
         style,
         transform
     );
+}
+
+static double sitekeeper_d2t_to_double(BITCODE_D2T value, double fallback)
+{
+    if (value == NULL || value[0] == '\0') {
+        return fallback;
+    }
+    char *end = NULL;
+    double parsed = strtod(value, &end);
+    if (end == value || !isfinite(parsed)) {
+        return fallback;
+    }
+    return parsed;
+}
+
+static int sitekeeper_append_rtext(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.RTEXT == NULL) {
+        return 0;
+    }
+    Dwg_Entity_RTEXT *text = entity->tio.RTEXT;
+    if (text->text_value == NULL || text->text_value[0] == '\0') {
+        return 0;
+    }
+    SiteKeeperLibreDWGPoint insertion = sitekeeper_ocs_point_to_wcs_2d(
+        text->pt.x,
+        text->pt.y,
+        text->pt.z,
+        text->extrusion
+    );
+    Dwg_Object_STYLE *style = sitekeeper_style_from_ref(entity->dwg, text->style);
+    return sitekeeper_append_text_entity(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        SiteKeeperLibreDWGEntityKindMText,
+        text->text_value,
+        insertion.x,
+        insertion.y,
+        text->height,
+        sitekeeper_ocs_rotation_to_wcs_2d(text->rotation, text->extrusion),
+        1.0,
+        0,
+        0,
+        1,
+        2,
+        NULL,
+        style,
+        transform
+    );
+}
+
+static int sitekeeper_append_arcalignedtext(
+    SiteKeeperLibreDWGEntityResult *result,
+    int32_t *entity_count,
+    int32_t *entity_capacity,
+    Dwg_Object_Entity *entity,
+    Dwg_Object *object,
+    const SiteKeeperLibreDWGTransform *transform
+)
+{
+    if (entity->tio.ARCALIGNEDTEXT == NULL) {
+        return 0;
+    }
+    Dwg_Entity_ARCALIGNEDTEXT *text = entity->tio.ARCALIGNEDTEXT;
+    if (text->text_value == NULL || text->text_value[0] == '\0') {
+        return 0;
+    }
+
+    const double height = sitekeeper_d2t_to_double(text->text_size, 2.5);
+    const double width_factor = sitekeeper_d2t_to_double(text->xscale, 1.0);
+    const double offset = sitekeeper_d2t_to_double(text->offset_from_arc, 0);
+    double start_angle = isfinite(text->start_angle) ? text->start_angle : 0;
+    double end_angle = isfinite(text->end_angle) ? text->end_angle : start_angle;
+    while (end_angle < start_angle) {
+        end_angle += SITEKEEPER_PI * 2.0;
+    }
+    const double mid_angle = (start_angle + end_angle) / 2.0;
+    double radius = isfinite(text->radius) && text->radius > DBL_EPSILON
+        ? text->radius + offset
+        : offset;
+    if (!isfinite(radius) || fabs(radius) <= DBL_EPSILON) {
+        radius = 1;
+    }
+
+    SiteKeeperLibreDWGPoint center = sitekeeper_ocs_point_to_wcs_2d(
+        text->center.x,
+        text->center.y,
+        text->center.z,
+        text->extrusion
+    );
+    SiteKeeperLibreDWGPoint insertion = {
+        center.x + radius * cos(mid_angle),
+        center.y + radius * sin(mid_angle)
+    };
+    double rotation = text->is_reverse ? mid_angle - SITEKEEPER_PI / 2.0 : mid_angle + SITEKEEPER_PI / 2.0;
+    const int32_t before_count = *entity_count;
+    int did_append = sitekeeper_append_text_entity(
+        result,
+        entity_count,
+        entity_capacity,
+        entity,
+        object,
+        SiteKeeperLibreDWGEntityKindMText,
+        text->text_value,
+        insertion.x,
+        insertion.y,
+        height,
+        rotation,
+        width_factor,
+        0,
+        0,
+        text->alignment,
+        2,
+        NULL,
+        NULL,
+        transform
+    );
+    if (did_append && before_count >= 0 && before_count < *entity_count) {
+        SiteKeeperLibreDWGEntity *out = &result->entities[before_count];
+        free(out->textStyleName);
+        free(out->fontName);
+        free(out->bigFontName);
+        out->textStyleName = sitekeeper_copy_string(text->style != NULL && text->style[0] != '\0' ? text->style : "ARCALIGNEDTEXT");
+        out->fontName = sitekeeper_copy_optional_string(text->font_name);
+        out->bigFontName = sitekeeper_copy_optional_string(text->bigfont_name);
+    }
+    return did_append;
 }
 
 static int sitekeeper_append_attrib(
@@ -4016,6 +4163,7 @@ static int sitekeeper_append_attrib(
         0,
         text->horiz_alignment,
         text->vert_alignment,
+        text->tag,
         style,
         transform
     );
@@ -4072,6 +4220,7 @@ static int sitekeeper_append_attdef(
         0,
         text->horiz_alignment,
         text->vert_alignment,
+        text->tag,
         style,
         transform
     );
@@ -4126,6 +4275,7 @@ static int sitekeeper_append_tolerance_text(
         0,
         1,
         2,
+        NULL,
         NULL,
         transform
     );
@@ -5423,6 +5573,14 @@ static int sitekeeper_process_entity(
         sitekeeper_trace_raw_text_kind(result, SiteKeeperLibreDWGEntityKindMText);
         return sitekeeper_append_mtext(result, entity_count, entity_capacity, entity, object, &transform);
     }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_RTEXT)) {
+        sitekeeper_trace_raw_text_kind(result, SiteKeeperLibreDWGEntityKindMText);
+        return sitekeeper_append_rtext(result, entity_count, entity_capacity, entity, object, &transform);
+    }
+    if (sitekeeper_object_matches(object, (int)DWG_TYPE_ARCALIGNEDTEXT)) {
+        sitekeeper_trace_raw_text_kind(result, SiteKeeperLibreDWGEntityKindMText);
+        return sitekeeper_append_arcalignedtext(result, entity_count, entity_capacity, entity, object, &transform);
+    }
     if (sitekeeper_object_matches(object, (int)DWG_TYPE_ATTRIB)) {
         sitekeeper_trace_raw_text_kind(result, SiteKeeperLibreDWGEntityKindAttrib);
         return sitekeeper_append_attrib(result, entity_count, entity_capacity, entity, object, &transform);
@@ -5660,6 +5818,7 @@ void SiteKeeperLibreDWGFreeBasic2D(SiteKeeperLibreDWGEntityResult *result)
             free(result->entities[index].textStyleName);
             free(result->entities[index].fontName);
             free(result->entities[index].bigFontName);
+            free(result->entities[index].attributeTag);
             free(result->entities[index].objectName);
             free(result->entities[index].unsupportedReason);
         }

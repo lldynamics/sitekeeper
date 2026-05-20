@@ -61,6 +61,7 @@ struct CADViewerToolbar: View {
             performanceMenu
             searchButton
             downloadButton
+            openExternallyButton
             reportButton
             closeButton
         }
@@ -80,6 +81,7 @@ struct CADViewerToolbar: View {
                 performanceMenu
                 searchButton
                 downloadButton
+                openExternallyButton
                 reportButton
             }
         }
@@ -235,6 +237,15 @@ struct CADViewerToolbar: View {
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.regular)
+    }
+
+    private var openExternallyButton: some View {
+        ShareLink(item: fileURL) {
+            Label(String(localized: "用其他软件打开"), systemImage: "square.and.arrow.up")
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .accessibilityLabel(String(localized: "用其他软件打开 CAD 文件"))
     }
 
     private var reportButton: some View {

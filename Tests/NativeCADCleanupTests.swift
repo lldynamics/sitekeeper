@@ -33,8 +33,12 @@ struct NativeCADCleanupTests {
     @Test func originalDrawingDownloadActionRemainsAvailable() throws {
         let root = try Self.repositoryRoot()
         let toolbarSource = try Self.sourceText(root, "Sources/Shared/CAD/Viewer/CADViewerToolbar.swift")
+        let chromeSource = try Self.sourceText(root, "Sources/Features/项目/CADPreviewContainer+Chrome.swift")
         #expect(toolbarSource.contains("ShareLink(item: fileURL)"))
         #expect(toolbarSource.contains("下载原图"))
+        #expect(toolbarSource.contains("用其他软件打开"))
+        #expect(chromeSource.contains("用其他软件打开"))
+        #expect(chromeSource.contains("showShareSheet = true"))
     }
 
     @Test func nativeCADOptionalDetailFeaturesDefaultToPerformanceMode() throws {
@@ -81,6 +85,8 @@ struct NativeCADCleanupTests {
         #expect(toolbarSource.contains("吸附点"))
         #expect(toolbarSource.contains("填充细节"))
         #expect(toolbarSource.contains("占位对象"))
+        #expect(toolbarSource.contains("兼容渲染") == false)
+        #expect(chromeSource.contains("toggleCADCoreGraphicsRenderer") == false)
         #expect(chromeSource.contains("cadDrawingLayoutMenu"))
     }
 
