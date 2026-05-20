@@ -281,10 +281,10 @@ struct PanelSummaryLabel: View {
                     .foregroundStyle(.secondary)
             } else {
                 HStack(spacing: AppSpacing.tight * 0.75) {
-                    if warehouse > 0 { tag(String(localized: "📦 \(warehouse)"), color: .appInventory) }
-                    if overdue > 0   { tag(String(localized: "⚠️ \(overdue)"), color: .appRisk) }
-                    if todos > 0     { tag(String(localized: "✅ \(todos)"), color: .appWarning) }
-                    if logs > 0      { tag(String(localized: "📝 \(logs)"), color: .appDoc) }
+                    if warehouse > 0 { tag(String(format: String(localized: "📦 %lld"), Int64(warehouse)), color: .appInventory) }
+                    if overdue > 0   { tag(String(format: String(localized: "⚠️ %lld"), Int64(overdue)), color: .appRisk) }
+                    if todos > 0     { tag(String(format: String(localized: "✅ %lld"), Int64(todos)), color: .appWarning) }
+                    if logs > 0      { tag(String(format: String(localized: "📝 %lld"), Int64(logs)), color: .appDoc) }
                 }
             }
         }

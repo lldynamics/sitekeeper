@@ -235,7 +235,7 @@ struct ProjectTimelineView: View {
                     row(item, showsChevron: true)
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint(String(localized: "打开\(item.targetMode.displayName)"))
+                .accessibilityHint(String(format: String(localized: "打开%@"), item.targetMode.displayName))
             } else {
                 row(item, showsChevron: false)
             }

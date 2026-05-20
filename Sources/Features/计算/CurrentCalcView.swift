@@ -13,35 +13,35 @@ struct CurrentCalcView: View {
 
     var body: some View {
         Form {
-            Section("输入参数") {
-                LabeledContent("功率 (kW)") {
-                    TextField("例如 10", text: $power)
+            Section(String(localized: "输入参数")) {
+                LabeledContent(String(localized: "功率 (kW)")) {
+                    TextField(String(localized: "例如 10"), text: $power.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(power, min: 0.1, max: 5_000_000, hint: "请输入 0.1–5000000"))
-                CalculatorPresetChips(title: "常用功率", options: ["3", "5", "10", "20", "30", "50"], selection: $power)
-                LabeledContent("电压 (V)") {
-                    TextField("220", text: $voltage)
+                CalculatorValidationHint(message: rangeMessage(power, min: 0.1, max: 5_000_000, hint: String(localized: "请输入 0.1–5000000")))
+                CalculatorPresetChips(title: String(localized: "常用功率"), options: ["3", "5", "10", "20", "30", "50"], selection: $power)
+                LabeledContent(String(localized: "电压 (V)")) {
+                    TextField("220", text: $voltage.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(voltage, min: 12, max: 100_000, hint: "请输入 12–100000"))
-                CalculatorPresetChips(title: "电压预设", options: ["220", "380"], selection: $voltage)
-                LabeledContent("功率因数") {
-                    TextField("0.85", text: $powerFactor)
+                CalculatorValidationHint(message: rangeMessage(voltage, min: 12, max: 100_000, hint: String(localized: "请输入 12–100000")))
+                CalculatorPresetChips(title: String(localized: "电压预设"), options: ["220", "380"], selection: $voltage)
+                LabeledContent(String(localized: "功率因数")) {
+                    TextField("0.85", text: $powerFactor.numericInput(.quantity))
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .focused($isInputFocused)
                 }
-                CalculatorValidationHint(message: rangeMessage(powerFactor, min: 0.01, max: 1, hint: "请输入 0.01–1"))
-                CalculatorPresetChips(title: "功率因数", options: ["0.80", "0.85", "0.90", "0.95"], selection: $powerFactor)
-                Toggle("三相电", isOn: $isThreePhase)
+                CalculatorValidationHint(message: rangeMessage(powerFactor, min: 0.01, max: 1, hint: String(localized: "请输入 0.01–1")))
+                CalculatorPresetChips(title: String(localized: "功率因数"), options: ["0.80", "0.85", "0.90", "0.95"], selection: $powerFactor)
+                Toggle(String(localized: "三相电"), isOn: $isThreePhase)
             }
 
-            Section("公式") {
+            Section(String(localized: "公式")) {
                 VStack(alignment: .leading, spacing: 4) {
                     Group {
                         if isThreePhase {
@@ -56,7 +56,7 @@ struct CurrentCalcView: View {
             }
 
             Section {
-                Button("计算") {
+                Button(String(localized: "计算")) {
                     isInputFocused = false
                     calc()
                 }
@@ -65,15 +65,15 @@ struct CurrentCalcView: View {
             }
 
             if let resultModel {
-                Section("计算结果") {
+                Section(String(localized: "计算结果")) {
                     CalculatorResultCard(
-                        title: "电流计算结果",
+                        title: String(localized: "电流计算结果"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("电流计算")
+        .navigationTitle(String(localized: "电流计算"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
@@ -89,7 +89,7 @@ struct CurrentCalcView: View {
         guard let p = CalculatorInputParser.double(power),
               let v = CalculatorInputParser.double(voltage),
               let pf = CalculatorInputParser.double(powerFactor) else {
-            presentError("请输入有效数值")
+            presentError(String(localized: "请输入有效数值"))
             return
         }
         let current: Double
@@ -106,30 +106,41 @@ struct CurrentCalcView: View {
             return
         }
         let warning = current > 100
+        let phaseLabel = isThreePhase ? String(localized: "三相") : String(localized: "单相")
         resultModel = .singleSection(
-            headline: "电流 \(String(format: "%.2f", current)) A",
+            headline: String(format: String(localized: "电流 %@ A"), String(format: "%.2f", current)),
             formula: isThreePhase
                 ? "I = P×1000 ÷ (√3×U×cosφ)"
                 : "I = P×1000 ÷ (U×cosφ)",
             items: [
-                CalculationResult.item("功率", "\(String(format: "%.2f", p)) kW"),
-                CalculationResult.item("电压", "\(String(format: "%.0f", v)) V (\(isThreePhase ? "三相" : "单相"))"),
-                CalculationResult.item("功率因数", String(format: "%.2f", pf)),
-                CalculationResult.item("电流结果", "\(String(format: "%.2f", current)) A", status: warning ? .warning : .pass),
+                CalculationResult.item(
+                    String(localized: "功率"),
+                    String(format: String(localized: "%@ kW"), String(format: "%.2f", p))
+                ),
+                CalculationResult.item(
+                    String(localized: "电压"),
+                    String(format: String(localized: "%@ V (%@)"), String(format: "%.0f", v), phaseLabel)
+                ),
+                CalculationResult.item(String(localized: "功率因数"), String(format: "%.2f", pf)),
+                CalculationResult.item(
+                    String(localized: "电流结果"),
+                    String(format: String(localized: "%@ A"), String(format: "%.2f", current)),
+                    status: warning ? .warning : .pass
+                ),
             ]
         )
         resultText = """
-        功率: \(String(format: "%.2f", p)) kW
-        电压: \(String(format: "%.0f", v)) V (\(isThreePhase ? "三相" : "单相"))
-        电流: \(String(format: "%.2f", current)) A
+        \(String(format: String(localized: "功率: %@ kW"), String(format: "%.2f", p)))
+        \(String(format: String(localized: "电压: %@ V (%@)"), String(format: "%.0f", v), phaseLabel))
+        \(String(format: String(localized: "电流: %@ A"), String(format: "%.2f", current)))
         """
         saveHistory("\(String(format: "%.2f", current)) A")
     }
 
     private func saveHistory(_ r: String) {
         store.appendCalculationHistory(
-            tool: "电流计算",
-            input: "\(power)kW / \(voltage)V",
+            tool: String(localized: "电流计算"),
+            input: String(format: String(localized: "%@kW / %@V"), power, voltage),
             result: r
         )
     }
@@ -138,7 +149,7 @@ struct CurrentCalcView: View {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard let value = CalculatorInputParser.double(trimmed) else {
-            return "请输入数值"
+            return String(localized: "请输入数值")
         }
         return (value >= min && value <= max) ? nil : hint
     }

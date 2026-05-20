@@ -8,26 +8,115 @@ struct RebarCalcView: View {
     @AppStorage(UserPreferenceKeys.Calculator.rebarPrice) private var price = ""
     @State private var result = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
+
+    private var diameterRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 4,
+            max: 80,
+            rangeMessage: calculatorLoc("请输入 4–80")
+        )
+    }
+
+    private var lengthRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 0.5,
+            max: 100,
+            rangeMessage: calculatorLoc("请输入 0.5–100")
+        )
+    }
+
+    private var quantityRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 1,
+            max: 100_000,
+            rangeMessage: calculatorLoc("请输入 1–100000"),
+            wholeNumberOnly: true,
+            wholeNumberMessage: calculatorLoc("请输入整数")
+        )
+    }
+
+    private var priceRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .amount,
+            requirement: .optionalNonNegative,
+            min: 0.1,
+            max: 100_000,
+            rangeMessage: calculatorLoc("请输入 0.1–100000")
+        )
+    }
+
+    private var diameterValidation: NumericInputFieldValidation {
+        diameterRule.validate(dia)
+    }
+
+    private var lengthValidation: NumericInputFieldValidation {
+        lengthRule.validate(len)
+    }
+
+    private var quantityValidation: NumericInputFieldValidation {
+        quantityRule.validate(qty)
+    }
+
+    private var priceValidation: NumericInputFieldValidation {
+        priceRule.validate(price)
+    }
 
     var body: some View {
         Form {
             Section("钢筋规格") {
-                LabeledContent("直径 (mm)") { TextField("12", text: $dia).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(dia, min: 4, max: 80, hint: "请输入 4–80"))
+                CalculatorValidatedNumericField(
+                    title: "直径",
+                    placeholder: "12",
+                    unit: "mm",
+                    text: $dia,
+                    rule: diameterRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用直径", options: ["6", "8", "10", "12", "14", "16", "20"], selection: $dia)
-                LabeledContent("每根长 (m)") { TextField("9", text: $len).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(len, min: 0.5, max: 100, hint: "请输入 0.5–100"))
+                CalculatorValidatedNumericField(
+                    title: "每根长",
+                    placeholder: "9",
+                    unit: "m",
+                    text: $len,
+                    rule: lengthRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用长度", options: ["6", "9", "12"], selection: $len)
-                LabeledContent("根数 (根)") { TextField("30", text: $qty).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(qty, min: 1, max: 100_000, hint: "请输入 1–100000"))
+                CalculatorValidatedNumericField(
+                    title: "根数",
+                    placeholder: "30",
+                    unit: "根",
+                    text: $qty,
+                    rule: quantityRule,
+                    keyboardType: .numberPad,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
                 CalculatorPresetChips(title: "常用根数", options: ["10", "20", "30", "50", "100"], selection: $qty)
-                LabeledContent("单价 (元/kg)") { TextField("选填", text: $price).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: optionalRangeMessage(price, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
+                CalculatorValidatedNumericField(
+                    title: "单价",
+                    placeholder: "选填",
+                    unit: "元/kg",
+                    text: $price,
+                    rule: priceRule,
+                    showWhenEmpty: false,
+                    focus: $isInputFocused
+                )
             }
             Section {
                 Button("估算") {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     calc()
                 }
                 .frame(maxWidth: .infinity)
@@ -51,22 +140,25 @@ struct RebarCalcView: View {
     }
 
     private func calc() {
-        guard let d = CalculatorInputParser.double(dia), d > 0,
-              let l = CalculatorInputParser.double(len), l > 0,
-              let q = CalculatorInputParser.double(qty), q > 0 else {
-            presentError("请输入有效数值")
+        guard let d = diameterValidation.doubleValue,
+              let l = lengthValidation.doubleValue,
+              let qValue = quantityValidation.doubleValue,
+              priceValidation.errorMessage == nil else {
+            result = ""
+            resultModel = nil
             return
         }
+        let q = qValue.rounded(.towardZero)
         let uw = d * d / 162
         let tw = uw * l * q
         var lines = ["单位重: \(fmt(uw)) kg/m", "总重: \(fmt(tw)) kg", "吨位: \(fmt(tw/1000)) t"]
-        if let p = CalculatorInputParser.double(price), p > 0 { lines.append("造价: \(fmt(tw * p)) 元") }
+        if let p = priceValidation.doubleValue, p > 0 { lines.append("造价: \(fmt(tw * p)) 元") }
         var items: [CalculationResult.ResultItem] = [
             CalculationResult.item("单位重", "\(fmt(uw)) kg/m"),
             CalculationResult.item("总重", "\(fmt(tw)) kg", status: .pass),
             CalculationResult.item("吨位", "\(fmt(tw / 1000)) t"),
         ]
-        if let p = CalculatorInputParser.double(price), p > 0 {
+        if let p = priceValidation.doubleValue, p > 0 {
             items.append(CalculationResult.item("造价", "\(fmt(tw * p)) 元"))
         }
         resultModel = .singleSection(
@@ -76,6 +168,10 @@ struct RebarCalcView: View {
         )
         result = lines.joined(separator: "\n")
         saveHistory("总重 \(fmt(tw)) kg")
+        dia = NumericInputSupport.normalizedStorageText(dia, kind: .quantity, preservingInvalid: false)
+        len = NumericInputSupport.normalizedStorageText(len, kind: .quantity, preservingInvalid: false)
+        qty = NumericInputSupport.normalizedStorageText(qty, kind: .quantity, preservingInvalid: false)
+        price = NumericInputSupport.normalizedStorageText(price, kind: .amount, preservingInvalid: false)
     }
 
     private func fmt(_ v: Double) -> String {
@@ -91,21 +187,4 @@ struct RebarCalcView: View {
         )
     }
 
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
-    }
-
-    private func optionalRangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return rangeMessage(trimmed, min: min, max: max, hint: hint)
-    }
-
-    private func presentError(_ message: String) {
-        result = message
-        resultModel = .error(message)
-    }
 }

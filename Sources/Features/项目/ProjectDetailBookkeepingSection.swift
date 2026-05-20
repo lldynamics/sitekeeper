@@ -25,21 +25,21 @@ struct ProjectBookkeepingView: View {
 
     var body: some View {
         Group {
-            Section("成本汇总") {
+            Section(String(localized: "成本汇总")) {
                 Button {
                     onAddRecord()
                 } label: {
-                    Label("记账", systemImage: "plus.circle.fill")
+                    Label(String(localized: "记账"), systemImage: "plus.circle.fill")
                 }
-                LabeledContent("收入", value: ReportBuilder.money(totalIncome))
-                LabeledContent("支出", value: ReportBuilder.money(totalExpense))
-                LabeledContent("净额", value: ReportBuilder.money(totalIncome - totalExpense))
-                LabeledContent("未附票据", value: "\(unattachedCount) 笔")
+                LabeledContent(String(localized: "收入"), value: ReportBuilder.money(totalIncome))
+                LabeledContent(String(localized: "支出"), value: ReportBuilder.money(totalExpense))
+                LabeledContent(String(localized: "净额"), value: ReportBuilder.money(totalIncome - totalExpense))
+                LabeledContent(String(localized: "未附票据"), value: String(format: String(localized: "%lld 笔"), Int64(unattachedCount)))
             }
 
-            Section("往来单位") {
+            Section(String(localized: "往来单位")) {
                 if counterpartySummaries.isEmpty {
-                    ProjectInlineEmptyState("还没有往来单位", systemImage: "person.2")
+                    ProjectInlineEmptyState(String(localized: "还没有往来单位"), systemImage: "person.2")
                 } else {
                     ForEach(counterpartySummaries) { summary in
                         NavigationLink {
@@ -64,29 +64,29 @@ struct ProjectBookkeepingView: View {
                                         .padding(.vertical, 2)
                                         .background(summary.kind.tint.opacity(0.14), in: Capsule())
                                     Spacer()
-                                    Text("净额 \(ReportBuilder.money(summary.netOutstandingAmount))")
+                                    Text(String(format: String(localized: "净额 %@"), ReportBuilder.money(summary.netOutstandingAmount)))
                                         .font(.caption.weight(.semibold))
                                         .foregroundStyle(summary.netOutstandingAmount >= 0 ? Color.appSuccess : Color.appRisk)
                                 }
                                 HStack(spacing: AppSpacing.tight) {
-                                    Text("应收 \(ReportBuilder.money(summary.receivableAmount))")
+                                    Text(String(format: String(localized: "应收 %@"), ReportBuilder.money(summary.receivableAmount)))
                                         .foregroundStyle(Color.appSuccess)
-                                    Text("应付 \(ReportBuilder.money(summary.payableAmount))")
+                                    Text(String(format: String(localized: "应付 %@"), ReportBuilder.money(summary.payableAmount)))
                                         .foregroundStyle(Color.appRisk)
                                     if summary.unsettledCount > 0 {
-                                        Text("未结清 \(summary.unsettledCount) 笔")
+                                        Text(String(format: String(localized: "未结清 %lld 笔"), Int64(summary.unsettledCount)))
                                             .foregroundStyle(Color.appWarning)
                                     }
                                     if summary.missingReceiptCount > 0 {
-                                        Text("缺票 \(summary.missingReceiptCount) 笔")
+                                        Text(String(format: String(localized: "缺票 %lld 笔"), Int64(summary.missingReceiptCount)))
                                             .foregroundStyle(Color.appFinance)
                                     }
                                 }
                                 .font(.caption2)
                                 HStack(spacing: AppSpacing.tight) {
-                                    Text("累计收入 \(ReportBuilder.money(summary.incomeAmount))")
+                                    Text(String(format: String(localized: "累计收入 %@"), ReportBuilder.money(summary.incomeAmount)))
                                         .foregroundStyle(.secondary)
-                                    Text("累计支出 \(ReportBuilder.money(summary.expenseAmount))")
+                                    Text(String(format: String(localized: "累计支出 %@"), ReportBuilder.money(summary.expenseAmount)))
                                         .foregroundStyle(.secondary)
                                 }
                                 .font(.caption2)
@@ -98,9 +98,9 @@ struct ProjectBookkeepingView: View {
                 }
             }
 
-            Section("未结清 (\(unsettledRecords.count))") {
+            Section(String(format: String(localized: "未结清 (%lld)"), Int64(unsettledRecords.count))) {
                 if unsettledRecords.isEmpty {
-                    ProjectInlineEmptyState("没有未结清记录", systemImage: "checkmark.seal")
+                    ProjectInlineEmptyState(String(localized: "没有未结清记录"), systemImage: "checkmark.seal")
                 } else {
                     ForEach(unsettledRecords) { record in
                         VStack(alignment: .leading, spacing: 3) {
@@ -127,11 +127,11 @@ struct ProjectBookkeepingView: View {
             }
 
             if let quickFilterLabel {
-                Section("快速筛选") {
+                Section(String(localized: "快速筛选")) {
                     HStack {
-                        Text("当前: \(quickFilterLabel)")
+                        Text(String(format: String(localized: "当前: %@"), quickFilterLabel))
                         Spacer()
-                        Button("清除") {
+                        Button(String(localized: "清除")) {
                             resetToDefaultFilters()
                             onResetQuickFilter()
                         }
@@ -141,42 +141,42 @@ struct ProjectBookkeepingView: View {
             }
 
             if !records.isEmpty {
-                Section("筛选") {
-                    Picker("收支", selection: $directionFilter) {
+                Section(String(localized: "筛选")) {
+                    Picker(String(localized: "收支"), selection: $directionFilter) {
                         ForEach(BookDirectionFilter.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
                         }
                     }
                     .pickerStyle(.segmented)
-                    Picker("票据类型", selection: $categoryFilter) {
+                    Picker(String(localized: "票据类型"), selection: $categoryFilter) {
                         ForEach(BookCategoryFilter.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
                         }
                     }
-                    Picker("票据附件", selection: $attachmentFilter) {
+                    Picker(String(localized: "票据附件"), selection: $attachmentFilter) {
                         ForEach(BookAttachmentFilter.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
                         }
                     }
-                    Picker("状态", selection: $outstandingFilter) {
+                    Picker(String(localized: "状态"), selection: $outstandingFilter) {
                         ForEach(BookOutstandingFilter.allCases, id: \.self) { option in
                             Text(option.displayName).tag(option)
                         }
                     }
-                    Toggle("限定日期范围", isOn: $useDateRange)
+                    Toggle(String(localized: "限定日期范围"), isOn: $useDateRange)
                     if useDateRange {
-                        DatePicker("开始", selection: $startDate, displayedComponents: .date)
-                        DatePicker("结束", selection: $endDate, displayedComponents: .date)
+                        DatePicker(String(localized: "开始"), selection: $startDate, displayedComponents: .date)
+                        DatePicker(String(localized: "结束"), selection: $endDate, displayedComponents: .date)
                     }
                 }
             }
 
-            Section("流水 (\(filteredRecords.count))") {
+            Section(String(format: String(localized: "流水 (%lld)"), Int64(filteredRecords.count))) {
                 if filteredRecords.isEmpty {
                     ProjectInlineEmptyState(
-                        records.isEmpty ? "还没有账目" : "没有匹配账目",
+                        records.isEmpty ? String(localized: "还没有账目") : String(localized: "没有匹配账目"),
                         systemImage: "tray",
-                        detail: records.isEmpty ? "先记一笔收入或支出。" : "调整筛选条件或新增一笔。"
+                        detail: records.isEmpty ? String(localized: "先记一笔收入或支出。") : String(localized: "调整筛选条件或新增一笔。")
                     )
                 } else {
                     ForEach(filteredRecords) { record in
@@ -196,8 +196,12 @@ struct ProjectBookkeepingView: View {
                                 }
                                 HStack(spacing: AppSpacing.tight) {
                                     if !record.counterparty.isEmpty { Text(record.counterparty) }
-                                    if !record.invoiceNumber.isEmpty { Text("票号 \(record.invoiceNumber)") }
-                                    if !linkedDocuments(record).isEmpty { Text("已附票据\(linkedDocuments(record).count)") }
+                                    if !record.invoiceNumber.isEmpty {
+                                        Text(String(format: String(localized: "票号 %@"), record.invoiceNumber))
+                                    }
+                                    if !linkedDocuments(record).isEmpty {
+                                        Text(String(format: String(localized: "已附票据%lld"), Int64(linkedDocuments(record).count)))
+                                    }
                                 }
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
@@ -331,10 +335,14 @@ struct ProjectBookkeepingView: View {
         case .none:
             return nil
         case .unsettled:
-            return "应收付"
+            return String(localized: "应收付")
         case .missingReceipt:
-            return "缺票"
+            return String(localized: "缺票")
         }
+    }
+
+    private var unfilledCounterpartyName: String {
+        String(localized: "未填写单位")
     }
 
     private func resetToDefaultFilters() {
@@ -382,7 +390,7 @@ struct ProjectBookkeepingView: View {
 
     private func counterpartyDisplayName(_ raw: String) -> String {
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "未填写单位" : trimmed
+        return trimmed.isEmpty ? unfilledCounterpartyName : trimmed
     }
 
     private func counterpartyRecords(for name: String) -> [ProjectFinancialRecord] {
@@ -391,7 +399,7 @@ struct ProjectBookkeepingView: View {
 
     private func matchingSuppliers(for name: String) -> [SupplierProfile] {
         let source = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty, source != "未填写单位" else { return [] }
+        guard !source.isEmpty, source != unfilledCounterpartyName else { return [] }
         return supplierProfiles
             .filter { supplier in
                 isLooseCounterpartyMatch(source, supplier.name)
@@ -404,7 +412,7 @@ struct ProjectBookkeepingView: View {
 
     private func matchingContacts(for name: String) -> [ProjectContact] {
         let source = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty, source != "未填写单位" else { return [] }
+        guard !source.isEmpty, source != unfilledCounterpartyName else { return [] }
         return projectContacts
             .filter { contact in
                 isLooseCounterpartyMatch(source, contact.company)
@@ -420,7 +428,7 @@ struct ProjectBookkeepingView: View {
 
     private func counterpartyMatch(for rawName: String) -> BookCounterpartyMatch {
         let source = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !source.isEmpty, source != "未填写单位" else {
+        guard !source.isEmpty, source != unfilledCounterpartyName else {
             return .none
         }
         let supplier = supplierProfiles.first { supplier in
@@ -526,13 +534,13 @@ private enum BookCounterpartyKind {
     var displayName: String {
         switch self {
         case .supplier:
-            return "供应商"
+            return String(localized: "供应商")
         case .team:
-            return "班组"
+            return String(localized: "班组")
         case .customer:
-            return "客户"
+            return String(localized: "客户")
         case .other:
-            return "其他"
+            return String(localized: "其他")
         }
     }
 
@@ -625,7 +633,7 @@ private struct BookCounterpartyDetailView: View {
             let missing = rows.filter(isMissingReceipt).count
             return BookCounterpartyProjectRollup(
                 projectId: projectId,
-                projectName: projectsByID[projectId] ?? "未知项目",
+                projectName: projectsByID[projectId] ?? String(localized: "未知项目"),
                 latestDate: latestRecord?.date ?? "",
                 receivableAmount: receivable,
                 payableAmount: payable,
@@ -663,40 +671,40 @@ private struct BookCounterpartyDetailView: View {
                 counterpartyHeader
             }
 
-            Section("核心指标") {
+            Section(String(localized: "核心指标")) {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: AppSpacing.normal) {
                     counterpartyMetricCard(
-                        title: "应收",
+                        title: String(localized: "应收"),
                         value: ReportBuilder.money(receivableAmount),
-                        subtitle: "\(unsettledRecords.filter(\.isIncomeDirection).count) 笔",
+                        subtitle: String(format: String(localized: "%lld 笔"), Int64(unsettledRecords.filter(\.isIncomeDirection).count)),
                         tint: .appSuccess
                     )
                     counterpartyMetricCard(
-                        title: "应付",
+                        title: String(localized: "应付"),
                         value: ReportBuilder.money(payableAmount),
-                        subtitle: "\(unsettledRecords.filter(\.isExpenseDirection).count) 笔",
+                        subtitle: String(format: String(localized: "%lld 笔"), Int64(unsettledRecords.filter(\.isExpenseDirection).count)),
                         tint: .appRisk
                     )
                     counterpartyMetricCard(
-                        title: "未结清",
-                        value: "\(unsettledRecords.count) 笔",
-                        subtitle: "合计 \(ReportBuilder.money(receivableAmount + payableAmount))",
+                        title: String(localized: "未结清"),
+                        value: String(format: String(localized: "%lld 笔"), Int64(unsettledRecords.count)),
+                        subtitle: String(format: String(localized: "合计 %@"), ReportBuilder.money(receivableAmount + payableAmount)),
                         tint: .appWarning
                     )
                     counterpartyMetricCard(
-                        title: "缺票",
-                        value: "\(missingReceiptCount) 笔",
-                        subtitle: "需补票据/资料",
+                        title: String(localized: "缺票"),
+                        value: String(format: String(localized: "%lld 笔"), Int64(missingReceiptCount)),
+                        subtitle: String(localized: "需补票据/资料"),
                         tint: .appFinance
                     )
                 }
-                LabeledContent("累计收入", value: ReportBuilder.money(summary.incomeAmount))
-                LabeledContent("累计支出", value: ReportBuilder.money(summary.expenseAmount))
+                LabeledContent(String(localized: "累计收入"), value: ReportBuilder.money(summary.incomeAmount))
+                LabeledContent(String(localized: "累计支出"), value: ReportBuilder.money(summary.expenseAmount))
             }
 
-            Section("关联项目") {
+            Section(String(localized: "关联项目")) {
                 if recentProjectRollups.isEmpty {
-                    Text("暂无项目记录。")
+                    Text(String(localized: "暂无项目记录。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(recentProjectRollups) { rollup in
@@ -715,16 +723,16 @@ private struct BookCounterpartyDetailView: View {
                                     }
                                 }
                                 HStack(spacing: AppSpacing.tight) {
-                                    Text("应收 \(ReportBuilder.money(rollup.receivableAmount))")
+                                    Text(String(format: String(localized: "应收 %@"), ReportBuilder.money(rollup.receivableAmount)))
                                         .foregroundStyle(Color.appSuccess)
-                                    Text("应付 \(ReportBuilder.money(rollup.payableAmount))")
+                                    Text(String(format: String(localized: "应付 %@"), ReportBuilder.money(rollup.payableAmount)))
                                         .foregroundStyle(Color.appRisk)
                                     if rollup.unsettledCount > 0 {
-                                        Text("未结清 \(rollup.unsettledCount)")
+                                        Text(String(format: String(localized: "未结清 %lld"), Int64(rollup.unsettledCount)))
                                             .foregroundStyle(Color.appWarning)
                                     }
                                     if rollup.missingReceiptCount > 0 {
-                                        Text("缺票 \(rollup.missingReceiptCount)")
+                                        Text(String(format: String(localized: "缺票 %lld"), Int64(rollup.missingReceiptCount)))
                                             .foregroundStyle(Color.appFinance)
                                     }
                                 }
@@ -735,9 +743,9 @@ private struct BookCounterpartyDetailView: View {
                 }
             }
 
-            Section("关联联系人 / 供应商") {
+            Section(String(localized: "关联联系人 / 供应商")) {
                 if suppliers.isEmpty && contacts.isEmpty {
-                    Text("暂无已关联联系人或供应商。")
+                    Text(String(localized: "暂无已关联联系人或供应商。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(suppliers) { supplier in
@@ -765,9 +773,9 @@ private struct BookCounterpartyDetailView: View {
                 }
             }
 
-            Section("未结清账目") {
+            Section(String(localized: "未结清账目")) {
                 if unsettledRecords.isEmpty {
-                    Text("暂无未结清账目。")
+                    Text(String(localized: "暂无未结清账目。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(unsettledRecords) { record in
@@ -781,9 +789,9 @@ private struct BookCounterpartyDetailView: View {
                 }
             }
 
-            Section("缺票记录") {
+            Section(String(localized: "缺票记录")) {
                 if missingReceiptRecords.isEmpty {
-                    Text("暂无缺票记录。")
+                    Text(String(localized: "暂无缺票记录。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(missingReceiptRecords) { record in
@@ -797,9 +805,9 @@ private struct BookCounterpartyDetailView: View {
                 }
             }
 
-            Section("最近流水") {
+            Section(String(localized: "最近流水")) {
                 if recentRecords.isEmpty {
-                    Text("暂无流水记录。")
+                    Text(String(localized: "暂无流水记录。"))
                         .foregroundStyle(.secondary)
                 } else {
                     ForEach(recentRecords.prefix(12)) { record in
@@ -828,7 +836,11 @@ private struct BookCounterpartyDetailView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(summary.name)
                         .font(.headline)
-                    Text([summary.kind.displayName, "\(recentProjectRollups.count) 个关联项目", "\(contacts.count) 位联系人"].joined(separator: " · "))
+                    Text([
+                        summary.kind.displayName,
+                        String(format: String(localized: "%lld 个关联项目"), Int64(recentProjectRollups.count)),
+                        String(format: String(localized: "%lld 位联系人"), Int64(contacts.count))
+                    ].joined(separator: " · "))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -836,21 +848,21 @@ private struct BookCounterpartyDetailView: View {
             }
             HStack(spacing: AppSpacing.tight) {
                 if !unsettledRecords.isEmpty {
-                    Text("未结清 \(unsettledRecords.count)")
+                    Text(String(format: String(localized: "未结清 %lld"), Int64(unsettledRecords.count)))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.appWarning, in: Capsule())
                 }
                 if !missingReceiptRecords.isEmpty {
-                    Text("缺票 \(missingReceiptRecords.count)")
+                    Text(String(format: String(localized: "缺票 %lld"), Int64(missingReceiptRecords.count)))
                         .foregroundStyle(.white)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.appFinance, in: Capsule())
                 }
                 if unsettledRecords.isEmpty && missingReceiptRecords.isEmpty {
-                    Text("账目状态良好")
+                    Text(String(localized: "账目状态良好"))
                         .foregroundStyle(Color.appSuccess)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -896,17 +908,17 @@ private struct BookCounterpartyDetailView: View {
                     .foregroundStyle(record.normalizedDirection == .income ? Color.appSuccess : Color.appRisk)
             }
             HStack(spacing: AppSpacing.tight) {
-                Text(projectsByID[record.projectId] ?? "未知项目")
+                Text(projectsByID[record.projectId] ?? String(localized: "未知项目"))
                 Text(record.normalizedCategory.displayName)
                 if showsDueDate, !record.dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text("到期 \(record.dueDate)")
+                    Text(String(format: String(localized: "到期 %@"), record.dueDate))
                         .foregroundStyle(Color.appWarning)
                 } else if isUnsettled(record) {
-                    Text("未结清")
+                    Text(String(localized: "未结清"))
                         .foregroundStyle(Color.appWarning)
                 }
                 if isMissingReceipt(record) {
-                    Text("缺票")
+                    Text(String(localized: "缺票"))
                         .foregroundStyle(Color.appFinance)
                 }
             }
@@ -946,12 +958,21 @@ private struct BookCounterpartyProjectRollup: Identifiable {
     var id: UUID { projectId }
 }
 
-private enum BookDirectionFilter: String, CaseIterable {
-    case all = "全部"
-    case income = "收入"
-    case expense = "支出"
+private enum BookDirectionFilter: CaseIterable {
+    case all
+    case income
+    case expense
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .income:
+            return String(localized: "收入")
+        case .expense:
+            return String(localized: "支出")
+        }
+    }
 
     func matches(_ record: ProjectFinancialRecord) -> Bool {
         switch self {
@@ -965,12 +986,21 @@ private enum BookDirectionFilter: String, CaseIterable {
     }
 }
 
-private enum BookCategoryFilter: String, CaseIterable {
-    case all = "全部"
-    case invoice = "发票"
-    case receipt = "收据"
+private enum BookCategoryFilter: CaseIterable {
+    case all
+    case invoice
+    case receipt
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .invoice:
+            return String(localized: "发票")
+        case .receipt:
+            return String(localized: "收据")
+        }
+    }
 
     func matches(_ record: ProjectFinancialRecord) -> Bool {
         switch self {
@@ -984,12 +1014,21 @@ private enum BookCategoryFilter: String, CaseIterable {
     }
 }
 
-private enum BookAttachmentFilter: String, CaseIterable {
-    case all = "全部"
-    case attached = "已附票据"
-    case unattached = "未附票据"
+private enum BookAttachmentFilter: CaseIterable {
+    case all
+    case attached
+    case unattached
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .attached:
+            return String(localized: "已附票据")
+        case .unattached:
+            return String(localized: "未附票据")
+        }
+    }
 
     func matches(
         _ record: ProjectFinancialRecord,
@@ -1006,11 +1045,18 @@ private enum BookAttachmentFilter: String, CaseIterable {
     }
 }
 
-private enum BookOutstandingFilter: String, CaseIterable {
-    case all = "全部"
-    case activeWithDueDate = "应收付"
+private enum BookOutstandingFilter: CaseIterable {
+    case all
+    case activeWithDueDate
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .all:
+            return String(localized: "全部")
+        case .activeWithDueDate:
+            return String(localized: "应收付")
+        }
+    }
 
     func matches(_ record: ProjectFinancialRecord) -> Bool {
         switch self {

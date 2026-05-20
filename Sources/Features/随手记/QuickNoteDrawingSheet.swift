@@ -28,13 +28,13 @@ struct QuickNoteDrawingSheet: View {
                     PencilCanvasView(canvasView: canvasView)
                 }
             }
-            .navigationTitle(backgroundImage == nil ? "手绘" : "照片标注")
+            .navigationTitle(backgroundImage == nil ? String(localized: "quick_note_drawing_title") : String(localized: "quick_note_drawing_photo_markup_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) { Button("撤销") { canvasView.undoManager?.undo() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "quick_note_drawing_cancel_button")) { dismiss() } }
+                ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "quick_note_drawing_undo_button")) { canvasView.undoManager?.undo() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { saveDrawing() }
+                    Button(String(localized: "quick_note_drawing_save_button")) { saveDrawing() }
                         .disabled(canvasView.drawing.bounds.isEmpty && backgroundImage == nil)
                 }
             }
@@ -53,25 +53,25 @@ struct QuickNoteDrawingSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     PhotosPicker(selection: $selectedBackgroundItem, matching: .images) {
-                        Label("照片标注", systemImage: "photo")
+                        Label(String(localized: "quick_note_drawing_photo_markup_title"), systemImage: "photo")
                     }
-                    Button { isEraser = false } label: { Label("画笔", systemImage: "pencil") }
+                    Button { isEraser = false } label: { Label(String(localized: "quick_note_drawing_pen_tool"), systemImage: "pencil") }
                         .tint(isEraser ? .appMuted : .appWarning)
-                    Button { isEraser = true } label: { Label("橡皮", systemImage: "eraser") }
+                    Button { isEraser = true } label: { Label(String(localized: "quick_note_drawing_eraser_tool"), systemImage: "eraser") }
                         .tint(isEraser ? .appWarning : .appMuted)
                     Button(role: .destructive) {
                         canvasView.drawing = PKDrawing()
                         backgroundImage = nil
-                    } label: { Label("清空", systemImage: "trash") }
+                    } label: { Label(String(localized: "quick_note_drawing_clear_button"), systemImage: "trash") }
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
             }
             HStack {
-                ColorPicker("颜色", selection: $selectedColor)
+                ColorPicker(String(localized: "quick_note_drawing_color_picker_label"), selection: $selectedColor)
                     .labelsHidden()
                     .disabled(isEraser)
-                Text("粗细")
+                Text(String(localized: "quick_note_drawing_line_width_label"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Slider(value: $lineWidth, in: 2...18)

@@ -99,6 +99,8 @@ extension ProjectDetailContainer {
             missingReceiptCount: snapshot.missingReceiptCount,
             unsettledFinancialCount: snapshot.unsettledFinancialCount,
             unsettledFinancialAmount: unsettledFinancialAmount(snapshot: snapshot),
+            openTodoCount: snapshot.openTodoCount,
+            backupState: ProjectDeliveryBackupState.current(),
             missingOriginalEntries: ProjectDetailImportExportActions.missingProjectPackageFiles(
                 documents: snapshot.relatedDocuments,
                 drawings: snapshot.relatedDrawings,
@@ -243,8 +245,7 @@ extension ProjectDetailContainer {
     }
 
     func updateProject(_ updated: Project) {
-        guard let idx = projectStore.projects.firstIndex(where: { $0.id == updated.id }) else { return }
-        store.projects[idx] = updated
+        guard store.updateProject(updated) else { return }
         store.scheduleSave()
     }
 

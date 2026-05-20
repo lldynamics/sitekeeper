@@ -14,20 +14,36 @@ struct BreakerSelectView: View {
 
     var body: some View {
         Form {
-            Section("负载参数") {
-                LabeledContent("计算电流 (A)") { TextField("例如 32", text: $calcCurrent).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(calcCurrent, min: 0.1, max: 100_000, hint: "请输入 0.1–100000"))
-                CalculatorPresetChips(title: "常用电流", options: ["16", "20", "25", "32", "40", "63"], selection: $calcCurrent)
-                Picker("负载类型", selection: $loadTypeRawValue) {
+            Section(String(localized: "负载参数")) {
+                LabeledContent(String(localized: "计算电流 (A)")) {
+                    TextField(String(localized: "例如 32"), text: $calcCurrent.numericInput(.quantity))
+                        .keyboardType(.decimalPad)
+                        .multilineTextAlignment(.trailing)
+                        .focused($isInputFocused)
+                }
+                CalculatorValidationHint(
+                    message: rangeMessage(
+                        calcCurrent,
+                        min: 0.1,
+                        max: 100_000,
+                        hint: String(localized: "请输入 0.1–100000")
+                    )
+                )
+                CalculatorPresetChips(
+                    title: String(localized: "常用电流"),
+                    options: ["16", "20", "25", "32", "40", "63"],
+                    selection: $calcCurrent
+                )
+                Picker(String(localized: "负载类型"), selection: $loadTypeRawValue) {
                     ForEach(LoadType.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
                 }
             }
-            Section("选型参考") {
-                Text("• 照明回路: 额定电流 × 1.0\n• 插座回路: 额定电流 × 1.25\n• 动力回路: 额定电流 × 1.5")
+            Section(String(localized: "选型参考")) {
+                Text(String(localized: "• 照明回路: 额定电流 × 1.0\n• 插座回路: 额定电流 × 1.25\n• 动力回路: 额定电流 × 1.5"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
-                Button("选型") {
+                Button(String(localized: "选型")) {
                     isInputFocused = false
                     select()
                 }
@@ -35,15 +51,15 @@ struct BreakerSelectView: View {
                 .fontWeight(.semibold)
             }
             if let resultModel {
-                Section("推荐") {
+                Section(String(localized: "推荐")) {
                     CalculatorResultCard(
-                        title: "断路器推荐",
+                        title: String(localized: "断路器推荐"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("空开/漏保选型").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "空开/漏保选型")).navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
                 isInputFocused = false
@@ -53,7 +69,7 @@ struct BreakerSelectView: View {
 
     private func select() {
         guard let i = CalculatorInputParser.double(calcCurrent), i > 0 else {
-            presentError("请输入计算电流")
+            presentError(String(localized: "请输入计算电流"))
             return
         }
         let rated = i * loadType.factor
@@ -62,22 +78,38 @@ struct BreakerSelectView: View {
         let rcdRecommended = loadType == .socket
         let warning = rated > 100
         resultModel = .singleSection(
-            headline: "推荐 \(breaker)A / \(loadType.poles)",
-            formula: "整定值 = 计算电流×负载系数；断路器规格取≥整定值的最小标准档",
+            headline: String(
+                format: String(localized: "推荐 %lldA / %@"),
+                Int64(breaker),
+                loadType.poles
+            ),
+            formula: String(localized: "整定值 = 计算电流×负载系数；断路器规格取≥整定值的最小标准档"),
             items: [
-                CalculationResult.item("计算电流", "\(fmt(i)) A"),
-                CalculationResult.item("推荐整定值", "\(fmt(rated)) A", status: warning ? .warning : .pass),
-                CalculationResult.item("漏保建议", rcdRecommended ? "建议配置 30mA 漏电保护" : "按现场方案选配", status: rcdRecommended ? .pass : .normal),
+                CalculationResult.item(
+                    String(localized: "计算电流"),
+                    String(format: String(localized: "%@ A"), fmt(i))
+                ),
+                CalculationResult.item(
+                    String(localized: "推荐整定值"),
+                    String(format: String(localized: "%@ A"), fmt(rated)),
+                    status: warning ? .warning : .pass
+                ),
+                CalculationResult.item(
+                    String(localized: "漏保建议"),
+                    rcdRecommended ? String(localized: "建议配置 30mA 漏电保护") : String(localized: "按现场方案选配"),
+                    status: rcdRecommended ? .pass : .normal
+                ),
             ]
         )
+        let rcdAdvice = rcdRecommended ? String(localized: "建议配置 30mA 漏电保护") : ""
         result = """
-        计算电流: \(fmt(i)) A
-        推荐整定值: \(fmt(rated)) A
-        断路器规格: \(breaker)A / \(loadType.poles)
-        \(rcdRecommended ? "建议配置 30mA 漏电保护" : "")
+        \(String(format: String(localized: "计算电流: %@ A"), fmt(i)))
+        \(String(format: String(localized: "推荐整定值: %@ A"), fmt(rated)))
+        \(String(format: String(localized: "断路器规格: %lldA / %@"), Int64(breaker), loadType.poles))
+        \(rcdAdvice)
         """
         store.appendCalculationHistory(
-            tool: "空开选型",
+            tool: String(localized: "空开选型"),
             input: "\(fmt(i))A, \(loadType.displayName)",
             result: "\(breaker)A"
         )
@@ -91,7 +123,7 @@ struct BreakerSelectView: View {
     private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
+        guard let value = CalculatorInputParser.double(trimmed) else { return String(localized: "请输入数值") }
         return (value >= min && value <= max) ? nil : hint
     }
 
@@ -108,9 +140,9 @@ enum LoadType: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .lighting: "照明"
-        case .socket: "插座"
-        case .power: "动力"
+        case .lighting: String(localized: "照明")
+        case .socket: String(localized: "插座")
+        case .power: String(localized: "动力")
         }
     }
     var factor: Double { switch self { case .lighting: 1.0; case .socket: 1.25; case .power: 1.5 } }

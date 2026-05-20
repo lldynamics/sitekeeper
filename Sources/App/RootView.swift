@@ -19,10 +19,6 @@ struct RootView: View {
 
     private let currentOnboardingVersion = 1
 
-    private var allowsSampleDataImport: Bool {
-        AppFeatureFlags.allowsSampleDataImport
-    }
-
     private var skipOnboardingForUITests: Bool {
         ProcessInfo.processInfo.arguments.contains("-uitest-skip-onboarding")
             || ProcessInfo.processInfo.environment["UITEST_SKIP_ONBOARDING"] == "1"
@@ -40,7 +36,7 @@ struct RootView: View {
     }
 
     private var preferredLocale: Locale {
-        Locale(identifier: languageCode)
+        StringEnumFallback.value(languageCode, default: AppLanguage.chinese).preferredLocale
     }
 
     private var usesPadSplitShell: Bool {
@@ -57,7 +53,6 @@ struct RootView: View {
 
             if showOnboarding {
                 FirstLaunchOnboardingView(
-                    allowsSampleDataImport: allowsSampleDataImport,
                     onCreateProject: {
                         finishOnboarding()
                         selectedTab = .records
@@ -68,10 +63,6 @@ struct RootView: View {
                         Task { @MainActor in
                             showOnboardingBackupImport = true
                         }
-                    },
-                    onLoadSample: {
-                        store.importSampleData(replacingExisting: true)
-                        finishOnboarding()
                     }
                 )
                 .background(Color(.systemBackground))
@@ -90,7 +81,7 @@ struct RootView: View {
         }
         .sheet(isPresented: $showOnboardingBackupImport) {
             NavigationStack {
-                DataManagementView(initialTab: "导入恢复")
+                DataManagementView(initialRoute: .restore)
             }
         }
         .sheet(item: $widgetDeepLinkDestination) { destination in
@@ -265,7 +256,7 @@ struct RootView: View {
         case .missingReceipt:
             ProjectListView(initialOverviewFilter: .missingReceipt)
         case .backupOverdue:
-            DataManagementView(initialTab: "备份")
+            DataManagementView(initialRoute: .backup)
         case .priceSpike:
             MaterialPriceSpikeDetailView()
         case .project(let projectId):
@@ -397,10 +388,8 @@ enum Tab: Hashable, CaseIterable, Identifiable {
 }
 
 private struct FirstLaunchOnboardingView: View {
-    let allowsSampleDataImport: Bool
     let onCreateProject: () -> Void
     let onImportBackup: () -> Void
-    let onLoadSample: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -424,12 +413,6 @@ private struct FirstLaunchOnboardingView: View {
                         actionRow(title: "导入备份", subtitle: "从 ZIP 恢复已有项目数据", icon: "square.and.arrow.down.fill")
                     }
                     .buttonStyle(.bordered)
-                    if allowsSampleDataImport {
-                        Button(action: onLoadSample) {
-                            actionRow(title: "查看示例", subtitle: "导入演示数据体验完整功能", icon: "sparkles")
-                        }
-                        .buttonStyle(.bordered)
-                    }
                 }
                 .buttonBorderShape(.roundedRectangle)
                 Spacer()

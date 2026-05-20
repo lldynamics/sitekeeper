@@ -23,7 +23,7 @@ struct ExportView: View {
     @State private var includeProjectDrawings = true
     @State private var includeWarehouseMovements = true
     @State private var includeQuickNotes = true
-    @State private var includeLightingCircuits = true
+    @State private var includeOperationAuditLogs = false
     @State private var filterProjectId: UUID?
     @State private var enableDateFilter = false
     @State private var filterStart = Calendar.current.date(byAdding: .day, value: -30, to: Date()) ?? Date()
@@ -32,6 +32,7 @@ struct ExportView: View {
     @State private var showExporter = false
     @State private var showExportErrorAlert = false
     @State private var exportErrorMessage = ""
+    @AppStorage(UserPreferenceKeys.exportCurrencyDisplayMode) private var currencyDisplayModeRaw = ExportCurrencyDisplayMode.defaultMode.rawValue
     private let showsNavigationTitle: Bool
 
     init(showsNavigationTitle: Bool = true) {
@@ -69,35 +70,39 @@ struct ExportView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: payload?.data ?? Data()),
             contentType: payload?.contentType ?? .data,
-            defaultFilename: payload?.defaultFilename ?? "\(AppBrand.exportFilePrefix)_导出"
+            defaultFilename: payload?.defaultFilename ?? "\(AppBrand.exportFilePrefix)_\(String(localized: "导出"))"
         ) { result in
             switch result {
             case .success(let exportedURL):
                 guard validateExportedFile(at: exportedURL) else {
-                    presentExportError("导出文件为空或写入不完整，请重试。")
+                    presentExportError(String(localized: "导出文件为空或写入不完整，请重试。"))
                     return
                 }
                 AppHaptics.success()
             case .failure(let error):
                 if (error as NSError).code != NSUserCancelledError {
-                    presentExportError("导出失败：\(error.localizedDescription)")
+                    presentExportError("\(String(localized: "导出失败"))：\(error.localizedDescription)")
                 }
             }
         }
+    }
+
+    private var currencyDisplayMode: ExportCurrencyDisplayMode {
+        StringEnumFallback.value(currencyDisplayModeRaw, default: ExportCurrencyDisplayMode.defaultMode)
     }
 
     var body: some View {
         Group {
             if showsNavigationTitle {
                 exportSurface
-                    .navigationTitle("导出数据")
+                    .navigationTitle(String(localized: "导出数据"))
                     .navigationBarTitleDisplayMode(.inline)
             } else {
                 exportSurface
             }
         }
-        .alert("导出失败", isPresented: $showExportErrorAlert) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "导出失败"), isPresented: $showExportErrorAlert) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
             Text(exportErrorMessage)
         }
@@ -109,9 +114,9 @@ struct ExportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label("导出数据", systemImage: "square.and.arrow.up")
+                    Label(String(localized: "导出数据"), systemImage: "square.and.arrow.up")
                         .font(.headline)
-                    Text("选择格式与导出内容模块")
+                    Text(String(localized: "选择格式与导出内容模块"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -158,11 +163,11 @@ struct ExportView: View {
     private var exportFormatSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel("导出格式") {
+                iPadPanel(String(localized: "导出格式")) {
                     exportFormatContent
                 }
             } else {
-                Section("导出格式") {
+                Section(String(localized: "导出格式")) {
                     exportFormatContent
                 }
             }
@@ -172,11 +177,11 @@ struct ExportView: View {
     private var exportContentSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel("导出内容") {
+                iPadPanel(String(localized: "导出内容")) {
                     exportContentRows
                 }
             } else {
-                Section("导出内容") {
+                Section(String(localized: "导出内容")) {
                     exportContentRows
                 }
             }
@@ -186,11 +191,11 @@ struct ExportView: View {
     private var exportScopeSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel("导出范围") {
+                iPadPanel(String(localized: "导出范围")) {
                     exportScopeRows
                 }
             } else {
-                Section("导出范围") {
+                Section(String(localized: "导出范围")) {
                     exportScopeRows
                 }
             }
@@ -200,11 +205,11 @@ struct ExportView: View {
     private var exportPreviewSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel("格式预览") {
+                iPadPanel(String(localized: "格式预览")) {
                     exportPreviewRows
                 }
             } else {
-                Section("格式预览") {
+                Section(String(localized: "格式预览")) {
                     exportPreviewRows
                 }
             }
@@ -214,7 +219,7 @@ struct ExportView: View {
     private var exportButtonSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel("导出操作") {
+                iPadPanel(String(localized: "导出操作")) {
                     exportButtonRow
                 }
             } else {
@@ -225,45 +230,66 @@ struct ExportView: View {
         }
     }
 
+    @ViewBuilder
     private var exportFormatContent: some View {
-        Picker("格式", selection: $exportFormat) {
+        Picker(String(localized: "格式"), selection: $exportFormat) {
             ForEach(ExportFormat.allCases, id: \.self) { f in
                 Text(f.displayName).tag(f)
             }
         }
         .pickerStyle(.segmented)
+
+        Picker(String(localized: "金额显示"), selection: $currencyDisplayModeRaw) {
+            ForEach(ExportCurrencyDisplayMode.allCases) { mode in
+                Text(mode.displayName).tag(mode.rawValue)
+            }
+        }
+
+        Text(
+            String(
+                format: String(localized: "预览：%@。CSV 会同时保留 amount_raw 数字列，amount_display 按这里显示。"),
+                currencyDisplayMode.format(1234.5)
+            )
+        )
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
 
     private var exportContentRows: some View {
         Group {
-            Toggle("材料清单", isOn: $includeMaterials)
-            Toggle("报价明细", isOn: $includeQuotes)
-            Toggle("人工记录", isOn: $includeLabor)
-            Toggle("施工日志", isOn: $includeDailyLogs)
-            Toggle("施工进度", isOn: $includeProgress)
-            Toggle("现场待办", isOn: $includeTodos)
-            Toggle("项目财务流水", isOn: $includeProjectFinance)
-            Toggle("项目票据资料", isOn: $includeProjectDocuments)
-            Toggle("项目联系人", isOn: $includeProjectContacts)
-            Toggle("图纸索引", isOn: $includeProjectDrawings)
-            Toggle("仓库流水", isOn: $includeWarehouseMovements)
-            Toggle("随手记", isOn: $includeQuickNotes)
-            Toggle("照明回路", isOn: $includeLightingCircuits)
+            Toggle(String(localized: "材料清单"), isOn: $includeMaterials)
+            Toggle(String(localized: "报价明细"), isOn: $includeQuotes)
+            Toggle(String(localized: "人工记录"), isOn: $includeLabor)
+            Toggle(String(localized: "施工日志"), isOn: $includeDailyLogs)
+            Toggle(String(localized: "施工进度"), isOn: $includeProgress)
+            Toggle(String(localized: "现场待办"), isOn: $includeTodos)
+            Toggle(String(localized: "项目财务流水"), isOn: $includeProjectFinance)
+            Toggle(String(localized: "项目票据资料"), isOn: $includeProjectDocuments)
+            Toggle(String(localized: "项目联系人"), isOn: $includeProjectContacts)
+            Toggle(String(localized: "图纸索引"), isOn: $includeProjectDrawings)
+            Toggle(String(localized: "仓库流水"), isOn: $includeWarehouseMovements)
+            Toggle(String(localized: "随手记"), isOn: $includeQuickNotes)
+            Toggle(String(localized: "操作审计日志"), isOn: $includeOperationAuditLogs)
+            if includeOperationAuditLogs {
+                Text(String(localized: "审计日志仅随本次数据导出写入文件，不会进入默认备份。"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 
     private var exportScopeRows: some View {
         Group {
-            Picker("项目", selection: $filterProjectId) {
-                Text("全部项目").tag(nil as UUID?)
+            Picker(String(localized: "项目"), selection: $filterProjectId) {
+                Text(String(localized: "全部项目")).tag(nil as UUID?)
                 ForEach(store.projects) { project in
                     Text(project.name).tag(project.id as UUID?)
                 }
             }
-            Toggle("启用日期范围", isOn: $enableDateFilter)
+            Toggle(String(localized: "启用日期范围"), isOn: $enableDateFilter)
             if enableDateFilter {
-                DatePicker("开始", selection: $filterStart, displayedComponents: .date)
-                DatePicker("结束", selection: $filterEnd, displayedComponents: .date)
+                DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
+                DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
             }
         }
     }
@@ -271,23 +297,28 @@ struct ExportView: View {
     private var exportPreviewRows: some View {
         let snapshot = previewResult.snapshot
         return Group {
-            LabeledContent("材料条数", value: includeMaterials ? "\(snapshot.materialItems.count)" : "-")
-            LabeledContent("报价条数", value: includeQuotes ? "\(snapshot.quoteItems.count)" : "-")
-            LabeledContent("人工条数", value: includeLabor ? "\(snapshot.laborRecords.count)" : "-")
-            LabeledContent("日志条数", value: includeDailyLogs ? "\(snapshot.dailyLogs.count)" : "-")
-            LabeledContent("进度条数", value: includeProgress ? "\(snapshot.progressTasks.count)" : "-")
-            LabeledContent("待办条数", value: includeTodos ? "\(snapshot.siteTodos.count)" : "-")
-            LabeledContent("财务条数", value: includeProjectFinance ? "\(snapshot.projectFinancialRecords.count)" : "-")
-            LabeledContent("票据条数", value: includeProjectDocuments ? "\(snapshot.projectDocuments.count)" : "-")
-            LabeledContent("联系人数", value: includeProjectContacts ? "\(snapshot.projectContacts.count)" : "-")
-            LabeledContent("图纸条数", value: includeProjectDrawings ? "\(snapshot.projectDrawings.count)" : "-")
-            LabeledContent("仓库流水条数", value: includeWarehouseMovements ? "\(snapshot.projectWarehouseMovements.count)" : "-")
-            LabeledContent("随手记条数", value: includeQuickNotes ? "\(snapshot.quickNotes.count)" : "-")
-            LabeledContent("回路方案数", value: includeLightingCircuits ? "\(snapshot.lightingCircuitPlans.count)" : "-")
-            LabeledContent("日期格式异常", value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
-            LabeledContent("文件名", value: previewFilename)
+            LabeledContent(String(localized: "材料条数"), value: includeMaterials ? "\(snapshot.materialItems.count)" : "-")
+            LabeledContent(String(localized: "报价条数"), value: includeQuotes ? "\(snapshot.quoteItems.count)" : "-")
+            LabeledContent(String(localized: "人工条数"), value: includeLabor ? "\(snapshot.laborRecords.count)" : "-")
+            LabeledContent(String(localized: "日志条数"), value: includeDailyLogs ? "\(snapshot.dailyLogs.count)" : "-")
+            LabeledContent(String(localized: "进度条数"), value: includeProgress ? "\(snapshot.progressTasks.count)" : "-")
+            LabeledContent(String(localized: "待办条数"), value: includeTodos ? "\(snapshot.siteTodos.count)" : "-")
+            LabeledContent(String(localized: "财务条数"), value: includeProjectFinance ? "\(snapshot.projectFinancialRecords.count)" : "-")
+            LabeledContent(String(localized: "票据条数"), value: includeProjectDocuments ? "\(snapshot.projectDocuments.count)" : "-")
+            LabeledContent(String(localized: "联系人数"), value: includeProjectContacts ? "\(snapshot.projectContacts.count)" : "-")
+            LabeledContent(String(localized: "图纸条数"), value: includeProjectDrawings ? "\(snapshot.projectDrawings.count)" : "-")
+            LabeledContent(String(localized: "仓库流水条数"), value: includeWarehouseMovements ? "\(snapshot.projectWarehouseMovements.count)" : "-")
+            LabeledContent(String(localized: "随手记条数"), value: includeQuickNotes ? "\(snapshot.quickNotes.count)" : "-")
+            LabeledContent(String(localized: "审计日志条数"), value: includeOperationAuditLogs ? "\(filteredOperationAuditEntries.count)" : "-")
+            LabeledContent(String(localized: "日期格式异常"), value: enableDateFilter ? "\(previewResult.invalidDateCount)" : "-")
+            LabeledContent(String(localized: "文件名"), value: previewFilename)
             if enableDateFilter, previewResult.invalidDateCount > 0 {
-                Text(String(localized: "有 \(previewResult.invalidDateCount) 条记录日期格式异常，已按\"不命中日期筛选\"处理。"))
+                Text(
+                    String(
+                        format: String(localized: "有 %lld 条记录日期格式异常，已按\"不命中日期筛选\"处理。"),
+                        Int64(previewResult.invalidDateCount)
+                    )
+                )
                     .font(.caption2)
                     .foregroundStyle(.appWarning)
             }
@@ -298,7 +329,7 @@ struct ExportView: View {
         Button {
             buildExport()
         } label: {
-            Label("导出文件", systemImage: "square.and.arrow.up")
+            Label(String(localized: "导出文件"), systemImage: "square.and.arrow.up")
                 .frame(maxWidth: .infinity)
         }
         .disabled(!hasSelectedContent)
@@ -307,7 +338,7 @@ struct ExportView: View {
     // MARK: - 导出逻辑
 
     private var hasSelectedContent: Bool {
-        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeLightingCircuits
+        includeMaterials || includeQuotes || includeLabor || includeDailyLogs || includeProgress || includeTodos || includeProjectFinance || includeProjectDocuments || includeProjectContacts || includeProjectDrawings || includeWarehouseMovements || includeQuickNotes || includeOperationAuditLogs
     }
 
     private var options: ExportContentOptions {
@@ -324,7 +355,9 @@ struct ExportView: View {
             includeProjectDrawings: includeProjectDrawings,
             includeWarehouseMovements: includeWarehouseMovements,
             includeQuickNotes: includeQuickNotes,
-            includeLightingCircuits: includeLightingCircuits
+            includeOperationAuditLogs: includeOperationAuditLogs,
+            operationAuditEntries: includeOperationAuditLogs ? filteredOperationAuditEntries : [],
+            currencyDisplayMode: currencyDisplayMode
         )
     }
 
@@ -340,7 +373,7 @@ struct ExportView: View {
             nextPayload = ExportPayload(data: ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options), contentType: .excelHTML, defaultFilename: previewFilename)
         }
         guard !nextPayload.data.isEmpty else {
-            presentExportError("导出内容为空，未生成有效文件。请调整导出范围后重试。")
+            presentExportError(String(localized: "导出内容为空，未生成有效文件。请调整导出范围后重试。"))
             return
         }
         payload = nextPayload
@@ -357,9 +390,21 @@ struct ExportView: View {
         if let projectId = filterProjectId,
            let name = store.projects.first(where: { $0.id == projectId })?.name {
             let safeName = name.replacingOccurrences(of: " ", with: "_")
-            return "\(AppBrand.exportFilePrefix)_\(safeName)_导出\(suffix)"
+            return "\(AppBrand.exportFilePrefix)_\(safeName)_\(String(localized: "导出"))\(suffix)"
         }
-        return "\(AppBrand.exportFilePrefix)_导出\(suffix)"
+        return "\(AppBrand.exportFilePrefix)_\(String(localized: "导出"))\(suffix)"
+    }
+
+    private var filteredOperationAuditEntries: [OperationAuditEntry] {
+        let entries = OperationAuditLog.entries()
+        guard enableDateFilter else { return entries }
+        let start = Calendar.current.startOfDay(for: min(filterStart, filterEnd))
+        let endStart = Calendar.current.startOfDay(for: max(filterStart, filterEnd))
+        let end = Calendar.current.date(byAdding: .day, value: 1, to: endStart) ?? endStart
+        return entries.filter { entry in
+            let timestamp = Date(timeIntervalSince1970: entry.timestamp)
+            return timestamp >= start && timestamp < end
+        }
     }
 
     private func presentExportError(_ message: String) {
@@ -394,7 +439,6 @@ struct ExportView: View {
             snapshot.laborRecords = snapshot.laborRecords.filter { $0.projectId == pid }
             snapshot.dailyLogs = snapshot.dailyLogs.filter { $0.projectId == pid }
             snapshot.progressTasks = snapshot.progressTasks.filter { $0.projectId == pid }
-            snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter { $0.projectId == pid }
             snapshot.siteTodos = snapshot.siteTodos.filter { $0.projectId == pid }
             snapshot.projectContacts = snapshot.projectContacts.filter { $0.projectId == pid }
             snapshot.projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId == pid }
@@ -441,9 +485,6 @@ struct ExportView: View {
         snapshot.quickNotes = snapshot.quickNotes.filter {
             isWithinDateRange($0.updatedAt, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)
         }
-        snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter {
-            isWithinDateRange($0.updatedAt, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)
-        }
         return FilteredExportResult(snapshot: snapshot, invalidDateCount: invalidDateCount)
     }
 
@@ -474,7 +515,7 @@ enum ExportFormat: String, CaseIterable {
 }
 
 struct ExportDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.data, .plainText, .commaSeparatedText, .pdf, .excelHTML, .zipArchive, .jpeg] }
+    static var readableContentTypes: [UTType] { [.data, .plainText, .commaSeparatedText, .pdf, .excelHTML, .zipArchive, .jpeg, .png] }
     var data: Data
     var sourceFileURL: URL?
 

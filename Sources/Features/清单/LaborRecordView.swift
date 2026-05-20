@@ -26,7 +26,8 @@ struct LaborRecordView: View {
     @State private var newProjectId: UUID?
     @State private var projectFilter: UUID?
     @State private var settlementFilter: Bool? = nil
-    @State private var operationMessage: String?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var exportProjectFilter: UUID?
@@ -60,7 +61,9 @@ struct LaborRecordView: View {
     }
 
     private var totalDays: Double {
-        filtered.compactMap { Double($0.days) }.reduce(0, +)
+        filtered.reduce(QuantityValue.zero) { partial, record in
+            partial + QuantityValue(text: record.days)
+        }.doubleValue
     }
 
     private var totalCost: Double {
@@ -80,12 +83,12 @@ struct LaborRecordView: View {
 
     var body: some View {
         List {
-            Section("范围") {
+            Section(String(localized: "范围")) {
                 ProjectContextStrip(
-                    title: "当前工程",
+                    title: String(localized: "当前工程"),
                     projects: store.projects,
                     selectedProjectId: $projectFilter,
-                    emptyText: "全部项目"
+                    emptyText: String(localized: "全部项目")
                 )
                 FilterChipBar(
                     options: LaborSettlementChip.allCases,
@@ -95,17 +98,17 @@ struct LaborRecordView: View {
             }
 
             if filtered.isEmpty {
-                Section("人工记录") {
-                    ContentUnavailableView("暂无人工记录", systemImage: "person.2", description: Text("添加人工后可按工程统计工时与成本。"))
+                Section(String(localized: "人工记录")) {
+                    ContentUnavailableView(String(localized: "暂无人工记录"), systemImage: "person.2", description: Text(String(localized: "添加人工后可按工程统计工时与成本。")))
                     Button {
                         showAdd = true
                     } label: {
-                        Label("添加人工记录", systemImage: "plus.circle.fill")
+                        Label(String(localized: "添加人工记录"), systemImage: "plus.circle.fill")
                     }
                     .buttonStyle(.appProminent())
                 }
             } else {
-                Section("人工记录 (\(filtered.count))") {
+                Section(String(format: String(localized: "人工记录 (%d)"), filtered.count)) {
                     ForEach(filtered) { r in
                         Button {
                             editingRecord = r
@@ -116,9 +119,7 @@ struct LaborRecordView: View {
                     }
                     .onDelete { idx in
                         let ids = idx.map { filtered[$0].id }
-                        store.laborRecords.removeAll { ids.contains($0.id) }
-                        store.scheduleSave()
-                        operationMessage = "已删除 \(ids.count) 条人工记录"
+                        deleteLaborRecordsWithUndo(ids: ids)
                     }
                 }
             }
@@ -127,21 +128,21 @@ struct LaborRecordView: View {
                 Section {
                     VStack(spacing: 4) {
                         HStack {
-                            Text("记录数")
+                            Text(String(localized: "记录数"))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(filtered.count) 条")
+                            Text(String(format: String(localized: "%d 条"), filtered.count))
                                 .monospacedDigit()
                         }
                         HStack {
-                            Text("出工总天数")
+                            Text(String(localized: "出工总天数"))
                                 .foregroundStyle(.secondary)
                             Spacer()
-                            Text("\(totalDays.formatted(.number.precision(.fractionLength(0...1)))) 天")
+                            Text(String(format: String(localized: "%@ 天"), totalDays.formatted(.number.precision(.fractionLength(0...1)))))
                                 .monospacedDigit()
                         }
                         HStack {
-                            Text("合计人工费")
+                            Text(String(localized: "合计人工费"))
                                 .foregroundStyle(.secondary)
                             Spacer()
                             Text(ReportBuilder.money(totalCost))
@@ -150,7 +151,7 @@ struct LaborRecordView: View {
                         }
                         if unsettledCost > 0 {
                             HStack {
-                                Text("待结算金额")
+                                Text(String(localized: "待结算金额"))
                                     .foregroundStyle(.appWarning)
                                 Spacer()
                                 Text(ReportBuilder.money(unsettledCost))
@@ -162,91 +163,118 @@ struct LaborRecordView: View {
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "按工种、班组或备注搜索")
-        .navigationTitle("人工记录")
+        .searchable(text: $searchText, prompt: String(localized: "按工种、班组或备注搜索"))
+        .navigationTitle(String(localized: "人工记录"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button { showExportConfig = true } label: {
-                        Label("导出人工记录", systemImage: "square.and.arrow.up")
+                        Label(String(localized: "导出人工记录"), systemImage: "square.and.arrow.up")
                     }
                     Button { showAdd = true } label: {
-                        Label("新增记录", systemImage: "plus")
+                        Label(String(localized: "新增记录"), systemImage: "plus")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("更多操作")
+                .accessibilityLabel(String(localized: "更多操作"))
                 Button { showAdd = true } label: {
                     Image(systemName: "plus").visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("新增人工记录")
+                .accessibilityLabel(String(localized: "新增人工记录"))
             }
         }
         .sheet(isPresented: $showAdd) {
             NavigationStack {
                 Form {
                     Section {
-                        DatePicker("日期", selection: $newDate, displayedComponents: .date)
+                        DatePicker(String(localized: "日期"), selection: $newDate, displayedComponents: .date)
 
                         workTypePickerSection
 
                         teamPickerSection
 
-                        LabeledContent("人数") {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newWorkers)
-                                    .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                                    .focused($laborFormFocusedField, equals: .workers)
-                                    .frame(minWidth: 72, alignment: .trailing)
-                                Text("人").font(.subheadline).foregroundStyle(.secondary)
+                        LabeledContent(String(localized: "人数")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newWorkers.numericInput(.quantity))
+                                        .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                        .focused($laborFormFocusedField, equals: .workers)
+                                        .frame(minWidth: 72, alignment: .trailing)
+                                    Text(String(localized: "人")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newWorkers,
+                                        kind: .quantity,
+                                        requirement: .requiredNonNegative
+                                    )
+                                )
                             }
                         }
-                        LabeledContent("出工天数") {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newDays)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                                    .focused($laborFormFocusedField, equals: .hours)
-                                    .frame(minWidth: 72, alignment: .trailing)
-                                Text("天").font(.subheadline).foregroundStyle(.secondary)
+                        LabeledContent(String(localized: "出工天数")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newDays.numericInput(.days))
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                        .focused($laborFormFocusedField, equals: .hours)
+                                        .frame(minWidth: 72, alignment: .trailing)
+                                    Text(String(localized: "天")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newDays,
+                                        kind: .days,
+                                        requirement: .requiredNonNegative
+                                    )
+                                )
                             }
                         }
-                        LabeledContent("工价") {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newUnitRate)
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                                    .focused($laborFormFocusedField, equals: .unitRate)
-                                    .frame(minWidth: 88, alignment: .trailing)
-                                Text("元/天").font(.subheadline).foregroundStyle(.secondary)
+                        LabeledContent(String(localized: "工价")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newUnitRate.numericInput(.laborRate))
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                        .focused($laborFormFocusedField, equals: .unitRate)
+                                        .frame(minWidth: 88, alignment: .trailing)
+                                    Text(String(localized: "元/天")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newUnitRate,
+                                        kind: .laborRate,
+                                        requirement: .optionalNonNegative
+                                    )
+                                )
                             }
                         }
-                        LabeledContent("合计人工费") {
+                        LabeledContent(String(localized: "合计人工费")) {
                             Text(ReportBuilder.money(newLaborTotal.doubleValue))
                                 .fontWeight(.semibold)
                                 .foregroundStyle(Color.appFinance)
                                 .monospacedDigit()
                         }
-                    } header: { Text("人工明细").font(.headline) }
+                    } header: { Text(String(localized: "人工明细")).font(.headline) }
 
                     Section {
-                        Toggle("已结算", isOn: $newIsSettled)
-                        Picker("归属项目", selection: $newProjectId) {
-                            Text("无归属").tag(nil as UUID?)
+                        Toggle(String(localized: "已结算"), isOn: $newIsSettled)
+                        Picker(String(localized: "归属项目"), selection: $newProjectId) {
+                            Text(String(localized: "无归属")).tag(nil as UUID?)
                             ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                         }
-                        TextField("备注", text: $newNote, axis: .vertical).lineLimit(2...4)
+                        TextField(String(localized: "备注"), text: $newNote, axis: .vertical).lineLimit(2...4)
                     }
                 }
-                .navigationTitle("添加记录")
+                .navigationTitle(String(localized: "添加记录"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button("取消") { showAdd = false }
+                        Button(String(localized: "取消")) { showAdd = false }
                     }
                 ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") { save(); showAdd = false }
+                        Button(String(localized: "保存")) { save(); showAdd = false }
                             .disabled(!canSave)
                     }
                     KeyboardNavigationToolbar(
@@ -258,18 +286,18 @@ struct LaborRecordView: View {
         }
         .sheet(item: $editingRecord) { record in
             LaborRecordEditSheet(record: record, projects: store.projects) { updated in
-                if let index = store.laborRecords.firstIndex(where: { $0.id == updated.id }) {
-                    store.laborRecords[index] = updated
+                if store.updateLaborRecord(updated) {
                     store.scheduleSave()
-                    operationMessage = "已更新人工记录"
+                    operationNotice = .info(String(localized: "已更新人工记录"))
                 }
             } onDelete: { target in
-                store.laborRecords.removeAll { $0.id == target.id }
-                store.scheduleSave()
-                operationMessage = "已删除人工记录"
+                deleteLaborRecordsWithUndo(ids: [target.id])
             }
         }
         .onAppear(perform: openFocusedLaborIfNeeded)
+        .onDisappear {
+            flushPendingLaborDeletionIfNeeded()
+        }
         .sheet(isPresented: $showExportConfig) {
             laborExportSheet
         }
@@ -277,9 +305,9 @@ struct LaborRecordView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .commaSeparatedText,
-            defaultFilename: exportPayload?.defaultFilename ?? "人工记录.csv"
+            defaultFilename: exportPayload?.defaultFilename ?? String(localized: "人工记录.csv")
         ) { _ in }
-        .operationToast(message: $operationMessage)
+        .operationToast(notice: $operationNotice)
     }
 
     // MARK: - 工种选择（带工价记忆）
@@ -287,7 +315,7 @@ struct LaborRecordView: View {
     @ViewBuilder
     private var workTypePickerSection: some View {
         if !savedWorkTypes.isEmpty {
-            LabeledContent("工种") {
+            LabeledContent(String(localized: "工种")) {
                 Menu {
                     ForEach(savedWorkTypes, id: \.self) { type in
                         Button(type) {
@@ -295,16 +323,16 @@ struct LaborRecordView: View {
                         }
                     }
                     Divider()
-                    Button("自定义") {
+                    Button(String(localized: "自定义")) {
                         newWorkType = ""
                     }
                 } label: {
-                    Text(newWorkType.isEmpty ? "选择工种" : newWorkType)
+                    Text(newWorkType.isEmpty ? String(localized: "选择工种") : newWorkType)
                         .foregroundStyle(newWorkType.isEmpty ? .secondary : .primary)
                 }
             }
         } else {
-            TextField("工种（例如电工）", text: $newWorkType)
+            TextField(String(localized: "工种（例如电工）"), text: $newWorkType)
                 .onChange(of: newWorkType) { _, newVal in
                     autoFillRate(for: newVal)
                 }
@@ -316,20 +344,20 @@ struct LaborRecordView: View {
     @ViewBuilder
     private var teamPickerSection: some View {
         if !savedTeams.isEmpty {
-            LabeledContent("班组") {
+            LabeledContent(String(localized: "班组")) {
                 Menu {
                     ForEach(savedTeams, id: \.self) { team in
                         Button(team) { newTeamName = team }
                     }
                     Divider()
-                    Button("自定义") { newTeamName = "" }
+                    Button(String(localized: "自定义")) { newTeamName = "" }
                 } label: {
-                    Text(newTeamName.isEmpty ? "选择班组" : newTeamName)
+                    Text(newTeamName.isEmpty ? String(localized: "选择班组") : newTeamName)
                         .foregroundStyle(newTeamName.isEmpty ? .secondary : .primary)
                 }
             }
         } else {
-            TextField("班组（例如A组）", text: $newTeamName)
+            TextField(String(localized: "班组（例如A组）"), text: $newTeamName)
         }
     }
 
@@ -395,8 +423,10 @@ struct LaborRecordView: View {
     }
 
     private func laborRow(_ r: LaborRecord) -> some View {
-        let projectText = r.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
-        let meta = [r.workType, r.teamName, "\(r.workers)人", "\(r.days)天", r.date].filter { !$0.isEmpty }.joined(separator: " · ")
+        let projectText = r.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
+        let workersText = r.workers.isEmpty ? "" : String(format: String(localized: "%@人"), r.workers)
+        let daysText = r.days.isEmpty ? "" : String(format: String(localized: "%@天"), r.days)
+        let meta = [r.workType, r.teamName, workersText, daysText, r.date].filter { !$0.isEmpty }.joined(separator: " · ")
         return HStack(alignment: .top, spacing: AppSpacing.normal) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(r.isSettled ? Color.appSuccess : Color.appFinance)
@@ -428,11 +458,11 @@ struct LaborRecordView: View {
 
     private func save() {
         guard canSave else { return }
-        store.laborRecords.append(LaborRecord(
+        store.appendLaborRecord(LaborRecord(
             date: Formatters.date.string(from: newDate),
-            workers: newWorkers,
-            hours: newDays,
-            unitRate: newUnitRate,
+            workers: NumericInputSupport.normalizedStorageText(newWorkers, kind: .quantity),
+            hours: NumericInputSupport.normalizedStorageText(newDays, kind: .days),
+            unitRate: NumericInputSupport.normalizedStorageText(newUnitRate, kind: .laborRate),
             workType: newWorkType,
             teamName: newTeamName,
             isSettled: newIsSettled,
@@ -445,7 +475,7 @@ struct LaborRecordView: View {
             saveRatePair(workType: newWorkType, rate: newUnitRate)
         }
         store.scheduleSave()
-        operationMessage = "已新增人工记录"
+        operationNotice = .info(String(localized: "已新增人工记录"))
         newWorkers = ""
         newDays = ""
         newUnitRate = ""
@@ -457,9 +487,9 @@ struct LaborRecordView: View {
     }
 
     private var canSave: Bool {
-        InputValidator.nonNegativeNumber(newWorkers) &&
-        InputValidator.nonNegativeNumber(newDays) &&
-        (newUnitRate.isEmpty || InputValidator.nonNegativeNumber(newUnitRate))
+        InputValidator.validate(newWorkers, kind: .quantity, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(newDays, kind: .days, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(newUnitRate, kind: .laborRate, requirement: .optionalNonNegative).isValid
     }
 
     private var newLaborTotal: MoneyValue {
@@ -479,29 +509,63 @@ struct LaborRecordView: View {
         }
     }
 
+    private func deleteLaborRecordsWithUndo(ids: [UUID]) {
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return }
+
+        let targets = store.laborRecords.filter { idSet.contains($0.id) }
+        guard !targets.isEmpty else { return }
+        let deletion = store.removeLaborRecords(
+            ids: idSet,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除人工记录"),
+                detail: targets.map { [$0.teamName, $0.workType].filter { !$0.isEmpty }.joined(separator: " / ") }.joined(separator: "、"),
+                source: "LaborRecordView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条人工记录"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreLaborRecords(from: deletion)
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func flushPendingLaborDeletionIfNeeded() {
+        undoableDeletion.flushPendingCommit()
+    }
+
     // MARK: - 导出配置
 
     private var laborExportSheet: some View {
         NavigationStack {
             Form {
-                Section("筛选范围") {
-                    Picker("项目", selection: $exportProjectFilter) {
-                        Text("全部项目").tag(nil as UUID?)
+                Section(String(localized: "筛选范围")) {
+                    Picker(String(localized: "项目"), selection: $exportProjectFilter) {
+                        Text(String(localized: "全部项目")).tag(nil as UUID?)
                         ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                     }
-                    Picker("班组", selection: $exportTeamFilter) {
-                        Text("全部班组").tag("")
+                    Picker(String(localized: "班组"), selection: $exportTeamFilter) {
+                        Text(String(localized: "全部班组")).tag("")
                         ForEach(savedTeams, id: \.self) { t in Text(t).tag(t) }
                     }
-                    Picker("工种", selection: $exportWorkTypeFilter) {
-                        Text("全部工种").tag("")
+                    Picker(String(localized: "工种"), selection: $exportWorkTypeFilter) {
+                        Text(String(localized: "全部工种")).tag("")
                         ForEach(savedWorkTypes, id: \.self) { t in Text(t).tag(t) }
                     }
-                    DatePicker("从", selection: $exportStartDate, displayedComponents: .date)
-                    DatePicker("至", selection: $exportEndDate, displayedComponents: .date)
+                    DatePicker(String(localized: "从"), selection: $exportStartDate, displayedComponents: .date)
+                    DatePicker(String(localized: "至"), selection: $exportEndDate, displayedComponents: .date)
                 }
                 Section {
-                    Picker("格式", selection: $exportFormat) {
+                    Picker(String(localized: "格式"), selection: $exportFormat) {
                         ForEach(LaborExportFormat.allCases, id: \.self) { f in
                             Text(f.displayName).tag(f)
                         }
@@ -513,15 +577,15 @@ struct LaborRecordView: View {
                         }
                         showExportConfig = false
                     } label: {
-                        Label("导出 \(exportFormat.displayName)", systemImage: "square.and.arrow.up")
+                        Label(String(format: String(localized: "导出 %@"), exportFormat.displayName), systemImage: "square.and.arrow.up")
                     }
                 }
             }
-            .navigationTitle("导出人工记录")
+            .navigationTitle(String(localized: "导出人工记录"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showExportConfig = false }
+                    Button(String(localized: "取消")) { showExportConfig = false }
                 }
             }
         }
@@ -540,23 +604,25 @@ struct LaborRecordView: View {
 
     private func performCSVExport() {
         let records = recordsForExport()
-        var rows = ["日期,项目,工种,班组,人数,天数（天）,工价（元/天）,合计（元）,已结算,备注"]
+        var rows = [String(localized: "人工记录CSV表头")]
         rows += records.map { r in
             let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
             return [r.date, project, r.workType, r.teamName, r.workers, r.days, r.unitRate,
                     String(format: "%.2f", ReportBuilder.laborLineTotal(r)),
-                    r.isSettled ? "是" : "否", r.note]
+                    r.isSettled ? String(localized: "是") : String(localized: "否"), r.note]
                 .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
                 .joined(separator: ",")
         }
         let data = rows.joined(separator: "\n").data(using: .utf8) ?? Data()
-        exportPayload = ExportPayload(data: data, contentType: .commaSeparatedText, defaultFilename: "人工记录.csv")
+        exportPayload = ExportPayload(data: data, contentType: .commaSeparatedText, defaultFilename: String(localized: "人工记录.csv"))
         showExporter = true
     }
 
     private func performHTMLExport() {
         let records = recordsForExport()
-        let totalDays = records.compactMap { Double($0.days) }.reduce(0, +)
+        let totalDays = records.reduce(QuantityValue.zero) { partial, record in
+            partial + QuantityValue(text: record.days)
+        }.doubleValue
         let totalCost = records.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
         let unsettledCost = records.filter { !$0.isSettled }.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
 
@@ -569,21 +635,21 @@ struct LaborRecordView: View {
         .settled{color:#2E8B3E;}.unsettled{color:#E5661A;}
         .summary{color:#666;font-size:13px;margin:8px 0;}
         .total{font-weight:bold;color:#E5661A;}</style></head><body>
-        <h3>人工记录报表</h3>
-        <p class="summary">\(records.count)条 · \(totalDays)天 · 合计 ¥\(String(format: "%.2f", totalCost)) · 待结 ¥\(String(format: "%.2f", unsettledCost))</p>
-        <table><tr><th>日期</th><th>项目</th><th>工种</th><th>班组</th><th>人数</th><th>天数</th><th>工价</th><th>合计</th><th>状态</th></tr>
+        <h3>\(String(localized: "人工记录报表"))</h3>
+        <p class="summary">\(String(format: String(localized: "%lld条 · %@天 · 合计 %@ · 待结 %@"), Int64(records.count), totalDays.formatted(.number.precision(.fractionLength(0...1))), ReportBuilder.money(totalCost), ReportBuilder.money(unsettledCost)))</p>
+        <table><tr><th>\(String(localized: "日期"))</th><th>\(String(localized: "项目"))</th><th>\(String(localized: "工种"))</th><th>\(String(localized: "班组"))</th><th>\(String(localized: "人数"))</th><th>\(String(localized: "天数"))</th><th>\(String(localized: "工价"))</th><th>\(String(localized: "合计"))</th><th>\(String(localized: "状态"))</th></tr>
         """
         for r in records {
             let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
             let statusClass = r.isSettled ? "settled" : "unsettled"
-            let status = r.isSettled ? "已结算" : "待结算"
+            let status = r.isSettled ? String(localized: "已结算") : String(localized: "待结算")
             html += "<tr><td>\(r.date)</td><td>\(project)</td><td>\(r.workType)</td><td>\(r.teamName)</td><td>\(r.workers)</td><td>\(r.days)</td><td>\(r.unitRate)</td><td class=\"total\">\(ReportBuilder.money(ReportBuilder.laborLineTotal(r)))</td><td class=\"\(statusClass)\">\(status)</td></tr>"
         }
-        html += "<tr><td colspan=\"8\" style=\"text-align:right;font-weight:bold;\">合计</td><td class=\"total\">\(ReportBuilder.money(totalCost))</td><td></td></tr>"
-        html += "</table><p class=\"summary\">导出时间: \(Formatters.now())</p></body></html>"
+        html += "<tr><td colspan=\"8\" style=\"text-align:right;font-weight:bold;\">\(String(localized: "合计"))</td><td class=\"total\">\(ReportBuilder.money(totalCost))</td></tr>"
+        html += "</table><p class=\"summary\">\(String(format: String(localized: "导出时间: %@"), Formatters.now()))</p></body></html>"
 
         let data = html.data(using: .utf8) ?? Data()
-        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: "人工记录表.xls")
+        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "人工记录表.xls"))
         showExporter = true
     }
 }
@@ -618,11 +684,11 @@ private enum LaborSettlementChip: CaseIterable, Hashable {
     var title: String {
         switch self {
         case .all:
-            "全部"
+            String(localized: "全部")
         case .unsettled:
-            "待结算"
+            String(localized: "待结算")
         case .settled:
-            "已结算"
+            String(localized: "已结算")
         }
     }
 }
@@ -633,8 +699,8 @@ private enum LaborExportFormat: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .html: return "Excel 表格"
-        case .csv: return "CSV"
+        case .html: return String(localized: "Excel 表格")
+        case .csv: return String(localized: "CSV")
         }
     }
 }
@@ -683,80 +749,107 @@ struct LaborRecordEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("人工") {
-                    DatePicker("日期", selection: $date, displayedComponents: .date)
-                    LabeledContent("人数") {
-                        HStack(spacing: 6) {
-                            TextField("0", text: $workers)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($editLaborFormFocusedField, equals: .workers)
-                                .frame(minWidth: 72, alignment: .trailing)
-                            Text("人")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                Section(String(localized: "人工")) {
+                    DatePicker(String(localized: "日期"), selection: $date, displayedComponents: .date)
+                    LabeledContent(String(localized: "人数")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 6) {
+                                TextField("0", text: $workers.numericInput(.quantity))
+                                    .keyboardType(.numberPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .focused($editLaborFormFocusedField, equals: .workers)
+                                    .frame(minWidth: 72, alignment: .trailing)
+                                Text(String(localized: "人"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    workers,
+                                    kind: .quantity,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
                         }
                     }
-                    LabeledContent("出工天数") {
-                        HStack(spacing: 6) {
-                            TextField("0", text: $hours)
-                                .keyboardType(.numberPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($editLaborFormFocusedField, equals: .hours)
-                                .frame(minWidth: 72, alignment: .trailing)
-                            Text("天")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                    LabeledContent(String(localized: "出工天数")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 6) {
+                                TextField("0", text: $hours.numericInput(.days))
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .focused($editLaborFormFocusedField, equals: .hours)
+                                    .frame(minWidth: 72, alignment: .trailing)
+                                Text(String(localized: "天"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    hours,
+                                    kind: .days,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
                         }
                     }
-                    LabeledContent("工价") {
-                        HStack(spacing: 6) {
-                            TextField("0", text: $unitRate)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($editLaborFormFocusedField, equals: .unitRate)
-                                .frame(minWidth: 88, alignment: .trailing)
-                            Text("元/天")
-                                .font(.subheadline)
-                                .foregroundStyle(.secondary)
+                    LabeledContent(String(localized: "工价")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            HStack(spacing: 6) {
+                                TextField("0", text: $unitRate.numericInput(.laborRate))
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .focused($editLaborFormFocusedField, equals: .unitRate)
+                                    .frame(minWidth: 88, alignment: .trailing)
+                                Text(String(localized: "元/天"))
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                            }
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    unitRate,
+                                    kind: .laborRate,
+                                    requirement: .optionalNonNegative
+                                )
+                            )
                         }
                     }
-                    LabeledContent("合计人工费") {
+                    LabeledContent(String(localized: "合计人工费")) {
                         Text(ReportBuilder.money(editLaborTotal.doubleValue))
                             .fontWeight(.semibold)
                             .foregroundStyle(Color.appFinance)
                             .monospacedDigit()
                     }
-                    TextField("工种", text: $workType)
-                    TextField("班组", text: $teamName)
-                    Toggle("已结算", isOn: $isSettled)
+                    TextField(String(localized: "工种"), text: $workType)
+                    TextField(String(localized: "班组"), text: $teamName)
+                    Toggle(String(localized: "已结算"), isOn: $isSettled)
                 }
-                Section("归属项目") {
-                    Picker("归属项目", selection: $projectId) {
-                        Text("无归属").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "归属项目"), selection: $projectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
                 }
-                Section("备注") {
-                    TextField("备注", text: $note, axis: .vertical)
+                Section(String(localized: "备注")) {
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
                 Section {
-                    Button("删除人工记录", role: .destructive) {
+                    Button(String(localized: "删除人工记录"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                 }
             }
-            .navigationTitle("编辑人工记录")
+            .navigationTitle(String(localized: "编辑人工记录"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(updatedRecord)
                         dismiss()
                     }
@@ -767,9 +860,9 @@ struct LaborRecordEditSheet: View {
                     fields: [.workers, .hours, .unitRate]
                 )
             }
-            .alert("删除这条人工记录？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条人工记录？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete(record)
                     dismiss()
                 }
@@ -780,9 +873,9 @@ struct LaborRecordEditSheet: View {
     private var updatedRecord: LaborRecord {
         var value = record
         value.date = Formatters.date.string(from: date)
-        value.workers = workers
-        value.hours = hours
-        value.unitRate = unitRate
+        value.workers = NumericInputSupport.normalizedStorageText(workers, kind: .quantity)
+        value.hours = NumericInputSupport.normalizedStorageText(hours, kind: .days)
+        value.unitRate = NumericInputSupport.normalizedStorageText(unitRate, kind: .laborRate)
         value.workType = workType.trimmingCharacters(in: .whitespacesAndNewlines)
         value.teamName = teamName.trimmingCharacters(in: .whitespacesAndNewlines)
         value.isSettled = isSettled
@@ -792,9 +885,9 @@ struct LaborRecordEditSheet: View {
     }
 
     private var canSave: Bool {
-        InputValidator.nonNegativeNumber(workers) &&
-        InputValidator.nonNegativeNumber(hours) &&
-        (unitRate.isEmpty || InputValidator.nonNegativeNumber(unitRate))
+        InputValidator.validate(workers, kind: .quantity, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(hours, kind: .days, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(unitRate, kind: .laborRate, requirement: .optionalNonNegative).isValid
     }
 
     private var editLaborTotal: MoneyValue {

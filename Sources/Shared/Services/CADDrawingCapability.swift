@@ -6,11 +6,7 @@ enum CADDrawingCapability {
         return ext == "dwg" || ext == "dxf"
     }
 
-    static func isLibreDWGRendererAvailable() -> Bool {
-#if canImport(LibreDWGBridge)
-        true
-#else
-        false
-#endif
+    static func isCADEngineInstalled() -> Bool {
+        CADViewerEngineRegistry.isInstalled
     }
 }

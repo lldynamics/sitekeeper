@@ -4,6 +4,7 @@ import QuickLook
 struct ProjectFileCategoryView: View {
     @Environment(DataStore.self) private var store
     @State private var searchText = ""
+    @State private var healthFilter: ProjectFileHealthFilter = .all
     @State private var previewURL: URL?
     let project: Project
     private let summaryColumns: [GridItem] = [
@@ -11,13 +12,21 @@ struct ProjectFileCategoryView: View {
         GridItem(.flexible(minimum: 80), spacing: 8, alignment: .leading)
     ]
 
+    init(project: Project, initialHealthFilter: ProjectFileHealthFilter = .all) {
+        self.project = project
+        _healthFilter = State(initialValue: initialHealthFilter)
+    }
+
     private var summary: ProjectFileSummary {
         ProjectFileSummary(projectId: project.id, store: store)
     }
 
     private var recentItems: [ProjectFileItem] {
-        let all = ProjectFileCollector.allRecent(for: project.id, limit: 8, store: store)
-        return SearchMatcher.filter(all, keyword: searchText)
+        let all = ProjectFileCollector.allItems(for: project.id, store: store)
+            .filter { healthFilter.matches($0) }
+            .sorted { $0.sortDate > $1.sortDate }
+            .prefix(8)
+        return SearchMatcher.filter(Array(all), keyword: searchText)
     }
 
     var body: some View {
@@ -60,7 +69,11 @@ struct ProjectFileCategoryView: View {
                 ForEach(ProjectFileCategory.allCases, id: \.self) { category in
                     let count = summary.count(for: category)
                     NavigationLink {
-                        ProjectFileListView(project: project, category: category)
+                        ProjectFileListView(
+                            project: project,
+                            category: category,
+                            initialHealthFilter: healthFilter
+                        )
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: category.systemImage)
@@ -83,6 +96,8 @@ struct ProjectFileCategoryView: View {
                 }
             }
 
+            ProjectFileHealthFilterSection(selection: $healthFilter)
+
             if !recentItems.isEmpty {
                 Section("最近文件") {
                     ForEach(recentItems) { item in
@@ -104,10 +119,25 @@ struct ProjectFileListView: View {
     let project: Project
     let category: ProjectFileCategory
     @Environment(DataStore.self) private var store
+    @State private var healthFilter: ProjectFileHealthFilter = .all
     @State private var previewURL: URL?
 
-    private var items: [ProjectFileItem] {
+    init(
+        project: Project,
+        category: ProjectFileCategory,
+        initialHealthFilter: ProjectFileHealthFilter = .all
+    ) {
+        self.project = project
+        self.category = category
+        _healthFilter = State(initialValue: initialHealthFilter)
+    }
+
+    private var rawItems: [ProjectFileItem] {
         ProjectFileCollector.items(for: project.id, category: category, store: store)
+    }
+
+    private var items: [ProjectFileItem] {
+        rawItems.filter { healthFilter.matches($0) }
     }
 
     private var missingItemCount: Int {
@@ -158,7 +188,11 @@ struct ProjectFileListView: View {
 
     var body: some View {
         List {
-            if items.isEmpty {
+            if !rawItems.isEmpty {
+                ProjectFileHealthFilterSection(selection: $healthFilter)
+            }
+
+            if rawItems.isEmpty {
                 Section("建议下一步") {
                     ContentUnavailableView(
                         "暂无\(category.title)",
@@ -172,13 +206,22 @@ struct ProjectFileListView: View {
                     }
                     .buttonStyle(.appProminent())
                 }
+            } else if items.isEmpty {
+                Section("筛选结果") {
+                    Text("当前筛选下没有文件。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             } else {
                 if missingItemCount > 0 {
                     Section("建议下一步") {
                         ProjectFileMicroGuideRow(
                             icon: "exclamationmark.triangle.fill",
                             color: .appRisk,
-                            title: String(localized: "本分类有 \(missingItemCount) 个文件缺失"),
+                            title: String(
+                                format: String(localized: "本分类有 %lld 个文件缺失"),
+                                Int64(missingItemCount)
+                            ),
                             detail: "建议尽快补齐，避免预览、分享或导出时失败。"
                         )
                         NavigationLink {

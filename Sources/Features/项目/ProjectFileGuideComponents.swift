@@ -204,6 +204,29 @@ struct ProjectFileMicroGuideRow: View {
     }
 }
 
+struct ProjectFileHealthFilterSection: View {
+    @Binding var selection: ProjectFileHealthFilter
+
+    var body: some View {
+        Section("健康筛选") {
+            Picker("健康筛选", selection: $selection) {
+                ForEach(ProjectFileHealthFilter.allCases, id: \.self) { filter in
+                    Label(filter.title, systemImage: filter.systemImage)
+                        .tag(filter)
+                }
+            }
+            if selection != .all {
+                ProjectFileMicroGuideRow(
+                    icon: selection.systemImage,
+                    color: selection.tint,
+                    title: selection.title,
+                    detail: "仅显示命中该状态的项目或文件。"
+                )
+            }
+        }
+    }
+}
+
 struct ProjectFileCountChip: View {
     let title: String
     let value: Int
@@ -237,6 +260,18 @@ struct ProjectFileItemRow: View {
                 HStack(spacing: 8) {
                     Text(item.fileType.uppercased())
                     Text(item.formattedSize)
+                    if let status = item.documentStatus {
+                        Text(status.displayName)
+                            .foregroundStyle(status.requiresArchiveAttention ? Color.appWarning : Color.secondary)
+                    }
+                    if item.isLargeFile {
+                        Text("大文件")
+                            .foregroundStyle(.appRisk)
+                    }
+                    if item.hasDocumentLedgerIssues {
+                        Text("台账缺项")
+                            .foregroundStyle(.appWarning)
+                    }
                     if !item.exists {
                         Text("文件缺失")
                             .foregroundStyle(.appRisk)

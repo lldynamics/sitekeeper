@@ -3,7 +3,6 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
-    @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
@@ -14,13 +13,12 @@ struct ProfileTabView: View {
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @State private var languageSwitchFeedback = ""
-    @State private var localStorageUsageText = "正在统计..."
+    @State private var localStorageUsageText = String(localized: "正在统计...")
     @State private var localStorageFileCount = 0
     @State private var isRefreshingStorageUsage = false
     @State private var lastStorageSampleAt: Date?
     @State private var hasLoadedStorageUsage = false
     @State private var showUserNameEditor = false
-    @State private var showSampleImportConfirm = false
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
@@ -35,7 +33,7 @@ struct ProfileTabView: View {
 
     private var displayUserName: String {
         let value = userName.trimmingCharacters(in: .whitespacesAndNewlines)
-        return value.isEmpty ? "未设置用户名" : value
+        return value.isEmpty ? String(localized: "未设置用户名") : value
     }
 
     private var avatarUIImage: UIImage? {
@@ -48,15 +46,15 @@ struct ProfileTabView: View {
     }
 
     private var backupStatusText: String {
-        guard cloudBackupLastSuccessAt > 0 else { return "尚未记录云备份成功" }
+        guard cloudBackupLastSuccessAt > 0 else { return String(localized: "尚未记录云备份成功") }
         let date = Date(timeIntervalSince1970: cloudBackupLastSuccessAt)
-        return "最近云备份：\(Formatters.dateTime.string(from: date))"
+        return String(format: String(localized: "最近云备份：%@"), Formatters.dateTime.string(from: date))
     }
 
     private var storageCaptionText: String {
-        var parts = ["\(localStorageFileCount) 个文件"]
+        var parts = [String(format: String(localized: "%@ 个文件"), "\(localStorageFileCount)")]
         if let lastStorageSampleAt {
-            parts.append("更新于 \(Formatters.dateTime.string(from: lastStorageSampleAt))")
+            parts.append(String(format: String(localized: "更新于 %@"), Formatters.dateTime.string(from: lastStorageSampleAt)))
         }
         return parts.joined(separator: " · ")
     }
@@ -91,7 +89,7 @@ struct ProfileTabView: View {
                             }
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("编辑用户名")
+                        .accessibilityLabel(String(localized: "编辑用户名"))
                         Text("\(AppBrand.displayName) · v\(appVersion)")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -100,25 +98,25 @@ struct ProfileTabView: View {
                 .padding(.vertical, 8)
             }
 
-            Section("快捷设置") {
-                Toggle("公制单位", isOn: $useMetric)
-                Toggle("自动保存记录", isOn: $autoSaveEnabled)
+            Section(String(localized: "快捷设置")) {
+                Toggle(String(localized: "公制单位"), isOn: $useMetric)
+                Toggle(String(localized: "自动保存记录"), isOn: $autoSaveEnabled)
 
-                Picker("配色", selection: $appTheme) {
+                Picker(String(localized: "配色"), selection: $appTheme) {
                     ForEach(AppTheme.allCases, id: \.rawValue) { theme in
                         Text(theme.displayName).tag(theme.rawValue)
                     }
                 }
                 .pickerStyle(.menu)
 
-                Picker("主题", selection: $appearanceMode) {
+                Picker(String(localized: "主题"), selection: $appearanceMode) {
                     ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
                         Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
                     }
                 }
                 .pickerStyle(.segmented)
 
-                Picker("语言", selection: $languageCode) {
+                Picker(String(localized: "语言"), selection: $languageCode) {
                     ForEach(AppLanguage.allCases, id: \.rawValue) { lang in
                         Text(LocalizedStringKey(lang.displayName)).tag(lang.rawValue)
                     }
@@ -132,62 +130,49 @@ struct ProfileTabView: View {
                 }
             }
 
-            Section("数据安全") {
+            Section(String(localized: "数据安全")) {
                 backupStatusCard
-                NavigationLink { DataManagementView(initialTab: "备份") } label: {
+                NavigationLink { DataManagementView(initialRoute: .backup) } label: {
                     HStack(spacing: AppSpacing.tight) {
                         Image(systemName: "externaldrive")
                             .foregroundStyle(Color.appPrimaryAction)
                         VStack(alignment: .leading, spacing: 2) {
-                            Text("数据管理")
-                            Text("导出、备份、导入恢复、体检与清理")
+                            Text(String(localized: "数据管理"))
+                            Text(String(localized: "导出、备份、导入恢复、体检与清理"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
                     }
                 }
-                if AppFeatureFlags.allowsSampleDataImport {
-                    Button(role: .destructive) {
-                        showSampleImportConfirm = true
-                    } label: {
-                        HStack(spacing: AppSpacing.tight) {
-                            Image(systemName: "sparkles")
-                                .foregroundStyle(Color.appWarning)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("导入示例数据")
-                                Text("覆盖当前本地数据，用演示项目体验完整流程")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    .accessibilityLabel("导入示例数据")
-                    .accessibilityHint("会先确认，确认后覆盖当前本地数据")
-                }
+                .accessibilityIdentifier("profile-data-management-link")
             }
 
-            Section("系统") {
+            Section(String(localized: "系统")) {
                 NavigationLink { SettingsView() } label: {
-                    Label("更多设置", systemImage: "gear")
+                    Label(String(localized: "更多设置"), systemImage: "gear")
                 }
+                .accessibilityIdentifier("profile-settings-link")
             }
 
-            Section("关于") {
+            Section(String(localized: "关于")) {
                 HStack {
-                    Label("当前版本", systemImage: "info.circle")
+                    Label(String(localized: "当前版本"), systemImage: "info.circle")
                     Spacer()
                     Text("v\(appVersion)")
                         .foregroundStyle(.secondary)
                 }
                 NavigationLink { PrivacyPolicyView() } label: {
-                    Label("隐私政策", systemImage: "hand.raised.fill")
+                    Label(String(localized: "隐私政策"), systemImage: "hand.raised.fill")
+                }
+                NavigationLink { OpenSourceLicensesView() } label: {
+                    Label(String(localized: "开源许可"), systemImage: "curlybraces.square")
                 }
                 NavigationLink { FeedbackView() } label: {
-                    Label("意见反馈", systemImage: "envelope.fill")
+                    Label(String(localized: "意见反馈"), systemImage: "envelope.fill")
                 }
             }
         }
-        .navigationTitle("我的")
+        .navigationTitle(String(localized: "我的"))
         .task {
             guard !hasLoadedStorageUsage else { return }
             hasLoadedStorageUsage = true
@@ -216,19 +201,6 @@ struct ProfileTabView: View {
         .sheet(isPresented: $showUserNameEditor) {
             userNameEditorSheet
         }
-        .alert("导入示例数据？", isPresented: $showSampleImportConfirm) {
-            Button("取消", role: .cancel) {}
-            Button("覆盖并导入", role: .destructive) {
-                store.importSampleData(replacingExisting: true)
-                AppHaptics.success()
-            }
-        } message: {
-            if store.hasAnyBusinessData {
-                Text("将清空当前本地数据并写入示例项目、日志、报价、材料和仓库记录。此操作不可撤销。")
-            } else {
-                Text("将写入示例项目、日志、报价、材料和仓库记录，便于演示功能。")
-            }
-        }
     }
 
     private var backupStatusCard: some View {
@@ -241,13 +213,13 @@ struct ProfileTabView: View {
                     .padding(.top, 1)
 
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("备份与存储")
+                    Text(String(localized: "备份与存储"))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(.primary)
                     Text(backupStatusText)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                    Text("本机占用：\(localStorageUsageText)")
+                    Text(String(format: String(localized: "本机占用：%@"), localStorageUsageText))
                         .font(.caption)
                         .foregroundStyle(.primary)
                     Text(storageCaptionText)
@@ -318,13 +290,13 @@ struct ProfileTabView: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("修改头像")
+        .accessibilityLabel(String(localized: "修改头像"))
         .contextMenu {
             if hasCustomAvatar {
                 Button(role: .destructive) {
                     userAvatarData = Data()
                 } label: {
-                    Label("恢复默认头像", systemImage: "arrow.counterclockwise")
+                    Label(String(localized: "恢复默认头像"), systemImage: "arrow.counterclockwise")
                 }
             }
         }
@@ -333,25 +305,25 @@ struct ProfileTabView: View {
     private var userNameEditorSheet: some View {
         NavigationStack {
             Form {
-                Section("用户名") {
-                    TextField("请输入用户名", text: $userNameDraft)
+                Section(String(localized: "用户名")) {
+                    TextField(String(localized: "请输入用户名"), text: $userNameDraft)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
-                    Text("留空将显示“未设置用户名”。")
+                    Text(String(localized: "留空将显示“未设置用户名”。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("编辑用户名")
+            .navigationTitle(String(localized: "编辑用户名"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(String(localized: "取消")) {
                         showUserNameEditor = false
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         userName = userNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         showUserNameEditor = false
                     }
@@ -392,7 +364,7 @@ struct ProfileTabView: View {
         }.value
 
         guard let snapshot else {
-            localStorageUsageText = "读取失败"
+            localStorageUsageText = String(localized: "读取失败")
             localStorageFileCount = 0
             lastStorageSampleAt = nil
             return
@@ -435,5 +407,38 @@ struct ProfileTabView: View {
             fileCount += 1
         }
         return (totalBytes, fileCount)
+    }
+}
+
+private struct OpenSourceLicensesView: View {
+    private let gplURL = URL(string: "https://www.gnu.org/licenses/gpl-3.0.html")!
+
+    var body: some View {
+        List {
+            Section(String(localized: "内置开源组件")) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("LibreDWG")
+                        .font(.headline)
+                    Text(String(localized: "用于在本机读取 DWG 图纸几何并交给 CAD 查看器渲染。"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                LabeledContent(String(localized: "许可证"), value: String(localized: "GNU GPLv3 或更新版本"))
+                LabeledContent(String(localized: "源码"), value: String(localized: "随发布提供对应源码包"))
+            }
+
+            Section(String(localized: "用户权利")) {
+                Text(String(localized: "本发布包含 GPL 覆盖的软件。你可以按照 GPL 复制、分发和修改该组件及其对应源码；该组件按许可证原样提供，不提供担保。"))
+                    .font(.callout)
+            }
+
+            Section(String(localized: "源码获取")) {
+                Text(String(format: String(localized: "对应源码包会随发布提供；也可以通过 %@ 请求获取。"), AppContact.supportEmail))
+                    .font(.callout)
+                Link(String(localized: "查看 GNU GPLv3 完整文本"), destination: gplURL)
+            }
+        }
+        .navigationTitle(String(localized: "开源许可"))
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

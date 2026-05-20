@@ -77,7 +77,7 @@ struct DashboardRiskPill: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(title)：\(value)")
-        .accessibilityHint(String(localized: "打开\(title)详情"))
+        .accessibilityHint(String(format: String(localized: "打开%@详情"), title))
     }
 }
 
@@ -108,7 +108,7 @@ struct DashboardInventoryPill: View {
             }
             .buttonStyle(.plain)
             .accessibilityElement(children: .combine)
-            .accessibilityHint(String(localized: "打开\(title)详情"))
+            .accessibilityHint(String(format: String(localized: "打开%@详情"), title))
         } else {
             content
                 .accessibilityElement(children: .combine)
@@ -137,7 +137,7 @@ struct DashboardPanel<Content: View>: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .accessibilityHint(String(localized: "打开\(title)"))
+                .accessibilityHint(String(format: String(localized: "打开%@"), title))
             } else {
                 Label(title, systemImage: systemImage)
                     .font(.headline)
@@ -247,7 +247,7 @@ struct TodoPreviewRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 if let completedAt = todo.completedAt, todo.isDone {
-                    Text(String(localized: "完成 \(completedAt)"))
+                    Text(String(format: String(localized: "完成 %@"), completedAt))
                         .font(.caption2)
                         .foregroundStyle(Color.appSuccess)
                 }

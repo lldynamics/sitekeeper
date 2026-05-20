@@ -14,7 +14,59 @@ struct ExportContentOptions {
     var includeProjectDrawings = true
     var includeWarehouseMovements = true
     var includeQuickNotes = true
-    var includeLightingCircuits = true
+    var includeOperationAuditLogs = false
+    var operationAuditEntries: [OperationAuditEntry] = []
+    var currencyDisplayMode = ExportCurrencyDisplayMode.defaultMode
+}
+
+enum ExportCurrencyDisplayMode: String, CaseIterable, Identifiable, Codable {
+    case cny
+    case usd
+    case eur
+    case system
+    case numberOnly = "number_only"
+
+    static let defaultMode: ExportCurrencyDisplayMode = .cny
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .cny:
+            return String(localized: "人民币（¥）")
+        case .usd:
+            return String(localized: "美元（$）")
+        case .eur:
+            return String(localized: "欧元（€）")
+        case .system:
+            return String(localized: "跟随系统地区")
+        case .numberOnly:
+            return String(localized: "仅数字")
+        }
+    }
+
+    func format(_ value: Double) -> String {
+        switch self {
+        case .cny:
+            return prefixed("¥", value: value)
+        case .usd:
+            return prefixed("$", value: value)
+        case .eur:
+            return prefixed("€", value: value)
+        case .system:
+            return Formatters.localizedCurrency(value)
+        case .numberOnly:
+            return Formatters.money(value)
+        }
+    }
+
+    private func prefixed(_ symbol: String, value: Double) -> String {
+        let raw = Formatters.money(value)
+        if raw.hasPrefix("-") {
+            return "-\(symbol)\(raw.dropFirst())"
+        }
+        return "\(symbol)\(raw)"
+    }
 }
 
 struct ExportPayload {

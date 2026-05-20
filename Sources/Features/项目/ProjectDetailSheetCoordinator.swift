@@ -8,6 +8,7 @@ struct ProjectDetailEditingCoordinatorDependencies<AttachmentSheet: View> {
     let relatedLogs: [DailyLog]
     let relatedDrawings: [ProjectDrawing]
     let relatedFinancialRecords: [ProjectFinancialRecord]
+    let relatedDocuments: [ProjectDocument]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let attachmentSheetBuilder: (ProjectFinancialRecord) -> AttachmentSheet
     let timelineDrawings: (String) -> [ProjectDrawing]
@@ -44,11 +45,13 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
     let project: Project
     let projectId: UUID
     @Binding var presentation: ProjectDetailPresentation?
+    @Binding var documentScanCategory: ProjectDocumentCategory?
     @Binding var financialAddSeed: ProjectFinancialRecord?
     @Binding var imagePickerSource: UIImagePickerController.SourceType
 
     let deliveryGuideData: ProjectDeliveryGuideData
     let constructionMethods: [ConstructionMethod]
+    let relatedProgress: [ProgressTask]
     let recentFinancialRecords: [ProjectFinancialRecord]
     let onOpenModeFromDeliveryGuide: (ProjectDetailMode) -> Void
     let onStartDeliveryExport: () -> Void
@@ -62,6 +65,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
         content
             .sheet(item: $presentation, onDismiss: {
                 financialAddSeed = nil
+                documentScanCategory = nil
             }) { presentation in
                 switch presentation {
                 case .quickAdd(let sheet):
@@ -71,7 +75,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         constructionMethods: constructionMethods
                     )
                 case .editProject:
-                    ProjectEditSheet(project: project) { updated in
+                    ProjectEditSheet(project: project, progressTasks: relatedProgress) { updated in
                         onUpdateProject(updated)
                     }
                 case .deliveryGuide:
@@ -100,7 +104,11 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         financialAddSeed = nil
                     }
                 case .documentScanSetup:
-                    ProjectDocumentScanSetupSheet(projectId: projectId, constructionMethods: constructionMethods) { target in
+                    ProjectDocumentScanSetupSheet(
+                        projectId: projectId,
+                        constructionMethods: constructionMethods,
+                        initialCategory: documentScanCategory ?? .constructionRecord
+                    ) { target in
                         onCreateScanTarget(target)
                     }
                 case .imagePicker:
@@ -131,6 +139,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
     let relatedLogs: [DailyLog]
     let relatedDrawings: [ProjectDrawing]
     let relatedFinancialRecords: [ProjectFinancialRecord]
+    let relatedDocuments: [ProjectDocument]
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let attachmentSheetBuilder: (ProjectFinancialRecord) -> AttachmentSheet
     let timelineDrawings: (String) -> [ProjectDrawing]
@@ -210,6 +219,7 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
                 ProjectDocumentDetailSheet(
                     document: document,
                     financialRecords: relatedFinancialRecords,
+                    projectDocuments: relatedDocuments,
                     constructionMethods: constructionMethods
                 ) { target in
                     onPreviewDocument(target)
@@ -267,10 +277,12 @@ extension View {
         project: Project,
         projectId: UUID,
         presentation: Binding<ProjectDetailPresentation?>,
+        documentScanCategory: Binding<ProjectDocumentCategory?>,
         financialAddSeed: Binding<ProjectFinancialRecord?>,
         imagePickerSource: Binding<UIImagePickerController.SourceType>,
         deliveryGuideData: ProjectDeliveryGuideData,
         constructionMethods: [ConstructionMethod],
+        relatedProgress: [ProgressTask],
         recentFinancialRecords: [ProjectFinancialRecord],
         onOpenModeFromDeliveryGuide: @escaping (ProjectDetailMode) -> Void,
         onStartDeliveryExport: @escaping () -> Void,
@@ -285,10 +297,12 @@ extension View {
                 project: project,
                 projectId: projectId,
                 presentation: presentation,
+                documentScanCategory: documentScanCategory,
                 financialAddSeed: financialAddSeed,
                 imagePickerSource: imagePickerSource,
                 deliveryGuideData: deliveryGuideData,
                 constructionMethods: constructionMethods,
+                relatedProgress: relatedProgress,
                 recentFinancialRecords: recentFinancialRecords,
                 onOpenModeFromDeliveryGuide: onOpenModeFromDeliveryGuide,
                 onStartDeliveryExport: onStartDeliveryExport,
@@ -335,6 +349,7 @@ extension View {
                 relatedLogs: dependencies.relatedLogs,
                 relatedDrawings: dependencies.relatedDrawings,
                 relatedFinancialRecords: dependencies.relatedFinancialRecords,
+                relatedDocuments: dependencies.relatedDocuments,
                 linkedDocuments: dependencies.linkedDocuments,
                 attachmentSheetBuilder: dependencies.attachmentSheetBuilder,
                 timelineDrawings: dependencies.timelineDrawings,

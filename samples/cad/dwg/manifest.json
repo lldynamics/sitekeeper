@@ -1,0 +1,9 @@
+{
+  "sampleRoot": "samples/cad/dwg",
+  "notes": [
+    "真实 DWG 图纸仅作本机回归使用，不要提交敏感样本。",
+    "status=ready 表示样本文件在 sampleRoot 下可用。",
+    "status=needed 表示等待补充可公开样本。"
+  ],
+  "samples": []
+}

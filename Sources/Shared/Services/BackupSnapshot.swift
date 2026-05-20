@@ -1,6 +1,38 @@
 import Foundation
 
+struct BackupArchiveManifest: Codable, Equatable {
+    var schemaVersion: Int
+    var appVersion: String
+    var appBuild: String
+    var appName: String
+    var exportedAt: String
+    var metadataPath: String
+
+    init(
+        schemaVersion: Int = BackupSnapshot.currentSchemaVersion,
+        appVersion: String = AppBrand.appVersion,
+        appBuild: String = AppBrand.appBuild,
+        appName: String = AppBrand.displayName,
+        exportedAt: String = Formatters.now(),
+        metadataPath: String = ""
+    ) {
+        self.schemaVersion = schemaVersion
+        self.appVersion = appVersion
+        self.appBuild = appBuild
+        self.appName = appName
+        self.exportedAt = exportedAt
+        self.metadataPath = metadataPath
+    }
+}
+
 struct BackupSnapshot: Codable {
+    static let legacySchemaVersion = 1
+    static let currentSchemaVersion = 2
+
+    var schemaVersion: Int
+    var appVersion: String
+    var appBuild: String
+    var backupCreatedAt: String
     var materialItems: [MaterialItem]
     var quoteItems: [QuoteItem]
     var laborRecords: [LaborRecord]
@@ -8,7 +40,6 @@ struct BackupSnapshot: Codable {
     var dailyLogs: [DailyLog]
     var historyRecords: [HistoryRecord]
     var progressTasks: [ProgressTask]
-    var lightingCircuitPlans: [LightingCircuitPlan]
     var siteTodos: [SiteTodo]
     /// 旧版 `paymentRecords` 兼容字段：仅用于导入历史备份并迁移到 ProjectFinancialRecord。
     var legacyPaymentRecords: [LegacyPaymentRecord]
@@ -34,6 +65,10 @@ struct BackupSnapshot: Codable {
     var quickNoteAttachmentFiles: [QuickNoteAttachmentBackupFile] = []
 
     init(
+        schemaVersion: Int = BackupSnapshot.currentSchemaVersion,
+        appVersion: String = AppBrand.appVersion,
+        appBuild: String = AppBrand.appBuild,
+        backupCreatedAt: String = Formatters.now(),
         materialItems: [MaterialItem],
         quoteItems: [QuoteItem],
         laborRecords: [LaborRecord],
@@ -41,7 +76,6 @@ struct BackupSnapshot: Codable {
         dailyLogs: [DailyLog],
         historyRecords: [HistoryRecord],
         progressTasks: [ProgressTask] = [],
-        lightingCircuitPlans: [LightingCircuitPlan] = [],
         siteTodos: [SiteTodo] = [],
         legacyPaymentRecords: [LegacyPaymentRecord] = [],
         projectDrawings: [ProjectDrawing] = [],
@@ -65,6 +99,10 @@ struct BackupSnapshot: Codable {
         documentFiles: [ProjectDocumentBackupFile] = [],
         quickNoteAttachmentFiles: [QuickNoteAttachmentBackupFile] = []
     ) {
+        self.schemaVersion = schemaVersion
+        self.appVersion = appVersion
+        self.appBuild = appBuild
+        self.backupCreatedAt = backupCreatedAt
         self.materialItems = materialItems
         self.quoteItems = quoteItems
         self.laborRecords = laborRecords
@@ -72,7 +110,6 @@ struct BackupSnapshot: Codable {
         self.dailyLogs = dailyLogs
         self.historyRecords = historyRecords
         self.progressTasks = progressTasks
-        self.lightingCircuitPlans = lightingCircuitPlans
         self.siteTodos = siteTodos
         self.legacyPaymentRecords = legacyPaymentRecords
         self.projectDrawings = projectDrawings
@@ -98,8 +135,9 @@ struct BackupSnapshot: Codable {
     }
 
     enum CodingKeys: String, CodingKey {
+        case schemaVersion, appVersion, appBuild, backupCreatedAt
         case materialItems, quoteItems, laborRecords, projects, dailyLogs, historyRecords
-        case progressTasks, lightingCircuitPlans, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
+        case progressTasks, siteTodos, legacyPaymentRecords = "paymentRecords", projectDrawings
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
         case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
@@ -108,6 +146,10 @@ struct BackupSnapshot: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? BackupSnapshot.legacySchemaVersion
+        appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? ""
+        appBuild = try container.decodeIfPresent(String.self, forKey: .appBuild) ?? ""
+        backupCreatedAt = try container.decodeIfPresent(String.self, forKey: .backupCreatedAt) ?? ""
         materialItems = try container.decodeIfPresent([MaterialItem].self, forKey: .materialItems) ?? []
         quoteItems = try container.decodeIfPresent([QuoteItem].self, forKey: .quoteItems) ?? []
         laborRecords = try container.decodeIfPresent([LaborRecord].self, forKey: .laborRecords) ?? []
@@ -115,7 +157,6 @@ struct BackupSnapshot: Codable {
         dailyLogs = try container.decodeIfPresent([DailyLog].self, forKey: .dailyLogs) ?? []
         historyRecords = try container.decodeIfPresent([HistoryRecord].self, forKey: .historyRecords) ?? []
         progressTasks = try container.decodeIfPresent([ProgressTask].self, forKey: .progressTasks) ?? []
-        lightingCircuitPlans = try container.decodeIfPresent([LightingCircuitPlan].self, forKey: .lightingCircuitPlans) ?? []
         siteTodos = try container.decodeIfPresent([SiteTodo].self, forKey: .siteTodos) ?? []
         legacyPaymentRecords = try container.decodeIfPresent([LegacyPaymentRecord].self, forKey: .legacyPaymentRecords) ?? []
         projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []
@@ -142,6 +183,10 @@ struct BackupSnapshot: Codable {
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(appVersion, forKey: .appVersion)
+        try container.encode(appBuild, forKey: .appBuild)
+        try container.encode(backupCreatedAt, forKey: .backupCreatedAt)
         try container.encode(materialItems, forKey: .materialItems)
         try container.encode(quoteItems, forKey: .quoteItems)
         try container.encode(laborRecords, forKey: .laborRecords)
@@ -149,7 +194,6 @@ struct BackupSnapshot: Codable {
         try container.encode(dailyLogs, forKey: .dailyLogs)
         try container.encode(historyRecords, forKey: .historyRecords)
         try container.encode(progressTasks, forKey: .progressTasks)
-        try container.encode(lightingCircuitPlans, forKey: .lightingCircuitPlans)
         try container.encode(siteTodos, forKey: .siteTodos)
         try container.encode(projectDrawings, forKey: .projectDrawings)
         try container.encode(projectContacts, forKey: .projectContacts)

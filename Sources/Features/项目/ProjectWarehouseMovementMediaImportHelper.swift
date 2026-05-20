@@ -36,7 +36,7 @@ final class ProjectWarehouseMovementMediaImportHelper {
     }
 
     func cancelImport() {
-        status = "正在取消..."
+        status = String(localized: "正在取消...")
         importTask?.cancel()
     }
 
@@ -53,14 +53,14 @@ final class ProjectWarehouseMovementMediaImportHelper {
         isImporting = true
         completedCount = 0
         totalCount = items.count
-        status = "正在导入 0/\(max(items.count, 1))"
+        status = String(format: String(localized: "正在导入 %lld/%lld"), Int64(0), Int64(max(items.count, 1)))
 
         var imported: [ProjectWarehouseAttachmentDraft] = []
         for (index, item) in items.enumerated() {
             if Task.isCancelled {
                 break
             }
-            status = "正在导入 \(index + 1)/\(max(items.count, 1))"
+            status = String(format: String(localized: "正在导入 %lld/%lld"), Int64(index + 1), Int64(max(items.count, 1)))
 
             if isVideoItem(item) {
                 do {
@@ -69,7 +69,7 @@ final class ProjectWarehouseMovementMediaImportHelper {
                             ProjectWarehouseAttachmentDraft(
                                 fileURL: videoTransfer.fileURL,
                                 title: videoTransfer.originalName,
-                                note: "来源: 相册视频",
+                                note: String(localized: "来源: 相册视频"),
                                 cleanupAfterImport: true
                             )
                         )
@@ -77,16 +77,16 @@ final class ProjectWarehouseMovementMediaImportHelper {
                 } catch let error as ProjectWarehouseVideoTransferError {
                     presentError(error.userMessage)
                 } catch {
-                    presentError("视频导入失败。")
+                    presentError(String(localized: "视频导入失败。"))
                 }
             } else {
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let image = UIImage(data: data) else {
-                    presentError("图片导入失败。")
+                    presentError(String(localized: "图片导入失败。"))
                     completedCount = index + 1
                     continue
                 }
-                imported.append(ProjectWarehouseAttachmentDraft(image: image, title: "相册照片"))
+                imported.append(ProjectWarehouseAttachmentDraft(image: image, title: String(localized: "相册照片")))
             }
 
             completedCount = index + 1
@@ -97,7 +97,7 @@ final class ProjectWarehouseMovementMediaImportHelper {
         }
         selectedItems = []
         completedCount = totalCount
-        status = Task.isCancelled ? "已取消导入" : "导入完成"
+        status = Task.isCancelled ? String(localized: "已取消导入") : String(localized: "导入完成")
         importTask = nil
         isImporting = false
     }

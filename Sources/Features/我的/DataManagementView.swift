@@ -1,10 +1,29 @@
 import SwiftUI
 
-private enum HealthCleanupSection: String, CaseIterable {
-    case health = "健康检查"
-    case storage = "存储清理"
+enum DataManagementRoute: Hashable {
+    case export
+    case backup
+    case restore
+    case health
+    case storage
+    case audit
+}
 
-    var displayName: String { rawValue }
+private enum HealthCleanupSection: CaseIterable {
+    case health
+    case storage
+    case audit
+
+    var displayName: String {
+        switch self {
+        case .health:
+            return String(localized: "健康检查")
+        case .storage:
+            return String(localized: "存储清理")
+        case .audit:
+            return String(localized: "审计")
+        }
+    }
 
     var icon: String {
         switch self {
@@ -12,36 +31,53 @@ private enum HealthCleanupSection: String, CaseIterable {
             return "stethoscope"
         case .storage:
             return "internaldrive"
+        case .audit:
+            return "checklist.checked"
         }
     }
 
     var summary: String {
         switch self {
         case .health:
-            return "扫描缺失文件、无效关联与孤立文件，并支持一键修复。"
+            return String(localized: "扫描缺失文件、无效关联与孤立文件，并支持一键修复。")
         case .storage:
-            return "查看照片/视频/CAD/备份/历史计算占用，支持按项目清理附件文件。"
+            return String(localized: "查看照片/视频/CAD/备份/历史计算占用，支持按项目清理附件文件。")
+        case .audit:
+            return String(localized: "查看导入、恢复、清理、修复、删除等高风险操作记录。")
         }
     }
 
-    static func from(route: String?) -> Self {
+    static func from(route: DataManagementRoute?) -> Self {
         guard let route else { return .health }
         switch route {
-        case "存储清理", "存储", "空间清理":
+        case .storage:
             return .storage
+        case .audit:
+            return .audit
         default:
             return .health
         }
     }
 }
 
-private enum DataManagementTab: String, CaseIterable {
-    case export = "导出"
-    case backup = "备份"
-    case restore = "导入恢复"
-    case healthAndCleanup = "体检与清理"
+private enum DataManagementTab: CaseIterable {
+    case export
+    case backup
+    case restore
+    case healthAndCleanup
 
-    var displayName: String { rawValue }
+    var displayName: String {
+        switch self {
+        case .export:
+            return String(localized: "导出")
+        case .backup:
+            return String(localized: "备份")
+        case .restore:
+            return String(localized: "导入恢复")
+        case .healthAndCleanup:
+            return String(localized: "体检与清理")
+        }
+    }
 
     var icon: String {
         switch self {
@@ -59,31 +95,27 @@ private enum DataManagementTab: String, CaseIterable {
     var summary: String {
         switch self {
         case .export:
-            return "按项目或日期筛选后导出 CSV / Excel / PDF / ZIP。"
+            return String(localized: "按项目或日期筛选后导出 CSV / Excel / PDF / ZIP。")
         case .backup:
-            return "创建本地或 iCloud 备份，并查看备份体积与恢复建议。"
+            return String(localized: "创建本地或 iCloud 备份，并查看备份体积与恢复建议。")
         case .restore:
-            return "导入备份并预览差异，可选择合并或覆盖当前数据。"
+            return String(localized: "导入备份并预览差异，可选择合并或覆盖当前数据。")
         case .healthAndCleanup:
-            return "统一查看健康检查和存储占用，集中完成体检、修复与清理。"
+            return String(localized: "统一查看健康检查和存储占用，集中完成体检、修复与清理。")
         }
     }
 
-    static func from(route: String?) -> Self {
+    static func from(route: DataManagementRoute?) -> Self {
         guard let route else { return .backup }
         switch route {
-        case "导出", "导出数据":
+        case .export:
             return .export
-        case "备份", "数据备份":
+        case .backup:
             return .backup
-        case "导入恢复", "恢复", "导入":
+        case .restore:
             return .restore
-        case "健康检查", "数据健康":
+        case .health, .storage, .audit:
             return .healthAndCleanup
-        case "存储清理", "存储", "空间清理":
-            return .healthAndCleanup
-        default:
-            return DataManagementTab(rawValue: route) ?? .backup
         }
     }
 }
@@ -93,10 +125,12 @@ struct DataManagementView: View {
     @State private var selectedTab: DataManagementTab
     @State private var healthCleanupSection: HealthCleanupSection
     @State private var showClearHistoryConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
-    init(initialTab: String? = nil) {
-        _selectedTab = State(initialValue: DataManagementTab.from(route: initialTab))
-        _healthCleanupSection = State(initialValue: HealthCleanupSection.from(route: initialTab))
+    init(initialRoute: DataManagementRoute? = nil) {
+        _selectedTab = State(initialValue: DataManagementTab.from(route: initialRoute))
+        _healthCleanupSection = State(initialValue: HealthCleanupSection.from(route: initialRoute))
     }
 
     private var historyTrimCount: Int {
@@ -116,7 +150,7 @@ struct DataManagementView: View {
 
     var body: some View {
         VStack(spacing: AppSpacing.normal) {
-            Picker("数据管理", selection: $selectedTab) {
+            Picker(String(localized: "数据管理"), selection: $selectedTab) {
                 ForEach(DataManagementTab.allCases, id: \.self) { tab in
                     Text(tab.displayName).tag(tab)
                 }
@@ -140,23 +174,32 @@ struct DataManagementView: View {
             if !store.historyRecords.isEmpty {
                 VStack(alignment: .leading, spacing: AppSpacing.tight * 0.6) {
                     HStack(spacing: AppSpacing.tight) {
-                        Label("计算历史 \(store.historyRecords.count) 条", systemImage: "clock.arrow.circlepath")
+                        Label(
+                            String(format: String(localized: "计算历史 %lld 条"), Int64(store.historyRecords.count)),
+                            systemImage: "clock.arrow.circlepath"
+                        )
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("清空计算历史", role: .destructive) {
+                        Button(String(localized: "清空计算历史"), role: .destructive) {
                             showClearHistoryConfirm = true
                         }
                         .font(.caption.weight(.semibold))
                     }
                     HStack(spacing: AppSpacing.tight) {
-                        Text("保留策略：每工具最近 \(store.historyRetentionPerToolLimit) 条，总计最多 \(store.historyRetentionTotalLimit) 条")
+                        Text(
+                            String(
+                                format: String(localized: "保留策略：每工具最近 %lld 条，总计最多 %lld 条"),
+                                Int64(store.historyRetentionPerToolLimit),
+                                Int64(store.historyRetentionTotalLimit)
+                            )
+                        )
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
                         if historyTrimCount > 0 {
-                            Button("按策略清理 \(historyTrimCount) 条") {
-                                store.enforceCalculationHistoryRetention()
+                            Button(String(format: String(localized: "按策略清理 %lld 条"), Int64(historyTrimCount))) {
+                                trimCalculationHistoryWithUndo()
                             }
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.appWarning)
@@ -180,17 +223,21 @@ struct DataManagementView: View {
             }
             .id(selectedTab)
         }
-        .navigationTitle("数据管理")
+        .navigationTitle(String(localized: "数据管理"))
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("清空所有计算历史？", isPresented: $showClearHistoryConfirm) {
-            Button("清空", role: .destructive) { store.clearCalculationHistory() }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog(String(localized: "清空所有计算历史？"), isPresented: $showClearHistoryConfirm) {
+            Button(String(localized: "清空"), role: .destructive) { clearCalculationHistoryWithUndo() }
+            Button(String(localized: "取消"), role: .cancel) {}
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
     private var healthAndCleanupContent: some View {
         VStack(spacing: AppSpacing.normal) {
-            Picker("体检与清理", selection: $healthCleanupSection) {
+            Picker(String(localized: "体检与清理"), selection: $healthCleanupSection) {
                 ForEach(HealthCleanupSection.allCases, id: \.self) { tab in
                     Text(tab.displayName).tag(tab)
                 }
@@ -216,9 +263,55 @@ struct DataManagementView: View {
                     DataHealthView(showsNavigationTitle: false)
                 case .storage:
                     StorageCleanupCenterView(showsNavigationTitle: false)
+                case .audit:
+                    OperationAuditLogView(showsNavigationTitle: false)
                 }
             }
             .id(healthCleanupSection)
         }
+    }
+
+    private func clearCalculationHistoryWithUndo() {
+        let count = store.historyRecords.count
+        let deletion = store.clearCalculationHistory(
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "清空计算历史 %lld 条"), Int64(count)),
+                source: "DataManagementView"
+            )
+        )
+        queueHistoryDeletion(
+            deletion,
+            message: String(format: String(localized: "已清空 %lld 条计算历史"), Int64(deletion.deletedCount))
+        )
+    }
+
+    private func trimCalculationHistoryWithUndo() {
+        let count = historyTrimCount
+        let deletion = store.enforceCalculationHistoryRetention(
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "按保留策略清理计算历史 %lld 条"), Int64(count)),
+                source: "DataManagementView"
+            )
+        )
+        queueHistoryDeletion(
+            deletion,
+            message: String(format: String(localized: "已按策略清理 %lld 条计算历史"), Int64(deletion.deletedCount))
+        )
+    }
+
+    private func queueHistoryDeletion(_ deletion: DataStoreRemovalResult<HistoryRecord>, message: String) {
+        guard !deletion.isEmpty else { return }
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: message,
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreHistoryRecords(from: deletion)
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
     }
 }

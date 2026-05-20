@@ -14,7 +14,7 @@ struct ProjectContactsView: View {
     }
 
     var body: some View {
-        Section(String(localized: "联系人 (\(filteredContacts.count))")) {
+        Section(String(format: String(localized: "联系人 (%lld)"), Int64(filteredContacts.count))) {
             if !filteredContacts.isEmpty {
                 Button(action: onAdd) {
                     Label("添加联系人", systemImage: "person.crop.circle.badge.plus")

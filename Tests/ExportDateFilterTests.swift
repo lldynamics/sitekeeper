@@ -120,9 +120,6 @@ struct ExportDateFilterTests {
         let note = QuickNote(title: "test", content: "", projectId: nil, createdAt: "2025-04-12 09:00", updatedAt: "2025-04-12 09:00", attachments: [])
         #expect(Formatters.dateTime.date(from: note.updatedAt) != nil)
 
-        // LightingCircuitPlan - updatedAt
-        let plan = LightingCircuitPlan(name: "test", projectId: nil, supplyType: .singlePhase, voltage: "220", powerFactor: "0.9", demandFactor: "0.8", breakerFactor: "1.25", wireFactor: "1.0", isCopper: true, loads: [], updatedAt: "2025-04-13 10:00")
-        #expect(Formatters.dateTime.date(from: plan.updatedAt) != nil)
     }
 
     // 项目筛选不串项目（日期筛选后仍按项目隔离）

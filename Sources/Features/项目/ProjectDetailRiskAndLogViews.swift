@@ -5,10 +5,19 @@ struct ProjectDetailRiskStripView: View {
     let unpaidAmount: Double
     let unpricedQuoteCount: Int
     let hasTodayLog: Bool
+    var missingDocumentCategoryCount = 0
+    var documentActionCount = 0
+    var legacyDocumentCount = 0
 
     private var level: Color {
-        if overdueCount > 0 || unpaidAmount > 0 || unpricedQuoteCount > 0 || !hasTodayLog {
-            return overdueCount >= 2 || unpaidAmount > 10000 ? .appRisk : .appPrimaryAction
+        if overdueCount > 0 ||
+            unpaidAmount > 0 ||
+            unpricedQuoteCount > 0 ||
+            missingDocumentCategoryCount > 0 ||
+            documentActionCount > 0 ||
+            legacyDocumentCount > 0 ||
+            !hasTodayLog {
+            return overdueCount >= 2 || unpaidAmount > 10000 || missingDocumentCategoryCount >= 3 ? .appRisk : .appPrimaryAction
         }
         return .appSuccess
     }
@@ -16,13 +25,22 @@ struct ProjectDetailRiskStripView: View {
     private var riskItems: [(text: String, color: Color)] {
         var items: [(String, Color)] = []
         if overdueCount > 0 {
-            items.append((String(localized: "延期 \(overdueCount)"), .appRisk))
+            items.append((String(format: String(localized: "延期 %lld"), Int64(overdueCount)), .appRisk))
         }
         if unpaidAmount > 0 {
-            items.append((String(localized: "未收 \(ReportBuilder.money(unpaidAmount))"), .appPrimaryAction))
+            items.append((String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)), .appPrimaryAction))
         }
         if unpricedQuoteCount > 0 {
-            items.append((String(localized: "待补报价 \(unpricedQuoteCount)"), .appPrimaryAction))
+            items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .appPrimaryAction))
+        }
+        if missingDocumentCategoryCount > 0 {
+            items.append((String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)), .appWarning))
+        }
+        if documentActionCount > 0 {
+            items.append((String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)), .appPrimaryAction))
+        }
+        if legacyDocumentCount > 0 {
+            items.append((String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)), .appWarning))
         }
         if !hasTodayLog {
             items.append((String(localized: "今日日志未写"), .appRisk))
@@ -57,7 +75,7 @@ struct ProjectDetailRiskStripView: View {
                 }
             }
             .accessibilityElement(children: .combine)
-            .accessibilityHint(String(localized: "用于快速判断延期、回款、报价和日志填写风险"))
+            .accessibilityHint(String(localized: "用于快速判断延期、回款、报价、日志和资料缺项风险"))
         }
     }
 }
@@ -119,12 +137,21 @@ struct ProjectDetailLogRowView: View {
                     .lineLimit(1)
             }
             if !log.photoAttachments.isEmpty {
-                Label(String(localized: "\(log.photoAttachments.count) 张照片"), systemImage: "camera.fill")
+                Label(
+                    String(format: String(localized: "%lld 张照片"), Int64(log.photoAttachments.count)),
+                    systemImage: "camera.fill"
+                )
                     .font(.caption2)
                     .foregroundStyle(Color.appDoc)
             }
             if !log.linkedConstructionMethodIDs.isEmpty {
-                Label(String(localized: "关联工艺 \(log.linkedConstructionMethodIDs.count) 条"), systemImage: "link.badge.plus")
+                Label(
+                    String(
+                        format: String(localized: "关联工艺 %lld 条"),
+                        Int64(log.linkedConstructionMethodIDs.count)
+                    ),
+                    systemImage: "link.badge.plus"
+                )
                     .font(.caption2)
                     .foregroundStyle(Color.appPrimaryAction)
             }

@@ -12,13 +12,13 @@ struct DataHealthPhotoTests {
 
         let pid = UUID()
         let project = Project(id: pid, name: "test project", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        store.projects.append(project)
+        store.appendProject(project)
 
         // 创建一个有待办但没有实际照片文件的待办
         var todo = SiteTodo(title: "整改检查", priority: .high, issueType: .safety, projectId: pid)
         todo.rectificationBeforePhotoFileName = "nonexistent_before.jpg"
         todo.rectificationAfterPhotoFileName = "nonexistent_after.jpg"
-        store.siteTodos.append(todo)
+        store.appendSiteTodo(todo)
 
         // 验证缺失检测逻辑
         let logPhotoNames = store.dailyLogs.flatMap(\.allPhotoFileNames)
@@ -37,23 +37,25 @@ struct DataHealthPhotoTests {
 
         let pid = UUID()
         let project = Project(id: pid, name: "repair test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        store.projects.append(project)
+        store.appendProject(project)
 
         var todo = SiteTodo(title: "安全整改", priority: .high, issueType: .safety, projectId: pid)
         todo.rectificationBeforePhotoFileName = "ghost_photo.jpg"
-        store.siteTodos.append(todo)
+        store.appendSiteTodo(todo)
 
         // 模拟修复：清除缺失的照片引用
-        for index in store.siteTodos.indices {
-            if let fileName = store.siteTodos[index].rectificationBeforePhotoFileName,
+        var repairedTodos = store.siteTodos
+        for index in repairedTodos.indices {
+            if let fileName = repairedTodos[index].rectificationBeforePhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
-                store.siteTodos[index].rectificationBeforePhotoFileName = nil
+                repairedTodos[index].rectificationBeforePhotoFileName = nil
             }
-            if let fileName = store.siteTodos[index].rectificationAfterPhotoFileName,
+            if let fileName = repairedTodos[index].rectificationAfterPhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
-                store.siteTodos[index].rectificationAfterPhotoFileName = nil
+                repairedTodos[index].rectificationAfterPhotoFileName = nil
             }
         }
+        store.replaceSiteTodos(repairedTodos)
 
         #expect(store.siteTodos[0].rectificationBeforePhotoFileName == nil)
     }
@@ -65,11 +67,11 @@ struct DataHealthPhotoTests {
 
         let pid = UUID()
         let project = Project(id: pid, name: "combined test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        store.projects.append(project)
+        store.appendProject(project)
 
         var todo = SiteTodo(title: "整改项", priority: .medium, issueType: .quality, projectId: pid)
         todo.rectificationBeforePhotoFileName = "rect_before_combined.jpg"
-        store.siteTodos.append(todo)
+        store.appendSiteTodo(todo)
 
         let logPhotos = store.dailyLogs.flatMap(\.allPhotoFileNames)
         let todoPhotos = store.siteTodos.compactMap(\.rectificationBeforePhotoFileName) + store.siteTodos.compactMap(\.rectificationAfterPhotoFileName)

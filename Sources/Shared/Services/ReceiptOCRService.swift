@@ -4,14 +4,30 @@ import UIKit
 import UniformTypeIdentifiers
 import Vision
 
+struct ReceiptOCRAmountCandidate: Identifiable, Equatable {
+    var amount: String
+    var confidence: Double
+    var sourceLine: String
+
+    var id: String {
+        "\(amount)|\(sourceLine)"
+    }
+
+    var confidencePercent: Int {
+        Int((confidence * 100).rounded())
+    }
+}
+
 struct ReceiptOCRResult {
     var amount: String?
+    var amountCandidates: [ReceiptOCRAmountCandidate]
     var date: String?
     var counterparty: String?
     var invoiceNumber: String?
     var recognizedText: String
 
     var hasStructuredValue: Bool {
+        !amountCandidates.isEmpty ||
         amount?.isEmpty == false ||
         date?.isEmpty == false ||
         counterparty?.isEmpty == false ||
@@ -27,11 +43,11 @@ enum ReceiptOCRServiceError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .unsupportedFile:
-            return "仅支持图片或 PDF 票据识别。"
+            return String(localized: "仅支持图片或 PDF 票据识别。")
         case .recognizeFailed:
-            return "未能识别票据文字，请换一张更清晰的图片。"
+            return String(localized: "未能识别票据文字，请换一张更清晰的图片。")
         case .noStructuredResult:
-            return "已识别到文字，但未提取到金额/日期/单位等关键字段。"
+            return String(localized: "已识别到文字，但未提取到金额/日期/单位等关键字段。")
         }
     }
 }
@@ -130,8 +146,10 @@ enum ReceiptOCRService {
             .split(whereSeparator: \.isNewline)
             .map { normalizeLine(String($0)) }
             .filter { !$0.isEmpty }
+        let amountCandidates = parseAmountCandidates(from: lines)
         return ReceiptOCRResult(
-            amount: parseAmount(from: lines),
+            amount: amountCandidates.first?.amount,
+            amountCandidates: amountCandidates,
             date: parseDate(from: lines),
             counterparty: parseCounterparty(from: lines),
             invoiceNumber: parseInvoiceNumber(from: lines),
@@ -146,19 +164,91 @@ enum ReceiptOCRService {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private static func parseAmount(from lines: [String]) -> String? {
-        let amountKeywords = ["价税合计", "合计", "金额", "小写", "实收", "实付", "收款金额", "付款金额", "含税金额"]
-        for line in lines where amountKeywords.contains(where: { line.contains($0) }) {
-            if let best = numberCandidates(in: line).max() {
-                return moneyText(from: best)
+    private static func parseAmountCandidates(from lines: [String]) -> [ReceiptOCRAmountCandidate] {
+        let keywordWeights: [(String, Double)] = [
+            ("价税合计", 0.72),
+            ("收款金额", 0.70),
+            ("付款金额", 0.70),
+            ("合计", 0.66),
+            ("含税金额", 0.64),
+            ("实收", 0.60),
+            ("实付", 0.60),
+            ("金额", 0.58),
+            ("应收", 0.56),
+            ("应付", 0.56),
+            ("小写", 0.55)
+        ]
+        var bestByAmount: [String: (amount: Decimal, score: Double, sourceLine: String)] = [:]
+
+        for line in lines where !line.contains("年") {
+            let numbers = numberCandidates(in: line)
+                .filter { $0 > 0 && $0 < 100_000_000 }
+            guard !numbers.isEmpty else { continue }
+
+            var baseScore = 0.18
+            for (keyword, weight) in keywordWeights where line.contains(keyword) {
+                baseScore = max(baseScore, weight)
+            }
+            if line.contains("￥") || line.contains("¥") || line.contains("元") {
+                baseScore += 0.08
+            }
+            if line.contains("%") || line.contains("税率") {
+                baseScore -= 0.12
+            }
+            if line.contains("数量") || line.contains("单价") {
+                baseScore -= 0.08
+            }
+
+            for amount in numbers {
+                let score = clamped(baseScore + magnitudeConfidence(for: amount), minValue: 0.05, maxValue: 0.99)
+                let amountText = moneyText(from: amount)
+                if let existing = bestByAmount[amountText], existing.score >= score {
+                    continue
+                }
+                bestByAmount[amountText] = (amount, score, line)
             }
         }
-        let fallback = lines
-            .filter { !$0.contains("年") }
-            .flatMap(numberCandidates(in:))
-            .filter { $0 > 0 && $0 < 100_000_000 }
-        guard let maxNumber = fallback.max() else { return nil }
-        return moneyText(from: maxNumber)
+
+        return bestByAmount
+            .values
+            .sorted { lhs, rhs in
+                if lhs.score == rhs.score {
+                    return lhs.amount > rhs.amount
+                }
+                return lhs.score > rhs.score
+            }
+            .prefix(5)
+            .map { value in
+                ReceiptOCRAmountCandidate(
+                    amount: moneyText(from: value.amount),
+                    confidence: value.score,
+                    sourceLine: value.sourceLine
+                )
+            }
+    }
+
+    private static func magnitudeConfidence(for amount: Decimal) -> Double {
+        let value = NSDecimalNumber(decimal: amount).doubleValue
+        switch value {
+        case ..<1:
+            return 0.12
+        case ..<10:
+            return 0.20
+        case ..<100:
+            return 0.28
+        case ..<1_000:
+            return 0.34
+        case ..<10_000:
+            return 0.40
+        case ..<1_000_000:
+            return 0.36
+        default:
+            return 0.26
+        }
+    }
+
+    private static func clamped(_ value: Double, minValue: Double, maxValue: Double) -> Double {
+        min(max(value, minValue), maxValue)
     }
 
     private static func parseDate(from lines: [String]) -> String? {

@@ -1,6 +1,63 @@
 import SwiftUI
 import UIKit
 
+enum ProjectDateInput {
+    static func date(from text: String) -> Date? {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
+        return Formatters.parseDateOrDateTime(normalized)
+    }
+
+    static func string(from date: Date) -> String {
+        Formatters.date.string(from: date)
+    }
+
+    static func normalizedStorageText(_ text: String) -> String {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return "" }
+        return date(from: normalized).map(string(from:)) ?? normalized
+    }
+}
+
+struct OptionalProjectDatePicker: View {
+    private let title: String
+    private let emptyToggleTitle: String
+    @Binding private var text: String
+    @State private var hasDate: Bool
+    @State private var selectedDate: Date
+
+    init(_ title: String, text: Binding<String>, defaultDate: Date = Date()) {
+        self.title = title
+        self.emptyToggleTitle = String(format: String(localized: "填写%@"), title)
+        _text = text
+        let parsed = ProjectDateInput.date(from: text.wrappedValue)
+        _hasDate = State(initialValue: parsed != nil)
+        _selectedDate = State(initialValue: parsed ?? defaultDate)
+    }
+
+    var body: some View {
+        Toggle(emptyToggleTitle, isOn: Binding(
+            get: { hasDate },
+            set: { newValue in
+                hasDate = newValue
+                text = newValue ? ProjectDateInput.string(from: selectedDate) : ""
+            }
+        ))
+        if hasDate {
+            DatePicker(title, selection: Binding(
+                get: { selectedDate },
+                set: { newValue in
+                    selectedDate = newValue
+                    text = ProjectDateInput.string(from: newValue)
+                }
+            ), displayedComponents: .date)
+            .onAppear {
+                text = ProjectDateInput.string(from: selectedDate)
+            }
+        }
+    }
+}
+
 enum ProjectDetailMode: String, CaseIterable {
     case overview
     case records
@@ -14,11 +71,11 @@ enum ProjectDetailMode: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .overview: "概览"
-        case .records: "现场"
-        case .assets: "资料"
-        case .finance: "成本"
-        case .timeline: "时间线"
+        case .overview: String(localized: "概览")
+        case .records: String(localized: "现场")
+        case .assets: String(localized: "资料")
+        case .finance: String(localized: "成本")
+        case .timeline: String(localized: "时间线")
         }
     }
 }
@@ -36,9 +93,9 @@ enum DrawingListFilter: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .all: "全部"
-        case .current: "当前版"
-        case .withIssue: "有问题"
+        case .all: String(localized: "全部")
+        case .current: String(localized: "当前版")
+        case .withIssue: String(localized: "有问题")
         }
     }
 }
@@ -75,9 +132,9 @@ struct ProjectDrawingTimelineSheet: View {
             List {
                 if drawings.isEmpty {
                     ContentUnavailableView(
-                        "暂无版本记录",
+                        String(localized: "暂无版本记录"),
                         systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90",
-                        description: Text("同名图纸导入新版本后，可在这里查看版本时间线。")
+                        description: Text(String(localized: "同名图纸导入新版本后，可在这里查看版本时间线。"))
                     )
                 } else {
                     ForEach(drawings) { drawing in
@@ -85,7 +142,7 @@ struct ProjectDrawingTimelineSheet: View {
                             HStack {
                                 Text(drawing.version).font(.callout.weight(.semibold))
                                 if drawing.isCurrentVersion {
-                                    Text("当前版")
+                                    Text(String(localized: "当前版"))
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(Color.appSuccess)
                                 }
@@ -95,32 +152,32 @@ struct ProjectDrawingTimelineSheet: View {
                                     .foregroundStyle(.secondary)
                             }
                             if !drawing.relatedLogDate.isEmpty {
-                                Text("关联日志: \(drawing.relatedLogDate)")
+                                Text(String(format: String(localized: "关联日志: %@"), drawing.relatedLogDate))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }
                             if drawing.issueStatus != .none {
-                                Text("状态: \(drawing.issueStatus.displayName)")
+                                Text(String(format: String(localized: "状态: %@"), drawing.issueStatus.displayName))
                                     .font(.caption2.weight(.semibold))
                                     .foregroundStyle(Color.appPrimaryAction)
                             }
                             if !drawing.issueNote.isEmpty {
-                                Text("问题: \(drawing.issueNote)")
+                                Text(String(format: String(localized: "问题: %@"), drawing.issueNote))
                                     .font(.caption2)
                                     .foregroundStyle(.appRisk)
                             }
                             HStack(spacing: 16) {
-                                Button("预览") {
+                                Button(String(localized: "预览")) {
                                     onPreview(drawing)
                                 }
                                 .font(.caption)
-                                Button("编辑") {
+                                Button(String(localized: "编辑")) {
                                     onEdit(drawing)
                                     dismiss()
                                 }
                                 .font(.caption)
                                 if !drawing.isCurrentVersion {
-                                    Button("设为当前版") {
+                                    Button(String(localized: "设为当前版")) {
                                         onSetCurrent(drawing)
                                     }
                                     .font(.caption)
@@ -131,11 +188,11 @@ struct ProjectDrawingTimelineSheet: View {
                     }
                 }
             }
-            .navigationTitle("\(drawingName) 时间线")
+            .navigationTitle(String(format: String(localized: "%@ 时间线"), drawingName))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "关闭")) { dismiss() }
                 }
             }
         }
@@ -187,26 +244,26 @@ struct ProjectDrawingEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("图纸信息") {
-                    TextField("图纸名称", text: $name)
-                    TextField("版本号（如 V2）", text: $version)
-                    LabeledContent("格式", value: drawing.fileType.uppercased())
-                    LabeledContent("导入时间", value: drawing.importedAt)
-                    Toggle("设为当前版本", isOn: $isCurrentVersion)
-                    TextField("关联日志日期(yyyy-MM-dd)", text: $relatedLogDate)
-                    Picker("问题状态", selection: $issueStatus) {
+                Section(String(localized: "图纸信息")) {
+                    TextField(String(localized: "图纸名称"), text: $name)
+                    TextField(String(localized: "版本号（如 V2）"), text: $version)
+                    LabeledContent(String(localized: "格式"), value: drawing.fileType.uppercased())
+                    LabeledContent(String(localized: "导入时间"), value: drawing.importedAt)
+                    Toggle(String(localized: "设为当前版本"), isOn: $isCurrentVersion)
+                    OptionalProjectDatePicker(String(localized: "关联日志日期"), text: $relatedLogDate)
+                    Picker(String(localized: "问题状态"), selection: $issueStatus) {
                         ForEach(DrawingIssueStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
                         }
                     }
-                    TextField("问题标记", text: $issueNote, axis: .vertical)
+                    TextField(String(localized: "问题标记"), text: $issueNote, axis: .vertical)
                         .lineLimit(2...5)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
                 if isCADSource {
-                    Section("独立文件预览") {
-                        Text("DWG、PDF、DXF 都按独立文件管理和打开，不用同名 PDF/DXF 作为预览代理。")
+                    Section(String(localized: "独立文件预览")) {
+                        Text(String(localized: "DWG、PDF、DXF 都按独立文件管理和打开，不用同名 PDF/DXF 作为预览代理。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -215,29 +272,29 @@ struct ProjectDrawingEditSheet: View {
                     Button {
                         onPreview(drawing)
                     } label: {
-                        Label("预览图纸", systemImage: "eye.fill")
+                        Label(String(localized: "预览图纸"), systemImage: "eye.fill")
                     }
                 }
                 Section {
-                    Button("删除图纸", role: .destructive) {
+                    Button(String(localized: "删除图纸"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                 }
             }
-            .navigationTitle("图纸详情")
+            .navigationTitle(String(localized: "图纸详情"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         var updated = drawing
                         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.name = trimmed.isEmpty ? drawing.name : trimmed
                         updated.version = version
                         updated.isCurrentVersion = isCurrentVersion
-                        updated.relatedLogDate = relatedLogDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.relatedLogDate = ProjectDateInput.normalizedStorageText(relatedLogDate)
                         updated.issueStatus = issueStatus
                         updated.issueNote = issueNote.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.note = note
@@ -246,14 +303,14 @@ struct ProjectDrawingEditSheet: View {
                     }
                 }
             }
-            .alert("删除这份图纸？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这份图纸？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete(drawing)
                     dismiss()
                 }
             } message: {
-                Text("删除后将无法在项目中预览该图纸。")
+                Text(String(localized: "删除后将无法在项目中预览该图纸。"))
             }
         }
     }
@@ -295,53 +352,53 @@ struct MaterialEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("材料名称", text: $name)
-                TextField("数量", text: $quantity).keyboardType(.decimalPad)
-                TextField("单位", text: $unit)
-                TextField("单价", text: $unitPrice).keyboardType(.decimalPad)
-                TextField("规格", text: $specification)
-                TextField("品牌", text: $brand)
-                TextField("供应商", text: $supplier)
-                Picker("采购状态", selection: $purchaseStatus) {
+                TextField(String(localized: "材料名称"), text: $name)
+                TextField(String(localized: "数量"), text: $quantity.numericInput(.quantity)).keyboardType(.decimalPad)
+                TextField(String(localized: "单位"), text: $unit)
+                TextField(String(localized: "单价"), text: $unitPrice.numericInput(.amount)).keyboardType(.decimalPad)
+                TextField(String(localized: "规格"), text: $specification)
+                TextField(String(localized: "品牌"), text: $brand)
+                TextField(String(localized: "供应商"), text: $supplier)
+                Picker(String(localized: "采购状态"), selection: $purchaseStatus) {
                     ForEach(MaterialPurchaseStatus.allCases, id: \.self) { item in
                         Text(item.displayName).tag(item)
                     }
                 }
-                TextField("进场日期(yyyy-MM-dd)", text: $arrivalDate)
-                LabeledContent("金额") {
+                OptionalProjectDatePicker(String(localized: "进场日期"), text: $arrivalDate)
+                LabeledContent(String(localized: "金额")) {
                     Text(ReportBuilder.money(ReportBuilder.number(quantity) * ReportBuilder.number(unitPrice)))
                 }
                 Section {
-                    Button("删除材料", role: .destructive) {
+                    Button(String(localized: "删除材料"), role: .destructive) {
                         onDelete(item.id)
                         dismiss()
                     }
                 }
             }
-            .navigationTitle("编辑材料")
+            .navigationTitle(String(localized: "编辑材料"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         var updated = item
                         updated.name = name
-                        updated.quantity = quantity
+                        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
                         updated.unit = unit
-                        updated.unitPrice = unitPrice
+                        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
                         updated.specification = specification.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.purchaseStatus = purchaseStatus
-                        updated.arrivalDate = arrivalDate.trimmingCharacters(in: .whitespacesAndNewlines)
+                        updated.arrivalDate = ProjectDateInput.normalizedStorageText(arrivalDate)
                         onSave(updated)
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              !InputValidator.nonNegativeNumber(quantity) ||
-                              !unitPrice.isEmpty && !InputValidator.nonNegativeNumber(unitPrice))
+                              !InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid ||
+                              !InputValidator.validate(unitPrice, kind: .amount, requirement: .optionalNonNegative).isValid)
                 }
             }
         }
@@ -386,22 +443,22 @@ struct QuoteEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("项目名称", text: $name)
-                TextField("单价", text: $unitPrice).keyboardType(.decimalPad)
-                TextField("数量", text: $quantity).keyboardType(.decimalPad)
-                TextField("单位", text: $unit)
-                TextField("税率", text: $taxRate).keyboardType(.decimalPad)
-                TextField("折扣", text: $discountRate).keyboardType(.decimalPad)
-                TextField("版本", text: $versionName)
-                Picker("状态", selection: $status) {
+                TextField(String(localized: "项目名称"), text: $name)
+                TextField(String(localized: "单价"), text: $unitPrice.numericInput(.amount)).keyboardType(.decimalPad)
+                TextField(String(localized: "数量"), text: $quantity.numericInput(.quantity)).keyboardType(.decimalPad)
+                TextField(String(localized: "单位"), text: $unit)
+                TextField(String(localized: "税率"), text: $taxRate.numericInput(.taxRate)).keyboardType(.decimalPad)
+                TextField(String(localized: "折扣"), text: $discountRate.numericInput(.discountRate)).keyboardType(.decimalPad)
+                TextField(String(localized: "版本"), text: $versionName)
+                Picker(String(localized: "状态"), selection: $status) {
                     ForEach(QuoteStatus.allCases, id: \.self) { item in
                         Text(item.displayName).tag(item)
                     }
                 }
-                TextField("客户确认日期(yyyy-MM-dd)", text: $customerConfirmedDate)
-                TextField("转合同金额", text: $contractAmount).keyboardType(.decimalPad)
-                TextField("备注", text: $notes)
-                LabeledContent("合计") {
+                OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $customerConfirmedDate)
+                TextField(String(localized: "转合同金额"), text: $contractAmount.numericInput(.amount)).keyboardType(.decimalPad)
+                TextField(String(localized: "备注"), text: $notes)
+                LabeledContent(String(localized: "合计")) {
                     let preview = QuoteItem(
                         id: item.id,
                         name: name,
@@ -420,41 +477,41 @@ struct QuoteEditSheet: View {
                     Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(preview)))
                 }
                 Section {
-                    Button("删除报价", role: .destructive) {
+                    Button(String(localized: "删除报价"), role: .destructive) {
                         onDelete(item.id)
                         dismiss()
                     }
                 }
             }
-            .navigationTitle("编辑报价")
+            .navigationTitle(String(localized: "编辑报价"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         var updated = item
                         updated.name = name
-                        updated.unitPrice = unitPrice
-                        updated.quantity = quantity
+                        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
+                        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
                         updated.unit = unit
-                        updated.taxRate = taxRate
-                        updated.discountRate = discountRate
+                        updated.taxRate = NumericInputSupport.normalizedStorageText(taxRate, kind: .taxRate)
+                        updated.discountRate = NumericInputSupport.normalizedStorageText(discountRate, kind: .discountRate)
                         updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
                         updated.status = status
-                        updated.customerConfirmedDate = customerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.contractAmount = contractAmount
+                        updated.customerConfirmedDate = ProjectDateInput.normalizedStorageText(customerConfirmedDate)
+                        updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.notes = notes
                         onSave(updated)
                         dismiss()
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              !InputValidator.nonNegativeNumber(unitPrice) ||
-                              !InputValidator.nonNegativeNumber(quantity) ||
-                              !InputValidator.nonNegativeNumber(taxRate) ||
-                              !InputValidator.nonNegativeNumber(discountRate) ||
-                              (!contractAmount.isEmpty && !InputValidator.nonNegativeNumber(contractAmount)))
+                              !InputValidator.validate(unitPrice, kind: .amount, requirement: .requiredNonNegative).isValid ||
+                              !InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid ||
+                              !InputValidator.validate(taxRate, kind: .taxRate, requirement: .requiredNonNegative).isValid ||
+                              !InputValidator.validate(discountRate, kind: .discountRate, requirement: .requiredNonNegative).isValid ||
+                              !InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid)
                 }
             }
         }
@@ -487,32 +544,32 @@ struct ProgressEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                TextField("任务", text: $title)
-                TextField("开始日期(yyyy-MM-dd)", text: $startDate)
-                TextField("截止日期(yyyy-MM-dd)", text: $dueDate)
+                TextField(String(localized: "任务"), text: $title)
+                OptionalProjectDatePicker(String(localized: "开始日期"), text: $startDate)
+                OptionalProjectDatePicker(String(localized: "截止日期"), text: $dueDate)
                 Slider(value: $completion, in: 0...1, step: 0.05)
-                LabeledContent("完成率", value: "\(Int(completion * 100))%")
-                TextField("备注", text: $note, axis: .vertical)
+                LabeledContent(String(localized: "完成率"), value: "\(Int(completion * 100))%")
+                TextField(String(localized: "备注"), text: $note, axis: .vertical)
                     .lineLimit(2...4)
                 Section {
-                    Button("删除任务", role: .destructive) {
+                    Button(String(localized: "删除任务"), role: .destructive) {
                         onDelete(item.id)
                         dismiss()
                     }
                 }
             }
-            .navigationTitle("编辑进度")
+            .navigationTitle(String(localized: "编辑进度"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         var updated = item
                         updated.title = title
-                        updated.startDate = startDate
-                        updated.dueDate = dueDate
+                        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
+                        updated.dueDate = ProjectDateInput.normalizedStorageText(dueDate)
                         updated.completion = completion
                         updated.note = note
                         onSave(updated)
@@ -548,7 +605,7 @@ struct ProjectPhotoDetailSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("照片预览") {
+                Section(String(localized: "照片预览")) {
                     if let previewImage {
                         Image(uiImage: previewImage)
                             .resizable()
@@ -556,39 +613,39 @@ struct ProjectPhotoDetailSheet: View {
                             .frame(maxHeight: 360)
                             .frame(maxWidth: .infinity)
                     } else if !didAttemptLoadImage {
-                        ProgressView("加载中…")
+                        ProgressView(String(localized: "加载中…"))
                             .frame(maxWidth: .infinity)
                     } else {
-                        Text("图片已丢失或不可读取")
+                        Text(String(localized: "图片已丢失或不可读取"))
                             .foregroundStyle(.secondary)
                     }
                 }
-                Section("备注") {
-                    Picker("照片标签", selection: $tag) {
+                Section(String(localized: "备注")) {
+                    Picker(String(localized: "照片标签"), selection: $tag) {
                         ForEach(PhotoTag.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("现场备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "现场备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
                 }
                 Section {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(note, tag)
                         dismiss()
                     }
                     .frame(maxWidth: .infinity)
-                    Button("删除照片", role: .destructive) {
+                    Button(String(localized: "删除照片"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                     .frame(maxWidth: .infinity)
                 }
             }
-            .navigationTitle("照片详情")
+            .navigationTitle(String(localized: "照片详情"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "关闭")) { dismiss() }
                 }
             }
             .onAppear {
@@ -598,14 +655,14 @@ struct ProjectPhotoDetailSheet: View {
             .task(id: selectedPhoto?.fileName) {
                 await loadPreviewImage()
             }
-            .alert("删除这张照片？", isPresented: $showDeleteConfirm) {
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这张照片？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete()
                     dismiss()
                 }
-                Button("取消", role: .cancel) {}
+                Button(String(localized: "取消"), role: .cancel) {}
             } message: {
-                Text("该操作仅删除当前照片，不会删除整条日志。")
+                Text(String(localized: "该操作仅删除当前照片，不会删除整条日志。"))
             }
         }
     }
@@ -653,7 +710,7 @@ struct QuickAddSheet: View {
     @State private var laborTeamName = ""
     @State private var laborIsSettled = false
     @State private var laborLines: [QuickAddLaborLine] = [.init()]
-    @State private var content = ""; @State private var weather = "晴"
+    @State private var content = ""; @State private var weather = String(localized: "晴")
     @State private var safety = ""; @State private var materials = ""
     @State private var tomorrowPlan = ""; @State private var qualityIssue = ""
     @State private var rectification = ""; @State private var confirmer = ""
@@ -666,71 +723,71 @@ struct QuickAddSheet: View {
             Form {
                 switch sheet {
                 case .material:
-                    TextField("材料名称", text: $name)
-                    LabeledContent("数量") {
-                        TextField("0", text: $qty)
+                    TextField(String(localized: "材料名称"), text: $name)
+                    LabeledContent(String(localized: "数量")) {
+                        TextField("0", text: $qty.numericInput(.quantity))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("单位") {
-                        TextField("米 / 卷 / 个", text: $unit)
+                    LabeledContent(String(localized: "单位")) {
+                        TextField(String(localized: "米 / 卷 / 个"), text: $unit)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("单价") {
-                        TextField("0", text: $unitPrice)
+                    LabeledContent(String(localized: "单价")) {
+                        TextField("0", text: $unitPrice.numericInput(.amount))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
-                    TextField("规格型号", text: $materialSpecification)
-                    TextField("品牌", text: $materialBrand)
-                    TextField("供应商", text: $materialSupplier)
-                    Picker("采购状态", selection: $materialPurchaseStatus) {
+                    TextField(String(localized: "规格型号"), text: $materialSpecification)
+                    TextField(String(localized: "品牌"), text: $materialBrand)
+                    TextField(String(localized: "供应商"), text: $materialSupplier)
+                    Picker(String(localized: "采购状态"), selection: $materialPurchaseStatus) {
                         ForEach(MaterialPurchaseStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
                         }
                     }
-                    TextField("进场日期（yyyy-MM-dd）", text: $materialArrivalDate)
+                    OptionalProjectDatePicker(String(localized: "进场日期"), text: $materialArrivalDate)
                 case .quote:
-                    TextField("项目名称", text: $name)
-                    LabeledContent("单价 ¥") {
-                        TextField("0", text: $price)
+                    TextField(String(localized: "项目名称"), text: $name)
+                    LabeledContent(String(localized: "单价 ¥")) {
+                        TextField("0", text: $price.numericInput(.amount))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("数量") {
-                        TextField("0", text: $qty)
+                    LabeledContent(String(localized: "数量")) {
+                        TextField("0", text: $qty.numericInput(.quantity))
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                     }
-                    LabeledContent("单位") {
-                        TextField("项 / 米 / 台", text: $unit)
+                    LabeledContent(String(localized: "单位")) {
+                        TextField(String(localized: "项 / 米 / 台"), text: $unit)
                             .multilineTextAlignment(.trailing)
                     }
-                    TextField("版本", text: $quoteVersionName)
-                    Picker("状态", selection: $quoteStatus) {
+                    TextField(String(localized: "版本"), text: $quoteVersionName)
+                    Picker(String(localized: "状态"), selection: $quoteStatus) {
                         ForEach(QuoteStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
                         }
                     }
-                    TextField("客户确认日期（yyyy-MM-dd）", text: $quoteConfirmedDate)
-                    TextField("转合同金额", text: $quoteContractAmount)
+                    OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $quoteConfirmedDate)
+                    TextField(String(localized: "转合同金额"), text: $quoteContractAmount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                 case .log:
-                    DatePicker("日期", selection: $logDate, displayedComponents: .date)
-                    Picker("天气", selection: $weather) {
-                        ForEach(["晴", "多云", "阴", "小雨", "大雨", "雪"], id: \.self) { Text($0).tag($0) }
+                    DatePicker(String(localized: "日期"), selection: $logDate, displayedComponents: .date)
+                    Picker(String(localized: "天气"), selection: $weather) {
+                        ForEach([String(localized: "晴"), String(localized: "多云"), String(localized: "阴"), String(localized: "小雨"), String(localized: "大雨"), String(localized: "雪")], id: \.self) { Text($0).tag($0) }
                     }
-                    TextField("人数", text: $workers)
-                    TextField("内容", text: $content, axis: .vertical).lineLimit(3...6)
-                    TextField("安全事项", text: $safety, axis: .vertical).lineLimit(2...4)
-                    TextField("材料进场", text: $materials, axis: .vertical).lineLimit(2...4)
-                    TextField("明日计划", text: $tomorrowPlan, axis: .vertical).lineLimit(2...4)
-                    TextField("质量问题", text: $qualityIssue, axis: .vertical).lineLimit(2...4)
-                    TextField("整改记录", text: $rectification, axis: .vertical).lineLimit(2...4)
-                    TextField("现场确认人", text: $confirmer)
-                    Section("关联施工工艺") {
+                    TextField(String(localized: "人数"), text: $workers)
+                    TextField(String(localized: "内容"), text: $content, axis: .vertical).lineLimit(3...6)
+                    TextField(String(localized: "安全事项"), text: $safety, axis: .vertical).lineLimit(2...4)
+                    TextField(String(localized: "材料进场"), text: $materials, axis: .vertical).lineLimit(2...4)
+                    TextField(String(localized: "明日计划"), text: $tomorrowPlan, axis: .vertical).lineLimit(2...4)
+                    TextField(String(localized: "质量问题"), text: $qualityIssue, axis: .vertical).lineLimit(2...4)
+                    TextField(String(localized: "整改记录"), text: $rectification, axis: .vertical).lineLimit(2...4)
+                    TextField(String(localized: "现场确认人"), text: $confirmer)
+                    Section(String(localized: "关联施工工艺")) {
                         if constructionMethods.isEmpty {
-                            Text("暂无可关联工艺，请先在施工工艺库新增条目。")
+                            Text(String(localized: "暂无可关联工艺，请先在施工工艺库新增条目。"))
                                 .font(.footnote)
                                 .foregroundStyle(.secondary)
                         } else {
@@ -753,13 +810,13 @@ struct QuickAddSheet: View {
                         }
                     }
                 case .labor:
-                    DatePicker("日期", selection: $laborDate, displayedComponents: .date)
-                    TextField("班组（可选）", text: $laborTeamName)
-                    Toggle("已结算", isOn: $laborIsSettled)
+                    DatePicker(String(localized: "日期"), selection: $laborDate, displayedComponents: .date)
+                    TextField(String(localized: "班组（可选）"), text: $laborTeamName)
+                    Toggle(String(localized: "已结算"), isOn: $laborIsSettled)
                     ForEach($laborLines) { $line in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("工种 \(laborLineTitle(for: line.id))")
+                                Text(String(format: String(localized: "工种 %@"), laborLineTitle(for: line.id)))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                                 Spacer()
@@ -772,31 +829,31 @@ struct QuickAddSheet: View {
                                     .buttonStyle(.plain)
                                 }
                             }
-                            TextField("工种", text: $line.workType)
+                            TextField(String(localized: "工种"), text: $line.workType)
                             HStack(spacing: 10) {
-                                TextField("人数", text: $line.workers)
+                                TextField(String(localized: "人数"), text: $line.workers.numericInput(.quantity))
                                     .keyboardType(.numberPad)
-                                TextField("工时 (h)", text: $line.hours)
+                                TextField(String(localized: "工时 (h)"), text: $line.hours.numericInput(.days))
                                     .keyboardType(.decimalPad)
                             }
-                            TextField("工价（每工时）", text: $line.unitRate)
+                            TextField(String(localized: "工价（每工时）"), text: $line.unitRate.numericInput(.laborRate))
                                 .keyboardType(.decimalPad)
-                            TextField("备注", text: $line.note)
+                            TextField(String(localized: "备注"), text: $line.note)
                         }
                         .padding(.vertical, 2)
                     }
                     Button {
                         laborLines.append(.init())
                     } label: {
-                        Label("添加工种", systemImage: "plus.circle")
+                        Label(String(localized: "添加工种"), systemImage: "plus.circle")
                     }
                 }
             }
             .navigationTitle(sheetTitle).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         if save() {
                             dismiss()
                         }
@@ -811,10 +868,10 @@ struct QuickAddSheet: View {
 
     private var sheetTitle: String {
         switch sheet {
-        case .material: return "添加材料"
-        case .quote: return "添加报价"
-        case .log: return "写施工日志"
-        case .labor: return "记人工"
+        case .material: return String(localized: "添加材料")
+        case .quote: return String(localized: "添加报价")
+        case .log: return String(localized: "写施工日志")
+        case .labor: return String(localized: "记人工")
         }
     }
 
@@ -825,14 +882,14 @@ struct QuickAddSheet: View {
             store.appendMaterialItem(
                 MaterialItem(
                     name: name,
-                    quantity: qty,
+                    quantity: NumericInputSupport.normalizedStorageText(qty, kind: .quantity),
                     unit: unit,
-                    unitPrice: unitPrice,
+                    unitPrice: NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount),
                     specification: materialSpecification.trimmingCharacters(in: .whitespacesAndNewlines),
                     brand: materialBrand.trimmingCharacters(in: .whitespacesAndNewlines),
                     supplier: materialSupplier.trimmingCharacters(in: .whitespacesAndNewlines),
                     purchaseStatus: materialPurchaseStatus,
-                    arrivalDate: materialArrivalDate.trimmingCharacters(in: .whitespacesAndNewlines),
+                    arrivalDate: ProjectDateInput.normalizedStorageText(materialArrivalDate),
                     projectId: projectId
                 )
             )
@@ -843,16 +900,16 @@ struct QuickAddSheet: View {
             store.appendQuoteItem(
                 QuoteItem(
                     name: name,
-                    unitPrice: price,
-                    quantity: qty,
+                    unitPrice: NumericInputSupport.normalizedStorageText(price, kind: .amount),
+                    quantity: NumericInputSupport.normalizedStorageText(qty, kind: .quantity),
                     unit: unit,
                     notes: "",
                     taxRate: "0",
                     discountRate: "0",
                     versionName: quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : quoteVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
                     status: quoteStatus,
-                    customerConfirmedDate: quoteConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
-                    contractAmount: quoteContractAmount,
+                    customerConfirmedDate: ProjectDateInput.normalizedStorageText(quoteConfirmedDate),
+                    contractAmount: NumericInputSupport.normalizedStorageText(quoteContractAmount, kind: .amount),
                     projectId: projectId
                 )
             )
@@ -890,9 +947,9 @@ struct QuickAddSheet: View {
                 store.appendLaborRecord(
                     LaborRecord(
                         date: date,
-                        workers: workers,
-                        hours: hours,
-                        unitRate: unitRate,
+                        workers: NumericInputSupport.normalizedStorageText(workers, kind: .quantity),
+                        hours: NumericInputSupport.normalizedStorageText(hours, kind: .days),
+                        unitRate: NumericInputSupport.normalizedStorageText(unitRate, kind: .laborRate),
                         workType: workType,
                         teamName: teamName,
                         isSettled: laborIsSettled,
@@ -927,9 +984,9 @@ struct QuickAddSheet: View {
             let workers = line.workers.trimmingCharacters(in: .whitespacesAndNewlines)
             let hours = line.hours.trimmingCharacters(in: .whitespacesAndNewlines)
             let unitRate = line.unitRate.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard InputValidator.nonNegativeNumber(workers),
-                  InputValidator.nonNegativeNumber(hours) else { return false }
-            return unitRate.isEmpty || InputValidator.nonNegativeNumber(unitRate)
+            guard InputValidator.validate(workers, kind: .quantity, requirement: .requiredNonNegative).isValid,
+                  InputValidator.validate(hours, kind: .days, requirement: .requiredNonNegative).isValid else { return false }
+            return InputValidator.validate(unitRate, kind: .laborRate, requirement: .optionalNonNegative).isValid
         }
     }
 
@@ -954,7 +1011,7 @@ struct QuickAddSheet: View {
 
     private func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "未命名工艺" : title
+        return title.isEmpty ? String(localized: "未命名工艺") : title
     }
 }
 

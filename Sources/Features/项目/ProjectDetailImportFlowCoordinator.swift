@@ -5,13 +5,15 @@ import QuickLook
 import VisionKit
 
 private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
+    @State private var pendingDocumentImportRequest: ProjectDocumentImportConfirmationRequest?
+
     @Binding var showDrawingImporter: Bool
     let drawingImportTypes: [UTType]
     let onImportDrawings: ([URL]) -> Void
 
     @Binding var showDocumentFileImporter: Bool
     let documentImportTypes: [UTType]
-    let onImportDocuments: ([URL]) -> Void
+    let onImportDocuments: ([URL], ProjectDocumentImportLedgerSettings) -> Void
 
     @Binding var selectedPhotoItem: PhotosPickerItem?
     let onImportPhotoItem: (PhotosPickerItem) async -> Void
@@ -47,10 +49,22 @@ private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
             ) { result in
                 switch result {
                 case .success(let urls):
-                    onImportDocuments(urls)
+                    pendingDocumentImportRequest = ProjectDocumentImportConfirmationRequest(
+                        urls: urls,
+                        defaultSettings: ProjectDocumentImportLedgerSettings(category: .constructionRecord)
+                    )
                 case .failure(let error):
                     StorageIssueLog.record("项目资料导入失败：\(error.localizedDescription)")
                     onPresentImportError("资料导入失败：\(error.localizedDescription)")
+                }
+            }
+            .sheet(item: $pendingDocumentImportRequest) { request in
+                ProjectDocumentImportConfirmationSheet(
+                    urls: request.urls,
+                    defaultSettings: request.defaultSettings
+                ) { settings in
+                    onImportDocuments(request.urls, settings)
+                    pendingDocumentImportRequest = nil
                 }
             }
             .onChange(of: selectedPhotoItem) { _, item in
@@ -101,7 +115,7 @@ extension View {
         onImportDrawings: @escaping ([URL]) -> Void,
         showDocumentFileImporter: Binding<Bool>,
         documentImportTypes: [UTType],
-        onImportDocuments: @escaping ([URL]) -> Void,
+        onImportDocuments: @escaping ([URL], ProjectDocumentImportLedgerSettings) -> Void,
         selectedPhotoItem: Binding<PhotosPickerItem?>,
         onImportPhotoItem: @escaping (PhotosPickerItem) async -> Void,
         quickLookURL: Binding<URL?>,

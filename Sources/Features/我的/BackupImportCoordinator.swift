@@ -12,9 +12,14 @@ enum BackupImportCoordinator {
         let ext = selectedURL.pathExtension.isEmpty ? "zip" : selectedURL.pathExtension
         let copiedURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("backup-import-\(UUID().uuidString).\(ext)")
-        if FileManager.default.fileExists(atPath: copiedURL.path) {
-            try FileManager.default.removeItem(at: copiedURL)
-        }
+        _ = try FileOps.removeIfExists(
+            at: copiedURL,
+            context: .init(
+                event: "backup_import.prepare_temp_file",
+                category: .fileStorage,
+                source: "BackupImportCoordinator.copySelectedBackupToSandbox"
+            )
+        )
         try FileManager.default.copyItem(at: selectedURL, to: copiedURL)
         return copiedURL
     }
@@ -23,59 +28,57 @@ enum BackupImportCoordinator {
     static func applyImportMetadata(snapshot: BackupSnapshot, mode: ImportMode, store: DataStore) {
         switch mode {
         case .merge:
-            appendUniqueByID(snapshot.materialItems, to: &store.materialItems)
-            appendUniqueByID(snapshot.quoteItems, to: &store.quoteItems)
-            appendUniqueByID(snapshot.laborRecords, to: &store.laborRecords)
-            appendUniqueByID(snapshot.projects, to: &store.projects)
-            appendUniqueByID(snapshot.dailyLogs, to: &store.dailyLogs)
-            appendUniqueByID(snapshot.historyRecords, to: &store.historyRecords)
-            appendUniqueByID(snapshot.progressTasks, to: &store.progressTasks)
-            appendUniqueByID(snapshot.lightingCircuitPlans, to: &store.lightingCircuitPlans)
-            appendUniqueByID(snapshot.siteTodos, to: &store.siteTodos)
-            appendUniqueByID(snapshot.projectDrawings, to: &store.projectDrawings)
-            appendUniqueByID(snapshot.projectContacts, to: &store.projectContacts)
-            appendUniqueByID(snapshot.projectFinancialRecords, to: &store.projectFinancialRecords)
+            store.mergeMaterialItemsByID(snapshot.materialItems)
+            store.mergeQuoteItemsByID(snapshot.quoteItems)
+            store.mergeLaborRecordsByID(snapshot.laborRecords)
+            store.mergeProjectsByID(snapshot.projects)
+            store.mergeDailyLogsByID(snapshot.dailyLogs)
+            store.mergeHistoryRecordsByID(snapshot.historyRecords)
+            store.mergeProgressTasksByID(snapshot.progressTasks)
+            store.mergeSiteTodosByID(snapshot.siteTodos)
+            store.mergeProjectDrawingsByID(snapshot.projectDrawings)
+            store.mergeProjectContactsByID(snapshot.projectContacts)
+            store.mergeProjectFinancialRecordsByID(snapshot.projectFinancialRecords)
             let migratedLegacyRecords = migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: store.projects)
-            appendUniqueByID(migratedLegacyRecords, to: &store.projectFinancialRecords)
-            appendUniqueByID(snapshot.projectDocuments, to: &store.projectDocuments)
-            appendUniqueByID(snapshot.quickNotes, to: &store.quickNotes)
-            appendUniqueByID(snapshot.projectWarehouseMovements, to: &store.projectWarehouseMovements)
-            appendUniqueByID(snapshot.templates, to: &store.templates)
-            appendUniqueByID(snapshot.materialPriceEntries, to: &store.materialPriceEntries)
-            appendUniqueByID(snapshot.supplierProfiles, to: &store.supplierProfiles)
-            appendUniqueByID(snapshot.constructionMethods, to: &store.constructionMethods)
+            store.mergeProjectFinancialRecordsByID(migratedLegacyRecords)
+            store.mergeProjectDocumentsByID(snapshot.projectDocuments)
+            store.mergeQuickNotesByID(snapshot.quickNotes)
+            store.mergeProjectWarehouseMovementsByID(snapshot.projectWarehouseMovements)
+            store.mergeTemplatesByID(snapshot.templates)
+            store.mergeMaterialPriceEntriesByID(snapshot.materialPriceEntries)
+            store.mergeSupplierProfilesByID(snapshot.supplierProfiles)
+            store.mergeConstructionMethodsByID(snapshot.constructionMethods)
             store.favoriteMaterialKeys = mergeUniqueStrings(existing: store.favoriteMaterialKeys, incoming: snapshot.favoriteMaterialKeys)
             store.recentMaterialKeys = mergeUniqueStrings(existing: store.recentMaterialKeys, incoming: snapshot.recentMaterialKeys)
-            appendUniqueByID(snapshot.userMaterials, to: &store.userMaterials)
-            appendUniqueByID(snapshot.deletedUserMaterials, to: &store.deletedUserMaterials)
+            store.mergeUserMaterialsByID(snapshot.userMaterials)
+            store.mergeDeletedUserMaterialsByID(snapshot.deletedUserMaterials)
             store.hiddenPresetKeys.formUnion(snapshot.hiddenPresetKeys)
         case .overwrite:
-            store.materialItems = snapshot.materialItems
-            store.quoteItems = snapshot.quoteItems
-            store.laborRecords = snapshot.laborRecords
-            store.projects = snapshot.projects
-            store.dailyLogs = snapshot.dailyLogs
-            store.historyRecords = snapshot.historyRecords
-            store.progressTasks = snapshot.progressTasks
-            store.lightingCircuitPlans = snapshot.lightingCircuitPlans
-            store.siteTodos = snapshot.siteTodos
-            store.projectDrawings = snapshot.projectDrawings
-            store.projectContacts = snapshot.projectContacts
-            store.projectFinancialRecords = mergeUniqueByID(
+            store.replaceMaterialItems(snapshot.materialItems)
+            store.replaceQuoteItems(snapshot.quoteItems)
+            store.replaceLaborRecords(snapshot.laborRecords)
+            store.replaceProjects(snapshot.projects)
+            store.replaceDailyLogs(snapshot.dailyLogs)
+            store.replaceHistoryRecords(snapshot.historyRecords)
+            store.replaceProgressTasks(snapshot.progressTasks)
+            store.replaceSiteTodos(snapshot.siteTodos)
+            store.replaceProjectDrawings(snapshot.projectDrawings)
+            store.replaceProjectContacts(snapshot.projectContacts)
+            store.replaceProjectFinancialRecords(mergeUniqueByID(
                 snapshot.projectFinancialRecords,
                 migratedLegacyPaymentRecords(snapshot.legacyPaymentRecords, projects: snapshot.projects)
-            )
-            store.projectDocuments = snapshot.projectDocuments
-            store.quickNotes = snapshot.quickNotes
-            store.projectWarehouseMovements = snapshot.projectWarehouseMovements
-            store.templates = snapshot.templates
-            store.materialPriceEntries = snapshot.materialPriceEntries
-            store.supplierProfiles = snapshot.supplierProfiles
-            store.constructionMethods = snapshot.constructionMethods
+            ))
+            store.replaceProjectDocuments(snapshot.projectDocuments)
+            store.replaceQuickNotes(snapshot.quickNotes)
+            store.replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
+            store.replaceTemplates(snapshot.templates)
+            store.replaceMaterialPriceEntries(snapshot.materialPriceEntries)
+            store.replaceSupplierProfiles(snapshot.supplierProfiles)
+            store.replaceConstructionMethods(snapshot.constructionMethods)
             store.favoriteMaterialKeys = snapshot.favoriteMaterialKeys
             store.recentMaterialKeys = snapshot.recentMaterialKeys
-            store.userMaterials = snapshot.userMaterials
-            store.deletedUserMaterials = snapshot.deletedUserMaterials
+            store.replaceUserMaterials(snapshot.userMaterials)
+            store.replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
             store.hiddenPresetKeys = snapshot.hiddenPresetKeys
         }
         if !snapshot.legacyPaymentRecords.isEmpty {
@@ -85,7 +88,7 @@ enum BackupImportCoordinator {
         sanitizeMaterialProjectReferences(in: store)
     }
 
-    static func cleanupOverwrittenFiles(previous: BackupSnapshot, imported: BackupSnapshot) {
+    static func overwrittenLocalFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
         let oldPhotoNames = photoFileNames(in: previous)
         let newPhotoNames = photoFileNames(in: imported)
         let oldDrawingNames = Set(previous.projectDrawings.map(\.fileName).filter { !$0.isEmpty })
@@ -95,10 +98,60 @@ enum BackupImportCoordinator {
         let oldQuickNoteAttachmentNames = quickNoteAttachmentFileNames(in: previous)
         let newQuickNoteAttachmentNames = quickNoteAttachmentFileNames(in: imported)
 
-        PhotoStorage.delete(fileNames: Array(oldPhotoNames.subtracting(newPhotoNames)))
-        DrawingStorage.delete(fileNames: Array(oldDrawingNames.subtracting(newDrawingNames)))
-        ProjectDocumentStorage.delete(fileNames: Array(oldDocumentNames.subtracting(newDocumentNames)))
-        QuickNoteAttachmentStorage.delete(fileNames: Array(oldQuickNoteAttachmentNames.subtracting(newQuickNoteAttachmentNames)))
+        return BackupFileImpactSummary(
+            photoFileNames: oldPhotoNames.subtracting(newPhotoNames).filter { PhotoStorage.exists(fileName: $0) },
+            drawingFileNames: oldDrawingNames.subtracting(newDrawingNames).filter { DrawingStorage.exists(fileName: $0) },
+            documentFileNames: oldDocumentNames.subtracting(newDocumentNames).filter { ProjectDocumentStorage.exists(fileName: $0) },
+            quickNoteAttachmentFileNames: oldQuickNoteAttachmentNames.subtracting(newQuickNoteAttachmentNames).filter {
+                QuickNoteAttachmentStorage.exists(fileName: $0)
+            }
+        )
+    }
+
+    @discardableResult
+    static func cleanupOverwrittenFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
+        let impact = overwrittenLocalFiles(previous: previous, imported: imported)
+        var cleanupErrors: [String] = []
+
+        func runCleanup(_ label: String, _ cleanup: () throws -> Void) {
+            do {
+                try cleanup()
+            } catch {
+                cleanupErrors.append("\(label): \(error.localizedDescription)")
+            }
+        }
+
+        runCleanup("photo") {
+            try DataStoreDeferredFileCleanup.deletePhotoFilesOrThrow(
+                impact.photoFileNames,
+                summary: "backupImport.photos"
+            )
+        }
+        runCleanup("drawing") {
+            try DataStoreDeferredFileCleanup.deleteDrawingFilesOrThrow(
+                impact.drawingFileNames,
+                summary: "backupImport.drawings"
+            )
+        }
+        runCleanup("document") {
+            try DataStoreDeferredFileCleanup.deleteProjectDocumentFilesOrThrow(
+                impact.documentFileNames,
+                summary: "backupImport.projectDocuments"
+            )
+        }
+        runCleanup("quickNoteAttachment") {
+            try DataStoreDeferredFileCleanup.deleteQuickNoteAttachmentFilesOrThrow(
+                impact.quickNoteAttachmentFileNames,
+                summary: "backupImport.quickNoteAttachments"
+            )
+        }
+
+        if !cleanupErrors.isEmpty {
+            StorageIssueLog.record(
+                "覆盖导入清理旧文件失败：\(cleanupErrors.joined(separator: "；"))"
+            )
+        }
+        return impact
     }
 
     private static func appendUniqueByID<T: Identifiable>(_ incoming: [T], to current: inout [T]) where T.ID: Hashable {
@@ -146,11 +199,13 @@ enum BackupImportCoordinator {
     @MainActor
     private static func sanitizeMaterialProjectReferences(in store: DataStore) {
         let validProjectIds = Set(store.projects.map(\.id))
-        for index in store.materialItems.indices {
-            guard let projectId = store.materialItems[index].projectId,
+        var materialItems = store.materialItems
+        for index in materialItems.indices {
+            guard let projectId = materialItems[index].projectId,
                   !validProjectIds.contains(projectId) else { continue }
-            store.materialItems[index].projectId = nil
+            materialItems[index].projectId = nil
         }
+        store.replaceMaterialItems(materialItems)
     }
 
     private static func photoFileNames(in snapshot: BackupSnapshot) -> Set<String> {

@@ -7,6 +7,7 @@
 - [ ] 清理并确认本次发布的提交范围（无临时调试代码）
 - [ ] 工作区必须干净（`git status --short` 为空）；如需跳过，记录原因
 - [ ] 清理仓库垃圾文件（如 `.DS_Store`），确保预检不拦截
+- [ ] 本地已启用提交前守卫（一次性）：`scripts/dev/install_git_hooks.sh`
 - [ ] 运行一键预检：`scripts/release/preflight.sh`
 
 ## 1. 构建验证

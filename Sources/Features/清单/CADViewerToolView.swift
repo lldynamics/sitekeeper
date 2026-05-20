@@ -66,13 +66,8 @@ struct CADViewerToolView: View {
         }
     }
 
-    private var isLibreDWGUnavailable: Bool {
-        !CADDrawingCapability.isLibreDWGRendererAvailable()
-    }
-
-    private var isLibreDWGUnbound: Bool {
-        CADDrawingCapability.isLibreDWGRendererAvailable() &&
-        !CADRendererProvider.isLibreDWGRendererBound
+    private var isCADKernelReady: Bool {
+        CADDrawingCapability.isCADEngineInstalled() && CADRendererProvider.isRendererBound
     }
 
     private var importStrategyMessage: String {
@@ -229,9 +224,11 @@ struct CADViewerToolView: View {
                         .lineLimit(2)
                     if ProjectDetailDrawingHelper.isCADSource(drawing.fileType) {
                         let status = previewStatus(for: drawing)
-                        Text(status.text)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        if let statusText = status.text {
+                            Text(statusText)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
+                        }
                     }
                 }
                 Spacer(minLength: AppSpacing.tight)
@@ -255,6 +252,8 @@ struct CADViewerToolView: View {
                 fileURL: url,
                 displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
                 fileType: drawing.fileType,
+                importedAt: drawing.importedAt,
+                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
                 textEncoding: drawing.textEncoding,
                 textBigFont: drawing.textBigFont,
                 textSchemeSnapshot: drawing.textSchemeSnapshot,
@@ -359,8 +358,14 @@ struct CADViewerToolView: View {
             versioned.isCurrentVersion = resolved.isCurrentVersion
 
             if let replacement = resolved.replacement {
-                DrawingStorage.delete(fileName: replacement.fileName)
-                store.projectDrawings.removeAll { $0.id == replacement.id }
+                store.removeProjectDrawings(
+                    ids: Set([replacement.id]),
+                    deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
+                        [replacement.fileName],
+                        summary: "cadViewer.importReplacement"
+                    ),
+                    recordsAuditImmediately: true
+                )
                 currentDrawings.removeAll { $0.id == replacement.id }
                 replacedCount += 1
             }
@@ -375,7 +380,7 @@ struct CADViewerToolView: View {
                     }
                 }
             }
-            store.projectDrawings.append(versioned)
+            store.appendProjectDrawing(versioned)
             currentDrawings.append(versioned)
             importedDrawings.append(versioned)
             importedCount += 1
@@ -452,38 +457,35 @@ struct CADViewerToolView: View {
     }
 
     private func updateOverlaySnapshot(drawingID: UUID, snapshotData: String) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadOverlaySnapshotData = snapshotData
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadOverlaySnapshotData = snapshotData }) else { return }
         store.scheduleSave()
     }
 
     private func updateCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadViewState = viewState
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadViewState = viewState }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textEncoding = encoding
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textEncoding = encoding }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textBigFont = profile
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textBigFont = profile }) else { return }
         store.scheduleSave()
     }
 
     private func updateTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
-        guard let index = store.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textSchemeSnapshot = snapshot
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textSchemeSnapshot = snapshot }) else { return }
         store.scheduleSave()
     }
 
     private func updateProjectFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
         guard let index = store.projects.firstIndex(where: { $0.id == projectID }) else { return }
-        store.projects[index].cadFontMappings = mappings
+        var project = store.projects[index]
+        project.cadFontMappings = mappings
+        guard store.updateProject(project) else { return }
         store.scheduleSave()
     }
 
@@ -543,28 +545,16 @@ struct CADViewerToolView: View {
         }
     }
 
-    private func previewStatus(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
+    private func previewStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
         let fileType = drawing.fileType.lowercased()
         if fileType == "dxf" {
-            if isLibreDWGUnavailable {
-                return ("DWG Lite 未接入", false)
-            }
-            if isLibreDWGUnbound {
-                return ("DWG Lite 未绑定", false)
-            }
-            return ("DXF 直览", true)
+            return isCADKernelReady ? ("CAD 本机查看可用", true) : (nil, false)
         }
         if fileType == "pdf" {
             return ("PDF 附件", true)
         }
         if fileType == "dwg" {
-            if isLibreDWGUnavailable {
-                return ("DWG Lite 未接入", false)
-            }
-            if isLibreDWGUnbound {
-                return ("DWG Lite 未绑定", false)
-            }
-            return ("DWG Lite 本地直览", true)
+            return isCADKernelReady ? ("DWG 本机查看", true) : (nil, false)
         }
         return ("文件独立打开", true)
     }

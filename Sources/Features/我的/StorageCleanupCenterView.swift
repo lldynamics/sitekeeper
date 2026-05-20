@@ -2,6 +2,11 @@ import SwiftUI
 
 struct StorageCleanupCenterView: View {
     @Environment(DataStore.self) private var store
+    @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
+    @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
+    @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
+    @AppStorage(UserPreferenceKeys.storageCleanupLargeFileThresholdMB) private var largeFileThresholdMB = StorageCleanupLargeFileThresholdOption.defaultMegabytes
+    @AppStorage(UserPreferenceKeys.storageCleanupTrashRetentionDays) private var cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.defaultDays
     @State private var cloudBackups: [CloudBackupFile] = []
     @State private var cloudBackupError: String?
     @State private var isRefreshingCloudBackups = false
@@ -11,9 +16,9 @@ struct StorageCleanupCenterView: View {
     @State private var pendingCleanupCategory: ProjectStorageCleanupCategory = .all
     @State private var showCleanupProjectAlert = false
     @State private var cleanupStatusMessage = ""
+    @State private var cleanupTrashBatches: [StorageCleanupTrashBatch] = []
 
     private let showsNavigationTitle: Bool
-    private let largeFileThresholdBytes = 5 * 1024 * 1024
     private let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
     private let cadFileExtensions: Set<String> = ["dwg", "dxf"]
 
@@ -33,124 +38,36 @@ struct StorageCleanupCenterView: View {
 
             if let cloudBackupError, !cloudBackupError.isEmpty {
                 Section {
-                    Text("云备份读取失败：\(cloudBackupError)")
+                    Text(String(format: String(localized: "云备份读取失败：%@"), cloudBackupError))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            Section("空间汇总") {
-                ForEach(categorySummaries) { summary in
-                    HStack(spacing: AppSpacing.tight) {
-                        Image(systemName: summary.icon)
-                            .foregroundStyle(summary.tint)
-                            .frame(width: 18, height: 18)
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(summary.title)
-                            Text("\(summary.count) 项")
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(summary.formattedBytes)
-                            .font(.subheadline.weight(.semibold))
-                    }
-                }
-            }
+            cleanupTrashPolicySection
 
-            Section {
-                HStack {
-                    Label("大文件阈值", systemImage: "externaldrive.fill.badge.exclamationmark")
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text(QuickNoteAttachmentStorage.formattedFileSize(largeFileThresholdBytes))
-                        .foregroundStyle(.secondary)
-                }
-            } header: {
-                Text("大文件列表 (\(largeFileItems.count))")
-            } footer: {
-                Text("展示照片、视频、CAD、备份和历史计算中的高占用项。")
-            }
+            cleanupTrashSection
 
-            if largeFileItems.isEmpty {
-                Section {
-                    ContentUnavailableView(
-                        "暂无大文件",
-                        systemImage: "checkmark.seal",
-                        description: Text("当前各类文件都低于阈值。")
-                    )
-                }
-            } else {
-                Section {
-                    ForEach(largeFileItems.prefix(80)) { item in
-                        VStack(alignment: .leading, spacing: 4) {
-                            HStack(spacing: AppSpacing.tight) {
-                                Image(systemName: item.category.icon)
-                                    .foregroundStyle(item.category.tint)
-                                Text(item.title)
-                                    .font(.callout.weight(.medium))
-                                Spacer()
-                                Text(item.formattedBytes)
-                                    .font(.caption.weight(.semibold))
-                            }
-                            HStack(spacing: AppSpacing.tight) {
-                                Text(item.category.displayName)
-                                if let projectName = item.projectName {
-                                    Text(projectName)
-                                }
-                                if !item.detail.isEmpty {
-                                    Text(item.detail)
-                                }
-                            }
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-            }
+            StorageCleanupSummarySection(categorySummaries: categorySummaries)
 
-            Section("按项目清理") {
-                if projectUsages.isEmpty {
-                    Text("暂无可清理项目文件。")
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(projectUsages) { usage in
-                        NavigationLink {
-                            ProjectStorageCleanupDetailView(usage: usage) { category in
-                                pendingCleanupProject = usage
-                                pendingCleanupCategory = category
-                                showCleanupProjectAlert = true
-                            }
-                        } label: {
-                            VStack(alignment: .leading, spacing: 6) {
-                                HStack(alignment: .firstTextBaseline) {
-                                    Text(usage.projectName)
-                                        .font(.callout.weight(.semibold))
-                                    Spacer()
-                                    Text(usage.formattedTotalBytes)
-                                        .font(.caption.weight(.semibold))
-                                        .foregroundStyle(.appWarning)
-                                }
-                                HStack(spacing: AppSpacing.tight) {
-                                    Text("照片 \(QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes))")
-                                    Text("视频 \(QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes))")
-                                    Text("CAD \(QuickNoteAttachmentStorage.formattedFileSize(usage.cadBytes))")
-                                    Text("票据 \(QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes))")
-                                }
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                Text("备份估算 \(usage.formattedBackupEstimatedBytes)")
-                                    .font(.caption2)
-                                    .foregroundStyle(.secondary)
-                            }
-                            .padding(.vertical, 3)
-                        }
-                    }
-                }
+            StorageCleanupLargeFileSections(
+                largeFileThresholdMB: $largeFileThresholdMB,
+                largeFileRuleSuggestionText: largeFileRuleSuggestionText,
+                largeFileItems: largeFileItems
+            )
+
+            StorageCleanupProjectSection(projectUsages: projectUsages) { usage, category in
+                pendingCleanupProject = usage
+                pendingCleanupCategory = category
+                showCleanupProjectAlert = true
             }
         }
-        .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: "存储清理中心"))
+        .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: String(localized: "存储清理中心")))
+        .onAppear {
+            normalizeLargeFileThresholdPreference()
+            normalizeCleanupTrashRetentionPreference()
+            refreshCleanupTrash()
+        }
         .task {
             await refreshCloudBackups()
             await refreshProjectBackupEstimates()
@@ -159,285 +76,167 @@ struct StorageCleanupCenterView: View {
             await refreshProjectBackupEstimates()
         }
         .alert(
-            "清理项目文件？",
+            String(localized: "清理项目文件？"),
             isPresented: $showCleanupProjectAlert,
             presenting: pendingCleanupProject
         ) { usage in
             Button(pendingCleanupCategory.confirmationButtonTitle, role: .destructive) {
                 cleanupProjectFiles(usage, category: pendingCleanupCategory)
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingCleanupProject = nil
             }
         } message: { usage in
-            Text(pendingCleanupCategory.confirmationMessage(projectName: usage.projectName))
+            Text(cleanupConfirmationMessage(for: usage, category: pendingCleanupCategory))
         }
+    }
+
+    private var largeFileThresholdBytes: Int {
+        StorageCleanupLargeFileThresholdOption.bytes(for: largeFileThresholdMB)
+    }
+
+    private var normalizedCleanupTrashRetentionDays: Int {
+        StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
+    }
+
+    private var cleanupTrashRecoveryDeadlineText: String {
+        Formatters.date.string(from: cleanupTrashExpirationDate(from: Date()))
+    }
+
+    private var cleanupTrashPolicySection: some View {
+        Section {
+            Picker(selection: $cleanupTrashRetentionDays) {
+                ForEach(StorageCleanupTrashRetentionOption.allCases) { option in
+                    Text(option.displayName)
+                        .tag(option.days)
+                }
+            } label: {
+                Label(String(localized: "回收站保留时间"), systemImage: "clock.arrow.circlepath")
+                    .foregroundStyle(.secondary)
+            }
+
+            Text(
+                String(
+                    format: String(localized: "之后新清理的文件可恢复至 %@。"),
+                    cleanupTrashRecoveryDeadlineText
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+        } header: {
+            Text(String(localized: "回收站策略"))
+        } footer: {
+            Text(String(localized: "只影响之后新清理的批次；已有回收站批次仍按原到期时间处理。"))
+        }
+    }
+
+    private var cleanupTrashSection: some View {
+        Section {
+            if cleanupTrashBatches.isEmpty {
+                Text(String(localized: "暂无可恢复的清理记录。"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(cleanupTrashBatches) { batch in
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(batch.summary)
+                                .font(.callout.weight(.semibold))
+                            Spacer()
+                            Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.appWarning)
+                        }
+                        Text(
+                            String(
+                                format: String(localized: "可恢复至 %@"),
+                                Formatters.date.string(from: batch.expiresAt)
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                        HStack {
+                            Button {
+                                restoreCleanupTrash(batch)
+                            } label: {
+                                Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                            }
+                            .buttonStyle(.bordered)
+
+                            Button(role: .destructive) {
+                                permanentlyDeleteCleanupTrash(batch)
+                            } label: {
+                                Label(String(localized: "永久删除"), systemImage: "trash")
+                            }
+                            .buttonStyle(.bordered)
+                        }
+                        .font(.caption)
+                    }
+                    .padding(.vertical, 3)
+                }
+            }
+        } header: {
+            Text(String(localized: "清理回收站"))
+        } footer: {
+            Text(
+                String(
+                    format: String(localized: "项目文件清理后会先进入回收站，当前保留 %lld 天。过期批次会在进入本页时自动永久删除。"),
+                    Int64(normalizedCleanupTrashRetentionDays)
+                )
+            )
+        }
+    }
+
+    private var largeFileRuleSuggestionText: String {
+        String(
+            format: String(localized: "建议规则：照片≥%@、视频≥%@、票据资料≥%@ 时优先检查。"),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.photo.bytes),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.video.bytes),
+            QuickNoteAttachmentStorage.formattedFileSize(StorageCleanupLargeFileRuleSuggestion.ticket.bytes)
+        )
+    }
+
+    private var scanResult: StorageCleanupScanResult {
+        StorageCleanupScanner.scan(
+            store: store,
+            cloudBackups: cloudBackups,
+            projectBackupEstimateByID: projectBackupEstimateByID,
+            largeFileThresholdBytes: largeFileThresholdBytes,
+            videoFileExtensions: videoFileExtensions,
+            cadFileExtensions: cadFileExtensions
+        )
     }
 
     private var categorySummaries: [StorageCategorySummary] {
-        [
-            StorageCategorySummary(
-                title: "照片",
-                icon: "photo.fill",
-                tint: .appWarning,
-                bytes: photoEntries.reduce(0) { $0 + $1.bytes },
-                count: photoEntries.count
-            ),
-            StorageCategorySummary(
-                title: "视频",
-                icon: "video.fill",
-                tint: .appPhoto,
-                bytes: videoEntries.reduce(0) { $0 + $1.bytes },
-                count: videoEntries.count
-            ),
-            StorageCategorySummary(
-                title: "CAD 图纸",
-                icon: "compass.drawing",
-                tint: .appDoc,
-                bytes: cadEntries.reduce(0) { $0 + $1.bytes },
-                count: cadEntries.count
-            ),
-            StorageCategorySummary(
-                title: "票据资料",
-                icon: "doc.text.fill",
-                tint: .appRisk,
-                bytes: ticketEntries.reduce(0) { $0 + $1.bytes },
-                count: ticketEntries.count
-            ),
-            StorageCategorySummary(
-                title: "备份（iCloud）",
-                icon: "icloud.and.arrow.up.fill",
-                tint: .appPrimaryAction,
-                bytes: cloudBackups.reduce(0) { $0 + $1.byteSize },
-                count: cloudBackups.count
-            ),
-            StorageCategorySummary(
-                title: "历史计算",
-                icon: "clock.arrow.circlepath",
-                tint: .appSuccess,
-                bytes: historyBytes,
-                count: store.historyRecords.count
-            )
-        ]
+        scanResult.categorySummaries
     }
 
     private var largeFileItems: [StorageLargeFileItem] {
-        var items = (photoEntries + videoEntries + cadEntries + ticketEntries + backupEntries)
-            .filter { $0.bytes >= largeFileThresholdBytes }
-        if historyBytes >= largeFileThresholdBytes {
-            items.append(
-                StorageLargeFileItem(
-                    id: "history-records",
-                    category: .history,
-                    title: "历史计算记录",
-                    detail: "\(store.historyRecords.count) 条",
-                    projectName: nil,
-                    bytes: historyBytes
-                )
-            )
-        }
-        return items.sorted { lhs, rhs in
-            if lhs.bytes != rhs.bytes { return lhs.bytes > rhs.bytes }
-            return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-        }
+        scanResult.largeFileItems
     }
 
     private var projectUsages: [ProjectStorageUsage] {
-        store.projects.compactMap { project in
-            let projectId = project.id
-            let photoBytes = photoEntries
-                .filter { $0.projectId == projectId }
-                .reduce(0) { $0 + $1.bytes }
-            let videoBytes = videoEntries
-                .filter { $0.projectId == projectId }
-                .reduce(0) { $0 + $1.bytes }
-            let cadBytes = cadEntries
-                .filter { $0.projectId == projectId }
-                .reduce(0) { $0 + $1.bytes }
-            let ticketBytes = ticketEntries
-                .filter { $0.projectId == projectId }
-                .reduce(0) { $0 + $1.bytes }
-            let total = photoBytes + videoBytes + cadBytes + ticketBytes
-            guard total > 0 else { return nil }
-            return ProjectStorageUsage(
-                projectId: projectId,
-                projectName: project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名项目" : project.name,
-                photoBytes: photoBytes,
-                videoBytes: videoBytes,
-                cadBytes: cadBytes,
-                ticketBytes: ticketBytes,
-                backupEstimatedBytes: projectBackupEstimateByID[projectId]
-            )
-        }
-        .sorted { lhs, rhs in
-            if lhs.totalBytes != rhs.totalBytes { return lhs.totalBytes > rhs.totalBytes }
-            return lhs.projectName.localizedStandardCompare(rhs.projectName) == .orderedAscending
+        scanResult.projectUsages
+    }
+
+    private func normalizeLargeFileThresholdPreference() {
+        let normalized = StorageCleanupLargeFileThresholdOption.normalizedMegabytes(largeFileThresholdMB)
+        if largeFileThresholdMB != normalized {
+            largeFileThresholdMB = normalized
         }
     }
 
-    private var photoEntries: [StorageLargeFileItem] {
-        var entries: [StorageLargeFileItem] = []
-        var seen = Set<String>()
-        for log in store.dailyLogs {
-            let projectName = projectName(for: log.projectId)
-            for photo in log.photoAttachments {
-                guard seen.insert(photo.fileName).inserted else { continue }
-                let bytes = PhotoStorage.fileSize(for: photo.fileName)
-                guard bytes > 0 else { continue }
-                entries.append(
-                    StorageLargeFileItem(
-                        id: "photo-\(photo.fileName)",
-                        category: .photo,
-                        title: photo.fileName,
-                        detail: log.date,
-                        projectId: log.projectId,
-                        projectName: projectName,
-                        bytes: bytes
-                    )
-                )
-            }
-        }
-        for todo in store.siteTodos {
-            let projectName = projectName(for: todo.projectId)
-            let candidates: [(String?, String)] = [
-                (todo.rectificationBeforePhotoFileName, "整改前"),
-                (todo.rectificationAfterPhotoFileName, "整改后")
-            ]
-            for (fileName, phase) in candidates {
-                guard let fileName, seen.insert(fileName).inserted else { continue }
-                let bytes = PhotoStorage.fileSize(for: fileName)
-                guard bytes > 0 else { continue }
-                entries.append(
-                    StorageLargeFileItem(
-                        id: "photo-\(fileName)",
-                        category: .photo,
-                        title: "\(todo.title) · \(phase)",
-                        detail: fileName,
-                        projectId: todo.projectId,
-                        projectName: projectName,
-                        bytes: bytes
-                    )
-                )
-            }
-        }
-        return entries
-    }
-
-    private var videoEntries: [StorageLargeFileItem] {
-        var entries: [StorageLargeFileItem] = []
-        var seen = Set<String>()
-
-        for note in store.quickNotes {
-            let projectName = projectName(for: note.projectId)
-            for attachment in note.attachments where attachment.attachmentKind == .video {
-                guard seen.insert(attachment.fileName).inserted else { continue }
-                let bytes = QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
-                guard bytes > 0 else { continue }
-                entries.append(
-                    StorageLargeFileItem(
-                        id: "video-\(attachment.fileName)",
-                        category: .video,
-                        title: attachment.displayName,
-                        detail: note.title.isEmpty ? note.createdAt : note.title,
-                        projectId: note.projectId,
-                        projectName: projectName,
-                        bytes: bytes
-                    )
-                )
-            }
-        }
-
-        for document in store.projectDocuments {
-            let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard videoFileExtensions.contains(ext),
-                  !isTicketCategory(document.category),
-                  seen.insert(document.fileName).inserted else { continue }
-            let bytes = ProjectDocumentStorage.fileSize(for: document.fileName)
-            guard bytes > 0 else { continue }
-            entries.append(
-                StorageLargeFileItem(
-                    id: "video-doc-\(document.fileName)",
-                    category: .video,
-                    title: document.title.isEmpty ? document.fileName : document.title,
-                    detail: document.fileName,
-                    projectId: document.projectId,
-                    projectName: projectName(for: document.projectId),
-                    bytes: bytes
-                )
-            )
-        }
-        return entries
-    }
-
-    private var cadEntries: [StorageLargeFileItem] {
-        store.projectDrawings.compactMap { drawing in
-            let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard cadFileExtensions.contains(ext) else { return nil }
-            let bytes = DrawingStorage.fileSize(for: drawing.fileName)
-            guard bytes > 0 else { return nil }
-            return StorageLargeFileItem(
-                id: "cad-\(drawing.fileName)",
-                category: .cad,
-                title: drawing.name.isEmpty ? drawing.fileName : drawing.name,
-                detail: "\(drawing.version) · \(drawing.fileName)",
-                projectId: drawing.projectId,
-                projectName: projectName(for: drawing.projectId),
-                bytes: bytes
-            )
+    private func normalizeCleanupTrashRetentionPreference() {
+        let normalized = StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
+        if cleanupTrashRetentionDays != normalized {
+            cleanupTrashRetentionDays = normalized
         }
     }
 
-    private var ticketEntries: [StorageLargeFileItem] {
-        store.projectDocuments.compactMap { document in
-            guard isTicketCategory(document.category) else { return nil }
-            let bytes = ProjectDocumentStorage.fileSize(for: document.fileName)
-            guard bytes > 0 else { return nil }
-            let title = document.title.trimmingCharacters(in: .whitespacesAndNewlines)
-            return StorageLargeFileItem(
-                id: "ticket-\(document.id.uuidString)",
-                category: .ticket,
-                title: title.isEmpty ? document.fileName : title,
-                detail: "\(document.category.displayName) · \(document.fileName)",
-                projectId: document.projectId,
-                projectName: projectName(for: document.projectId),
-                bytes: bytes
-            )
-        }
-    }
-
-    private var backupEntries: [StorageLargeFileItem] {
-        cloudBackups.map { backup in
-            StorageLargeFileItem(
-                id: "backup-\(backup.id)",
-                category: .backup,
-                title: backup.fileName,
-                detail: backup.formattedModifiedAt,
-                projectName: nil,
-                bytes: backup.byteSize
-            )
-        }
-    }
-
-    private var historyBytes: Int {
-        (try? JSONEncoder().encode(store.historyRecords).count) ?? 0
-    }
-
-    private func projectName(for projectId: UUID?) -> String? {
-        guard let projectId else { return nil }
-        if let project = store.projects.first(where: { $0.id == projectId }) {
-            let trimmed = project.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return trimmed.isEmpty ? "未命名项目" : trimmed
-        }
-        return "未知项目"
-    }
-
-    private func isTicketCategory(_ category: ProjectDocumentCategory) -> Bool {
-        switch category {
-        case .invoice, .receipt, .paymentRequest:
-            return true
-        default:
-            return false
-        }
+    private func cleanupTrashExpirationDate(from date: Date) -> Date {
+        let retentionDays = max(normalizedCleanupTrashRetentionDays, 1)
+        return Calendar.current.date(byAdding: .day, value: retentionDays, to: date)
+            ?? date.addingTimeInterval(TimeInterval(retentionDays * 24 * 60 * 60))
     }
 
     private func refreshCloudBackups() async {
@@ -457,159 +256,291 @@ struct StorageCleanupCenterView: View {
         if let errorMessage, !errorMessage.isEmpty {
             cloudBackups = []
             cloudBackupError = errorMessage
-            StorageIssueLog.record("存储清理中心读取云备份失败：\(errorMessage)")
+            StorageIssueLog.record(String(format: String(localized: "存储清理中心读取云备份失败：%@"), errorMessage))
         } else {
             cloudBackups = backups
             cloudBackupError = nil
         }
     }
 
+    private func cleanupConfirmationMessage(for usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) -> String {
+        let preview = cleanupPreview(for: usage.projectId, category: category)
+        var lines: [String] = [category.confirmationMessage(projectName: usage.projectName)]
+
+        if preview.totalFileCount > 0 {
+            lines.append(String(format: String(localized: "预计删除文件 %lld 个："), Int64(preview.totalFileCount)))
+            for item in preview.fileItems {
+                lines.append(String(format: String(localized: "- %@ %lld 个"), item.title, Int64(item.count)))
+            }
+        } else {
+            lines.append(String(localized: "预计删除文件 0 个。"))
+        }
+
+        lines.append(String(localized: "预计影响记录："))
+        if preview.recordItems.isEmpty {
+            lines.append(String(localized: "- 无关联记录变更"))
+        } else {
+            for item in preview.recordItems {
+                lines.append(String(format: String(localized: "- %@ %lld 条"), item.title, Int64(item.count)))
+            }
+        }
+
+        if !preview.sampleFileNames.isEmpty {
+            let sampleSeparator = String(localized: "、")
+            lines.append(String(format: String(localized: "示例文件：%@"), preview.sampleFileNames.prefix(5).joined(separator: sampleSeparator)))
+        }
+
+        lines.append(
+            String(
+                format: String(localized: "清理后文件将进入回收站，可恢复至 %@（%lld 天内）。"),
+                Formatters.date.string(from: cleanupTrashExpirationDate(from: Date())),
+                Int64(normalizedCleanupTrashRetentionDays)
+            )
+        )
+        lines.append(backupReminderMessage())
+        return lines.joined(separator: "\n")
+    }
+
+    private func cleanupPreview(for projectId: UUID, category: ProjectStorageCleanupCategory) -> CleanupImpactSummary {
+        StorageCleanupScanner.cleanupPreview(
+            store: store,
+            projectId: projectId,
+            category: category,
+            videoFileExtensions: videoFileExtensions,
+            cadFileExtensions: cadFileExtensions
+        )
+    }
+
+    private func backupReminderMessage() -> String {
+        guard let latestDate = latestBackupDateForReminder else {
+            return String(localized: "最近备份：未检测到本机或云备份，建议先执行备份后再清理。")
+        }
+
+        let calendar = Calendar.current
+        let latestDay = calendar.startOfDay(for: latestDate)
+        let today = calendar.startOfDay(for: Date())
+        let daysSinceBackup = max(calendar.dateComponents([.day], from: latestDay, to: today).day ?? 0, 0)
+        let formattedDate = Formatters.dateTime.string(from: latestDate)
+        let reminderDays = max(1, backupHealthReminderDays)
+
+        if daysSinceBackup >= reminderDays {
+            return String(format: String(localized: "最近备份：%@（%lld 天前），建议先备份后再清理。"), formattedDate, Int64(daysSinceBackup))
+        }
+
+        return String(format: String(localized: "最近备份：%@。"), formattedDate)
+    }
+
+    private var latestBackupDateForReminder: Date? {
+        var candidates: [Date] = []
+        if localBackupLastSuccessAt > 0 {
+            candidates.append(Date(timeIntervalSince1970: localBackupLastSuccessAt))
+        }
+        if cloudBackupLastSuccessAt > 0 {
+            candidates.append(Date(timeIntervalSince1970: cloudBackupLastSuccessAt))
+        }
+        if let latestCloudBackup = cloudBackups.first?.modifiedAt {
+            candidates.append(latestCloudBackup)
+        }
+        return candidates.max()
+    }
+
+    private func refreshCleanupTrash() {
+        let purgedCount = StorageCleanupTrashStore.purgeExpiredBatches(now: Date())
+        cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+        if purgedCount > 0 {
+            StorageIssueLog.record(
+                String(
+                    format: String(localized: "清理回收站已自动永久删除 %lld 个过期批次。"),
+                    Int64(purgedCount)
+                )
+            )
+        }
+    }
+
+    private func restoreCleanupTrash(_ batch: StorageCleanupTrashBatch) {
+        OperationAuditLog.record(
+            action: .restore,
+            outcome: .started,
+            summary: String(localized: "恢复清理回收站"),
+            detail: batch.summary,
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try StorageCleanupTrashStore.restore(batch)
+            batch.snapshot.restore(into: store)
+            store.scheduleSave()
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已从清理回收站恢复：%@。"),
+                batch.summary
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .succeeded,
+                summary: String(localized: "恢复清理回收站"),
+                detail: "\(batch.summary) · restored=\(batch.fileCount)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "清理回收站恢复失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .failed,
+                summary: String(localized: "恢复清理回收站"),
+                detail: "\(batch.summary) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
+    private func permanentlyDeleteCleanupTrash(_ batch: StorageCleanupTrashBatch) {
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: String(localized: "永久删除清理回收站"),
+            detail: batch.summary,
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try StorageCleanupTrashStore.permanentlyDelete(batch)
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已永久删除清理回收站批次：%@。"),
+                batch.summary
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .succeeded,
+                summary: String(localized: "永久删除清理回收站"),
+                detail: "\(batch.summary) · deleted=\(batch.fileCount)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "永久删除清理回收站失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .failed,
+                summary: String(localized: "永久删除清理回收站"),
+                detail: "\(batch.summary) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
     private func cleanupProjectFiles(_ usage: ProjectStorageUsage, category: ProjectStorageCleanupCategory) {
         let projectId = usage.projectId
-        let deletedCount: Int
+        let auditDetail = "\(usage.projectName) · \(category.displayName)"
+        let undoSnapshot = StorageCleanupUndoSnapshot.capture(from: store)
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: String(localized: "按项目清理"),
+            detail: auditDetail,
+            source: "StorageCleanupCenterView"
+        )
+        var cleanupPlan = DeferredProjectFileCleanupPlan()
 
         switch category {
         case .photos:
-            deletedCount = cleanupProjectPhotos(projectId)
+            cleanupPlan.merge(cleanupProjectPhotos(projectId))
         case .videos:
-            deletedCount = cleanupProjectVideos(projectId)
+            cleanupPlan.merge(cleanupProjectVideos(projectId))
         case .cad:
-            deletedCount = cleanupProjectCAD(projectId)
+            cleanupPlan.merge(cleanupProjectCAD(projectId))
         case .tickets:
-            deletedCount = cleanupProjectTickets(projectId)
+            cleanupPlan.merge(cleanupProjectTickets(projectId))
         case .all:
-            deletedCount =
-                cleanupProjectPhotos(projectId)
-                + cleanupProjectVideos(projectId)
-                + cleanupProjectCAD(projectId)
-                + cleanupProjectTickets(projectId)
+            cleanupPlan.merge(cleanupProjectPhotos(projectId))
+            cleanupPlan.merge(cleanupProjectVideos(projectId))
+            cleanupPlan.merge(cleanupProjectCAD(projectId))
+            cleanupPlan.merge(cleanupProjectTickets(projectId))
         }
 
-        cleanupStatusMessage = "已清理 \(usage.projectName) 的\(category.resultTitle)：\(deletedCount) 个文件。"
-        store.scheduleSave()
+        let summary = String(
+            format: String(localized: "%@ · %@"),
+            usage.projectName,
+            category.resultTitle
+        )
+        do {
+            let retentionDays = normalizedCleanupTrashRetentionDays
+            let batch = try StorageCleanupTrashStore.quarantine(
+                plan: cleanupPlan,
+                snapshot: undoSnapshot,
+                summary: summary,
+                retentionDays: retentionDays
+            )
+            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            cleanupStatusMessage = String(
+                format: String(localized: "已将 %@ 的%@移入清理回收站：%lld 个文件，可恢复至 %@。"),
+                usage.projectName,
+                category.resultTitle,
+                Int64(batch.fileCount),
+                Formatters.date.string(from: batch.expiresAt)
+            )
+            store.scheduleSave()
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .succeeded,
+                summary: String(localized: "按项目清理"),
+                detail: "\(auditDetail) · trashed=\(batch.fileCount) · retentionDays=\(retentionDays)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            undoSnapshot.restore(into: store)
+            cleanupStatusMessage = String(
+                format: String(localized: "清理回收站写入失败：%@"),
+                error.localizedDescription
+            )
+            store.scheduleSave()
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .failed,
+                summary: String(localized: "按项目清理"),
+                detail: "\(auditDetail) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
         pendingCleanupProject = nil
     }
 
     @discardableResult
-    private func cleanupProjectPhotos(_ projectId: UUID) -> Int {
-        let logIndexes = store.dailyLogs.indices.filter { store.dailyLogs[$0].projectId == projectId }
-        let todoIndexes = store.siteTodos.indices.filter { store.siteTodos[$0].projectId == projectId }
-
-        var selectedPhotoNames = Set<String>()
-        for index in logIndexes {
-            selectedPhotoNames.formUnion(store.dailyLogs[index].allPhotoFileNames)
-            store.dailyLogs[index].photoFileName = nil
-            store.dailyLogs[index].photos = []
-        }
-        for index in todoIndexes {
-            if let before = store.siteTodos[index].rectificationBeforePhotoFileName {
-                selectedPhotoNames.insert(before)
-            }
-            if let after = store.siteTodos[index].rectificationAfterPhotoFileName {
-                selectedPhotoNames.insert(after)
-            }
-            store.siteTodos[index].rectificationBeforePhotoFileName = nil
-            store.siteTodos[index].rectificationAfterPhotoFileName = nil
-        }
-
-        let remainingPhotoNames = PhotoStorage.referencedFileNames(logs: store.dailyLogs, todos: store.siteTodos)
-        let deletablePhotoNames = selectedPhotoNames.filter { !remainingPhotoNames.contains($0) }
-        PhotoStorage.delete(fileNames: Array(deletablePhotoNames))
-        return deletablePhotoNames.count
+    private func cleanupProjectPhotos(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectPhotoReferences(projectId: projectId)
+        )
     }
 
     @discardableResult
-    private func cleanupProjectVideos(_ projectId: UUID) -> Int {
-        let noteIndexes = store.quickNotes.indices.filter { store.quickNotes[$0].projectId == projectId }
-        var selectedAttachmentNames = Set<String>()
-        for index in noteIndexes {
-            let videos = store.quickNotes[index].attachments.filter { $0.attachmentKind == .video }
-            selectedAttachmentNames.formUnion(videos.map(\.fileName))
-            store.quickNotes[index].attachments.removeAll { $0.attachmentKind == .video }
-        }
-
-        let videoDocumentIDs = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId }
-                .filter { document in
-                    let ext = document.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    return videoFileExtensions.contains(ext) && !isTicketCategory(document.category)
-                }
-                .map(\.id)
+    private func cleanupProjectVideos(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        return DeferredProjectFileCleanupPlan(
+            store.clearProjectVideoReferences(
+                projectId: projectId,
+                videoFileExtensions: videoFileExtensions
+            )
         )
-        let videoDocumentFileNames = Set(
-            store.projectDocuments
-                .filter { videoDocumentIDs.contains($0.id) }
-                .map(\.fileName)
-        )
-        store.projectDocuments.removeAll { videoDocumentIDs.contains($0.id) }
-        unlinkDocuments(ids: videoDocumentIDs)
-
-        let extraMethodAttachments = store.constructionMethods.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.tutorialAttachments)
-        let remainingAttachmentNames = QuickNoteAttachmentStorage.referencedFileNames(
-            for: store.quickNotes,
-            extraAttachments: extraMethodAttachments
-        )
-        let deletableAttachmentNames = selectedAttachmentNames.filter { !remainingAttachmentNames.contains($0) }
-        QuickNoteAttachmentStorage.delete(fileNames: Array(deletableAttachmentNames))
-
-        let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
-        let deletableDocumentNames = videoDocumentFileNames.filter { !remainingDocumentNames.contains($0) }
-        ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
-
-        return deletableAttachmentNames.count + deletableDocumentNames.count
     }
 
     @discardableResult
-    private func cleanupProjectCAD(_ projectId: UUID) -> Int {
-        let drawingFileNames = Set(
-            store.projectDrawings
-                .filter { $0.projectId == projectId }
-                .filter { drawing in
-                    let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    return cadFileExtensions.contains(ext)
-                }
-                .map(\.fileName)
+    private func cleanupProjectCAD(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectCADReferences(
+                projectId: projectId,
+                cadFileExtensions: cadFileExtensions
+            )
         )
-        store.projectDrawings.removeAll { drawing in
-            drawing.projectId == projectId
-                && cadFileExtensions.contains(drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased())
-        }
-        let remainingDrawingNames = Set(store.projectDrawings.map(\.fileName))
-        let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNames.contains($0) }
-        DrawingStorage.delete(fileNames: Array(deletableDrawingNames))
-        return deletableDrawingNames.count
     }
 
     @discardableResult
-    private func cleanupProjectTickets(_ projectId: UUID) -> Int {
-        let removedDocumentIDs = Set(
-            store.projectDocuments
-                .filter { $0.projectId == projectId && isTicketCategory($0.category) }
-                .map(\.id)
+    private func cleanupProjectTickets(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+        DeferredProjectFileCleanupPlan(
+            store.clearProjectTicketDocumentReferences(projectId: projectId)
         )
-        let documentFileNames = Set(
-            store.projectDocuments
-                .filter { removedDocumentIDs.contains($0.id) }
-                .map(\.fileName)
-        )
-        store.projectDocuments.removeAll { removedDocumentIDs.contains($0.id) }
-        unlinkDocuments(ids: removedDocumentIDs)
-        let remainingDocumentNames = Set(store.projectDocuments.map(\.fileName))
-        let deletableDocumentNames = documentFileNames.filter { !remainingDocumentNames.contains($0) }
-        ProjectDocumentStorage.delete(fileNames: Array(deletableDocumentNames))
-        return deletableDocumentNames.count
-    }
-
-    private func unlinkDocuments(ids: Set<UUID>) {
-        guard !ids.isEmpty else { return }
-        for index in store.projectFinancialRecords.indices {
-            store.projectFinancialRecords[index].linkedDocumentIds.removeAll { ids.contains($0) }
-        }
-        for index in store.projectWarehouseMovements.indices {
-            store.projectWarehouseMovements[index].linkedDocumentIds.removeAll { ids.contains($0) }
-        }
     }
 
     @MainActor
@@ -625,392 +556,12 @@ struct StorageCleanupCenterView: View {
             estimates.reserveCapacity(projectIDs.count)
 
             for projectId in projectIDs {
-                let scopedSnapshot = StorageCleanupCenterView.makeProjectScopedSnapshot(from: baseSnapshot, projectId: projectId)
-                estimates[projectId] = StorageCleanupCenterView.estimateBackupBytes(for: scopedSnapshot)
+                let scopedSnapshot = StorageCleanupScanner.makeProjectScopedSnapshot(from: baseSnapshot, projectId: projectId)
+                estimates[projectId] = StorageCleanupScanner.estimateBackupBytes(for: scopedSnapshot)
             }
             return estimates
         }
 
         projectBackupEstimateByID = await estimateTask.value
-    }
-
-    nonisolated private static func makeProjectScopedSnapshot(from baseSnapshot: BackupSnapshot, projectId: UUID) -> BackupSnapshot {
-        var snapshot = baseSnapshot
-        snapshot.materialItems = snapshot.materialItems.filter { $0.projectId == projectId }
-        snapshot.quoteItems = snapshot.quoteItems.filter { $0.projectId == projectId }
-        snapshot.laborRecords = snapshot.laborRecords.filter { $0.projectId == projectId }
-        snapshot.projects = snapshot.projects.filter { $0.id == projectId }
-        snapshot.dailyLogs = snapshot.dailyLogs.filter { $0.projectId == projectId }
-        snapshot.historyRecords = []
-        snapshot.progressTasks = snapshot.progressTasks.filter { $0.projectId == projectId }
-        snapshot.lightingCircuitPlans = snapshot.lightingCircuitPlans.filter { $0.projectId == projectId }
-        snapshot.siteTodos = snapshot.siteTodos.filter { $0.projectId == projectId }
-        snapshot.projectDrawings = snapshot.projectDrawings.filter { $0.projectId == projectId }
-        snapshot.projectContacts = snapshot.projectContacts.filter { $0.projectId == projectId }
-        snapshot.projectFinancialRecords = snapshot.projectFinancialRecords.filter { $0.projectId == projectId }
-        snapshot.projectDocuments = snapshot.projectDocuments.filter { $0.projectId == projectId }
-        snapshot.quickNotes = snapshot.quickNotes.filter { $0.projectId == projectId }
-        snapshot.projectWarehouseMovements = snapshot.projectWarehouseMovements.filter { $0.projectId == projectId }
-        snapshot.templates = []
-        snapshot.materialPriceEntries = []
-        snapshot.materialSheetDrafts = snapshot.materialSheetDrafts.filter { $0.projectId == projectId }
-        snapshot.supplierProfiles = []
-        snapshot.constructionMethods = []
-        snapshot.favoriteMaterialKeys = []
-        snapshot.recentMaterialKeys = []
-        snapshot.userMaterials = []
-        snapshot.deletedUserMaterials = []
-        snapshot.hiddenPresetKeys = []
-        snapshot.photoFiles = []
-        snapshot.drawingFiles = []
-        snapshot.documentFiles = []
-        snapshot.quickNoteAttachmentFiles = []
-        return snapshot
-    }
-
-    nonisolated private static func estimateBackupBytes(for snapshot: BackupSnapshot) -> Int {
-        let metadataBytes = (try? JSONEncoder().encode(snapshot).count) ?? 0
-
-        let photoNames = Set(
-            snapshot.dailyLogs.flatMap(\.allPhotoFileNames).filter { !$0.isEmpty }
-                + snapshot.siteTodos.compactMap(\.rectificationBeforePhotoFileName).filter { !$0.isEmpty }
-                + snapshot.siteTodos.compactMap(\.rectificationAfterPhotoFileName).filter { !$0.isEmpty }
-        )
-        let drawingNames = Set(snapshot.projectDrawings.map(\.fileName).filter { !$0.isEmpty })
-        let documentNames = Set(snapshot.projectDocuments.map(\.fileName).filter { !$0.isEmpty })
-        let attachmentNames = Set(snapshot.quickNotes.flatMap { $0.attachments.map(\.fileName) }.filter { !$0.isEmpty })
-
-        let rawFilesBytes =
-            sumFileBytes(fileNames: photoNames, size: PhotoStorage.fileSize(for:))
-            + sumFileBytes(fileNames: drawingNames, size: DrawingStorage.fileSize(for:))
-            + sumFileBytes(fileNames: documentNames, size: ProjectDocumentStorage.fileSize(for:))
-            + sumFileBytes(fileNames: attachmentNames, size: QuickNoteAttachmentStorage.fileSize(for:))
-
-        return metadataBytes + rawFilesBytes
-    }
-
-    nonisolated private static func sumFileBytes(fileNames: Set<String>, size: (String) -> Int) -> Int {
-        fileNames.reduce(0) { partial, fileName in
-            partial + size(fileName)
-        }
-    }
-}
-
-private struct StorageCategorySummary: Identifiable {
-    let id = UUID()
-    let title: String
-    let icon: String
-    let tint: Color
-    let bytes: Int
-    let count: Int
-
-    var formattedBytes: String {
-        QuickNoteAttachmentStorage.formattedFileSize(bytes)
-    }
-}
-
-private struct StorageLargeFileItem: Identifiable {
-    let id: String
-    let category: StorageFileCategory
-    let title: String
-    let detail: String
-    let projectId: UUID?
-    let projectName: String?
-    let bytes: Int
-
-    init(
-        id: String,
-        category: StorageFileCategory,
-        title: String,
-        detail: String,
-        projectId: UUID? = nil,
-        projectName: String? = nil,
-        bytes: Int
-    ) {
-        self.id = id
-        self.category = category
-        self.title = title
-        self.detail = detail
-        self.projectId = projectId
-        self.projectName = projectName
-        self.bytes = bytes
-    }
-
-    var formattedBytes: String {
-        QuickNoteAttachmentStorage.formattedFileSize(bytes)
-    }
-}
-
-private enum StorageFileCategory {
-    case photo
-    case video
-    case cad
-    case ticket
-    case backup
-    case history
-
-    var displayName: String {
-        switch self {
-        case .photo:
-            return "照片"
-        case .video:
-            return "视频"
-        case .cad:
-            return "CAD"
-        case .ticket:
-            return "票据"
-        case .backup:
-            return "备份"
-        case .history:
-            return "历史计算"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .photo:
-            return "photo.fill"
-        case .video:
-            return "video.fill"
-        case .cad:
-            return "compass.drawing"
-        case .ticket:
-            return "doc.text.fill"
-        case .backup:
-            return "externaldrive.fill"
-        case .history:
-            return "clock.arrow.circlepath"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .photo:
-            return .appWarning
-        case .video:
-            return .appPhoto
-        case .cad:
-            return .appDoc
-        case .ticket:
-            return .appRisk
-        case .backup:
-            return .appPrimaryAction
-        case .history:
-            return .appSuccess
-        }
-    }
-}
-
-private struct ProjectStorageUsage: Identifiable {
-    let projectId: UUID
-    let projectName: String
-    let photoBytes: Int
-    let videoBytes: Int
-    let cadBytes: Int
-    let ticketBytes: Int
-    let backupEstimatedBytes: Int?
-
-    var id: UUID { projectId }
-    var totalBytes: Int { photoBytes + videoBytes + cadBytes + ticketBytes }
-    var formattedTotalBytes: String { QuickNoteAttachmentStorage.formattedFileSize(totalBytes) }
-    var formattedBackupEstimatedBytes: String {
-        guard let backupEstimatedBytes else { return "计算中…" }
-        return QuickNoteAttachmentStorage.formattedFileSize(backupEstimatedBytes)
-    }
-}
-
-private enum ProjectStorageCleanupCategory: String, Identifiable {
-    case photos
-    case videos
-    case cad
-    case tickets
-    case all
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .photos:
-            return "照片"
-        case .videos:
-            return "视频"
-        case .cad:
-            return "CAD 图纸"
-        case .tickets:
-            return "票据资料"
-        case .all:
-            return "全部可清理文件"
-        }
-    }
-
-    var resultTitle: String {
-        switch self {
-        case .photos:
-            return "照片"
-        case .videos:
-            return "视频"
-        case .cad:
-            return "CAD 图纸"
-        case .tickets:
-            return "票据资料"
-        case .all:
-            return "项目文件"
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .photos:
-            return "photo.fill"
-        case .videos:
-            return "video.fill"
-        case .cad:
-            return "compass.drawing"
-        case .tickets:
-            return "doc.text.fill"
-        case .all:
-            return "trash"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .photos:
-            return .appWarning
-        case .videos:
-            return .appPhoto
-        case .cad:
-            return .appDoc
-        case .tickets:
-            return .appRisk
-        case .all:
-            return .red
-        }
-    }
-
-    var confirmationButtonTitle: String {
-        switch self {
-        case .all:
-            return "清理全部"
-        default:
-            return "清理\(displayName)"
-        }
-    }
-
-    func confirmationMessage(projectName: String) -> String {
-        switch self {
-        case .photos:
-            return "将清理 \(projectName) 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"
-        case .videos:
-            return "将清理 \(projectName) 随手记视频和资料中的视频原文件，并断开视频关联。"
-        case .cad:
-            return "将清理 \(projectName) 的 CAD 图纸原文件和图纸索引。"
-        case .tickets:
-            return "将清理 \(projectName) 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"
-        case .all:
-            return "将清理 \(projectName) 的照片、视频、CAD 图纸和票据资料原文件，保留其他文本记录。"
-        }
-    }
-}
-
-private struct ProjectStorageCleanupDetailView: View {
-    let usage: ProjectStorageUsage
-    let onCleanup: (ProjectStorageCleanupCategory) -> Void
-
-    var body: some View {
-        List {
-            Section("占用汇总") {
-                usageRow(title: "照片", icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
-                usageRow(title: "视频", icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
-                usageRow(title: "CAD 图纸", icon: "compass.drawing", tint: .appDoc, bytes: usage.cadBytes)
-                usageRow(title: "票据资料", icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
-                usageRow(title: "备份估算", icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
-            }
-
-            Section {
-                HStack {
-                    Text("项目总占用")
-                    Spacer()
-                    Text(usage.formattedTotalBytes)
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-
-            Section {
-                cleanupButton(.photos, bytes: usage.photoBytes)
-                cleanupButton(.videos, bytes: usage.videoBytes)
-                cleanupButton(.cad, bytes: usage.cadBytes)
-                cleanupButton(.tickets, bytes: usage.ticketBytes)
-            } header: {
-                Text("按类型清理")
-            } footer: {
-                Text("分项清理只处理对应文件类型，项目文本、金额、日志正文不会删除。")
-            }
-
-            Section {
-                Button(role: .destructive) {
-                    onCleanup(.all)
-                } label: {
-                    Label("清理该项目全部可清理文件", systemImage: "trash")
-                }
-                .disabled(usage.totalBytes == 0)
-            } footer: {
-                Text("备份是全局快照，不会按单个项目直接删除；如需释放备份空间，请回到“数据管理 → 备份”处理。")
-            }
-        }
-        .navigationTitle(usage.projectName)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    @ViewBuilder
-    private func cleanupButton(_ category: ProjectStorageCleanupCategory, bytes: Int) -> some View {
-        Button(role: .destructive) {
-            onCleanup(category)
-        } label: {
-            HStack(spacing: AppSpacing.tight) {
-                Image(systemName: category.icon)
-                    .foregroundStyle(category.tint)
-                    .frame(width: 18, height: 18)
-                Text("清理\(category.displayName)")
-                Spacer()
-                Text(QuickNoteAttachmentStorage.formattedFileSize(bytes))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .disabled(bytes == 0)
-    }
-
-    @ViewBuilder
-    private func usageRow(title: String, icon: String, tint: Color, bytes: Int) -> some View {
-        usageRow(title: title, icon: icon, tint: tint, bytesText: QuickNoteAttachmentStorage.formattedFileSize(bytes))
-    }
-
-    @ViewBuilder
-    private func usageRow(title: String, icon: String, tint: Color, bytesText: String) -> some View {
-        HStack(spacing: AppSpacing.tight) {
-            Image(systemName: icon)
-                .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
-            Text(title)
-            Spacer()
-            Text(bytesText)
-                .font(.caption.weight(.semibold))
-        }
-    }
-}
-
-private struct StorageOptionalInlineTitleModifier: ViewModifier {
-    let isEnabled: Bool
-    let title: String
-
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-        } else {
-            content
-        }
     }
 }

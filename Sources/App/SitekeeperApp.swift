@@ -61,20 +61,43 @@ private enum UITestLaunchConfig {
             let localStoreFiles = ["sitekeeper.json", "construction_toolbox.json"]
             for fileName in localStoreFiles {
                 let fileURL = documentsDirectory.appendingPathComponent(fileName)
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    do {
-                        try FileManager.default.removeItem(at: fileURL)
-                    } catch {
-                        StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
-                    }
+                do {
+                    _ = try FileOps.removeIfExists(
+                        at: fileURL,
+                        context: .init(
+                            event: "ui_test.reset_local_state.remove_store_file",
+                            category: .dataStore,
+                            source: "SitekeeperApp.resetLocalState"
+                        )
+                    )
+                } catch {
+                    StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
                 }
             }
         }
 
-        PhotoStorage.delete(fileNames: PhotoStorage.allStoredFileNames())
-        DrawingStorage.delete(fileNames: DrawingStorage.allStoredFileNames())
-        ProjectDocumentStorage.delete(fileNames: ProjectDocumentStorage.allStoredFileNames())
-        QuickNoteAttachmentStorage.delete(fileNames: QuickNoteAttachmentStorage.allStoredFileNames())
+        DataStoreDeferredFileCleanup.combined(
+            summary: "uiTest.resetLocalState",
+            cleanups: [
+                DataStoreDeferredFileCleanup.photoFiles(
+                    PhotoStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.photos"
+                ),
+                DataStoreDeferredFileCleanup.drawingFiles(
+                    DrawingStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.drawings"
+                ),
+                DataStoreDeferredFileCleanup.projectDocumentFiles(
+                    ProjectDocumentStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.projectDocuments"
+                ),
+                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                    QuickNoteAttachmentStorage.allStoredFileNames(),
+                    summary: "uiTest.reset.quickNoteAttachments"
+                )
+            ]
+        )
+        .perform()
         StorageIssueLog.clear()
         defaults.synchronize()
     }

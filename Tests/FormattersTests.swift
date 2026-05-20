@@ -38,4 +38,11 @@ struct FormattersTests {
     @Test func moneyNegative() {
         #expect(Formatters.money(-5.1) == "-5.10")
     }
+
+    @Test func projectDateInputNormalizesEditableProjectDates() {
+        #expect(ProjectDateInput.normalizedStorageText(" 2026-05-17 ") == "2026-05-17")
+        #expect(ProjectDateInput.normalizedStorageText("2026-05-17 08:30") == "2026-05-17")
+        #expect(ProjectDateInput.normalizedStorageText("   ") == "")
+        #expect(ProjectDateInput.normalizedStorageText("待现场确认") == "待现场确认")
+    }
 }
