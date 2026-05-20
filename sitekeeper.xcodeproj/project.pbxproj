@@ -286,6 +286,7 @@
 		D724C0A80A918429DFCE7879 /* DataStore+ProjectDrawingOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FAAD7C4873792AFFA0F44F /* DataStore+ProjectDrawingOps.swift */; };
 		D73E8D41DAA3F96486FFBD08 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 923AE3B0FFF61161AE20DB05 /* PrivacyInfo.xcprivacy */; };
 		D7DA1BA2B0D407BA45C2C755 /* TrayFillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB26E09C695868B0D9F5D4F0 /* TrayFillView.swift */; };
+		DA66A91B1DF27F30EB3B0C84 /* ProjectFinancialAttachmentSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD94D620228EABF53CC73596 /* ProjectFinancialAttachmentSheet.swift */; };
 		DDBCE1F4F40FFF5EA2A74789 /* CommonMaterialCatalog.json in Resources */ = {isa = PBXBuildFile; fileRef = F5E87020F4C5A3FCB762FEC5 /* CommonMaterialCatalog.json */; };
 		DF447ED9D5C153C96E3F2311 /* ProjectDeliveryGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F63CD43E1A5E07E696A5030C /* ProjectDeliveryGuideView.swift */; };
 		E16BB697A3C6EF7A475AFA23 /* ReportBuilderPDFSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E6B7697ECB30029D6A569FD /* ReportBuilderPDFSections.swift */; };
@@ -588,6 +589,7 @@
 		AA8C4230766C93FE92E8129C /* DataStore+ProjectRecordWarehouseOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+ProjectRecordWarehouseOps.swift"; sourceTree = "<group>"; };
 		ACA233F97E0768FC43002EC4 /* BackupLocalSectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupLocalSectionsView.swift; sourceTree = "<group>"; };
 		AD5001C37AE02B658C330290 /* DataValueParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataValueParser.swift; sourceTree = "<group>"; };
+		AD94D620228EABF53CC73596 /* ProjectFinancialAttachmentSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFinancialAttachmentSheet.swift; sourceTree = "<group>"; };
 		ADA11807C95A0DCE22B092AF /* ProjectDetailRouteState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailRouteState.swift; sourceTree = "<group>"; };
 		ADA1A7E00013B60F69E7585A /* MaterialDomainLogicTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialDomainLogicTests.swift; sourceTree = "<group>"; };
 		AEBEA02490A2891E687B46DD /* DataStore+ProjectDeletion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+ProjectDeletion.swift"; sourceTree = "<group>"; };
@@ -1140,6 +1142,7 @@
 				5B0FD5A007654C3185210C70 /* ProjectFileGuideComponents.swift */,
 				F64E6BE994B57F732D933EB2 /* ProjectFileSceneViews.swift */,
 				C46D8C098152E54F70DDA00E /* ProjectFileSearchIndexService.swift */,
+				AD94D620228EABF53CC73596 /* ProjectFinancialAttachmentSheet.swift */,
 				87352DF4A2BF1CDF99D4F38E /* ProjectFinancialRecordSheets.swift */,
 				DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */,
 				79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */,
@@ -1584,6 +1587,7 @@
 				576B9BB5E1FC38AB8B1A8C3A /* ProjectFileGuideComponents.swift in Sources */,
 				E9685843A4AB1C12EC8803DA /* ProjectFileSceneViews.swift in Sources */,
 				987E5D38BEA2DD5AA1E9BE2A /* ProjectFileSearchIndexService.swift in Sources */,
+				DA66A91B1DF27F30EB3B0C84 /* ProjectFinancialAttachmentSheet.swift in Sources */,
 				BD16E51273A0A932EC8A7BCD /* ProjectFinancialDocumentMatcher.swift in Sources */,
 				56E4200D10D21F0BE9A17FF5 /* ProjectFinancialMetrics.swift in Sources */,
 				6FAB709B582FE7533F855432 /* ProjectFinancialRecordSheets.swift in Sources */,
