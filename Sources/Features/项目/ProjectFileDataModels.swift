@@ -118,11 +118,15 @@ struct ProjectFileSummary {
         imageCount + drawingCount + documentCount + quickNoteAttachmentCount
     }
 
+    init(projectId: UUID, projectStore: ProjectStore) {
+        imageCount = ProjectFileCollector.count(for: projectId, category: .images, projectStore: projectStore)
+        drawingCount = ProjectFileCollector.count(for: projectId, category: .drawings, projectStore: projectStore)
+        documentCount = ProjectFileCollector.count(for: projectId, category: .documents, projectStore: projectStore)
+        quickNoteAttachmentCount = ProjectFileCollector.count(for: projectId, category: .quickNoteAttachments, projectStore: projectStore)
+    }
+
     init(projectId: UUID, store: DataStore) {
-        imageCount = ProjectFileCollector.count(for: projectId, category: .images, store: store)
-        drawingCount = ProjectFileCollector.count(for: projectId, category: .drawings, store: store)
-        documentCount = ProjectFileCollector.count(for: projectId, category: .documents, store: store)
-        quickNoteAttachmentCount = ProjectFileCollector.count(for: projectId, category: .quickNoteAttachments, store: store)
+        self.init(projectId: projectId, projectStore: store.projectStore)
     }
 
     func count(for category: ProjectFileCategory) -> Int {
@@ -243,59 +247,67 @@ enum ProjectFileCollector {
         let sizeProvider: () -> Int
     }
 
-    static func items(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> [ProjectFileItem] {
+    static func items(for projectId: UUID, category: ProjectFileCategory, projectStore: ProjectStore) -> [ProjectFileItem] {
         switch category {
         case .images:
-            return imageItems(for: projectId, store: store)
+            return imageItems(for: projectId, projectStore: projectStore)
         case .drawings:
-            return drawingItems(for: projectId, store: store)
+            return drawingItems(for: projectId, projectStore: projectStore)
         case .documents:
-            return documentItems(for: projectId, store: store)
+            return documentItems(for: projectId, projectStore: projectStore)
         case .quickNoteAttachments:
-            return quickNoteAttachmentItems(for: projectId, store: store)
+            return quickNoteAttachmentItems(for: projectId, projectStore: projectStore)
+        }
+    }
+
+    static func items(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> [ProjectFileItem] {
+        items(for: projectId, category: category, projectStore: store.projectStore)
+    }
+
+    static func allItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
+        ProjectFileCategory.allCases.flatMap { category in
+            items(for: projectId, category: category, projectStore: projectStore)
         }
     }
 
     static func allItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
-        ProjectFileCategory.allCases.flatMap { category in
-            items(for: projectId, category: category, store: store)
-        }
+        allItems(for: projectId, projectStore: store.projectStore)
     }
 
-    static func count(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> Int {
+    static func count(for projectId: UUID, category: ProjectFileCategory, projectStore: ProjectStore) -> Int {
         switch category {
         case .images:
-            let logPhotoCount = store.dailyLogs
-                .filter { $0.projectId == projectId }
+            let logPhotoCount = projectStore.dailyLogs(for: projectId)
                 .reduce(0) { $0 + $1.photoAttachments.count }
-            let todoPhotoCount = store.siteTodos
-                .filter { $0.projectId == projectId }
+            let todoPhotoCount = projectStore.siteTodos(for: projectId)
                 .reduce(0) { count, todo in
                     count
                         + (todo.rectificationBeforePhotoFileName == nil ? 0 : 1)
                         + (todo.rectificationAfterPhotoFileName == nil ? 0 : 1)
                 }
-            let quickNotePhotoCount = store.quickNotes
-                .filter { $0.projectId == projectId }
+            let quickNotePhotoCount = projectStore.quickNotes(for: projectId)
                 .flatMap(\.attachments)
                 .filter { [.photo, .drawing].contains($0.attachmentKind) }
                 .count
             return logPhotoCount + todoPhotoCount + quickNotePhotoCount
         case .drawings:
-            return store.projectDrawings.filter { $0.projectId == projectId }.count
+            return projectStore.projectDrawings(for: projectId).count
         case .documents:
-            return store.projectDocuments.filter { $0.projectId == projectId }.count
+            return projectStore.projectDocuments(for: projectId).count
         case .quickNoteAttachments:
-            return store.quickNotes
-                .filter { $0.projectId == projectId }
+            return projectStore.quickNotes(for: projectId)
                 .flatMap(\.attachments)
                 .filter { ![QuickNoteAttachmentKind.photo, .drawing].contains($0.attachmentKind) }
                 .count
         }
     }
 
-    static func allRecent(for projectId: UUID, limit: Int, store: DataStore) -> [ProjectFileItem] {
-        recentSeeds(for: projectId, store: store)
+    static func count(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> Int {
+        count(for: projectId, category: category, projectStore: store.projectStore)
+    }
+
+    static func allRecent(for projectId: UUID, limit: Int, projectStore: ProjectStore) -> [ProjectFileItem] {
+        recentSeeds(for: projectId, projectStore: projectStore)
             .sorted { $0.sortDate > $1.sortDate }
             .prefix(limit)
             .map { seed in
@@ -316,10 +328,14 @@ enum ProjectFileCollector {
             }
     }
 
-    private static func recentSeeds(for projectId: UUID, store: DataStore) -> [RecentSeed] {
+    static func allRecent(for projectId: UUID, limit: Int, store: DataStore) -> [ProjectFileItem] {
+        allRecent(for: projectId, limit: limit, projectStore: store.projectStore)
+    }
+
+    private static func recentSeeds(for projectId: UUID, projectStore: ProjectStore) -> [RecentSeed] {
         var seeds: [RecentSeed] = []
 
-        for log in store.dailyLogs where log.projectId == projectId {
+        for log in projectStore.dailyLogs(for: projectId) {
             for photo in log.photoAttachments {
                 let fileName = photo.fileName
                 let url = PhotoStorage.fileURL(for: fileName)
@@ -341,7 +357,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for todo in store.siteTodos where todo.projectId == projectId {
+        for todo in projectStore.siteTodos(for: projectId) {
             if let fileName = todo.rectificationBeforePhotoFileName {
                 let url = PhotoStorage.fileURL(for: fileName)
                 let sortText = todo.dueDate
@@ -382,7 +398,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for note in store.quickNotes where note.projectId == projectId {
+        for note in projectStore.quickNotes(for: projectId) {
             for attachment in note.attachments {
                 let url = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
                 let displayName = attachment.displayName == attachment.fileName ? attachment.attachmentKind.title : attachment.displayName
@@ -424,7 +440,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for drawing in store.projectDrawings where drawing.projectId == projectId {
+        for drawing in projectStore.projectDrawings(for: projectId) {
             let fileName = drawing.fileName
             let url = DrawingStorage.fileURL(for: fileName)
             seeds.append(
@@ -444,7 +460,7 @@ enum ProjectFileCollector {
             )
         }
 
-        for document in store.projectDocuments where document.projectId == projectId {
+        for document in projectStore.projectDocuments(for: projectId) {
             let fileName = document.fileName
             let url = ProjectDocumentStorage.fileURL(for: fileName)
             seeds.append(
@@ -467,10 +483,10 @@ enum ProjectFileCollector {
         return seeds
     }
 
-    private static func imageItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
+    private static func imageItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
         var result: [ProjectFileItem] = []
 
-        for log in store.dailyLogs where log.projectId == projectId {
+        for log in projectStore.dailyLogs(for: projectId) {
             for photo in log.photoAttachments {
                 result.append(photoItem(
                     id: "log-\(log.id.uuidString)-\(photo.fileName)",
@@ -482,7 +498,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for todo in store.siteTodos where todo.projectId == projectId {
+        for todo in projectStore.siteTodos(for: projectId) {
             if let fileName = todo.rectificationBeforePhotoFileName {
                 result.append(photoItem(
                     id: "todo-before-\(todo.id.uuidString)",
@@ -503,7 +519,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for note in store.quickNotes where note.projectId == projectId {
+        for note in projectStore.quickNotes(for: projectId) {
             for attachment in note.attachments where [.photo, .drawing].contains(attachment.attachmentKind) {
                 result.append(quickNoteItem(
                     note: note,
@@ -517,9 +533,8 @@ enum ProjectFileCollector {
         return result.sorted { $0.sortDate > $1.sortDate }
     }
 
-    private static func drawingItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
-        store.projectDrawings
-            .filter { $0.projectId == projectId }
+    private static func drawingItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
+        projectStore.projectDrawings(for: projectId)
             .map { drawing in
                 let url = DrawingStorage.fileURL(for: drawing.fileName)
                 return ProjectFileItem(
@@ -540,9 +555,8 @@ enum ProjectFileCollector {
             .sorted { $0.sortDate > $1.sortDate }
     }
 
-    private static func documentItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
-        store.projectDocuments
-            .filter { $0.projectId == projectId }
+    private static func documentItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
+        projectStore.projectDocuments(for: projectId)
             .map { document in
                 let url = ProjectDocumentStorage.fileURL(for: document.fileName)
                 return ProjectFileItem(
@@ -570,9 +584,8 @@ enum ProjectFileCollector {
         return (missingResponsible ? 1 : 0) + (missingFormedDate ? 1 : 0)
     }
 
-    private static func quickNoteAttachmentItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
-        store.quickNotes
-            .filter { $0.projectId == projectId }
+    private static func quickNoteAttachmentItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
+        projectStore.quickNotes(for: projectId)
             .flatMap { note in
                 note.attachments
                     .filter { ![QuickNoteAttachmentKind.photo, .drawing].contains($0.attachmentKind) }

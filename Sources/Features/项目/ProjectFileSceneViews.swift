@@ -2,7 +2,7 @@ import SwiftUI
 import QuickLook
 
 struct ProjectFileCategoryView: View {
-    @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
     @State private var searchText = ""
     @State private var healthFilter: ProjectFileHealthFilter = .all
     @State private var previewURL: URL?
@@ -18,11 +18,11 @@ struct ProjectFileCategoryView: View {
     }
 
     private var summary: ProjectFileSummary {
-        ProjectFileSummary(projectId: project.id, store: store)
+        ProjectFileSummary(projectId: project.id, projectStore: projectStore)
     }
 
     private var recentItems: [ProjectFileItem] {
-        let all = ProjectFileCollector.allItems(for: project.id, store: store)
+        let all = ProjectFileCollector.allItems(for: project.id, projectStore: projectStore)
             .filter { healthFilter.matches($0) }
             .sorted { $0.sortDate > $1.sortDate }
             .prefix(8)
@@ -118,7 +118,7 @@ struct ProjectFileCategoryView: View {
 struct ProjectFileListView: View {
     let project: Project
     let category: ProjectFileCategory
-    @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
     @State private var healthFilter: ProjectFileHealthFilter = .all
     @State private var previewURL: URL?
 
@@ -133,7 +133,7 @@ struct ProjectFileListView: View {
     }
 
     private var rawItems: [ProjectFileItem] {
-        ProjectFileCollector.items(for: project.id, category: category, store: store)
+        ProjectFileCollector.items(for: project.id, category: category, projectStore: projectStore)
     }
 
     private var items: [ProjectFileItem] {
