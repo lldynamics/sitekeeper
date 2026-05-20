@@ -13,6 +13,8 @@ struct ConstructionMethodLibraryView: View {
     @State private var didOpenFocusedMethod = false
     @State private var selectedTradeFilter = "全部"
     @State private var selectedMethodID: UUID?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedMethodId: UUID? = nil) {
         self.focusedMethodId = focusedMethodId
@@ -73,7 +75,7 @@ struct ConstructionMethodLibraryView: View {
         }
         .sheet(isPresented: $showAdd) {
             ConstructionMethodEditSheet(method: nil) { method in
-                store.constructionMethods.insert(method, at: 0)
+                store.upsertConstructionMethod(method, insertAtTopWhenNew: true)
                 selectedMethodID = method.id
                 store.scheduleSave()
                 showAdd = false
@@ -94,6 +96,10 @@ struct ConstructionMethodLibraryView: View {
                     viewingMethod = updated
                 }
             )
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
@@ -125,7 +131,11 @@ struct ConstructionMethodLibraryView: View {
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
                 title: "删除施工工艺？",
-                itemNoun: "施工工艺"
+                itemNoun: "施工工艺",
+                singularMessage: "删除后可在提示中撤销，附件会延迟清理。",
+                pluralMessage: { count, noun in
+                    "将删除 \(count) 条\(noun)，可在提示中撤销，附件会延迟清理。"
+                }
             ),
             onDeleteConfirmed: deleteMethods,
             rowContent: { method in
@@ -197,14 +207,39 @@ struct ConstructionMethodLibraryView: View {
     private func deleteMethods(_ methods: [ConstructionMethod]) {
         let ids = Set(methods.map(\.id))
         guard !ids.isEmpty else { return }
+
+        let todoSnapshot = store.siteTodos
+        let logSnapshot = store.dailyLogs
+        let previousSelection = selectedMethodID
         let targets = store.constructionMethods.filter { ids.contains($0.id) }
-        QuickNoteAttachmentStorage.delete(attachments: targets.flatMap(\.attachments) + targets.flatMap(\.tutorialAttachments))
-        store.constructionMethods.removeAll { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let attachments = uniqueAttachments(targets.flatMap(\.attachments) + targets.flatMap(\.tutorialAttachments))
+        let deletion = store.removeConstructionMethods(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除施工工艺 %lld 条"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.title)),
+                source: "ConstructionMethodLibraryView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.quickNoteAttachments(
+                attachments,
+                summary: "constructionMethod.attachments"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
         unlinkDeletedMethodReferences(Array(ids))
         if let selectedMethodID, ids.contains(selectedMethodID) {
             self.selectedMethodID = store.constructionMethods.first?.id
         }
-        store.scheduleSave()
+        queueMethodDeletion(
+            deletion,
+            deletedIDs: ids,
+            todoSnapshot: todoSnapshot,
+            logSnapshot: logSnapshot,
+            previousSelection: previousSelection
+        )
     }
 
     private func openFocusedMethodIfNeeded() {
@@ -228,44 +263,120 @@ struct ConstructionMethodLibraryView: View {
     }
 
     private func deleteMethod(_ target: ConstructionMethod) {
-        QuickNoteAttachmentStorage.delete(attachments: target.attachments + target.tutorialAttachments)
-        store.constructionMethods.removeAll { $0.id == target.id }
-        unlinkDeletedMethodReferences([target.id])
-        if selectedMethodID == target.id {
-            selectedMethodID = store.constructionMethods.first?.id
+        deleteMethods([target])
+    }
+
+    private func queueMethodDeletion(
+        _ deletion: DataStoreRemovalResult<ConstructionMethod>,
+        deletedIDs: Set<UUID>,
+        todoSnapshot: [SiteTodo],
+        logSnapshot: [DailyLog],
+        previousSelection: UUID?
+    ) {
+        guard !deletion.isEmpty else { return }
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条施工工艺"), Int64(deletion.deletedCount)),
+            commit: {
+                deletion.performDeferredFileCleanup()
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreConstructionMethods(from: deletion)
+                store.replaceSiteTodos(restoringMethodLinks(
+                    current: store.siteTodos,
+                    snapshot: todoSnapshot,
+                    deletedIDs: deletedIDs,
+                    links: \.linkedConstructionMethodIDs
+                ))
+                store.replaceDailyLogs(restoringMethodLinks(
+                    current: store.dailyLogs,
+                    snapshot: logSnapshot,
+                    deletedIDs: deletedIDs,
+                    links: \.linkedConstructionMethodIDs
+                ))
+                if let previousSelection,
+                   store.constructionMethods.contains(where: { $0.id == previousSelection }) {
+                    selectedMethodID = previousSelection
+                }
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func uniqueAttachments(_ attachments: [QuickNoteAttachment]) -> [QuickNoteAttachment] {
+        var seen = Set<String>()
+        return attachments.filter { attachment in
+            guard !attachment.fileName.isEmpty else { return false }
+            return seen.insert(attachment.fileName).inserted
         }
-        store.scheduleSave()
+    }
+
+    private func restoringMethodLinks<Item: Identifiable>(
+        current: [Item],
+        snapshot: [Item],
+        deletedIDs: Set<UUID>,
+        links: WritableKeyPath<Item, [UUID]>
+    ) -> [Item] where Item.ID: Hashable {
+        let snapshotByID = Dictionary(uniqueKeysWithValues: snapshot.map { ($0.id, $0) })
+        return current.map { item in
+            guard let before = snapshotByID[item.id] else { return item }
+            let removedLinks = before[keyPath: links].filter { deletedIDs.contains($0) }
+            guard !removedLinks.isEmpty else { return item }
+
+            var restored = item
+            var linkSet = Set(restored[keyPath: links])
+            for id in removedLinks where linkSet.insert(id).inserted {
+                restored[keyPath: links].append(id)
+            }
+            return restored
+        }
     }
 
     private func updateMethod(_ updated: ConstructionMethod) {
-        if let index = store.constructionMethods.firstIndex(where: { $0.id == updated.id }) {
-            let oldFiles = Set((store.constructionMethods[index].attachments + store.constructionMethods[index].tutorialAttachments).map(\.fileName))
-            let newFiles = Set((updated.attachments + updated.tutorialAttachments).map(\.fileName))
-            store.constructionMethods[index] = updated
-            QuickNoteAttachmentStorage.delete(fileNames: Array(oldFiles.subtracting(newFiles)))
-            selectedMethodID = updated.id
-            store.scheduleSave()
-        }
+        guard let existing = store.constructionMethods.first(where: { $0.id == updated.id }) else { return }
+        let oldFiles = Set((existing.attachments + existing.tutorialAttachments).map(\.fileName))
+        let newFiles = Set((updated.attachments + updated.tutorialAttachments).map(\.fileName))
+        store.upsertConstructionMethod(updated)
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            Array(oldFiles.subtracting(newFiles)),
+            summary: "engineeringDatabase.updateMethodAttachments"
+        )?.perform()
+        selectedMethodID = updated.id
+        store.scheduleSave()
     }
 
     private func unlinkDeletedMethodReferences(_ removedIDs: [UUID]) {
         let removedIDSet = Set(removedIDs)
         guard !removedIDSet.isEmpty else { return }
 
-        for index in store.siteTodos.indices {
-            let current = store.siteTodos[index].linkedConstructionMethodIDs
+        var siteTodos = store.siteTodos
+        var didUpdateSiteTodos = false
+        for index in siteTodos.indices {
+            let current = siteTodos[index].linkedConstructionMethodIDs
             let filtered = current.filter { !removedIDSet.contains($0) }
             if filtered.count != current.count {
-                store.siteTodos[index].linkedConstructionMethodIDs = filtered
+                siteTodos[index].linkedConstructionMethodIDs = filtered
+                didUpdateSiteTodos = true
             }
         }
+        if didUpdateSiteTodos {
+            store.replaceSiteTodos(siteTodos)
+        }
 
-        for index in store.dailyLogs.indices {
-            let current = store.dailyLogs[index].linkedConstructionMethodIDs
+        var dailyLogs = store.dailyLogs
+        var didUpdateDailyLogs = false
+        for index in dailyLogs.indices {
+            let current = dailyLogs[index].linkedConstructionMethodIDs
             let filtered = current.filter { !removedIDSet.contains($0) }
             if filtered.count != current.count {
-                store.dailyLogs[index].linkedConstructionMethodIDs = filtered
+                dailyLogs[index].linkedConstructionMethodIDs = filtered
+                didUpdateDailyLogs = true
             }
+        }
+        if didUpdateDailyLogs {
+            store.replaceDailyLogs(dailyLogs)
         }
     }
 }

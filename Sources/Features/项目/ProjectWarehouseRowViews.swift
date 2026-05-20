@@ -12,17 +12,24 @@ struct ProjectWarehouseProjectRow: View {
                     .font(.body.weight(.semibold))
                     .lineLimit(1)
                 Spacer()
-                Text("\(stockCount) 种")
+                Text(String(format: String(localized: "%lld 种"), Int64(stockCount)))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(stockCount == 0 ? Color.secondary : Color.appPrimaryAction)
             }
-            Text("出入库记录 \(movementCount) 条")
+            Text(String(format: String(localized: "出入库记录 %lld 条"), Int64(movementCount)))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(project.name)，库存材料 \(stockCount) 种，出入库记录 \(movementCount) 条")
-        .accessibilityHint("双击查看项目仓库详情")
+        .accessibilityLabel(
+            String(
+                format: String(localized: "%@，库存材料 %lld 种，出入库记录 %lld 条"),
+                project.name,
+                Int64(stockCount),
+                Int64(movementCount)
+            )
+        )
+        .accessibilityHint(String(localized: "双击查看项目仓库详情"))
     }
 }
 
@@ -44,9 +51,9 @@ struct ProjectWarehouseAttachmentDraftRow: View {
                     .foregroundStyle(.secondary)
             }
             Spacer()
-            Button("移除", role: .destructive, action: onRemove)
+            Button(String(localized: "移除"), role: .destructive, action: onRemove)
                 .font(.caption.weight(.semibold))
-                .accessibilityLabel("移除附件 \(attachment.title)")
+                .accessibilityLabel(String(format: String(localized: "移除附件 %@"), attachment.title))
         }
     }
 }
@@ -78,12 +85,12 @@ struct ProjectWarehouseAttachmentDocumentRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(document.title)，\(metaText)")
-        .accessibilityHint("双击预览附件")
+        .accessibilityLabel(String(format: String(localized: "%@，%@"), document.title, metaText))
+        .accessibilityHint(String(localized: "双击预览附件"))
     }
 
     private var metaText: String {
-        let fileType = document.fileType.isEmpty ? "附件" : document.fileType.uppercased()
+        let fileType = document.fileType.isEmpty ? String(localized: "附件") : document.fileType.uppercased()
         return "\(document.category.displayName) · \(fileType) · \(document.createdAt)"
     }
 
@@ -126,7 +133,10 @@ struct WarehouseMovementRow: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                 if !movement.linkedDocumentIds.isEmpty {
-                    Label("\(movement.linkedDocumentIds.count) 个附件", systemImage: "paperclip")
+                    Label(
+                        String(format: String(localized: "%lld 个附件"), Int64(movement.linkedDocumentIds.count)),
+                        systemImage: "paperclip"
+                    )
                         .font(.caption2)
                         .foregroundStyle(Color.appDoc)
                 }
@@ -142,7 +152,16 @@ struct WarehouseMovementRow: View {
             }
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(movementType.rawValue)，\(movement.materialName)，\(movement.quantity)\(movement.unit)，日期 \(movement.date)")
-        .accessibilityHint("双击查看出入库详情")
+        .accessibilityLabel(
+            String(
+                format: String(localized: "%@，%@，%@%@，日期 %@"),
+                movementType.displayName,
+                movement.materialName,
+                movement.quantity,
+                movement.unit,
+                movement.date
+            )
+        )
+        .accessibilityHint(String(localized: "双击查看出入库详情"))
     }
 }

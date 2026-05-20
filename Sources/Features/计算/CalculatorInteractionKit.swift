@@ -3,19 +3,40 @@ import SwiftUI
 import UIKit
 #endif
 
+func calculatorLoc(_ key: String) -> String {
+    String(localized: String.LocalizationValue(stringLiteral: key))
+}
+
+func calculatorLocFormat(_ key: String, _ arguments: CVarArg...) -> String {
+    String(format: calculatorLoc(key), locale: Locale.current, arguments: arguments)
+}
+
 enum CalculatorInputParser {
     static func double(_ value: String) -> Double? {
-        let normalized = value
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .replacingOccurrences(of: ",", with: ".")
-        guard !normalized.isEmpty else { return nil }
-        return Double(normalized)
+        guard let decimal = DataValueParser.decimalValueIfPresent(
+            from: value,
+            requiresEntireString: true
+        ) else {
+            return nil
+        }
+        return NSDecimalNumber(decimal: decimal).doubleValue
     }
 
     static func int(_ value: String) -> Int? {
-        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return nil }
-        return Int(normalized)
+        guard let decimal = DataValueParser.decimalValueIfPresent(
+            from: value,
+            requiresEntireString: true
+        ) else {
+            return nil
+        }
+        let doubleValue = NSDecimalNumber(decimal: decimal).doubleValue
+        guard doubleValue.isFinite,
+              doubleValue.rounded(.towardZero) == doubleValue,
+              doubleValue >= Double(Int.min),
+              doubleValue <= Double(Int.max) else {
+            return nil
+        }
+        return Int(doubleValue)
     }
 }
 
@@ -29,7 +50,153 @@ struct CalculatorValidationHint: View {
                 .foregroundStyle(.appRisk)
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel(message)
-                .accessibilityHint("输入校验提示")
+                .accessibilityHint(calculatorLoc("输入校验提示"))
+        }
+    }
+}
+
+struct CalculatorNumericFieldRule {
+    let kind: NumericInputKind
+    let requirement: NumericInputRequirement
+    let min: Double?
+    let max: Double?
+    let rangeMessage: String?
+    let wholeNumberOnly: Bool
+    let wholeNumberMessage: String?
+
+    init(
+        kind: NumericInputKind,
+        requirement: NumericInputRequirement,
+        min: Double? = nil,
+        max: Double? = nil,
+        rangeMessage: String? = nil,
+        wholeNumberOnly: Bool = false,
+        wholeNumberMessage: String? = nil
+    ) {
+        self.kind = kind
+        self.requirement = requirement
+        self.min = min
+        self.max = max
+        self.rangeMessage = rangeMessage
+        self.wholeNumberOnly = wholeNumberOnly
+        self.wholeNumberMessage = wholeNumberMessage
+    }
+
+    func validate(_ text: String) -> NumericInputFieldValidation {
+        let base = InputValidator.validateField(
+            text,
+            kind: kind,
+            requirement: requirement,
+            min: min,
+            max: max,
+            rangeMessage: rangeMessage
+        )
+
+        guard wholeNumberOnly,
+              base.validation.error == nil,
+              base.rangeErrorMessage == nil,
+              let decimal = base.decimalValue else {
+            return base
+        }
+
+        let value = NSDecimalNumber(decimal: decimal).doubleValue
+        guard value.rounded(.towardZero) != value else {
+            return base
+        }
+
+        return NumericInputFieldValidation(
+            validation: base.validation,
+            rangeErrorMessage: wholeNumberMessage ?? calculatorLoc("请输入整数")
+        )
+    }
+}
+
+struct CalculatorValidatedNumericField: View {
+    let title: String
+    let placeholder: String
+    let unit: String?
+    let rule: CalculatorNumericFieldRule
+    let keyboardType: UIKeyboardType
+    let showWhenEmpty: Bool
+
+    @Binding private var text: String
+    private let focusBinding: FocusState<Bool>.Binding?
+
+    init(
+        title: String,
+        placeholder: String,
+        unit: String? = nil,
+        text: Binding<String>,
+        rule: CalculatorNumericFieldRule,
+        keyboardType: UIKeyboardType = .decimalPad,
+        showWhenEmpty: Bool = false,
+        focus: FocusState<Bool>.Binding? = nil
+    ) {
+        self.title = title
+        self.placeholder = placeholder
+        self.unit = unit
+        _text = text
+        self.rule = rule
+        self.keyboardType = keyboardType
+        self.showWhenEmpty = showWhenEmpty
+        focusBinding = focus
+    }
+
+    var validation: NumericInputFieldValidation {
+        rule.validate(text)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            LabeledContent {
+                HStack(spacing: 6) {
+                    field
+                    if let unit, !unit.isEmpty {
+                        Text(unit)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.vertical, 2)
+                .padding(.horizontal, 6)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(
+                            shouldShowError ? Color.appRisk.opacity(0.55) : Color.clear,
+                            lineWidth: 1
+                        )
+                )
+            } label: {
+                Text(title)
+            }
+
+            NumericInputFieldValidationHint(
+                validation: validation,
+                showWhenEmpty: showWhenEmpty
+            )
+        }
+    }
+
+    private var shouldShowError: Bool {
+        guard validation.errorMessage != nil else { return false }
+        return showWhenEmpty || !validation.isEmpty
+    }
+
+    @ViewBuilder
+    private var field: some View {
+        if let focusBinding {
+            TextField(placeholder, text: $text.numericInput(rule.kind))
+                .keyboardType(keyboardType)
+                .multilineTextAlignment(.trailing)
+                .focused(focusBinding)
+        } else {
+            TextField(placeholder, text: $text.numericInput(rule.kind))
+                .keyboardType(keyboardType)
+                .multilineTextAlignment(.trailing)
         }
     }
 }
@@ -59,8 +226,8 @@ struct CalculatorPresetChips: View {
                         .foregroundStyle(selection == option ? .white : .primary)
                         .clipShape(Capsule())
                         .accessibilityLabel("\(title) \(option)")
-                        .accessibilityValue(selection == option ? "已选中" : "未选中")
-                        .accessibilityHint("双击切换")
+                        .accessibilityValue(selection == option ? calculatorLoc("已选中") : calculatorLoc("未选中"))
+                        .accessibilityHint(calculatorLoc("双击切换"))
                     }
                 }
             }
@@ -140,7 +307,7 @@ struct CalculationResult {
 
     static func singleSection(
         headline: String,
-        title: String = "明细",
+        title: String = calculatorLoc("明细"),
         formula: String? = nil,
         items: [ResultItem]
     ) -> CalculationResult {
@@ -154,8 +321,8 @@ struct CalculationResult {
     static func error(_ message: String) -> CalculationResult {
         singleSection(
             headline: message,
-            title: "错误",
-            items: [item("提示", message, status: .fail)]
+            title: calculatorLoc("错误"),
+            items: [item(calculatorLoc("提示"), message, status: .fail)]
         )
     }
 
@@ -169,7 +336,7 @@ struct CalculationResult {
             lines.append(headline)
         }
         if let formula, !formula.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            lines.append("公式: \(formula)")
+            lines.append(calculatorLocFormat("公式: %@", formula))
         }
 
         for section in sections {
@@ -230,7 +397,7 @@ struct CalculatorResultCard: View {
 
             if let formula = result.formula, !formula.isEmpty {
                 HStack(alignment: .firstTextBaseline, spacing: AppSpacing.tight) {
-                    Text("公式")
+                    Text(calculatorLoc("公式"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer(minLength: 8)
@@ -261,8 +428,8 @@ struct CalculatorResultCard: View {
             RoundedRectangle(cornerRadius: 12)
                 .stroke(result.primaryStatus.cardStrokeColor, lineWidth: 1)
         )
-        .alert("保存失败", isPresented: $showSaveError) {
-            Button("知道了", role: .cancel) {}
+        .alert(calculatorLoc("保存失败"), isPresented: $showSaveError) {
+            Button(calculatorLoc("知道了"), role: .cancel) {}
         } message: {
             Text(saveErrorMessage)
         }
@@ -284,24 +451,24 @@ struct CalculatorResultCard: View {
     @ViewBuilder
     private var projectSaveMenuContent: some View {
         if sortedProjects.isEmpty {
-            Button("暂无项目") {}
+            Button(calculatorLoc("暂无项目")) {}
                 .disabled(true)
         } else {
-            Menu("保存到项目资料") {
+            Menu(calculatorLoc("保存到项目资料")) {
                 ForEach(sortedProjects) { project in
                     Button(project.name) {
                         saveResultToProjectDocument(project)
                     }
                 }
             }
-            Menu("保存到随手记") {
+            Menu(calculatorLoc("保存到随手记")) {
                 ForEach(sortedProjects) { project in
                     Button(project.name) {
                         saveResultToQuickNote(project)
                     }
                 }
             }
-            Menu("保存到施工日志") {
+            Menu(calculatorLoc("保存到施工日志")) {
                 ForEach(sortedProjects) { project in
                     Button(project.name) {
                         saveResultToDailyLog(project)
@@ -320,26 +487,26 @@ struct CalculatorResultCard: View {
             Menu {
                 projectSaveMenuContent
             } label: {
-                Label("保存到项目", systemImage: "folder.badge.plus")
+                Label(calculatorLoc("保存到项目"), systemImage: "folder.badge.plus")
                     .font(.caption.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.appProminent())
             .disabled(store.projects.isEmpty || copyText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-            .accessibilityLabel("保存到项目")
-            .accessibilityHint("将计算结果写入项目资料、随手记或施工日志")
+            .accessibilityLabel(calculatorLoc("保存到项目"))
+            .accessibilityHint(calculatorLoc("将计算结果写入项目资料、随手记或施工日志"))
 
             Button {
                 copyToClipboard()
             } label: {
-                Label(copied ? "已复制" : "复制结果", systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
+                Label(copied ? calculatorLoc("已复制") : calculatorLoc("复制结果"), systemImage: copied ? "checkmark.circle.fill" : "doc.on.doc")
                     .font(.caption.weight(.semibold))
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
             .tint(copied ? Color.appSuccess : Color.appPrimaryAction)
-            .accessibilityLabel(copied ? "已复制结果" : "复制结果")
-            .accessibilityHint("将计算结果复制到剪贴板")
+            .accessibilityLabel(copied ? calculatorLoc("已复制结果") : calculatorLoc("复制结果"))
+            .accessibilityHint(calculatorLoc("将计算结果复制到剪贴板"))
         }
         .controlSize(.small)
     }
@@ -362,7 +529,7 @@ struct CalculatorResultCard: View {
                 .buttonStyle(.bordered)
                 .controlSize(.mini)
                 .tint(Color.appSuccess)
-                .accessibilityHint("打开保存结果所在的项目页面")
+                .accessibilityHint(calculatorLoc("打开保存结果所在的项目页面"))
             }
         }
         .padding(.horizontal, 10)
@@ -397,7 +564,7 @@ struct CalculatorResultCard: View {
 
     @MainActor
     private func saveResultToProjectDocument(_ project: Project) {
-        let note = "来源：计算器「\(title)」结果"
+        let note = calculatorLocFormat("来源：计算器「%@」结果", title)
         let generatedTitle = "\(title)-\(Formatters.date.string(from: Date()))"
         let payload = Data(copyText.utf8)
         switch ProjectDetailFinanceDocumentActions.importAttachmentDocumentData(
@@ -412,12 +579,12 @@ struct CalculatorResultCard: View {
         ) {
         case .success(let document):
             presentSaveSuccess(
-                "已保存到 \(project.name) 的项目资料",
+                calculatorLocFormat("已保存到 %@ 的项目资料", project.name),
                 destination: CalculatorSavedProjectDestination(
                     projectId: project.id,
                     mode: .assets,
                     focus: .document(document.id),
-                    actionTitle: "打开资料"
+                    actionTitle: calculatorLoc("打开资料")
                 )
             )
         case .failure(let message):
@@ -430,21 +597,21 @@ struct CalculatorResultCard: View {
     private func saveResultToQuickNote(_ project: Project) {
         let timestamp = Formatters.now()
         let note = QuickNote(
-            title: "\(title) 计算结果",
+            title: calculatorLocFormat("%@ 计算结果", title),
             content: copyText,
             projectId: project.id,
             createdAt: timestamp,
             updatedAt: timestamp
         )
-        store.quickNotes.insert(note, at: 0)
+        store.insertQuickNoteAtTop(note)
         store.scheduleSave()
         presentSaveSuccess(
-            "已保存到 \(project.name) 的随手记",
+            calculatorLocFormat("已保存到 %@ 的随手记", project.name),
             destination: CalculatorSavedProjectDestination(
                 projectId: project.id,
                 mode: .timeline,
                 focus: nil,
-                actionTitle: "打开项目"
+                actionTitle: calculatorLoc("打开项目")
             )
         )
     }
@@ -453,32 +620,33 @@ struct CalculatorResultCard: View {
     private func saveResultToDailyLog(_ project: Project) {
         let today = Formatters.date.string(from: Date())
         let block = """
-        【计算结果】\(title)
+        \(calculatorLocFormat("【计算结果】%@", title))
         \(copyText)
         """
         if let existingIndex = store.dailyLogs.firstIndex(where: { $0.projectId == project.id && $0.date == today }) {
-            let current = store.dailyLogs[existingIndex].content.trimmingCharacters(in: .whitespacesAndNewlines)
-            store.dailyLogs[existingIndex].content = current.isEmpty ? block : "\(current)\n\n\(block)"
+            var existing = store.dailyLogs[existingIndex]
+            let current = existing.content.trimmingCharacters(in: .whitespacesAndNewlines)
+            existing.content = current.isEmpty ? block : "\(current)\n\n\(block)"
+            store.updateDailyLog(existing)
         } else {
-            store.dailyLogs.insert(
+            store.insertDailyLogAtTop(
                 DailyLog(
                     date: today,
                     weather: autoWeatherNow(),
                     content: block,
                     workers: "0",
                     projectId: project.id
-                ),
-                at: 0
+                )
             )
         }
         store.scheduleSave()
         presentSaveSuccess(
-            "已保存到 \(project.name) 的施工日志",
+            calculatorLocFormat("已保存到 %@ 的施工日志", project.name),
             destination: CalculatorSavedProjectDestination(
                 projectId: project.id,
                 mode: .records,
                 focus: nil,
-                actionTitle: "打开现场"
+                actionTitle: calculatorLoc("打开现场")
             )
         )
     }
@@ -570,20 +738,20 @@ private struct CalculatorResultItemRow: View {
                 .fill(item.status.rowBackgroundColor)
         )
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.label)，\(item.value)")
+        .accessibilityLabel(calculatorLocFormat("%@，%@", item.label, item.value))
         .accessibilityValue(accessibilityStatus(item.status))
     }
 
     private func accessibilityStatus(_ status: CalculationResult.ResultStatus) -> String {
         switch status {
         case .normal:
-            return "普通结果"
+            return calculatorLoc("普通结果")
         case .pass:
-            return "通过"
+            return calculatorLoc("通过")
         case .warning:
-            return "关注"
+            return calculatorLoc("关注")
         case .fail:
-            return "不通过"
+            return calculatorLoc("不通过")
         }
     }
 }

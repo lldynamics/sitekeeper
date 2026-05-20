@@ -1,5 +1,55 @@
 import Foundation
 
+enum WidgetSharedDefaults {
+    static let suiteName = "group.com.chengjinfang.sitekeeper"
+    static let widgetKind = "SitekeeperWidget"
+    static let dataKey = "widget_data"
+    static let updatedAtKey = "widget_data_updated_at"
+    static let languageCodeKey = "languageCode"
+    static let appleLanguagesKey = "AppleLanguages"
+    static let storageIssueLogKey = "storageIssueLogEntries"
+}
+
+enum WidgetSharedStorageIssueLog {
+    private static let maxEntries = 120
+    private static let timestampFormatter: ISO8601DateFormatter = {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter
+    }()
+
+    @discardableResult
+    static func record(_ message: String, source: String? = nil) -> Bool {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return false }
+        append(message, source: source, defaults: defaults)
+        return true
+    }
+
+    static func entries() -> [String] {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return [] }
+        return defaults.stringArray(forKey: WidgetSharedDefaults.storageIssueLogKey) ?? []
+    }
+
+    static func clear() {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
+        defaults.removeObject(forKey: WidgetSharedDefaults.storageIssueLogKey)
+    }
+
+    static func append(_ message: String, source: String? = nil, defaults: UserDefaults) {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        let normalizedSource = source?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sourcePrefix = normalizedSource.map { $0.isEmpty ? "" : "[\($0)] " } ?? ""
+        let entry = "[\(timestampFormatter.string(from: Date()))] \(sourcePrefix)\(trimmed)"
+        var entries = defaults.stringArray(forKey: WidgetSharedDefaults.storageIssueLogKey) ?? []
+        entries.insert(entry, at: 0)
+        if entries.count > maxEntries {
+            entries = Array(entries.prefix(maxEntries))
+        }
+        defaults.set(entries, forKey: WidgetSharedDefaults.storageIssueLogKey)
+    }
+}
+
 struct WidgetProjectSummary: Codable {
     let id: UUID
     let name: String

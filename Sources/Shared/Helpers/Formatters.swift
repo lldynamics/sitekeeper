@@ -56,6 +56,7 @@ enum Formatters {
         let f = NumberFormatter()
         f.locale = posixLocale
         f.numberStyle = .decimal
+        f.usesGroupingSeparator = true
         f.minimumFractionDigits = minFraction
         f.maximumFractionDigits = maxFraction
         return f.string(from: NSNumber(value: v)) ?? String(v)
@@ -63,6 +64,15 @@ enum Formatters {
 
     /// 两位小数金额
     static func money(_ v: Double) -> String { String(format: "%.2f", v) }
+
+    static func localizedCurrency(_ value: Double, locale: Locale = .autoupdatingCurrent) -> String {
+        let formatter = NumberFormatter()
+        formatter.locale = locale
+        formatter.numberStyle = .currency
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: value)) ?? money(value)
+    }
 
     private static func makeFormatter(_ format: String) -> DateFormatter {
         let formatter = DateFormatter()

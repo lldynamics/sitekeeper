@@ -51,100 +51,111 @@ struct ProjectFinancialRecordAddSheet: View {
         NavigationStack {
             Form {
                 if !recentRecords.isEmpty {
-                    Section("快速录入") {
+                    Section(String(localized: "快速录入")) {
                         if let lastRecord = recentRecords.first {
-                            Button("套用上一笔") { apply(record: lastRecord) }
+                            Button(String(localized: "套用上一笔")) { apply(record: lastRecord) }
                         }
                         if let lastIncome = recentRecords.first(where: { $0.normalizedDirection == .income }) {
-                            Button("套用最近收入") { apply(record: lastIncome) }
+                            Button(String(localized: "套用最近收入")) { apply(record: lastIncome) }
                         }
                         if let lastExpense = recentRecords.first(where: { $0.normalizedDirection == .expense }) {
-                            Button("套用最近支出") { apply(record: lastExpense) }
+                            Button(String(localized: "套用最近支出")) { apply(record: lastExpense) }
                         }
                     }
                 }
-                Section("智能录入（票据 OCR）") {
+                Section(String(localized: "智能录入（票据 OCR）")) {
                     Button {
                         showOCRImporter = true
                     } label: {
-                        Label("从图片/PDF识别金额、日期、单位", systemImage: "text.viewfinder")
+                        Label(String(localized: "从图片/PDF识别金额、日期、单位"), systemImage: "text.viewfinder")
                     }
                     .disabled(isRecognizingReceipt)
 
                     if isRecognizingReceipt {
-                        ProgressView("识别中…")
+                        ProgressView(String(localized: "识别中…"))
                             .font(.caption)
                     }
 
                     if let ocrPreview {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("识别结果")
+                            Text(String(localized: "识别结果"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             ForEach(ProjectFinancialReceiptOCRSupport.summaryLines(from: ocrPreview), id: \.self) { line in
                                 Text(line)
                                     .font(.caption2)
                             }
+                            ReceiptOCRAmountCandidatesView(candidates: ocrPreview.amountCandidates) { candidate in
+                                applyOCRAmountCandidate(candidate)
+                            }
                         }
                     }
                 }
-                Section("账目") {
-                    DatePicker("日期时间", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    Picker("类型", selection: $direction) {
+                Section(String(localized: "账目")) {
+                    DatePicker(String(localized: "日期时间"), selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    Picker(String(localized: "类型"), selection: $direction) {
                         ForEach(ProjectFinancialDirection.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)
-                    Picker("分类", selection: $category) {
+                    Picker(String(localized: "分类"), selection: $category) {
                         ForEach(availableCategories, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("金额（元）", text: $amount)
+                    TextField(String(localized: "金额（元）"), text: $amount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                         .focused($isInputFocused)
-                    TextField("对方单位/个人", text: $counterparty)
+                    NumericInputValidationHint(
+                        validation: InputValidator.validate(
+                            amount,
+                            kind: .amount,
+                            requirement: .requiredPositive
+                        ),
+                        alignment: .leading
+                    )
+                    TextField(String(localized: "对方单位/个人"), text: $counterparty)
                         .focused($isInputFocused)
-                    TextField("发票号/收据号", text: $invoiceNumber)
+                    TextField(String(localized: "发票号/收据号"), text: $invoiceNumber)
                         .focused($isInputFocused)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                         .focused($isInputFocused)
                 }
-                Section("应收/应付提醒") {
-                    Toggle("设置到期提醒", isOn: $hasDueDate)
+                Section(String(localized: "应收/应付提醒")) {
+                    Toggle(String(localized: "设置到期提醒"), isOn: $hasDueDate)
                     if hasDueDate {
-                        DatePicker("到期日", selection: $dueDate, displayedComponents: .date)
-                        Picker("提醒状态", selection: $reminderStatus) {
+                        DatePicker(String(localized: "到期日"), selection: $dueDate, displayedComponents: .date)
+                        Picker(String(localized: "提醒状态"), selection: $reminderStatus) {
                             ForEach(ProjectFinancialReminderStatus.allCases.filter { $0 != .none }, id: \.self) { item in
                                 Text(item.displayName).tag(item)
                             }
                         }
                     }
                 }
-                Section("附件") {
-                    Toggle("保存后立即扫描票据（可选）", isOn: $scanAfterSave)
+                Section(String(localized: "附件")) {
+                    Toggle(String(localized: "保存后立即扫描票据（可选）"), isOn: $scanAfterSave)
                 }
             }
-            .navigationTitle("项目记账")
+            .navigationTitle(String(localized: "项目记账"))
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         isInputFocused = false
                         let record = ProjectFinancialRecord(
                             projectId: projectId,
                             date: Formatters.dateTime.string(from: date),
                             direction: direction,
                             category: category,
-                            amount: amount,
+                            amount: NumericInputSupport.normalizedStorageText(amount, kind: .amount),
                             counterparty: counterparty,
                             invoiceNumber: invoiceNumber,
                             status: status,
@@ -155,7 +166,7 @@ struct ProjectFinancialRecordAddSheet: View {
                         onSave(record, scanAfterSave)
                         dismiss()
                     }
-                    .disabled(!InputValidator.nonNegativeNumber(amount) || !MoneyValue(text: amount).isPositive)
+                    .disabled(!InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid)
                 }
                 KeyboardDismissToolbar {
                     isInputFocused = false
@@ -173,8 +184,8 @@ struct ProjectFinancialRecordAddSheet: View {
             ) { result in
                 handleOCRImportResult(result)
             }
-            .alert("票据识别失败", isPresented: $showOCRError) {
-                Button("知道了", role: .cancel) {}
+            .alert(String(localized: "票据识别失败"), isPresented: $showOCRError) {
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(ocrErrorMessage)
             }
@@ -215,7 +226,7 @@ struct ProjectFinancialRecordAddSheet: View {
             }
             startOCR(for: url)
         case .failure(let error):
-            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            ocrErrorMessage = String(format: String(localized: "打开票据失败：%@"), error.localizedDescription)
             showOCRError = true
             AppHaptics.error()
         }
@@ -239,7 +250,7 @@ struct ProjectFinancialRecordAddSheet: View {
                 return
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                StorageIssueLog.record(String(format: String(localized: "票据 OCR 识别失败：%@，%@"), url.lastPathComponent, message))
                 ocrErrorMessage = message
                 showOCRError = true
                 AppHaptics.error()
@@ -249,8 +260,10 @@ struct ProjectFinancialRecordAddSheet: View {
 
     @MainActor
     private func applyOCRResult(_ result: ReceiptOCRResult) {
-        if let amountText = result.amount, !amountText.isEmpty {
-            amount = amountText
+        if result.amountCandidates.isEmpty,
+           let amountText = result.amount,
+           !amountText.isEmpty {
+            amount = NumericInputSupport.sanitize(amountText, kind: .amount)
         }
         if let party = result.counterparty, !party.isEmpty {
             counterparty = party
@@ -262,6 +275,12 @@ struct ProjectFinancialRecordAddSheet: View {
            let recognizedDate = Formatters.date.date(from: dateText) {
             date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
         }
+    }
+
+    @MainActor
+    private func applyOCRAmountCandidate(_ candidate: ReceiptOCRAmountCandidate) {
+        amount = NumericInputSupport.sanitize(candidate.amount, kind: .amount)
+        AppHaptics.success()
     }
 }
 
@@ -337,11 +356,11 @@ struct ProjectFinancialRecordEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("智能录入（票据 OCR）") {
+                Section(String(localized: "智能录入（票据 OCR）")) {
                     Button {
                         showOCRImporter = true
                     } label: {
-                        Label("从图片/PDF识别金额、日期、单位", systemImage: "text.viewfinder")
+                        Label(String(localized: "从图片/PDF识别金额、日期、单位"), systemImage: "text.viewfinder")
                     }
                     .disabled(isRecognizingReceipt)
 
@@ -351,8 +370,8 @@ struct ProjectFinancialRecordEditSheet: View {
                         } label: {
                             Label(
                                 linkedOCRCandidates.isEmpty
-                                ? "已关联票据暂不支持识别（仅图片/PDF）"
-                                : "从已关联票据一键回填（\(linkedOCRCandidates.count)）",
+                                ? String(localized: "已关联票据暂不支持识别（仅图片/PDF）")
+                                : String(format: String(localized: "从已关联票据一键回填（%lld）"), Int64(linkedOCRCandidates.count)),
                                 systemImage: "doc.text.viewfinder"
                             )
                         }
@@ -360,95 +379,106 @@ struct ProjectFinancialRecordEditSheet: View {
                     }
 
                     if isRecognizingReceipt {
-                        ProgressView("识别中…")
+                        ProgressView(String(localized: "识别中…"))
                             .font(.caption)
                     }
 
                     if let ocrPreview {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text("识别结果")
+                            Text(String(localized: "识别结果"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                             ForEach(ProjectFinancialReceiptOCRSupport.summaryLines(from: ocrPreview), id: \.self) { line in
                                 Text(line)
                                     .font(.caption2)
                             }
+                            ReceiptOCRAmountCandidatesView(candidates: ocrPreview.amountCandidates) { candidate in
+                                applyOCRAmountCandidate(candidate)
+                            }
                         }
                     }
                 }
-                Section("账目") {
-                    DatePicker("日期时间", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    Picker("类型", selection: $direction) {
+                Section(String(localized: "账目")) {
+                    DatePicker(String(localized: "日期时间"), selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    Picker(String(localized: "类型"), selection: $direction) {
                         ForEach(ProjectFinancialDirection.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)
-                    Picker("分类", selection: $category) {
+                    Picker(String(localized: "分类"), selection: $category) {
                         ForEach(availableCategories, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("金额（元）", text: $amount)
+                    TextField(String(localized: "金额（元）"), text: $amount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                         .focused($isInputFocused)
-                    TextField("对方单位/个人", text: $counterparty)
+                    NumericInputValidationHint(
+                        validation: InputValidator.validate(
+                            amount,
+                            kind: .amount,
+                            requirement: .requiredPositive
+                        ),
+                        alignment: .leading
+                    )
+                    TextField(String(localized: "对方单位/个人"), text: $counterparty)
                         .focused($isInputFocused)
-                    TextField("发票号/收据号", text: $invoiceNumber)
+                    TextField(String(localized: "发票号/收据号"), text: $invoiceNumber)
                         .focused($isInputFocused)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                         .focused($isInputFocused)
                 }
-                Section("应收/应付提醒") {
-                    Toggle("设置到期提醒", isOn: $hasDueDate)
+                Section(String(localized: "应收/应付提醒")) {
+                    Toggle(String(localized: "设置到期提醒"), isOn: $hasDueDate)
                     if hasDueDate {
-                        DatePicker("到期日", selection: $dueDate, displayedComponents: .date)
-                        Picker("提醒状态", selection: $reminderStatus) {
+                        DatePicker(String(localized: "到期日"), selection: $dueDate, displayedComponents: .date)
+                        Picker(String(localized: "提醒状态"), selection: $reminderStatus) {
                             ForEach(ProjectFinancialReminderStatus.allCases.filter { $0 != .none }, id: \.self) { item in
                                 Text(item.displayName).tag(item)
                             }
                         }
                     }
                 }
-                Section("票据") {
-                    Button("补扫/追加票据") {
+                Section(String(localized: "票据")) {
+                    Button(String(localized: "补扫/追加票据")) {
                         onScan(updatedRecord)
                     }
-                    Button("管理票据附件（\(linkedAttachmentCount)）") {
+                    Button(String(format: String(localized: "管理票据附件（%d）"), linkedAttachmentCount)) {
                         onManageAttachments(updatedRecord)
                     }
                 }
                 Section {
-                    Button("删除账目", role: .destructive) {
+                    Button(String(localized: "删除账目"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                 }
             }
-            .navigationTitle("编辑账目")
+            .navigationTitle(String(localized: "编辑账目"))
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         isInputFocused = false
                         onSave(updatedRecord)
                         dismiss()
                     }
-                    .disabled(!InputValidator.nonNegativeNumber(amount) || !MoneyValue(text: amount).isPositive)
+                    .disabled(!InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid)
                 }
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }
             }
-            .alert("删除这条账目？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条账目？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     onDelete(record)
                     dismiss()
                 }
@@ -460,8 +490,8 @@ struct ProjectFinancialRecordEditSheet: View {
             ) { result in
                 handleOCRImportResult(result)
             }
-            .alert("票据识别失败", isPresented: $showOCRError) {
-                Button("知道了", role: .cancel) {}
+            .alert(String(localized: "票据识别失败"), isPresented: $showOCRError) {
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(ocrErrorMessage)
             }
@@ -476,7 +506,7 @@ struct ProjectFinancialRecordEditSheet: View {
         value.date = Formatters.dateTime.string(from: date)
         value.direction = direction
         value.category = ProjectFinancialCategory.normalized(category, for: direction)
-        value.amount = amount
+        value.amount = NumericInputSupport.normalizedStorageText(amount, kind: .amount)
         value.counterparty = counterparty
         value.invoiceNumber = invoiceNumber
         value.status = status
@@ -500,7 +530,7 @@ struct ProjectFinancialRecordEditSheet: View {
             }
             startOCR(for: url)
         case .failure(let error):
-            ocrErrorMessage = "打开票据失败：\(error.localizedDescription)"
+            ocrErrorMessage = String(format: String(localized: "打开票据失败：%@"), error.localizedDescription)
             showOCRError = true
             AppHaptics.error()
         }
@@ -524,7 +554,7 @@ struct ProjectFinancialRecordEditSheet: View {
                 return
             } catch {
                 let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                StorageIssueLog.record("票据 OCR 识别失败：\(url.lastPathComponent)，\(message)")
+                StorageIssueLog.record(String(format: String(localized: "票据 OCR 识别失败：%@，%@"), url.lastPathComponent, message))
                 ocrErrorMessage = message
                 showOCRError = true
                 AppHaptics.error()
@@ -536,7 +566,7 @@ struct ProjectFinancialRecordEditSheet: View {
     private func startOCRFromLinkedDocuments() {
         let candidates = linkedOCRCandidates
         guard !candidates.isEmpty else {
-            ocrErrorMessage = "已关联票据暂不支持识别，请使用图片或 PDF。"
+            ocrErrorMessage = String(localized: "已关联票据暂不支持识别，请使用图片或 PDF。")
             showOCRError = true
             AppHaptics.warning()
             return
@@ -562,16 +592,23 @@ struct ProjectFinancialRecordEditSheet: View {
                     return
                 } catch {
                     let message = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
-                    StorageIssueLog.record("关联票据 OCR 识别失败：\(document.fileName)，\(message)")
+                    StorageIssueLog.record(String(format: String(localized: "关联票据 OCR 识别失败：%@，%@"), document.fileName, message))
                     if firstFailureMessage == nil {
                         firstFailureMessage = message
                     }
                 }
             }
             if let firstFailureMessage {
-                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段（\(firstFailureMessage)）。"
+                ocrErrorMessage = String(
+                    format: String(localized: "已尝试 %lld 份关联票据，仍未提取到可回填字段（%@）。"),
+                    Int64(candidates.count),
+                    firstFailureMessage
+                )
             } else {
-                ocrErrorMessage = "已尝试 \(candidates.count) 份关联票据，仍未提取到可回填字段。"
+                ocrErrorMessage = String(
+                    format: String(localized: "已尝试 %lld 份关联票据，仍未提取到可回填字段。"),
+                    Int64(candidates.count)
+                )
             }
             showOCRError = true
             AppHaptics.error()
@@ -580,8 +617,10 @@ struct ProjectFinancialRecordEditSheet: View {
 
     @MainActor
     private func applyOCRResult(_ result: ReceiptOCRResult) {
-        if let amountText = result.amount, !amountText.isEmpty {
-            amount = amountText
+        if result.amountCandidates.isEmpty,
+           let amountText = result.amount,
+           !amountText.isEmpty {
+            amount = NumericInputSupport.sanitize(amountText, kind: .amount)
         }
         if let party = result.counterparty, !party.isEmpty {
             counterparty = party
@@ -592,6 +631,50 @@ struct ProjectFinancialRecordEditSheet: View {
         if let dateText = result.date,
            let recognizedDate = Formatters.date.date(from: dateText) {
             date = ProjectFinancialReceiptOCRSupport.mergeDate(recognizedDate, keepingTimeOf: date)
+        }
+    }
+
+    @MainActor
+    private func applyOCRAmountCandidate(_ candidate: ReceiptOCRAmountCandidate) {
+        amount = NumericInputSupport.sanitize(candidate.amount, kind: .amount)
+        AppHaptics.success()
+    }
+}
+
+private struct ReceiptOCRAmountCandidatesView: View {
+    let candidates: [ReceiptOCRAmountCandidate]
+    let onApply: (ReceiptOCRAmountCandidate) -> Void
+
+    var body: some View {
+        if !candidates.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(String(format: String(localized: "识别到 %lld 个金额候选，请点选确认："), Int64(candidates.count)))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                ForEach(candidates) { candidate in
+                    HStack(alignment: .top, spacing: 6) {
+                        Button {
+                            onApply(candidate)
+                        } label: {
+                            Text(String(format: String(localized: "回填金额：%@"), candidate.amount))
+                                .font(.caption2.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        Text(
+                            String(
+                                format: String(localized: "置信度：%lld%%"),
+                                Int64(candidate.confidencePercent)
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+                    Text(candidate.sourceLine)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
         }
     }
 }
@@ -612,19 +695,19 @@ private enum ProjectFinancialReceiptOCRSupport {
     static func summaryLines(from result: ReceiptOCRResult) -> [String] {
         var lines: [String] = []
         if let amount = result.amount, !amount.isEmpty {
-            lines.append("金额：\(amount)")
+            lines.append(String(format: String(localized: "金额：%@"), amount))
         }
         if let date = result.date, !date.isEmpty {
-            lines.append("日期：\(date)")
+            lines.append(String(format: String(localized: "日期：%@"), date))
         }
         if let counterparty = result.counterparty, !counterparty.isEmpty {
-            lines.append("单位：\(counterparty)")
+            lines.append(String(format: String(localized: "单位：%@"), counterparty))
         }
         if let invoice = result.invoiceNumber, !invoice.isEmpty {
-            lines.append("票号：\(invoice)")
+            lines.append(String(format: String(localized: "票号：%@"), invoice))
         }
         if lines.isEmpty {
-            lines.append("未提取到结构化字段，可手动补录。")
+            lines.append(String(localized: "未提取到结构化字段，可手动补录。"))
         }
         return lines
     }
@@ -661,10 +744,11 @@ struct ProjectFinancialAttachmentSheet: View {
     let onAttach: (ProjectDocument) -> Void
     let onBulkSetCategory: ([ProjectDocument], ProjectDocumentCategory) -> Void
     let onScan: () -> Void
-    let onImportFiles: ([URL]) -> Void
+    let onImportFiles: ([URL], ProjectDocumentImportLedgerSettings) -> Void
     let onImportImage: (UIImage, String) -> Void
 
     @State private var showFileImporter = false
+    @State private var pendingDocumentImportRequest: ProjectDocumentImportConfirmationRequest?
     @State private var selectedPhotoItem: PhotosPickerItem?
     @State private var showImagePicker = false
     @State private var imagePickerSource: UIImagePickerController.SourceType = .photoLibrary
@@ -706,17 +790,20 @@ struct ProjectFinancialAttachmentSheet: View {
         NavigationStack {
             List {
                 if !selectedDocuments.isEmpty {
-                    Section("选中操作") {
-                        LabeledContent("已选附件", value: "\(selectedDocuments.count) 份")
+                    Section(String(localized: "选中操作")) {
+                        LabeledContent(
+                            String(localized: "已选附件"),
+                            value: String(format: String(localized: "%lld 份"), Int64(selectedDocuments.count))
+                        )
                         Button {
                             if let firstDoc = selectedDocuments.first { previewURL = ProjectDocumentStorage.fileURL(for: firstDoc.fileName) }
                         } label: {
-                            Label("预览第一份", systemImage: "eye")
+                            Label(String(localized: "预览第一份"), systemImage: "eye")
                         }
                         ShareLink(items: selectedDocumentURLs) {
-                            Label("导出/分享选中附件", systemImage: "square.and.arrow.up")
+                            Label(String(localized: "导出/分享选中附件"), systemImage: "square.and.arrow.up")
                         }
-                        Picker("批量分类", selection: $bulkCategory) {
+                        Picker(String(localized: "批量分类"), selection: $bulkCategory) {
                             ForEach(ProjectDocumentCategory.allCases, id: \.self) { category in
                                 Text(category.displayName).tag(category)
                             }
@@ -726,21 +813,21 @@ struct ProjectFinancialAttachmentSheet: View {
                             selectedLinkedDocumentIds.removeAll()
                             selectedUnlinkedDocumentIds.removeAll()
                         } label: {
-                            Label("应用分类到选中附件", systemImage: "tag.fill")
+                            Label(String(localized: "应用分类到选中附件"), systemImage: "tag.fill")
                         }
                     }
                 }
 
-                Section("已关联附件 (\(linkedDocuments.count))") {
+                Section(String(format: String(localized: "已关联附件 (%d)"), linkedDocuments.count)) {
                     if linkedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无附件",
+                            String(localized: "暂无附件"),
                             systemImage: "paperclip",
-                            description: Text("可拍照、扫描或关联已有项目资料。")
+                            description: Text(String(localized: "可拍照、扫描或关联已有项目资料。"))
                         )
                     } else {
                         if !selectedLinkedDocumentIds.isEmpty {
-                            Button("移除选中 \(selectedLinkedDocumentIds.count) 项") {
+                            Button(String(format: String(localized: "移除选中 %d 项"), selectedLinkedDocumentIds.count)) {
                                 for document in linkedDocuments where selectedLinkedDocumentIds.contains(document.id) {
                                     onDetach(document)
                                 }
@@ -752,7 +839,7 @@ struct ProjectFinancialAttachmentSheet: View {
                             ProjectFinancialAttachmentRow(
                                 document: document,
                                 isSelected: selectedLinkedDocumentIds.contains(document.id),
-                                trailingTitle: "移除",
+                                trailingTitle: String(localized: "移除"),
                                 onToggleSelection: { toggleLinked(document.id) },
                                 onAction: { onDetach(document) }
                             )
@@ -760,30 +847,30 @@ struct ProjectFinancialAttachmentSheet: View {
                     }
                 }
 
-                Section("新增附件") {
-                    Button("扫描添加") {
+                Section(String(localized: "新增附件")) {
+                    Button(String(localized: "扫描添加")) {
                         onScan()
                     }
-                    Button("从文件导入附件") {
+                    Button(String(localized: "从文件导入附件")) {
                         showFileImporter = true
                     }
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                        Label("从相册选择照片", systemImage: "photo.on.rectangle")
+                        Label(String(localized: "从相册选择照片"), systemImage: "photo.on.rectangle")
                     }
                     if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                        Button("拍照保存") {
+                        Button(String(localized: "拍照保存")) {
                             imagePickerSource = .camera
                             showImagePicker = true
                         }
                     }
                 }
 
-                Section("缺票自动匹配") {
+                Section(String(localized: "缺票自动匹配")) {
                     if autoMatchedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无匹配建议",
+                            String(localized: "暂无匹配建议"),
                             systemImage: "wand.and.stars",
-                            description: Text("建议先在资料里补录金额、日期或单位名称，再回来一键关联。")
+                            description: Text(String(localized: "建议先在资料里补录金额、日期或单位名称，再回来一键关联。"))
                         )
                     } else {
                         ForEach(autoMatchedDocuments) { suggestion in
@@ -805,7 +892,7 @@ struct ProjectFinancialAttachmentSheet: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 Spacer()
-                                Button("关联") {
+                                Button(String(localized: "关联")) {
                                     onAttach(suggestion.document)
                                 }
                                 .buttonStyle(.appProminent())
@@ -816,16 +903,16 @@ struct ProjectFinancialAttachmentSheet: View {
                     }
                 }
 
-                Section("关联已有资料") {
+                Section(String(localized: "关联已有资料")) {
                     if unlinkedDocuments.isEmpty {
                         ContentUnavailableView(
-                            "暂无可关联资料",
+                            String(localized: "暂无可关联资料"),
                             systemImage: "doc.badge.plus",
-                            description: Text("导入项目资料后可在这里关联到当前流水。")
+                            description: Text(String(localized: "导入项目资料后可在这里关联到当前流水。"))
                         )
                     } else {
                         if !selectedUnlinkedDocumentIds.isEmpty {
-                            Button("关联选中 \(selectedUnlinkedDocumentIds.count) 项") {
+                            Button(String(format: String(localized: "关联选中 %d 项"), selectedUnlinkedDocumentIds.count)) {
                                 for document in unlinkedDocuments where selectedUnlinkedDocumentIds.contains(document.id) {
                                     onAttach(document)
                                 }
@@ -837,8 +924,8 @@ struct ProjectFinancialAttachmentSheet: View {
                             ProjectFinancialAttachmentRow(
                                 document: document,
                                 isSelected: selectedUnlinkedDocumentIds.contains(document.id),
-                                trailingTitle: "关联",
-                                warning: document.linkedFinancialRecordId != nil && document.linkedFinancialRecordId != record.id ? "已关联其他账目，点击后将重新关联" : nil,
+                                trailingTitle: String(localized: "关联"),
+                                warning: document.linkedFinancialRecordId != nil && document.linkedFinancialRecordId != record.id ? String(localized: "已关联其他账目，点击后将重新关联") : nil,
                                 onToggleSelection: { toggleUnlinked(document.id) },
                                 onAction: { onAttach(document) }
                             )
@@ -846,11 +933,11 @@ struct ProjectFinancialAttachmentSheet: View {
                     }
                 }
             }
-            .navigationTitle("票据附件管理")
+            .navigationTitle(String(localized: "票据附件管理"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "关闭")) { dismiss() }
                 }
             }
         }
@@ -860,12 +947,24 @@ struct ProjectFinancialAttachmentSheet: View {
             allowsMultipleSelection: true
         ) { result in
             if case .success(let urls) = result {
-                onImportFiles(urls)
+                pendingDocumentImportRequest = ProjectDocumentImportConfirmationRequest(
+                    urls: urls,
+                    defaultSettings: importLedgerDefaultSettings
+                )
+            }
+        }
+        .sheet(item: $pendingDocumentImportRequest) { request in
+            ProjectDocumentImportConfirmationSheet(
+                urls: request.urls,
+                defaultSettings: request.defaultSettings
+            ) { settings in
+                onImportFiles(request.urls, settings)
+                pendingDocumentImportRequest = nil
             }
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePickerView(sourceType: imagePickerSource) { image in
-                onImportImage(image, "来源: 拍照")
+                onImportImage(image, String(localized: "来源: 拍照"))
             }
         }
         .quickLookPreview($previewURL)
@@ -886,10 +985,17 @@ struct ProjectFinancialAttachmentSheet: View {
         }
         await MainActor.run {
             if let image = UIImage(data: data) {
-                onImportImage(image, "来源: 相册")
+                onImportImage(image, String(localized: "来源: 相册"))
             }
             selectedPhotoItem = nil
         }
+    }
+
+    private var importLedgerDefaultSettings: ProjectDocumentImportLedgerSettings {
+        ProjectDocumentImportLedgerSettings(
+            category: ProjectDetailFinanceDocumentHelper.documentCategory(for: record.category),
+            formedAt: record.date
+        )
     }
 
     private func toggleLinked(_ id: UUID) {
@@ -944,9 +1050,9 @@ private struct ProjectFinancialAttachmentRow: View {
     }
 
     private var metaText: String {
-        let fileType = document.fileType.isEmpty ? "附件" : document.fileType.uppercased()
-        let pageText = document.fileType.lowercased() == "pdf" ? " · \(document.pageCount) 页" : ""
-        return "\(document.category.displayName) · \(fileType)\(pageText) · \(document.createdAt)"
+        let fileType = document.fileType.isEmpty ? String(localized: "附件") : document.fileType.uppercased()
+        let pageText = document.fileType.lowercased() == "pdf" ? String(format: String(localized: " · %lld 页"), Int64(document.pageCount)) : ""
+        return String(format: String(localized: "%@ · %@%@ · %@"), document.category.displayName, fileType, pageText, document.createdAt)
     }
 }
 

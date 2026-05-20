@@ -10,6 +10,7 @@ extension ProjectDetailContainer {
             amount: record.amount,
             linkedFinancialRecordId: record.id,
             linkedConstructionMethodIDs: [],
+            formedAt: record.date,
             note: record.note
         )
     }
@@ -56,8 +57,14 @@ extension ProjectDetailContainer {
             versioned.isCurrentVersion = resolved.isCurrentVersion
 
             if let replacement = resolved.replacement {
-                DrawingStorage.delete(fileName: replacement.fileName)
-                store.removeProjectDrawings(ids: Set([replacement.id]))
+                store.removeProjectDrawings(
+                    ids: Set([replacement.id]),
+                    deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
+                        [replacement.fileName],
+                        summary: "projectDetail.importReplacement"
+                    ),
+                    recordsAuditImmediately: true
+                )
                 currentDrawings.removeAll { $0.id == replacement.id }
             }
 
@@ -158,6 +165,8 @@ extension ProjectDetailContainer {
                 fileURL: url,
                 displayName: drawing.name.isEmpty ? drawing.fileName : drawing.name,
                 fileType: drawing.fileType,
+                importedAt: drawing.importedAt,
+                fileSizeBytes: DrawingStorage.fileSize(for: drawing.fileName),
                 textEncoding: drawing.textEncoding,
                 textBigFont: drawing.textBigFont,
                 textSchemeSnapshot: drawing.textSchemeSnapshot,
@@ -190,46 +199,48 @@ extension ProjectDetailContainer {
     }
 
     func updateDrawingOverlaySnapshot(drawingID: UUID, snapshotData: String) {
-        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadOverlaySnapshotData = snapshotData
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadOverlaySnapshotData = snapshotData }) else { return }
         store.scheduleSave()
     }
 
     func updateDrawingCADViewState(drawingID: UUID, viewState: CADDrawingViewState) {
-        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].cadViewState = viewState
+        guard store.mutateProjectDrawing(id: drawingID, { $0.cadViewState = viewState }) else { return }
         store.scheduleSave()
     }
 
     func updateDrawingTextEncoding(drawingID: UUID, encoding: CADDrawingTextEncoding) {
-        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textEncoding = encoding
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textEncoding = encoding }) else { return }
         store.scheduleSave()
     }
 
     func updateDrawingTextBigFont(drawingID: UUID, profile: CADDrawingTextBigFont) {
-        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textBigFont = profile
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textBigFont = profile }) else { return }
         store.scheduleSave()
     }
 
     func updateDrawingTextSchemeSnapshot(drawingID: UUID, snapshot: CADDrawingTextSchemeSnapshot) {
-        guard let index = projectStore.projectDrawings.firstIndex(where: { $0.id == drawingID }) else { return }
-        store.projectDrawings[index].textSchemeSnapshot = snapshot
+        guard store.mutateProjectDrawing(id: drawingID, { $0.textSchemeSnapshot = snapshot }) else { return }
         store.scheduleSave()
     }
 
     func updateProjectCADFontMappings(projectID: UUID, mappings: [CADProjectFontMapping]) {
         guard let index = projectStore.projects.firstIndex(where: { $0.id == projectID }) else { return }
-        store.projects[index].cadFontMappings = mappings
+        var project = projectStore.projects[index]
+        project.cadFontMappings = mappings
+        guard store.updateProject(project) else { return }
         store.scheduleSave()
     }
 
-    func importProjectDocuments(_ urls: [URL], linkedFinancialRecordId: UUID? = nil) {
+    func importProjectDocuments(
+        _ urls: [URL],
+        linkedFinancialRecordId: UUID? = nil,
+        ledgerSettings: ProjectDocumentImportLedgerSettings? = nil
+    ) {
         let failures = ProjectDetailAssetActions.importProjectDocuments(
             urls,
             projectId: projectId,
             linkedFinancialRecordId: linkedFinancialRecordId,
+            ledgerSettings: ledgerSettings,
             store: store
         )
         if !failures.isEmpty {

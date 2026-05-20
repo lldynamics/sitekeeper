@@ -18,6 +18,8 @@ struct ProjectContactDatabaseView: View {
     @State private var showImportFeedbackAlert = false
     @State private var mergeConfirmPhone: String?
     @State private var showMergeConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedContactId: UUID? = nil) {
         self.focusedContactId = focusedContactId
@@ -70,13 +72,13 @@ struct ProjectContactDatabaseView: View {
 
     var body: some View {
         SearchableDatabaseView(
-            title: "联系人",
+            title: String(localized: "联系人"),
             searchText: $searchText,
-            searchPrompt: "搜索姓名、电话、公司、项目",
+            searchPrompt: String(localized: "搜索姓名、电话、公司、项目"),
             items: filteredContacts,
-            emptyTitle: "暂无联系人",
+            emptyTitle: String(localized: "暂无联系人"),
             emptySystemImage: "person.crop.rectangle.stack",
-            emptyDescription: Text("项目联系人会统一显示在这里，可按项目筛选。"),
+            emptyDescription: Text(String(localized: "项目联系人会统一显示在这里，可按项目筛选。")),
             searchSuggestions: searchSuggestions,
             onSelect: { contact in
                 editingContact = contact
@@ -88,8 +90,12 @@ struct ProjectContactDatabaseView: View {
                 editingContact = contact
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
-                title: "删除联系人？",
-                itemNoun: "联系人"
+                title: String(localized: "删除联系人？"),
+                itemNoun: String(localized: "联系人"),
+                singularMessage: String(localized: "删除后可在提示中撤销。"),
+                pluralMessage: { count, noun in
+                    String(format: String(localized: "将删除 %lld 条%@，可在提示中撤销。"), Int64(count), noun)
+                }
             ),
             onDeleteConfirmed: deleteContacts,
             rowContent: { contact in
@@ -110,9 +116,9 @@ struct ProjectContactDatabaseView: View {
                 }
 
                 if selectedProjectId == nil && !duplicatePhoneGroups.isEmpty {
-                    Section("疑似重复联系人") {
+                    Section(String(localized: "疑似重复联系人")) {
                         ForEach(duplicatePhoneGroups, id: \.phone) { group in
-                            DisclosureGroup("\(group.phone) · \(group.contacts.count) 条") {
+                            DisclosureGroup(String(format: String(localized: "%@ · %lld 条"), group.phone, Int64(group.contacts.count))) {
                                 ForEach(group.contacts) { contact in
                                     ContactPickerRowView(
                                         contact: contact,
@@ -126,7 +132,7 @@ struct ProjectContactDatabaseView: View {
                                     mergeConfirmPhone = group.phone
                                     showMergeConfirm = true
                                 } label: {
-                                    Label("合并为同一联系人", systemImage: "arrow.triangle.merge")
+                                    Label(String(localized: "合并为同一联系人"), systemImage: "arrow.triangle.merge")
                                         .font(.subheadline.weight(.semibold))
                                         .foregroundStyle(Color.appWarning)
                                 }
@@ -143,39 +149,37 @@ struct ProjectContactDatabaseView: View {
                     Button {
                         beginSystemContactImport()
                     } label: {
-                        Label("导入本机联系人", systemImage: "person.badge.plus")
+                        Label(String(localized: "导入本机联系人"), systemImage: "person.badge.plus")
                     }
                     Button {
                         exportContactsVCard()
                     } label: {
-                        Label("导出联系人 vCard", systemImage: "square.and.arrow.up")
+                        Label(String(localized: "导出联系人 vCard"), systemImage: "square.and.arrow.up")
                     }
                     Button {
                         showAdd = true
                     } label: {
-                        Label("新增联系人", systemImage: "plus")
+                        Label(String(localized: "新增联系人"), systemImage: "plus")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("更多操作")
+                .accessibilityLabel(String(localized: "更多操作"))
             }
         )
         .onAppear(perform: openFocusedContactIfNeeded)
         .sheet(isPresented: $showAdd) {
             ProjectContactDatabaseEditSheet(contact: nil, projects: store.projects, initialProjectId: selectedProjectId) { contact in
-                store.projectContacts.insert(contact, at: 0)
+                store.upsertProjectContact(contact, insertAtTopWhenNew: true)
                 store.scheduleSave()
                 showAdd = false
             }
         }
         .sheet(item: $editingContact) { contact in
             ProjectContactDatabaseEditSheet(contact: contact, projects: store.projects, initialProjectId: contact.projectId) { updated in
-                if let index = store.projectContacts.firstIndex(where: { $0.id == updated.id }) {
-                    store.projectContacts[index] = updated
-                    store.scheduleSave()
-                }
+                store.upsertProjectContact(updated)
+                store.scheduleSave()
                 editingContact = nil
             } onDelete: { target in
                 deleteContact(target)
@@ -186,7 +190,7 @@ struct ProjectContactDatabaseView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .vCard,
-            defaultFilename: exportPayload?.defaultFilename ?? "项目联系人.vcf"
+            defaultFilename: exportPayload?.defaultFilename ?? String(localized: "项目联系人.vcf")
         ) { _ in }
         .sheet(isPresented: $showSystemContactPicker) {
             SystemContactPicker(
@@ -196,23 +200,27 @@ struct ProjectContactDatabaseView: View {
                 onCancel: {}
             )
         }
-        .alert("联系人导入", isPresented: $showImportFeedbackAlert) {
-            Button("确定", role: .cancel) {}
+        .alert(String(localized: "联系人导入"), isPresented: $showImportFeedbackAlert) {
+            Button(String(localized: "确定"), role: .cancel) {}
         } message: {
             Text(importFeedbackMessage)
         }
-        .confirmationDialog("合并联系人？", isPresented: $showMergeConfirm, titleVisibility: .visible) {
-            Button("合并，保留第一个项目的联系人", role: .destructive) {
+        .confirmationDialog(String(localized: "合并联系人？"), isPresented: $showMergeConfirm, titleVisibility: .visible) {
+            Button(String(localized: "合并，保留第一个项目的联系人"), role: .destructive) {
                 if let phone = mergeConfirmPhone {
                     mergeDuplicateContacts(phone: phone)
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(String(localized: "取消"), role: .cancel) {}
         } message: {
             if let phone = mergeConfirmPhone,
                let group = duplicatePhoneGroups.first(where: { $0.phone == phone }) {
-                Text("将删除 \(group.contacts.count - 1) 个重复联系人，仅保留每个项目中身份信息最完整的记录。")
+                Text(String(format: String(localized: "将删除 %lld 个重复联系人，仅保留每个项目中身份信息最完整的记录。"), Int64(group.contacts.count - 1)))
             }
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
@@ -221,7 +229,7 @@ struct ProjectContactDatabaseView: View {
             // 项目筛选
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
-                    contactFilterChip(title: "全部项目", isSelected: selectedProjectId == nil && roleFilter == nil, isColored: false) {
+                    contactFilterChip(title: String(localized: "全部项目"), isSelected: selectedProjectId == nil && roleFilter == nil, isColored: false) {
                         selectedProjectId = nil
                         roleFilter = nil
                     }
@@ -240,7 +248,7 @@ struct ProjectContactDatabaseView: View {
             if selectedProjectId == nil {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 6) {
-                        contactFilterChip(title: "全部", isSelected: roleFilter == nil, isColored: false) {
+                        contactFilterChip(title: String(localized: "全部"), isSelected: roleFilter == nil, isColored: false) {
                             roleFilter = nil
                         }
                         ForEach(ProjectContactRole.allCases, id: \.rawValue) { role in
@@ -281,18 +289,60 @@ struct ProjectContactDatabaseView: View {
     }
 
     private func deleteContact(_ contact: ProjectContact) {
-        store.projectContacts.removeAll { $0.id == contact.id }
-        store.scheduleSave()
+        deleteContacts(Set([contact.id]), source: "ProjectContactDatabaseView")
     }
 
-    private func deleteContacts(_ ids: Set<UUID>) {
+    private func deleteContacts(_ ids: Set<UUID>, source: String = "ProjectContactDatabaseView") {
         guard !ids.isEmpty else { return }
-        store.projectContacts.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+        let targets = store.projectContacts.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeProjectContacts(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除联系人 %lld 位"), Int64(targets.count)),
+                detail: contactAuditDetail(targets),
+                source: source
+            )
+        )
+        queueContactDeletion(
+            deletion,
+            message: String(format: String(localized: "已删除 %lld 位联系人"), Int64(deletion.deletedCount))
+        )
     }
 
     private func deleteContacts(_ items: [ProjectContact]) {
         deleteContacts(Set(items.map(\.id)))
+    }
+
+    private func queueContactDeletion(
+        _ deletion: DataStoreRemovalResult<ProjectContact>,
+        message: String
+    ) {
+        guard !deletion.isEmpty else { return }
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: message,
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreProjectContacts(from: deletion)
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func contactAuditDetail(_ contacts: [ProjectContact]) -> String {
+        ListFormatter.localizedString(
+            byJoining: contacts.map { contact in
+                [contact.name, contact.phone, projectName(contact.projectId)]
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                    .filter { !$0.isEmpty }
+                    .joined(separator: " · ")
+            }
+        )
     }
 
     /// 同一手机号关联的项目名列表
@@ -326,8 +376,22 @@ struct ProjectContactDatabaseView: View {
                 toKeep.insert(best.id)
             }
         }
-        store.projectContacts.removeAll { !toKeep.contains($0.id) }
-        store.scheduleSave()
+        let idsToDelete = Set(all.map(\.id)).subtracting(toKeep)
+        let targets = store.projectContacts.filter { idsToDelete.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeProjectContacts(
+            ids: idsToDelete,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "合并重复联系人，删除 %lld 位"), Int64(targets.count)),
+                detail: "\(phoneKey) · \(contactAuditDetail(targets))",
+                source: "ProjectContactDatabaseView"
+            )
+        )
+        queueContactDeletion(
+            deletion,
+            message: String(format: String(localized: "已合并联系人，删除 %lld 个重复项"), Int64(deletion.deletedCount))
+        )
     }
 
     /// 导出 vCard
@@ -361,13 +425,13 @@ struct ProjectContactDatabaseView: View {
         exportPayload = ExportPayload(
             data: data,
             contentType: .vCard,
-            defaultFilename: "项目联系人.vcf"
+            defaultFilename: String(localized: "项目联系人.vcf")
         )
         showExporter = true
     }
 
     private func projectName(_ id: UUID) -> String {
-        store.projects.first(where: { $0.id == id })?.name ?? "未知项目"
+        store.projects.first(where: { $0.id == id })?.name ?? String(localized: "未知项目")
     }
 
     private func projectNames(for ids: [UUID]) -> [String] {
@@ -391,16 +455,16 @@ struct ProjectContactDatabaseView: View {
         let projectNames = sortedProjects
             .prefix(2)
             .map { projectName($0) }
-            .filter { !$0.isEmpty && $0 != "未知项目" }
-        let projectPreview = projectNames.isEmpty ? "暂无项目" : projectNames.joined(separator: "、")
+            .filter { !$0.isEmpty && $0 != String(localized: "未知项目") }
+        let projectPreview = projectNames.isEmpty ? String(localized: "暂无项目") : projectNames.joined(separator: "、")
         let unpaid = sortedProjects.reduce(0.0) { total, projectId in
             total + unpaidAmount(for: projectId)
         }
 
         if unpaid > 0 {
-            return "最近合作：\(projectPreview) · 待收 \(ReportBuilder.money(unpaid))"
+            return String(format: String(localized: "最近合作：%@ · 待收 %@"), projectPreview, ReportBuilder.money(unpaid))
         }
-        return "最近合作：\(projectPreview)"
+        return String(format: String(localized: "最近合作：%@"), projectPreview)
     }
 
     private func contactCluster(for contact: ProjectContact) -> [ProjectContact] {
@@ -433,11 +497,11 @@ struct ProjectContactDatabaseView: View {
 
     private func beginSystemContactImport() {
         guard !store.projects.isEmpty else {
-            showImportFeedback("请先创建项目，再导入联系人。")
+            showImportFeedback(String(localized: "请先创建项目，再导入联系人。"))
             return
         }
         guard targetProjectIdForImport() != nil else {
-            showImportFeedback("请先在顶部筛选中选择一个项目，再导入联系人。")
+            showImportFeedback(String(localized: "请先在顶部筛选中选择一个项目，再导入联系人。"))
             return
         }
         showSystemContactPicker = true
@@ -456,12 +520,12 @@ struct ProjectContactDatabaseView: View {
     private func importSystemContact(_ imported: ImportedSystemContact) {
         showSystemContactPicker = false
         guard let projectId = targetProjectIdForImport() else {
-            showImportFeedback("请先选择项目，再导入联系人。")
+            showImportFeedback(String(localized: "请先选择项目，再导入联系人。"))
             return
         }
 
         let resolvedName = imported.fullName.isEmpty
-            ? (imported.organizationName.isEmpty ? "未命名联系人" : imported.organizationName)
+            ? (imported.organizationName.isEmpty ? String(localized: "未命名联系人") : imported.organizationName)
             : imported.fullName
 
         let normalizedPrimary = normalizedPhone(imported.primaryPhone)
@@ -471,13 +535,18 @@ struct ProjectContactDatabaseView: View {
            }) {
             selectedProjectId = projectId
             editingContact = existing
-            showImportFeedback("该号码已存在，已定位到现有联系人。")
+            showImportFeedback(String(localized: "该号码已存在，已定位到现有联系人。"))
             return
         }
 
         var noteLines: [String] = []
         if imported.phoneNumbers.count > 1 {
-            noteLines.append("备用号码：\(imported.phoneNumbers.dropFirst().joined(separator: "、"))")
+            noteLines.append(
+                String(
+                    format: String(localized: "备用号码：%@"),
+                    imported.phoneNumbers.dropFirst().joined(separator: "、")
+                )
+            )
         }
 
         let contact = ProjectContact(
@@ -489,11 +558,11 @@ struct ProjectContactDatabaseView: View {
             phone: imported.primaryPhone,
             note: noteLines.joined(separator: "\n")
         )
-        store.projectContacts.insert(contact, at: 0)
+        store.upsertProjectContact(contact, insertAtTopWhenNew: true)
         store.scheduleSave()
         selectedProjectId = projectId
         AppHaptics.success()
-        showImportFeedback("已导入联系人：\(resolvedName)")
+        showImportFeedback(String(format: String(localized: "已导入联系人：%@"), resolvedName))
     }
 
     private func showImportFeedback(_ message: String) {
@@ -544,8 +613,8 @@ private struct ProjectContactDatabaseEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("归属项目") {
-                    Picker("项目", selection: $projectId) {
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "项目"), selection: $projectId) {
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
@@ -556,43 +625,43 @@ private struct ProjectContactDatabaseEditSheet: View {
                         selectedProjectIDs: $relatedProjectIDs
                     )
                 }
-                Section("联系人") {
+                Section(String(localized: "联系人")) {
                     Button {
                         showSystemContactPicker = true
                     } label: {
-                        Label("从通讯录导入", systemImage: "person.badge.plus")
+                        Label(String(localized: "从通讯录导入"), systemImage: "person.badge.plus")
                     }
-                    TextField("姓名/单位", text: $name)
+                    TextField(String(localized: "姓名/单位"), text: $name)
                     ProjectContactRoleField(role: $role)
-                    TextField("公司/班组", text: $company)
-                    TextField("电话", text: $phone)
+                    TextField(String(localized: "公司/班组"), text: $company)
+                    TextField(String(localized: "电话"), text: $phone)
                         .keyboardType(.phonePad)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...4)
                 }
                 if contact != nil {
                     Section {
-                        Button("删除联系人", role: .destructive) {
+                        Button(String(localized: "删除联系人"), role: .destructive) {
                             showDeleteConfirm = true
                         }
                     }
                 }
             }
-            .navigationTitle(contact == nil ? "新增联系人" : "编辑联系人")
+            .navigationTitle(contact == nil ? String(localized: "新增联系人") : String(localized: "编辑联系人"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(updatedContact)
                         dismiss()
                     }
                     .disabled(!canSave)
                 }
             }
-            .alert("删除这个联系人？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这个联系人？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     if let contact { onDelete?(contact) }
                     dismiss()
                 }
@@ -637,7 +706,7 @@ private struct ProjectContactDatabaseEditSheet: View {
         guard imported.phoneNumbers.count > 1 else { return }
         let spareText = imported.phoneNumbers.dropFirst().joined(separator: "、")
         guard !spareText.isEmpty else { return }
-        let marker = "备用号码：\(spareText)"
+        let marker = String(format: String(localized: "备用号码：%@"), spareText)
         if note.contains(marker) { return }
         note = note.trimmingCharacters(in: .whitespacesAndNewlines)
         note = note.isEmpty ? marker : "\(note)\n\(marker)"

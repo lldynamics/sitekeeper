@@ -115,16 +115,16 @@ struct ProjectFinancialMetricsTests {
         options.includeProjectDrawings = false
         options.includeWarehouseMovements = false
         options.includeQuickNotes = false
-        options.includeLightingCircuits = false
         options.includeProjectFinance = true
 
         let csv = ReportBuilder.makeCSV(snapshot: snapshot, options: options)
         let text = try #require(String(data: csv, encoding: .utf8))
 
-        #expect(text.contains("\"日期\",\"收支\",\"分类\",\"状态\",\"到期日\",\"提醒状态\",\"金额\""))
-        #expect(text.contains("草稿"))
+        #expect(text.contains("\"date\",\"direction_key\",\"direction_display\",\"category_key\",\"category_display\",\"status_key\",\"status_display\",\"due_date\",\"reminder_status_key\",\"reminder_status_display\",\"amount_raw\",\"amount_display\""))
+        #expect(text.contains("\"draft\",\"草稿\""))
         #expect(text.contains("2026-05-12"))
-        #expect(text.contains("待提醒"))
+        #expect(text.contains("\"pending\",\"待提醒\""))
+        #expect(text.contains("\"100.00\",\"¥100.00\""))
         #expect(text.contains(projectId.uuidString))
     }
 

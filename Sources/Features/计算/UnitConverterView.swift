@@ -3,93 +3,115 @@ import SwiftUI
 struct UnitConverterView: View {
     @AppStorage(UserPreferenceKeys.Calculator.unitCategory) private var categoryRawValue: String = ConvCategory.length.rawValue
     @AppStorage(UserPreferenceKeys.Calculator.unitInputValue) private var inputValue: String = "1"
-    @AppStorage(UserPreferenceKeys.Calculator.unitFromUnit) private var fromUnit: String = "米"
-    @AppStorage(UserPreferenceKeys.Calculator.unitToUnit) private var toUnit: String = "英尺"
+    @AppStorage(UserPreferenceKeys.Calculator.unitFromUnit) private var fromUnitID: String = UnitOptionID.lengthMeter.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.unitToUnit) private var toUnitID: String = UnitOptionID.lengthFoot.rawValue
 
     @State private var resultText: String = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
+
     private var category: ConvCategory {
         StringEnumFallback.value(categoryRawValue, default: ConvCategory.length)
     }
 
-    // factor: 1 unit = factor 个基准单位（基准为米/平方米/千克）
-    private let units: [ConvCategory: [(name: String, factor: Double)]] = [
+    private var inputRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredNonNegative,
+            min: 0,
+            max: 1_000_000_000,
+            rangeMessage: calculatorLoc(String(localized: "请输入 0–1000000000"))
+        )
+    }
+
+    private var inputValidation: NumericInputFieldValidation {
+        inputRule.validate(inputValue)
+    }
+
+    // factor: 1 unit = factor base units (base unit: meter / square meter / kilogram)
+    private let units: [ConvCategory: [UnitOption]] = [
         .length: [
-            ("米", 1),
-            ("千米", 1000),
-            ("厘米", 0.01),
-            ("毫米", 0.001),
-            ("英尺", 0.3048),
-            ("英寸", 0.0254),
-            ("码", 0.9144),
+            UnitOption(id: .lengthMeter, factor: 1, displayName: String(localized: "米")),
+            UnitOption(id: .lengthKilometer, factor: 1000, displayName: String(localized: "千米")),
+            UnitOption(id: .lengthCentimeter, factor: 0.01, displayName: String(localized: "厘米")),
+            UnitOption(id: .lengthMillimeter, factor: 0.001, displayName: String(localized: "毫米")),
+            UnitOption(id: .lengthFoot, factor: 0.3048, displayName: String(localized: "英尺")),
+            UnitOption(id: .lengthInch, factor: 0.0254, displayName: String(localized: "英寸")),
+            UnitOption(id: .lengthYard, factor: 0.9144, displayName: String(localized: "码")),
         ],
         .area: [
-            ("平方米", 1),
-            ("平方千米", 1_000_000),
-            ("公顷", 10000),
-            ("亩", 666.667),
-            ("平方英尺", 0.092903),
+            UnitOption(id: .areaSquareMeter, factor: 1, displayName: String(localized: "平方米")),
+            UnitOption(id: .areaSquareKilometer, factor: 1_000_000, displayName: String(localized: "平方千米")),
+            UnitOption(id: .areaHectare, factor: 10_000, displayName: String(localized: "公顷")),
+            UnitOption(id: .areaMu, factor: 666.667, displayName: String(localized: "亩")),
+            UnitOption(id: .areaSquareFoot, factor: 0.092903, displayName: String(localized: "平方英尺")),
         ],
         .weight: [
-            ("千克", 1),
-            ("吨", 1000),
-            ("克", 0.001),
-            ("磅", 0.453592),
-            ("盎司", 0.0283495),
+            UnitOption(id: .weightKilogram, factor: 1, displayName: String(localized: "千克")),
+            UnitOption(id: .weightTon, factor: 1000, displayName: String(localized: "吨")),
+            UnitOption(id: .weightGram, factor: 0.001, displayName: String(localized: "克")),
+            UnitOption(id: .weightPound, factor: 0.453592, displayName: String(localized: "磅")),
+            UnitOption(id: .weightOunce, factor: 0.0283495, displayName: String(localized: "盎司")),
         ],
     ]
 
     var body: some View {
         Form {
-            Section("换算") {
-                Picker("类别", selection: $categoryRawValue) {
+            Section(String(localized: "换算")) {
+                Picker(String(localized: "类别"), selection: $categoryRawValue) {
                     ForEach(ConvCategory.allCases, id: \.self) { c in
                         Text(c.displayName).tag(c.rawValue)
                     }
                 }
                 .onChange(of: categoryRawValue) { _, _ in
-                    let opts = unitOptions()
-                    fromUnit = opts.first ?? ""
-                    toUnit = opts.last ?? ""
+                    let options = unitOptions()
+                    fromUnitID = options.first?.id.rawValue ?? ""
+                    toUnitID = options.dropFirst().first?.id.rawValue ?? options.first?.id.rawValue ?? ""
                 }
 
-                LabeledContent("数值") {
-                    TextField("1", text: $inputValue)
-                        .keyboardType(.decimalPad)
-                        .multilineTextAlignment(.trailing)
-                        .focused($isInputFocused)
-                }
-                CalculatorValidationHint(message: rangeMessage(inputValue, min: 0, max: 1_000_000_000, hint: "请输入 0–1000000000"))
-                CalculatorPresetChips(title: "快捷值", options: ["0.5", "1", "5", "10", "100"], selection: $inputValue)
+                CalculatorValidatedNumericField(
+                    title: String(localized: "数值"),
+                    placeholder: "1",
+                    text: $inputValue,
+                    rule: inputRule,
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
+                CalculatorPresetChips(title: String(localized: "快捷值"), options: ["0.5", "1", "5", "10", "100"], selection: $inputValue)
 
-                Picker("从", selection: $fromUnit) {
-                    ForEach(unitOptions(), id: \.self) { Text($0).tag($0) }
+                Picker(String(localized: "从"), selection: $fromUnitID) {
+                    ForEach(unitOptions()) { option in
+                        Text(option.displayName).tag(option.id.rawValue)
+                    }
                 }
-                Picker("到", selection: $toUnit) {
-                    ForEach(unitOptions(), id: \.self) { Text($0).tag($0) }
+                Picker(String(localized: "到"), selection: $toUnitID) {
+                    ForEach(unitOptions()) { option in
+                        Text(option.displayName).tag(option.id.rawValue)
+                    }
                 }
             }
 
             Section {
-                Button("换算") {
+                Button(String(localized: "换算")) {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     convert()
                 }
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
+                .frame(maxWidth: .infinity)
+                .fontWeight(.semibold)
             }
 
             if let resultModel {
-                Section("结果") {
+                Section(String(localized: "结果")) {
                     CalculatorResultCard(
-                        title: "单位换算",
+                        title: String(localized: "单位换算"),
                         result: resultModel
                     )
                 }
             }
         }
-        .navigationTitle("单位换算")
+        .navigationTitle(String(localized: "单位换算"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             KeyboardDismissToolbar {
@@ -99,24 +121,22 @@ struct UnitConverterView: View {
         .onAppear(perform: normalizeUnits)
     }
 
-    private func unitOptions() -> [String] {
-        units[category]?.map(\.name) ?? []
+    private func unitOptions() -> [UnitOption] {
+        units[category] ?? []
     }
 
     private func convert() {
-        guard let value = CalculatorInputParser.double(inputValue) else {
-            presentError("请输入有效数值")
+        guard let value = inputValidation.doubleValue else {
+            resultText = ""
+            resultModel = nil
             return
         }
-        guard let list = units[category] else {
-            presentError("换算配置缺失")
+        guard let from = unitOptions().first(where: { $0.id.rawValue == fromUnitID }),
+              let to = unitOptions().first(where: { $0.id.rawValue == toUnitID }) else {
+            presentError(String(localized: "请选择单位"))
             return
         }
-        guard let from = list.first(where: { $0.name == fromUnit }),
-              let to = list.first(where: { $0.name == toUnit }) else {
-            presentError("请选择单位")
-            return
-        }
+
         let converted: Double
         switch EngineeringCalculations.unitConvertValidated(value: value, fromFactor: from.factor, toFactor: to.factor) {
         case .success(let output):
@@ -125,46 +145,81 @@ struct UnitConverterView: View {
             presentError(error.userMessage)
             return
         }
+
         resultModel = .singleSection(
-            headline: "\(trim(converted)) \(toUnit)",
-            formula: "输出值 = 输入值×源单位系数÷目标单位系数",
+            headline: String(format: String(localized: "%@ %@"), trim(converted), to.displayName),
+            formula: String(localized: "输出值 = 输入值×源单位系数÷目标单位系数"),
             items: [
-                CalculationResult.item("输入", "\(trim(value)) \(fromUnit)"),
-                CalculationResult.item("类别", category.displayName),
-                CalculationResult.item("输出", "\(trim(converted)) \(toUnit)", status: .pass),
+                CalculationResult.item(
+                    String(localized: "输入"),
+                    String(format: String(localized: "%@ %@"), trim(value), from.displayName)
+                ),
+                CalculationResult.item(String(localized: "类别"), category.displayName),
+                CalculationResult.item(
+                    String(localized: "输出"),
+                    String(format: String(localized: "%@ %@"), trim(converted), to.displayName),
+                    status: .pass
+                ),
             ]
         )
-        resultText = "\(trim(value)) \(fromUnit) = \(trim(converted)) \(toUnit)"
+        resultText = String(format: String(localized: "%@ %@ = %@ %@"), trim(value), from.displayName, trim(converted), to.displayName)
+        inputValue = NumericInputSupport.normalizedStorageText(inputValue, kind: .quantity, preservingInvalid: false)
     }
 
     private func trim(_ v: Double) -> String {
-        let f = NumberFormatter()
-        f.minimumFractionDigits = 0
-        f.maximumFractionDigits = 6
-        return f.string(from: NSNumber(value: v)) ?? String(v)
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 6
+        return formatter.string(from: NSNumber(value: v)) ?? String(v)
     }
 
     private func normalizeUnits() {
         let options = unitOptions()
-        if !options.contains(fromUnit) {
-            fromUnit = options.first ?? ""
+        guard !options.isEmpty else {
+            fromUnitID = ""
+            toUnitID = ""
+            return
         }
-        if !options.contains(toUnit) {
-            toUnit = options.dropFirst().first ?? options.first ?? ""
+        if !options.contains(where: { $0.id.rawValue == fromUnitID }) {
+            fromUnitID = options.first?.id.rawValue ?? ""
         }
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return "请输入数值" }
-        return (value >= min && value <= max) ? nil : hint
+        if !options.contains(where: { $0.id.rawValue == toUnitID }) {
+            toUnitID = options.dropFirst().first?.id.rawValue ?? options.first?.id.rawValue ?? ""
+        }
     }
 
     private func presentError(_ message: String) {
         resultText = message
         resultModel = .error(message)
     }
+}
+
+private struct UnitOption: Identifiable {
+    let id: UnitOptionID
+    let factor: Double
+    let displayName: String
+}
+
+private enum UnitOptionID: String {
+    case lengthMeter = "length_m"
+    case lengthKilometer = "length_km"
+    case lengthCentimeter = "length_cm"
+    case lengthMillimeter = "length_mm"
+    case lengthFoot = "length_ft"
+    case lengthInch = "length_in"
+    case lengthYard = "length_yd"
+
+    case areaSquareMeter = "area_m2"
+    case areaSquareKilometer = "area_km2"
+    case areaHectare = "area_hectare"
+    case areaMu = "area_mu"
+    case areaSquareFoot = "area_ft2"
+
+    case weightKilogram = "weight_kg"
+    case weightTon = "weight_ton"
+    case weightGram = "weight_g"
+    case weightPound = "weight_lb"
+    case weightOunce = "weight_oz"
 }
 
 enum ConvCategory: String, CaseIterable {
@@ -174,9 +229,9 @@ enum ConvCategory: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .length: "长度"
-        case .area: "面积"
-        case .weight: "重量"
+        case .length: String(localized: "长度")
+        case .area: String(localized: "面积")
+        case .weight: String(localized: "重量")
         }
     }
 }

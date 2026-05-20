@@ -19,9 +19,17 @@ struct QuickNoteAttachmentStrip: View {
                             attachmentCard(attachment)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("预览附件")
+                        .accessibilityLabel(
+                            attachment.attachmentKind == .audio
+                            ? String(localized: "quick_note_attachment_play_audio_accessibility_label")
+                            : String(localized: "quick_note_attachment_preview_accessibility_label")
+                        )
                         .accessibilityValue("\(attachment.attachmentKind.title) \(label(for: attachment))")
-                        .accessibilityHint("双击打开附件预览")
+                        .accessibilityHint(
+                            attachment.attachmentKind == .audio
+                            ? String(localized: "quick_note_attachment_play_audio_accessibility_hint")
+                            : String(localized: "quick_note_attachment_preview_accessibility_hint")
+                        )
 
                         if showsRemoveButton {
                             Button { onRemove(attachment) } label: {
@@ -31,9 +39,9 @@ struct QuickNoteAttachmentStrip: View {
                                     .foregroundStyle(.white, .black.opacity(0.55))
                             }
                             .offset(x: 5, y: -5)
-                            .accessibilityLabel("删除附件")
+                            .accessibilityLabel(String(localized: "quick_note_attachment_remove_accessibility_label"))
                             .accessibilityValue("\(attachment.attachmentKind.title) \(label(for: attachment))")
-                            .accessibilityHint("双击移除该附件")
+                            .accessibilityHint(String(localized: "quick_note_attachment_remove_accessibility_hint"))
                         }
                     }
                 }
@@ -97,11 +105,17 @@ struct QuickNoteAttachmentStrip: View {
 
     private func label(for attachment: QuickNoteAttachment) -> String {
         if attachment.attachmentKind == .audio, let duration = attachment.durationSeconds, duration > 0 {
-            return "语音 \(Int(duration))s"
+            return String(
+                format: String(localized: "quick_note_attachment_audio_duration_format"),
+                Int(duration)
+            )
         }
         if attachment.attachmentKind == .video,
            let size = QuickNoteAttachmentStorage.formattedFileSize(for: attachment.fileName) {
-            return "视频 \(size)"
+            return String(
+                format: String(localized: "quick_note_attachment_video_size_format"),
+                size
+            )
         }
         if attachment.attachmentKind == .file {
             return attachment.displayName
@@ -134,7 +148,7 @@ struct QuickNoteAttachmentPreview: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { dismiss() }
+                    Button(String(localized: "quick_note_attachment_close_button")) { dismiss() }
                 }
             }
         }
@@ -146,9 +160,9 @@ struct QuickNoteAttachmentPreview: View {
             QuickNoteImagePreviewController(image: previewImage)
                 .ignoresSafeArea(edges: .bottom)
         } else if attemptedImageLoad {
-            ContentUnavailableView("文件不存在", systemImage: "exclamationmark.triangle")
+            ContentUnavailableView(String(localized: "quick_note_attachment_file_missing"), systemImage: "exclamationmark.triangle")
         } else {
-            ProgressView("加载中…")
+            ProgressView(String(localized: "quick_note_attachment_loading"))
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .task(id: attachment.fileName) {
                     await loadImagePreview()
@@ -173,7 +187,7 @@ struct QuickNoteAttachmentPreview: View {
         if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
             VideoPlayer(player: AVPlayer(url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)))
         } else {
-            ContentUnavailableView("视频文件不存在", systemImage: "exclamationmark.triangle")
+            ContentUnavailableView(String(localized: "quick_note_attachment_video_missing"), systemImage: "exclamationmark.triangle")
         }
     }
 
@@ -183,7 +197,7 @@ struct QuickNoteAttachmentPreview: View {
             QuickNoteAudioPlayer(url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName))
                 .padding()
         } else {
-            ContentUnavailableView("语音文件不存在", systemImage: "exclamationmark.triangle")
+            ContentUnavailableView(String(localized: "quick_note_attachment_audio_missing"), systemImage: "exclamationmark.triangle")
         }
     }
 
@@ -204,7 +218,7 @@ struct QuickNoteAttachmentPreview: View {
                             .foregroundStyle(.secondary)
                     }
                     ShareLink(item: url) {
-                        Label("打开或分享附件", systemImage: "square.and.arrow.up")
+                        Label(String(localized: "quick_note_attachment_open_or_share"), systemImage: "square.and.arrow.up")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.appProminent())
@@ -213,13 +227,69 @@ struct QuickNoteAttachmentPreview: View {
                 .background(Color(.systemGroupedBackground))
             }
         } else {
-            ContentUnavailableView("附件文件不存在", systemImage: "exclamationmark.triangle")
+            ContentUnavailableView(String(localized: "quick_note_attachment_file_missing"), systemImage: "exclamationmark.triangle")
         }
     }
 }
 
+struct QuickNoteInlineAudioAttachmentPlayer: View {
+    let attachment: QuickNoteAttachment
+    var onClose: () -> Void = {}
+
+    var body: some View {
+        if QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Label(title, systemImage: "waveform")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                    Spacer(minLength: 8)
+                    Button {
+                        onClose()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .accessibilityLabel(String(localized: "quick_note_attachment_collapse_audio_player_accessibility_label"))
+                }
+
+                QuickNoteAudioPlayer(
+                    url: QuickNoteAttachmentStorage.fileURL(for: attachment.fileName),
+                    style: .inline
+                )
+            }
+            .padding(10)
+            .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } else {
+            Label(String(localized: "quick_note_attachment_audio_missing"), systemImage: "exclamationmark.triangle")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .padding(10)
+                .background(Color(.tertiarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+    }
+
+    private var title: String {
+        guard let duration = attachment.durationSeconds, duration > 0 else {
+            return String(localized: "quick_note_attachment_audio_title")
+        }
+        return String(
+            format: String(localized: "quick_note_attachment_audio_duration_format"),
+            Int(duration)
+        )
+    }
+}
+
+enum QuickNoteAudioPlayerStyle {
+    case full
+    case inline
+}
+
 struct QuickNoteAudioPlayer: View {
     let url: URL
+    var style: QuickNoteAudioPlayerStyle = .full
     @State private var player: AVAudioPlayer?
     @State private var isPlaying = false
     @State private var currentTime: Double = 0
@@ -227,6 +297,19 @@ struct QuickNoteAudioPlayer: View {
     @State private var timer: Timer?
 
     var body: some View {
+        Group {
+            switch style {
+            case .full:
+                fullPlayer
+            case .inline:
+                inlinePlayer
+            }
+        }
+        .onAppear(perform: preparePlayer)
+        .onDisappear(perform: stopPlayback)
+    }
+
+    private var fullPlayer: some View {
         VStack(spacing: 16) {
             Image(systemName: "waveform.circle.fill")
                 .font(.system(size: 64))
@@ -243,13 +326,45 @@ struct QuickNoteAudioPlayer: View {
             .font(.caption.monospacedDigit())
             .foregroundStyle(.secondary)
             Button { togglePlay() } label: {
-                Label(isPlaying ? "暂停播放" : "播放语音", systemImage: isPlaying ? "pause.fill" : "play.fill")
+                Label(
+                    isPlaying
+                    ? String(localized: "quick_note_attachment_pause_playback_button")
+                    : String(localized: "quick_note_attachment_play_audio_button"),
+                    systemImage: isPlaying ? "pause.fill" : "play.fill"
+                )
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.appProminent())
         }
-        .onAppear(perform: preparePlayer)
-        .onDisappear(perform: stopPlayback)
+    }
+
+    private var inlinePlayer: some View {
+        HStack(spacing: 10) {
+            Button { togglePlay() } label: {
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Color.appWarning, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(
+                isPlaying
+                ? String(localized: "quick_note_attachment_pause_playback_button")
+                : String(localized: "quick_note_attachment_play_audio_button")
+            )
+
+            Slider(value: Binding(
+                get: { currentTime },
+                set: { seek(to: $0) }
+            ), in: 0...max(duration, 1))
+            .tint(.appWarning)
+
+            Text("\(formatTime(currentTime))/\(formatTime(duration))")
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+                .frame(width: 82, alignment: .trailing)
+        }
     }
 
     private func preparePlayer() {

@@ -16,43 +16,25 @@ struct QuickNoteAttachmentPickerBar: View {
     @State private var mediaImportMessage = ""
     @State private var mediaImportTask: Task<Void, Never>?
     @State private var fileImportTask: Task<Void, Never>?
+    @State private var audioRecorder = QuickNoteAudioRecorder()
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    PhotosPicker(selection: $selectedMediaItems, maxSelectionCount: mode == .compact ? 4 : 9, matching: .any(of: [.images, .videos])) {
-                        toolLabel("媒体", systemImage: "photo.stack")
-                    }
-                    .disabled(isImportingMedia)
-                    .accessibilityLabel("从相册添加媒体")
-                    .accessibilityHint("选择照片或视频附件")
-                    Button { openCamera() } label: {
-                        toolLabel("拍照", systemImage: "camera")
-                    }
-                    .accessibilityLabel("拍照添加")
-                    .accessibilityHint("打开相机拍照并加入随手记")
-                    if mode == .full {
-                        Button { showDrawing = true } label: {
-                            toolLabel("手绘/标注", systemImage: "pencil.and.outline")
-                        }
-                        .accessibilityLabel("添加手绘标注")
-                        .accessibilityHint("打开手绘板创建标注附件")
-                    }
-                    Button { showFileImporter = true } label: {
-                        toolLabel("附件", systemImage: "paperclip")
-                    }
-                    .accessibilityLabel("导入文件附件")
-                    .accessibilityHint("从文件中选择附件导入")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
+            toolRow
             if isImportingMedia {
                 HStack(spacing: 8) {
                     ProgressView()
                         .controlSize(.small)
-                    Text(mediaImportMessage.isEmpty ? "正在导入媒体..." : mediaImportMessage)
+                    Text(mediaImportMessage.isEmpty ? String(localized: "quick_note_media_importing_default_text") : mediaImportMessage)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if audioRecorder.isRecording {
+                HStack(spacing: 8) {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(Color.appRisk)
+                    Text(String(localized: "quick_note_media_recording_hint_text"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -79,8 +61,8 @@ struct QuickNoteAttachmentPickerBar: View {
             allowsMultipleSelection: true,
             onCompletion: handleFileImportResult(_:)
         )
-        .alert("无法添加附件", isPresented: $showAlert) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "quick_note_media_alert_title"), isPresented: $showAlert) {
+            Button(String(localized: "quick_note_media_alert_ack_button"), role: .cancel) {}
         } message: {
             Text(alertMessage)
         }
@@ -89,7 +71,109 @@ struct QuickNoteAttachmentPickerBar: View {
             fileImportTask?.cancel()
             mediaImportTask = nil
             fileImportTask = nil
+            audioRecorder.cancelRecording()
         }
+    }
+
+    @ViewBuilder
+    private var toolRow: some View {
+        if mode == .compact {
+            HStack(spacing: 7) {
+                PhotosPicker(selection: $selectedMediaItems, maxSelectionCount: 4, matching: .any(of: [.images, .videos])) {
+                    compactToolIcon("photo.stack")
+                }
+                .disabled(isImportingMedia)
+                .accessibilityLabel(String(localized: "quick_note_media_add_photo_accessibility_label"))
+                .accessibilityHint(String(localized: "quick_note_media_add_photo_accessibility_hint"))
+
+                Button { openCamera() } label: {
+                    compactToolIcon("camera")
+                }
+                .accessibilityLabel(String(localized: "quick_note_media_take_photo_accessibility_label"))
+                .accessibilityHint(String(localized: "quick_note_media_take_photo_accessibility_hint"))
+
+                Button {
+                    Task { await toggleAudioRecording() }
+                } label: {
+                    compactToolIcon(audioRecorder.isRecording ? "stop.fill" : "waveform", isActive: audioRecorder.isRecording)
+                }
+                .accessibilityLabel(
+                    audioRecorder.isRecording
+                    ? String(localized: "quick_note_media_stop_recording_accessibility_label")
+                    : String(localized: "quick_note_media_start_recording_accessibility_label")
+                )
+                .accessibilityHint(
+                    audioRecorder.isRecording
+                    ? String(localized: "quick_note_media_stop_recording_accessibility_hint")
+                    : String(localized: "quick_note_media_start_recording_accessibility_hint")
+                )
+
+                Button { showFileImporter = true } label: {
+                    compactToolIcon("paperclip")
+                }
+                .accessibilityLabel(String(localized: "quick_note_media_import_file_accessibility_label"))
+                .accessibilityHint(String(localized: "quick_note_media_import_file_accessibility_hint"))
+            }
+            .buttonStyle(.plain)
+        } else {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    PhotosPicker(selection: $selectedMediaItems, maxSelectionCount: 9, matching: .any(of: [.images, .videos])) {
+                        toolLabel(String(localized: "quick_note_media_tool_photo"), systemImage: "photo.stack")
+                    }
+                    .disabled(isImportingMedia)
+                    .accessibilityLabel(String(localized: "quick_note_media_add_photo_accessibility_label"))
+                    .accessibilityHint(String(localized: "quick_note_media_add_photo_accessibility_hint"))
+                    Button { openCamera() } label: {
+                        toolLabel(String(localized: "quick_note_media_tool_camera"), systemImage: "camera")
+                    }
+                    .accessibilityLabel(String(localized: "quick_note_media_take_photo_accessibility_label"))
+                    .accessibilityHint(String(localized: "quick_note_media_take_photo_accessibility_hint"))
+                    Button {
+                        Task { await toggleAudioRecording() }
+                    } label: {
+                        toolLabel(
+                            audioRecorder.isRecording
+                            ? String(localized: "quick_note_media_tool_stop_record")
+                            : String(localized: "quick_note_media_tool_record"),
+                            systemImage: audioRecorder.isRecording ? "stop.fill" : "waveform"
+                        )
+                    }
+                    .tint(audioRecorder.isRecording ? Color.appRisk : Color.appPrimaryAction)
+                    .accessibilityLabel(
+                        audioRecorder.isRecording
+                        ? String(localized: "quick_note_media_stop_recording_accessibility_label")
+                        : String(localized: "quick_note_media_start_recording_accessibility_label")
+                    )
+                    .accessibilityHint(
+                        audioRecorder.isRecording
+                        ? String(localized: "quick_note_media_stop_recording_accessibility_hint")
+                        : String(localized: "quick_note_media_start_recording_accessibility_hint")
+                    )
+                    Button { showDrawing = true } label: {
+                        toolLabel(String(localized: "quick_note_media_tool_drawing"), systemImage: "pencil.and.outline")
+                    }
+                    .accessibilityLabel(String(localized: "quick_note_media_add_drawing_accessibility_label"))
+                    .accessibilityHint(String(localized: "quick_note_media_add_drawing_accessibility_hint"))
+                    Button { showFileImporter = true } label: {
+                        toolLabel(String(localized: "quick_note_media_tool_file"), systemImage: "paperclip")
+                    }
+                    .accessibilityLabel(String(localized: "quick_note_media_import_file_accessibility_label"))
+                    .accessibilityHint(String(localized: "quick_note_media_import_file_accessibility_hint"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+        }
+    }
+
+    private func compactToolIcon(_ systemImage: String, isActive: Bool = false) -> some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 16, weight: .semibold))
+            .symbolRenderingMode(.hierarchical)
+            .foregroundStyle(isActive ? Color.white : Color.appPrimaryAction)
+            .frame(width: 32, height: 30)
+            .background(isActive ? Color.appRisk : Color(.tertiarySystemGroupedBackground), in: Circle())
     }
 
     private func toolLabel(_ title: String, systemImage: String) -> some View {
@@ -99,7 +183,7 @@ struct QuickNoteAttachmentPickerBar: View {
 
     private func openCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            showError("当前设备不可用相机。")
+            showError(String(localized: "quick_note_media_camera_unavailable_error"))
             return
         }
         showCamera = true
@@ -109,7 +193,7 @@ struct QuickNoteAttachmentPickerBar: View {
         guard !items.isEmpty else { return }
         await MainActor.run {
             isImportingMedia = true
-            mediaImportMessage = "正在导入媒体..."
+            mediaImportMessage = String(localized: "quick_note_media_importing_default_text")
         }
         for item in items {
             guard !Task.isCancelled else { break }
@@ -120,7 +204,7 @@ struct QuickNoteAttachmentPickerBar: View {
             guard let data = try? await item.loadTransferable(type: Data.self),
                   let image = UIImage(data: data) else {
                 guard !Task.isCancelled else { break }
-                await MainActor.run { showError("有一项媒体导入失败。") }
+                await MainActor.run { showError(String(localized: "quick_note_media_import_failed_single_item_error")) }
                 continue
             }
             guard !Task.isCancelled else { break }
@@ -134,10 +218,10 @@ struct QuickNoteAttachmentPickerBar: View {
     }
 
     private func importVideoItem(_ item: PhotosPickerItem) async {
-        await MainActor.run { mediaImportMessage = "检查视频大小和时长..." }
+        await MainActor.run { mediaImportMessage = String(localized: "quick_note_media_check_video_message") }
         do {
             guard let transfer = try await item.loadTransferable(type: QuickNoteVideoTransfer.self) else {
-                await MainActor.run { showError("视频导入失败。") }
+                await MainActor.run { showError(String(localized: "quick_note_media_video_import_failed_error")) }
                 return
             }
             _ = QuickNoteAttachmentStorage.videoThumbnail(for: transfer.fileName)
@@ -147,7 +231,7 @@ struct QuickNoteAttachmentPickerBar: View {
         } catch let error as QuickNoteVideoTransferError {
             await MainActor.run { showError(error.userMessage) }
         } catch {
-            await MainActor.run { showError("视频导入失败。") }
+            await MainActor.run { showError(String(localized: "quick_note_media_video_import_failed_error")) }
         }
     }
 
@@ -164,10 +248,28 @@ struct QuickNoteAttachmentPickerBar: View {
         do {
             fileName = try QuickNoteAttachmentStorage.saveImageOrThrow(image)
         } catch {
-            showError("图片保存失败：\(error.localizedDescription)")
+            showError(
+                String(
+                    format: String(localized: "quick_note_media_image_save_failed_error_format"),
+                    error.localizedDescription
+                )
+            )
             return
         }
         onAppend(QuickNoteAttachment(kind: kind, fileName: fileName))
+    }
+
+    @MainActor
+    private func toggleAudioRecording() async {
+        do {
+            if let attachment = try await audioRecorder.toggleRecording() {
+                onAppend(attachment)
+            }
+        } catch let error as QuickNoteAudioRecorderError {
+            showError(error.userMessage)
+        } catch {
+            showError(String(localized: "quick_note_media_recording_failed_error"))
+        }
     }
 
     private func handleFileImportResult(_ result: Result<[URL], Error>) {
@@ -175,13 +277,17 @@ struct QuickNoteAttachmentPickerBar: View {
         case .success(let urls):
             guard !urls.isEmpty else { return }
             isImportingMedia = true
-            mediaImportMessage = "正在导入附件..."
+            mediaImportMessage = String(localized: "quick_note_media_importing_files_message")
             fileImportTask?.cancel()
             fileImportTask = Task {
                 for (index, url) in urls.enumerated() {
                     guard !Task.isCancelled else { break }
                     await MainActor.run {
-                        mediaImportMessage = "正在导入附件 \(index + 1)/\(urls.count)"
+                        mediaImportMessage = String(
+                            format: String(localized: "quick_note_media_importing_files_progress_format"),
+                            index + 1,
+                            urls.count
+                        )
                     }
                     do {
                         let attachment = try await Task.detached(priority: .utility) {
@@ -195,7 +301,7 @@ struct QuickNoteAttachmentPickerBar: View {
                         await MainActor.run { showError(error.userMessage) }
                     } catch {
                         guard !Task.isCancelled else { break }
-                        await MainActor.run { showError("附件导入失败。") }
+                        await MainActor.run { showError(String(localized: "quick_note_media_file_import_failed_error")) }
                     }
                 }
                 await MainActor.run {
@@ -205,7 +311,7 @@ struct QuickNoteAttachmentPickerBar: View {
                 }
             }
         case .failure:
-            showError("附件导入失败。")
+            showError(String(localized: "quick_note_media_file_import_failed_error"))
         }
     }
 

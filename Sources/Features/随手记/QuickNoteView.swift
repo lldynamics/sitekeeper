@@ -2,22 +2,19 @@ import SwiftUI
 
 struct QuickNoteView: View {
     @Environment(DataStore.self) private var store
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let focusedNoteId: UUID?
     let embedsNavigationStack: Bool
     @State private var searchText = ""
     @State private var draftContent = ""
     @State private var draftProjectId: UUID?
     @State private var draftAttachments: [QuickNoteAttachment] = []
-    @State private var draftAttachmentFileNames = Set<String>()
     @State private var editingNote: QuickNote?
     @State private var previewAttachment: QuickNoteAttachment?
-    @State private var showComposer = false
     @State private var showClearComposerConfirm = false
-    @State private var composerDetent: PresentationDetent = .large
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var didOpenFocusedNote = false
     @State private var didRestoreDraft = false
-    @State private var hasRecoveredDraft = false
     @AppStorage("quickNoteDraftContent") private var storedDraftContent = ""
     @AppStorage("quickNoteDraftProjectId") private var storedDraftProjectId = ""
     @AppStorage("quickNoteDraftAttachments") private var storedDraftAttachments = ""
@@ -31,36 +28,6 @@ struct QuickNoteView: View {
         store.quickNotes
             .filter(matchesSearch(_:))
             .sorted { $0.createdAt > $1.createdAt }
-    }
-
-    private var canPublishDraft: Bool {
-        !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftAttachments.isEmpty
-    }
-
-    private var useFullScreenComposer: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
-
-    private var composerSheetPresented: Binding<Bool> {
-        Binding(
-            get: { showComposer && !useFullScreenComposer },
-            set: { newValue in
-                if !newValue {
-                    showComposer = false
-                }
-            }
-        )
-    }
-
-    private var composerFullScreenPresented: Binding<Bool> {
-        Binding(
-            get: { showComposer && useFullScreenComposer },
-            set: { newValue in
-                if !newValue {
-                    showComposer = false
-                }
-            }
-        )
     }
 
     var body: some View {
@@ -78,44 +45,22 @@ struct QuickNoteView: View {
             QuickNoteTimelineView(
                 notes: filteredNotes,
                 projects: store.projects,
-                onCreate: { showComposer = true },
                 onEdit: { editingNote = $0 },
                 onConvert: { editingNote = $0 },
                 onDelete: deleteNotes(_:),
                 onPreview: { previewAttachment = $0 }
             )
         }
-        .navigationTitle("随手记")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    showComposer = true
-                } label: {
-                    HStack(spacing: 6) {
-                        Text("发布")
-                        if hasRecoveredDraft && canPublishDraft {
-                            Circle()
-                                .fill(.appWarning)
-                                .frame(width: 7, height: 7)
-                        }
-                    }
-                }
-                .accessibilityLabel(hasRecoveredDraft && canPublishDraft ? "发布，检测到未发布草稿" : "发布")
-                .accessibilityHint("双击打开随手记发布面板")
-            }
-        }
-        .searchable(text: $searchText, prompt: "搜索随手记")
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color(.systemGroupedBackground))
+        .navigationTitle(String(localized: "随手记"))
+        .searchable(text: $searchText, prompt: String(localized: "搜索随手记"))
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: draftContent) { _, _ in saveDraftState() }
         .onChange(of: draftProjectId) { _, _ in saveDraftState() }
-        .sheet(isPresented: composerSheetPresented) {
-            composerPresentation
-                .presentationDetents([.large], selection: $composerDetent)
-                .presentationContentInteraction(.scrolls)
-                .presentationDragIndicator(.visible)
-        }
-        .fullScreenCover(isPresented: composerFullScreenPresented) {
-            composerPresentation
+        .safeAreaInset(edge: .bottom) {
+            messageComposer
         }
         .sheet(item: $editingNote) { note in
             QuickNoteEditSheet(note: note, projects: store.projects) { updated in
@@ -127,82 +72,46 @@ struct QuickNoteView: View {
         .sheet(item: $previewAttachment) { attachment in
             QuickNoteAttachmentPreview(attachment: attachment)
         }
+        .confirmationDialog(String(localized: "清空当前草稿？"), isPresented: $showClearComposerConfirm, titleVisibility: .visible) {
+            Button(String(localized: "清空草稿"), role: .destructive) {
+                clearComposerDraft(deleteFiles: true)
+            }
+            Button(String(localized: "取消"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "将清空文字、附件和关联工程。"))
+        }
         .onAppear {
             restoreDraftIfNeeded()
             openFocusedNoteIfNeeded()
         }
-        .onDisappear(perform: saveDraftState)
+        .onDisappear {
+            saveDraftState()
+            undoableDeletion.flushPendingCommit()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
-    private var composerPresentation: some View {
-        NavigationStack {
-            List {
-                QuickNoteComposerView(
-                    projects: store.projects,
-                    content: $draftContent,
-                    projectId: $draftProjectId,
-                    attachments: $draftAttachments,
-                    onPublish: {
-                        publishDraft()
-                        if !canPublishDraft {
-                            showComposer = false
-                        }
-                    },
-                    onPreview: { previewAttachment = $0 },
-                    onAttachmentAdded: { attachment in
-                        draftAttachmentFileNames.insert(attachment.fileName)
-                        saveDraftState()
-                    },
-                    onAttachmentRemoved: { attachment in
-                        draftAttachmentFileNames.remove(attachment.fileName)
-                        saveDraftState()
-                    },
-                    onDraftCleared: { removed in
-                        draftAttachmentFileNames.subtract(removed.map(\.fileName))
-                        hasRecoveredDraft = false
-                        clearStoredDraft()
-                    },
-                    onDiscardDraftRequest: {
-                        showClearComposerConfirm = true
-                    }
-                )
+    private var messageComposer: some View {
+        QuickNoteComposerView(
+            projects: store.projects,
+            content: $draftContent,
+            projectId: $draftProjectId,
+            attachments: $draftAttachments,
+            mode: .compact,
+            onPublish: {
+                publishDraft()
+            },
+            onPreview: { previewAttachment = $0 },
+            onAttachmentAdded: { _ in
+                saveDraftState()
+            },
+            onAttachmentRemoved: { _ in
+                saveDraftState()
+            },
+            onDiscardDraftRequest: {
+                showClearComposerConfirm = true
             }
-            .navigationTitle("发布随手记")
-            .navigationBarTitleDisplayMode(.inline)
-            .scrollDismissesKeyboard(.interactively)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭") { showComposer = false }
-                }
-                ToolbarItemGroup(placement: .topBarTrailing) {
-                    if hasRecoveredDraft && canPublishDraft {
-                        Circle()
-                            .fill(.appWarning)
-                            .frame(width: 7, height: 7)
-                            .accessibilityHidden(true)
-                    }
-                    Button("清空", role: .destructive) {
-                        showClearComposerConfirm = true
-                    }
-                    .disabled(!canPublishDraft)
-                    Button("发布") {
-                        publishDraft()
-                        if !canPublishDraft {
-                            showComposer = false
-                        }
-                    }
-                    .disabled(!canPublishDraft)
-                }
-            }
-            .confirmationDialog("清空当前草稿？", isPresented: $showClearComposerConfirm, titleVisibility: .visible) {
-                Button("清空草稿", role: .destructive) {
-                    clearComposerDraft(deleteFiles: true)
-                }
-                Button("取消", role: .cancel) {}
-            } message: {
-                Text("将清空文字、附件和关联工程。")
-            }
-        }
+        )
     }
 
     private func matchesSearch(_ note: QuickNote) -> Bool {
@@ -216,19 +125,16 @@ struct QuickNoteView: View {
     private func publishDraft() {
         let content = draftContent.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !content.isEmpty || !draftAttachments.isEmpty else { return }
-        store.quickNotes.insert(
+        store.insertQuickNoteAtTop(
             QuickNote(
                 title: QuickNoteText.title(from: content, attachments: draftAttachments),
                 content: content,
                 projectId: draftProjectId,
                 attachments: draftAttachments
-            ),
-            at: 0
+            )
         )
         draftContent = ""
         draftAttachments = []
-        draftAttachmentFileNames.removeAll()
-        hasRecoveredDraft = false
         clearStoredDraft()
         store.scheduleSave()
     }
@@ -236,18 +142,110 @@ struct QuickNoteView: View {
     private func saveEditedNote(original: QuickNote, updated: QuickNote) {
         let updatedFileNames = Set(updated.attachments.map(\.fileName))
         let removedAttachments = original.attachments.filter { !updatedFileNames.contains($0.fileName) }
-        QuickNoteAttachmentStorage.delete(attachments: removedAttachments)
-        if let index = store.quickNotes.firstIndex(where: { $0.id == updated.id }) {
-            store.quickNotes[index] = updated
+        if store.quickNotes.contains(where: { $0.id == updated.id }) {
+            let restoreSnapshot = store.quickNotes.map { note in
+                guard note.id == updated.id else { return note }
+                var restore = updated
+                restore.attachments = uniqueAttachments(original.attachments + updated.attachments)
+                return restore
+            }
+            store.updateQuickNote(updated)
             store.scheduleSave()
+            queueAttachmentRemovalUndo(
+                removedAttachments,
+                restoreSnapshot: restoreSnapshot,
+                noteId: updated.id
+            )
         }
     }
 
     private func deleteNotes(_ notes: [QuickNote]) {
         let ids = Set(notes.map(\.id))
-        QuickNoteAttachmentStorage.delete(attachments: notes.flatMap(\.attachments))
-        store.quickNotes.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+        guard !ids.isEmpty else { return }
+
+        let requestedByID = Dictionary(notes.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let restoreSnapshot = store.quickNotes.map { note in
+            requestedByID[note.id] ?? note
+        }
+        let targets = restoreSnapshot.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let attachments = uniqueAttachments(
+            targets.flatMap(\.attachments) + notes.flatMap(\.attachments)
+        )
+        let deletion = store.removeQuickNotes(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除随手记 %lld 条"), Int64(targets.count)),
+                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(attachments.count)),
+                source: "QuickNoteView"
+            ),
+            deferredFileCleanup: DataStoreDeferredFileCleanup.quickNoteAttachments(
+                attachments,
+                summary: "quickNote.attachments"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条随手记"), Int64(deletion.deletedCount)),
+            commit: {
+                deletion.performDeferredFileCleanup()
+                store.scheduleSave()
+            },
+            undo: {
+                store.replaceQuickNotes(UndoableDeletionCoordinator.restoringItems(
+                    snapshot: restoreSnapshot,
+                    current: store.quickNotes,
+                    deletedIDs: ids
+                ))
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func uniqueAttachments(_ attachments: [QuickNoteAttachment]) -> [QuickNoteAttachment] {
+        var seen = Set<String>()
+        return attachments.filter { attachment in
+            guard !attachment.fileName.isEmpty else { return false }
+            return seen.insert(attachment.fileName).inserted
+        }
+    }
+
+    private func queueAttachmentRemovalUndo(
+        _ attachments: [QuickNoteAttachment],
+        restoreSnapshot: [QuickNote],
+        noteId: UUID
+    ) {
+        let dedupedAttachments = uniqueAttachments(attachments)
+        guard !dedupedAttachments.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已移除 %lld 个随手记附件"), Int64(dedupedAttachments.count)),
+            commit: {
+                DataStoreDeferredFileCleanup.quickNoteAttachments(
+                    dedupedAttachments,
+                    summary: "quickNote.removeAttachments"
+                )?.perform()
+                store.scheduleSave()
+            },
+            undo: {
+                store.replaceQuickNotes(UndoableDeletionCoordinator.restoringItems(
+                    snapshot: restoreSnapshot,
+                    current: store.quickNotes,
+                    deletedIDs: Set([noteId])
+                ))
+                store.scheduleSave()
+            },
+            audit: UndoableDeletionAuditContext(
+                summary: String(format: String(localized: "删除随手记附件 %lld 个"), Int64(dedupedAttachments.count)),
+                detail: dedupedAttachments.map(\.displayName).joined(separator: "、"),
+                source: "QuickNoteView"
+            )
+        )
     }
 
     private func openFocusedNoteIfNeeded() {
@@ -268,12 +266,10 @@ struct QuickNoteView: View {
             do {
                 let decoded = try JSONDecoder().decode([QuickNoteAttachment].self, from: data)
                 draftAttachments = decoded.filter { QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
-                draftAttachmentFileNames = Set(draftAttachments.map(\.fileName))
             } catch {
                 StorageIssueLog.record("随手记草稿附件解析失败：\(error.localizedDescription)")
             }
         }
-        hasRecoveredDraft = !draftContent.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !draftAttachments.isEmpty
         saveDraftState()
     }
 
@@ -301,13 +297,14 @@ struct QuickNoteView: View {
 
     private func clearComposerDraft(deleteFiles: Bool) {
         if deleteFiles {
-            QuickNoteAttachmentStorage.delete(attachments: draftAttachments)
+            DataStoreDeferredFileCleanup.quickNoteAttachments(
+                draftAttachments,
+                summary: "quickNote.clearDraftAttachments"
+            )?.perform()
         }
         draftContent = ""
         draftProjectId = nil
         draftAttachments = []
-        draftAttachmentFileNames.removeAll()
-        hasRecoveredDraft = false
         clearStoredDraft()
     }
 

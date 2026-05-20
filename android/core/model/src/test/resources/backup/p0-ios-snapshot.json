@@ -1,0 +1,307 @@
+{
+  "schemaVersion": 1,
+  "exportedAt": "2026-05-16 10:30",
+  "exportPlatform": "ios-fixture",
+  "unknownTopLevel": {
+    "ignored": true
+  },
+  "projects": [
+    {
+      "id": "project-001",
+      "name": "阳光花园 3# 楼",
+      "location": "城东区",
+      "status": "进行中",
+      "customerName": "宏远地产",
+      "customerPhone": "13800000001",
+      "startDate": "2026-05-01",
+      "expectedEndDate": "2026-06-30",
+      "managerName": "李工",
+      "contractAmount": "118000",
+      "paidAmount": "42000",
+      "paymentStatus": "部分收款",
+      "materialCost": "36000",
+      "laborCost": "24000",
+      "cadFontMappings": []
+    }
+  ],
+  "dailyLogs": [
+    {
+      "id": "daily-log-001",
+      "date": "2026-05-16",
+      "weather": "晴",
+      "content": "二层桥架安装完成，下午核对材料进场数量。",
+      "workers": "8",
+      "photos": [
+        {
+          "id": "photo-001",
+          "fileName": "site-photo-001.jpg",
+          "note": "二层桥架",
+          "tag": "现场"
+        }
+      ],
+      "safety": "临边防护已复查",
+      "materials": "桥架 80 米",
+      "tomorrowPlan": "开始三层布线",
+      "qualityIssue": "",
+      "rectification": "",
+      "confirmer": "王工",
+      "linkedConstructionMethodIDs": [
+        "method-001"
+      ],
+      "projectId": "project-001"
+    }
+  ],
+  "siteTodos": [
+    {
+      "id": "todo-001",
+      "title": "复查二层桥架固定间距",
+      "owner": "赵工",
+      "dueDate": "2026-05-17",
+      "priority": "高",
+      "issueType": "质量",
+      "rectificationBeforePhotoFileName": "todo-before-001.jpg",
+      "rectificationAfterPhotoFileName": null,
+      "isDone": false,
+      "completedAt": null,
+      "note": "重点看转角位置",
+      "linkedConstructionMethodIDs": [
+        "method-001"
+      ],
+      "projectId": "project-001"
+    }
+  ],
+  "progressTasks": [
+    {
+      "id": "progress-001",
+      "projectId": "project-001",
+      "title": "桥架安装",
+      "startDate": "2026-05-10",
+      "dueDate": "2026-05-20",
+      "completion": 0.65,
+      "note": "二层完成"
+    }
+  ],
+  "projectContacts": [
+    {
+      "id": "contact-001",
+      "projectId": "project-001",
+      "relatedProjectIds": [],
+      "name": "陈经理",
+      "role": "客户",
+      "company": "宏远地产",
+      "phone": "13800000001",
+      "note": "现场协调"
+    }
+  ],
+  "projectDrawings": [
+    {
+      "id": "drawing-001",
+      "projectId": "project-001",
+      "name": "二层电气平面图",
+      "fileName": "drawing-001.pdf",
+      "fileType": "pdf",
+      "version": "V1",
+      "isCurrentVersion": true,
+      "relatedLogDate": "2026-05-16",
+      "issueStatus": "无问题",
+      "issueNote": "",
+      "textEncoding": "auto",
+      "textBigFont": "auto",
+      "textSchemeSnapshot": {},
+      "cadViewState": {},
+      "importedAt": "2026-05-16 09:10",
+      "note": "",
+      "cadOverlaySnapshotData": ""
+    }
+  ],
+  "projectDocuments": [
+    {
+      "id": "document-001",
+      "projectId": "project-001",
+      "title": "材料进场单",
+      "category": "施工资料",
+      "fileName": "document-001.pdf",
+      "fileType": "pdf",
+      "pageCount": 2,
+      "amount": "36000",
+      "linkedFinancialRecordId": "financial-001",
+      "linkedConstructionMethodIDs": [
+        "method-001"
+      ],
+      "createdAt": "2026-05-16 09:20",
+      "note": ""
+    }
+  ],
+  "projectFinancialRecords": [
+    {
+      "id": "financial-001",
+      "projectId": "project-001",
+      "date": "2026-05-16 09:30",
+      "direction": "收入",
+      "category": "收款",
+      "amount": "42000",
+      "counterparty": "宏远地产",
+      "invoiceNumber": "",
+      "linkedDocumentIds": [
+        "confirmed-document-001"
+      ],
+      "status": "正式",
+      "dueDate": "",
+      "reminderStatus": "不提醒",
+      "note": "首期款"
+    }
+  ],
+  "materialItems": [
+    {
+      "id": "material-001",
+      "name": "热镀锌桥架",
+      "quantity": "80",
+      "unit": "米",
+      "unitPrice": "45",
+      "specification": "200x100",
+      "brand": "",
+      "supplier": "城东建材",
+      "purchaseStatus": "已进场",
+      "arrivalDate": "2026-05-16",
+      "projectId": "project-001"
+    }
+  ],
+  "quoteItems": [
+    {
+      "id": "quote-001",
+      "name": "桥架安装",
+      "unitPrice": "68",
+      "quantity": "80",
+      "unit": "米",
+      "notes": "含辅材",
+      "taxRate": "0",
+      "discountRate": "0",
+      "versionName": "V1",
+      "status": "已确认",
+      "customerConfirmedDate": "2026-05-15",
+      "contractAmount": "5440",
+      "projectId": "project-001"
+    }
+  ],
+  "laborRecords": [
+    {
+      "id": "labor-001",
+      "date": "2026-05-16",
+      "workers": "8",
+      "hours": "1",
+      "unitRate": "320",
+      "workType": "电工",
+      "teamName": "李工班组",
+      "isSettled": false,
+      "note": "桥架安装",
+      "projectId": "project-001"
+    }
+  ],
+  "quickNotes": [
+    {
+      "id": "note-001",
+      "title": "现场协调",
+      "content": "明天材料车 9 点到场。",
+      "projectId": "project-001",
+      "createdAt": "2026-05-16 10:00",
+      "updatedAt": "2026-05-16 10:00",
+      "attachments": [
+        {
+          "id": "attachment-001",
+          "kind": "photo",
+          "fileName": "note-photo-001.jpg",
+          "originalName": "现场照片.jpg",
+          "createdAt": "2026-05-16 10:00",
+          "durationSeconds": null
+        }
+      ]
+    }
+  ],
+  "historyRecords": [],
+  "lightingCircuitPlans": [],
+  "projectWarehouseMovements": [
+    {
+      "id": "warehouse-001",
+      "projectId": "project-001",
+      "date": "2026-05-16",
+      "movementType": "入库",
+      "materialName": "热镀锌桥架",
+      "specification": "200x100",
+      "unit": "米",
+      "quantity": "80",
+      "counterparty": "城东建材",
+      "handler": "张工",
+      "note": "首批进场",
+      "linkedDocumentIds": [
+        "confirmed-document-001"
+      ],
+      "createdAt": "2026-05-16T09:00:00+0800"
+    }
+  ],
+  "templates": [],
+  "materialPriceEntries": [
+    {
+      "id": "price-001",
+      "name": "热镀锌桥架",
+      "specification": "200x100",
+      "brand": "国标",
+      "unit": "米",
+      "referencePrice": "45",
+      "supplier": "城东建材",
+      "category": "桥架",
+      "note": "按厚度复核",
+      "updatedAt": "2026-05-16T09:00:00+0800"
+    }
+  ],
+  "materialSheetDrafts": [],
+  "supplierProfiles": [
+    {
+      "id": "supplier-001",
+      "name": "城东建材",
+      "category": "综合材料",
+      "contact": "张经理",
+      "phone": "13800001001",
+      "address": "城东建材市场 A 区",
+      "note": "桥架、线管、辅材常用供应商",
+      "updatedAt": "2026-05-16T09:00:00+0800"
+    }
+  ],
+  "constructionMethods": [
+    {
+      "id": "method-001",
+      "title": "桥架安装工艺",
+      "trade": "电气",
+      "versionName": "V1",
+      "publishStatus": "已发布",
+      "tutorialBody": "先复核图纸标高，再按样板段展开。",
+      "tutorialTextSize": "normal",
+      "tutorialAttachments": [],
+      "steps": "复核图纸\n弹线定位\n安装支吊架",
+      "qualityStandard": "桥架水平顺直\n跨接接地可靠",
+      "safetyNotes": "高处作业系安全带",
+      "procedureSteps": [
+        "复核图纸",
+        "弹线定位",
+        "安装支吊架"
+      ],
+      "qualityChecklist": [
+        "桥架水平顺直",
+        "跨接接地可靠"
+      ],
+      "safetyChecklist": [
+        "高处作业系安全带"
+      ],
+      "attachments": [],
+      "updatedAt": "2026-05-16T09:00:00+0800"
+    }
+  ],
+  "favoriteMaterialKeys": [],
+  "recentMaterialKeys": [],
+  "userMaterials": [],
+  "deletedUserMaterials": [],
+  "hiddenPresetKeys": [],
+  "photoFiles": [],
+  "drawingFiles": [],
+  "documentFiles": [],
+  "quickNoteAttachmentFiles": []
+}

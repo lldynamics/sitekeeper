@@ -28,7 +28,7 @@ struct QuotationView: View {
             case .pdf:
                 return "PDF"
             case .excel:
-                return "Excel 表格"
+                return String(localized: "Excel 表格")
             }
         }
     }
@@ -49,7 +49,7 @@ struct QuotationView: View {
 
     // 表单字段
     @State private var formName = ""
-    @State private var formUnit = "项"
+    @State private var formUnit = String(localized: "项")
     @State private var formPrice = ""
     @State private var formQty = ""
     @State private var formNotes = ""
@@ -72,9 +72,10 @@ struct QuotationView: View {
     @State private var showCompanyInfoPrompt = false
     @State private var quoteCustomerName = ""
     @State private var quoteProjectAddress = ""
-    @State private var quoteSignerName = "项目负责人"
+    @State private var quoteSignerName = String(localized: "项目负责人")
     @State private var quoteExportFormat: QuotationExportFormat = .pdf
-    @State private var operationMessage: String?
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @FocusState private var quoteFormFocusedField: QuoteFormField?
     @FocusState private var generateQuoteFocusedField: GenerateQuoteField?
 
@@ -127,12 +128,12 @@ struct QuotationView: View {
 
     var body: some View {
         List {
-            Section("范围") {
+            Section(String(localized: "范围")) {
                 ProjectContextStrip(
-                    title: "当前工程",
+                    title: String(localized: "当前工程"),
                     projects: store.projects,
                     selectedProjectId: $projectFilter,
-                    emptyText: "全部项目"
+                    emptyText: String(localized: "全部项目")
                 )
                 FilterChipBar(
                     options: QuoteStatusChip.allCases,
@@ -148,10 +149,15 @@ struct QuotationView: View {
 
             ForEach(filtered) { item in
                 let total = ReportBuilder.quoteGrandTotal(item)
-                let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? "未归属"
+                let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
                 let statusText = "\(item.versionName) · \(item.status.displayName)"
-                let amountText = "单价 ¥\(item.unitPrice) × \(item.quantity)\(item.unit)"
-                let extraText = item.customerConfirmedDate.isEmpty ? "" : "确认 \(item.customerConfirmedDate)"
+                let amountText = String(
+                    format: String(localized: "单价 ¥%@ × %@%@"),
+                    item.unitPrice,
+                    item.quantity,
+                    item.unit
+                )
+                let extraText = item.customerConfirmedDate.isEmpty ? "" : String(format: String(localized: "确认 %@"), item.customerConfirmedDate)
                 Button {
                     openEdit(item)
                 } label: {
@@ -168,65 +174,63 @@ struct QuotationView: View {
             }
             .onDelete { idx in
                 let ids = idx.map { filtered[$0].id }
-                store.quoteItems.removeAll { ids.contains($0.id) }
-                store.scheduleSave()
-                operationMessage = "已删除 \(ids.count) 条报价"
+                deleteQuotesWithUndo(ids: ids)
             }
 
             Section {
                 VStack(spacing: 4) {
-                    HStack { Text("小计").foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
-                    if totalTaxValue.isPositive { HStack { Text("税额").foregroundStyle(.appRisk); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
-                    if totalDiscountValue.isPositive { HStack { Text("折扣").foregroundStyle(.appSuccess); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
+                    HStack { Text(String(localized: "小计")).foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
+                    if totalTaxValue.isPositive { HStack { Text(String(localized: "税额")).foregroundStyle(.appRisk); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
+                    if totalDiscountValue.isPositive { HStack { Text(String(localized: "折扣")).foregroundStyle(.appSuccess); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
                     Divider()
                     HStack {
-                        Text("合计").font(.title3.weight(.bold))
+                        Text(String(localized: "合计")).font(.title3.weight(.bold))
                         Spacer()
                         Text(ReportBuilder.money(grandTotalValue.doubleValue)).font(.title3.weight(.bold)).foregroundStyle(.appWarning)
                     }
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "搜索报价名称")
-        .navigationTitle("预结算信息")
+        .searchable(text: $searchText, prompt: String(localized: "搜索报价名称"))
+        .navigationTitle(String(localized: "预结算信息"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
                         showGenerateSheet = true
                     } label: {
-                        Label("从材料/人工生成报价", systemImage: "wand.and.stars")
+                        Label(String(localized: "从材料/人工生成报价"), systemImage: "wand.and.stars")
                     }
                     Button {
                         openQuotationExportSheet()
                     } label: {
-                        Label("导出当前报价", systemImage: "doc.richtext")
+                        Label(String(localized: "导出当前报价"), systemImage: "doc.richtext")
                     }
                     Divider()
                     ForEach(store.materialItems) { m in
                         Button {
-                            store.quoteItems.append(QuoteItem(
+                            store.appendQuoteItem(QuoteItem(
                                 name: m.name, unitPrice: "", quantity: m.quantity, unit: m.unit,
                                 notes: "", taxRate: "0", discountRate: "0", projectId: m.projectId
                             ))
                             store.scheduleSave()
                         } label: { Text("\(m.name) (\(m.quantity) \(m.unit))") }
                     }
-                    if store.materialItems.isEmpty { Text("材料清单为空").foregroundStyle(.secondary) }
+                    if store.materialItems.isEmpty { Text(String(localized: "材料清单为空")).foregroundStyle(.secondary) }
                 } label: {
                     Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
-                .accessibilityLabel("更多操作")
+                .accessibilityLabel(String(localized: "更多操作"))
                 .buttonStyle(.appIcon())
                 Button { openAdd() } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel("新建报价")
+                    .accessibilityLabel(String(localized: "新建报价"))
             }
             if let projectFilter, store.projects.contains(where: { $0.id == projectFilter }) {
                 ToolbarItem(placement: .topBarLeading) {
-                    Button("写入合同") {
+                    Button(String(localized: "写入合同")) {
                         applyGrandTotalToProjectContract()
                     }
-                    .accessibilityLabel("将当前筛选报价合计写入项目合同金额")
+                    .accessibilityLabel(String(localized: "将当前筛选报价合计写入项目合同金额"))
                 }
             }
         }
@@ -243,7 +247,7 @@ struct QuotationView: View {
             isPresented: $showExporter,
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .pdf,
-            defaultFilename: exportPayload?.defaultFilename ?? "报价单.pdf"
+            defaultFilename: exportPayload?.defaultFilename ?? String(localized: "报价单.pdf")
         ) { result in
             switch result {
             case .success:
@@ -254,13 +258,16 @@ struct QuotationView: View {
                 }
             }
         }
-        .alert("先填写公司信息", isPresented: $showCompanyInfoPrompt) {
-            Button("知道了", role: .cancel) {}
+        .alert(String(localized: "先填写公司信息"), isPresented: $showCompanyInfoPrompt) {
+            Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
-            Text("请先填写公司名称、电话和地址。导出的报价单会使用这些信息。")
+            Text(String(localized: "请先填写公司名称、电话和地址。导出的报价单会使用这些信息。"))
         }
         .onAppear(perform: openFocusedQuoteIfNeeded)
-        .operationToast(message: $operationMessage)
+        .onDisappear {
+            flushPendingQuoteDeletionIfNeeded()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     // MARK: - Form
@@ -268,85 +275,130 @@ struct QuotationView: View {
     private var quoteForm: some View {
         NavigationStack {
             Form {
-                Section("必填信息") {
+                Section(String(localized: "必填信息")) {
                     if !store.templates.filter({ $0.category == .quotation }).isEmpty {
-                        Menu("套用报价模板") {
+                        Menu(String(localized: "套用报价模板")) {
                             ForEach(store.templates.filter { $0.category == .quotation }) { template in
                                 Button(template.name) { applyQuotationTemplate(template) }
                             }
                         }
                     }
-                    TextField("项目名称", text: $formName)
-                    LabeledContent("单价 ¥") {
-                        TextField("0", text: $formPrice)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($quoteFormFocusedField, equals: .price)
+                    TextField(String(localized: "项目名称"), text: $formName)
+                    LabeledContent(String(localized: "单价 ¥")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $formPrice.numericInput(.amount))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($quoteFormFocusedField, equals: .price)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    formPrice,
+                                    kind: .amount,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
-                    LabeledContent("数量") {
-                        TextField("0", text: $formQty)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($quoteFormFocusedField, equals: .quantity)
+                    LabeledContent(String(localized: "数量")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $formQty.numericInput(.quantity))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($quoteFormFocusedField, equals: .quantity)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    formQty,
+                                    kind: .quantity,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
-                    LabeledContent("单位") {
-                        TextField("项 / 米 / 台", text: $formUnit)
+                    LabeledContent(String(localized: "单位")) {
+                        TextField(String(localized: "项 / 米 / 台"), text: $formUnit)
                             .multilineTextAlignment(.trailing)
                     }
-                    TextField("版本（如 V1）", text: $formVersionName)
-                    Picker("状态", selection: $formStatus) {
+                    TextField(String(localized: "版本（如 V1）"), text: $formVersionName)
+                    Picker(String(localized: "状态"), selection: $formStatus) {
                         ForEach(QuoteStatus.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
                 }
-                Section("商务信息") {
-                    TextField("客户确认日期（yyyy-MM-dd）", text: $formCustomerConfirmedDate)
-                    LabeledContent("合同金额") {
-                        TextField("0", text: $formContractAmount)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($quoteFormFocusedField, equals: .contractAmount)
+                Section(String(localized: "商务信息")) {
+                    OptionalProjectDatePicker(String(localized: "客户确认日期"), text: $formCustomerConfirmedDate)
+                    LabeledContent(String(localized: "合同金额")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $formContractAmount.numericInput(.amount))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($quoteFormFocusedField, equals: .contractAmount)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    formContractAmount,
+                                    kind: .amount,
+                                    requirement: .optionalNonNegative
+                                )
+                            )
+                        }
                     }
                 }
-                Section("归属项目") {
-                    Picker("选择工程", selection: $formProjectId) {
-                        Text("无归属").tag(nil as UUID?)
+                Section(String(localized: "归属项目")) {
+                    Picker(String(localized: "选择工程"), selection: $formProjectId) {
+                        Text(String(localized: "无归属")).tag(nil as UUID?)
                         ForEach(store.projects) { p in
                             Text(p.name).tag(p.id as UUID?)
                         }
                     }
                 }
-                Section("费率") {
+                Section(String(localized: "费率")) {
                     HStack {
-                        Text("税率 (%)")
+                        Text(String(localized: "税率 (%)"))
                         Spacer()
-                        TextField("0", text: $formTax)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 60)
-                            .focused($quoteFormFocusedField, equals: .taxRate)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $formTax.numericInput(.taxRate))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 60)
+                                .focused($quoteFormFocusedField, equals: .taxRate)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    formTax,
+                                    kind: .taxRate,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
                     HStack {
-                        Text("折扣 (%)")
+                        Text(String(localized: "折扣 (%)"))
                         Spacer()
-                        TextField("0", text: $formDiscount)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .frame(width: 60)
-                            .focused($quoteFormFocusedField, equals: .discountRate)
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $formDiscount.numericInput(.discountRate))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .frame(width: 60)
+                                .focused($quoteFormFocusedField, equals: .discountRate)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    formDiscount,
+                                    kind: .discountRate,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
                 }
-                Section("备注") {
-                    TextField("备注", text: $formNotes)
+                Section(String(localized: "备注")) {
+                    TextField(String(localized: "备注"), text: $formNotes)
                 }
             }
-            .navigationTitle(editingId == nil ? "添加报价" : "编辑报价")
+            .navigationTitle(editingId == nil ? String(localized: "添加报价") : String(localized: "编辑报价"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { showForm = false } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showForm = false } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") { saveItem(); showForm = false }
+                    Button(String(localized: "保存")) { saveItem(); showForm = false }
                         .disabled(!canSaveQuoteForm)
                 }
                 KeyboardNavigationToolbar(
@@ -360,56 +412,93 @@ struct QuotationView: View {
     private var generateQuoteForm: some View {
         NavigationStack {
             Form {
-                Section("范围") {
-                    Picker("选择工程", selection: $generateProjectId) {
-                        Text("全部未分项目").tag(nil as UUID?)
+                Section(String(localized: "范围")) {
+                    Picker(String(localized: "选择工程"), selection: $generateProjectId) {
+                        Text(String(localized: "全部未分项目")).tag(nil as UUID?)
                         ForEach(store.projects) { p in
                             Text(p.name).tag(p.id as UUID?)
                         }
                     }
                 }
-                Section("默认价格") {
-                    LabeledContent("材料默认单价") {
-                        TextField("留空表示待补", text: $defaultMaterialPrice)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($generateQuoteFocusedField, equals: .materialPrice)
+                Section(String(localized: "默认价格")) {
+                    LabeledContent(String(localized: "材料默认单价")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField(String(localized: "留空表示待补"), text: $defaultMaterialPrice.numericInput(.amount))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($generateQuoteFocusedField, equals: .materialPrice)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    defaultMaterialPrice,
+                                    kind: .amount,
+                                    requirement: .optionalNonNegative
+                                )
+                            )
+                        }
                     }
-                    LabeledContent("人工单价 ¥/工时") {
-                        TextField("120", text: $defaultLaborRate)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($generateQuoteFocusedField, equals: .laborRate)
+                    LabeledContent(String(localized: "人工单价 ¥/工时")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("120", text: $defaultLaborRate.numericInput(.laborRate))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($generateQuoteFocusedField, equals: .laborRate)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    defaultLaborRate,
+                                    kind: .laborRate,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
                 }
-                Section("费率") {
-                    LabeledContent("税率 %") {
-                        TextField("0", text: $generateTax)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($generateQuoteFocusedField, equals: .taxRate)
+                Section(String(localized: "费率")) {
+                    LabeledContent(String(localized: "税率 %")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $generateTax.numericInput(.taxRate))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($generateQuoteFocusedField, equals: .taxRate)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    generateTax,
+                                    kind: .taxRate,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
-                    LabeledContent("折扣 %") {
-                        TextField("0", text: $generateDiscount)
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($generateQuoteFocusedField, equals: .discountRate)
+                    LabeledContent(String(localized: "折扣 %")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $generateDiscount.numericInput(.discountRate))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($generateQuoteFocusedField, equals: .discountRate)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    generateDiscount,
+                                    kind: .discountRate,
+                                    requirement: .requiredNonNegative
+                                )
+                            )
+                        }
                     }
                 }
                 Section {
-                    Button("生成报价") {
+                    Button(String(localized: "生成报价")) {
                         generateQuoteItems()
                         showGenerateSheet = false
                     }
                     .frame(maxWidth: .infinity)
                     .fontWeight(.semibold)
+                    .disabled(!canGenerateQuoteForm)
                 }
             }
-            .navigationTitle("生成报价")
+            .navigationTitle(String(localized: "生成报价"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showGenerateSheet = false }
+                    Button(String(localized: "取消")) { showGenerateSheet = false }
                 }
                 KeyboardNavigationToolbar(
                     focusedField: $generateQuoteFocusedField,
@@ -421,7 +510,7 @@ struct QuotationView: View {
 
     private func openAdd() {
         editingId = nil
-        formName = ""; formUnit = "项"; formPrice = ""; formQty = ""; formNotes = ""; formTax = "0"; formDiscount = "0"
+        formName = ""; formUnit = String(localized: "项"); formPrice = ""; formQty = ""; formNotes = ""; formTax = "0"; formDiscount = "0"
         formVersionName = "V1"; formStatus = .draft; formCustomerConfirmedDate = ""; formContractAmount = ""
         formProjectId = nil
         showForm = true
@@ -455,47 +544,55 @@ struct QuotationView: View {
         guard canSaveQuoteForm else { return }
         let newItem = QuoteItem(
             id: editingId ?? UUID(),
-            name: formName, unitPrice: formPrice, quantity: formQty, unit: formUnit,
-            notes: formNotes, taxRate: formTax, discountRate: formDiscount,
+            name: formName,
+            unitPrice: NumericInputSupport.normalizedStorageText(formPrice, kind: .amount),
+            quantity: NumericInputSupport.normalizedStorageText(formQty, kind: .quantity),
+            unit: formUnit,
+            notes: formNotes,
+            taxRate: NumericInputSupport.normalizedStorageText(formTax, kind: .taxRate),
+            discountRate: NumericInputSupport.normalizedStorageText(formDiscount, kind: .discountRate),
             versionName: formVersionName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "V1" : formVersionName.trimmingCharacters(in: .whitespacesAndNewlines),
             status: formStatus,
-            customerConfirmedDate: formCustomerConfirmedDate.trimmingCharacters(in: .whitespacesAndNewlines),
-            contractAmount: formContractAmount,
+            customerConfirmedDate: ProjectDateInput.normalizedStorageText(formCustomerConfirmedDate),
+            contractAmount: NumericInputSupport.normalizedStorageText(formContractAmount, kind: .amount),
             projectId: formProjectId
         )
-        if let eid = editingId, let idx = store.quoteItems.firstIndex(where: { $0.id == eid }) {
-            store.quoteItems[idx] = newItem
+        if editingId != nil, store.updateQuoteItem(newItem) {
         } else {
-            store.quoteItems.append(newItem)
+            store.appendQuoteItem(newItem)
         }
         store.scheduleSave()
-        operationMessage = editingId == nil ? "已新增报价" : "已更新报价"
+        operationNotice = .info(editingId == nil ? String(localized: "已新增报价") : String(localized: "已更新报价"))
     }
 
     private func applyQuotationTemplate(_ template: ProjectTemplate) {
-        guard let line = template.content.split(separator: "\n").first else { return }
-        let parts = line.split(separator: "¥").map { $0.trimmingCharacters(in: .whitespaces) }
-        formName = parts.first ?? template.name
-        let pricePart = parts.count > 1 ? parts[1] : ""
-        formPrice = pricePart.filter { "0123456789.".contains($0) }
-        if formPrice.isEmpty { formPrice = "0" }
+        guard let line = template.content
+            .split(separator: "\n")
+            .map({ String($0).trimmingCharacters(in: .whitespacesAndNewlines) })
+            .first(where: { !$0.isEmpty }) else { return }
+        let parsed = NumericInputSupport.parseQuotationTemplateLine(line, defaultPrice: "0")
+        formName = parsed.name.isEmpty ? template.name : parsed.name
+        formPrice = parsed.price
+        if let parsedUnit = parsed.unit, !parsedUnit.isEmpty {
+            formUnit = parsedUnit
+        }
         if formQty.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { formQty = "1" }
-        if formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { formUnit = "项" }
-        if formNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { formNotes = "模板导入" }
+        if formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { formUnit = String(localized: "项") }
+        if formNotes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty { formNotes = String(localized: "模板导入") }
     }
 
     private func generateQuoteItems() {
         let materials = store.materialItems.filter { $0.projectId == generateProjectId }
         let labor = store.laborRecords.filter { $0.projectId == generateProjectId }
         for material in materials {
-            store.quoteItems.append(QuoteItem(
+            store.appendQuoteItem(QuoteItem(
                 name: material.name,
-                unitPrice: defaultMaterialPrice,
+                unitPrice: NumericInputSupport.normalizedStorageText(defaultMaterialPrice, kind: .amount),
                 quantity: material.quantity,
                 unit: material.unit,
-                notes: "材料清单导入",
-                taxRate: generateTax,
-                discountRate: generateDiscount,
+                notes: String(localized: "材料清单导入"),
+                taxRate: NumericInputSupport.normalizedStorageText(generateTax, kind: .taxRate),
+                discountRate: NumericInputSupport.normalizedStorageText(generateDiscount, kind: .discountRate),
                 versionName: "V1",
                 status: .draft,
                 projectId: material.projectId
@@ -505,28 +602,30 @@ struct QuotationView: View {
             let workers = firstNumber(in: record.workers)
             let hours = firstNumber(in: record.hours)
             let quantity = workers > 0 ? workers * hours : hours
-            let laborPrice = defaultLaborRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? record.unitRate : defaultLaborRate
-            store.quoteItems.append(QuoteItem(
-                name: "人工费 \(record.date)",
+            let laborPrice = defaultLaborRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? record.unitRate
+            : NumericInputSupport.normalizedStorageText(defaultLaborRate, kind: .laborRate)
+            store.appendQuoteItem(QuoteItem(
+                name: String(format: String(localized: "人工费 %@"), record.date),
                 unitPrice: laborPrice,
                 quantity: quantity > 0 ? trim(quantity) : record.hours,
-                unit: "工时",
+                unit: String(localized: "工时"),
                 notes: record.note,
-                taxRate: generateTax,
-                discountRate: generateDiscount,
+                taxRate: NumericInputSupport.normalizedStorageText(generateTax, kind: .taxRate),
+                discountRate: NumericInputSupport.normalizedStorageText(generateDiscount, kind: .discountRate),
                 versionName: "V1",
                 status: .draft,
                 projectId: record.projectId
             ))
         }
         store.scheduleSave()
-        operationMessage = "已从材料/人工生成报价"
+        operationNotice = .info(String(localized: "已从材料/人工生成报价"))
     }
 
     private func exportQuotationPDF() {
         let meta = quotationDocumentMeta()
-        let data = ReportBuilder.makeQuotationPDF(title: "报价单", items: filtered, projects: store.projects, meta: meta)
-        exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: "报价单.pdf")
+        let data = ReportBuilder.makeQuotationPDF(title: String(localized: "报价单"), items: filtered, projects: store.projects, meta: meta)
+        exportPayload = ExportPayload(data: data, contentType: .pdf, defaultFilename: String(localized: "报价单.pdf"))
         AppHaptics.impact(.light)
         showExporter = true
     }
@@ -534,12 +633,12 @@ struct QuotationView: View {
     private func exportQuotationExcel() {
         let meta = quotationDocumentMeta()
         let data = ReportBuilder.makeQuotationExcelHTML(
-            title: "报价单",
+            title: String(localized: "报价单"),
             items: filtered,
             projects: store.projects,
             meta: meta
         )
-        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: "报价单表格.xls")
+        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "报价单表格.xls"))
         AppHaptics.impact(.light)
         showExporter = true
     }
@@ -561,40 +660,40 @@ struct QuotationView: View {
         let phone = companyPhone.trimmingCharacters(in: .whitespacesAndNewlines)
         let address = companyAddress.trimmingCharacters(in: .whitespacesAndNewlines)
         return QuotationDocumentMeta(
-            companyName: company.isEmpty ? "未填写" : company,
-            companyPhone: phone.isEmpty ? "未填写" : phone,
-            companyAddress: address.isEmpty ? "未填写" : address,
-            customerName: quoteCustomerName.isEmpty ? "未填写" : quoteCustomerName,
-            projectAddress: quoteProjectAddress.isEmpty ? "未填写" : quoteProjectAddress,
+            companyName: company.isEmpty ? String(localized: "未填写") : company,
+            companyPhone: phone.isEmpty ? String(localized: "未填写") : phone,
+            companyAddress: address.isEmpty ? String(localized: "未填写") : address,
+            customerName: quoteCustomerName.isEmpty ? String(localized: "未填写") : quoteCustomerName,
+            projectAddress: quoteProjectAddress.isEmpty ? String(localized: "未填写") : quoteProjectAddress,
             validUntil: validUntil,
-            signerName: quoteSignerName.isEmpty ? "项目负责人" : quoteSignerName
+            signerName: quoteSignerName.isEmpty ? String(localized: "项目负责人") : quoteSignerName
         )
     }
 
     private var quotationExportForm: some View {
         NavigationStack {
             Form {
-                Section("客户信息") {
-                    TextField("客户名称", text: $quoteCustomerName)
-                    TextField("项目地址", text: $quoteProjectAddress, axis: .vertical)
+                Section(String(localized: "客户信息")) {
+                    TextField(String(localized: "客户名称"), text: $quoteCustomerName)
+                    TextField(String(localized: "项目地址"), text: $quoteProjectAddress, axis: .vertical)
                         .lineLimit(2...4)
-                    TextField("签字人", text: $quoteSignerName)
+                    TextField(String(localized: "签字人"), text: $quoteSignerName)
                 }
-                Section("公司信息") {
-                    TextField("公司名称", text: $companyName)
-                    TextField("公司电话", text: $companyPhone)
+                Section(String(localized: "公司信息")) {
+                    TextField(String(localized: "公司名称"), text: $companyName)
+                    TextField(String(localized: "公司电话"), text: $companyPhone)
                         .keyboardType(.phonePad)
-                    TextField("公司地址", text: $companyAddress, axis: .vertical)
+                    TextField(String(localized: "公司地址"), text: $companyAddress, axis: .vertical)
                         .lineLimit(2...4)
-                    LabeledContent("有效期", value: "\(quoteValidityDays) 天")
+                    LabeledContent(String(localized: "有效期"), value: String(format: String(localized: "%lld 天"), Int64(quoteValidityDays)))
                     if !isCompanyProfileComplete {
-                        Text("请补全公司信息后再导出。")
+                        Text(String(localized: "请补全公司信息后再导出。"))
                             .font(.caption)
                             .foregroundStyle(.appWarning)
                     }
                 }
-                Section("导出格式") {
-                    Picker("格式", selection: $quoteExportFormat) {
+                Section(String(localized: "导出格式")) {
+                    Picker(String(localized: "格式"), selection: $quoteExportFormat) {
                         ForEach(QuotationExportFormat.allCases) { format in
                             Text(format.displayName).tag(format)
                         }
@@ -602,7 +701,7 @@ struct QuotationView: View {
                     .pickerStyle(.segmented)
                 }
                 Section {
-                    Button("导出\(quoteExportFormat.displayName)") {
+                    Button(String(format: String(localized: "导出%@"), quoteExportFormat.displayName)) {
                         showQuoteExportSheet = false
                         performQuotationExport()
                     }
@@ -611,11 +710,11 @@ struct QuotationView: View {
                     .disabled(filtered.isEmpty || (quoteExportFormat == .pdf && !isCompanyProfileComplete))
                 }
             }
-            .navigationTitle("报价单模板")
+            .navigationTitle(String(localized: "报价单模板"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { showQuoteExportSheet = false }
+                    Button(String(localized: "取消")) { showQuoteExportSheet = false }
                 }
             }
         }
@@ -626,7 +725,7 @@ struct QuotationView: View {
             quoteProjectAddress = project.location
         }
         if quoteSignerName.isEmpty {
-            quoteSignerName = "项目负责人"
+            quoteSignerName = String(localized: "项目负责人")
         }
         if !isCompanyProfileComplete {
             showCompanyInfoPrompt = true
@@ -662,16 +761,25 @@ struct QuotationView: View {
         let unassigned = store.quoteItems
             .filter { $0.projectId == nil }
             .reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
-        if unassigned > 0 { rows.append(("未归属", unassigned)) }
+        if unassigned > 0 { rows.append((String(localized: "未归属"), unassigned)) }
         return rows
     }
 
     private var canSaveQuoteForm: Bool {
         !formName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
         !formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        InputValidator.nonNegativeNumber(formPrice) &&
-        InputValidator.nonNegativeNumber(formQty) &&
-        (formContractAmount.isEmpty || InputValidator.nonNegativeNumber(formContractAmount))
+        InputValidator.validate(formPrice, kind: .amount, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formQty, kind: .quantity, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+    }
+
+    private var canGenerateQuoteForm: Bool {
+        InputValidator.validate(defaultMaterialPrice, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        InputValidator.validate(defaultLaborRate, kind: .laborRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(generateTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid
     }
 
     private func statusColor(_ status: QuoteStatus) -> Color {
@@ -690,9 +798,45 @@ struct QuotationView: View {
 
     private func applyGrandTotalToProjectContract() {
         guard let pid = projectFilter, let projectIndex = store.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[projectIndex].contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
+        var project = store.projects[projectIndex]
+        project.contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
+        guard store.updateProject(project) else { return }
         store.scheduleSave()
-        operationMessage = "已同步到项目合同金额"
+        operationNotice = .info(String(localized: "已同步到项目合同金额"))
+    }
+
+    private func deleteQuotesWithUndo(ids: [UUID]) {
+        let idSet = Set(ids)
+        guard !idSet.isEmpty else { return }
+
+        let targets = store.quoteItems.filter { idSet.contains($0.id) }
+        guard !targets.isEmpty else { return }
+        let deletion = store.removeQuoteItems(
+            ids: idSet,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(localized: "删除报价"),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "QuotationView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条报价"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreQuoteItems(from: deletion)
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
+    }
+
+    private func flushPendingQuoteDeletionIfNeeded() {
+        undoableDeletion.flushPendingCommit()
     }
 }
 
@@ -722,10 +866,10 @@ private enum QuoteStatusChip: CaseIterable, Hashable {
 
     var title: String {
         switch self {
-        case .all: return "全部"
-        case .draft: return "草稿"
-        case .sent: return "已发送"
-        case .confirmed: return "已确认"
+        case .all: return String(localized: "全部")
+        case .draft: return String(localized: "草稿")
+        case .sent: return String(localized: "已发送")
+        case .confirmed: return String(localized: "已确认")
         }
     }
 }

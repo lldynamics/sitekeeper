@@ -16,7 +16,7 @@ enum ProjectDetailFocusedItem {
         case .financialRecord:
             return .finance
         case .document, .contact:
-            return .records
+            return .assets
         }
     }
 }

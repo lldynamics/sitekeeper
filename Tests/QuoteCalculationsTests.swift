@@ -55,4 +55,28 @@ struct QuoteCalculationsTests {
         let value = DataValueParser.decimalValue(from: "￥1,234.5678")
         #expect(NSDecimalNumber(decimal: value).stringValue == "1234.5678")
     }
+
+    @Test func decimalParserKeepsGroupingAndDecimalSeparatorsDistinct() {
+        let cases = [
+            ("1,234", "1234"),
+            ("12,345.67", "12345.67"),
+            ("1,234,567.89", "1234567.89"),
+            ("1,5", "1.5"),
+            ("1.234,56", "1234.56")
+        ]
+
+        for (input, expected) in cases {
+            let value = DataValueParser.decimalValue(from: input)
+            #expect(NSDecimalNumber(decimal: value).stringValue == expected)
+        }
+    }
+
+    @Test func nonNegativeNumberValidatorAcceptsGroupedNumbersOnlyWhenFullyNumeric() {
+        #expect(InputValidator.nonNegativeNumber("1,234"))
+        #expect(InputValidator.nonNegativeNumber("12,345.67"))
+        #expect(InputValidator.nonNegativeNumber("1,5"))
+        #expect(!InputValidator.nonNegativeNumber("-0.01"))
+        #expect(!InputValidator.nonNegativeNumber("￥1,234"))
+        #expect(!InputValidator.nonNegativeNumber("abc"))
+    }
 }

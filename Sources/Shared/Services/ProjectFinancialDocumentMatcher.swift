@@ -112,6 +112,17 @@ extension ProjectDocumentCategory {
         case .construction:
             return category == .material
                 || category == .labor
+        case .constructionMaterial:
+            return category == .material
+        case .constructionRecord:
+            return category == .labor
+        case .constructionTechnical,
+             .constructionSurvey,
+             .constructionTest,
+             .constructionManagement,
+             .processAcceptance,
+             .completionAcceptance:
+            return false
         case .contract, .acceptance, .other:
             return false
         }

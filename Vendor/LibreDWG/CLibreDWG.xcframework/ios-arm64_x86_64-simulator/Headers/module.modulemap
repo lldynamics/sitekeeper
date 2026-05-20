@@ -1,0 +1,4 @@
+module CLibreDWG [system] {
+  header "dwg_api.h"
+  export *
+}

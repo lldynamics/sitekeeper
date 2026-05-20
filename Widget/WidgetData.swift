@@ -1,17 +1,41 @@
 import Foundation
 
 final class WidgetDataStore {
-    static let suiteName = "group.com.chengjinfang.sitekeeper"
-    static let widgetDataKey = "widget_data"
-    static let widgetUpdatedAtKey = "widget_data_updated_at"
+    static let suiteName = WidgetSharedDefaults.suiteName
+    static let widgetDataKey = WidgetSharedDefaults.dataKey
+    static let widgetUpdatedAtKey = WidgetSharedDefaults.updatedAtKey
 
     static var shared: WidgetExportData {
         decodeWidgetData(from: UserDefaults(suiteName: suiteName))
     }
 
+    static var languageCode: String {
+        guard let defaults = UserDefaults(suiteName: suiteName) else {
+            return resolvedSystemLanguageCode
+        }
+        if let code = defaults.string(forKey: WidgetSharedDefaults.languageCodeKey),
+           !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if code == "system" {
+                return resolvedSystemLanguageCode
+            }
+            return code
+        }
+        if let code = defaults.stringArray(forKey: WidgetSharedDefaults.appleLanguagesKey)?.first,
+           !code.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return code
+        }
+        return resolvedSystemLanguageCode
+    }
+
+    private static var resolvedSystemLanguageCode: String {
+        Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
+    }
+
     static func healthSnapshot() -> WidgetDataHealthSnapshot {
         guard let defaults = UserDefaults(suiteName: suiteName) else {
-            StorageIssueLog.record("Widget App Group 不可用：\(suiteName)")
+            WidgetStorageIssueLog.record(
+                String(format: WidgetLocalizedText.string(for: "widget_storage_app_group_unavailable_format"), suiteName)
+            )
             return WidgetDataHealthSnapshot(
                 appGroupReadable: false,
                 lastUpdatedAt: nil,
@@ -48,8 +72,8 @@ final class WidgetDataStore {
     }
 }
 
-private enum StorageIssueLog {
-    private static let key = "storageIssueLogEntries"
+private enum WidgetStorageIssueLog {
+    private static let localFallbackKey = WidgetSharedDefaults.storageIssueLogKey
     private static let maxEntries = 120
     private static let timestampFormatter: ISO8601DateFormatter = {
         let formatter = ISO8601DateFormatter()
@@ -60,11 +84,14 @@ private enum StorageIssueLog {
     static func record(_ message: String) {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        var entries = UserDefaults.standard.stringArray(forKey: key) ?? []
+        if WidgetSharedStorageIssueLog.record(trimmed, source: "widget") {
+            return
+        }
+        var entries = UserDefaults.standard.stringArray(forKey: localFallbackKey) ?? []
         entries.insert("[\(timestampFormatter.string(from: Date()))] \(trimmed)", at: 0)
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
-        UserDefaults.standard.set(entries, forKey: key)
+        UserDefaults.standard.set(entries, forKey: localFallbackKey)
     }
 }

@@ -20,8 +20,11 @@ struct ProjectListView: View {
     @State private var newMaterialCost = ""
     @State private var newLaborCost = ""
     @State private var newPaymentStatus: PaymentStatus = .unpaid
+    @State private var newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
     @State private var projectToDelete: Project?
     @State private var showDeleteConfirm = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var statusFilter: ProjectStatus? = nil
     @State private var overviewFilter: ProjectOverviewFilter? = nil
     @State private var sortOption: ProjectSortOption = .recentUpdate
@@ -142,6 +145,7 @@ struct ProjectListView: View {
                 materialCost: $newMaterialCost,
                 laborCost: $newLaborCost,
                 paymentStatus: $newPaymentStatus,
+                requiredDocumentCategories: $newRequiredDocumentCategories,
                 focusedField: $newProjectFocusedField,
                 canCreate: canCreateProject,
                 onCancel: {
@@ -154,12 +158,18 @@ struct ProjectListView: View {
                 }
             )
         }
-        .confirmationDialog("删除项目", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("归档项目，保留全部数据") { archiveProject() }
-            Button("删除项目及全部关联数据", role: .destructive) { deleteProject(keepData: false) }
-            Button("取消", role: .cancel) {}
+        .confirmationDialog(String(localized: "删除项目"), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "归档项目，保留全部数据")) { archiveProject() }
+            Button(String(localized: "删除项目及全部关联数据"), role: .destructive) { deleteProject(keepData: false) }
+            Button(String(localized: "取消"), role: .cancel) {}
         } message: {
-            Text(String(localized: "项目「\(projectToDelete?.name ?? "")」有 \(relatedCount) 条关联数据。归档会保留全部联系人、财务、资料、图纸和记录；删除会清除项目及全部关联数据。"))
+            Text(
+                String(
+                    format: String(localized: "project_delete_dialog_message"),
+                    projectToDelete?.name ?? "",
+                    relatedCount
+                )
+            )
         }
         .onAppear {
             handleAutoOpenComposer()
@@ -174,11 +184,15 @@ struct ProjectListView: View {
         .onChange(of: shouldUseSplitNavigation) { _, _ in
             syncSelectedProjectIfNeeded()
         }
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
+        }
+        .operationToast(notice: $operationNotice)
     }
 
     private var compactProjectLayout: some View {
         projectList(isSplitNavigation: false)
-            .navigationTitle("项目")
+            .navigationTitle(String(localized: "项目"))
             .toolbar {
                 projectToolbar
             }
@@ -187,7 +201,7 @@ struct ProjectListView: View {
     private var splitProjectLayout: some View {
         NavigationSplitView {
             projectList(isSplitNavigation: true)
-                .navigationTitle("项目")
+                .navigationTitle(String(localized: "项目"))
                 .toolbar {
                     projectToolbar
                 }
@@ -196,9 +210,9 @@ struct ProjectListView: View {
                 ProjectDetailView(projectId: selectedProject.id)
             } else {
                 ContentUnavailableView(
-                    "请选择项目",
+                    String(localized: "请选择项目"),
                     systemImage: "building.2.crop.circle",
-                    description: Text("在左侧选择工程后，右侧常驻展示项目详情。")
+                    description: Text(String(localized: "在左侧选择工程后，右侧常驻展示项目详情。"))
                 )
             }
         }
@@ -214,14 +228,15 @@ struct ProjectListView: View {
                 Image(systemName: "folder").visibleIconStyle()
             }
             .buttonStyle(.appIcon())
-            .accessibilityLabel("全局文件检索")
+            .accessibilityLabel(String(localized: "项目资料"))
+            .accessibilityIdentifier("project-file-browser-entry")
             Button {
                 showAdd = true
             } label: {
                 Image(systemName: "plus").visibleIconStyle()
             }
             .buttonStyle(.appIcon())
-            .accessibilityLabel("新建项目")
+            .accessibilityLabel(String(localized: "新建项目"))
         }
     }
 
@@ -260,28 +275,28 @@ struct ProjectListView: View {
 
     @ViewBuilder
     private var emptyProjectSection: some View {
-        Section("建议下一步") {
+        Section(String(localized: "建议下一步")) {
             if hasAnyFilterApplied {
                 ContentUnavailableView(
-                    "没有匹配项目",
+                    String(localized: "没有匹配项目"),
                     systemImage: "line.3.horizontal.decrease.circle",
-                    description: Text("当前筛选条件下没有匹配项，建议先清除筛选再查看全部工程。")
+                    description: Text(String(localized: "当前筛选条件下没有匹配项，建议先清除筛选再查看全部工程。"))
                 )
                 Button {
                     clearAllFilters()
                 } label: {
-                    Label("清除筛选条件", systemImage: "arrow.uturn.backward.circle")
+                    Label(String(localized: "清除筛选条件"), systemImage: "arrow.uturn.backward.circle")
                 }
             } else {
                 ContentUnavailableView(
-                    "还没有项目",
+                    String(localized: "还没有项目"),
                     systemImage: "building.2",
-                    description: Text("先新建一个工程，再补充日志、资料、报价和回款。")
+                    description: Text(String(localized: "先新建一个工程，再补充日志、资料、报价和回款。"))
                 )
                 Button {
                     showAdd = true
                 } label: {
-                    Label("新建第一个项目", systemImage: "plus.circle.fill")
+                    Label(String(localized: "新建第一个项目"), systemImage: "plus.circle.fill")
                 }
                 .buttonStyle(.appProminent())
             }
@@ -324,21 +339,21 @@ struct ProjectListView: View {
                 NavigationLink {
                     ProjectDetailView(projectId: project.id, initialMode: .finance)
                 } label: {
-                    Label("财务", systemImage: "wallet.pass.fill")
+                    Label(String(localized: "财务"), systemImage: "wallet.pass.fill")
                 }
                 .tint(Color.appFinance)
 
                 NavigationLink {
                     SiteTodoView(initialProjectId: project.id)
                 } label: {
-                    Label("待办", systemImage: "checkmark.circle.fill")
+                    Label(String(localized: "待办"), systemImage: "checkmark.circle.fill")
                 }
                 .tint(Color.appSuccess)
 
                 NavigationLink {
                     ProjectDetailView(projectId: project.id, initialMode: .assets)
                 } label: {
-                    Label("图纸", systemImage: "square.on.square.squareshape.controlhandles")
+                    Label(String(localized: "图纸"), systemImage: "square.on.square.squareshape.controlhandles")
                 }
                 .tint(Color.appPrimaryAction)
             }
@@ -346,21 +361,21 @@ struct ProjectListView: View {
                 NavigationLink {
                     ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
                 } label: {
-                    Label("加资料", systemImage: "doc.badge.plus")
+                    Label(String(localized: "加资料"), systemImage: "doc.badge.plus")
                 }
                 .tint(Color.appDoc)
 
                 NavigationLink {
                     DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
                 } label: {
-                    Label("写日志", systemImage: "book.pages.fill")
+                    Label(String(localized: "写日志"), systemImage: "book.pages.fill")
                 }
                 .tint(Color.appSuccess)
 
                 NavigationLink {
                     ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
                 } label: {
-                    Label("记账", systemImage: "receipt.fill")
+                    Label(String(localized: "记账"), systemImage: "receipt.fill")
                 }
                 .tint(Color.appFinance)
 
@@ -368,7 +383,7 @@ struct ProjectListView: View {
                     Button {
                         openURL(url)
                     } label: {
-                        Label("联系客户", systemImage: "phone.fill")
+                        Label(String(localized: "联系客户"), systemImage: "phone.fill")
                     }
                     .tint(Color.appDoc)
                 }
@@ -414,21 +429,58 @@ struct ProjectListView: View {
             archiveProject()
             return
         } else {
-            store.deleteProject(pid)
+            let projectName = projectToDelete?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            let normalizedName = projectName.isEmpty ? String(localized: "项目") : projectName
+            let relationCount = relatedCount
+            let deletion = store.removeProjectCascade(pid)
+            guard !deletion.isEmpty else {
+                projectToDelete = nil
+                return
+            }
+
+            projectToDelete = nil
+            syncSelectedProjectIfNeeded()
+            undoableDeletion.queue(
+                notice: $operationNotice,
+                message: String(format: String(localized: "已删除项目 %@"), normalizedName),
+                commit: {
+                    deletion.performDeferredFileCleanup()
+                    store.scheduleSave()
+                },
+                undo: {
+                    store.restoreProjectCascade(deletion)
+                    if shouldUseSplitNavigation {
+                        selectedProjectId = pid
+                    }
+                    store.scheduleSave()
+                },
+                audit: UndoableDeletionAuditContext(
+                    summary: String(localized: "删除项目及全部关联数据"),
+                    detail: [
+                        "\(normalizedName)",
+                        "related=\(relationCount)",
+                        "records=\(deletion.deletedRecordCount)",
+                        "files=\(deletion.deferredFileCleanup?.fileCount ?? 0)"
+                    ].joined(separator: " · "),
+                    source: "ProjectListView"
+                )
+            )
         }
     }
 
     private func archiveProject() {
         guard let pid = projectToDelete?.id,
               let index = projectStore.projects.firstIndex(where: { $0.id == pid }) else { return }
-        store.projects[index].status = .archived
+        var project = projectStore.projects[index]
+        project.status = .archived
+        guard store.updateProject(project) else { return }
         projectToDelete = nil
         store.scheduleSave()
     }
 
     private func addProject() {
         guard canCreateProject else { return }
-        store.projects.append(Project(
+        store.appendProject(Project(
             name: newName.trimmingCharacters(in: .whitespacesAndNewlines),
             location: newLocation,
             status: .active,
@@ -437,11 +489,14 @@ struct ProjectListView: View {
             startDate: Formatters.date.string(from: newStartDate),
             expectedEndDate: Formatters.date.string(from: newExpectedEndDate),
             managerName: newManagerName,
-            contractAmount: newContractAmount,
-            paidAmount: newPaidAmount,
+            contractAmount: NumericInputSupport.normalizedStorageText(newContractAmount, kind: .amount),
+            paidAmount: NumericInputSupport.normalizedStorageText(newPaidAmount, kind: .amount),
             paymentStatus: newPaymentStatus,
-            materialCost: newMaterialCost,
-            laborCost: newLaborCost
+            materialCost: NumericInputSupport.normalizedStorageText(newMaterialCost, kind: .amount),
+            laborCost: NumericInputSupport.normalizedStorageText(newLaborCost, kind: .amount),
+            requiredDocumentCategories: ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+                Array(newRequiredDocumentCategories)
+            )
         ))
         store.scheduleSave()
         clearProject()
@@ -457,16 +512,18 @@ struct ProjectListView: View {
         newMaterialCost = ""
         newLaborCost = ""
         newPaymentStatus = .unpaid
+        newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
         newStartDate = Date()
         newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
     }
 
     private var canCreateProject: Bool {
         !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        (newContractAmount.isEmpty || InputValidator.nonNegativeNumber(newContractAmount)) &&
-        (newPaidAmount.isEmpty || InputValidator.nonNegativeNumber(newPaidAmount)) &&
-        (newMaterialCost.isEmpty || InputValidator.nonNegativeNumber(newMaterialCost)) &&
-        (newLaborCost.isEmpty || InputValidator.nonNegativeNumber(newLaborCost))
+        !newRequiredDocumentCategories.isEmpty &&
+        InputValidator.validate(newContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        InputValidator.validate(newPaidAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        InputValidator.validate(newMaterialCost, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        InputValidator.validate(newLaborCost, kind: .amount, requirement: .optionalNonNegative).isValid
     }
 
     private var relatedCount: Int {
@@ -501,22 +558,34 @@ struct ProjectListView: View {
     private func projectRiskBadges(for project: Project) -> [ProjectRiskBadge] {
         var badges: [ProjectRiskBadge] = []
         if hasOverdueItem(for: project) {
-            badges.append(ProjectRiskBadge(title: "延期", systemImage: "exclamationmark.triangle.fill", color: .appRisk))
+            badges.append(ProjectRiskBadge(title: String(localized: "延期"), systemImage: "exclamationmark.triangle.fill", color: .appRisk))
         }
         let todos = openTodoCount(for: project)
         if todos > 0 {
-            badges.append(ProjectRiskBadge(title: "\(todos)待办", systemImage: "checklist", color: .appWarning))
+            badges.append(ProjectRiskBadge(
+                title: String(format: String(localized: "%d待办"), todos),
+                systemImage: "checklist",
+                color: .appWarning
+            ))
         }
         let missingReceipts = unattachedReceiptCount(for: project)
         if missingReceipts > 0 {
-            badges.append(ProjectRiskBadge(title: "\(missingReceipts)缺票", systemImage: "doc.badge.exclamationmark", color: .appFinance))
+            badges.append(ProjectRiskBadge(
+                title: String(format: String(localized: "%d缺票"), missingReceipts),
+                systemImage: "doc.badge.exclamationmark",
+                color: .appFinance
+            ))
         }
         let priceSpikes = materialPriceSpikeCount(for: project)
         if priceSpikes > 0 {
-            badges.append(ProjectRiskBadge(title: "\(priceSpikes)价格异动", systemImage: "arrow.up.right.circle.fill", color: .appFinance))
+            badges.append(ProjectRiskBadge(
+                title: String(format: String(localized: "%d价格异动"), priceSpikes),
+                systemImage: "arrow.up.right.circle.fill",
+                color: .appFinance
+            ))
         }
         if unpaidAmount(for: project) > 0 {
-            badges.append(ProjectRiskBadge(title: "未收", systemImage: "yensign.circle.fill", color: .appDoc))
+            badges.append(ProjectRiskBadge(title: String(localized: "未收"), systemImage: "yensign.circle.fill", color: .appDoc))
         }
         return Array(badges.prefix(4))
     }

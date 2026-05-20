@@ -24,6 +24,7 @@ final class SitekeeperUITests: XCTestCase {
     private func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
         let url = screenshotOutputDirectory.appendingPathComponent("\(name).png")
         do {
+            try FileManager.default.createDirectory(at: screenshotOutputDirectory, withIntermediateDirectories: true)
             try XCUIScreen.main.screenshot().pngRepresentation.write(to: url)
         } catch {
             XCTFail("截图保存失败: \(error.localizedDescription)", line: line)
@@ -34,7 +35,8 @@ final class SitekeeperUITests: XCTestCase {
     private func launchApp(
         skipOnboarding: Bool = true,
         resetState: Bool = false,
-        enableBackupPreview: Bool = false
+        enableBackupPreview: Bool = false,
+        allowClearWithoutBackup: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         if skipOnboarding {
@@ -48,6 +50,10 @@ final class SitekeeperUITests: XCTestCase {
         if enableBackupPreview {
             app.launchArguments += ["-uitest-backup-preview"]
             app.launchEnvironment["UITEST_BACKUP_PREVIEW"] = "1"
+        }
+        if allowClearWithoutBackup {
+            app.launchArguments += ["-uitest-allow-clear-without-backup"]
+            app.launchEnvironment["UITEST_ALLOW_CLEAR_WITHOUT_BACKUP"] = "1"
         }
         app.launch()
         return app
@@ -85,7 +91,7 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp()
         app.tabBars.buttons["我的"].tap()
 
-        let backupEntry = app.cells.containing(.staticText, identifier: "数据备份").firstMatch
+        let backupEntry = app.buttons["profile-data-management-link"]
         XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
         backupEntry.tap()
 
@@ -98,12 +104,11 @@ final class SitekeeperUITests: XCTestCase {
         app.tabBars.buttons["随手记"].tap()
 
         XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
-        app.buttons["发布"].tap()
-
-        XCTAssertTrue(app.navigationBars["发布随手记"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["媒体"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["附件"].exists)
-        app.buttons["关闭"].tap()
+        XCTAssertTrue(app.buttons["发送随手记"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["从相册添加媒体"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["拍照添加"].exists)
+        XCTAssertTrue(app.buttons["录制语音"].exists)
+        XCTAssertTrue(app.buttons["导入文件附件"].exists)
     }
 
     func testFirstLaunchOnboardingCanOpenProjectComposer() {
@@ -123,27 +128,27 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true)
         app.tabBars.buttons["项目"].tap()
 
-        let browserButton = app.buttons["项目文件浏览"]
+        let browserButton = app.buttons["project-file-browser-entry"]
         XCTAssertTrue(browserButton.waitForExistence(timeout: 5))
         browserButton.tap()
 
-        XCTAssertTrue(app.navigationBars["项目文件"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["暂无项目文件"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["暂无项目资料"].waitForExistence(timeout: 5))
     }
 
     func testClearLocalDataFlowRequiresConfirmationPhrase() {
-        let app = launchApp(resetState: true)
+        let app = launchApp(resetState: true, allowClearWithoutBackup: true)
         app.tabBars.buttons["我的"].tap()
 
-        let settingsEntry = app.cells.containing(.staticText, identifier: "设置").firstMatch
+        let settingsEntry = app.buttons["profile-settings-link"]
         XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
         settingsEntry.tap()
 
-        let clearButton = app.buttons["清空本机全部数据（不可恢复）"]
+        let clearButton = app.buttons["清空本机全部数据（需先备份）"]
         XCTAssertTrue(clearButton.waitForExistence(timeout: 5))
         clearButton.tap()
 
-        let continueButton = app.buttons["继续"]
+        let continueButton = app.buttons["继续清空"]
         XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
         continueButton.tap()
 
@@ -167,7 +172,7 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true, enableBackupPreview: true)
         app.tabBars.buttons["我的"].tap()
 
-        let backupEntry = app.cells.containing(.staticText, identifier: "数据备份").firstMatch
+        let backupEntry = app.buttons["profile-data-management-link"]
         XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
         backupEntry.tap()
 
@@ -186,7 +191,7 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true)
 
         tapPrimaryModule(app, name: "我的")
-        let settingsEntry = app.cells.containing(.staticText, identifier: "设置").firstMatch
+        let settingsEntry = app.buttons["profile-settings-link"]
         XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
         settingsEntry.tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
@@ -216,11 +221,11 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "03-dashboard")
 
         app.tabBars.buttons["项目"].tap()
-        XCTAssertTrue(app.buttons["项目文件浏览"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["project-file-browser-entry"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "04-project-home")
 
-        app.buttons["项目文件浏览"].tap()
-        XCTAssertTrue(app.navigationBars["项目文件"].waitForExistence(timeout: 5))
+        app.buttons["project-file-browser-entry"].tap()
+        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "05-project-files")
         app.navigationBars.buttons.firstMatch.tap()
 
@@ -233,12 +238,12 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "07-quick-note")
 
         app.tabBars.buttons["我的"].tap()
-        let backupEntry = app.cells.containing(.staticText, identifier: "数据备份").firstMatch
+        let backupEntry = app.buttons["profile-data-management-link"]
         XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
         saveScreenshot(app, named: "08-profile")
 
         backupEntry.tap()
-        XCTAssertTrue(app.navigationBars["数据备份"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["数据管理"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "09-backup")
     }
 

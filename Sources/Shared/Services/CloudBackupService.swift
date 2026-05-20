@@ -25,13 +25,13 @@ enum CloudBackupError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .iCloudUnavailable:
-            return "未能访问 iCloud。请确认已登录 Apple ID，并在系统设置中允许本 App 使用 iCloud。"
+            return String(localized: "未能访问 iCloud。请确认已登录 Apple ID，并在系统设置中允许本 App 使用 iCloud。")
         case .cloudFileNotDownloaded:
-            return "云端备份仍在从 iCloud 下载，请稍后再试。"
+            return String(localized: "云端备份仍在从 iCloud 下载，请稍后再试。")
         case .backupNotFound:
-            return "未找到可恢复的 iCloud 备份。"
+            return String(localized: "未找到可恢复的 iCloud 备份。")
         case .invalidBackupFile:
-            return "iCloud 备份文件无效。"
+            return String(localized: "iCloud 备份文件无效。")
         }
     }
 }
@@ -41,6 +41,24 @@ enum CloudBackupService {
     private static let backupsDirectoryName = "Backups"
     private static let backupFilePrefix = "sitekeeper-cloud-backup"
     private static let backupFileExtension = "zip"
+
+    private static func recordIssue(
+        _ event: String,
+        fileURL: URL? = nil,
+        details: [String: String] = [:],
+        error: Error? = nil
+    ) {
+        var payload = details
+        if let fileURL {
+            payload["file"] = fileURL.lastPathComponent
+        }
+        StorageIssueLog.recordEvent(
+            event,
+            category: .cloudBackup,
+            details: payload,
+            error: error
+        )
+    }
 
     static func containerRootURL() -> URL? {
         FileManager.default.url(forUbiquityContainerIdentifier: containerIdentifier)
@@ -84,10 +102,15 @@ enum CloudBackupService {
     ) throws -> CloudBackupFile {
         let directory = try backupsDirectoryURL(createIfNeeded: true)
         let targetURL = directory.appendingPathComponent(fileName)
-        if FileManager.default.fileExists(atPath: targetURL.path) {
-            try FileManager.default.removeItem(at: targetURL)
-        }
-        try FileManager.default.copyItem(at: archiveFileURL, to: targetURL)
+        try FileOps.replaceByCopyWithRollback(
+            from: archiveFileURL,
+            to: targetURL,
+            context: .init(
+                event: "cloud_backup.save_archive",
+                category: .cloudBackup,
+                source: "CloudBackupService.saveArchiveToCloud"
+            )
+        )
         try pruneOldBackups(keepMostRecent: retainedCount)
         guard let file = cloudBackupFile(from: targetURL) else {
             throw CloudBackupError.invalidBackupFile
@@ -103,10 +126,15 @@ enum CloudBackupService {
 
         let targetURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("icloud-backup-import-\(UUID().uuidString).zip")
-        if FileManager.default.fileExists(atPath: targetURL.path) {
-            try FileManager.default.removeItem(at: targetURL)
-        }
-        try FileManager.default.copyItem(at: file.fileURL, to: targetURL)
+        try FileOps.replaceByCopyWithRollback(
+            from: file.fileURL,
+            to: targetURL,
+            context: .init(
+                event: "cloud_backup.copy_to_temporary",
+                category: .cloudBackup,
+                source: "CloudBackupService.copyBackupToTemporaryFile"
+            )
+        )
         return targetURL
     }
 
@@ -127,9 +155,21 @@ enum CloudBackupService {
         let backups = try listBackups()
         for file in backups.dropFirst(retainedCount) {
             do {
-                try FileManager.default.removeItem(at: file.fileURL)
+                _ = try FileOps.removeIfExists(
+                    at: file.fileURL,
+                    context: .init(
+                        event: "cloud_backup.retention_prune",
+                        category: .cloudBackup,
+                        source: "CloudBackupService.pruneOldBackups"
+                    )
+                )
             } catch {
-                StorageIssueLog.record("云备份历史清理失败：\(file.fileURL.lastPathComponent)，\(error.localizedDescription)")
+                recordIssue(
+                    "cloud_backup.retention_prune_failed",
+                    fileURL: file.fileURL,
+                    details: ["retentionCount": String(retainedCount)],
+                    error: error
+                )
             }
         }
     }
@@ -139,7 +179,7 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.contentModificationDateKey, .fileSizeKey, .isRegularFileKey])
         } catch {
-            StorageIssueLog.record("读取云备份元信息失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            recordIssue("cloud_backup.metadata_read_failed", fileURL: url, error: error)
             return nil
         }
         guard values.isRegularFile != false else {
@@ -159,7 +199,7 @@ enum CloudBackupService {
         do {
             values = try url.resourceValues(forKeys: [.ubiquitousItemDownloadingStatusKey])
         } catch {
-            StorageIssueLog.record("读取云端下载状态失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+            recordIssue("cloud_backup.download_status_read_failed", fileURL: url, error: error)
             values = nil
         }
         if let status = values?.ubiquitousItemDownloadingStatus,
@@ -167,7 +207,7 @@ enum CloudBackupService {
             do {
                 try FileManager.default.startDownloadingUbiquitousItem(at: url)
             } catch {
-                StorageIssueLog.record("触发云备份下载失败：\(url.lastPathComponent)，\(error.localizedDescription)")
+                recordIssue("cloud_backup.download_start_failed", fileURL: url, error: error)
             }
             throw CloudBackupError.cloudFileNotDownloaded
         }

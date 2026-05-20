@@ -1,5 +1,8 @@
 import Foundation
 import SwiftUI
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 enum UserPreferenceKeys {
     static let useMetric = "useMetric"
@@ -23,15 +26,18 @@ enum UserPreferenceKeys {
     static let cloudBackupIncludeAttachments = "cloudBackup.includeAttachments"
     static let cloudBackupAutoInterval = "cloudBackup.autoInterval"
     static let cloudBackupAutoRequiresWiFi = "cloudBackup.autoRequiresWiFi"
+    static let cloudBackupRetentionCount = "cloudBackup.retentionCount"
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
+    static let storageCleanupLargeFileThresholdMB = "storageCleanup.largeFileThresholdMB"
+    static let storageCleanupTrashRetentionDays = "storageCleanup.trashRetentionDays"
+    static let exportCurrencyDisplayMode = "export.currencyDisplayMode"
     static let cloudBackupAutoLastAttemptAt = "cloudBackup.autoLastAttemptAt"
     static let cloudBackupAutoLastStatus = "cloudBackup.autoLastStatus"
     static let userName = "userName"
     static let userAvatarData = "userAvatarData"
     static let cadViewerRecentDrawingIDs = "cad.viewer.recentDrawingIDs"
-    static let showTemplates = "feature.showTemplates"
     static let materialPriceSpikeThreshold = "dashboard.materialPriceSpikeThreshold"
     static let materialPriceSpikeIgnoredKeys = "dashboard.materialPriceSpikeIgnoredKeys"
     static let materialLibraryPromptAfterAdd = "materialLibrary.promptAfterAdd"
@@ -66,17 +72,6 @@ enum UserPreferenceKeys {
         static let lightingRoomWidth = "calc.lighting.roomWidth"
         static let lightingTargetLux = "calc.lighting.targetLux"
         static let lightingUtilizationFactor = "calc.lighting.utilizationFactor"
-        static let lightingPlannerBreakerFactor = "calc.lightingPlanner.breakerFactor"
-        static let lightingPlannerDemandFactor = "calc.lightingPlanner.demandFactor"
-        static let lightingPlannerImbalanceLimitPercent = "calc.lightingPlanner.imbalanceLimitPercent"
-        static let lightingPlannerIsCopper = "calc.lightingPlanner.isCopper"
-        static let lightingPlannerMainBreakerLimitA = "calc.lightingPlanner.mainBreakerLimitA"
-        static let lightingPlannerPlanName = "calc.lightingPlanner.planName"
-        static let lightingPlannerPowerFactor = "calc.lightingPlanner.powerFactor"
-        static let lightingPlannerRows = "calc.lightingPlanner.rows"
-        static let lightingPlannerSupplyType = "calc.lightingPlanner.supplyType"
-        static let lightingPlannerVoltage = "calc.lightingPlanner.voltage"
-        static let lightingPlannerWireFactor = "calc.lightingPlanner.wireFactor"
         static let rebarDia = "calc.rebar.dia"
         static let rebarLen = "calc.rebar.len"
         static let rebarPrice = "calc.rebar.price"
@@ -128,18 +123,34 @@ enum AppAppearanceMode: String, CaseIterable {
 }
 
 enum AppLanguage: String, CaseIterable {
+    case system = "system"
     case chinese = "zh-Hans"
     case english = "en"
 
     var displayName: String {
         switch self {
+        case .system: return "跟随系统"
         case .chinese: return "中文"
         case .english: return "English"
         }
     }
 
-    var appleLanguageCode: String {
-        rawValue
+    var preferredLocale: Locale {
+        switch self {
+        case .system:
+            return .autoupdatingCurrent
+        case .chinese, .english:
+            return Locale(identifier: rawValue)
+        }
+    }
+
+    var appleLanguageCodes: [String]? {
+        switch self {
+        case .system:
+            return nil
+        case .chinese, .english:
+            return [rawValue]
+        }
     }
 
     static var current: AppLanguage {
@@ -148,14 +159,42 @@ enum AppLanguage: String, CaseIterable {
     }
 
     static func apply(_ language: AppLanguage) {
-        UserDefaults.standard.set([language.appleLanguageCode], forKey: "AppleLanguages")
+        if let appleLanguageCodes = language.appleLanguageCodes {
+            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
         UserDefaults.standard.set(language.rawValue, forKey: UserPreferenceKeys.languageCode)
+        syncWidgetLanguage(language)
+        reloadWidgetLanguage()
     }
 
     static func restoreFromStorage() {
         let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
         let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
-        UserDefaults.standard.set([lang.appleLanguageCode], forKey: "AppleLanguages")
+        if let appleLanguageCodes = lang.appleLanguageCodes {
+            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+        } else {
+            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+        }
+        syncWidgetLanguage(lang)
+        reloadWidgetLanguage()
+    }
+
+    private static func syncWidgetLanguage(_ language: AppLanguage) {
+        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else { return }
+        defaults.set(language.rawValue, forKey: WidgetSharedDefaults.languageCodeKey)
+        if let appleLanguageCodes = language.appleLanguageCodes {
+            defaults.set(appleLanguageCodes, forKey: WidgetSharedDefaults.appleLanguagesKey)
+        } else {
+            defaults.removeObject(forKey: WidgetSharedDefaults.appleLanguagesKey)
+        }
+    }
+
+    private static func reloadWidgetLanguage() {
+#if canImport(WidgetKit)
+        WidgetCenter.shared.reloadTimelines(ofKind: WidgetSharedDefaults.widgetKind)
+#endif
     }
 }
 
@@ -195,9 +234,9 @@ enum AppTheme: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .dropboxBlue: return "晴空蓝"
-        case .jiangnanSpring: return "江南春"
-        case .warmAmber: return "暖橙"
+        case .dropboxBlue: return String(localized: "晴空蓝")
+        case .jiangnanSpring: return String(localized: "江南春")
+        case .warmAmber: return String(localized: "暖橙")
         }
     }
 
@@ -356,20 +395,29 @@ enum AppBrand {
     static var exportFilePrefix: String {
         displayName
     }
+
+    static var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0"
+    }
+
+    static var appBuild: String {
+        Bundle.main.object(forInfoDictionaryKey: kCFBundleVersionKey as String) as? String ?? "0"
+    }
 }
 
 enum AppPolicy {
-    static let privacyPolicyLastUpdated = "2026年5月9日"
+    static let privacyPolicyLastUpdated = "2026年5月15日"
 }
 
 enum AppFeatureFlags {
     static var allowsSampleDataImport: Bool {
+#if DEBUG
         TransferLimitPolicy.allowsSampleDataImport
+#else
+        false
+#endif
     }
 
-    static var showTemplates: Bool {
-        UserPreferences.bool(UserPreferenceKeys.showTemplates, default: false)
-    }
 }
 
 enum UserPreferences {
@@ -394,9 +442,10 @@ enum UserPreferences {
 enum UnitDisplay {
     static func quantityWithUnit(_ quantity: String, unit: String, useMetric: Bool) -> String {
         guard !useMetric else { return "\(quantity) \(unit)" }
-        guard let numeric = Double(quantity.replacingOccurrences(of: ",", with: ".")) else {
+        guard let numericDecimal = DataValueParser.decimalValueIfPresent(from: quantity, requiresEntireString: true) else {
             return "\(quantity) \(translatedUnit(unit, useMetric: useMetric))"
         }
+        let numeric = NSDecimalNumber(decimal: numericDecimal).doubleValue
         guard let converted = convert(value: numeric, from: unit) else {
             return "\(quantity) \(translatedUnit(unit, useMetric: useMetric))"
         }
@@ -440,7 +489,17 @@ enum UnitDisplay {
 
 enum InputValidator {
     static func nonNegativeNumber(_ text: String) -> Bool {
-        guard let value = Double(text.replacingOccurrences(of: ",", with: ".")) else { return false }
-        return value >= 0
+        guard let value = DataValueParser.decimalValueIfPresent(from: text, requiresEntireString: true) else {
+            return false
+        }
+        return value >= .zero
+    }
+
+    static func validate(
+        _ text: String,
+        kind: NumericInputKind,
+        requirement: NumericInputRequirement
+    ) -> NumericInputValidation {
+        NumericInputSupport.validate(text, kind: kind, requirement: requirement)
     }
 }

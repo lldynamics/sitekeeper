@@ -108,17 +108,38 @@ struct SimpleZipArchiveReader {
         var errorDescription: String? {
             switch self {
             case .invalidArchive:
-                return "备份 ZIP 结构不正确。"
+                return String(localized: "备份 ZIP 结构不正确。")
             case .unsupportedCompression:
-                return "备份 ZIP 使用了当前不支持的压缩方式。"
+                return String(localized: "备份 ZIP 使用了当前不支持的压缩方式。")
             case .unsupportedDataDescriptor:
-                return "备份 ZIP 使用了当前不支持的数据描述符。"
+                return String(localized: "备份 ZIP 使用了当前不支持的数据描述符。")
             case .invalidFileName:
-                return "备份 ZIP 内存在无法识别的文件名。"
+                return String(localized: "备份 ZIP 内存在无法识别的文件名。")
             case .cancelled:
-                return "已取消导入。"
+                return String(localized: "已取消导入。")
             }
         }
+    }
+
+    private static func recordIssue(
+        _ event: String,
+        fileURL: URL? = nil,
+        path: String? = nil,
+        error: Error? = nil
+    ) {
+        var details: [String: String] = [:]
+        if let fileURL {
+            details["file"] = fileURL.lastPathComponent
+        }
+        if let path, !path.isEmpty {
+            details["path"] = path
+        }
+        StorageIssueLog.recordEvent(
+            "zip_reader.\(event)",
+            category: .zipArchive,
+            details: details,
+            error: error
+        )
     }
 
     static func read(_ data: Data) throws -> [Entry] {
@@ -175,7 +196,7 @@ struct SimpleZipArchiveReader {
             do {
                 try handle.close()
             } catch {
-                StorageIssueLog.record("ZIP 扫描句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                recordIssue("scan_handle_close_failed", fileURL: fileURL, error: error)
             }
         }
 
@@ -248,7 +269,7 @@ struct SimpleZipArchiveReader {
                             do {
                                 try readHandle.close()
                             } catch {
-                                StorageIssueLog.record("ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                                recordIssue("entry_read_handle_close_failed", fileURL: fileURL, path: path, error: error)
                             }
                         }
                         try readHandle.seek(toOffset: dataOffset)
@@ -275,7 +296,7 @@ struct SimpleZipArchiveReader {
                                 do {
                                     try readHandle.close()
                                 } catch {
-                                    StorageIssueLog.record("ZIP 条目读取句柄关闭失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                                    recordIssue("entry_read_handle_close_failed", fileURL: fileURL, path: path, error: error)
                                 }
                             }
                             try readHandle.seek(toOffset: dataOffset)
@@ -348,9 +369,14 @@ struct SimpleZipArchiveReader {
     ) throws {
         let manager = FileManager.default
         try manager.createDirectory(at: destinationURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if manager.fileExists(atPath: destinationURL.path) {
-            try manager.removeItem(at: destinationURL)
-        }
+        _ = try FileOps.removeIfExists(
+            at: destinationURL,
+            context: .init(
+                event: "zip.reader.write_entry.prepare_destination",
+                category: .zipArchive,
+                source: "SimpleZipArchiveReader.writeEntry"
+            )
+        )
 
         guard manager.createFile(atPath: destinationURL.path, contents: nil) else {
             throw ZipReadError.invalidArchive
@@ -362,12 +388,12 @@ struct SimpleZipArchiveReader {
             do {
                 try readHandle.close()
             } catch {
-                StorageIssueLog.record("ZIP 读取句柄关闭失败：\(archiveURL.lastPathComponent)，\(error.localizedDescription)")
+                recordIssue("entry_copy_read_handle_close_failed", fileURL: archiveURL, error: error)
             }
             do {
                 try writeHandle.close()
             } catch {
-                StorageIssueLog.record("ZIP 写入句柄关闭失败：\(destinationURL.lastPathComponent)，\(error.localizedDescription)")
+                recordIssue("entry_copy_write_handle_close_failed", fileURL: destinationURL, error: error)
             }
         }
 

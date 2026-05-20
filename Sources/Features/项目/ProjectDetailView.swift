@@ -55,6 +55,8 @@ struct ProjectDetailContainer: View {
     @State var routeState: ProjectDetailRouteState
     @State var financeState = ProjectDetailFinanceState()
     @State var assetState = ProjectDetailAssetState()
+    @State var operationNotice: OperationToastNotice?
+    @State var undoableDeletion = UndoableDeletionCoordinator()
 
     @State var didAutoOpenFinancialAdd = false
     @State var didAutoOpenDocumentScanSetup = false
@@ -116,9 +118,16 @@ struct ProjectDetailContainer: View {
         }
         let preview = names.prefix(3).joined(separator: "、")
         if names.count > 3 {
-            return String(localized: "检测到同名图纸：\(preview) 等 \(names.count) 项，请选择导入策略。")
+            return String(
+                format: String(localized: "检测到同名图纸：%@ 等 %lld 项，请选择导入策略。"),
+                preview,
+                Int64(names.count)
+            )
         }
-        return String(localized: "检测到同名图纸：\(preview)，请选择导入策略。")
+        return String(
+            format: String(localized: "检测到同名图纸：%@，请选择导入策略。"),
+            preview
+        )
     }
 
     private var editingMaterialBinding: Binding<MaterialItem?> {
@@ -213,8 +222,11 @@ struct ProjectDetailContainer: View {
             get: { project.status },
             set: { newVal in
                 if let idx = projectStore.projects.firstIndex(where: { $0.id == projectId }) {
-                    store.projects[idx].status = newVal
-                    store.scheduleSave()
+                    var updatedProject = projectStore.projects[idx]
+                    updatedProject.status = newVal
+                    if store.updateProject(updatedProject) {
+                        store.scheduleSave()
+                    }
                 }
             }
         )
@@ -261,7 +273,14 @@ struct ProjectDetailContainer: View {
                 onOpenMode: { mode in
                     openMode(mode, prefersInlineSections: usesInlineDetailLayout(for: proxy.size.width))
                 },
-                onScanDocument: { routeState.presentation = .documentScanSetup },
+                onScanDocument: {
+                    routeState.documentScanCategory = nil
+                    routeState.presentation = .documentScanSetup
+                },
+                onScanDocumentCategory: { category in
+                    routeState.documentScanCategory = category
+                    routeState.presentation = .documentScanSetup
+                },
                 onCaptureDocumentPhoto: {
                     assetState.imagePickerSource = .camera
                     routeState.presentation = .imagePicker
@@ -328,10 +347,12 @@ struct ProjectDetailContainer: View {
             project: project,
             projectId: projectId,
             presentation: $routeState.presentation,
+            documentScanCategory: $routeState.documentScanCategory,
             financialAddSeed: $financeState.financialAddSeed,
             imagePickerSource: $assetState.imagePickerSource,
             deliveryGuideData: deliveryGuideData(snapshot: snapshot),
             constructionMethods: store.constructionMethods,
+            relatedProgress: snapshot.relatedProgress,
             recentFinancialRecords: snapshot.relatedFinancialRecords,
             onOpenModeFromDeliveryGuide: { mode in
                 routeState.mode = mode
@@ -378,6 +399,7 @@ struct ProjectDetailContainer: View {
                 relatedLogs: snapshot.relatedLogs,
                 relatedDrawings: snapshot.relatedDrawings,
                 relatedFinancialRecords: snapshot.relatedFinancialRecords,
+                relatedDocuments: snapshot.relatedDocuments,
                 linkedDocuments: linkedDocuments(for:),
                 attachmentSheetBuilder: { record in
                     attachmentSheet(record: record, documents: snapshot.relatedDocuments)
@@ -429,8 +451,8 @@ struct ProjectDetailContainer: View {
             onImportDrawings: importDrawings(_:),
             showDocumentFileImporter: $assetState.showDocumentFileImporter,
             documentImportTypes: Self.documentImportTypes,
-            onImportDocuments: { urls in
-                importProjectDocuments(urls)
+            onImportDocuments: { urls, settings in
+                importProjectDocuments(urls, ledgerSettings: settings)
             },
             selectedPhotoItem: $assetState.selectedPhotoItem,
             onImportPhotoItem: { item in
@@ -462,6 +484,7 @@ struct ProjectDetailContainer: View {
         }
         .onDisappear {
             exportState.cancelExportTask()
+            flushPendingProjectDeletionIfNeeded()
         }
         .navigationDestination(isPresented: $showTodoFilterView) {
             SiteTodoView(initialProjectId: projectId)
@@ -504,6 +527,7 @@ struct ProjectDetailContainer: View {
                 }
             }
         }
+        .operationToast(notice: $operationNotice)
     }
 
 }

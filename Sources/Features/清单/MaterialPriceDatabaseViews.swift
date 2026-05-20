@@ -10,6 +10,8 @@ struct MaterialPriceDatabaseView: View {
     @State private var showAdd = false
     @State private var editingEntry: MaterialPriceEntry?
     @State private var didOpenFocusedEntry = false
+    @State private var operationNotice: OperationToastNotice?
+    @State private var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedEntryId: UUID? = nil) {
         self.focusedEntryId = focusedEntryId
@@ -34,13 +36,13 @@ struct MaterialPriceDatabaseView: View {
 
     var body: some View {
         SearchableDatabaseView(
-            title: "材料价格库",
+            title: String(localized: "材料价格库"),
             searchText: $searchText,
-            searchPrompt: "搜索材料、品牌、供应商",
+            searchPrompt: String(localized: "搜索材料、品牌、供应商"),
             items: filtered,
-            emptyTitle: "暂无材料价格",
+            emptyTitle: String(localized: "暂无材料价格"),
             emptySystemImage: "yensign.circle",
-            emptyDescription: Text("记录常用材料的品牌、规格、供应商和参考价。"),
+            emptyDescription: Text(String(localized: "记录常用材料的品牌、规格、供应商和参考价。")),
             searchSuggestions: searchSuggestions,
             onSelect: { entry in
                 editingEntry = entry
@@ -52,8 +54,12 @@ struct MaterialPriceDatabaseView: View {
                 }
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
-                title: "删除材料价格？",
-                itemNoun: "材料价格记录"
+                title: String(localized: "删除材料价格？"),
+                itemNoun: String(localized: "材料价格记录"),
+                singularMessage: String(localized: "删除后可在提示中撤销。"),
+                pluralMessage: { count, noun in
+                    String(format: String(localized: "将删除 %lld 条%@，可在提示中撤销。"), Int64(count), noun)
+                }
             ),
             onDeleteConfirmed: deleteEntries,
             rowContent: { entry in
@@ -67,13 +73,13 @@ struct MaterialPriceDatabaseView: View {
                     Button {
                         importCommonMaterials()
                     } label: {
-                        Label("导入预置材料为价格库", systemImage: "tray.and.arrow.down.fill")
+                        Label(String(localized: "导入预置材料为价格库"), systemImage: "tray.and.arrow.down.fill")
                     }
                 }
             },
             toolbarContent: {
                 Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel("添加材料价格")
+                    .accessibilityLabel(String(localized: "添加材料价格"))
             }
         )
         .onAppear(perform: openFocusedEntryIfNeeded)
@@ -88,18 +94,45 @@ struct MaterialPriceDatabaseView: View {
                 upsertMaterialPriceEntry(updated)
                 editingEntry = nil
             } onDelete: { target in
-                store.materialPriceEntries.removeAll { $0.id == target.id }
-                store.scheduleSave()
+                deleteEntries([target])
                 editingEntry = nil
             }
+        }
+        .operationToast(notice: $operationNotice)
+        .onDisappear {
+            undoableDeletion.flushPendingCommit()
         }
     }
 
     private func deleteEntries(_ items: [MaterialPriceEntry]) {
         let ids = Set(items.map(\.id))
         guard !ids.isEmpty else { return }
-        store.materialPriceEntries.removeAll { ids.contains($0.id) }
-        store.scheduleSave()
+
+        let targets = store.materialPriceEntries.filter { ids.contains($0.id) }
+        guard !targets.isEmpty else { return }
+
+        let deletion = store.removeMaterialPriceEntries(
+            ids: ids,
+            audit: DataStoreDeletionAuditContext(
+                summary: String(format: String(localized: "删除材料价格 %lld 条"), Int64(targets.count)),
+                detail: ListFormatter.localizedString(byJoining: targets.map(\.name)),
+                source: "MaterialPriceDatabaseView"
+            )
+        )
+        guard !deletion.isEmpty else { return }
+
+        undoableDeletion.queue(
+            notice: $operationNotice,
+            message: String(format: String(localized: "已删除 %lld 条材料价格"), Int64(deletion.deletedCount)),
+            commit: {
+                store.scheduleSave()
+            },
+            undo: {
+                store.restoreMaterialPriceEntries(from: deletion)
+                store.scheduleSave()
+            },
+            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
+        )
     }
 
     private func importCommonMaterials() {
@@ -110,27 +143,12 @@ struct MaterialPriceDatabaseView: View {
             return MaterialPriceEntry(name: item.name, specification: item.specification, unit: item.unit, category: item.category.rawValue)
         }
         guard !newItems.isEmpty else { return }
-        store.materialPriceEntries.append(contentsOf: newItems)
+        store.appendMaterialPriceEntries(newItems)
         store.scheduleSave()
     }
 
     private func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
-        let entryKey = MaterialIdentity.key(name: entry.name, specification: entry.specification, unit: entry.unit)
-        if let index = store.materialPriceEntries.firstIndex(where: { $0.id == entry.id }) {
-            store.materialPriceEntries[index] = entry
-            store.scheduleSave()
-            return
-        }
-        if let duplicateIndex = store.materialPriceEntries.firstIndex(where: {
-            MaterialIdentity.key(name: $0.name, specification: $0.specification, unit: $0.unit) == entryKey
-        }) {
-            var merged = entry
-            merged.id = store.materialPriceEntries[duplicateIndex].id
-            store.materialPriceEntries[duplicateIndex] = merged
-            store.scheduleSave()
-            return
-        }
-        store.materialPriceEntries.insert(entry, at: 0)
+        store.upsertMaterialPriceEntry(entry)
         store.scheduleSave()
     }
 
@@ -170,17 +188,17 @@ struct AddMaterialSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("材料信息") {
-                    TextField("名称", text: $name)
-                    TextField("规格", text: $specification)
-                    TextField("单位", text: $unit)
+                Section(String(localized: "材料信息")) {
+                    TextField(String(localized: "名称"), text: $name)
+                    TextField(String(localized: "规格"), text: $specification)
+                    TextField(String(localized: "单位"), text: $unit)
                 }
-                Section("参考价格（可选）") {
-                    TextField("参考单价", text: $price)
+                Section(String(localized: "参考价格（可选）")) {
+                    TextField(String(localized: "参考单价"), text: $price)
                         .keyboardType(.decimalPad)
                 }
-                Section("分类") {
-                    TextField("分类（可自定义）", text: $category)
+                Section(String(localized: "分类")) {
+                    TextField(String(localized: "分类（可自定义）"), text: $category)
                     if !suggestedCategories.isEmpty {
                         ScrollView(.horizontal, showsIndicators: false) {
                             HStack(spacing: 8) {
@@ -195,16 +213,16 @@ struct AddMaterialSheet: View {
                     }
                 }
             }
-            .navigationTitle("新增材料")
+            .navigationTitle(String(localized: "新增材料"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("添加") {
+                    Button(String(localized: "添加")) {
                         let mat = UserMaterial(
                             name: name.trimmingCharacters(in: .whitespacesAndNewlines),
                             specification: specification.trimmingCharacters(in: .whitespacesAndNewlines),
-                            unit: unit.trimmingCharacters(in: .whitespaces).isEmpty ? "个" : unit.trimmingCharacters(in: .whitespaces),
+                            unit: unit.trimmingCharacters(in: .whitespaces).isEmpty ? String(localized: "个") : unit.trimmingCharacters(in: .whitespaces),
                             category: category.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? MaterialCategory.other.rawValue : category.trimmingCharacters(in: .whitespacesAndNewlines)
                         )
                         onSave(mat, price.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -226,7 +244,7 @@ private struct MaterialPriceRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .firstTextBaseline) {
-                Text(entry.name.isEmpty ? "未命名材料" : entry.name)
+                Text(entry.name.isEmpty ? String(localized: "未命名材料") : entry.name)
                     .font(.body.weight(.semibold))
                 Spacer()
                 if !entry.referencePrice.isEmpty {
@@ -296,42 +314,42 @@ struct MaterialPriceEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("材料") {
-                    TextField("名称", text: $name)
-                    TextField("规格", text: $specification)
-                    TextField("品牌", text: $brand)
-                    TextField("单位", text: $unit)
-                    TextField("分类", text: $category)
+                Section(String(localized: "材料")) {
+                    TextField(String(localized: "名称"), text: $name)
+                    TextField(String(localized: "规格"), text: $specification)
+                    TextField(String(localized: "品牌"), text: $brand)
+                    TextField(String(localized: "单位"), text: $unit)
+                    TextField(String(localized: "分类"), text: $category)
                 }
-                Section("价格与供应商") {
-                    TextField("参考单价", text: $referencePrice)
+                Section(String(localized: "价格与供应商")) {
+                    TextField(String(localized: "参考单价"), text: $referencePrice)
                         .keyboardType(.decimalPad)
-                    TextField("供应商", text: $supplier)
+                    TextField(String(localized: "供应商"), text: $supplier)
                     if !suppliers.isEmpty {
-                        Picker("选择供应商", selection: $supplier) {
-                            Text("手动填写").tag(supplier)
+                        Picker(String(localized: "选择供应商"), selection: $supplier) {
+                            Text(String(localized: "手动填写")).tag(supplier)
                             ForEach(suppliers) { item in
                                 Text(item.name).tag(item.name)
                             }
                         }
                     }
                 }
-                Section("备注") {
-                    TextField("备注", text: $note, axis: .vertical)
+                Section(String(localized: "备注")) {
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(3...6)
                 }
                 if entry != nil {
                     Section {
-                        Button("删除材料价格", role: .destructive) { showDeleteConfirm = true }
+                        Button(String(localized: "删除材料价格"), role: .destructive) { showDeleteConfirm = true }
                     }
                 }
             }
-            .navigationTitle(entry == nil ? "新增材料价格" : "编辑材料价格")
+            .navigationTitle(entry == nil ? String(localized: "新增材料价格") : String(localized: "编辑材料价格"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(updatedEntry)
                         dismiss()
                     }
@@ -341,9 +359,9 @@ struct MaterialPriceEditSheet: View {
                     AppKeyboard.dismiss()
                 }
             }
-            .alert("删除这条材料价格？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条材料价格？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     if let target = entry { onDelete?(target) }
                     dismiss()
                 }

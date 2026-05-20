@@ -15,8 +15,20 @@ struct SitekeeperProvider: TimelineProvider {
             date: Date(),
             data: WidgetExportData(
                 projects: [
-                    WidgetProjectSummary(id: UUID(), name: "金方花园", status: "进行中", progress: 0.65, todoCount: 3),
-                    WidgetProjectSummary(id: UUID(), name: "翰林府邸", status: "进行中", progress: 0.32, todoCount: 5)
+                    WidgetProjectSummary(
+                        id: UUID(),
+                        name: WidgetLocalizedText.string(for: "widget_placeholder_project_primary"),
+                        status: "active",
+                        progress: 0.65,
+                        todoCount: 3
+                    ),
+                    WidgetProjectSummary(
+                        id: UUID(),
+                        name: WidgetLocalizedText.string(for: "widget_placeholder_project_secondary"),
+                        status: "active",
+                        progress: 0.32,
+                        todoCount: 5
+                    )
                 ],
                 pendingTodos: 8,
                 materialStockCount: 42,
@@ -68,15 +80,15 @@ struct SitekeeperWidgetEntryView: View {
 }
 
 struct SitekeeperWidget: Widget {
-    let kind: String = "SitekeeperWidget"
+    let kind: String = WidgetSharedDefaults.widgetKind
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: SitekeeperProvider()) { entry in
             SitekeeperWidgetEntryView(entry: entry)
                 .containerBackground(.fill.tertiary, for: .widget)
         }
-        .configurationDisplayName("工地掌柜")
-        .description("今日待办、项目进度、材料库存一目了然")
+        .configurationDisplayName(Text("widget_configuration_display_name"))
+        .description(Text("widget_configuration_description"))
         .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
     }
 }

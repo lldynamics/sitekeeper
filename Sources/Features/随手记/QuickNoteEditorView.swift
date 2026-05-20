@@ -40,8 +40,8 @@ struct QuickNoteEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("记录") {
-                    TextField("随手记录", text: $content, axis: .vertical)
+                Section(String(localized: "记录")) {
+                    TextField(String(localized: "随手记录"), text: $content, axis: .vertical)
                         .focused($isContentFocused)
                         .lineLimit(6...16)
                         .padding(10)
@@ -52,9 +52,9 @@ struct QuickNoteEditSheet: View {
                                 .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                         )
                 }
-                Section("附件") {
+                Section(String(localized: "附件")) {
                     if attachments.isEmpty {
-                        Text("可追加媒体、拍照、手绘或 PDF/CAD/文档附件")
+                        Text(String(localized: "可追加媒体、拍照、手绘或 PDF/CAD/文档附件"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {
@@ -69,9 +69,9 @@ struct QuickNoteEditSheet: View {
                         temporaryFileNames.insert(attachment.fileName)
                     }
                 }
-                Section("关联工程") {
-                    Picker("工程", selection: $projectId) {
-                        Text("不关联工程").tag(nil as UUID?)
+                Section(String(localized: "关联工程")) {
+                    Picker(String(localized: "工程"), selection: $projectId) {
+                        Text(String(localized: "不关联工程")).tag(nil as UUID?)
                         ForEach(projects) { project in
                             Text(project.name).tag(project.id as UUID?)
                         }
@@ -79,18 +79,18 @@ struct QuickNoteEditSheet: View {
                 }
                 conversionSection
                 Section {
-                    Button("删除这条记录", role: .destructive) {
+                    Button(String(localized: "删除这条记录"), role: .destructive) {
                         showDeleteConfirm = true
                     }
                 }
             }
-            .navigationTitle("编辑随手记")
+            .navigationTitle(String(localized: "编辑随手记"))
             .navigationBarTitleDisplayMode(.inline)
             .scrollDismissesKeyboard(.interactively)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         didCommit = true
                         onSave(updatedNote)
                         dismiss()
@@ -99,19 +99,19 @@ struct QuickNoteEditSheet: View {
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
-                    Button("完成") { isContentFocused = false }
+                    Button(String(localized: "完成")) { isContentFocused = false }
                 }
             }
-            .alert("删除这条随手记？", isPresented: $showDeleteConfirm) {
-                Button("取消", role: .cancel) {}
-                Button("删除", role: .destructive) {
+            .alert(String(localized: "删除这条随手记？"), isPresented: $showDeleteConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+                Button(String(localized: "删除"), role: .destructive) {
                     didCommit = true
                     onDelete(updatedNote)
                     dismiss()
                 }
             }
-            .alert("随手记", isPresented: $showAlert) {
-                Button("知道了", role: .cancel) {}
+            .alert(String(localized: "随手记"), isPresented: $showAlert) {
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(alertMessage)
             }
@@ -124,9 +124,9 @@ struct QuickNoteEditSheet: View {
                         projectId: projectId,
                         initialNote: currentText.isEmpty ? updatedNote.title : currentText
                     ) { record in
-                        store.projectFinancialRecords.append(record)
+                        store.appendProjectFinancialRecord(record)
                         store.scheduleSave()
-                        showMessage("已新增项目账目。")
+                        showMessage(String(localized: "已新增项目账目。"))
                     }
                 }
             }
@@ -154,23 +154,29 @@ struct QuickNoteEditSheet: View {
 
     @ViewBuilder
     private var conversionSection: some View {
-        Section("转为") {
+        Section(String(localized: "转为")) {
             if projectId == nil {
-                Text("先关联工程后，可转为现场待办、施工日志、项目资料或记账备注。")
+                Text(String(localized: "先关联工程后，可转为现场待办、施工日志、项目资料或记账备注。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            Button { convertToTodo() } label: { Label("转为现场待办", systemImage: "checklist") }
+            Button { convertToTodo() } label: { Label(String(localized: "转为现场待办"), systemImage: "checklist") }
                 .disabled(projectId == nil)
             Button { convertToDailyLog() } label: {
-                Label(isPreparingDailyLogDraft ? "准备日志草稿…" : "转为施工日志", systemImage: isPreparingDailyLogDraft ? "hourglass" : "book.pages.fill")
+                Label(
+                    isPreparingDailyLogDraft ? String(localized: "准备日志草稿…") : String(localized: "转为施工日志"),
+                    systemImage: isPreparingDailyLogDraft ? "hourglass" : "book.pages.fill"
+                )
             }
                 .disabled(projectId == nil || isPreparingDailyLogDraft)
             Button { convertToProjectDocument() } label: {
-                Label(isPreparingProjectDocument ? "生成项目资料中…" : "转为项目资料 PDF", systemImage: isPreparingProjectDocument ? "hourglass" : "doc.richtext")
+                Label(
+                    isPreparingProjectDocument ? String(localized: "生成项目资料中…") : String(localized: "转为项目资料 PDF"),
+                    systemImage: isPreparingProjectDocument ? "hourglass" : "doc.richtext"
+                )
             }
                 .disabled(projectId == nil || isPreparingProjectDocument)
-            Button { convertToFinancialMemo() } label: { Label("转为记账备注", systemImage: "receipt") }
+            Button { convertToFinancialMemo() } label: { Label(String(localized: "转为记账备注"), systemImage: "receipt") }
                 .disabled(projectId == nil)
         }
     }
@@ -190,15 +196,19 @@ struct QuickNoteEditSheet: View {
         attachments.removeAll { $0.id == attachment.id }
         if temporaryFileNames.contains(attachment.fileName) {
             temporaryFileNames.remove(attachment.fileName)
-            QuickNoteAttachmentStorage.delete(fileName: attachment.fileName)
+            DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                [attachment.fileName],
+                summary: "quickNoteEditor.removeTemporaryAttachment"
+            )?.perform()
         }
     }
 
     private func cleanupTemporaryAttachmentsIfNeeded() {
         guard !didCommit else { return }
-        for fileName in temporaryFileNames {
-            QuickNoteAttachmentStorage.delete(fileName: fileName)
-        }
+        DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+            Array(temporaryFileNames),
+            summary: "quickNoteEditor.cleanupTemporaryAttachments"
+        )?.perform()
         temporaryFileNames.removeAll()
     }
 
@@ -210,7 +220,7 @@ struct QuickNoteEditSheet: View {
     private func convertToTodo() {
         guard let projectId else { return showNeedProject() }
         let text = currentText
-        store.siteTodos.append(SiteTodo(
+        store.appendSiteTodo(SiteTodo(
             title: String((text.isEmpty ? updatedNote.title : text).prefix(40)),
             owner: "",
             dueDate: Formatters.date.string(from: Date()),
@@ -218,7 +228,7 @@ struct QuickNoteEditSheet: View {
             projectId: projectId
         ))
         store.scheduleSave()
-        showMessage("已新增现场待办。")
+        showMessage(String(localized: "已新增现场待办。"))
     }
 
     private func convertToDailyLog() {
@@ -239,7 +249,10 @@ struct QuickNoteEditSheet: View {
 
     private func buildDailyLogSeedPhotos() async -> [DailyLogSeedPhoto] {
         let candidates = Array(attachments.prefix(6))
-        let seedNote = String(localized: "来源: 随手记\n记录时间: \(note.createdAt)")
+        let seedNote = String(
+            format: String(localized: "来源: 随手记\n记录时间: %@"),
+            note.createdAt
+        )
         let capturedAt = Formatters.dateTime.date(from: note.createdAt)
         var seedPhotos: [DailyLogSeedPhoto] = []
         for attachment in candidates where [.photo, .drawing].contains(attachment.attachmentKind) {
@@ -272,24 +285,24 @@ struct QuickNoteEditSheet: View {
                 await MainActor.run {
                     isPreparingProjectDocument = false
                     projectDocumentGenerationTask = nil
-                    showMessage("项目资料生成失败：\(error.localizedDescription)")
+                    showMessage(String(format: String(localized: "项目资料生成失败：%@"), error.localizedDescription))
                 }
                 return
             }
             await MainActor.run {
-                store.projectDocuments.append(ProjectDocument(
+                store.appendProjectDocument(ProjectDocument(
                     projectId: projectId,
-                    title: updatedNote.title.isEmpty ? "随手记资料" : updatedNote.title,
-                    category: .construction,
+                    title: updatedNote.title.isEmpty ? String(localized: "随手记资料") : updatedNote.title,
+                    category: .constructionRecord,
                     fileName: fileName,
                     fileType: "pdf",
                     pageCount: 1,
-                    note: "由随手记转入"
+                    note: String(localized: "由随手记转入")
                 ))
                 store.scheduleSave()
                 isPreparingProjectDocument = false
                 projectDocumentGenerationTask = nil
-                showMessage("已生成项目资料 PDF。")
+                showMessage(String(localized: "已生成项目资料 PDF。"))
             }
         }
     }
@@ -304,7 +317,7 @@ struct QuickNoteEditSheet: View {
     }
 
     private func showNeedProject() {
-        showMessage("请先关联工程。")
+        showMessage(String(localized: "请先关联工程。"))
     }
 
     private func showMessage(_ message: String) {
@@ -319,10 +332,10 @@ struct QuickNoteEditSheet: View {
         return renderer.pdfData { context in
             context.beginPage()
             var y = margin
-            y = drawText("随手记资料", atY: y, font: .boldSystemFont(ofSize: 22), page: page, margin: margin)
-            y = drawText("生成时间: \(Formatters.now())", atY: y + 8, font: .systemFont(ofSize: 11), color: .secondaryLabel, page: page, margin: margin)
+            y = drawText(String(localized: "随手记资料"), atY: y, font: .boldSystemFont(ofSize: 22), page: page, margin: margin)
+            y = drawText(String(format: String(localized: "生成时间: %@"), Formatters.now()), atY: y + 8, font: .systemFont(ofSize: 11), color: .secondaryLabel, page: page, margin: margin)
             if let projectId, let project = projects.first(where: { $0.id == projectId }) {
-                y = drawText("关联工程: \(project.name)", atY: y + 4, font: .systemFont(ofSize: 11), color: .secondaryLabel, page: page, margin: margin)
+                y = drawText(String(format: String(localized: "关联工程: %@"), project.name), atY: y + 4, font: .systemFont(ofSize: 11), color: .secondaryLabel, page: page, margin: margin)
             }
             y = drawText(currentText.isEmpty ? updatedNote.title : currentText, atY: y + 18, font: .systemFont(ofSize: 14), page: page, margin: margin)
             for attachment in attachments where [.photo, .drawing].contains(attachment.attachmentKind) {
@@ -394,43 +407,43 @@ private struct QuickNoteFinancialMemoSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("账目") {
-                    DatePicker("日期", selection: $date, displayedComponents: .date)
-                    Picker("类型", selection: $direction) {
+                Section(String(localized: "账目")) {
+                    DatePicker(String(localized: "日期"), selection: $date, displayedComponents: .date)
+                    Picker(String(localized: "类型"), selection: $direction) {
                         ForEach(ProjectFinancialDirection.allCases, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
                     .pickerStyle(.segmented)
-                    Picker("分类", selection: $category) {
+                    Picker(String(localized: "分类"), selection: $category) {
                         ForEach(availableCategories, id: \.self) { item in
                             Text(item.displayName).tag(item)
                         }
                     }
-                    TextField("金额", text: $amount)
+                    TextField(String(localized: "金额"), text: $amount)
                         .keyboardType(.decimalPad)
-                    TextField("对方单位/个人", text: $counterparty)
-                    TextField("发票号/收据号", text: $invoiceNumber)
-                    TextField("备注", text: $note, axis: .vertical)
+                    TextField(String(localized: "对方单位/个人"), text: $counterparty)
+                    TextField(String(localized: "发票号/收据号"), text: $invoiceNumber)
+                    TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(3...8)
                 }
                 Section {
-                    Text("随手记不会再直接生成空金额流水。补齐金额后才会写入项目财务。")
+                    Text(String(localized: "随手记不会再直接生成空金额流水。补齐金额后才会写入项目财务。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("转为项目记账")
+            .navigationTitle(String(localized: "转为项目记账"))
             .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         onSave(ProjectFinancialRecord(
                             projectId: projectId,
                             date: Formatters.date.string(from: date),

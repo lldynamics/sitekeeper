@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ProjectEditSheet: View {
+    @Environment(DataStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     let project: Project
+    let progressTasks: [ProgressTask]
     let onSave: (Project) -> Void
 
     @State private var name: String
@@ -14,10 +16,17 @@ struct ProjectEditSheet: View {
     @State private var expectedEndDate: String
     @State private var contractAmount: String
     @State private var paymentStatus: PaymentStatus
+    @State private var requiredDocumentCategories: Set<ProjectDocumentCategory>
+    @State private var recommendationStage: ProjectDocumentRecommendationStage
     @FocusState private var isInputFocused: Bool
 
-    init(project: Project, onSave: @escaping (Project) -> Void) {
+    private var savedDocumentChecklistTemplates: [ProjectDocumentChecklistTemplate] {
+        ProjectDocumentChecklistTemplate.customTemplates(from: store.templates)
+    }
+
+    init(project: Project, progressTasks: [ProgressTask] = [], onSave: @escaping (Project) -> Void) {
         self.project = project
+        self.progressTasks = progressTasks
         self.onSave = onSave
         _name = State(initialValue: project.name)
         _location = State(initialValue: project.location)
@@ -28,6 +37,11 @@ struct ProjectEditSheet: View {
         _expectedEndDate = State(initialValue: project.expectedEndDate)
         _contractAmount = State(initialValue: project.contractAmount)
         _paymentStatus = State(initialValue: project.paymentStatus)
+        _requiredDocumentCategories = State(initialValue: Set(project.requiredDocumentCategories))
+        _recommendationStage = State(initialValue: ProjectDocumentCategory.recommendedStage(
+            for: project,
+            progressTasks: progressTasks
+        ))
     }
 
     var body: some View {
@@ -49,16 +63,27 @@ struct ProjectEditSheet: View {
                         .keyboardType(.phonePad)
                         .focused($isInputFocused)
                 }
+                ProjectDocumentChecklistTemplateSection(
+                    selectedCategories: $requiredDocumentCategories,
+                    recommendationStage: $recommendationStage,
+                    customTemplates: savedDocumentChecklistTemplates
+                )
                 Section(String(localized: "工期")) {
-                    TextField(String(localized: "开工日期(yyyy-MM-dd)"), text: $startDate)
-                        .focused($isInputFocused)
-                    TextField(String(localized: "预计完工(yyyy-MM-dd)"), text: $expectedEndDate)
-                        .focused($isInputFocused)
+                    OptionalProjectDatePicker(String(localized: "开工日期"), text: $startDate)
+                    OptionalProjectDatePicker(String(localized: "预计完工"), text: $expectedEndDate)
                 }
                 Section(String(localized: "合同")) {
-                    TextField(String(localized: "合同金额（元）"), text: $contractAmount)
+                    TextField(String(localized: "合同金额（元）"), text: $contractAmount.numericInput(.amount))
                         .keyboardType(.decimalPad)
                         .focused($isInputFocused)
+                    NumericInputValidationHint(
+                        validation: InputValidator.validate(
+                            contractAmount,
+                            kind: .amount,
+                            requirement: .optionalNonNegative
+                        ),
+                        alignment: .leading
+                    )
                     Picker(String(localized: "收款状态"), selection: $paymentStatus) {
                         ForEach(PaymentStatus.allCases, id: \.self) { status in
                             Text(status.displayName).tag(status)
@@ -82,14 +107,20 @@ struct ProjectEditSheet: View {
                         updated.customerName = customerName
                         updated.customerPhone = customerPhone
                         updated.managerName = managerName
-                        updated.startDate = startDate
-                        updated.expectedEndDate = expectedEndDate
-                        updated.contractAmount = contractAmount
+                        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
+                        updated.expectedEndDate = ProjectDateInput.normalizedStorageText(expectedEndDate)
+                        updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
                         updated.paymentStatus = paymentStatus
+                        updated.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
+                            Array(requiredDocumentCategories)
+                        )
                         onSave(updated)
                         dismiss()
                     }
-                    .disabled(!contractAmount.isEmpty && !InputValidator.nonNegativeNumber(contractAmount))
+                    .disabled(
+                        requiredDocumentCategories.isEmpty ||
+                        !InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+                    )
                 }
                 KeyboardDismissToolbar {
                     isInputFocused = false

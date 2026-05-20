@@ -1,9 +1,0 @@
-.DS_Store
-
-samples/**
-!samples/.gitkeep
-!samples/README.md
-
-reports/**
-!reports/.gitkeep
-!reports/README.md
