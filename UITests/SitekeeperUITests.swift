@@ -78,6 +78,34 @@ final class SitekeeperUITests: XCTestCase {
         }
     }
 
+    private func button(
+        _ app: XCUIApplication,
+        identifier: String,
+        scrollingAttempts: Int = 4
+    ) -> XCUIElement {
+        let button = app.buttons[identifier]
+        if button.waitForExistence(timeout: 2), button.isHittable {
+            return button
+        }
+
+        for _ in 0..<scrollingAttempts {
+            let scrollView = app.scrollViews.firstMatch
+            let collectionView = app.collectionViews.firstMatch
+            if scrollView.exists {
+                scrollView.swipeUp()
+            } else if collectionView.exists {
+                collectionView.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+
+            if button.waitForExistence(timeout: 1), button.isHittable {
+                break
+            }
+        }
+        return button
+    }
+
     func testColdLaunchShowsPrimaryTabs() {
         let app = launchApp()
         XCTAssertTrue(app.tabBars.buttons["工作台"].waitForExistence(timeout: 5))
@@ -140,7 +168,7 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true, allowClearWithoutBackup: true)
         app.tabBars.buttons["我的"].tap()
 
-        let settingsEntry = app.buttons["profile-settings-link"]
+        let settingsEntry = button(app, identifier: "profile-settings-link")
         XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
         settingsEntry.tap()
 
@@ -191,7 +219,7 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp(resetState: true)
 
         tapPrimaryModule(app, name: "我的")
-        let settingsEntry = app.buttons["profile-settings-link"]
+        let settingsEntry = button(app, identifier: "profile-settings-link")
         XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
         settingsEntry.tap()
         XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 5))
