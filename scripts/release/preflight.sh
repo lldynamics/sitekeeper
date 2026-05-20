@@ -66,6 +66,9 @@ scripts/release/check_backup_contract_boundary.sh
 echo "==> Checking drawing release boundary"
 scripts/release/check_drawing_release_boundary.sh
 
+echo "==> Checking legal policy generated copies"
+python3 scripts/legal/export_privacy_policy.py --check
+
 BUILD_CMD=(
   xcodebuild
   -project sitekeeper.xcodeproj

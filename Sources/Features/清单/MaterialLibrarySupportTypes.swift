@@ -109,6 +109,11 @@ struct MaterialLibraryBatchSelectionState {
     var pendingBatchAddQuantity = "1"
 }
 
+enum MaterialLibraryPendingDeleteTarget {
+    case preset(CommonMaterial)
+    case user(UserMaterial)
+}
+
 struct RecentMaterialItem: Identifiable {
     enum Source {
         case preset(CommonMaterial)
@@ -235,6 +240,68 @@ struct MaterialLibraryAppendToSheetForm: View {
     }
 }
 
+struct MaterialLibraryAppendToSheetModal: View {
+    let context: PendingMaterialAppendContext
+    let activeMaterialSheetDrafts: [MaterialSheetDraft]
+    let projects: [Project]
+    let draftPickerTitle: (MaterialSheetDraft) -> String
+    @Binding var quantity: String
+    @Binding var unitPrice: String
+    @Binding var note: String
+    @Binding var targetMode: MaterialSheetTargetMode
+    @Binding var draftId: UUID?
+    @Binding var draftTitle: String
+    @Binding var projectId: UUID?
+    var focusedField: FocusState<AppendMaterialField?>.Binding
+    @Binding var operationMessage: String?
+    let canAppendMaterialToSheet: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Bool
+    let onEnsureExistingDraftSelection: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            MaterialLibraryAppendToSheetForm(
+                context: context,
+                activeMaterialSheetDrafts: activeMaterialSheetDrafts,
+                projects: projects,
+                draftPickerTitle: draftPickerTitle,
+                quantity: $quantity,
+                unitPrice: $unitPrice,
+                note: $note,
+                targetMode: $targetMode,
+                draftId: $draftId,
+                draftTitle: $draftTitle,
+                projectId: $projectId,
+                focusedField: focusedField
+            )
+            .navigationTitle(String(localized: "materials.library.appendSheet.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.cancel"), action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "common.add")) {
+                        guard onConfirm() else { return }
+                        onCancel()
+                    }
+                    .disabled(!canAppendMaterialToSheet)
+                }
+                KeyboardNavigationToolbar(
+                    focusedField: focusedField,
+                    fields: [.quantity, .unitPrice, .note]
+                )
+            }
+        }
+        .onChange(of: targetMode) { _, mode in
+            guard mode == .existing else { return }
+            onEnsureExistingDraftSelection()
+        }
+        .operationToast(message: $operationMessage)
+    }
+}
+
 struct MaterialLibraryBatchAppendForm: View {
     let context: PendingBatchMaterialAppendContext
     let activeMaterialSheetDrafts: [MaterialSheetDraft]
@@ -336,6 +403,233 @@ struct MaterialLibraryBatchAppendForm: View {
             return "未选择材料单"
         }
         return draftPickerTitle(draft)
+    }
+}
+
+struct MaterialLibraryBatchAppendSheet: View {
+    let context: PendingBatchMaterialAppendContext
+    let activeMaterialSheetDrafts: [MaterialSheetDraft]
+    let projects: [Project]
+    let draftPickerTitle: (MaterialSheetDraft) -> String
+    @Binding var quantity: String
+    @Binding var targetMode: MaterialSheetTargetMode
+    @Binding var draftId: UUID?
+    @Binding var draftTitle: String
+    @Binding var projectId: UUID?
+    @Binding var operationMessage: String?
+    let canAppendMaterialToSheet: Bool
+    let onCancel: () -> Void
+    let onConfirm: () -> Bool
+    let onEnsureExistingDraftSelection: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            MaterialLibraryBatchAppendForm(
+                context: context,
+                activeMaterialSheetDrafts: activeMaterialSheetDrafts,
+                projects: projects,
+                draftPickerTitle: draftPickerTitle,
+                quantity: $quantity,
+                targetMode: $targetMode,
+                draftId: $draftId,
+                draftTitle: $draftTitle,
+                projectId: $projectId
+            )
+            .navigationTitle(String(localized: "materials.library.batchAppendSheet.title"))
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "common.cancel"), action: onCancel)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(String(localized: "common.add")) {
+                        guard onConfirm() else { return }
+                        onCancel()
+                    }
+                    .disabled(!canAppendMaterialToSheet)
+                }
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
+            }
+            .onChange(of: targetMode) { _, mode in
+                guard mode == .existing else { return }
+                onEnsureExistingDraftSelection()
+            }
+        }
+        .operationToast(message: $operationMessage)
+    }
+}
+
+struct MaterialLibraryFilterBar: View {
+    let selectedCategory: String?
+    let availableCategories: [String]
+    let priceFilter: MaterialPriceFilter
+    let onSelectCategory: (String?) -> Void
+    let onSelectPriceFilter: (MaterialPriceFilter) -> Void
+    let onOpenCategoryManager: () -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                CategoryChip(
+                    title: String(localized: "materials.library.category.all"),
+                    isSelected: selectedCategory == nil
+                ) {
+                    onSelectCategory(nil)
+                }
+                ForEach(availableCategories, id: \.self) { category in
+                    CategoryChip(
+                        title: category,
+                        isSelected: selectedCategory == category
+                    ) {
+                        onSelectCategory(category)
+                    }
+                }
+                ForEach(MaterialPriceFilter.allCases, id: \.self) { item in
+                    CategoryChip(title: item.title, isSelected: priceFilter == item) {
+                        onSelectPriceFilter(item)
+                    }
+                }
+                Button(action: onOpenCategoryManager) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.caption)
+                        Text(String(localized: "materials.library.categoryManagement.title"))
+                            .font(.caption.weight(.medium))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.appPrimarySurfaceSubtle)
+                    .foregroundStyle(.primary)
+                    .clipShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "materials.library.categoryManagement.title"))
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+        }
+    }
+}
+
+struct MaterialLibraryListView: View {
+    let recentSearchKeywords: [String]
+    @Binding var searchText: String
+    let recentMaterials: [RecentMaterialItem]
+    let filteredUser: [UserMaterial]
+    let filteredPreset: [CommonMaterial]
+    let showRecycleBin: Bool
+    let hiddenPresetKeys: [String]
+    let deletedUserMaterials: [UserMaterial]
+    let onSelectRecentSearch: (String) -> Void
+    let onRemoveRecentSearch: (String) -> Void
+    let onRemoveRecentMaterial: (String) -> Void
+    let onDeletePresetMaterial: (CommonMaterial) -> Void
+    let onDeleteUserMaterial: (UserMaterial) -> Void
+    let presetRow: (CommonMaterial) -> AnyView
+    let userRow: (UserMaterial) -> AnyView
+    let deletedPresetRow: (String) -> AnyView
+    let deletedUserRow: (UserMaterial) -> AnyView
+    let onSubmitSearch: () -> Void
+
+    var body: some View {
+        List {
+            if !recentSearchKeywords.isEmpty && searchText.isEmpty {
+                Section(String(localized: "materials.library.recentSearches.section")) {
+                    ForEach(recentSearchKeywords, id: \.self) { term in
+                        Button {
+                            onSelectRecentSearch(term)
+                        } label: {
+                            Label(term, systemImage: "clock.arrow.circlepath")
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                            Button(String(localized: "materials.library.remove.button"), role: .destructive) {
+                                onRemoveRecentSearch(term)
+                            }
+                        }
+                    }
+                }
+            }
+
+            if !recentMaterials.isEmpty && searchText.isEmpty {
+                Section(String(localized: "materials.library.recentlyUsed.section")) {
+                    ForEach(recentMaterials) { item in
+                        switch item.source {
+                        case .preset(let material):
+                            presetRow(material)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(String(localized: "materials.library.removeFromRecent.button")) {
+                                        onRemoveRecentMaterial(item.key)
+                                    }
+                                    .tint(Color.appWarning)
+                                    Button(String(localized: "materials.library.deleteMaterial.button"), role: .destructive) {
+                                        onDeletePresetMaterial(material)
+                                    }
+                                }
+                        case .user(let material):
+                            userRow(material)
+                                .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                    Button(String(localized: "materials.library.removeFromRecent.button")) {
+                                        onRemoveRecentMaterial(item.key)
+                                    }
+                                    .tint(Color.appWarning)
+                                    Button(String(localized: "common.delete"), role: .destructive) {
+                                        onDeleteUserMaterial(material)
+                                    }
+                                }
+                        }
+                    }
+                }
+            }
+
+            if !filteredUser.isEmpty {
+                Section(String(localized: "materials.library.customMaterials.section")) {
+                    ForEach(filteredUser) { item in
+                        userRow(item)
+                            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                                Button(String(localized: "common.delete"), role: .destructive) {
+                                    onDeleteUserMaterial(item)
+                                }
+                            }
+                    }
+                }
+            }
+
+            Section(
+                searchText.isEmpty
+                    ? String(localized: "materials.library.allMaterials.section")
+                    : String(localized: "materials.library.searchResults.section")
+            ) {
+                ForEach(filteredPreset) { item in
+                    presetRow(item)
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(String(localized: "materials.library.deleteMaterial.button"), role: .destructive) {
+                                onDeletePresetMaterial(item)
+                            }
+                        }
+                }
+            }
+
+            if showRecycleBin {
+                Section(String(localized: "materials.library.recycleBin.section")) {
+                    ForEach(hiddenPresetKeys, id: \.self) { key in
+                        deletedPresetRow(key)
+                    }
+                    ForEach(deletedUserMaterials) { item in
+                        deletedUserRow(item)
+                    }
+                }
+            }
+        }
+        .searchable(
+            text: $searchText,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text(String(localized: "materials.library.search.prompt"))
+        )
+        .onSubmit(of: .search) {
+            onSubmitSearch()
+        }
     }
 }
 

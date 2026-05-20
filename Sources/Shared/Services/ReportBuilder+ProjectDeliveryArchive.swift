@@ -102,6 +102,16 @@ extension ReportBuilder {
         let currentDrawings = currentProjectPackageDrawings(drawings)
         let missingDrawingOriginalEntries = projectPackageMissingDrawingEntries(drawings)
         let openDrawingIssues = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos)
+        let preDeliveryInspection = projectPreDeliveryInspectionTSVText(
+            project: project,
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes,
+            backupState: deliveryHealth.backupState
+        )
         var stagedRawBytes = 0
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(
@@ -128,6 +138,7 @@ extension ReportBuilder {
             tsv(["delivery_health_backup_fresh", deliveryHealth.backupState.isFresh ? "true" : "false"]),
             tsv(["delivery_health_latest_backup_at", deliveryHealth.backupState.latestBackupExportValue]),
             tsv(["delivery_health_missing_originals", "\(deliveryHealth.missingOriginalEntries.count)"]),
+            tsv(["delivery_health_drawing_without_current_count", "\(deliveryHealth.drawingGroupsWithoutCurrent.count)"]),
             tsv(["drawing_register_current_count", "\(currentDrawings.count)"]),
             tsv(["drawing_original_count", "\(drawings.count)"]),
             tsv(["drawing_missing_original_count", "\(missingDrawingOriginalEntries.count)"]),
@@ -143,6 +154,7 @@ extension ReportBuilder {
             tsv(["path", "kind_raw", "kind_display"]),
             tsv(["\(deliveryDirectory)/\(pdfName)", "project_delivery_pdf", loc("项目交付包 PDF")]),
             tsv(["\(deliveryDirectory)/\(checklistFileName)", "delivery_checklist", loc("交付检查清单")]),
+            tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.preDeliveryInspectionFileName)", "pre_delivery_inspection", loc("交付前体检明细")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.documentChecklistFileName)", "document_checklist", loc("施工资料清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.currentDrawingRegisterFileName)", "current_drawing_register", loc("当前版图纸清单")]),
             tsv(["\(deliveryDirectory)/\(ProjectPackageSchema.drawingMissingCheckFileName)", "drawing_missing_check", loc("缺失图纸检查")]),
@@ -180,6 +192,15 @@ extension ReportBuilder {
             stagedRawBytes: &stagedRawBytes
         )
         reportProgress(loc("写入交付检查清单"))
+
+        try failIfCancelled()
+        try addGeneratedFileToProjectPackageZip(
+            zip: &zip,
+            data: Data(preDeliveryInspection.utf8),
+            path: "\(folder)/\(deliveryDirectory)/\(ProjectPackageSchema.preDeliveryInspectionFileName)",
+            stagedRawBytes: &stagedRawBytes
+        )
+        reportProgress(loc("写入交付前体检明细"))
 
         try failIfCancelled()
         try addGeneratedFileToProjectPackageZip(

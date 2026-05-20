@@ -12,11 +12,11 @@ extension ReportBuilder {
         quickNotes: [QuickNote]
     ) -> String {
         let logExpectation = projectDeliveryLogExpectation(project: project, logs: logs)
-        let drawingsWithoutCurrent = projectDrawingGroupsWithoutCurrentVersion(drawings)
+        let drawingsWithoutCurrent = projectPackageDrawingGroupsWithoutCurrentVersion(drawings)
         let currentDrawings = currentProjectPackageDrawings(drawings)
         let missingDrawingOriginalEntries = projectPackageMissingDrawingEntries(drawings)
         let openDrawingIssues = projectPackageOpenDrawingIssueRows(drawings: drawings, todos: todos)
-        let missingReceipts = projectFinancialRecordsMissingReceipts(
+        let missingReceipts = projectPackageMissingReceiptRecords(
             financialRecords: financialRecords,
             documents: documents
         )
@@ -60,6 +60,7 @@ extension ReportBuilder {
             loc("核心交付健康"),
             locFormat("   - 缺票据: %lld 笔", Int64(deliveryHealth.missingReceiptCount)),
             locFormat("   - 图纸: %lld 份", Int64(deliveryHealth.drawingCount)),
+            locFormat("   - 当前版缺失: %lld 组", Int64(deliveryHealth.drawingGroupsWithoutCurrent.count)),
             locFormat("   - 未完成待办: %lld 项", Int64(deliveryHealth.openTodoCount)),
             locFormat("   - 备份状态: %@", deliveryHealth.backupState.detail),
             locFormat("   - 缺失原件: %lld 项", Int64(deliveryHealth.missingOriginalEntries.count)),
@@ -166,7 +167,7 @@ extension ReportBuilder {
         quickNotes: [QuickNote]
     ) -> ProjectDeliveryPackageHealthReport {
         ProjectDeliveryPackageHealthReport(
-            missingReceiptCount: projectFinancialRecordsMissingReceipts(
+            missingReceiptCount: projectPackageMissingReceiptRecords(
                 financialRecords: financialRecords,
                 documents: documents
             ).count,
@@ -178,46 +179,9 @@ extension ReportBuilder {
                 drawings: drawings,
                 logs: logs,
                 quickNotes: quickNotes
-            )
+            ),
+            drawingGroupsWithoutCurrent: projectPackageDrawingGroupsWithoutCurrentVersion(drawings)
         )
-    }
-
-    private static func projectFinancialRecordsMissingReceipts(
-        financialRecords: [ProjectFinancialRecord],
-        documents: [ProjectDocument]
-    ) -> [ProjectFinancialRecord] {
-        financialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
-            let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = documents.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByRecord || linkedByDocument)
-        }
-    }
-
-    private static func projectPackageMissingOriginalEntries(
-        documents: [ProjectDocument],
-        drawings: [ProjectDrawing],
-        logs: [DailyLog],
-        quickNotes: [QuickNote]
-    ) -> [String] {
-        var entries: [String] = []
-        entries += documents.compactMap { document in
-            ProjectDocumentStorage.exists(fileName: document.fileName) ? nil : locFormat("资料 %@", document.title)
-        }
-        entries += drawings.compactMap { drawing in
-            DrawingStorage.exists(fileName: drawing.fileName) ? nil : locFormat("图纸 %@", drawing.name)
-        }
-        for log in logs {
-            for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
-                entries.append(locFormat("照片 %@ %@", log.date, photo.tag.displayName))
-            }
-        }
-        for note in quickNotes {
-            for attachment in note.attachments where !QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
-                entries.append(locFormat("随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
-            }
-        }
-        return entries
     }
 
     private static func projectDeliveryLogExpectation(project: Project, logs: [DailyLog]) -> (expectedCount: Int, missingDates: [String]) {
@@ -252,27 +216,6 @@ extension ReportBuilder {
             return Formatters.date.string(from: date)
         }
         return trimmed
-    }
-
-    private static func projectDrawingGroupsWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> [String] {
-        guard !drawings.isEmpty else { return [] }
-        let grouped = Dictionary(grouping: drawings) { drawing in
-            let key = normalizedProjectDrawingFamilyKey(drawing.name)
-            return key.isEmpty ? drawing.fileName : key
-        }
-        return grouped.values.compactMap { group in
-            guard !group.contains(where: \.isCurrentVersion) else { return nil }
-            let sorted = group.sorted { lhs, rhs in
-                if lhs.importedAt == rhs.importedAt {
-                    return lhs.fileName < rhs.fileName
-                }
-                return lhs.importedAt > rhs.importedAt
-            }
-            guard let drawing = sorted.first else { return nil }
-            let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
-            return name.isEmpty ? drawing.fileName : name
-        }
-        .sorted { $0.localizedStandardCompare($1) == .orderedAscending }
     }
 
     static func currentProjectPackageDrawings(_ drawings: [ProjectDrawing]) -> [ProjectDrawing] {

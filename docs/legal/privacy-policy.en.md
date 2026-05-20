@@ -1,0 +1,35 @@
+# Privacy Policy
+
+Last updated: May 15, 2026
+
+Sitekeeper does not automatically collect, transmit, sell, or share your project data, photos, receipts, drawings, contacts, quick notes, or attachment files.
+
+Data Collection
+Feedback content and the contact email you enter leave the device only when you actively send feedback by email, and are sent to support@chengjinfang.com. For App Store privacy labels, the app may process Email Address and Other User Content, only for App Functionality such as replying to feedback and handling issues. This data is not used for tracking.
+
+Local Processing
+Projects, daily logs, to-dos, financial records, warehouse movements, and settings are stored locally by default. Photos, videos, sketches, PDFs, DWG, DXF, spreadsheets, documents, and other attachments are stored in the app's local sandbox by default. Drawing records store only the original-file index, version, current-version flag, file availability status, external open failure reason, issue status, and notes. Quotes, delivery packages, backup ZIP files, and data reports are manually exported by you to the location you choose. The app does not use third-party analytics or advertising tracking.
+
+Drawing Originals
+PDF drawings open with the system preview. DWG / DXF drawings are managed as drawing originals and, when opened, are handed through the system share flow to the external professional viewer you choose. The app does not provide an entry point to upload DWG / DXF files to a server for processing, and it does not automatically send drawings to the developer's server for viewing.
+
+iCloud Backup
+When you actively use Back Up to iCloud Now, or when you enable Auto Backup in the app and the configured interval is reached, the app writes the selected backup ZIP content to your own iCloud container for restoration on devices using the same Apple ID. Cloud backups are not sent to the developer's server, and the developer cannot read your iCloud backup content from the app. You can manage related backups in iCloud settings or in Files.
+
+Permission Use
+- Camera: used to scan receipts, take site photos, take quick-note photos, and use the watermark camera
+- Photos: used to select project photos, receipts, documents, and quick-note media
+- Location: used only when you actively use location in the watermark camera, to include the capture location on watermarked photos
+- File access and iCloud: used to import, export, or restore backup ZIP files, drawings, PDFs, spreadsheets, documents, and other attachments
+
+Backup and Export
+The app supports manual export of a complete ZIP backup. Backup files include the data index and original project files; iCloud backups also support backup and restore by selected content scope. Drawing originals and the drawing register are restored with backups. Backup files are saved to the location you choose, such as the Files app, iCloud Drive, or another local directory, or to this app's iCloud backup directory. You manage whether to keep, move, share, or delete backup files.
+
+Data Deletion
+- You can delete projects, logs, receipts, attachments, and other records in the app.
+- You can clear all local data in Settings.
+- Uninstalling the app deletes local data inside the app sandbox. If you have not exported a backup first, the data cannot be recovered.
+- Exported backup files are outside the app sandbox, so uninstalling the app does not automatically delete those external backup files.
+
+Contact Us
+For questions about this privacy policy, contact: support@chengjinfang.com

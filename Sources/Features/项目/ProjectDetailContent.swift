@@ -119,7 +119,8 @@ struct ProjectDetailContent: View {
             drawingCount: snapshot.relatedDrawings.count,
             openTodoCount: snapshot.openTodoCount,
             backupState: ProjectDeliveryBackupState.current(),
-            missingOriginalCount: missingOriginalEntries.count
+            missingOriginalCount: missingOriginalEntries.count,
+            drawingWithoutCurrentCount: ReportBuilder.projectPackageDrawingGroupsWithoutCurrentVersion(snapshot.relatedDrawings).count
         )
         let documentArchiveChecklist = DocumentArchiveChecklistSnapshot(
             documents: snapshot.relatedDocuments,
