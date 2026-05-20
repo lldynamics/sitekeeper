@@ -3,17 +3,12 @@ import Foundation
 extension DataStore {
     func loadAsync() {
         initialLoadTask?.cancel()
-        let primaryStoreURL = self.primaryStoreURL
-        let legacyStoreURL = self.legacyStoreURL
         let storeURL = self.storeURL
         let persistenceActor = self.persistenceActor
         initialLoadTask = Task { [weak self] in
             guard let self else { return }
             do {
-                guard let snapshot = try await persistenceActor.loadSnapshot(
-                    primaryStoreURL: primaryStoreURL,
-                    legacyStoreURL: legacyStoreURL
-                ) else {
+                guard let snapshot = try await persistenceActor.loadSnapshot() else {
                     initialLoadTask = nil
                     flushDeferredSaveIfNeededAfterInitialLoad()
                     return

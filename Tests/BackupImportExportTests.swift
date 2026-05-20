@@ -552,7 +552,7 @@ struct BackupImportExportTests {
         #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile) == false)
     }
 
-    @Test func backupRestoreEmbeddedFilesFromJSON() throws {
+    @Test func backupRestoreEmbeddedFilesRejectsJSONBackup() throws {
         let projectId = UUID()
         let fileName = "backup-json-\(UUID().uuidString).bin"
         let jsonURL = FileManager.default.temporaryDirectory.appendingPathComponent("backup-json-\(UUID().uuidString).json")
@@ -579,77 +579,114 @@ struct BackupImportExportTests {
         QuickNoteAttachmentStorage.delete(fileName: fileName)
         #expect(QuickNoteAttachmentStorage.exists(fileName: fileName) == false)
 
-        let restored = try BackupArchiveService.restoreEmbeddedFiles(from: jsonURL)
-        #expect(restored.quickNoteAttachmentFileCount == 1)
-        #expect(QuickNoteAttachmentStorage.exists(fileName: fileName))
+        Self.expectInvalidBackup {
+            _ = try BackupArchiveService.restoreEmbeddedFiles(from: jsonURL)
+        }
+        #expect(QuickNoteAttachmentStorage.exists(fileName: fileName) == false)
     }
 
-    @Test func backupArchiveDecoderKeepsLegacyJSONCompatibility() throws {
+    @Test func backupArchiveDecoderRejectsJSONBackupImport() throws {
         let snapshot = BackupSnapshot(
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(name: "旧备份", location: "", status: .active)],
+            projects: [Project(name: "JSON备份", location: "", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             templates: []
         )
         let data = try JSONEncoder().encode(snapshot)
         let jsonURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("backup-legacy-\(UUID().uuidString).json")
+            .appendingPathComponent("backup-json-\(UUID().uuidString).json")
         try data.write(to: jsonURL, options: .atomic)
         defer { try? FileManager.default.removeItem(at: jsonURL) }
 
-        let restored = try BackupArchiveService.decodeBackup(from: jsonURL)
-        #expect(restored.projects.first?.name == "旧备份")
+        Self.expectInvalidBackup {
+            _ = try BackupArchiveService.previewBackup(from: jsonURL)
+        }
+        Self.expectInvalidBackup {
+            _ = try BackupArchiveService.decodeBackup(from: jsonURL)
+        }
     }
 
-    @Test func backupArchiveDecoderKeepsLegacyJSONWithoutVersionCompatibility() throws {
+    @Test func backupArchiveDecoderRejectsZIPMetadataWithoutSchemaVersion() throws {
         let snapshot = BackupSnapshot(
             materialItems: [],
             quoteItems: [],
             laborRecords: [],
-            projects: [Project(name: "无版本旧备份", location: "", status: .active)],
+            projects: [Project(name: "无版本备份", location: "", status: .active)],
             dailyLogs: [],
             historyRecords: [],
             templates: []
         )
-        let legacyData = try Self.legacyMetadataData(from: snapshot)
-        let jsonURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("backup-legacy-no-version-\(UUID().uuidString).json")
-        try legacyData.write(to: jsonURL, options: .atomic)
-        defer { try? FileManager.default.removeItem(at: jsonURL) }
-
-        let restored = try BackupArchiveService.decodeBackup(from: jsonURL)
-
-        #expect(restored.schemaVersion == BackupSnapshot.legacySchemaVersion)
-        #expect(restored.appVersion.isEmpty)
-        #expect(restored.projects.first?.name == "无版本旧备份")
-    }
-
-    @Test func backupArchiveDecoderKeepsLegacyZipWithoutManifestCompatibility() throws {
-        let snapshot = BackupSnapshot(
-            materialItems: [],
-            quoteItems: [],
-            laborRecords: [],
-            projects: [Project(name: "旧ZIP备份", location: "", status: .active)],
-            dailyLogs: [],
-            historyRecords: [],
-            templates: []
-        )
-        let legacyData = try Self.legacyMetadataData(from: snapshot)
-        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: "legacy-backup")
+        let metadataData = try Self.metadataDataWithoutSchemaVersion(from: snapshot)
+        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: "backup-no-schema")
         var zip = try StreamingZipArchiveWriter(fileURL: archiveURL)
-        try zip.addFile(path: BackupArchiveService.metadataPath, data: legacyData)
+        try zip.addFile(path: BackupArchiveService.manifestPath, data: try Self.manifestData())
+        try zip.addFile(path: BackupArchiveService.metadataPath, data: metadataData)
         let finishedURL = try zip.finish()
         defer { try? FileManager.default.removeItem(at: finishedURL) }
 
-        let preview = try BackupArchiveService.previewBackup(from: finishedURL)
-        let restored = try BackupArchiveService.decodeBackup(from: finishedURL)
+        Self.expectDecodingFailure {
+            _ = try BackupArchiveService.previewBackup(from: finishedURL)
+        }
+        Self.expectDecodingFailure {
+            _ = try BackupArchiveService.decodeBackup(from: finishedURL)
+        }
+    }
 
-        #expect(preview.manifest.schemaVersion == BackupSnapshot.legacySchemaVersion)
-        #expect(restored.schemaVersion == BackupSnapshot.legacySchemaVersion)
-        #expect(restored.projects.first?.name == "旧ZIP备份")
+    @Test func backupArchiveDecoderRejectsOldSchemaVersion() throws {
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(name: "旧版本备份", location: "", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: []
+        )
+        let metadataData = try Self.metadataDataWithSchemaVersion(1, from: snapshot)
+        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: "backup-old-schema")
+        var zip = try StreamingZipArchiveWriter(fileURL: archiveURL)
+        try zip.addFile(path: BackupArchiveService.manifestPath, data: try Self.manifestData())
+        try zip.addFile(path: BackupArchiveService.metadataPath, data: metadataData)
+        let finishedURL = try zip.finish()
+        defer { try? FileManager.default.removeItem(at: finishedURL) }
+
+        Self.expectDecodingFailure {
+            _ = try BackupArchiveService.previewBackup(from: finishedURL)
+        }
+        Self.expectDecodingFailure {
+            _ = try BackupArchiveService.decodeBackup(from: finishedURL)
+        }
+    }
+
+    @Test func backupArchiveDecoderRejectsZIPWithoutManifest() throws {
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(name: "无清单备份", location: "", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: []
+        )
+        let metadataData = try JSONEncoder().encode(snapshot)
+        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: "backup-without-manifest")
+        var zip = try StreamingZipArchiveWriter(fileURL: archiveURL)
+        try zip.addFile(path: BackupArchiveService.metadataPath, data: metadataData)
+        let finishedURL = try zip.finish()
+        defer { try? FileManager.default.removeItem(at: finishedURL) }
+
+        Self.expectMissingManifest {
+            _ = try BackupArchiveService.previewBackup(from: finishedURL)
+        }
+        Self.expectMissingManifest {
+            _ = try BackupArchiveService.decodeBackup(from: finishedURL)
+        }
+        Self.expectMissingManifest {
+            _ = try BackupArchiveService.restoreEmbeddedFiles(from: finishedURL)
+        }
     }
 
     @Test func backupArchiveEstimateAllowsLargeRawFiles() throws {
@@ -696,7 +733,7 @@ struct BackupImportExportTests {
         return data
     }
 
-    private static func legacyMetadataData(from snapshot: BackupSnapshot) throws -> Data {
+    private static func metadataDataWithoutSchemaVersion(from snapshot: BackupSnapshot) throws -> Data {
         let encoded = try JSONEncoder().encode(snapshot)
         var object = try #require(
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
@@ -706,5 +743,52 @@ struct BackupImportExportTests {
         object.removeValue(forKey: "appBuild")
         object.removeValue(forKey: "backupCreatedAt")
         return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    private static func metadataDataWithSchemaVersion(_ version: Int, from snapshot: BackupSnapshot) throws -> Data {
+        let encoded = try JSONEncoder().encode(snapshot)
+        var object = try #require(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+        object["schemaVersion"] = version
+        return try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+    }
+
+    private static func manifestData(schemaVersion: Int = BackupSnapshot.currentSchemaVersion) throws -> Data {
+        try JSONEncoder().encode(BackupArchiveManifest(
+            schemaVersion: schemaVersion,
+            metadataPath: BackupArchiveService.metadataPath
+        ))
+    }
+
+    private static func expectInvalidBackup(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            Issue.record("预期应拒绝 JSON 备份")
+        } catch BackupArchiveError.invalidBackup {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    private static func expectMissingManifest(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            Issue.record("预期应拒绝缺少 manifest.json 的备份")
+        } catch BackupArchiveError.missingManifest {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    private static func expectDecodingFailure(_ operation: () throws -> Void) {
+        do {
+            try operation()
+            Issue.record("预期应拒绝旧备份数据索引")
+        } catch is DecodingError {
+        } catch BackupArchiveError.unsupportedSchemaVersion(_) {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
     }
 }

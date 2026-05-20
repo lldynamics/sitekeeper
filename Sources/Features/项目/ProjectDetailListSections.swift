@@ -469,7 +469,7 @@ struct ProjectDrawingSectionView: View {
                 ProjectInlineEmptyState(
                     String(localized: "还没有图纸"),
                     systemImage: "doc.viewfinder",
-                    detail: String(localized: "可上传 DWG、DXF、PDF；PDF 可系统预览，CAD 原件可分享给外部看图软件。")
+                    detail: String(localized: "可上传 DWG、DXF、PDF；PDF 可系统预览，DWG/DXF 原件可分享给外部专业看图软件。")
                 )
                 Button(action: onImportDrawing) {
                     Label(String(localized: "导图纸"), systemImage: "doc.viewfinder.fill")
@@ -564,6 +564,12 @@ struct ProjectDrawingSectionView: View {
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
                     }
+                    if let failureText = ProjectDetailDrawingHelper.externalOpenFailureLine(for: drawing) {
+                        Text(failureText)
+                            .font(.caption2)
+                            .foregroundStyle(Color.appWarning)
+                            .lineLimit(2)
+                    }
                     if !drawing.relatedLogDate.isEmpty {
                         Text(String(format: String(localized: "关联日志: %@"), drawing.relatedLogDate))
                             .font(.caption2)
@@ -604,7 +610,7 @@ struct ProjectDrawingSectionView: View {
             Button {
                 onPreview(drawing)
             } label: {
-                Label(String(localized: "用专业看图软件打开"), systemImage: "square.and.arrow.up")
+                Label(openActionTitle(for: drawing), systemImage: "square.and.arrow.up")
             }
         }
         .swipeActions(edge: .trailing) {
@@ -618,7 +624,7 @@ struct ProjectDrawingSectionView: View {
             Button {
                 onPreview(drawing)
             } label: {
-                Label(String(localized: "专业看图"), systemImage: "square.and.arrow.up")
+                Label(openSwipeTitle(for: drawing), systemImage: "square.and.arrow.up")
             }
             .tint(Color.appDoc)
         }
@@ -655,13 +661,19 @@ struct ProjectDrawingSectionView: View {
     }
 
     private func openStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
-        let fileType = drawing.fileType.lowercased()
-        if fileType == "pdf" {
-            return (String(localized: "PDF 可预览"), true)
-        }
-        if ProjectDetailDrawingHelper.isCADSource(fileType) {
-            return (String(localized: "用专业看图软件打开"), true)
-        }
-        return (String(localized: "文件独立打开"), true)
+        let status = ProjectDetailDrawingHelper.fileAvailabilityLine(for: drawing)
+        return (status.text, status.isReady)
+    }
+
+    private func openActionTitle(for drawing: ProjectDrawing) -> String {
+        ProjectDetailDrawingHelper.requiresExternalViewer(drawing.fileType)
+            ? String(localized: "用外部专业看图软件打开")
+            : String(localized: "打开原件")
+    }
+
+    private func openSwipeTitle(for drawing: ProjectDrawing) -> String {
+        ProjectDetailDrawingHelper.requiresExternalViewer(drawing.fileType)
+            ? String(localized: "外部专业看图")
+            : String(localized: "打开")
     }
 }

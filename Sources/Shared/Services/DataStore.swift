@@ -16,8 +16,6 @@ final class DataStore {
     var searchIndexVersion = 0
     var dataVersion = UUID()
 
-    let primaryStoreURL: URL
-    let legacyStoreURL: URL
     let storeURL: URL
     let persistenceActor: DataStorePersistenceActor
     var latestPersistToken = 0
@@ -33,9 +31,7 @@ final class DataStore {
 
     init(storageDirectory: URL? = nil) {
         let documentsDirectory = storageDirectory ?? Self.defaultDocumentsDirectory
-        primaryStoreURL = documentsDirectory.appendingPathComponent("sitekeeper.json")
-        legacyStoreURL = documentsDirectory.appendingPathComponent("construction_toolbox.json")
-        storeURL = primaryStoreURL
+        storeURL = documentsDirectory.appendingPathComponent("sitekeeper.json")
         persistenceActor = DataStorePersistenceActor(storeURL: storeURL)
         loadAsync()
         publishWidgetData()

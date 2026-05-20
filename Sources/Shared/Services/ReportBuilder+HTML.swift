@@ -63,7 +63,7 @@ extension ReportBuilder {
             })
         }
         if options.includeProjectDrawings {
-            table(loc("图纸索引"), headers: ["名称", "图号", "专业", "楼层/区域", "类型", "版本", "当前版", "出图日期", "接收人", "文件名", "问题状态", "问题备注", "关联待办", "关联日志", "关联资料", "导入时间", "关联日志日期", "备注", "项目ID"], rows: snapshot.projectDrawings.map {
+            table(loc("图纸索引"), headers: ["名称", "图号", "专业", "楼层/区域", "类型", "版本", "当前版", "出图日期", "接收人", "文件名", "文件状态", "状态检查时间", "外部打开失败原因", "外部失败时间", "问题状态", "问题备注", "关联待办", "关联日志", "关联资料", "导入时间", "关联日志日期", "备注", "项目ID"], rows: snapshot.projectDrawings.map {
                 [
                     $0.name,
                     $0.drawingNumber,
@@ -75,6 +75,10 @@ extension ReportBuilder {
                     $0.issuedAt,
                     $0.receiver,
                     $0.fileName,
+                    $0.fileAvailabilityStatus.displayName,
+                    $0.fileAvailabilityCheckedAt,
+                    $0.externalOpenFailureReason,
+                    $0.externalOpenFailedAt,
                     $0.issueStatus.displayName,
                     $0.issueNote,
                     "\($0.linkedTodoIDs.count)",

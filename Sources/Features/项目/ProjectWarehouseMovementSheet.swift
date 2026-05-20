@@ -93,7 +93,7 @@ struct ProjectWarehouseMovementSheet: View {
 
                 Section(String(localized: "附件")) {
                     if attachments.isEmpty {
-                        Text(String(localized: "可上传现场照片、签收视频、送货单 PDF、CAD 或其他文件。"))
+                        Text(String(localized: "可上传现场照片、签收视频、送货单 PDF、DWG/DXF 图纸或其他文件。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {

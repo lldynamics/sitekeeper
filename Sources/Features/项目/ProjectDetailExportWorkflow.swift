@@ -43,7 +43,7 @@ enum ProjectDetailExportWorkflow {
             return .proceed
         case .warn:
             return .warn(
-                "预计原始附件约 \(ProjectDetailImportExportActions.formattedBytes(estimatedBytes))。导出不设体积上限，会使用 ZIP64 流式打包；大照片、视频和 CAD 会增加导出时间，并需要设备有足够剩余空间。"
+                "预计原始附件约 \(ProjectDetailImportExportActions.formattedBytes(estimatedBytes))。导出不设体积上限，会使用 ZIP64 流式打包；大照片、视频和图纸原件会增加导出时间，并需要设备有足够剩余空间。"
             )
         }
     }

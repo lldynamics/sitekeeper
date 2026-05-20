@@ -54,7 +54,7 @@ struct ProjectFileCategoryView: View {
                     LazyVGrid(columns: summaryColumns, alignment: .leading, spacing: 8) {
                         ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .appDoc)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .appPrimaryAction)
+                        ProjectFileCountChip(title: "图纸", value: summary.drawingCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
                         ProjectFileCountChip(title: "票据", value: summary.documentCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -151,7 +151,7 @@ struct ProjectFileListView: View {
         case .images:
             return "先去施工日志或随手记添加照片，这里会按项目自动汇总。"
         case .drawings:
-            return "先去项目详情导入 CAD / 图纸文件。"
+            return "先去项目详情导入图纸原件。"
         case .documents:
             return "先去项目详情添加票据或扫描资料。"
         case .quickNoteAttachments:

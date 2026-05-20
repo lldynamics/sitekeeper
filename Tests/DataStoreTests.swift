@@ -54,6 +54,30 @@ struct DataStoreTests {
         #expect(!testStore.historyRecords.isEmpty)
     }
 
+    @Test func importSampleDataRestoresExpandedFixtureCoverage() throws {
+        #expect(testStore.importSampleData(replacingExisting: true))
+        #expect(testStore.projects.count >= 3)
+        #expect(testStore.materialItems.count >= 5)
+        #expect(testStore.quoteItems.count >= 4)
+        #expect(testStore.projectDrawings.count >= 1)
+        #expect(testStore.projectDocuments.count >= 2)
+        #expect(testStore.quickNotes.contains { !$0.attachments.isEmpty })
+        #expect(testStore.dailyLogs.contains { !$0.allPhotoFileNames.isEmpty })
+
+        let drawing = try #require(testStore.projectDrawings.first)
+        let document = try #require(testStore.projectDocuments.first)
+        let note = try #require(testStore.quickNotes.first { !$0.attachments.isEmpty })
+        let attachment = try #require(note.attachments.first)
+        let photoName = try #require(testStore.dailyLogs.first(where: { !$0.allPhotoFileNames.isEmpty })?.allPhotoFileNames.first)
+
+        #expect(DrawingStorage.exists(fileName: drawing.fileName))
+        #expect(ProjectDocumentStorage.exists(fileName: document.fileName))
+        #expect(QuickNoteAttachmentStorage.exists(fileName: attachment.fileName))
+        #expect(PhotoStorage.exists(fileName: photoName))
+        let photoData = try #require(PhotoStorage.data(for: photoName))
+        #expect(UIImage(data: photoData) != nil)
+    }
+
     @Test func calculationHistoryRemovalReturnsRestorableResult() {
         let first = HistoryRecord(tool: "墙面", input: "A", result: "1", date: "2026-05-16 10:00")
         let second = HistoryRecord(tool: "照明", input: "B", result: "2", date: "2026-05-16 10:01")
@@ -450,9 +474,9 @@ struct DataStoreTests {
             fileName: "other.mp4",
             fileType: "mp4"
         )
-        let targetDrawing = ProjectDrawing(projectId: projectA, name: "CAD", fileName: "target.dwg", fileType: "dwg")
-        let sharedDrawing = ProjectDrawing(projectId: projectA, name: "共享 CAD", fileName: "shared.dwg", fileType: "dwg")
-        let otherSharedDrawing = ProjectDrawing(projectId: projectB, name: "其他 CAD", fileName: "shared.dwg", fileType: "dwg")
+        let targetDrawing = ProjectDrawing(projectId: projectA, name: "图纸", fileName: "target.dwg", fileType: "dwg")
+        let sharedDrawing = ProjectDrawing(projectId: projectA, name: "共享图纸", fileName: "shared.dwg", fileType: "dwg")
+        let otherSharedDrawing = ProjectDrawing(projectId: projectB, name: "其他图纸", fileName: "shared.dwg", fileType: "dwg")
         let financial = ProjectFinancialRecord(
             projectId: projectA,
             amount: "100",
@@ -487,14 +511,14 @@ struct DataStoreTests {
         #expect(videoResult.quickNoteAttachmentFileNames == Set(["site.mov"]))
         #expect(videoResult.projectDocumentFileNames == Set(["clip.mp4"]))
 
-        let cadResult = testStore.clearProjectCADReferences(
+        let drawingResult = testStore.clearProjectDrawingSourceReferences(
             projectId: projectA,
-            cadFileExtensions: ["dwg", "dxf"]
+            drawingFileExtensions: ["dwg", "dxf"]
         )
         #expect(!testStore.projectDrawings.contains { $0.id == targetDrawing.id })
         #expect(!testStore.projectDrawings.contains { $0.id == sharedDrawing.id })
         #expect(testStore.projectDrawings.contains { $0.id == otherSharedDrawing.id })
-        #expect(cadResult.drawingFileNames == Set(["target.dwg"]))
+        #expect(drawingResult.drawingFileNames == Set(["target.dwg"]))
 
         let ticketResult = testStore.clearProjectTicketDocumentReferences(projectId: projectA)
         #expect(!testStore.projectDocuments.contains { $0.id == ticketDocument.id })

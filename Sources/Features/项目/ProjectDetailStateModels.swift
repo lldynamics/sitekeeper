@@ -46,6 +46,7 @@ struct ProjectDetailAssetState {
     var selectedPhotoContext: ProjectPhotoContext?
     var quickLookURL: URL?
     var drawingShareURL: URL?
+    var drawingShareDrawingID: UUID?
     var showDrawingImporter = false
     var pendingDrawingImportURLs: [URL] = []
     var drawingImportConflictNames: [String] = []

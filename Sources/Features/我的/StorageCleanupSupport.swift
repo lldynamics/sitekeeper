@@ -285,10 +285,8 @@ enum StorageCleanupTrashStore {
         sources += plan.projectDocumentFileNames.sorted().map {
             StorageCleanupTrashSource(kind: .projectDocument, fileName: $0)
         }
-        sources += plan.drawingFileNames.sorted().flatMap { fileName in
-            ([fileName] + DrawingStorage.sidecarFileNames(for: fileName)).map {
-                StorageCleanupTrashSource(kind: .drawing, fileName: $0)
-            }
+        sources += plan.drawingFileNames.sorted().map { fileName in
+            StorageCleanupTrashSource(kind: .drawing, fileName: fileName)
         }
         return sources
     }
@@ -521,7 +519,7 @@ struct StorageLargeFileItem: Identifiable {
 enum StorageFileCategory {
     case photo
     case video
-    case cad
+    case drawing
     case ticket
     case backup
     case history
@@ -532,8 +530,8 @@ enum StorageFileCategory {
             return String(localized: "照片")
         case .video:
             return String(localized: "视频")
-        case .cad:
-            return String(localized: "CAD")
+        case .drawing:
+            return String(localized: "图纸原件")
         case .ticket:
             return String(localized: "票据")
         case .backup:
@@ -549,8 +547,8 @@ enum StorageFileCategory {
             return "photo.fill"
         case .video:
             return "video.fill"
-        case .cad:
-            return "compass.drawing"
+        case .drawing:
+            return "doc.viewfinder"
         case .ticket:
             return "doc.text.fill"
         case .backup:
@@ -566,7 +564,7 @@ enum StorageFileCategory {
             return .appWarning
         case .video:
             return .appPhoto
-        case .cad:
+        case .drawing:
             return .appDoc
         case .ticket:
             return .appRisk
@@ -583,12 +581,12 @@ struct ProjectStorageUsage: Identifiable {
     let projectName: String
     let photoBytes: Int
     let videoBytes: Int
-    let cadBytes: Int
+    let drawingBytes: Int
     let ticketBytes: Int
     let backupEstimatedBytes: Int?
 
     var id: UUID { projectId }
-    var totalBytes: Int { photoBytes + videoBytes + cadBytes + ticketBytes }
+    var totalBytes: Int { photoBytes + videoBytes + drawingBytes + ticketBytes }
     var formattedTotalBytes: String { QuickNoteAttachmentStorage.formattedFileSize(totalBytes) }
     var formattedBackupEstimatedBytes: String {
         guard let backupEstimatedBytes else { return String(localized: "计算中…") }
@@ -662,7 +660,7 @@ struct CleanupImpactSummary {
 enum ProjectStorageCleanupCategory: String, Identifiable {
     case photos
     case videos
-    case cad
+    case drawings
     case tickets
     case all
 
@@ -674,8 +672,8 @@ enum ProjectStorageCleanupCategory: String, Identifiable {
             return String(localized: "照片")
         case .videos:
             return String(localized: "视频")
-        case .cad:
-            return String(localized: "CAD 图纸")
+        case .drawings:
+            return String(localized: "图纸原件")
         case .tickets:
             return String(localized: "票据资料")
         case .all:
@@ -689,8 +687,8 @@ enum ProjectStorageCleanupCategory: String, Identifiable {
             return String(localized: "照片")
         case .videos:
             return String(localized: "视频")
-        case .cad:
-            return String(localized: "CAD 图纸")
+        case .drawings:
+            return String(localized: "图纸原件")
         case .tickets:
             return String(localized: "票据资料")
         case .all:
@@ -704,8 +702,8 @@ enum ProjectStorageCleanupCategory: String, Identifiable {
             return "photo.fill"
         case .videos:
             return "video.fill"
-        case .cad:
-            return "compass.drawing"
+        case .drawings:
+            return "doc.viewfinder"
         case .tickets:
             return "doc.text.fill"
         case .all:
@@ -719,7 +717,7 @@ enum ProjectStorageCleanupCategory: String, Identifiable {
             return .appWarning
         case .videos:
             return .appPhoto
-        case .cad:
+        case .drawings:
             return .appDoc
         case .tickets:
             return .appRisk
@@ -743,12 +741,12 @@ enum ProjectStorageCleanupCategory: String, Identifiable {
             return String(format: String(localized: "将清理 %@ 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"), projectName)
         case .videos:
             return String(format: String(localized: "将清理 %@ 随手记视频和资料中的视频原文件，并断开视频关联。"), projectName)
-        case .cad:
-            return String(format: String(localized: "将清理 %@ 的 CAD 图纸原文件和图纸索引。"), projectName)
+        case .drawings:
+            return String(format: String(localized: "将清理 %@ 的图纸原件和图纸索引。"), projectName)
         case .tickets:
             return String(format: String(localized: "将清理 %@ 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"), projectName)
         case .all:
-            return String(format: String(localized: "将清理 %@ 的照片、视频、CAD 图纸和票据资料原文件，保留其他文本记录。"), projectName)
+            return String(format: String(localized: "将清理 %@ 的照片、视频、图纸原件和票据资料原文件，保留其他文本记录。"), projectName)
         }
     }
 }
@@ -762,7 +760,7 @@ struct ProjectStorageCleanupDetailView: View {
             Section(String(localized: "占用汇总")) {
                 usageRow(title: String(localized: "照片"), icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
                 usageRow(title: String(localized: "视频"), icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
-                usageRow(title: String(localized: "CAD 图纸"), icon: "compass.drawing", tint: .appDoc, bytes: usage.cadBytes)
+                usageRow(title: String(localized: "图纸原件"), icon: "doc.viewfinder", tint: .appDoc, bytes: usage.drawingBytes)
                 usageRow(title: String(localized: "票据资料"), icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
                 usageRow(title: String(localized: "备份估算"), icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
             }
@@ -779,7 +777,7 @@ struct ProjectStorageCleanupDetailView: View {
             Section {
                 cleanupButton(.photos, bytes: usage.photoBytes)
                 cleanupButton(.videos, bytes: usage.videoBytes)
-                cleanupButton(.cad, bytes: usage.cadBytes)
+                cleanupButton(.drawings, bytes: usage.drawingBytes)
                 cleanupButton(.tickets, bytes: usage.ticketBytes)
             } header: {
                 Text(String(localized: "按类型清理"))

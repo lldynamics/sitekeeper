@@ -57,7 +57,7 @@ private enum UITestLaunchConfig {
         }
 
         if let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let localStoreFiles = ["sitekeeper.json", "construction_toolbox.json"]
+            let localStoreFiles = ["sitekeeper.json"]
             for fileName in localStoreFiles {
                 let fileURL = documentsDirectory.appendingPathComponent(fileName)
                 do {

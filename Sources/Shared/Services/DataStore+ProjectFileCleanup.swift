@@ -94,15 +94,15 @@ extension DataStore {
     }
 
     @discardableResult
-    func clearProjectCADReferences(
+    func clearProjectDrawingSourceReferences(
         projectId: UUID,
-        cadFileExtensions: Set<String>
+        drawingFileExtensions: Set<String>
     ) -> DataStoreProjectFileCleanupResult {
         let drawingIDs = Set(
             projectDrawings
                 .filter { drawing in
                     let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    return drawing.projectId == projectId && cadFileExtensions.contains(ext)
+                    return drawing.projectId == projectId && drawingFileExtensions.contains(ext)
                 }
                 .map(\.id)
         )

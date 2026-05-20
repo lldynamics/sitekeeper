@@ -54,7 +54,7 @@ struct QuickNoteEditSheet: View {
                 }
                 Section(String(localized: "附件")) {
                     if attachments.isEmpty {
-                        Text(String(localized: "可追加媒体、拍照、手绘或 PDF/CAD/文档附件"))
+                        Text(String(localized: "可追加媒体、拍照、手绘或 PDF/DWG/DXF/文档附件"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     } else {

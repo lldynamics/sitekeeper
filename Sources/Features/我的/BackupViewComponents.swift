@@ -90,7 +90,7 @@ struct BackupQuickStartCard: View {
             }
             .buttonStyle(.appProminent(tint: .appWarning))
 
-            Text(String(localized: "导入备份可在下方“本地备份”中选择 ZIP；旧版备份会自动兼容。"))
+            Text(String(localized: "导入备份请在下方“本地备份”中选择当前版本 ZIP。"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }

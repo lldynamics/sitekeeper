@@ -47,7 +47,7 @@ struct StorageCleanupLargeFileSections: View {
         } header: {
             Text(String(format: String(localized: "大文件列表（%lld）"), Int64(largeFileItems.count)))
         } footer: {
-            Text(String(localized: "展示照片、视频、CAD、备份和历史计算中的高占用项。"))
+            Text(String(localized: "展示照片、视频、图纸原件、备份和历史计算中的高占用项。"))
         }
 
         if largeFileItems.isEmpty {
@@ -118,7 +118,7 @@ struct StorageCleanupProjectSection: View {
                             HStack(spacing: AppSpacing.tight) {
                                 Text(String(format: String(localized: "照片 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes)))
                                 Text(String(format: String(localized: "视频 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes)))
-                                Text(String(format: String(localized: "CAD %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.cadBytes)))
+                                Text(String(format: String(localized: "图纸 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.drawingBytes)))
                                 Text(String(format: String(localized: "票据 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes)))
                             }
                             .font(.caption2)

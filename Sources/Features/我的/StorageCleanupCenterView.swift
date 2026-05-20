@@ -20,7 +20,7 @@ struct StorageCleanupCenterView: View {
 
     private let showsNavigationTitle: Bool
     private let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
-    private let cadFileExtensions: Set<String> = ["dwg", "dxf"]
+    private let drawingSourceFileExtensions: Set<String> = ["dwg", "dxf"]
 
     init(showsNavigationTitle: Bool = true) {
         self.showsNavigationTitle = showsNavigationTitle
@@ -203,7 +203,7 @@ struct StorageCleanupCenterView: View {
             projectBackupEstimateByID: projectBackupEstimateByID,
             largeFileThresholdBytes: largeFileThresholdBytes,
             videoFileExtensions: videoFileExtensions,
-            cadFileExtensions: cadFileExtensions
+            drawingSourceFileExtensions: drawingSourceFileExtensions
         )
     }
 
@@ -307,7 +307,7 @@ struct StorageCleanupCenterView: View {
             projectId: projectId,
             category: category,
             videoFileExtensions: videoFileExtensions,
-            cadFileExtensions: cadFileExtensions
+            drawingSourceFileExtensions: drawingSourceFileExtensions
         )
     }
 
@@ -451,14 +451,14 @@ struct StorageCleanupCenterView: View {
             cleanupPlan.merge(cleanupProjectPhotos(projectId))
         case .videos:
             cleanupPlan.merge(cleanupProjectVideos(projectId))
-        case .cad:
-            cleanupPlan.merge(cleanupProjectCAD(projectId))
+        case .drawings:
+            cleanupPlan.merge(cleanupProjectDrawings(projectId))
         case .tickets:
             cleanupPlan.merge(cleanupProjectTickets(projectId))
         case .all:
             cleanupPlan.merge(cleanupProjectPhotos(projectId))
             cleanupPlan.merge(cleanupProjectVideos(projectId))
-            cleanupPlan.merge(cleanupProjectCAD(projectId))
+            cleanupPlan.merge(cleanupProjectDrawings(projectId))
             cleanupPlan.merge(cleanupProjectTickets(projectId))
         }
 
@@ -527,11 +527,11 @@ struct StorageCleanupCenterView: View {
     }
 
     @discardableResult
-    private func cleanupProjectCAD(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
+    private func cleanupProjectDrawings(_ projectId: UUID) -> DeferredProjectFileCleanupPlan {
         DeferredProjectFileCleanupPlan(
-            store.clearProjectCADReferences(
+            store.clearProjectDrawingSourceReferences(
                 projectId: projectId,
-                cadFileExtensions: cadFileExtensions
+                drawingFileExtensions: drawingSourceFileExtensions
             )
         )
     }

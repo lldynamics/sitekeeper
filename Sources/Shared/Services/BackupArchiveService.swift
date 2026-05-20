@@ -173,6 +173,7 @@ struct BackupEmbeddedRestoreCounts {
 enum BackupArchiveError: LocalizedError {
     case encodingFailed
     case missingMetadata
+    case missingManifest
     case invalidBackup
     case unsupportedSchemaVersion(Int)
     case restoreFailed(String)
@@ -184,11 +185,13 @@ enum BackupArchiveError: LocalizedError {
             return String(localized: "备份数据编码失败。")
         case .missingMetadata:
             return String(localized: "备份 ZIP 缺少数据索引。")
+        case .missingManifest:
+            return String(localized: "备份 ZIP 缺少清单文件。")
         case .invalidBackup:
             return String(localized: "备份文件格式不正确。")
         case .unsupportedSchemaVersion(let version):
             return String(
-                format: String(localized: "备份格式版本过高（schema %lld），请升级应用后再导入。"),
+                format: String(localized: "备份格式版本不受支持（schema %lld），请使用当前版本重新导出后再导入。"),
                 Int64(version)
             )
         case .restoreFailed(let reason):
@@ -501,32 +504,11 @@ enum BackupArchiveService {
         let ext = fileURL.pathExtension.lowercased()
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         if ext == "json" {
-            report(0, totalBytes, loc("读取数据索引"))
-            let data: Data
-            do {
-                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.archive.preview_json_read_failed",
-                    fileName: fileURL.lastPathComponent,
-                    error: error
-                )
-                throw error
-            }
-            try failIfCancelled()
-            let snapshot = try decodeJSONSnapshot(from: data)
-            report(totalBytes, totalBytes, loc("读取完成"))
-            return BackupImportPreview(
-                snapshot: snapshot.withoutEmbeddedFiles(),
-                manifest: manifest(for: snapshot),
-                incomingFiles: BackupFileImpactSummary(
-                    photoFileNames: snapshot.photoFiles.map(\.fileName),
-                    drawingFileNames: snapshot.drawingFiles.map(\.fileName),
-                    documentFileNames: snapshot.documentFiles.map(\.fileName),
-                    quickNoteAttachmentFileNames: snapshot.quickNoteAttachmentFiles.map(\.fileName)
-                ),
-                overwrittenLocalFiles: BackupFileImpactSummary()
+            recordBackupArchiveIssue(
+                "backup.archive.preview_json_rejected",
+                fileName: fileURL.lastPathComponent
             )
+            throw BackupArchiveError.invalidBackup
         }
 
         var metadataData: Data?
@@ -589,11 +571,19 @@ enum BackupArchiveService {
             )
             throw BackupArchiveError.missingMetadata
         }
-        let snapshot = try decodeJSONSnapshot(from: metadataData, manifestData: manifestData)
+        guard let manifestData else {
+            recordBackupArchiveIssue(
+                "backup.archive.preview_missing_manifest",
+                path: manifestPath
+            )
+            throw BackupArchiveError.missingManifest
+        }
+        let manifest = try decodeManifest(from: manifestData)
+        let snapshot = try decodeJSONSnapshot(from: metadataData)
         report(totalBytes, totalBytes, loc("读取完成"))
         return BackupImportPreview(
             snapshot: snapshot.withoutEmbeddedFiles(),
-            manifest: manifest(from: manifestData, fallbackSnapshot: snapshot),
+            manifest: manifest,
             incomingFiles: BackupFileImpactSummary(
                 photoFileNames: photoFileNames,
                 drawingFileNames: drawingFileNames,
@@ -622,21 +612,11 @@ enum BackupArchiveService {
         let ext = fileURL.pathExtension.lowercased()
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         if ext == "json" {
-            report(0, totalBytes, loc("读取旧版备份"))
-            let data: Data
-            do {
-                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.archive.decode_json_read_failed",
-                    fileName: fileURL.lastPathComponent,
-                    error: error
-                )
-                throw error
-            }
-            try failIfCancelled()
-            report(totalBytes, totalBytes, loc("解析完成"))
-            return try decodeJSONSnapshot(from: data)
+            recordBackupArchiveIssue(
+                "backup.archive.decode_json_rejected",
+                fileName: fileURL.lastPathComponent
+            )
+            throw BackupArchiveError.invalidBackup
         }
 
         var metadataData: Data?
@@ -699,7 +679,15 @@ enum BackupArchiveService {
             )
             throw BackupArchiveError.missingMetadata
         }
-        var snapshot = try decodeJSONSnapshot(from: metadataData, manifestData: manifestData)
+        guard let manifestData else {
+            recordBackupArchiveIssue(
+                "backup.archive.decode_missing_manifest",
+                path: manifestPath
+            )
+            throw BackupArchiveError.missingManifest
+        }
+        _ = try decodeManifest(from: manifestData)
+        var snapshot = try decodeJSONSnapshot(from: metadataData)
         snapshot.photoFiles = photoFiles
         snapshot.drawingFiles = drawingFiles
         snapshot.documentFiles = documentFiles
@@ -742,6 +730,7 @@ enum BackupArchiveService {
         let ext = fileURL.pathExtension.lowercased()
         let totalBytes = Int64(max(QuickNoteAttachmentStorage.fileSize(at: fileURL), 1))
         var counts = BackupEmbeddedRestoreCounts()
+        var manifestData: Data?
 
         let stageRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("backup-restore-\(UUID().uuidString)", isDirectory: true)
@@ -749,26 +738,6 @@ enum BackupArchiveService {
         let drawingStage = stageRoot.appendingPathComponent("drawings", isDirectory: true)
         let documentStage = stageRoot.appendingPathComponent("project-documents", isDirectory: true)
         let quickNoteStage = stageRoot.appendingPathComponent("quick-note-attachments", isDirectory: true)
-
-        func stageData(
-            _ data: Data,
-            fileName: String,
-            to directory: URL,
-            failureMessage: String,
-            stage: String
-        ) throws {
-            do {
-                try data.write(to: directory.appendingPathComponent(fileName), options: .atomic)
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.restore.stage_data_failed",
-                    fileName: fileName,
-                    details: ["stage": stage],
-                    error: error
-                )
-                throw BackupArchiveError.restoreFailed(locFormat("%@：%@", failureMessage, fileName))
-            }
-        }
 
         func stageEntry(
             _ writeEntryToFile: (URL) throws -> Void,
@@ -830,40 +799,11 @@ enum BackupArchiveService {
         }
 
         if ext == "json" {
-            report(0, totalBytes, loc("读取旧版备份附件"))
-            let data: Data
-            do {
-                data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.restore.legacy_attachment_read_failed",
-                    fileName: fileURL.lastPathComponent,
-                    error: error
-                )
-                throw error
-            }
-            try failIfCancelled()
-            let snapshot = try decodeJSONSnapshot(from: data)
-            for file in snapshot.photoFiles {
-                try failIfCancelled()
-                try stageData(file.data, fileName: file.fileName, to: photoStage, failureMessage: loc("暂存照片失败"), stage: "photos")
-                counts.photoFileCount += 1
-            }
-            for file in snapshot.drawingFiles {
-                try failIfCancelled()
-                try stageData(file.data, fileName: file.fileName, to: drawingStage, failureMessage: loc("暂存图纸失败"), stage: "drawings")
-                counts.drawingFileCount += 1
-            }
-            for file in snapshot.documentFiles {
-                try failIfCancelled()
-                try stageData(file.data, fileName: file.fileName, to: documentStage, failureMessage: loc("暂存项目资料失败"), stage: "project-documents")
-                counts.documentFileCount += 1
-            }
-            for file in snapshot.quickNoteAttachmentFiles {
-                try failIfCancelled()
-                try stageData(file.data, fileName: file.fileName, to: quickNoteStage, failureMessage: loc("暂存随手记/工艺附件失败"), stage: "quick-note-attachments")
-                counts.quickNoteAttachmentFileCount += 1
-            }
+            recordBackupArchiveIssue(
+                "backup.restore.json_rejected",
+                fileName: fileURL.lastPathComponent
+            )
+            throw BackupArchiveError.invalidBackup
         } else {
             do {
                 try SimpleZipArchiveReader.scan(
@@ -872,8 +812,12 @@ enum BackupArchiveService {
                     onProgress: { completed, total, path in
                         report(completed, total, locFormat("恢复 %@", path))
                     },
-                    onEntry: { entry, _, writeEntryToFile in
+                    onEntry: { entry, readData, writeEntryToFile in
                         try failIfCancelled()
+                        if entry.path == manifestPath {
+                            manifestData = try readData()
+                            return
+                        }
                         if let fileName = leafFileName(for: entry.path, prefix: photoPrefix) {
                             try stageEntry(writeEntryToFile, fileName: fileName, to: photoStage, failureMessage: loc("暂存照片失败"), stage: "photos")
                             counts.photoFileCount += 1
@@ -908,6 +852,14 @@ enum BackupArchiveService {
         }
 
         try failIfCancelled()
+        guard let manifestData else {
+            recordBackupArchiveIssue(
+                "backup.restore.missing_manifest",
+                path: manifestPath
+            )
+            throw BackupArchiveError.missingManifest
+        }
+        _ = try decodeManifest(from: manifestData)
         report(totalBytes, totalBytes, loc("原文件已暂存"))
         shouldCleanupStageOnExit = false
         return EmbeddedFileRestoreTransaction(
@@ -920,38 +872,19 @@ enum BackupArchiveService {
         )
     }
 
-    @available(*, deprecated, message: "请优先使用 decodeBackup(from: fileURL) 流式解包，避免整包内存读取。")
-    static func decodeBackup(from data: Data) throws -> BackupSnapshot {
-        do {
-            let jsonSnapshot = try decodeJSONSnapshot(from: data)
-            return jsonSnapshot
-        } catch {
-            recordBackupArchiveIssue(
-                "backup.archive.legacy_json_parse_failed_try_zip",
-                error: error
-            )
-        }
-        let entries = try SimpleZipArchiveReader.read(data)
-        guard let metadata = entries.first(where: { $0.path == metadataPath })?.data else {
-            throw BackupArchiveError.missingMetadata
-        }
-        let manifest = entries.first(where: { $0.path == manifestPath })?.data
-        var snapshot = try decodeJSONSnapshot(from: metadata, manifestData: manifest)
-        snapshot.photoFiles = entries.backupFiles(prefix: photoPrefix) { PhotoBackupFile(fileName: $0, data: $1) }
-        snapshot.drawingFiles = entries.backupFiles(prefix: drawingPrefix) { DrawingBackupFile(fileName: $0, data: $1) }
-        snapshot.documentFiles = entries.backupFiles(prefix: documentPrefix) { ProjectDocumentBackupFile(fileName: $0, data: $1) }
-        snapshot.quickNoteAttachmentFiles = entries.backupFiles(prefix: quickNotePrefix) { QuickNoteAttachmentBackupFile(fileName: $0, data: $1) }
-        return snapshot
+    private static func decodeJSONSnapshot(from data: Data) throws -> BackupSnapshot {
+        let header = try JSONDecoder().decode(BackupSchemaHeader.self, from: data)
+        try validateSupportedSchemaVersion(header.schemaVersion)
+        return try JSONDecoder().decode(BackupSnapshot.self, from: data)
     }
 
-    private static func decodeJSONSnapshot(from data: Data, manifestData: Data? = nil) throws -> BackupSnapshot {
-        let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: data)
-        try validateSupportedSchemaVersion(snapshot.schemaVersion)
-        if let manifestData {
-            let manifest = try JSONDecoder().decode(BackupArchiveManifest.self, from: manifestData)
-            try validateSupportedSchemaVersion(manifest.schemaVersion)
+    private static func decodeManifest(from data: Data) throws -> BackupArchiveManifest {
+        let manifest = try JSONDecoder().decode(BackupArchiveManifest.self, from: data)
+        try validateSupportedSchemaVersion(manifest.schemaVersion)
+        guard manifest.metadataPath == metadataPath else {
+            throw BackupArchiveError.invalidBackup
         }
-        return snapshot
+        return manifest
     }
 
     private static func encodeManifest(from snapshot: BackupSnapshot) throws -> Data {
@@ -972,26 +905,8 @@ enum BackupArchiveService {
         }
     }
 
-    private static func manifest(from data: Data?, fallbackSnapshot snapshot: BackupSnapshot) -> BackupArchiveManifest {
-        if let data, let manifest = try? JSONDecoder().decode(BackupArchiveManifest.self, from: data) {
-            return manifest
-        }
-        return manifest(for: snapshot)
-    }
-
-    private static func manifest(for snapshot: BackupSnapshot) -> BackupArchiveManifest {
-        BackupArchiveManifest(
-            schemaVersion: snapshot.schemaVersion,
-            appVersion: snapshot.appVersion,
-            appBuild: snapshot.appBuild,
-            appName: AppBrand.displayName,
-            exportedAt: snapshot.backupCreatedAt,
-            metadataPath: metadataPath
-        )
-    }
-
     private static func validateSupportedSchemaVersion(_ version: Int) throws {
-        guard version <= BackupSnapshot.currentSchemaVersion else {
+        guard version == BackupSnapshot.currentSchemaVersion else {
             throw BackupArchiveError.unsupportedSchemaVersion(version)
         }
     }
@@ -1216,7 +1131,7 @@ enum BackupArchiveService {
             "",
             loc("目录:"),
             locFormat("%@ 现场照片和整改照片", photoPrefix),
-            locFormat("%@ CAD/PDF 图纸", drawingPrefix),
+            locFormat("%@ DWG/DXF/PDF 图纸", drawingPrefix),
             locFormat("%@ 票据和项目资料", documentPrefix),
             locFormat("%@ 随手记媒体与工艺教程附件", quickNotePrefix),
             "",
@@ -1233,16 +1148,5 @@ private extension BackupSnapshot {
         copy.documentFiles = []
         copy.quickNoteAttachmentFiles = []
         return copy
-    }
-}
-
-private extension Array where Element == SimpleZipArchiveReader.Entry {
-    func backupFiles<File>(prefix: String, makeFile: (String, Data) -> File) -> [File] {
-        compactMap { entry in
-            guard entry.path.hasPrefix(prefix) else { return nil }
-            let fileName = String(entry.path.dropFirst(prefix.count))
-            guard !fileName.isEmpty, !fileName.contains("/") else { return nil }
-            return makeFile(fileName, entry.data)
-        }
     }
 }

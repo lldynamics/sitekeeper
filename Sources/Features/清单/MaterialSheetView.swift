@@ -1,73 +1,6 @@
 import SwiftUI
 import PhotosUI
 
-// MARK: - Material Sheet Item
-
-struct MaterialSheetItem: Identifiable, Equatable {
-    var id: UUID = UUID()
-    var name: String
-    var specification: String
-    var unit: String
-    var quantity: String
-    var unitPrice: String
-    var laborCost: String = ""
-    var supplier: String = ""
-    var usageLocation: String = ""
-    var note: String = ""
-    var attachmentData: Data?
-    var attachmentFileName: String?
-
-    var hasAttachment: Bool { attachmentData != nil }
-    var isExpanded: Bool = false
-}
-
-private extension MaterialSheetItem {
-    init(draftItem: MaterialSheetDraftItem) {
-        self.init(
-            id: draftItem.id,
-            name: draftItem.name,
-            specification: draftItem.specification,
-            unit: draftItem.unit,
-            quantity: draftItem.quantity,
-            unitPrice: draftItem.unitPrice,
-            laborCost: draftItem.laborCost,
-            supplier: draftItem.supplier,
-            usageLocation: draftItem.usageLocation,
-            note: draftItem.note,
-            attachmentData: draftItem.attachmentData,
-            attachmentFileName: draftItem.attachmentFileName,
-            isExpanded: false
-        )
-    }
-
-    var draftItem: MaterialSheetDraftItem {
-        MaterialSheetDraftItem(
-            id: id,
-            name: name,
-            specification: specification,
-            unit: unit,
-            quantity: quantity,
-            unitPrice: unitPrice,
-            laborCost: laborCost,
-            supplier: supplier,
-            usageLocation: usageLocation,
-            note: note,
-            attachmentData: attachmentData,
-            attachmentFileName: attachmentFileName
-        )
-    }
-}
-
-// MARK: - Export Column Toggles
-
-struct MaterialSheetExportOptions {
-    var showPrice = true
-    var showLabor = false
-    var showSupplier = false
-    var showLocation = true
-    var showNote = false
-}
-
 // MARK: - Material Sheet View
 
 struct MaterialSheetView: View {
@@ -145,12 +78,6 @@ struct MaterialSheetView: View {
     }
     private var grandTotalValue: MoneyValue {
         totalEstimateValue + totalLaborValue
-    }
-    private var totalEstimate: Double {
-        totalEstimateValue.doubleValue
-    }
-    private var totalLabor: Double {
-        totalLaborValue.doubleValue
     }
     private var totalEstimateText: String {
         String(format: "¥%.2f", totalEstimateValue.doubleValue)
@@ -1007,10 +934,15 @@ struct MaterialSheetView: View {
     private func exportAsPDF() {
         isExporting = true
         defer { isExporting = false }
-        let d = generatePDF()
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(formattedNow()).pdf")
+        let data = MaterialSheetExportRenderer.generatePDF(
+            sheetItems: sheetItems,
+            options: exportOptions,
+            exportProjectName: exportProjectName,
+            exportPreparer: exportPreparer
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).pdf")
         do {
-            try d.write(to: url)
+            try data.write(to: url)
             exportFileURL = url
             showExportChoice = true
         } catch {
@@ -1021,10 +953,15 @@ struct MaterialSheetView: View {
     private func exportAsCSV() {
         isExporting = true
         defer { isExporting = false }
-        let d = Data(generateCSV().utf8)
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(formattedNow()).csv")
+        let data = Data(
+            MaterialSheetExportRenderer.generateCSV(
+                sheetItems: sheetItems,
+                options: exportOptions
+            ).utf8
+        )
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).csv")
         do {
-            try d.write(to: url)
+            try data.write(to: url)
             exportFileURL = url
             showExportChoice = true
         } catch {
@@ -1035,58 +972,21 @@ struct MaterialSheetView: View {
     private func exportAsImage() {
         isExporting = true
         defer { isExporting = false }
-        guard let data = generateImage() else { return }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(formattedNow()).png")
+        guard let data = MaterialSheetExportRenderer.generateImage(
+            sheetItems: sheetItems,
+            options: exportOptions,
+            exportProjectName: exportProjectName,
+            exportPreparer: exportPreparer
+        ) else {
+            return
+        }
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).png")
         do {
             try data.write(to: url)
             exportFileURL = url
             showExportChoice = true
         } catch {
             cleanupExportFileIfNeeded()
-        }
-    }
-
-    private func generateImage() -> Data? {
-        let cols = activeColumns()
-        let rh: CGFloat = 24
-        let headerH: CGFloat = 120
-        let footerH: CGFloat = 76
-        let totalH = headerH + CGFloat(sheetItems.count) * rh + footerH
-        let totalW: CGFloat = cols.reduce(30) { $0 + $1.1 } + 20
-
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: totalW, height: max(totalH, 100)))
-        let projectTitle = exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let preparer = exportPreparer.trimmingCharacters(in: .whitespacesAndNewlines)
-        let exportDate = Formatters.date.string(from: Date())
-
-        return renderer.pngData { ctx in
-            UIColor.white.setFill()
-            ctx.fill(CGRect(x: 0, y: 0, width: totalW, height: max(totalH, 100)))
-            UIColor.black.setStroke()
-
-            var y: CGFloat = 10
-            y = drawImageText("材料单", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .boldSystemFont(ofSize: 22), a: .center) + 4
-            if !projectTitle.isEmpty {
-                y = drawImageText("项目: \(projectTitle)", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .systemFont(ofSize: 13), a: .center)
-            }
-            var infoLine = "导出日期: \(exportDate)"
-            if !preparer.isEmpty { infoLine += "    编制人: \(preparer)" }
-            y = drawImageText(infoLine, at: CGPoint(x: 10, y: y), w: totalW - 20, f: .systemFont(ofSize: 11), a: .center)
-            y = drawImageText("共 \(sheetItems.count) 项    \(AppBrand.displayName)", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .systemFont(ofSize: 10), a: .center) + 6
-            y = drawImageHeader(cols, x: 10, y: y, h: rh)
-
-            for (i, item) in sheetItems.enumerated() {
-                var vs = itemRowValues(item)
-                vs[0] = "\(i + 1)"
-                y = drawImageRow(vs, cols, x: 10, y: y, h: rh)
-            }
-
-            y += 8
-            if totalEstimateValue.isPositive || totalLaborValue.isPositive {
-                y = drawImageText("总计: ¥\(String(format: "%.2f", grandTotalValue.doubleValue))", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .boldSystemFont(ofSize: 14))
-            }
-            y += 8
-            _ = drawImageText("—— 本材料单由工地掌柜生成 ——", at: CGPoint(x: 10, y: y), w: totalW - 20, f: .systemFont(ofSize: 10), a: .center)
         }
     }
 
@@ -1113,183 +1013,4 @@ struct MaterialSheetView: View {
         showExportChoice = false
     }
 
-    private func drawImageText(_ t: String, at o: CGPoint, w: CGFloat, f: UIFont, a: NSTextAlignment = .left) -> CGFloat {
-        let p = NSMutableParagraphStyle(); p.alignment = a; p.lineBreakMode = .byWordWrapping
-        let attr = [NSAttributedString.Key.font: f, .paragraphStyle: p, .foregroundColor: UIColor.black]
-        let ns = NSAttributedString(string: t, attributes: attr)
-        let r = ns.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-        let h = ceil(r.height); ns.draw(in: CGRect(x: o.x, y: o.y, width: w, height: h))
-        return o.y + max(18, h + 4)
-    }
-
-    private func drawImageHeader(_ cols: [(String, CGFloat)], x: CGFloat, y: CGFloat, h: CGFloat) -> CGFloat {
-        var cx = x
-        let attr: [NSAttributedString.Key: Any] = [.font: UIFont.boldSystemFont(ofSize: 11), .foregroundColor: UIColor.black]
-        for c in cols {
-            let rect = CGRect(x: cx, y: y, width: c.1, height: h)
-            UIBezierPath(rect: rect).stroke()
-            NSAttributedString(string: c.0, attributes: attr).draw(in: CGRect(x: rect.minX + 4, y: rect.minY + 5, width: rect.width - 8, height: rect.height - 8))
-            cx += c.1
-        }
-        return y + h
-    }
-
-    private func drawImageRow(_ vs: [String], _ cols: [(String, CGFloat)], x: CGFloat, y: CGFloat, h: CGFloat) -> CGFloat {
-        var cx = x
-        let p = NSMutableParagraphStyle(); p.lineBreakMode = .byTruncatingTail
-        let attr: [NSAttributedString.Key: Any] = [.font: UIFont.systemFont(ofSize: 11), .paragraphStyle: p, .foregroundColor: UIColor.black]
-        for (i, c) in cols.enumerated() {
-            let rect = CGRect(x: cx, y: y, width: c.1, height: h)
-            UIBezierPath(rect: rect).stroke()
-            let v = vs.indices.contains(i) ? vs[i] : ""
-            NSAttributedString(string: v, attributes: attr).draw(in: CGRect(x: rect.minX + 4, y: rect.minY + 5, width: rect.width - 8, height: rect.height - 8))
-            cx += c.1
-        }
-        return y + h
-    }
-
-    private func activeColumns() -> [(String, CGFloat)] {
-        var cols: [(String, CGFloat)] = [("序号", 30), ("材料名称", 110), ("规格/型号", 64), ("单位", 30), ("数量", 38)]
-        if exportOptions.showLocation { cols.append(("使用部位", 60)) }
-        if exportOptions.showPrice { cols.append(("单价", 46)); cols.append(("金额", 52)) }
-        if exportOptions.showLabor { cols.append(("人工费", 46)) }
-        if exportOptions.showSupplier { cols.append(("供应商", 56)) }
-        if exportOptions.showNote { cols.append(("备注", 60)) }
-        let fixed = cols.dropFirst().reduce(0) { $0 + $1.1 }
-        let nameW = max(70, 595 - 60 - fixed)
-        cols[1] = ("材料名称", nameW)
-        return cols
-    }
-
-    private func itemRowValues(_ item: MaterialSheetItem) -> [String] {
-        let q = item.quantity; let p = item.unitPrice
-        let lineTotal = lineTotalValue(for: item)
-        var vs: [String] = ["", item.name, item.specification, item.unit, q]
-        if exportOptions.showLocation { vs.append(item.usageLocation.isEmpty ? "-" : item.usageLocation) }
-        if exportOptions.showPrice {
-            vs.append(p.isEmpty ? "-" : p)
-            vs.append(lineTotal.isPositive ? String(format: "%.2f", lineTotal.doubleValue) : "-")
-        }
-        if exportOptions.showLabor { vs.append(item.laborCost.isEmpty ? "-" : item.laborCost) }
-        if exportOptions.showSupplier { vs.append(item.supplier.isEmpty ? "-" : item.supplier) }
-        if exportOptions.showNote { vs.append(item.note.isEmpty ? "-" : item.note) }
-        return vs
-    }
-
-    private func csvHeader() -> String {
-        var hdrs = ["序号", "材料名称", "规格/型号", "单位", "数量"]
-        if exportOptions.showLocation { hdrs.append("使用部位") }
-        if exportOptions.showPrice { hdrs.append(contentsOf: ["单价", "金额"]) }
-        if exportOptions.showLabor { hdrs.append("人工费") }
-        if exportOptions.showSupplier { hdrs.append("供应商") }
-        if exportOptions.showNote { hdrs.append("备注") }
-        return hdrs.map { "\"\($0)\"" }.joined(separator: ",")
-    }
-
-    private func csvItemRow(_ item: MaterialSheetItem, index: Int) -> String {
-        let esc: (String) -> String = { $0.replacingOccurrences(of: "\"", with: "\"\"") }
-        let q = item.quantity; let p = item.unitPrice
-        let lineTotal = lineTotalValue(for: item)
-        var vs = ["\"\(index + 1)\"", "\"\(esc(item.name))\"", "\"\(esc(item.specification))\"", "\"\(esc(item.unit))\"", "\"\(q)\""]
-        if exportOptions.showLocation { vs.append("\"\(esc(item.usageLocation))\"") }
-        if exportOptions.showPrice {
-            vs.append("\"\(p)\"")
-            vs.append(lineTotal.isPositive ? "\"\(String(format: "%.2f", lineTotal.doubleValue))\"" : "\"\"")
-        }
-        if exportOptions.showLabor { vs.append("\"\(item.laborCost)\"") }
-        if exportOptions.showSupplier { vs.append("\"\(esc(item.supplier))\"") }
-        if exportOptions.showNote { vs.append("\"\(esc(item.note))\"") }
-        return vs.joined(separator: ",")
-    }
-
-    private func generatePDF() -> Data {
-        let page = CGRect(x: 0, y: 0, width: 595, height: 842)
-        let r = UIGraphicsPDFRenderer(bounds: page)
-        let m: CGFloat = 30; let mw = page.width - m * 2
-        let cols = activeColumns()
-        let rh: CGFloat = 22
-
-        let projectTitle = exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let preparer = exportPreparer.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return r.pdfData { ctx in
-            ctx.beginPage()
-            var y: CGFloat = 30
-            y = drawText("材料单", at: CGPoint(x: m, y: y), w: mw, f: .boldSystemFont(ofSize: 20), a: .center) + 4
-            if !projectTitle.isEmpty {
-                y = drawText("项目: \(projectTitle)", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 11), a: .center)
-            }
-            var infoLine = "导出日期: \(Formatters.date.string(from: Date()))"
-            if !preparer.isEmpty { infoLine += "    编制人: \(preparer)" }
-            y = drawText(infoLine, at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 9), a: .center)
-            y = drawText("共 \(sheetItems.count) 项    \(AppBrand.displayName)", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 8), a: .center) + 10
-            y = drawHeader(cols, x: m, y: y, h: rh)
-
-            for (i, item) in sheetItems.enumerated() {
-                if y > page.height - 90 { ctx.beginPage(); y = 44; y = drawHeader(cols, x: m, y: y, h: rh) }
-                var vs = itemRowValues(item)
-                vs[0] = "\(i + 1)"
-                y = drawRow(vs, cols, x: m, y: y, h: rh)
-            }
-
-            y += 8
-            if exportOptions.showPrice, totalEstimateValue.isPositive {
-                y = drawText("材料估价合计: ¥\(String(format: "%.2f", totalEstimateValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
-            }
-            if exportOptions.showLabor, totalLaborValue.isPositive {
-                y = drawText("人工费合计: ¥\(String(format: "%.2f", totalLaborValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 10))
-            }
-            if totalEstimateValue.isPositive || totalLaborValue.isPositive {
-                y = drawText("总计: ¥\(String(format: "%.2f", grandTotalValue.doubleValue))", at: CGPoint(x: m, y: y), w: mw, f: .boldSystemFont(ofSize: 12))
-            }
-            y += 16
-            _ = drawText("—— 本材料单由 \(AppBrand.displayName) 生成 ——", at: CGPoint(x: m, y: y), w: mw, f: .systemFont(ofSize: 8), a: .center)
-        }
-    }
-
-    private func generateCSV() -> String {
-        var lines = [csvHeader()]
-        for (i, item) in sheetItems.enumerated() {
-            lines.append(csvItemRow(item, index: i))
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private func formattedNow() -> String {
-        let f = DateFormatter(); f.dateFormat = "yyyyMMdd_HHmm"; return f.string(from: Date())
-    }
-
-    // MARK: - PDF Helpers
-
-    private func drawText(_ t: String, at o: CGPoint, w: CGFloat, f: UIFont, a: NSTextAlignment = .left) -> CGFloat {
-        let p = NSMutableParagraphStyle(); p.alignment = a; p.lineBreakMode = .byWordWrapping
-        let attr = NSAttributedString(string: t, attributes: [.font: f, .paragraphStyle: p])
-        let r = attr.boundingRect(with: CGSize(width: w, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin, .usesFontLeading], context: nil)
-        let h = ceil(r.height); attr.draw(in: CGRect(x: o.x, y: o.y, width: w, height: h))
-        return o.y + max(16, h + 3)
-    }
-
-    private func drawHeader(_ cols: [(String, CGFloat)], x: CGFloat, y: CGFloat, h: CGFloat) -> CGFloat {
-        var cx = x
-        for c in cols {
-            let rect = CGRect(x: cx, y: y, width: c.1, height: h); UIBezierPath(rect: rect).stroke()
-            NSAttributedString(string: c.0, attributes: [.font: UIFont.boldSystemFont(ofSize: 9), .foregroundColor: UIColor.black])
-                .draw(in: CGRect(x: rect.minX + 3, y: rect.minY + 5, width: rect.width - 6, height: rect.height - 6))
-            cx += c.1
-        }
-        return y + h
-    }
-
-    private func drawRow(_ vs: [String], _ cols: [(String, CGFloat)], x: CGFloat, y: CGFloat, h: CGFloat) -> CGFloat {
-        var cx = x
-        for (i, c) in cols.enumerated() {
-            let rect = CGRect(x: cx, y: y, width: c.1, height: h); UIBezierPath(rect: rect).stroke()
-            let v = vs.indices.contains(i) ? vs[i] : ""
-            let p = NSMutableParagraphStyle(); p.lineBreakMode = .byTruncatingTail
-            NSAttributedString(string: v, attributes: [.font: UIFont.systemFont(ofSize: 9), .paragraphStyle: p, .foregroundColor: UIColor.black])
-                .draw(in: CGRect(x: rect.minX + 3, y: rect.minY + 5, width: rect.width - 6, height: rect.height - 6))
-            cx += c.1
-        }
-        return y + h
-    }
 }

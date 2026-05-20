@@ -766,7 +766,7 @@ struct ProjectFileBrowserView: View {
                                 ShareLink(item: item.url) {
                                     Label(
                                         item.category == .drawings
-                                            ? String(localized: "用专业看图软件打开")
+                                            ? String(localized: "用外部专业看图软件打开")
                                             : String(localized: "分享/打开"),
                                         systemImage: "square.and.arrow.up"
                                     )
@@ -849,7 +849,7 @@ private struct ProjectFileProjectRow: View {
                 }
                 HStack(spacing: AppSpacing.tight) {
                     ProjectFileCountChip(title: String(localized: "图片"), value: summary.imageCount, color: .appDoc)
-                    ProjectFileCountChip(title: "CAD", value: summary.drawingCount, color: .appPrimaryAction)
+                    ProjectFileCountChip(title: "图纸", value: summary.drawingCount, color: .appPrimaryAction)
                     ProjectFileCountChip(title: String(localized: "资料"), value: summary.documentCount, color: .appPrimaryAction)
                     ProjectFileCountChip(title: String(localized: "附件"), value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
                 }

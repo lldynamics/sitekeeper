@@ -367,7 +367,11 @@ struct ReportBuilderTests {
                 fileName: "drawing.pdf",
                 fileType: "PDF",
                 issuedAt: "2026-05-04",
-                receiver: "张工"
+                receiver: "张工",
+                fileAvailabilityStatus: .missing,
+                fileAvailabilityCheckedAt: "2026-05-05 09:30",
+                externalOpenFailureReason: "原件被清理",
+                externalOpenFailedAt: "2026-05-05 09:31"
             )
         ])
         store.replaceProjectWarehouseMovements([
@@ -399,6 +403,9 @@ struct ReportBuilderTests {
         #expect(csvText.contains("\"title\",\"category_key\",\"category_display\",\"version_number\",\"version_state\""))
         #expect(csvText.contains("\"replaces_document_id\",\"replaced_by_document_id\",\"submission_status_raw\""))
         #expect(csvText.contains("\"drawing_number\",\"discipline\",\"floor_area\""))
+        #expect(csvText.contains("\"file_availability_status_key\",\"file_availability_status_display\""))
+        #expect(csvText.contains("\"missing\""))
+        #expect(csvText.contains("原件被清理"))
         #expect(csvText.contains("\"A-101\""))
 
         let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
@@ -406,6 +413,7 @@ struct ReportBuilderTests {
         #expect(htmlText.contains("项目联系人"))
         #expect(htmlText.contains("图纸索引"))
         #expect(htmlText.contains("A-101"))
+        #expect(htmlText.contains("原件被清理"))
         #expect(htmlText.contains("仓库流水"))
         #expect(htmlText.contains("随手记"))
         #expect(htmlText.contains("项目财务流水"))

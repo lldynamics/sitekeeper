@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "appVersion": "debug-sample",
   "appBuild": "1",
-  "backupCreatedAt": "2026-05-16 09:00",
+  "backupCreatedAt": "2026-05-20 09:30",
   "projects": [
     {
       "id": "11111111-1111-1111-1111-111111111111",
@@ -35,6 +35,22 @@
       "paymentStatus": "部分收款",
       "materialCost": "28000",
       "laborCost": "19000"
+    },
+    {
+      "id": "33333333-3333-3333-3333-333333333333",
+      "name": "滨江商业街消防整改",
+      "location": "滨江区",
+      "status": "已完成",
+      "customerName": "滨江商管",
+      "customerPhone": "13800000003",
+      "startDate": "2026-04-12",
+      "expectedEndDate": "2026-05-12",
+      "managerName": "赵工",
+      "contractAmount": "156000",
+      "paidAmount": "156000",
+      "paymentStatus": "已收款",
+      "materialCost": "48600",
+      "laborCost": "33200"
     }
   ],
   "materialItems": [
@@ -63,6 +79,45 @@
       "purchaseStatus": "已进场",
       "arrivalDate": "2026-05-15",
       "projectId": "22222222-2222-2222-2222-222222222222"
+    },
+    {
+      "id": "33331111-1111-1111-1111-111111111111",
+      "name": "LED 平板灯 600x600",
+      "quantity": "36",
+      "unit": "套",
+      "unitPrice": "92",
+      "specification": "4000K / 48W",
+      "brand": "工程常用",
+      "supplier": "供应商D",
+      "purchaseStatus": "未采购",
+      "arrivalDate": "",
+      "projectId": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "34444444-4444-4444-4444-444444444444",
+      "name": "NH-BV 4mm² 耐火电缆",
+      "quantity": "12",
+      "unit": "卷",
+      "unitPrice": "468",
+      "specification": "100m/卷",
+      "brand": "消防专用",
+      "supplier": "供应商C",
+      "purchaseStatus": "已进场",
+      "arrivalDate": "2026-04-18",
+      "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "35555555-5555-5555-5555-555555555555",
+      "name": "应急照明集中电源",
+      "quantity": "1",
+      "unit": "台",
+      "unitPrice": "4200",
+      "specification": "EPS-2kW",
+      "brand": "工程常用",
+      "supplier": "供应商C",
+      "purchaseStatus": "已使用",
+      "arrivalDate": "2026-04-22",
+      "projectId": "33333333-3333-3333-3333-333333333333"
     }
   ],
   "quoteItems": [
@@ -95,6 +150,36 @@
       "customerConfirmedDate": "",
       "contractAmount": "5729",
       "projectId": "22222222-2222-2222-2222-222222222222"
+    },
+    {
+      "id": "43333333-3333-3333-3333-333333333333",
+      "name": "灯具安装调试",
+      "unitPrice": "78",
+      "quantity": "236",
+      "unit": "套",
+      "notes": "含样板段复核与调试",
+      "taxRate": "3",
+      "discountRate": "1.5",
+      "versionName": "V3",
+      "status": "已确认",
+      "customerConfirmedDate": "2026-05-16",
+      "contractAmount": "18120",
+      "projectId": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "消防线路整改",
+      "unitPrice": "58",
+      "quantity": "1240",
+      "unit": "米",
+      "notes": "含切换测试与联动检查",
+      "taxRate": "3",
+      "discountRate": "0",
+      "versionName": "V2",
+      "status": "已确认",
+      "customerConfirmedDate": "2026-04-25",
+      "contractAmount": "71920",
+      "projectId": "33333333-3333-3333-3333-333333333333"
     }
   ],
   "laborRecords": [
@@ -121,6 +206,30 @@
       "isSettled": false,
       "note": "桥架改造",
       "projectId": "22222222-2222-2222-2222-222222222222"
+    },
+    {
+      "id": "53333333-3333-3333-3333-333333333333",
+      "date": "2026-05-16",
+      "workers": "5",
+      "hours": "8",
+      "unitRate": "138",
+      "workType": "安装",
+      "teamName": "照明组",
+      "isSettled": true,
+      "note": "样板段灯具安装与回路测试",
+      "projectId": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "54444444-4444-4444-4444-444444444444",
+      "date": "2026-04-26",
+      "workers": "8",
+      "hours": "9",
+      "unitRate": "152",
+      "workType": "消防整改",
+      "teamName": "消防组",
+      "isSettled": true,
+      "note": "消防回路整改与应急照明切换测试",
+      "projectId": "33333333-3333-3333-3333-333333333333"
     }
   ],
   "dailyLogs": [
@@ -131,14 +240,23 @@
       "content": "公共区域灯具定位复核，完成样板段试装",
       "workers": "7",
       "photoFileName": null,
-      "photos": [],
+      "photos": [
+        {
+          "id": "61111111-aaaa-1111-1111-111111111111",
+          "fileName": "sample-log-photo-11111111.jpg",
+          "note": "样板段安装完成",
+          "tag": "现场"
+        }
+      ],
       "safety": "梯具防滑垫检查通过",
       "materials": "LED 平板灯到货待验收",
       "tomorrowPlan": "完成走道灯具安装",
       "qualityIssue": "局部吊顶开孔偏差 8mm",
       "rectification": "明日统一修正开孔",
       "confirmer": "李工",
-      "linkedConstructionMethodIDs": [],
+      "linkedConstructionMethodIDs": [
+        "d3333333-3333-3333-3333-333333333333"
+      ],
       "projectId": "11111111-1111-1111-1111-111111111111"
     },
     {
@@ -157,6 +275,44 @@
       "confirmer": "王工",
       "linkedConstructionMethodIDs": [],
       "projectId": "22222222-2222-2222-2222-222222222222"
+    },
+    {
+      "id": "63333333-3333-3333-3333-333333333333",
+      "date": "2026-05-17",
+      "weather": "多云",
+      "content": "走道灯具全部安装完成，照度抽测通过。",
+      "workers": "6",
+      "photoFileName": null,
+      "photos": [],
+      "safety": "脚手平台复核完成",
+      "materials": "LED 平板灯 36 套已入场",
+      "tomorrowPlan": "补齐开孔偏差并整理验收资料",
+      "qualityIssue": "个别吊顶边缘需修口",
+      "rectification": "木工已安排次日修正",
+      "confirmer": "李工",
+      "linkedConstructionMethodIDs": [
+        "d3333333-3333-3333-3333-333333333333"
+      ],
+      "projectId": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "64444444-4444-4444-4444-444444444444",
+      "date": "2026-05-11",
+      "weather": "晴",
+      "content": "消防应急照明切换测试完成，商业街整体验收通过。",
+      "workers": "4",
+      "photoFileName": null,
+      "photos": [],
+      "safety": "验收通道保持畅通",
+      "materials": "应急集中电源铭牌与标签已复核",
+      "tomorrowPlan": "归档验收资料与竣工图",
+      "qualityIssue": "",
+      "rectification": "",
+      "confirmer": "赵工",
+      "linkedConstructionMethodIDs": [
+        "d5555555-5555-5555-5555-555555555555"
+      ],
+      "projectId": "33333333-3333-3333-3333-333333333333"
     }
   ],
   "historyRecords": [
@@ -173,6 +329,20 @@
       "input": "120㎡ 办公区 / 350lux",
       "result": "24 盏",
       "date": "2026-05-08 10:12"
+    },
+    {
+      "id": "73333333-3333-3333-3333-333333333333",
+      "tool": "线管填充率",
+      "input": "4 根 BV2.5 / Φ20 线管",
+      "result": "41%",
+      "date": "2026-05-16 09:05"
+    },
+    {
+      "id": "74444444-4444-4444-4444-444444444444",
+      "tool": "电压降",
+      "input": "65m / 32A / 4mm²",
+      "result": "2.87%",
+      "date": "2026-05-12 14:18"
     }
   ],
   "progressTasks": [
@@ -193,6 +363,24 @@
       "dueDate": "2026-05-20",
       "completion": 0.65,
       "note": ""
+    },
+    {
+      "id": "83333333-3333-3333-3333-333333333333",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "title": "公共走道灯具安装",
+      "startDate": "2026-05-12",
+      "dueDate": "2026-05-19",
+      "completion": 0.92,
+      "note": "待整理验收资料"
+    },
+    {
+      "id": "84444444-4444-4444-4444-444444444444",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "title": "消防应急照明整改",
+      "startDate": "2026-04-14",
+      "dueDate": "2026-05-11",
+      "completion": 1,
+      "note": "已完成并验收"
     }
   ],
   "siteTodos": [
@@ -225,9 +413,76 @@
       "note": "",
       "linkedConstructionMethodIDs": [],
       "projectId": "22222222-2222-2222-2222-222222222222"
+    },
+    {
+      "id": "a3333333-3333-3333-3333-333333333333",
+      "title": "补齐样板段验收记录",
+      "owner": "李工",
+      "dueDate": "2026-05-18",
+      "priority": "中",
+      "issueType": "质量",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": true,
+      "completedAt": "2026-05-17 17:40",
+      "note": "已归档到施工记录",
+      "linkedConstructionMethodIDs": [
+        "d3333333-3333-3333-3333-333333333333"
+      ],
+      "projectId": "11111111-1111-1111-1111-111111111111"
+    },
+    {
+      "id": "a4444444-4444-4444-4444-444444444444",
+      "title": "消防联动回执签字",
+      "owner": "赵工",
+      "dueDate": "2026-05-12",
+      "priority": "高",
+      "issueType": "进度",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": true,
+      "completedAt": "2026-05-12 18:30",
+      "note": "物业与消防维保已签字",
+      "linkedConstructionMethodIDs": [
+        "d5555555-5555-5555-5555-555555555555"
+      ],
+      "projectId": "33333333-3333-3333-3333-333333333333"
     }
   ],
-  "projectDrawings": [],
+  "projectDrawings": [
+    {
+      "id": "81111111-1111-1111-1111-111111111111",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "name": "公共走道照明布置图",
+      "drawingNumber": "ZM-03",
+      "discipline": "电气",
+      "floorArea": "3F",
+      "fileName": "sample-lighting-layout.pdf",
+      "fileType": "pdf",
+      "version": "V3",
+      "isCurrentVersion": true,
+      "issuedAt": "2026-05-14",
+      "receiver": "李工",
+      "relatedLogDate": "2026-05-16",
+      "linkedTodoIDs": [
+        "a1111111-1111-1111-1111-111111111111"
+      ],
+      "linkedLogIDs": [
+        "61111111-1111-1111-1111-111111111111"
+      ],
+      "linkedDocumentIDs": [
+        "91111111-1111-1111-1111-111111111111"
+      ],
+      "issueStatus": "待整改",
+      "issueNote": "东侧吊顶开孔需复核",
+      "fileAvailabilityStatus": "available",
+      "fileAvailabilityCheckedAt": "2026-05-16 18:30",
+      "externalOpenFailureReason": "",
+      "externalOpenFailedAt": "",
+      "importedAt": "2026-05-16 18:10",
+      "note": "样板段定位复核"
+    }
+  ],
   "projectContacts": [
     {
       "id": "b1111111-1111-1111-1111-111111111111",
@@ -250,6 +505,28 @@
       "company": "云栖物业",
       "phone": "13900010003",
       "note": ""
+    },
+    {
+      "id": "b3333333-3333-3333-3333-333333333333",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "relatedProjectIds": [],
+      "name": "陈经理",
+      "role": "供应商",
+      "company": "供应商D",
+      "phone": "13900010008",
+      "note": "灯具到货前一日确认排产"
+    },
+    {
+      "id": "b4444444-4444-4444-4444-444444444444",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "relatedProjectIds": [
+        "11111111-1111-1111-1111-111111111111"
+      ],
+      "name": "周监",
+      "role": "监理",
+      "company": "滨江监理",
+      "phone": "13900010009",
+      "note": "兼顾商业街与住宅配套验收"
     }
   ],
   "projectFinancialRecords": [
@@ -282,9 +559,114 @@
       "dueDate": "2026-05-18",
       "reminderStatus": "待提醒",
       "note": "线管补货，缺票匹配测试"
+    },
+    {
+      "id": "c3333333-3333-3333-3333-333333333333",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "date": "2026-05-17 18:10",
+      "direction": "支出",
+      "category": "人工",
+      "amount": "5520",
+      "counterparty": "照明组",
+      "invoiceNumber": "",
+      "linkedDocumentIds": [
+        "91111111-1111-1111-1111-111111111111"
+      ],
+      "status": "正式",
+      "dueDate": "2026-05-18",
+      "reminderStatus": "待提醒",
+      "note": "样板段安装班组结算"
+    },
+    {
+      "id": "c4444444-4444-4444-4444-444444444444",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "date": "2026-05-12 16:20",
+      "direction": "收入",
+      "category": "收款",
+      "amount": "36000",
+      "counterparty": "滨江商管",
+      "invoiceNumber": "SK-20260512-03",
+      "linkedDocumentIds": [
+        "92222222-2222-2222-2222-222222222222"
+      ],
+      "status": "正式",
+      "dueDate": "2026-05-12",
+      "reminderStatus": "待提醒",
+      "note": "尾款到账"
     }
   ],
-  "projectDocuments": [],
+  "projectDocuments": [
+    {
+      "id": "91111111-1111-1111-1111-111111111111",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "title": "灯具到货验收单",
+      "category": "施工记录",
+      "fileName": "11111111-1111-1111-1111-111111111111-sample-arrival.pdf",
+      "fileType": "pdf",
+      "pageCount": 1,
+      "amount": "3312",
+      "linkedFinancialRecordId": "c3333333-3333-3333-3333-333333333333",
+      "linkedConstructionMethodIDs": [
+        "d3333333-3333-3333-3333-333333333333"
+      ],
+      "submissionStatus": "已确认",
+      "responsiblePerson": "李工",
+      "formedAt": "2026-05-16",
+      "archiveNumber": "JL-20260516-01",
+      "workSection": "公共走道照明",
+      "createdAt": "2026-05-16 18:20",
+      "note": "样板段验收随附",
+      "statusHistory": [
+        {
+          "id": "91111111-aaaa-1111-1111-111111111111",
+          "fromStatus": "待报验",
+          "toStatus": "已确认",
+          "operatorName": "李工",
+          "changedAt": "2026-05-16 19:00",
+          "reason": "样板段确认通过"
+        }
+      ],
+      "versionNumber": 1,
+      "versionState": "当前版",
+      "replacesDocumentId": null,
+      "replacedByDocumentId": null
+    },
+    {
+      "id": "92222222-2222-2222-2222-222222222222",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "title": "消防整改验收记录",
+      "category": "验收资料",
+      "fileName": "33333333-3333-3333-3333-333333333333-sample-fire-acceptance.pdf",
+      "fileType": "pdf",
+      "pageCount": 1,
+      "amount": "",
+      "linkedFinancialRecordId": "c4444444-4444-4444-4444-444444444444",
+      "linkedConstructionMethodIDs": [
+        "d5555555-5555-5555-5555-555555555555"
+      ],
+      "submissionStatus": "已归档",
+      "responsiblePerson": "赵工",
+      "formedAt": "2026-05-11",
+      "archiveNumber": "XF-20260511-02",
+      "workSection": "商业街 1-3 层",
+      "createdAt": "2026-05-11 17:35",
+      "note": "消防应急照明整改总验收",
+      "statusHistory": [
+        {
+          "id": "92222222-bbbb-2222-2222-222222222222",
+          "fromStatus": "已报验",
+          "toStatus": "已归档",
+          "operatorName": "赵工",
+          "changedAt": "2026-05-12 09:30",
+          "reason": "资料归档完成"
+        }
+      ],
+      "versionNumber": 1,
+      "versionState": "当前版",
+      "replacesDocumentId": null,
+      "replacedByDocumentId": null
+    }
+  ],
   "quickNotes": [
     {
       "id": "d1111111-1111-1111-1111-111111111111",
@@ -303,6 +685,33 @@
       "createdAt": "2026-05-10 18:06",
       "updatedAt": "2026-05-10 18:06",
       "attachments": []
+    },
+    {
+      "id": "d3333333-1111-4444-8888-111111111111",
+      "title": "灯具样板确认清单",
+      "content": "已确认色温 4000K，东侧开孔需二次复核。",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "createdAt": "2026-05-16 20:10",
+      "updatedAt": "2026-05-16 20:10",
+      "attachments": []
+    },
+    {
+      "id": "d4444444-2222-5555-9999-222222222222",
+      "title": "消防整改复核要点",
+      "content": "附一份现场复核要点文本，供验收前逐项核对。",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "createdAt": "2026-05-12 10:30",
+      "updatedAt": "2026-05-12 10:30",
+      "attachments": [
+        {
+          "id": "d4444444-aaaa-5555-9999-222222222222",
+          "kind": "file",
+          "fileName": "quick-note-sample-checklist.txt",
+          "originalName": "消防整改复核要点.txt",
+          "createdAt": "2026-05-12 10:30",
+          "durationSeconds": null
+        }
+      ]
     }
   ],
   "projectWarehouseMovements": [
@@ -335,6 +744,40 @@
       "note": "办公区回路施工领用",
       "linkedDocumentIds": [],
       "createdAt": "2026-05-15 16:30"
+    },
+    {
+      "id": "e3333333-1111-1111-1111-111111111111",
+      "projectId": "11111111-1111-1111-1111-111111111111",
+      "date": "2026-05-16",
+      "movementType": "入库",
+      "materialName": "LED 平板灯 600x600",
+      "specification": "4000K / 48W",
+      "unit": "套",
+      "quantity": "36",
+      "counterparty": "供应商D",
+      "handler": "材料员",
+      "note": "样板段到货验收",
+      "linkedDocumentIds": [
+        "91111111-1111-1111-1111-111111111111"
+      ],
+      "createdAt": "2026-05-16 18:25"
+    },
+    {
+      "id": "e4444444-2222-2222-2222-222222222222",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "date": "2026-05-11",
+      "movementType": "出库",
+      "materialName": "NH-BV 4mm² 耐火电缆",
+      "specification": "100m/卷",
+      "unit": "卷",
+      "quantity": "12",
+      "counterparty": "消防组",
+      "handler": "库管",
+      "note": "消防整改完工领用结转",
+      "linkedDocumentIds": [
+        "92222222-2222-2222-2222-222222222222"
+      ],
+      "createdAt": "2026-05-11 16:50"
     }
   ],
   "templates": [
@@ -355,6 +798,18 @@
       "name": "住宅布线材料",
       "category": "材料模板",
       "content": "BV 2.5mm² 电线 × 3卷\nBV 4mm² 电线 × 2卷\n线管 Φ20 × 50m\n86盒 × 20个"
+    },
+    {
+      "id": "f4444444-4444-4444-4444-444444444444",
+      "name": "施工资料归档清单",
+      "category": "资料清单模板",
+      "content": "sitekeeper_document_checklist_template_v1\n施工技术\n施工记录\n过程验收\n竣工验收"
+    },
+    {
+      "id": "f5555555-5555-5555-5555-555555555555",
+      "name": "商业消防整改报价",
+      "category": "报价模板",
+      "content": "耐火电缆整改 ¥58/m\n应急灯安装 ¥125/套\n联动测试 ¥1800/项"
     }
   ],
   "materialPriceEntries": [
@@ -381,6 +836,42 @@
       "category": "线管",
       "note": "补货价上涨",
       "updatedAt": "2026-05-15 15:45"
+    },
+    {
+      "id": "a5555555-5555-5555-5555-555555555555",
+      "name": "LED 平板灯",
+      "specification": "600×600 / 48W",
+      "brand": "工程常用",
+      "unit": "套",
+      "referencePrice": "92",
+      "supplier": "供应商D",
+      "category": "灯具",
+      "note": "样板确认价",
+      "updatedAt": "2026-05-16 12:15"
+    },
+    {
+      "id": "a6666666-6666-6666-6666-666666666666",
+      "name": "耐火电缆",
+      "specification": "NH-BV 4mm²",
+      "brand": "消防专用",
+      "unit": "卷(100m)",
+      "referencePrice": "468",
+      "supplier": "供应商C",
+      "category": "电缆",
+      "note": "",
+      "updatedAt": "2026-04-18 10:30"
+    },
+    {
+      "id": "a7777777-7777-7777-7777-777777777777",
+      "name": "应急照明集中电源",
+      "specification": "EPS-2kW",
+      "brand": "工程常用",
+      "unit": "台",
+      "referencePrice": "4200",
+      "supplier": "供应商C",
+      "category": "配电设备",
+      "note": "消防项目常用",
+      "updatedAt": "2026-04-20 08:40"
     }
   ],
   "materialSheetDrafts": [
@@ -420,6 +911,31 @@
       ],
       "createdAt": "2026-05-15 18:00",
       "updatedAt": "2026-05-16 09:20"
+    },
+    {
+      "id": "b4444444-4444-4444-4444-444444444444",
+      "title": "滨江商业街消防整改收尾补料单",
+      "projectId": "33333333-3333-3333-3333-333333333333",
+      "isArchived": true,
+      "exportProjectName": "滨江商业街消防整改",
+      "exportPreparer": "赵工",
+      "exportDate": "2026-05-10",
+      "items": [
+        {
+          "id": "b4444444-aaaa-4444-4444-444444444444",
+          "name": "应急疏散指示灯",
+          "specification": "壁挂式",
+          "unit": "套",
+          "quantity": "18",
+          "unitPrice": "48",
+          "laborCost": "12",
+          "supplier": "供应商C",
+          "usageLocation": "商业街通道",
+          "note": "收尾补装"
+        }
+      ],
+      "createdAt": "2026-05-09 18:20",
+      "updatedAt": "2026-05-10 09:10"
     }
   ],
   "supplierProfiles": [
@@ -442,6 +958,26 @@
       "address": "高新区仓",
       "note": "",
       "updatedAt": "2026-05-15 15:00"
+    },
+    {
+      "id": "c5555555-5555-5555-5555-555555555555",
+      "name": "供应商C",
+      "category": "消防设备",
+      "contact": "郭经理",
+      "phone": "13700020003",
+      "address": "滨江仓",
+      "note": "应急照明与耐火电缆",
+      "updatedAt": "2026-04-18 09:20"
+    },
+    {
+      "id": "c6666666-6666-6666-6666-666666666666",
+      "name": "供应商D",
+      "category": "照明灯具",
+      "contact": "何经理",
+      "phone": "13700020004",
+      "address": "城东灯具市场",
+      "note": "样板段先发 36 套",
+      "updatedAt": "2026-05-16 11:50"
     }
   ],
   "constructionMethods": [
@@ -497,13 +1033,43 @@
       ],
       "attachments": [],
       "updatedAt": "2026-05-10 16:10"
+    },
+    {
+      "id": "d5555555-5555-5555-5555-555555555555",
+      "title": "应急照明切换测试",
+      "trade": "消防电",
+      "versionName": "V1",
+      "publishStatus": "已发布",
+      "tutorialBody": "断开主电源后检查应急回路切换与持续时间。",
+      "tutorialTextSize": "normal",
+      "tutorialAttachments": [],
+      "procedureSteps": [
+        "确认主回路状态",
+        "模拟断电切换",
+        "检查疏散指示连续性",
+        "记录测试结果"
+      ],
+      "qualityChecklist": [
+        "切换时间符合要求",
+        "应急灯点亮正常",
+        "测试记录完整"
+      ],
+      "safetyChecklist": [
+        "提前通知现场断电测试",
+        "测试区设专人看护"
+      ],
+      "attachments": [],
+      "updatedAt": "2026-05-10 15:20"
     }
   ],
   "favoriteMaterialKeys": [
     "bv 铜芯线|2.5mm²|卷(100m)",
-    "阻燃线管|φ20|米"
+    "阻燃线管|φ20|米",
+    "led 平板灯|600×600 / 48w|套",
+    "耐火电缆|nh-bv 4mm²|卷(100m)"
   ],
   "recentMaterialKeys": [
+    "应急照明集中电源|eps-2kw|台",
     "阻燃线管|φ20|米",
     "bv 2.5mm² 电线|100m/卷|卷"
   ],
@@ -521,12 +1087,58 @@
       "specification": "2kg/包",
       "unit": "包",
       "category": "防火封堵"
+    },
+    {
+      "id": "e5555555-5555-5555-5555-555555555555",
+      "name": "应急疏散指示灯",
+      "specification": "壁挂式",
+      "unit": "套",
+      "category": "消防照明"
+    },
+    {
+      "id": "e6666666-6666-6666-6666-666666666666",
+      "name": "电缆标识套管",
+      "specification": "白底黑字",
+      "unit": "盒",
+      "category": "标识辅材"
     }
   ],
-  "deletedUserMaterials": [],
+  "deletedUserMaterials": [
+    {
+      "id": "e7777777-7777-7777-7777-777777777777",
+      "name": "旧款疏散灯",
+      "specification": "T8 兼容型",
+      "unit": "套",
+      "category": "废弃样例"
+    }
+  ],
   "hiddenPresetKeys": [],
-  "photoFiles": [],
-  "drawingFiles": [],
-  "documentFiles": [],
-  "quickNoteAttachmentFiles": []
+  "photoFiles": [
+    {
+      "fileName": "sample-log-photo-11111111.jpg",
+      "data": "/9j/4AAQSkZJRgABAQAASABIAAD/4QBARXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAEKADAAQAAAABAAAAEAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+ICGElDQ19QUk9GSUxFAAEBAAACCGFwcGwEAAAAbW50clJHQiBYWVogB+oABQAUAAkALwA1YWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKZGVzYwAAAPwAAAAwY3BydAAAASwAAABQd3RwdAAAAXwAAAAUclhZWgAAAZAAAAAUZ1hZWgAAAaQAAAAUYlhZWgAAAbgAAAAUclRSQwAAAcwAAAAQY2hhZAAAAdwAAAAsYlRSQwAAAcwAAAAQZ1RSQwAAAcwAAAAQbWx1YwAAAAAAAAABAAAADGVuVVMAAAAUAAAAHABNAGkAIABNAG8AbgBpAHQAbwBybWx1YwAAAAAAAAABAAAADGVuVVMAAAA0AAAAHABDAG8AcAB5AHIAaQBnAGgAdAAgAEEAcABwAGwAZQAgAEkAbgBjAC4ALAAgADIAMAAyADZYWVogAAAAAAAA9tYAAQAAAADTLVhZWiAAAAAAAAB8CQAAOKoAAAE/WFlaIAAAAAAAAFNGAAC4mwAAD5FYWVogAAAAAAAAJ4YAAA67AADCXXBhcmEAAAAAAAAAAAAB9gRzZjMyAAAAAAABDHIAAAX4///zHQAAB7oAAP1y///7nf///aQAAAPZAADAcf/AABEIABAAEAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAAEBAQEBAQIBAQIDAgICAwQDAwMDBAUEBAQEBAUGBQUFBQUFBgYGBgYGBgYHBwcHBwcICAgICAkJCQkJCQkJCQn/2wBDAQEBAQICAgQCAgQJBgUGCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQn/3QAEAAH/2gAMAwEAAhEDEQA/APviiiiv8Hz/AHgP/9k="
+    }
+  ],
+  "drawingFiles": [
+    {
+      "fileName": "sample-lighting-layout.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    }
+  ],
+  "documentFiles": [
+    {
+      "fileName": "11111111-1111-1111-1111-111111111111-sample-arrival.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "33333333-3333-3333-3333-333333333333-sample-fire-acceptance.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    }
+  ],
+  "quickNoteAttachmentFiles": [
+    {
+      "fileName": "quick-note-sample-checklist.txt",
+      "data": "5raI6Ziy5pW05pS55aSN5qC46KaB54K5CjEuIOW6lOaApeeFp+aYjuWIh+aNoua1i+ivlQoyLiDnlo/mlaPmjIfnpLrov57nu63mgKcKMy4g6YWN55S1566x5qCH562+5aSN5qC4Cg=="
+    }
+  ]
 }

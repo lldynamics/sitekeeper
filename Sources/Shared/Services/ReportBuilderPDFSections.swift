@@ -98,6 +98,8 @@ enum ReportBuilderPDFSections {
                     drawing.isCurrentVersion ? String(localized: "当前版") : String(localized: "历史版"),
                     drawing.issuedAt.isEmpty ? "" : String(format: String(localized: "出图: %@"), drawing.issuedAt),
                     drawing.receiver.isEmpty ? "" : String(format: String(localized: "接收: %@"), drawing.receiver),
+                    drawing.fileAvailabilityStatus.displayName,
+                    drawing.externalOpenFailureReason.isEmpty ? "" : String(format: String(localized: "外部打开失败：%@"), drawing.externalOpenFailureReason),
                     linkParts.isEmpty ? "" : String(format: String(localized: "关联: %@"), linkParts.joined(separator: " · "))
                 ]
                 .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }

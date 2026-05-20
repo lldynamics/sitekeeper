@@ -25,8 +25,11 @@ struct BackupArchiveManifest: Codable, Equatable {
     }
 }
 
+struct BackupSchemaHeader: Decodable {
+    let schemaVersion: Int
+}
+
 struct BackupSnapshot: Codable {
-    static let legacySchemaVersion = 1
     static let currentSchemaVersion = 2
 
     var schemaVersion: Int
@@ -142,7 +145,14 @@ struct BackupSnapshot: Codable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? BackupSnapshot.legacySchemaVersion
+        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
+        guard schemaVersion == BackupSnapshot.currentSchemaVersion else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .schemaVersion,
+                in: container,
+                debugDescription: "Unsupported backup schema version \(schemaVersion)."
+            )
+        }
         appVersion = try container.decodeIfPresent(String.self, forKey: .appVersion) ?? ""
         appBuild = try container.decodeIfPresent(String.self, forKey: .appBuild) ?? ""
         backupCreatedAt = try container.decodeIfPresent(String.self, forKey: .backupCreatedAt) ?? ""

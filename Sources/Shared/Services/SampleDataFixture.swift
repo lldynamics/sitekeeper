@@ -3,42 +3,35 @@ import Foundation
 #if DEBUG
 @MainActor
 extension DataStore {
-    func seedDefaults() {
+    func loadSampleFixtureSnapshot() -> BackupSnapshot? {
         guard let snapshot = SampleDataFixtureLoader.loadSnapshot() else {
             StorageIssueLog.recordEvent(
                 "sample_data.fixture_missing",
                 category: .dataStore,
                 details: ["file": "SampleDataFixture.json"]
             )
-            return
+            return nil
         }
-        applySampleSnapshot(snapshot)
+        return snapshot
     }
 
-    private func applySampleSnapshot(_ snapshot: BackupSnapshot) {
-        replaceProjects(snapshot.projects)
-        replaceMaterialItems(snapshot.materialItems)
-        replaceQuoteItems(snapshot.quoteItems)
-        replaceLaborRecords(snapshot.laborRecords)
-        replaceDailyLogs(snapshot.dailyLogs)
-        replaceHistoryRecords(snapshot.historyRecords)
-        replaceProgressTasks(snapshot.progressTasks)
-        replaceSiteTodos(snapshot.siteTodos)
-        replaceProjectDrawings(snapshot.projectDrawings)
-        replaceProjectDocuments(snapshot.projectDocuments)
-        replaceProjectContacts(snapshot.projectContacts)
-        replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
-        replaceQuickNotes(snapshot.quickNotes)
-        replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
-        replaceTemplates(snapshot.templates)
-        replaceMaterialPriceEntries(snapshot.materialPriceEntries)
-        replaceMaterialSheetDrafts(snapshot.materialSheetDrafts)
-        replaceSupplierProfiles(snapshot.supplierProfiles)
-        replaceConstructionMethods(snapshot.constructionMethods)
-        replaceUserMaterials(snapshot.userMaterials)
-        replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
-        favoriteMaterialKeys = snapshot.favoriteMaterialKeys
-        recentMaterialKeys = snapshot.recentMaterialKeys
+    @discardableResult
+    func seedDefaults() -> Bool {
+        guard let snapshot = loadSampleFixtureSnapshot() else { return false }
+        applySampleFixtureSnapshot(snapshot)
+        return true
+    }
+
+    func applySampleFixtureSnapshot(_ snapshot: BackupSnapshot) {
+        applyLoadedSnapshot(snapshot)
+        restoreSampleFixtureFiles(snapshot)
+    }
+
+    private func restoreSampleFixtureFiles(_ snapshot: BackupSnapshot) {
+        PhotoStorage.restore(snapshot.photoFiles)
+        DrawingStorage.restore(snapshot.drawingFiles)
+        ProjectDocumentStorage.restore(snapshot.documentFiles)
+        QuickNoteAttachmentStorage.restore(snapshot.quickNoteAttachmentFiles)
     }
 }
 
@@ -64,15 +57,22 @@ private enum SampleDataFixtureLoader {
             return data
         }
         for bundle in candidateBundles {
-            if let url = bundle.url(
-                forResource: "SampleDataFixture",
-                withExtension: "json",
-                subdirectory: "Fixtures"
-            ) {
+            if let url = bundledFixtureURL(in: bundle) {
                 return try? Data(contentsOf: url)
             }
         }
         return nil
+    }
+
+    private static func bundledFixtureURL(in bundle: Bundle) -> URL? {
+        if let url = bundle.url(
+            forResource: "SampleDataFixture",
+            withExtension: "json",
+            subdirectory: "Fixtures"
+        ) {
+            return url
+        }
+        return bundle.url(forResource: "SampleDataFixture", withExtension: "json")
     }
 
     private static var candidateBundles: [Bundle] {

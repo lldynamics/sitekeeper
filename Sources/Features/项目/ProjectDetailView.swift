@@ -102,6 +102,7 @@ struct ProjectDetailContainer: View {
             set: { isPresented in
                 if !isPresented {
                     assetState.drawingShareURL = nil
+                    assetState.drawingShareDrawingID = nil
                 }
             }
         )
@@ -479,8 +480,14 @@ struct ProjectDetailContainer: View {
         )
         .sheet(isPresented: drawingShareSheetPresented) {
             if let drawingShareURL = assetState.drawingShareURL {
-                ActivityShareSheet(activityItems: [drawingShareURL], onComplete: { _ in
+                ActivityShareSheet(activityItems: [drawingShareURL], onComplete: { completed in
+                    ProjectDetailAssetActions.recordDrawingExternalOpenResult(
+                        completed: completed,
+                        drawingID: assetState.drawingShareDrawingID,
+                        store: store
+                    )
                     assetState.drawingShareURL = nil
+                    assetState.drawingShareDrawingID = nil
                 })
             }
         }

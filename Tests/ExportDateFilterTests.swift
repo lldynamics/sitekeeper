@@ -148,10 +148,11 @@ struct ExportDateFilterTests {
         #expect(filteredByDate[0].counterparty == "A")
     }
 
-    @Test func legacyPaymentRecordsFieldIsIgnored() throws {
+    @Test func removedPaymentRecordsFieldIsIgnoredForCurrentSchema() throws {
         let projectId = UUID()
         let data = """
         {
+          "schemaVersion": 2,
           "paymentRecords": [
             {
               "projectId": "\(projectId.uuidString)",
