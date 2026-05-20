@@ -66,6 +66,7 @@ struct ProjectDeliveryHealth: Equatable {
         case openTodos
         case backupOverdue
         case missingOriginals
+        case missingCurrentDrawingVersion
 
         var id: String { rawValue }
 
@@ -81,6 +82,8 @@ struct ProjectDeliveryHealth: Equatable {
                 return String(localized: "未备份")
             case .missingOriginals:
                 return String(localized: "资料缺原件")
+            case .missingCurrentDrawingVersion:
+                return String(localized: "当前版缺失")
             }
         }
 
@@ -96,6 +99,8 @@ struct ProjectDeliveryHealth: Equatable {
                 return String(localized: "备份有效")
             case .missingOriginals:
                 return String(localized: "原件齐全")
+            case .missingCurrentDrawingVersion:
+                return String(localized: "当前版已确认")
             }
         }
 
@@ -111,6 +116,8 @@ struct ProjectDeliveryHealth: Equatable {
                 return "externaldrive.badge.icloud"
             case .missingOriginals:
                 return "doc.badge.exclamationmark"
+            case .missingCurrentDrawingVersion:
+                return "checkmark.rectangle.stack"
             }
         }
 
@@ -118,7 +125,7 @@ struct ProjectDeliveryHealth: Equatable {
             switch self {
             case .missingReceipts:
                 return .finance
-            case .missingDrawings, .missingOriginals:
+            case .missingDrawings, .missingOriginals, .missingCurrentDrawingVersion:
                 return .assets
             case .openTodos:
                 return .records
@@ -133,6 +140,7 @@ struct ProjectDeliveryHealth: Equatable {
     let openTodoCount: Int
     let backupState: ProjectDeliveryBackupState
     let missingOriginalCount: Int
+    let drawingWithoutCurrentCount: Int
 
     var failedIssues: [Issue] {
         Issue.allCases.filter { !isPassed($0) }
@@ -152,7 +160,7 @@ struct ProjectDeliveryHealth: Equatable {
 
     var summary: String {
         if isDeliverable {
-            return String(localized: "票据、图纸、待办、备份和原件检查均已通过。")
+            return String(localized: "票据、图纸、待办、备份、当前版和原件检查均已通过。")
         }
         let titles = failedIssues.map(\.title).joined(separator: "、")
         return String(format: String(localized: "需处理：%@"), titles)
@@ -170,6 +178,8 @@ struct ProjectDeliveryHealth: Equatable {
             return backupState.isFresh
         case .missingOriginals:
             return missingOriginalCount == 0
+        case .missingCurrentDrawingVersion:
+            return drawingWithoutCurrentCount == 0
         }
     }
 
@@ -193,6 +203,10 @@ struct ProjectDeliveryHealth: Equatable {
             return missingOriginalCount == 0
                 ? String(localized: "交付包引用的本机原件均可找到。")
                 : String(format: String(localized: "检测到 %lld 个资料原件缺失。"), Int64(missingOriginalCount))
+        case .missingCurrentDrawingVersion:
+            return drawingWithoutCurrentCount == 0
+                ? String(localized: "所有图纸组均已确认当前版。")
+                : String(format: String(localized: "还有 %lld 组图纸未标记当前版。"), Int64(drawingWithoutCurrentCount))
         }
     }
 }
@@ -257,7 +271,8 @@ struct ProjectDeliveryGuideData {
             drawingCount: drawingCount,
             openTodoCount: openTodoCount,
             backupState: backupState,
-            missingOriginalCount: missingOriginalEntries.count
+            missingOriginalCount: missingOriginalEntries.count,
+            drawingWithoutCurrentCount: drawingWithoutCurrentCount
         )
     }
 
@@ -483,7 +498,7 @@ struct ProjectDeliveryGuideView: View {
     private var readinessDetail: String {
         if data.deliveryHealth.isDeliverable {
             if data.isReadyForDelivery {
-                return String(localized: "票据、图纸、待办、备份和原件检查均已通过，可执行最终交付。")
+                return String(localized: "票据、图纸、待办、备份、当前版和原件检查均已通过，可执行最终交付。")
             }
             return String(
                 format: String(localized: "核心交付项已通过，另有 %lld 项建议检查。"),

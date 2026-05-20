@@ -30,7 +30,11 @@ struct ProjectFileGuideHintStrip: View {
                     .foregroundStyle(.secondary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(isExpanded ? "收起使用提示" : "展开使用提示")
+            .accessibilityLabel(
+                isExpanded
+                    ? String(localized: "project.files.guide.collapse.accessibility")
+                    : String(localized: "project.files.guide.expand.accessibility")
+            )
 
             Button(action: onDismiss) {
                 Image(systemName: "xmark.circle.fill")
@@ -38,7 +42,7 @@ struct ProjectFileGuideHintStrip: View {
                     .foregroundStyle(.tertiary)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("关闭使用提示")
+            .accessibilityLabel(String(localized: "project.files.guide.close.accessibility"))
         }
         .padding(.vertical, 2)
     }
@@ -50,15 +54,27 @@ struct ProjectFileGuidePanel: View {
             ProjectFileGuideIllustration()
 
             VStack(alignment: .leading, spacing: 3) {
-                Text("如何快速找文件")
+                Text(String(localized: "project.files.guide.title"))
                     .font(.subheadline.weight(.semibold))
-                Text("先按项目筛选，再看最近文件，最后进入分类页批量预览与分享。")
+                Text(String(localized: "project.files.guide.subtitle"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            ProjectFileGuideStep(icon: "magnifyingglass", title: "先搜索项目", detail: "顶部搜索支持项目名和地点。")
-            ProjectFileGuideStep(icon: "clock.fill", title: "看最近文件", detail: "最近文件按时间倒序，适合快速回看。")
-            ProjectFileGuideStep(icon: "square.and.arrow.up", title: "点开后可分享", detail: "进入分类后支持预览、分享和打开。")
+            ProjectFileGuideStep(
+                icon: "magnifyingglass",
+                title: String(localized: "project.files.guide.search.title"),
+                detail: String(localized: "project.files.guide.search.detail")
+            )
+            ProjectFileGuideStep(
+                icon: "clock.fill",
+                title: String(localized: "project.files.guide.recent.title"),
+                detail: String(localized: "project.files.guide.recent.detail")
+            )
+            ProjectFileGuideStep(
+                icon: "square.and.arrow.up",
+                title: String(localized: "project.files.guide.share.title"),
+                detail: String(localized: "project.files.guide.share.detail")
+            )
         }
         .padding(.vertical, 2)
     }
@@ -68,8 +84,16 @@ struct ProjectFileCategoryGuidePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ProjectFileCategoryIllustration()
-            ProjectFileGuideStep(icon: "doc.on.doc.fill", title: "分类查看", detail: "图片、图纸原件、票据、附件分开管理。")
-            ProjectFileGuideStep(icon: "eye.fill", title: "轻点预览", detail: "点行内菜单可预览文件并快速分享。")
+            ProjectFileGuideStep(
+                icon: "doc.on.doc.fill",
+                title: String(localized: "project.files.categoryGuide.categories.title"),
+                detail: String(localized: "project.files.categoryGuide.categories.detail")
+            )
+            ProjectFileGuideStep(
+                icon: "eye.fill",
+                title: String(localized: "project.files.categoryGuide.preview.title"),
+                detail: String(localized: "project.files.categoryGuide.preview.detail")
+            )
         }
         .padding(.vertical, 1)
     }
@@ -118,8 +142,8 @@ struct ProjectFileGuideIllustration: View {
                 Spacer(minLength: 0)
 
                 VStack(alignment: .trailing, spacing: 6) {
-                    Label("搜索", systemImage: "magnifyingglass")
-                    Label("预览", systemImage: "eye.fill")
+                    Label(String(localized: "project.files.action.search"), systemImage: "magnifyingglass")
+                    Label(String(localized: "project.files.action.preview"), systemImage: "eye.fill")
                 }
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(Color.appDoc)
@@ -208,8 +232,8 @@ struct ProjectFileHealthFilterSection: View {
     @Binding var selection: ProjectFileHealthFilter
 
     var body: some View {
-        Section("健康筛选") {
-            Picker("健康筛选", selection: $selection) {
+        Section(String(localized: "project.files.healthFilter.section")) {
+            Picker(String(localized: "project.files.healthFilter.section"), selection: $selection) {
                 ForEach(ProjectFileHealthFilter.allCases, id: \.self) { filter in
                     Label(filter.title, systemImage: filter.systemImage)
                         .tag(filter)
@@ -220,7 +244,7 @@ struct ProjectFileHealthFilterSection: View {
                     icon: selection.systemImage,
                     color: selection.tint,
                     title: selection.title,
-                    detail: "仅显示命中该状态的项目或文件。"
+                    detail: String(localized: "project.files.healthFilter.active.detail")
                 )
             }
         }
@@ -265,15 +289,15 @@ struct ProjectFileItemRow: View {
                             .foregroundStyle(status.requiresArchiveAttention ? Color.appWarning : Color.secondary)
                     }
                     if item.isLargeFile {
-                        Text("大文件")
+                        Text(String(localized: "project.files.badge.large"))
                             .foregroundStyle(.appRisk)
                     }
                     if item.hasDocumentLedgerIssues {
-                        Text("台账缺项")
+                        Text(String(localized: "project.files.badge.ledgerIncomplete"))
                             .foregroundStyle(.appWarning)
                     }
                     if !item.exists {
-                        Text("文件缺失")
+                        Text(String(localized: "project.files.badge.missing"))
                             .foregroundStyle(.appRisk)
                     }
                 }
@@ -284,13 +308,13 @@ struct ProjectFileItemRow: View {
             if item.exists {
                 Menu {
                     Button(action: onPreview) {
-                        Label("预览", systemImage: "eye")
+                        Label(String(localized: "project.files.action.preview"), systemImage: "eye")
                     }
                     ShareLink(item: item.url) {
                         Label(
                             item.category == .drawings
-                                ? String(localized: "用外部专业看图软件打开")
-                                : String(localized: "分享/打开"),
+                                ? String(localized: "project.files.action.openExternalViewer")
+                                : String(localized: "project.files.action.shareOpen"),
                             systemImage: "square.and.arrow.up"
                         )
                     }
@@ -298,7 +322,7 @@ struct ProjectFileItemRow: View {
                     Image(systemName: "ellipsis.circle").visibleIconStyle()
                 }
                 .buttonStyle(.appIcon())
-                .accessibilityLabel("预览与分享")
+                .accessibilityLabel(String(localized: "project.files.action.previewShare.accessibility"))
             }
         }
         .contentShape(Rectangle())

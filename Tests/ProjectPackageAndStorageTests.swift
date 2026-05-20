@@ -327,7 +327,8 @@ struct ProjectPackageAndStorageTests {
             drawingCount: 0,
             openTodoCount: 3,
             backupState: backupState,
-            missingOriginalCount: 1
+            missingOriginalCount: 1,
+            drawingWithoutCurrentCount: 1
         )
 
         #expect(health.score == 0)
@@ -351,7 +352,8 @@ struct ProjectPackageAndStorageTests {
             drawingCount: 2,
             openTodoCount: 0,
             backupState: backupState,
-            missingOriginalCount: 0
+            missingOriginalCount: 0,
+            drawingWithoutCurrentCount: 0
         )
 
         #expect(health.score == 100)
@@ -467,6 +469,7 @@ struct ProjectPackageAndStorageTests {
         #expect(readmeText.contains("path\tkind_raw\tkind_display"))
         #expect(readmeText.contains("00-delivery/\(folder)_project_delivery_package.pdf\tproject_delivery_pdf\t"))
         #expect(readmeText.contains("00-delivery/delivery_checklist.txt\tdelivery_checklist\t"))
+        #expect(readmeText.contains("00-delivery/pre_delivery_inspection.tsv\tpre_delivery_inspection\t"))
         #expect(readmeText.contains("00-delivery/document_checklist.tsv\tdocument_checklist\t"))
         #expect(readmeText.contains("document_checklist_missing_categories\t8"))
         let checklistEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/delivery_checklist.txt" })
@@ -479,6 +482,11 @@ struct ProjectPackageAndStorageTests {
         let documentChecklistText = try #require(String(data: documentChecklistEntry.data, encoding: .utf8))
         #expect(documentChecklistText.contains("category_key\tcategory_display\tstatus_raw\tstatus_display\tdocument_count\taction_count\treturned_count\tarchived_count"))
         #expect(documentChecklistText.contains("construction_technical"))
+
+        let inspectionEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/pre_delivery_inspection.tsv" })
+        let inspectionText = try #require(String(data: inspectionEntry.data, encoding: .utf8))
+        #expect(inspectionText.contains("check_key\tcheck_display\tstatus_raw\tstatus_display\tseverity"))
+        #expect(inspectionText.contains("backup_freshness\t未备份\tpassed\t通过\tok"))
     }
 
     @Test func projectPackageOutputsDrawingDeliveryFiles() throws {
@@ -573,6 +581,57 @@ struct ProjectPackageAndStorageTests {
 
         #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(currentDrawing.fileName)" })
         #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(historicalDrawing.fileName)" })
+    }
+
+    @Test func preDeliveryInspectionTSVListsActionableIssues() throws {
+        let project = Project(name: "交付体检", location: "工地", status: .active)
+        let missingDrawing = ProjectDrawing(
+            projectId: project.id,
+            name: "一层平面",
+            fileName: "missing-current-\(UUID().uuidString).pdf",
+            fileType: "pdf",
+            version: "V1",
+            isCurrentVersion: false
+        )
+        let todo = SiteTodo(
+            title: "整改收口",
+            owner: "李工",
+            dueDate: "2026-05-20",
+            priority: .high,
+            issueType: .quality,
+            projectId: project.id
+        )
+        let financialRecord = ProjectFinancialRecord(
+            projectId: project.id,
+            date: "2026-05-19",
+            direction: .expense,
+            category: .material,
+            amount: "1200",
+            counterparty: "材料商"
+        )
+        let backupState = ReportBuilder.ProjectDeliveryPackageBackupState(
+            latestBackupDate: nil,
+            reminderDays: 7,
+            referenceDate: Date()
+        )
+
+        let text = ReportBuilder.projectPreDeliveryInspectionTSVText(
+            project: project,
+            financialRecords: [financialRecord],
+            documents: [],
+            drawings: [missingDrawing],
+            todos: [todo],
+            logs: [],
+            quickNotes: [],
+            backupState: backupState
+        )
+
+        #expect(text.contains("missing_drawing_original\t缺图纸原件\tfailed\t未通过\tblocker\tdrawing"))
+        #expect(text.contains("open_todo\t未结待办\tfailed\t未通过\tblocker\ttodo"))
+        #expect(text.contains("missing_receipt\t缺票据\tfailed\t未通过\twarning\tfinancial_record"))
+        #expect(text.contains("backup_freshness\t未备份\tfailed\t未通过\twarning\tproject"))
+        #expect(text.contains("missing_current_drawing_version\t当前版缺失\tfailed\t未通过\twarning\tdrawing_group"))
+        #expect(text.contains("在图纸台账中确认最终版本"))
     }
 
     @Test func projectPackageAuxiliaryTSVUsesMachineAndDisplayColumns() throws {

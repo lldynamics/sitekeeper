@@ -35,16 +35,7 @@ struct MaterialSheetView: View {
     }
 
     private var activeMaterialSheetDrafts: [MaterialSheetDraft] {
-        store.materialSheetDrafts
-            .filter { !$0.isArchived }
-            .sorted { lhs, rhs in
-                let lhsDate = Formatters.parseDateOrDateTime(lhs.updatedAt) ?? .distantPast
-                let rhsDate = Formatters.parseDateOrDateTime(rhs.updatedAt) ?? .distantPast
-                if lhsDate != rhsDate {
-                    return lhsDate > rhsDate
-                }
-                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-            }
+        MaterialSheetLogicHelpers.activeDrafts(from: store.materialSheetDrafts)
     }
 
     private var activeMaterialSheetDraftIDs: [UUID] {
@@ -52,47 +43,87 @@ struct MaterialSheetView: View {
     }
 
     private var selectedDraft: MaterialSheetDraft? {
-        guard let selectedDraftID else { return nil }
-        return activeMaterialSheetDrafts.first(where: { $0.id == selectedDraftID })
+        MaterialSheetLogicHelpers.selectedDraft(
+            selectedDraftID: selectedDraftID,
+            activeDrafts: activeMaterialSheetDrafts
+        )
     }
 
     private var priceSuggestions: [MaterialPriceEntry] {
-        guard !searchText.isEmpty else { return [] }
-        return Array(SearchMatcher.filter(store.materialPriceEntries, keyword: searchText).prefix(10))
+        MaterialSheetLogicHelpers.priceSuggestions(
+            keyword: searchText,
+            entries: store.materialPriceEntries
+        )
     }
     private var librarySuggestions: [CommonMaterial] {
-        guard !searchText.isEmpty else { return [] }
-        return Array(SearchMatcher.filter(MaterialLibrary.all, keyword: searchText).prefix(10))
+        MaterialSheetLogicHelpers.librarySuggestions(
+            keyword: searchText,
+            materials: MaterialLibrary.all
+        )
     }
     private var hasSearchResults: Bool { !priceSuggestions.isEmpty || !librarySuggestions.isEmpty }
 
+    private var totals: MaterialSheetTotals {
+        MaterialSheetLogicHelpers.totals(for: sheetItems)
+    }
+
     private var totalEstimateValue: MoneyValue {
-        sheetItems.reduce(MoneyValue.zero) { total, item in
-            total + lineTotalValue(for: item)
-        }
+        totals.estimate
     }
     private var totalLaborValue: MoneyValue {
-        sheetItems.reduce(MoneyValue.zero) { total, item in
-            total + MoneyValue(text: item.laborCost)
-        }
+        totals.labor
     }
     private var grandTotalValue: MoneyValue {
-        totalEstimateValue + totalLaborValue
+        totals.grand
     }
     private var totalEstimateText: String {
-        String(format: "¥%.2f", totalEstimateValue.doubleValue)
+        totals.estimateText
     }
     private var totalLaborText: String {
-        String(format: "¥%.2f", totalLaborValue.doubleValue)
+        totals.laborText
     }
     private var grandTotalText: String {
-        String(format: "¥%.2f", grandTotalValue.doubleValue)
+        totals.grandText
     }
 
     var body: some View {
         List {
-            draftSelectorSection
-            materialSearchSection
+            MaterialSheetDraftSelectorSection(
+                activeDrafts: activeMaterialSheetDrafts,
+                selectedDraftID: $selectedDraftID,
+                selectedDraft: selectedDraft,
+                draftDisplayName: { draft in
+                    draftDisplayName(draft)
+                },
+                projectName: { projectId in
+                    projectName(for: projectId)
+                },
+                onCreateDraft: {
+                    prepareCreateDraftSheet()
+                },
+                onFocusMaterialSearch: {
+                    focusMaterialSearch()
+                },
+                onPrepareRenameDraft: {
+                    prepareRenameDraftSheet()
+                },
+                onArchiveSelectedDraft: {
+                    archiveSelectedDraft()
+                }
+            )
+            MaterialSheetSearchSection(
+                searchText: $searchText,
+                isMaterialSearchFocused: $isMaterialSearchFocused,
+                hasSearchResults: hasSearchResults,
+                priceSuggestions: priceSuggestions,
+                librarySuggestions: librarySuggestions,
+                librarySearchRow: { entry in
+                    AnyView(librarySearchRow(entry: entry))
+                },
+                presetSearchRow: { material in
+                    AnyView(presetSearchRow(material: material))
+                }
+            )
 
             // Sheet items
             Section {
@@ -203,8 +234,32 @@ struct MaterialSheetView: View {
                     .padding()
             }
         }
-        .sheet(isPresented: $showCreateDraftSheet) { createDraftSheet }
-        .sheet(isPresented: $showRenameDraftSheet) { renameDraftSheet }
+        .sheet(isPresented: $showCreateDraftSheet) {
+            MaterialSheetCreateDraftSheet(
+                titleInput: $draftTitleInput,
+                projectIdInput: $draftProjectIdInput,
+                projects: store.projects,
+                onCancel: {
+                    showCreateDraftSheet = false
+                },
+                onCreate: {
+                    createDraftAndSelect(title: draftTitleInput, projectId: draftProjectIdInput)
+                    showCreateDraftSheet = false
+                }
+            )
+        }
+        .sheet(isPresented: $showRenameDraftSheet) {
+            MaterialSheetRenameDraftSheet(
+                renameTitleInput: $renameDraftTitleInput,
+                onCancel: {
+                    showRenameDraftSheet = false
+                },
+                onSave: {
+                    renameSelectedDraft(to: renameDraftTitleInput)
+                    showRenameDraftSheet = false
+                }
+            )
+        }
         .alert(String(localized: "清空材料单？"), isPresented: $showClearConfirm) {
             Button(String(localized: "取消"), role: .cancel) {}
             Button(String(localized: "清空"), role: .destructive) {
@@ -283,170 +338,28 @@ struct MaterialSheetView: View {
         }
     }
 
-    private var draftSelectorSection: some View {
-        Section(String(localized: "材料单草稿")) {
-            if activeMaterialSheetDrafts.isEmpty {
-                ContentUnavailableView(
-                    "暂无材料单",
-                    systemImage: "doc.badge.plus",
-                    description: Text(String(localized: "可从材料库点击 + 直接创建，或先在这里新建一个。"))
-                )
-                Button {
-                    prepareCreateDraftSheet()
-                } label: {
-                    Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                }
-                Button {
-                    focusMaterialSearch()
-                } label: {
-                    Label(String(localized: "添加材料"), systemImage: "magnifyingglass")
-                }
-            } else {
-                Picker(String(localized: "当前材料单"), selection: $selectedDraftID) {
-                    ForEach(activeMaterialSheetDrafts) { draft in
-                        Text(draftDisplayName(draft)).tag(draft.id as UUID?)
-                    }
-                }
-                .pickerStyle(.menu)
-
-                if let selectedDraft {
-                    let updatedAt = selectedDraft.updatedAt
-                    let count = selectedDraft.items.count
-                    let projectName = selectedDraft.projectId.flatMap(projectName(for:)) ?? "无归属项目"
-                    Text(String(format: String(localized: "%@ · %d 项 · 更新于 %@"), projectName, count, updatedAt))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    Menu {
-                        Button {
-                            prepareRenameDraftSheet()
-                        } label: {
-                            Label(String(localized: "重命名当前材料单"), systemImage: "pencil")
-                        }
-                        Button(role: .destructive) {
-                            archiveSelectedDraft()
-                        } label: {
-                            Label(String(localized: "归档当前材料单"), systemImage: "archivebox")
-                        }
-                    } label: {
-                        Label(String(localized: "管理当前材料单"), systemImage: "ellipsis.circle")
-                    }
-                }
-
-                Button {
-                    prepareCreateDraftSheet()
-                } label: {
-                    Label(String(localized: "新建材料单"), systemImage: "plus")
-                }
-                Button {
-                    focusMaterialSearch()
-                } label: {
-                    Label(String(localized: "添加材料"), systemImage: "magnifyingglass")
-                }
-            }
-        }
-    }
-
-    private var materialSearchSection: some View {
-        Section(String(localized: "添加材料")) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(String(localized: "搜索材料库"), text: $searchText)
-                    .submitLabel(.search)
-                    .focused($isMaterialSearchFocused)
-            }
-            if !searchText.isEmpty {
-                if !hasSearchResults {
-                    ContentUnavailableView(
-                        "材料库没有匹配项",
-                        systemImage: "shippingbox",
-                        description: Text(String(localized: "请先到材料库新增自定义材料，再加入材料单。"))
-                    )
-                }
-                ForEach(priceSuggestions) { librarySearchRow(entry: $0) }
-                ForEach(librarySuggestions) { presetSearchRow(material: $0) }
-            }
-        }
-    }
-
-    private var createDraftSheet: some View {
-        NavigationStack {
-            Form {
-                Section(String(localized: "基本信息")) {
-                    TextField(String(localized: "材料单名称"), text: $draftTitleInput)
-                    Picker(String(localized: "归属项目"), selection: $draftProjectIdInput) {
-                        Text(String(localized: "无归属")).tag(nil as UUID?)
-                        ForEach(store.projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("新建材料单")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) {
-                        showCreateDraftSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "创建")) {
-                        createDraftAndSelect(title: draftTitleInput, projectId: draftProjectIdInput)
-                        showCreateDraftSheet = false
-                    }
-                }
-            }
-        }
-    }
-
-    private var renameDraftSheet: some View {
-        NavigationStack {
-            Form {
-                Section(String(localized: "材料单名称")) {
-                    TextField(String(localized: "材料单名称"), text: $renameDraftTitleInput)
-                }
-            }
-            .navigationTitle("重命名材料单")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) {
-                        showRenameDraftSheet = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        renameSelectedDraft(to: renameDraftTitleInput)
-                        showRenameDraftSheet = false
-                    }
-                }
-            }
-        }
-    }
-
     private func draftDisplayName(_ draft: MaterialSheetDraft) -> String {
-        let title = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "未命名材料单" : title
+        MaterialSheetLogicHelpers.draftDisplayName(draft)
     }
 
     private func projectName(for projectId: UUID) -> String? {
-        store.projects.first(where: { $0.id == projectId })?.name
+        MaterialSheetLogicHelpers.projectName(for: projectId, projects: store.projects)
     }
 
     private func defaultDraftTitle(projectId: UUID?) -> String {
-        if let projectId,
-           let projectName = projectName(for: projectId),
-           !projectName.isEmpty {
-            return "\(projectName)-材料单"
-        }
-        return "材料单-\(Formatters.date.string(from: Date()))"
+        MaterialSheetLogicHelpers.defaultDraftTitle(
+            projectId: projectId,
+            projects: store.projects
+        )
     }
 
     private func prepareCreateDraftSheet() {
-        draftProjectIdInput = selectedDraft?.projectId
-        draftTitleInput = defaultDraftTitle(projectId: draftProjectIdInput)
+        let input = MaterialSheetLogicHelpers.createDraftSheetInput(
+            selectedDraft: selectedDraft,
+            projects: store.projects
+        )
+        draftProjectIdInput = input.projectID
+        draftTitleInput = input.title
         showCreateDraftSheet = true
     }
 
@@ -457,72 +370,63 @@ struct MaterialSheetView: View {
     }
 
     private func createDraftAndSelect(title: String, projectId: UUID?) {
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedTitle = normalizedTitle.isEmpty ? defaultDraftTitle(projectId: projectId) : normalizedTitle
-        let now = Formatters.now()
-        let newDraft = MaterialSheetDraft(
-            title: resolvedTitle,
+        let newDraft = MaterialSheetLogicHelpers.makeDraft(
+            title: title,
             projectId: projectId,
-            exportProjectName: projectId.flatMap(projectName(for:)) ?? "",
-            items: [],
-            createdAt: now,
-            updatedAt: now
+            projects: store.projects,
+            now: Formatters.now(),
+            items: []
         )
-        var drafts = store.materialSheetDrafts
-        drafts.insert(newDraft, at: 0)
-        store.replaceMaterialSheetDrafts(drafts)
+        store.replaceMaterialSheetDrafts(
+            MaterialSheetLogicHelpers.insertingDraftAtTop(newDraft, drafts: store.materialSheetDrafts)
+        )
         store.scheduleSave()
         selectedDraftID = newDraft.id
     }
 
     private func renameSelectedDraft(to title: String) {
-        guard let selectedDraftID,
-              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
-            return
-        }
-        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedTitle.isEmpty else { return }
-        var drafts = store.materialSheetDrafts
-        drafts[index].title = normalizedTitle
-        drafts[index].updatedAt = Formatters.now()
+        guard let drafts = MaterialSheetLogicHelpers.renamedDrafts(
+            selectedDraftID: selectedDraftID,
+            title: title,
+            drafts: store.materialSheetDrafts,
+            now: Formatters.now()
+        ) else { return }
         store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
     }
 
     private func archiveSelectedDraft() {
-        guard let selectedDraftID,
-              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
-            return
-        }
-        let draft = store.materialSheetDrafts[index]
-        let previousDrafts = store.materialSheetDrafts
-        let previousSelectedDraftID = selectedDraftID
-        var drafts = store.materialSheetDrafts
-        drafts[index].isArchived = true
-        drafts[index].updatedAt = Formatters.now()
-        store.replaceMaterialSheetDrafts(drafts)
+        guard let context = MaterialSheetLogicHelpers.archiveContext(
+            selectedDraftID: selectedDraftID,
+            drafts: store.materialSheetDrafts,
+            now: Formatters.now()
+        ) else { return }
+        store.replaceMaterialSheetDrafts(context.updatedDrafts)
         store.scheduleSave()
 
         undoableDeletion.queue(
             notice: $operationNotice,
-            message: String(format: String(localized: "已归档材料单「%@」"), draftDisplayName(draft)),
+            message: String(
+                format: String(localized: "已归档材料单「%@」"),
+                draftDisplayName(context.archivedDraft)
+            ),
             undoMessage: String(localized: "已恢复材料单草稿"),
             commit: {
                 store.scheduleSave()
             },
             undo: {
                 store.replaceMaterialSheetDrafts(UndoableDeletionCoordinator.restoringItems(
-                    snapshot: previousDrafts,
+                    snapshot: context.previousDrafts,
                     current: store.materialSheetDrafts,
-                    deletedIDs: Set([draft.id])
+                    deletedIDs: Set([context.archivedDraft.id])
                 ))
-                self.selectedDraftID = previousSelectedDraftID
+                self.selectedDraftID = context.previousSelectedDraftID
                 loadSelectedDraftIntoEditor()
                 store.scheduleSave()
             },
             audit: UndoableDeletionAuditContext(
                 summary: String(localized: "归档材料单草稿"),
-                detail: draftDisplayName(draft),
+                detail: draftDisplayName(context.archivedDraft),
                 source: "MaterialSheetView"
             )
         )
@@ -541,25 +445,22 @@ struct MaterialSheetView: View {
             isApplyingDraftState = false
             return
         }
-        if let selectedDraftID,
-           activeMaterialSheetDraftIDs.contains(selectedDraftID) {
-            return
-        }
-        self.selectedDraftID = activeMaterialSheetDrafts.first?.id
+        selectedDraftID = MaterialSheetLogicHelpers.resolvedSelectedDraftID(
+            currentSelectedDraftID: selectedDraftID,
+            activeDraftIDs: activeMaterialSheetDraftIDs
+        )
     }
 
     private func loadSelectedDraftIntoEditor() {
         guard let selectedDraft else { return }
+        let editorState = MaterialSheetLogicHelpers.draftEditorState(
+            draft: selectedDraft,
+            projects: store.projects
+        )
         isApplyingDraftState = true
-        sheetItems = selectedDraft.items.map(MaterialSheetItem.init(draftItem:))
-        if selectedDraft.exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-           let projectId = selectedDraft.projectId,
-           let projectName = projectName(for: projectId) {
-            exportProjectName = projectName
-        } else {
-            exportProjectName = selectedDraft.exportProjectName
-        }
-        exportPreparer = selectedDraft.exportPreparer
+        sheetItems = editorState.sheetItems
+        exportProjectName = editorState.exportProjectName
+        exportPreparer = editorState.exportPreparer
         itemExpanded.removeAll()
         rowPhotoSelections.removeAll()
         pendingDeleteSheetItemIDs.removeAll()
@@ -568,16 +469,15 @@ struct MaterialSheetView: View {
 
     private func persistCurrentDraft() {
         guard !isApplyingDraftState,
-              let selectedDraftID,
-              let index = store.materialSheetDrafts.firstIndex(where: { $0.id == selectedDraftID }) else {
-            return
-        }
-        var drafts = store.materialSheetDrafts
-        drafts[index].items = sheetItems.map(\.draftItem)
-        drafts[index].exportProjectName = exportProjectName.trimmingCharacters(in: .whitespacesAndNewlines)
-        drafts[index].exportPreparer = exportPreparer.trimmingCharacters(in: .whitespacesAndNewlines)
-        drafts[index].exportDate = Formatters.date.string(from: Date())
-        drafts[index].updatedAt = Formatters.now()
+              let drafts = MaterialSheetLogicHelpers.persistingDrafts(
+                selectedDraftID: selectedDraftID,
+                drafts: store.materialSheetDrafts,
+                sheetItems: sheetItems,
+                exportProjectName: exportProjectName,
+                exportPreparer: exportPreparer,
+                exportDate: Formatters.date.string(from: Date()),
+                now: Formatters.now()
+              ) else { return }
         store.replaceMaterialSheetDrafts(drafts)
         store.scheduleSave()
     }
@@ -619,107 +519,27 @@ struct MaterialSheetView: View {
     // MARK: - Item Row
 
     private func materialItemRow(_ item: Binding<MaterialSheetItem>) -> some View {
-        let isExpanded = itemExpanded.contains(item.wrappedValue.id)
-        return VStack(spacing: 0) {
-            // Compact header row
-            Button { toggleExpand(item.wrappedValue.id) } label: {
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(item.wrappedValue.name).font(.body.weight(.medium)).foregroundStyle(.primary)
-                        if !item.wrappedValue.specification.isEmpty {
-                            Text(item.wrappedValue.specification).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    Spacer()
-                    HStack(spacing: 6) {
-                        Text(item.wrappedValue.quantity).font(.callout.weight(.semibold)).foregroundStyle(Color.appPrimaryAction)
-                        Text(item.wrappedValue.unit).font(.caption).foregroundStyle(.secondary)
-                    }
-                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2).foregroundStyle(.tertiary)
-                }
+        let itemID = item.wrappedValue.id
+        let isExpanded = itemExpanded.contains(itemID)
+        return MaterialSheetEditableItemRow(
+            item: item,
+            isExpanded: isExpanded,
+            accessibilityLabel: MaterialSheetLogicHelpers.materialItemAccessibilityLabel(
+                item.wrappedValue,
+                isExpanded: isExpanded
+            ),
+            photoSelection: photoSelectionBinding(for: itemID),
+            suggestedPrice: MaterialSheetLogicHelpers.suggestedUnitPrice(
+                for: item.wrappedValue,
+                entries: store.materialPriceEntries
+            ),
+            onToggleExpand: {
+                toggleExpand(itemID)
+            },
+            onDelete: {
+                requestDeleteSheetItems(ids: [itemID])
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel(materialItemAccessibilityLabel(item.wrappedValue, isExpanded: isExpanded))
-            .accessibilityHint(isExpanded ? "双击收起编辑项" : "双击展开编辑项")
-
-            // Expanded detail
-            if isExpanded {
-                Divider().padding(.vertical, 6)
-                VStack(spacing: 8) {
-                    // Price + Labor row
-                    HStack(spacing: 10) {
-                        TextField(String(localized: "估价 ¥"), text: item.unitPrice).keyboardType(.decimalPad)
-                            .frame(width: 100).textFieldStyle(.roundedBorder).font(.callout)
-                        autoFillButton(for: item)
-                        TextField(String(localized: "人工费 ¥"), text: item.laborCost).keyboardType(.decimalPad)
-                            .frame(width: 100).textFieldStyle(.roundedBorder).font(.callout)
-                        Spacer()
-                    }
-
-                    // Supplier + Location
-                    HStack(spacing: 10) {
-                        TextField(String(localized: "供应商"), text: item.supplier)
-                            .textFieldStyle(.roundedBorder).font(.callout)
-                        TextField(String(localized: "使用部位"), text: item.usageLocation)
-                            .textFieldStyle(.roundedBorder).font(.callout)
-                    }
-
-                    // Note
-                    HStack(spacing: 10) {
-                        TextField(String(localized: "备注"), text: item.note)
-                            .textFieldStyle(.roundedBorder).font(.callout)
-                    }
-
-                    // Attachment
-                    HStack(spacing: 8) {
-                        PhotosPicker(selection: photoSelectionBinding(for: item.wrappedValue.id), maxSelectionCount: 1, matching: .images) {
-                            Label(item.wrappedValue.hasAttachment ? "已添加照片" : "添加照片",
-                                  systemImage: item.wrappedValue.hasAttachment ? "photo.fill" : "photo.badge.plus")
-                                .font(.caption)
-                        }
-                        .buttonStyle(.bordered).controlSize(.small)
-                        .accessibilityLabel(String(format: String(localized: "%@添加或更换照片"), item.wrappedValue.name))
-
-                        if item.wrappedValue.hasAttachment {
-                            Text(item.wrappedValue.attachmentFileName ?? "附件")
-                                .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
-                            Button {
-                                item.wrappedValue.attachmentData = nil
-                                item.wrappedValue.attachmentFileName = nil
-                            } label: {
-                                Image(systemName: "xmark.circle.fill").font(.caption).foregroundStyle(.secondary)
-                            }
-                            .buttonStyle(.borderless)
-                            .accessibilityLabel(String(format: String(localized: "移除%@照片"), item.wrappedValue.name))
-                        }
-                        Spacer()
-                    }
-
-                    // Delete
-                    HStack {
-                        Spacer()
-                        Button(role: .destructive) {
-                            requestDeleteSheetItems(ids: [item.wrappedValue.id])
-                        } label: {
-                            Label(String(localized: "删除此项"), systemImage: "trash").font(.caption)
-                        }
-                        .buttonStyle(.borderless)
-                        .accessibilityLabel(String(format: String(localized: "删除%@"), item.wrappedValue.name))
-                    }
-                }
-            }
-        }
-        .padding(.vertical, 6)
-    }
-
-    private func materialItemAccessibilityLabel(_ item: MaterialSheetItem, isExpanded: Bool) -> String {
-        var parts = [item.name]
-        if !item.specification.isEmpty { parts.append("规格 \(item.specification)") }
-        parts.append("数量 \(item.quantity)\(item.unit)")
-        if !item.unitPrice.isEmpty { parts.append("估价 \(item.unitPrice) 元") }
-        parts.append(isExpanded ? "已展开" : "已收起")
-        return parts.joined(separator: "，")
+        )
     }
 
     private func toggleExpand(_ id: UUID) {
@@ -728,7 +548,7 @@ struct MaterialSheetView: View {
     }
 
     private func requestDeleteSheetItems(ids: [UUID]) {
-        let normalizedIDs = Set(ids)
+        let normalizedIDs = MaterialSheetLogicHelpers.normalizedDeleteIDs(ids)
         guard !normalizedIDs.isEmpty else { return }
         pendingDeleteSheetItemIDs = normalizedIDs
         showDeleteItemConfirm = true
@@ -737,7 +557,7 @@ struct MaterialSheetView: View {
     private func confirmDeleteSheetItems() {
         let ids = pendingDeleteSheetItemIDs
         guard !ids.isEmpty else { return }
-        let count = sheetItems.filter { ids.contains($0.id) }.count
+        let count = MaterialSheetLogicHelpers.deletedItemCount(ids: ids, sheetItems: sheetItems)
         queueSheetItemDeletion(
             ids: ids,
             message: String(format: String(localized: "已删除 %lld 项材料单项目"), Int64(count)),
@@ -796,32 +616,7 @@ struct MaterialSheetView: View {
     }
 
     private func materialSheetItemAuditDetail(_ items: [MaterialSheetItem]) -> String {
-        ListFormatter.localizedString(
-            byJoining: items.map { item in
-                let name = item.name.trimmingCharacters(in: .whitespacesAndNewlines)
-                let specification = item.specification.trimmingCharacters(in: .whitespacesAndNewlines)
-                if name.isEmpty { return String(localized: "未命名材料") }
-                return specification.isEmpty ? name : "\(name) \(specification)"
-            }
-        )
-    }
-
-    @ViewBuilder
-    private func autoFillButton(for item: Binding<MaterialSheetItem>) -> some View {
-        let name = item.wrappedValue.name
-        let spec = item.wrappedValue.specification
-        let match = store.materialPriceEntries.first { e in
-            e.name.localizedCaseInsensitiveContains(name) && (spec.isEmpty || e.specification.localizedCaseInsensitiveContains(spec))
-        }
-        let price = match?.referencePrice ?? ""
-        if !price.isEmpty, price != item.wrappedValue.unitPrice {
-            Button { item.wrappedValue.unitPrice = price } label: {
-                Text("¥\(price)").font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 6).padding(.vertical, 3)
-                    .background(Color.appPrimarySurfaceSubtle, in: Capsule()).foregroundStyle(Color.appPrimaryAction)
-            }
-            .buttonStyle(.borderless)
-        }
+        MaterialSheetLogicHelpers.materialSheetItemAuditDetail(items)
     }
 
     // MARK: - Search Rows
@@ -876,10 +671,6 @@ struct MaterialSheetView: View {
         isMaterialSearchFocused = true
     }
 
-    private func lineTotalValue(for item: MaterialSheetItem) -> MoneyValue {
-        QuantityValue(text: item.quantity) * MoneyValue(text: item.unitPrice)
-    }
-
     private func addToSheet(name: String, spec: String, unit: String, price: String = "") {
         let newItem = MaterialSheetItem(
             name: name, specification: spec, unit: unit,
@@ -909,13 +700,7 @@ struct MaterialSheetView: View {
     private func saveToMaterialList() {
         let projectId = selectedDraft?.projectId
         for item in sheetItems {
-            let q = item.quantity.trimmingCharacters(in: .whitespacesAndNewlines)
-            let finalQty: String
-            if QuantityValue(text: q).isPositive {
-                finalQty = q
-            } else {
-                finalQty = "1"
-            }
+            let finalQty = MaterialSheetLogicHelpers.normalizedMaterialListQuantity(item.quantity)
             let price = item.unitPrice.trimmingCharacters(in: .whitespacesAndNewlines)
             store.appendMaterialItem(MaterialItem(
                 name: item.name, quantity: finalQty,
