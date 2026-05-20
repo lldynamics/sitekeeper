@@ -13,6 +13,7 @@
 		021C67C19338BF8D610C3C1A /* CalculatorTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6EA9C71AA55008F5E9FE24F0 /* CalculatorTabView.swift */; };
 		031AE5458E3DECE8BD387949 /* ConstructionMethodTutorialEditorSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = F67BC4AD630568878D87F705 /* ConstructionMethodTutorialEditorSections.swift */; };
 		049AF3E26BEEA71938C14ADB /* StorageCleanupCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D01229C310BF30CD7D5BC49 /* StorageCleanupCenterView.swift */; };
+		06277A4461525B6654AA9A72 /* DashboardRiskDataProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 21EF4F76F3249C051451B6B8 /* DashboardRiskDataProvider.swift */; };
 		06764CCD2443108030F6FBF4 /* QuickNoteComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F6EB15CA31C31A6F07770B1E /* QuickNoteComposerView.swift */; };
 		077FC492077CB4BB1E383D31 /* ProjectDetailSubpageSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E3EE0F41C369597A7EF38A7 /* ProjectDetailSubpageSupport.swift */; };
 		083555F981911E17E54A9710 /* DataStore+ProjectRecordQuickNoteOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93DD15B0BCEBD10DCF98D6B9 /* DataStore+ProjectRecordQuickNoteOps.swift */; };
@@ -410,6 +411,7 @@
 		1F76D16BAAA588C3C6C5B21F /* QuickNoteDrawingSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteDrawingSheet.swift; sourceTree = "<group>"; };
 		1FC354B87853988B0DB16EFC /* DataStore+FinanceState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+FinanceState.swift"; sourceTree = "<group>"; };
 		2160350B1ECABF4523316109 /* ReportBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportBuilder.swift; sourceTree = "<group>"; };
+		21EF4F76F3249C051451B6B8 /* DashboardRiskDataProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardRiskDataProvider.swift; sourceTree = "<group>"; };
 		2463B432CFB59269EBFD300C /* BackupArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupArchiveService.swift; sourceTree = "<group>"; };
 		2553DDEAB8BAEC14C2A500EC /* DataStore+RuntimeInfo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+RuntimeInfo.swift"; sourceTree = "<group>"; };
 		255544AD5ECB041CBCD9532A /* DataStore+ProjectRecordOpsShared.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+ProjectRecordOpsShared.swift"; sourceTree = "<group>"; };
@@ -1190,6 +1192,7 @@
 				0E4BDFEDAF2A0AB171A2E5AD /* DashboardCardViews.swift */,
 				4979E4F17DC5A6EB4044A53D /* DashboardDataProvider.swift */,
 				2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */,
+				21EF4F76F3249C051451B6B8 /* DashboardRiskDataProvider.swift */,
 				BD27E55A07E5EFA317299CC5 /* DashboardSupportViews.swift */,
 				760AA521D532102AF50F99C0 /* DashboardView.swift */,
 				BB59CEBE7ADADAB3DA34B206 /* MaterialPriceSpikeDetailView.swift */,
@@ -1436,6 +1439,7 @@
 				F4249E0028EAFCD0CAC2E119 /* DashboardCardViews.swift in Sources */,
 				635B6829FECE84BE5867060E /* DashboardDataProvider.swift in Sources */,
 				B6B5F87595A1CD02B44DD660 /* DashboardPanelViews.swift in Sources */,
+				06277A4461525B6654AA9A72 /* DashboardRiskDataProvider.swift in Sources */,
 				0E62B274696A6A0FB200BBA8 /* DashboardSupportViews.swift in Sources */,
 				138FA28720F9675E91A7B210 /* DashboardView.swift in Sources */,
 				86DA3A1020565419EB19AADB /* DataHealthSupport.swift in Sources */,
