@@ -2,6 +2,9 @@ import SwiftUI
 
 struct MaterialLibraryView: View {
     @Environment(DataStore.self) private var store
+    @Environment(MaterialLibraryStore.self) private var materialLibraryStore
+    @Environment(ProjectStore.self) private var projectStore
+    @Environment(UserPreferenceStore.self) private var userPreferenceStore
     @State private var categoryState = MaterialLibraryCategoryState()
     @State private var priceFilter: MaterialPriceFilter = .all
     @State private var searchText = ""
@@ -21,13 +24,22 @@ struct MaterialLibraryView: View {
     @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) private var lastAppendDraftIDRaw = ""
     @AppStorage(UserPreferenceKeys.materialLibraryLastProjectID) private var lastAppendProjectIDRaw = ""
 
+    private var materialPriceEntries: [MaterialPriceEntry] { materialLibraryStore.materialPriceEntries }
+    private var userMaterials: [UserMaterial] { materialLibraryStore.userMaterials }
+    private var deletedUserMaterials: [UserMaterial] { materialLibraryStore.deletedUserMaterials }
+    private var supplierProfiles: [SupplierProfile] { materialLibraryStore.supplierProfiles }
+    private var materialSheetDrafts: [MaterialSheetDraft] { materialLibraryStore.materialSheetDrafts }
+    private var recentMaterialKeys: [String] { userPreferenceStore.recentMaterialKeys }
+    private var hiddenPresetKeys: Set<String> { userPreferenceStore.hiddenPresetKeys }
+    private var projects: [Project] { projectStore.projects }
+
     private var visiblePresetMaterials: [CommonMaterial] {
         MaterialLibrary.all.filter { !isPresetHidden($0) }
     }
 
     private var priceEntryByKey: [String: MaterialPriceEntry] {
         var map: [String: MaterialPriceEntry] = [:]
-        for entry in store.materialPriceEntries {
+        for entry in materialPriceEntries {
             let key = materialKey(name: entry.name, specification: entry.specification, unit: entry.unit)
             if map[key] == nil {
                 map[key] = entry
@@ -64,7 +76,7 @@ struct MaterialLibraryView: View {
     }
 
     private var filteredUser: [UserMaterial] {
-        store.userMaterials.filter { item in
+        userMaterials.filter { item in
             if let cat = categoryState.selectedCategory, normalizedCategory(item.category) != cat {
                 return false
             }
@@ -86,7 +98,7 @@ struct MaterialLibraryView: View {
         let preset = MaterialCategory.allCases.map(\.rawValue)
         let presetSet = Set(preset)
         let dynamic = Set(
-            (store.userMaterials.map(\.category) + store.materialPriceEntries.map(\.category))
+            (userMaterials.map(\.category) + materialPriceEntries.map(\.category))
                 .map(normalizedCategory)
                 .filter { !$0.isEmpty }
         )
@@ -95,13 +107,13 @@ struct MaterialLibraryView: View {
     }
 
     private var recentMaterials: [RecentMaterialItem] {
-        store.recentMaterialKeys.prefix(5).compactMap { key in
+        recentMaterialKeys.prefix(5).compactMap { key in
             if let preset = MaterialLibrary.all.first(where: {
                 materialKey($0) == key || legacyMaterialKey($0) == key
             }) {
                 return RecentMaterialItem(key: key, source: .preset(preset))
             }
-            if let userMaterial = store.userMaterials.first(where: {
+            if let userMaterial = userMaterials.first(where: {
                 let normalized = materialKey(name: $0.name, specification: $0.specification, unit: $0.unit)
                 let legacy = legacyMaterialKey(name: $0.name, specification: $0.specification, unit: $0.unit)
                 return normalized == key || legacy == key
@@ -113,7 +125,7 @@ struct MaterialLibraryView: View {
     }
 
     private var showRecycleBin: Bool {
-        !store.deletedUserMaterials.isEmpty || !store.hiddenPresetKeys.isEmpty
+        !deletedUserMaterials.isEmpty || !hiddenPresetKeys.isEmpty
     }
 
     private var selectedBatchMaterialContexts: [PendingMaterialAppendContext] {
@@ -162,8 +174,8 @@ struct MaterialLibraryView: View {
                 filteredUser: filteredUser,
                 filteredPreset: filteredPreset,
                 showRecycleBin: showRecycleBin,
-                hiddenPresetKeys: Array(store.hiddenPresetKeys),
-                deletedUserMaterials: store.deletedUserMaterials,
+                hiddenPresetKeys: Array(hiddenPresetKeys),
+                deletedUserMaterials: deletedUserMaterials,
                 onSelectRecentSearch: { term in
                     searchText = term
                 },
@@ -221,7 +233,7 @@ struct MaterialLibraryView: View {
                 suggestedCategories: availableCategories
             ) { material, price in
                 let key = materialKey(name: material.name, specification: material.specification, unit: material.unit)
-                if !store.userMaterials.contains(where: { materialKey(name: $0.name, specification: $0.specification, unit: $0.unit) == key }) {
+                if !userMaterials.contains(where: { materialKey(name: $0.name, specification: $0.specification, unit: $0.unit) == key }) {
                     store.appendUserMaterial(material)
                 }
                 if !price.isEmpty {
@@ -248,7 +260,7 @@ struct MaterialLibraryView: View {
         .sheet(item: $priceEditorContext) { context in
             MaterialPriceEditSheet(
                 entry: context.entry,
-                suppliers: store.supplierProfiles,
+                suppliers: supplierProfiles,
                 initialName: context.name,
                 initialSpecification: context.specification,
                 initialUnit: context.unit,
@@ -270,9 +282,9 @@ struct MaterialLibraryView: View {
             MaterialLibraryAppendToSheetModal(
                 context: context,
                 activeMaterialSheetDrafts: activeMaterialSheetDrafts,
-                projects: store.projects,
+                projects: projects,
                 draftPickerTitle: { draft in
-                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: store.projects)
+                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
                 },
                 quantity: $appendState.pendingAddQuantity,
                 unitPrice: $appendState.pendingAddUnitPrice,
@@ -306,9 +318,9 @@ struct MaterialLibraryView: View {
             MaterialLibraryBatchAppendSheet(
                 context: context,
                 activeMaterialSheetDrafts: activeMaterialSheetDrafts,
-                projects: store.projects,
+                projects: projects,
                 draftPickerTitle: { draft in
-                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: store.projects)
+                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
                 },
                 quantity: $batchState.pendingBatchAddQuantity,
                 targetMode: $appendState.pendingAddTargetMode,
@@ -421,10 +433,10 @@ struct MaterialLibraryView: View {
             draft: defaultTargetMaterialSheetDraft,
             activeDrafts: activeMaterialSheetDrafts,
             draftTitle: { draft in
-                MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: store.projects)
+                MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
             },
             projectName: { projectID in
-                MaterialLibraryLogicHelpers.projectName(for: projectID, projects: store.projects)
+                MaterialLibraryLogicHelpers.projectName(for: projectID, projects: projects)
             },
             recentlyAddedSummary: { draft in
                 MaterialLibraryLogicHelpers.recentlyAddedSummary(
@@ -584,7 +596,7 @@ struct MaterialLibraryView: View {
         applyDefaultAppendTarget()
         appendState.pendingAddDraftTitle = MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
             projectId: appendState.pendingAddProjectId,
-            projects: store.projects
+            projects: projects
         )
         batchState.pendingBatchAddContext = PendingBatchMaterialAppendContext(materials: contexts)
     }
@@ -630,7 +642,7 @@ struct MaterialLibraryView: View {
         applyDefaultAppendTarget()
         appendState.pendingAddDraftTitle = MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
             projectId: appendState.pendingAddProjectId,
-            projects: store.projects
+            projects: projects
         )
     }
 
@@ -668,8 +680,8 @@ struct MaterialLibraryView: View {
             targetDraftID: appendState.pendingAddDraftId,
             targetProjectID: appendState.pendingAddProjectId,
             draftTitleInput: appendState.pendingAddDraftTitle,
-            drafts: store.materialSheetDrafts,
-            projects: store.projects,
+            drafts: materialSheetDrafts,
+            projects: projects,
             now: Formatters.now(),
             unitPriceResolver: unitPriceResolver
         )
@@ -723,7 +735,7 @@ struct MaterialLibraryView: View {
     }
 
     private var activeMaterialSheetDrafts: [MaterialSheetDraft] {
-        MaterialLibraryLogicHelpers.activeMaterialSheetDrafts(from: store.materialSheetDrafts)
+        MaterialLibraryLogicHelpers.activeMaterialSheetDrafts(from: materialSheetDrafts)
     }
 
     private func applyDefaultAppendTarget() {
@@ -738,7 +750,7 @@ struct MaterialLibraryView: View {
             lastDraftIDRaw: lastAppendDraftIDRaw,
             lastProjectIDRaw: lastAppendProjectIDRaw,
             activeDrafts: activeMaterialSheetDrafts,
-            projects: store.projects
+            projects: projects
         )
         appendState.pendingAddTargetMode = target.mode
         appendState.pendingAddDraftId = target.draftID
@@ -759,7 +771,7 @@ struct MaterialLibraryView: View {
         let newDraft = MaterialSheetDraft(
             title: MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
                 projectId: nil,
-                projects: store.projects
+                projects: projects
             ),
             items: [],
             createdAt: now,
@@ -787,14 +799,14 @@ struct MaterialLibraryView: View {
     private func appendRecentMaterialKey(_ key: String) {
         store.recentMaterialKeys = MaterialLibraryLogicHelpers.appendingRecentMaterialKey(
             key,
-            to: store.recentMaterialKeys
+            to: recentMaterialKeys
         )
     }
 
     private func removeRecentKey(_ key: String) {
         store.recentMaterialKeys = MaterialLibraryLogicHelpers.removingRecentMaterialKey(
             key,
-            from: store.recentMaterialKeys
+            from: recentMaterialKeys
         )
         store.scheduleSave()
     }
@@ -860,7 +872,7 @@ struct MaterialLibraryView: View {
     }
 
     private func isPresetHidden(_ item: CommonMaterial) -> Bool {
-        MaterialLibraryLogicHelpers.isPresetHidden(item, hiddenPresetKeys: store.hiddenPresetKeys)
+        MaterialLibraryLogicHelpers.isPresetHidden(item, hiddenPresetKeys: hiddenPresetKeys)
     }
 
     private func normalizedCategory(_ value: String) -> String {

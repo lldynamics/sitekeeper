@@ -101,14 +101,19 @@ struct ProjectDocumentDeliveryInspection: Identifiable {
     var id: UUID { project.id }
 
     @MainActor
-    init(project: Project, store: DataStore) {
+    init(project: Project, projectStore: ProjectStore) {
         self.init(
             project: project,
-            documents: store.projectDocuments.filter { $0.projectId == project.id },
-            drawings: store.projectDrawings.filter { $0.projectId == project.id },
-            logs: store.dailyLogs.filter { $0.projectId == project.id },
-            quickNotes: store.quickNotes.filter { $0.projectId == project.id }
+            documents: projectStore.projectDocuments(for: project.id),
+            drawings: projectStore.projectDrawings(for: project.id),
+            logs: projectStore.dailyLogs(for: project.id),
+            quickNotes: projectStore.quickNotes(for: project.id)
         )
+    }
+
+    @MainActor
+    init(project: Project, store: DataStore) {
+        self.init(project: project, projectStore: store.projectStore)
     }
 
     init(

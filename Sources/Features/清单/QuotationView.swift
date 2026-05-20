@@ -17,24 +17,7 @@ struct QuotationView: View {
         case discountRate
     }
 
-    private enum QuotationExportFormat: String, CaseIterable, Identifiable {
-        case pdf
-        case excel
-
-        var id: String { rawValue }
-
-        var displayName: String {
-            switch self {
-            case .pdf:
-                return "PDF"
-            case .excel:
-                return String(localized: "Excel 表格")
-            }
-        }
-    }
-
     @Environment(DataStore.self) private var store
-    @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.companyName) private var companyName = ""
     @AppStorage(UserPreferenceKeys.companyPhone) private var companyPhone = ""
     @AppStorage(UserPreferenceKeys.companyAddress) private var companyAddress = ""
@@ -69,11 +52,9 @@ struct QuotationView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var showQuoteExportSheet = false
-    @State private var showCompanyInfoPrompt = false
     @State private var quoteCustomerName = ""
     @State private var quoteProjectAddress = ""
     @State private var quoteSignerName = String(localized: "项目负责人")
-    @State private var quoteExportFormat: QuotationExportFormat = .pdf
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
     @FocusState private var quoteFormFocusedField: QuoteFormField?
@@ -257,11 +238,6 @@ struct QuotationView: View {
                     AppHaptics.error()
                 }
             }
-        }
-        .alert(String(localized: "先填写公司信息"), isPresented: $showCompanyInfoPrompt) {
-            Button(String(localized: "知道了"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "请先填写公司名称、电话和地址。导出的报价单会使用这些信息。"))
         }
         .onAppear(perform: openFocusedQuoteIfNeeded)
         .onDisappear {
@@ -630,28 +606,6 @@ struct QuotationView: View {
         showExporter = true
     }
 
-    private func exportQuotationExcel() {
-        let meta = quotationDocumentMeta()
-        let data = ReportBuilder.makeQuotationExcelHTML(
-            title: String(localized: "报价单"),
-            items: filtered,
-            projects: store.projects,
-            meta: meta
-        )
-        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "报价单表格.xls"))
-        AppHaptics.impact(.light)
-        showExporter = true
-    }
-
-    private func performQuotationExport() {
-        switch quoteExportFormat {
-        case .pdf:
-            exportQuotationPDF()
-        case .excel:
-            exportQuotationExcel()
-        }
-    }
-
     private func quotationDocumentMeta() -> QuotationDocumentMeta {
         let validUntil = Formatters.date.string(
             from: Calendar.current.date(byAdding: .day, value: max(1, quoteValidityDays), to: Date()) ?? Date()
@@ -692,25 +646,17 @@ struct QuotationView: View {
                             .foregroundStyle(.appWarning)
                     }
                 }
-                Section(String(localized: "导出格式")) {
-                    Picker(String(localized: "格式"), selection: $quoteExportFormat) {
-                        ForEach(QuotationExportFormat.allCases) { format in
-                            Text(format.displayName).tag(format)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                }
                 Section {
-                    Button(String(format: String(localized: "导出%@"), quoteExportFormat.displayName)) {
+                    Button(String(localized: "导出 PDF")) {
                         showQuoteExportSheet = false
-                        performQuotationExport()
+                        exportQuotationPDF()
                     }
                     .frame(maxWidth: .infinity)
                     .fontWeight(.semibold)
-                    .disabled(filtered.isEmpty || (quoteExportFormat == .pdf && !isCompanyProfileComplete))
+                    .disabled(filtered.isEmpty || !isCompanyProfileComplete)
                 }
             }
-            .navigationTitle(String(localized: "报价单模板"))
+            .navigationTitle(String(localized: "导出报价单"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -726,9 +672,6 @@ struct QuotationView: View {
         }
         if quoteSignerName.isEmpty {
             quoteSignerName = String(localized: "项目负责人")
-        }
-        if !isCompanyProfileComplete {
-            showCompanyInfoPrompt = true
         }
         showQuoteExportSheet = true
     }

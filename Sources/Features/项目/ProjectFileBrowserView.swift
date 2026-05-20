@@ -2,7 +2,7 @@ import SwiftUI
 import QuickLook
 
 struct ProjectFileBrowserView: View {
-    @Environment(DataStore.self) private var store
+    @Environment(ProjectStore.self) private var projectStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var searchText = ""
     @State private var debouncedSearchText = ""
@@ -35,7 +35,7 @@ struct ProjectFileBrowserView: View {
 
     private var searchMatchedProjects: [Project] {
         SearchMatcher.filter(
-            store.projects,
+            projectStore.projects,
             keyword: normalizedQuery,
             sort: { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
         )
@@ -49,7 +49,7 @@ struct ProjectFileBrowserView: View {
 
     private var visibleDeliveryInspections: [ProjectDocumentDeliveryInspection] {
         searchMatchedProjects
-            .map { ProjectDocumentDeliveryInspection(project: $0, store: store) }
+            .map { ProjectDocumentDeliveryInspection(project: $0, projectStore: projectStore) }
             .sorted { left, right in
                 if left.isReadyForDelivery != right.isReadyForDelivery {
                     return !left.isReadyForDelivery
@@ -74,13 +74,13 @@ struct ProjectFileBrowserView: View {
     private var fileSearchDataSignature: Int {
         var hasher = Hasher()
 
-        for project in store.projects {
+        for project in projectStore.projects {
             hasher.combine(project.id)
             hasher.combine(project.name)
             hasher.combine(project.location)
         }
 
-        for log in store.dailyLogs {
+        for log in projectStore.dailyLogs {
             hasher.combine(log.id)
             hasher.combine(log.projectId)
             hasher.combine(log.date)
@@ -92,7 +92,7 @@ struct ProjectFileBrowserView: View {
             }
         }
 
-        for todo in store.siteTodos {
+        for todo in projectStore.siteTodos {
             hasher.combine(todo.id)
             hasher.combine(todo.projectId)
             hasher.combine(todo.title)
@@ -102,7 +102,7 @@ struct ProjectFileBrowserView: View {
             hasher.combine(todo.rectificationAfterPhotoFileName)
         }
 
-        for drawing in store.projectDrawings {
+        for drawing in projectStore.projectDrawings {
             hasher.combine(drawing.id)
             hasher.combine(drawing.projectId)
             hasher.combine(drawing.name)
@@ -112,7 +112,7 @@ struct ProjectFileBrowserView: View {
             hasher.combine(drawing.note)
         }
 
-        for document in store.projectDocuments {
+        for document in projectStore.projectDocuments {
             hasher.combine(document.id)
             hasher.combine(document.projectId)
             hasher.combine(document.title)
@@ -128,7 +128,7 @@ struct ProjectFileBrowserView: View {
             hasher.combine(document.linkedFinancialRecordId)
         }
 
-        for note in store.quickNotes {
+        for note in projectStore.quickNotes {
             hasher.combine(note.id)
             hasher.combine(note.projectId)
             hasher.combine(note.title)
@@ -149,9 +149,9 @@ struct ProjectFileBrowserView: View {
     private func collectAllFileSearchResults() -> [ProjectFileSearchResult] {
         var results: [ProjectFileSearchResult] = []
 
-        for project in store.projects {
+        for project in projectStore.projects {
             for category in ProjectFileCategory.allCases {
-                let items = ProjectFileCollector.items(for: project.id, category: category, store: store)
+                let items = ProjectFileCollector.items(for: project.id, category: category, projectStore: projectStore)
                 for item in items {
                     results.append(ProjectFileSearchResult(project: project, item: item))
                 }
@@ -249,12 +249,12 @@ struct ProjectFileBrowserView: View {
 
     private var selectedProject: Project? {
         guard let selectedProjectId else { return nil }
-        return store.projects.first { $0.id == selectedProjectId }
+        return projectStore.projects.first { $0.id == selectedProjectId }
     }
 
     private var splitCategoryItems: [ProjectFileItem] {
         guard let selectedProjectId else { return [] }
-        return ProjectFileCollector.items(for: selectedProjectId, category: selectedCategory, store: store)
+        return ProjectFileCollector.items(for: selectedProjectId, category: selectedCategory, projectStore: projectStore)
             .filter { healthFilter.matches($0) }
     }
 
@@ -448,7 +448,7 @@ struct ProjectFileBrowserView: View {
     ) -> ProjectFileCategory {
         guard issue.kind == .missingFiles else { return .documents }
         return ProjectFileCategory.allCases.first { category in
-            ProjectFileCollector.items(for: inspection.project.id, category: category, store: store)
+            ProjectFileCollector.items(for: inspection.project.id, category: category, projectStore: projectStore)
                 .contains { !$0.exists }
         } ?? .documents
     }
@@ -569,7 +569,7 @@ struct ProjectFileBrowserView: View {
             } else {
                 Section(String(localized: "项目")) {
                     ForEach(filteredProjects) { project in
-                        let summary = ProjectFileSummary(projectId: project.id, store: store)
+                        let summary = ProjectFileSummary(projectId: project.id, projectStore: projectStore)
                         NavigationLink {
                             ProjectFileCategoryView(project: project)
                         } label: {
@@ -637,7 +637,7 @@ struct ProjectFileBrowserView: View {
                             .foregroundStyle(.secondary)
                     } else {
                         ForEach(filteredProjects) { project in
-                            let summary = ProjectFileSummary(projectId: project.id, store: store)
+                            let summary = ProjectFileSummary(projectId: project.id, projectStore: projectStore)
                             let isSelected = selectedProjectId == project.id
                             Button {
                                 selectedProjectId = project.id
@@ -670,7 +670,7 @@ struct ProjectFileBrowserView: View {
 
                     Section(String(localized: "文件分类")) {
                         ForEach(ProjectFileCategory.allCases, id: \.self) { category in
-                            let count = ProjectFileSummary(projectId: selectedProject.id, store: store).count(for: category)
+                            let count = ProjectFileSummary(projectId: selectedProject.id, projectStore: projectStore).count(for: category)
                             Button {
                                 selectedCategory = category
                                 syncSplitSelectionIfNeeded()
@@ -814,7 +814,7 @@ struct ProjectFileBrowserView: View {
     }
 
     private func projectMatchesHealthFilter(_ project: Project) -> Bool {
-        ProjectFileCollector.allItems(for: project.id, store: store).contains {
+        ProjectFileCollector.allItems(for: project.id, projectStore: projectStore).contains {
             healthFilter.matches($0)
         }
     }
