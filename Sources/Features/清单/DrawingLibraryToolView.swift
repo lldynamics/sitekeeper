@@ -7,6 +7,7 @@ struct DrawingLibraryToolView: View {
     @State private var selectedProjectID: UUID?
     @State private var quickLookURL: URL?
     @State private var shareURL: URL?
+    @State private var shareDrawingID: UUID?
     @State private var operationMessage: String?
     @State private var showDrawingImporter = false
     @State private var pendingImportURLs: [URL] = []
@@ -15,6 +16,7 @@ struct DrawingLibraryToolView: View {
     @State private var pendingImportConflictNames: [String] = []
     @State private var showImportStrategyDialog = false
     @State private var searchText = ""
+    @State private var availabilityFilter: DrawingAvailabilityFilter = .all
     @State private var showHistoricalDrawings = false
     @AppStorage(UserPreferenceKeys.drawingLibraryRecentDrawingIDs) private var recentDrawingIDsRaw = ""
 
@@ -32,60 +34,19 @@ struct DrawingLibraryToolView: View {
         return types
     }()
 
-    private var sortedDrawings: [ProjectDrawing] {
-        store.projectDrawings
-            .filter(isSupportedDrawing)
-            .sorted { lhs, rhs in
-                let left = Formatters.parseDateOrDateTime(lhs.importedAt) ?? .distantPast
-                let right = Formatters.parseDateOrDateTime(rhs.importedAt) ?? .distantPast
-                if left != right {
-                    return left > right
-                }
-                return lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
-            }
-    }
-
-    private var filteredDrawings: [ProjectDrawing] {
-        let scoped = selectedProjectID.map { projectId in
-            sortedDrawings.filter { $0.projectId == projectId }
-        } ?? sortedDrawings
-        guard !normalizedSearchText.isEmpty else { return scoped }
-        return scoped.filter(matchesSearch(_:))
-    }
-
-    private var normalizedSearchText: String {
-        searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var currentFilteredDrawings: [ProjectDrawing] {
-        filteredDrawings.filter(\.isCurrentVersion)
-    }
-
-    private var historicalFilteredDrawings: [ProjectDrawing] {
-        filteredDrawings.filter { !$0.isCurrentVersion }
-    }
-
-    private var recentDrawingIDs: [UUID] {
-        recentDrawingIDsRaw
-            .split(separator: "\n")
-            .compactMap { UUID(uuidString: String($0)) }
-    }
-
-    private var recentDrawings: [ProjectDrawing] {
-        recentDrawingIDs.compactMap { id in
-            sortedDrawings.first(where: { $0.id == id })
-        }
+    private var listModel: DrawingListViewModel {
+        DrawingListViewModel(
+            projects: store.projects,
+            drawings: store.projectDrawings,
+            selectedProjectID: selectedProjectID,
+            searchText: searchText,
+            recentDrawingIDs: DrawingListViewModel.recentDrawingIDs(from: recentDrawingIDsRaw),
+            availabilityFilter: availabilityFilter
+        )
     }
 
     private var importStrategyMessage: String {
-        guard !pendingImportConflictNames.isEmpty else {
-            return "检测到同名图纸，请选择导入策略。"
-        }
-        let preview = pendingImportConflictNames.prefix(3).joined(separator: "、")
-        if pendingImportConflictNames.count > 3 {
-            return "检测到同名图纸：\(preview) 等 \(pendingImportConflictNames.count) 项，请选择导入策略。"
-        }
-        return "检测到同名图纸：\(preview)，请选择导入策略。"
+        DrawingImportCoordinator.importStrategyMessage(for: pendingImportConflictNames)
     }
 
     private var shareSheetPresented: Binding<Bool> {
@@ -94,6 +55,7 @@ struct DrawingLibraryToolView: View {
             set: { isPresented in
                 if !isPresented {
                     shareURL = nil
+                    shareDrawingID = nil
                 }
             }
         )
@@ -101,20 +63,20 @@ struct DrawingLibraryToolView: View {
 
     var body: some View {
         List {
-            Section("项目筛选") {
-                Picker("查看范围", selection: $selectedProjectID) {
-                    Text("全部项目").tag(nil as UUID?)
+            Section(String(localized: "项目筛选")) {
+                Picker(String(localized: "查看范围"), selection: $selectedProjectID) {
+                    Text(String(localized: "全部项目")).tag(nil as UUID?)
                     ForEach(store.projects) { project in
                         Text(project.name).tag(project.id as UUID?)
                     }
                 }
             }
 
-            Section("快速查找") {
+            Section(String(localized: "快速查找")) {
                 HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
-                    TextField("搜索名称、图号、专业、楼层、项目", text: $searchText)
+                    TextField(String(localized: "搜索名称、图号、专业、楼层、项目"), text: $searchText)
                         .textInputAutocapitalization(.never)
                         .disableAutocorrection(true)
                     if !searchText.isEmpty {
@@ -125,43 +87,76 @@ struct DrawingLibraryToolView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel("清空搜索")
+                        .accessibilityLabel(String(localized: "清空搜索"))
                     }
                 }
-                if !normalizedSearchText.isEmpty {
-                    Text("匹配 \(filteredDrawings.count) 张图纸")
+                if !listModel.normalizedSearchText.isEmpty {
+                    Text(String(format: String(localized: "匹配 %lld 张图纸"), Int64(listModel.filteredDrawings.count)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
 
-            if !recentDrawings.isEmpty {
-                Section("最近打开") {
-                    ForEach(recentDrawings.prefix(3)) { drawing in
+            Section(String(localized: "状态筛选")) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        ForEach(DrawingAvailabilityFilter.allCases) { filter in
+                            DrawingAvailabilityFilterChip(
+                                filter: filter,
+                                count: listModel.count(for: filter),
+                                isSelected: availabilityFilter == filter
+                            ) {
+                                availabilityFilter = filter
+                            }
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                if let summary = listModel.filteredResultSummary {
+                    Text(summary)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Button {
+                    scanDrawingFileAvailability()
+                } label: {
+                    Label(String(localized: "扫描原件状态"), systemImage: "checkmark.folder.fill")
+                }
+            }
+
+            if !listModel.recentDrawings.isEmpty {
+                Section(String(localized: "最近打开")) {
+                    ForEach(listModel.recentDrawings.prefix(3)) { drawing in
                         drawingRow(drawing, showsProject: selectedProjectID == nil)
                     }
                 }
             }
 
-            Section(selectedProjectID == nil ? "图纸台账" : "项目图纸") {
-                if filteredDrawings.isEmpty {
+            Section(selectedProjectID == nil ? String(localized: "图纸台账") : String(localized: "项目图纸")) {
+                if listModel.filteredDrawings.isEmpty {
                     ContentUnavailableView(
-                        "暂无图纸",
+                        String(localized: "暂无图纸"),
                         systemImage: "doc.viewfinder",
-                        description: Text("先导入 DWG / DXF / PDF 图纸原件，后续按项目、版本和当前版管理。")
+                        description: Text(String(localized: "先导入 DWG / DXF / PDF 图纸原件，后续按项目、版本和当前版管理。"))
                     )
                 } else {
-                    ForEach(currentFilteredDrawings) { drawing in
+                    ForEach(listModel.currentFilteredDrawings) { drawing in
                         drawingRow(drawing, showsProject: selectedProjectID == nil)
                     }
-                    if !historicalFilteredDrawings.isEmpty {
+                    if !listModel.historicalFilteredDrawings.isEmpty {
                         Button {
                             withAnimation(.easeInOut(duration: 0.2)) {
                                 showHistoricalDrawings.toggle()
                             }
                         } label: {
                             HStack {
-                                Label("历史版本 (\(historicalFilteredDrawings.count))", systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90")
+                                Label(
+                                    String(
+                                        format: String(localized: "历史版本 (%lld)"),
+                                        Int64(listModel.historicalFilteredDrawings.count)
+                                    ),
+                                    systemImage: "clock.arrow.trianglehead.counterclockwise.rotate.90"
+                                )
                                 Spacer()
                                 Image(systemName: showHistoricalDrawings ? "chevron.up" : "chevron.down")
                                     .font(.caption2.weight(.semibold))
@@ -170,7 +165,7 @@ struct DrawingLibraryToolView: View {
                         }
                         .buttonStyle(.plain)
                         if showHistoricalDrawings {
-                            ForEach(historicalFilteredDrawings) { drawing in
+                            ForEach(listModel.historicalFilteredDrawings) { drawing in
                                 drawingRow(drawing, showsProject: selectedProjectID == nil)
                             }
                         }
@@ -178,7 +173,7 @@ struct DrawingLibraryToolView: View {
                 }
             }
         }
-        .navigationTitle("图纸管理")
+        .navigationTitle(String(localized: "图纸管理"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -187,7 +182,7 @@ struct DrawingLibraryToolView: View {
                 } label: {
                     Image(systemName: "plus").visibleIconStyle()
                 }
-                .accessibilityLabel("导入图纸")
+                .accessibilityLabel(String(localized: "导入图纸"))
             }
         }
         .fileImporter(
@@ -199,29 +194,31 @@ struct DrawingLibraryToolView: View {
             case .success(let urls):
                 handleImportedDrawings(urls)
             case .failure(let error):
-                StorageIssueLog.record("图纸管理导入失败：\(error.localizedDescription)")
-                operationMessage = "图纸导入失败：\(error.localizedDescription)"
+                StorageIssueLog.record(
+                    String(format: String(localized: "图纸管理导入失败：%@"), error.localizedDescription)
+                )
+                operationMessage = String(format: String(localized: "图纸导入失败：%@"), error.localizedDescription)
             }
         }
-        .confirmationDialog("选择导入项目", isPresented: $showImportProjectPicker, titleVisibility: .visible) {
+        .confirmationDialog(String(localized: "选择导入项目"), isPresented: $showImportProjectPicker, titleVisibility: .visible) {
             ForEach(store.projects) { project in
                 Button(project.name) {
                     prepareImportDrawings(pendingImportURLs, projectId: project.id)
                 }
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingImportURLs.removeAll()
             }
         } message: {
-            Text("请选择图纸归属的项目。")
+            Text(String(localized: "请选择图纸归属的项目。"))
         }
-        .confirmationDialog("同名图纸导入策略", isPresented: $showImportStrategyDialog, titleVisibility: .visible) {
+        .confirmationDialog(String(localized: "同名图纸导入策略"), isPresented: $showImportStrategyDialog, titleVisibility: .visible) {
             ForEach(ProjectDrawingImportStrategy.allCases) { strategy in
                 Button(strategy.displayName) {
                     applyImportStrategy(strategy)
                 }
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 clearImportStrategyState()
             }
         } message: {
@@ -230,8 +227,14 @@ struct DrawingLibraryToolView: View {
         .quickLookPreview($quickLookURL)
         .sheet(isPresented: shareSheetPresented) {
             if let shareURL {
-                ActivityShareSheet(activityItems: [shareURL], onComplete: { _ in
+                ActivityShareSheet(activityItems: [shareURL], onComplete: { completed in
+                    ProjectDetailAssetActions.recordDrawingExternalOpenResult(
+                        completed: completed,
+                        drawingID: shareDrawingID,
+                        store: store
+                    )
                     self.shareURL = nil
+                    self.shareDrawingID = nil
                 })
             }
         }
@@ -239,69 +242,39 @@ struct DrawingLibraryToolView: View {
     }
 
     private func drawingRow(_ drawing: ProjectDrawing, showsProject: Bool) -> some View {
-        Button {
+        DrawingRow(
+            drawing: drawing,
+            projectName: showsProject ? listModel.projectName(for: drawing.projectId) : nil
+        ) {
             openDrawing(drawing)
-        } label: {
-            HStack(alignment: .center, spacing: AppSpacing.normal) {
-                Image(systemName: icon(for: drawing))
-                    .font(.title3)
-                    .foregroundStyle(Color.appDoc)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 4) {
-                    HStack(spacing: 6) {
-                        Text(drawing.name.isEmpty ? drawing.fileName : drawing.name)
-                            .font(.body.weight(.medium))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        if drawing.isCurrentVersion {
-                            Text("当前版")
-                                .font(.caption2.weight(.semibold))
-                                .foregroundStyle(Color.appSuccess)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(Color.appSuccess.opacity(0.12), in: Capsule())
-                        }
-                    }
-                    Text(detailText(for: drawing, showsProject: showsProject))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                    let status = openStatus(for: drawing)
-                    if let statusText = status.text {
-                        Text(statusText)
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(status.isReady ? Color.appSuccess : Color.appWarning)
-                    }
-                }
-                Spacer(minLength: AppSpacing.tight)
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("用专业看图软件打开 \(drawing.name.isEmpty ? drawing.fileName : drawing.name)")
     }
 
     private func openDrawing(_ drawing: ProjectDrawing) {
-        switch ProjectDetailAssetActions.previewDrawingURL(for: drawing) {
+        switch ProjectDetailAssetActions.previewDrawingURL(for: drawing, store: store) {
         case .success(let url):
             recordRecentDrawing(drawing.id)
             if drawing.fileType.lowercased() == "pdf" {
                 quickLookURL = url
             } else {
+                shareDrawingID = drawing.id
                 shareURL = url
             }
         case .failure(let message):
-            StorageIssueLog.record("图纸原件打开失败：\(drawing.name.isEmpty ? drawing.fileName : drawing.name)，\(message)")
+            StorageIssueLog.record(
+                String(
+                    format: String(localized: "图纸原件打开失败：%@，%@"),
+                    drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                    message
+                )
+            )
             operationMessage = message
         }
     }
 
     private func beginImportDrawings() {
         guard !store.projects.isEmpty else {
-            operationMessage = "请先创建项目，再导入图纸。"
+            operationMessage = String(localized: "请先创建项目，再导入图纸。")
             return
         }
         showDrawingImporter = true
@@ -326,8 +299,7 @@ struct DrawingLibraryToolView: View {
         pendingImportProjectID = nil
         pendingImportConflictNames.removeAll()
         showImportStrategyDialog = false
-        let projectDrawings = store.projectDrawings.filter { $0.projectId == projectId }
-        let conflicts = ProjectDetailDrawingHelper.conflictedDrawingNames(for: urls, in: projectDrawings)
+        let conflicts = DrawingImportCoordinator.conflictedDrawingNames(for: urls, projectId: projectId, store: store)
         guard !conflicts.isEmpty else {
             pendingImportURLs.removeAll()
             performImportDrawings(urls, projectId: projectId, strategy: .createNewVersion)
@@ -355,202 +327,100 @@ struct DrawingLibraryToolView: View {
     }
 
     private func performImportDrawings(_ urls: [URL], projectId: UUID, strategy: ProjectDrawingImportStrategy) {
-        var importedCount = 0
-        var replacedCount = 0
-        var failedNames: [String] = []
-        var currentDrawings = store.projectDrawings.filter { $0.projectId == projectId }
-
-        func importDrawing(_ drawing: ProjectDrawing) {
-            var versioned = drawing
-            let resolved = ProjectDetailDrawingHelper.resolvedImportMetadata(
-                for: drawing,
-                in: currentDrawings,
-                strategy: strategy
-            )
-            versioned.version = resolved.version
-            versioned.isCurrentVersion = resolved.isCurrentVersion
-
-            if let replacement = resolved.replacement {
-                store.removeProjectDrawings(
-                    ids: Set([replacement.id]),
-                    deferredFileCleanup: DataStoreDeferredFileCleanup.drawingFiles(
-                        [replacement.fileName],
-                        summary: "drawingLibrary.importReplacement"
-                    ),
-                    recordsAuditImmediately: true
-                )
-                currentDrawings.removeAll { $0.id == replacement.id }
-                replacedCount += 1
-            }
-
-            if strategy == .createNewVersion && versioned.isCurrentVersion {
-                ProjectDetailAssetActions.updateCurrentVersionFlags(for: versioned, store: store)
-                for index in currentDrawings.indices where currentDrawings[index].projectId == versioned.projectId {
-                    if ProjectDetailDrawingHelper.normalizedDrawingNameKey(currentDrawings[index].name) ==
-                        ProjectDetailDrawingHelper.normalizedDrawingNameKey(versioned.name),
-                       currentDrawings[index].id != versioned.id {
-                        currentDrawings[index].isCurrentVersion = false
-                    }
-                }
-            }
-            store.appendProjectDrawing(versioned)
-            currentDrawings.append(versioned)
-            importedCount += 1
-        }
-
-        for url in urls {
-            if url.pathExtension.lowercased() == "zip" {
-                do {
-                    var hasDrawingEntries = false
-                    try SimpleZipArchiveReader.scan(fileURL: url) { entry, readData, _ in
-                        let ext = (entry.path as NSString).pathExtension.lowercased()
-                        guard ProjectDrawing.allowedFileExtensions.contains(ext) else { return }
-                        hasDrawingEntries = true
-                        do {
-                            let entryData = try readData()
-                            var drawing = try DrawingStorage.saveImportedDataOrThrow(
-                                data: entryData,
-                                sourceFileName: entry.path,
-                                projectId: projectId
-                            )
-                            drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
-                            importDrawing(drawing)
-                        } catch {
-                            StorageIssueLog.record("图纸 ZIP 导入失败：\(entry.path)，\(error.localizedDescription)")
-                            failedNames.append("\(entry.path)（\(error.localizedDescription)）")
-                        }
-                    }
-                    if !hasDrawingEntries {
-                        failedNames.append("\(url.lastPathComponent)（ZIP 内没有可导入的图纸）")
-                    }
-                } catch {
-                    StorageIssueLog.record("图纸 ZIP 读取失败：\(url.lastPathComponent)，\(error.localizedDescription)")
-                    failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
-                }
-                continue
-            }
-
-            do {
-                let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
-                importDrawing(drawing)
-            } catch {
-                StorageIssueLog.record("图纸导入失败：\(url.lastPathComponent)，\(error.localizedDescription)")
-                failedNames.append("\(url.lastPathComponent)（\(error.localizedDescription)）")
-            }
-        }
-
-        if importedCount > 0 {
+        let result = DrawingImportCoordinator.importDrawings(
+            urls,
+            projectId: projectId,
+            strategy: strategy,
+            store: store,
+            replacementCleanupSummary: "drawingLibrary.importReplacement"
+        )
+        if result.didImport {
             selectedProjectID = projectId
             store.scheduleSave()
         }
-        let previewHint = ""
+        operationMessage = result.operationMessage
+    }
 
-        if importedCount > 0, failedNames.isEmpty {
-            let replaceHint = replacedCount > 0 ? "，替换 \(replacedCount) 份同格式旧文件" : ""
-            operationMessage = "已导入 \(importedCount) 份图纸\(previewHint)"
-            if !replaceHint.isEmpty {
-                operationMessage = "已导入 \(importedCount) 份图纸\(replaceHint)\(previewHint)"
+    private func scanDrawingFileAvailability() {
+        let drawings = listModel.scannableDrawings
+        guard !drawings.isEmpty else {
+            operationMessage = String(localized: "没有可扫描的图纸原件。")
+            return
+        }
+
+        let now = Formatters.now()
+        var availableCount = 0
+        var missingCount = 0
+        var didChange = false
+
+        for drawing in drawings {
+            let exists = DrawingStorage.exists(fileName: drawing.fileName)
+            let status: ProjectDrawingFileAvailabilityStatus = exists ? .available : .missing
+            if exists {
+                availableCount += 1
+            } else {
+                missingCount += 1
             }
-            return
+
+            store.mutateProjectDrawing(id: drawing.id) { item in
+                if item.fileAvailabilityStatus != status {
+                    item.fileAvailabilityStatus = status
+                    didChange = true
+                }
+                if item.fileAvailabilityCheckedAt != now {
+                    item.fileAvailabilityCheckedAt = now
+                    didChange = true
+                }
+            }
         }
-        if importedCount > 0, !failedNames.isEmpty {
-            let replaceHint = replacedCount > 0 ? "，已替换 \(replacedCount) 份同格式旧文件" : ""
-            operationMessage = "已导入 \(importedCount) 份，\(failedNames.count) 份失败\(replaceHint)\(previewHint)"
-            return
+
+        if didChange {
+            store.scheduleSave()
         }
-        operationMessage = "没有可导入的图纸文件，请选择 DWG / DXF / PDF / ZIP。"
+        if missingCount > 0 {
+            availabilityFilter = .missing
+        }
+        operationMessage = String(
+            format: String(localized: "已扫描 %lld 张图纸：可用 %lld，缺失 %lld"),
+            Int64(drawings.count),
+            Int64(availableCount),
+            Int64(missingCount)
+        )
     }
 
     private func recordRecentDrawing(_ drawingID: UUID) {
-        var ids = recentDrawingIDs
-        ids.removeAll { $0 == drawingID }
-        ids.insert(drawingID, at: 0)
-        recentDrawingIDsRaw = ids.prefix(12).map(\.uuidString).joined(separator: "\n")
+        recentDrawingIDsRaw = DrawingListViewModel.rawRecentDrawingIDs(recording: drawingID, in: recentDrawingIDsRaw)
     }
+}
 
-    private func detailText(for drawing: ProjectDrawing, showsProject: Bool) -> String {
-        var parts = [String]()
-        if showsProject {
-            parts.append(projectName(for: drawing.projectId))
-        }
-        if !drawing.drawingNumber.isEmpty {
-            parts.append("图号 \(drawing.drawingNumber)")
-        }
-        if !drawing.discipline.isEmpty {
-            parts.append(drawing.discipline)
-        }
-        if !drawing.floorArea.isEmpty {
-            parts.append(drawing.floorArea)
-        }
-        parts.append(drawing.version)
-        if !drawing.issuedAt.isEmpty {
-            parts.append("出图 \(drawing.issuedAt)")
-        }
-        if !drawing.receiver.isEmpty {
-            parts.append("接收 \(drawing.receiver)")
-        }
-        parts.append(drawing.fileType.uppercased())
-        if !drawing.importedAt.isEmpty {
-            parts.append("导入 \(drawing.importedAt)")
-        }
-        let linkCount = drawing.linkedTodoIDs.count + drawing.linkedLogIDs.count + drawing.linkedDocumentIDs.count
-        if linkCount > 0 {
-            parts.append("关联 \(linkCount)")
-        }
-        return parts.joined(separator: " · ")
-    }
+private struct DrawingAvailabilityFilterChip: View {
+    let filter: DrawingAvailabilityFilter
+    let count: Int
+    let isSelected: Bool
+    let action: () -> Void
 
-    private func projectName(for projectID: UUID) -> String {
-        store.projects.first(where: { $0.id == projectID })?.name ?? "未知项目"
-    }
-
-    private func matchesSearch(_ drawing: ProjectDrawing) -> Bool {
-        let query = normalizedSearchText.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-        let fields = [
-            drawing.name,
-            drawing.drawingNumber,
-            drawing.discipline,
-            drawing.floorArea,
-            drawing.fileName,
-            drawing.version,
-            drawing.issuedAt,
-            drawing.receiver,
-            drawing.fileType,
-            drawing.issueStatus.displayName,
-            drawing.issueNote,
-            drawing.note,
-            projectName(for: drawing.projectId),
-            ProjectDetailDrawingHelper.zipEntryPath(for: drawing) ?? "",
-            ProjectDetailDrawingHelper.zipFolderPath(for: drawing) ?? ""
-        ]
-        return fields.contains { value in
-            value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current).contains(query)
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                Image(systemName: filter.icon)
+                Text(filter.title)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(isSelected ? .white : .primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(isSelected ? Color.appDoc : Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
         }
-    }
-
-    private func isSupportedDrawing(_ drawing: ProjectDrawing) -> Bool {
-        ProjectDrawing.allowedFileExtensions.contains(drawing.fileType.lowercased())
-    }
-
-    private func icon(for drawing: ProjectDrawing) -> String {
-        switch drawing.fileType.lowercased() {
-        case "pdf":
-            return "doc.richtext.fill"
-        case "dwg", "dxf":
-            return "compass.drawing"
-        default:
-            return "doc.viewfinder"
-        }
-    }
-
-    private func openStatus(for drawing: ProjectDrawing) -> (text: String?, isReady: Bool) {
-        let fileType = drawing.fileType.lowercased()
-        if fileType == "pdf" {
-            return ("PDF 可预览", true)
-        }
-        if ProjectDetailDrawingHelper.isCADSource(fileType) {
-            return ("用专业看图软件打开", true)
-        }
-        return ("文件独立打开", true)
+        .buttonStyle(.plain)
+        .accessibilityLabel(
+            String(
+                format: String(localized: "%@，%lld 张图纸"),
+                filter.title,
+                Int64(count)
+            )
+        )
     }
 }

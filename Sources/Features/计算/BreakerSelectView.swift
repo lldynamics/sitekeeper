@@ -3,13 +3,13 @@ import SwiftUI
 struct BreakerSelectView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.Calculator.breakerCurrent) private var calcCurrent = ""
-    @AppStorage(UserPreferenceKeys.Calculator.breakerLoadType) private var loadTypeRawValue: String = LoadType.lighting.rawValue
+    @AppStorage(UserPreferenceKeys.Calculator.breakerLoadType) private var loadTypeRawValue: String = LoadType.socket.rawValue
     @State private var result = ""
     @State private var resultModel: CalculationResult?
     @FocusState private var isInputFocused: Bool
 
     private var loadType: LoadType {
-        StringEnumFallback.value(loadTypeRawValue, default: LoadType.lighting)
+        StringEnumFallback.value(loadTypeRawValue, default: LoadType.socket)
     }
 
     var body: some View {
@@ -39,7 +39,7 @@ struct BreakerSelectView: View {
                 }
             }
             Section(String(localized: "选型参考")) {
-                Text(String(localized: "• 照明回路: 额定电流 × 1.0\n• 插座回路: 额定电流 × 1.25\n• 动力回路: 额定电流 × 1.5"))
+                Text(String(localized: "• 插座回路: 额定电流 × 1.25\n• 动力回路: 额定电流 × 1.5"))
                     .font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -134,17 +134,15 @@ struct BreakerSelectView: View {
 }
 
 enum LoadType: String, CaseIterable {
-    case lighting
     case socket
     case power
 
     var displayName: String {
         switch self {
-        case .lighting: String(localized: "照明")
         case .socket: String(localized: "插座")
         case .power: String(localized: "动力")
         }
     }
-    var factor: Double { switch self { case .lighting: 1.0; case .socket: 1.25; case .power: 1.5 } }
-    var poles: String { switch self { case .lighting, .socket: "1P+N"; case .power: "3P" } }
+    var factor: Double { switch self { case .socket: 1.25; case .power: 1.5 } }
+    var poles: String { switch self { case .socket: "1P+N"; case .power: "3P" } }
 }

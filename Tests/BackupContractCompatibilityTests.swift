@@ -4,15 +4,39 @@ import Foundation
 
 @MainActor
 struct BackupContractCompatibilityTests {
-    @Test func legacyBackupImportIgnoresPaymentRecordsAndKeepsDrawingReference() throws {
-        let projectID = UUID()
-        let drawingID = UUID()
+    @Test func legacyBackupWithoutSchemaVersionIsRejected() throws {
         let legacyJSON = """
         {
           "projects": [
             {
-              "id": "\(projectID.uuidString)",
+              "id": "\(UUID().uuidString)",
               "name": "旧备份项目",
+              "status": "进行中"
+            }
+          ],
+          "paymentRecords": []
+        }
+        """
+
+        do {
+            _ = try JSONDecoder().decode(BackupSnapshot.self, from: Data(legacyJSON.utf8))
+            Issue.record("预期应拒绝缺少 schemaVersion 的旧备份")
+        } catch is DecodingError {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
+    @Test func currentBackupIgnoresRemovedPaymentRecordsAndKeepsDrawingReference() throws {
+        let projectID = UUID()
+        let drawingID = UUID()
+        let currentJSON = """
+        {
+          "schemaVersion": 2,
+          "projects": [
+            {
+              "id": "\(projectID.uuidString)",
+              "name": "当前备份项目",
               "status": "进行中"
             }
           ],
@@ -20,8 +44,8 @@ struct BackupContractCompatibilityTests {
             {
               "id": "\(drawingID.uuidString)",
               "projectId": "\(projectID.uuidString)",
-              "name": "旧图纸",
-              "fileName": "legacy-plan.pdf",
+              "name": "图纸",
+              "fileName": "plan.pdf",
               "fileType": "pdf"
             }
           ],
@@ -38,15 +62,16 @@ struct BackupContractCompatibilityTests {
         }
         """
 
-        let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: Data(legacyJSON.utf8))
-        #expect(snapshot.schemaVersion == BackupSnapshot.legacySchemaVersion)
+        let snapshot = try JSONDecoder().decode(BackupSnapshot.self, from: Data(currentJSON.utf8))
+        #expect(snapshot.schemaVersion == BackupSnapshot.currentSchemaVersion)
 
         let store = makeStore()
         store.applyLoadedSnapshot(snapshot)
 
         #expect(store.projects.count == 1)
         #expect(store.projectDrawings.count == 1)
-        #expect(store.projectDrawings.first?.fileName == "legacy-plan.pdf")
+        #expect(store.projectDrawings.first?.fileName == "plan.pdf")
+        #expect(store.projectDrawings.first?.fileAvailabilityStatus == .unknown)
         #expect(store.projectFinancialRecords.isEmpty)
     }
 
@@ -111,6 +136,8 @@ struct BackupContractCompatibilityTests {
         #expect(drawing.linkedTodoIDs.isEmpty)
         #expect(drawing.linkedLogIDs.isEmpty)
         #expect(drawing.linkedDocumentIDs.isEmpty)
+        #expect(drawing.fileAvailabilityStatus == .unknown)
+        #expect(drawing.externalOpenFailureReason.isEmpty)
     }
 
     @Test func overwriteImportReplacesDrawingFileReferences() {

@@ -270,6 +270,11 @@ extension ReportBuilder {
                 "issued_at",
                 "receiver",
                 "file_name",
+                "file_availability_status_key",
+                "file_availability_status_display",
+                "file_availability_checked_at",
+                "external_open_failure_reason",
+                "external_open_failed_at",
                 "issue_status_key",
                 "issue_status_display",
                 "issue_note",
@@ -293,6 +298,11 @@ extension ReportBuilder {
                     drawing.issuedAt,
                     drawing.receiver,
                     drawing.fileName,
+                    drawing.fileAvailabilityStatus.exportKey,
+                    drawing.fileAvailabilityStatus.displayName,
+                    drawing.fileAvailabilityCheckedAt,
+                    drawing.externalOpenFailureReason,
+                    drawing.externalOpenFailedAt,
                     drawing.issueStatus.exportKey,
                     drawing.issueStatus.displayName,
                     drawing.issueNote,
@@ -549,6 +559,12 @@ extension ProjectContactRole {
         case .team: "team"
         case .other: "other"
         }
+    }
+}
+
+private extension ProjectDrawingFileAvailabilityStatus {
+    var exportKey: String {
+        rawValue
     }
 }
 

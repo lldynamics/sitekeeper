@@ -559,22 +559,19 @@ extension BackupView {
             templates: []
         )
 
-        let tempURL = FileManager.default.temporaryDirectory
-            .appendingPathComponent("backup-uitest-preview-\(UUID().uuidString).json")
+        let archive: BackupArchive
         do {
-            let data = try JSONEncoder().encode(snapshot)
-            try data.write(to: tempURL, options: .atomic)
+            archive = try BackupArchiveService.makeArchive(from: snapshot)
         } catch {
             StorageIssueLog.record(String(
-                format: String(localized: "UI 测试预览备份写入失败：%@，%@"),
-                tempURL.lastPathComponent,
+                format: String(localized: "UI 测试预览备份生成失败：%@"),
                 error.localizedDescription
             ))
             return
         }
 
         cleanupPendingImportFileIfNeeded()
-        pendingImportFileURL = tempURL
+        pendingImportFileURL = archive.fileURL
         pendingImportPreview = BackupImportPreview(
             snapshot: snapshot,
             manifest: BackupArchiveManifest(

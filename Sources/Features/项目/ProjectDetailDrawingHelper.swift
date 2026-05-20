@@ -33,9 +33,45 @@ enum ProjectDetailDrawingHelper {
         }
     }
 
-    static func isCADSource(_ fileType: String) -> Bool {
+    static func requiresExternalViewer(_ fileType: String) -> Bool {
         let normalized = fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return normalized == "dwg" || normalized == "dxf"
+    }
+
+    static func openCapabilityText(for fileType: String) -> String {
+        let normalized = fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if normalized == "pdf" {
+            return String(localized: "PDF 可预览")
+        }
+        if requiresExternalViewer(normalized) {
+            return String(localized: "用外部专业看图软件打开")
+        }
+        return String(localized: "文件独立打开")
+    }
+
+    static func fileAvailabilityLine(for drawing: ProjectDrawing) -> (text: String, isReady: Bool) {
+        let status = drawing.fileAvailabilityStatus
+        let capability = openCapabilityText(for: drawing.fileType)
+        switch status {
+        case .available:
+            return (
+                String(format: String(localized: "%@ · %@"), status.displayName, capability),
+                true
+            )
+        case .missing:
+            return (status.displayName, false)
+        case .unknown:
+            return (
+                String(format: String(localized: "%@ · %@"), status.displayName, capability),
+                true
+            )
+        }
+    }
+
+    static func externalOpenFailureLine(for drawing: ProjectDrawing) -> String? {
+        let reason = drawing.externalOpenFailureReason.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !reason.isEmpty else { return nil }
+        return String(format: String(localized: "外部打开失败：%@"), reason)
     }
 
     static func nextDrawingVersion(name: String, drawings: [ProjectDrawing]) -> String {

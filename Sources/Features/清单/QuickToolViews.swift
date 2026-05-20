@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct QuickToolCategoryListView: View {
-    private let sections = ["电气", "照明", "土建", "通用"]
+    private let sectionOrder = ["电气", "土建", "通用"]
     @AppStorage("favoriteCalculators") private var favoriteRaw = ""
     @AppStorage("recentQuickTools") private var recentRaw = ""
 
@@ -27,6 +27,12 @@ struct QuickToolCategoryListView: View {
         }
     }
 
+    private var availableSections: [String] {
+        sectionOrder.filter { section in
+            allTools.contains { $0.section == section }
+        }
+    }
+
     var body: some View {
         List {
             if !favoriteTools.isEmpty {
@@ -46,7 +52,7 @@ struct QuickToolCategoryListView: View {
             }
 
             Section("选择专业") {
-                ForEach(sections, id: \.self) { section in
+                ForEach(availableSections, id: \.self) { section in
                     NavigationLink { QuickToolSectionView(section: section) } label: {
                         ToolRow(
                             icon: quickToolIcon(for: section),
@@ -208,8 +214,6 @@ private func quickToolIcon(for section: String) -> String {
     switch section {
     case "电气":
         return "bolt.fill"
-    case "照明":
-        return "lightbulb.fill"
     case "土建":
         return "cube.fill"
     default:
@@ -221,8 +225,6 @@ private func quickToolColor(for section: String) -> Color {
     switch section {
     case "电气":
         return .appCalculations
-    case "照明":
-        return .appWarning
     case "土建":
         return .appInventory
     default:

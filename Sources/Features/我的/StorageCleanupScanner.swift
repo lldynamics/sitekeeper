@@ -15,16 +15,16 @@ enum StorageCleanupScanner {
         projectBackupEstimateByID: [UUID: Int],
         largeFileThresholdBytes: Int,
         videoFileExtensions: Set<String>,
-        cadFileExtensions: Set<String>
+        drawingSourceFileExtensions: Set<String>
     ) -> StorageCleanupScanResult {
         let photoEntries = scanPhotoEntries(store: store)
         let videoEntries = scanVideoEntries(
             store: store,
             videoFileExtensions: videoFileExtensions
         )
-        let cadEntries = scanCADEntries(
+        let drawingEntries = scanDrawingSourceEntries(
             store: store,
-            cadFileExtensions: cadFileExtensions
+            drawingFileExtensions: drawingSourceFileExtensions
         )
         let ticketEntries = scanTicketEntries(store: store)
         let backupEntries = scanBackupEntries(cloudBackups: cloudBackups)
@@ -36,7 +36,7 @@ enum StorageCleanupScanner {
             historyBytes: historyBytes,
             photoEntries: photoEntries,
             videoEntries: videoEntries,
-            cadEntries: cadEntries,
+            drawingEntries: drawingEntries,
             ticketEntries: ticketEntries
         )
         let largeFileItems = buildLargeFileItems(
@@ -45,7 +45,7 @@ enum StorageCleanupScanner {
             historyBytes: historyBytes,
             photoEntries: photoEntries,
             videoEntries: videoEntries,
-            cadEntries: cadEntries,
+            drawingEntries: drawingEntries,
             ticketEntries: ticketEntries,
             backupEntries: backupEntries
         )
@@ -54,7 +54,7 @@ enum StorageCleanupScanner {
             projectBackupEstimateByID: projectBackupEstimateByID,
             photoEntries: photoEntries,
             videoEntries: videoEntries,
-            cadEntries: cadEntries,
+            drawingEntries: drawingEntries,
             ticketEntries: ticketEntries
         )
 
@@ -70,7 +70,7 @@ enum StorageCleanupScanner {
         projectId: UUID,
         category: ProjectStorageCleanupCategory,
         videoFileExtensions: Set<String>,
-        cadFileExtensions: Set<String>
+        drawingSourceFileExtensions: Set<String>
     ) -> CleanupImpactSummary {
         switch category {
         case .photos:
@@ -81,11 +81,11 @@ enum StorageCleanupScanner {
                 projectId: projectId,
                 videoFileExtensions: videoFileExtensions
             )
-        case .cad:
-            return cadCleanupPreview(
+        case .drawings:
+            return drawingCleanupPreview(
                 store: store,
                 projectId: projectId,
-                cadFileExtensions: cadFileExtensions
+                drawingFileExtensions: drawingSourceFileExtensions
             )
         case .tickets:
             return ticketCleanupPreview(store: store, projectId: projectId)
@@ -100,10 +100,10 @@ enum StorageCleanupScanner {
                 )
             )
             summary.merge(
-                cadCleanupPreview(
+                drawingCleanupPreview(
                     store: store,
                     projectId: projectId,
-                    cadFileExtensions: cadFileExtensions
+                    drawingFileExtensions: drawingSourceFileExtensions
                 )
             )
             summary.merge(ticketCleanupPreview(store: store, projectId: projectId))
@@ -262,18 +262,18 @@ enum StorageCleanupScanner {
         return entries
     }
 
-    private static func scanCADEntries(
+    private static func scanDrawingSourceEntries(
         store: DataStore,
-        cadFileExtensions: Set<String>
+        drawingFileExtensions: Set<String>
     ) -> [StorageLargeFileItem] {
         store.projectDrawings.compactMap { drawing in
             let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-            guard cadFileExtensions.contains(ext) else { return nil }
+            guard drawingFileExtensions.contains(ext) else { return nil }
             let bytes = DrawingStorage.fileSize(for: drawing.fileName)
             guard bytes > 0 else { return nil }
             return StorageLargeFileItem(
-                id: "cad-\(drawing.fileName)",
-                category: .cad,
+                id: "drawing-\(drawing.fileName)",
+                category: .drawing,
                 title: drawing.name.isEmpty ? drawing.fileName : drawing.name,
                 detail: "\(drawing.version) · \(drawing.fileName)",
                 projectId: drawing.projectId,
@@ -320,7 +320,7 @@ enum StorageCleanupScanner {
         historyBytes: Int,
         photoEntries: [StorageLargeFileItem],
         videoEntries: [StorageLargeFileItem],
-        cadEntries: [StorageLargeFileItem],
+        drawingEntries: [StorageLargeFileItem],
         ticketEntries: [StorageLargeFileItem]
     ) -> [StorageCategorySummary] {
         [
@@ -339,11 +339,11 @@ enum StorageCleanupScanner {
                 count: videoEntries.count
             ),
             StorageCategorySummary(
-                title: String(localized: "CAD 图纸"),
-                icon: "compass.drawing",
+                title: String(localized: "图纸原件"),
+                icon: "doc.viewfinder",
                 tint: .appDoc,
-                bytes: cadEntries.reduce(0) { $0 + $1.bytes },
-                count: cadEntries.count
+                bytes: drawingEntries.reduce(0) { $0 + $1.bytes },
+                count: drawingEntries.count
             ),
             StorageCategorySummary(
                 title: String(localized: "票据资料"),
@@ -375,11 +375,11 @@ enum StorageCleanupScanner {
         historyBytes: Int,
         photoEntries: [StorageLargeFileItem],
         videoEntries: [StorageLargeFileItem],
-        cadEntries: [StorageLargeFileItem],
+        drawingEntries: [StorageLargeFileItem],
         ticketEntries: [StorageLargeFileItem],
         backupEntries: [StorageLargeFileItem]
     ) -> [StorageLargeFileItem] {
-        var items = (photoEntries + videoEntries + cadEntries + ticketEntries + backupEntries)
+        var items = (photoEntries + videoEntries + drawingEntries + ticketEntries + backupEntries)
             .filter { $0.bytes >= largeFileThresholdBytes }
         if historyBytes >= largeFileThresholdBytes {
             items.append(
@@ -404,7 +404,7 @@ enum StorageCleanupScanner {
         projectBackupEstimateByID: [UUID: Int],
         photoEntries: [StorageLargeFileItem],
         videoEntries: [StorageLargeFileItem],
-        cadEntries: [StorageLargeFileItem],
+        drawingEntries: [StorageLargeFileItem],
         ticketEntries: [StorageLargeFileItem]
     ) -> [ProjectStorageUsage] {
         store.projects.compactMap { project in
@@ -415,20 +415,20 @@ enum StorageCleanupScanner {
             let videoBytes = videoEntries
                 .filter { $0.projectId == projectId }
                 .reduce(0) { $0 + $1.bytes }
-            let cadBytes = cadEntries
+            let drawingBytes = drawingEntries
                 .filter { $0.projectId == projectId }
                 .reduce(0) { $0 + $1.bytes }
             let ticketBytes = ticketEntries
                 .filter { $0.projectId == projectId }
                 .reduce(0) { $0 + $1.bytes }
-            let total = photoBytes + videoBytes + cadBytes + ticketBytes
+            let total = photoBytes + videoBytes + drawingBytes + ticketBytes
             guard total > 0 else { return nil }
             return ProjectStorageUsage(
                 projectId: projectId,
                 projectName: project.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "未命名项目") : project.name,
                 photoBytes: photoBytes,
                 videoBytes: videoBytes,
-                cadBytes: cadBytes,
+                drawingBytes: drawingBytes,
                 ticketBytes: ticketBytes,
                 backupEstimatedBytes: projectBackupEstimateByID[projectId]
             )
@@ -539,23 +539,23 @@ enum StorageCleanupScanner {
         return summary
     }
 
-    private static func cadCleanupPreview(
+    private static func drawingCleanupPreview(
         store: DataStore,
         projectId: UUID,
-        cadFileExtensions: Set<String>
+        drawingFileExtensions: Set<String>
     ) -> CleanupImpactSummary {
         let drawings = store.projectDrawings
             .filter { $0.projectId == projectId }
             .filter { drawing in
                 let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                return cadFileExtensions.contains(ext)
+                return drawingFileExtensions.contains(ext)
             }
         let drawingFileNames = Set(drawings.map(\.fileName))
         let remainingDrawingNamesAfterCleanup = Set(
             store.projectDrawings
                 .filter { drawing in
                     let ext = drawing.fileType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                    let shouldRemove = drawing.projectId == projectId && cadFileExtensions.contains(ext)
+                    let shouldRemove = drawing.projectId == projectId && drawingFileExtensions.contains(ext)
                     return !shouldRemove
                 }
                 .map(\.fileName)
@@ -563,8 +563,8 @@ enum StorageCleanupScanner {
         let deletableDrawingNames = drawingFileNames.filter { !remainingDrawingNamesAfterCleanup.contains($0) }
 
         var summary = CleanupImpactSummary()
-        summary.addFile(title: String(localized: "CAD 文件"), count: deletableDrawingNames.count)
-        summary.addRecord(title: String(localized: "CAD 图纸记录"), count: drawings.count)
+        summary.addFile(title: String(localized: "图纸原件"), count: deletableDrawingNames.count)
+        summary.addRecord(title: String(localized: "图纸台账记录"), count: drawings.count)
         summary.addSampleFileNames(deletableDrawingNames)
         return summary
     }

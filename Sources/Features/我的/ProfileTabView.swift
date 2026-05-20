@@ -7,7 +7,6 @@ struct ProfileTabView: View {
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
     @AppStorage(UserPreferenceKeys.autoSave) private var autoSaveEnabled = true
-    @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
     @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.jiangnanSpring.rawValue
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
@@ -173,7 +172,6 @@ struct ProfileTabView: View {
         .task {
             guard !hasLoadedStorageUsage else { return }
             hasLoadedStorageUsage = true
-            migrateLegacyAppearanceIfNeeded()
             await refreshLocalStorageUsage()
         }
         .onChange(of: languageCode) { _, newCode in
@@ -343,12 +341,6 @@ struct ProfileTabView: View {
         if let compressed = thumbnail.jpegData(compressionQuality: 0.82) {
             userAvatarData = compressed
         }
-    }
-
-    private func migrateLegacyAppearanceIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: UserPreferenceKeys.appearanceMode) == nil else { return }
-        appearanceMode = legacyDarkMode ? AppAppearanceMode.dark.rawValue : AppAppearanceMode.system.rawValue
     }
 
     private func refreshLocalStorageUsage() async {

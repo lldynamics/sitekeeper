@@ -41,7 +41,7 @@ private enum HealthCleanupSection: CaseIterable {
         case .health:
             return String(localized: "扫描缺失文件、无效关联与孤立文件，并支持一键修复。")
         case .storage:
-            return String(localized: "查看照片/视频/CAD/备份/历史计算占用，支持按项目清理附件文件。")
+            return String(localized: "查看照片/视频/图纸原件/备份/历史计算占用，支持按项目清理附件文件。")
         case .audit:
             return String(localized: "查看导入、恢复、清理、修复、删除等高风险操作记录。")
         }
@@ -125,6 +125,7 @@ struct DataManagementView: View {
     @State private var selectedTab: DataManagementTab
     @State private var healthCleanupSection: HealthCleanupSection
     @State private var showClearHistoryConfirm = false
+    @State private var showSampleDataImportConfirm = false
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
 
@@ -170,6 +171,10 @@ struct DataManagementView: View {
                 Spacer()
             }
             .padding(.horizontal)
+
+            if selectedTab == .restore {
+                sampleDataImportCard
+            }
 
             if !store.historyRecords.isEmpty {
                 VStack(alignment: .leading, spacing: AppSpacing.tight * 0.6) {
@@ -229,10 +234,56 @@ struct DataManagementView: View {
             Button(String(localized: "清空"), role: .destructive) { clearCalculationHistoryWithUndo() }
             Button(String(localized: "取消"), role: .cancel) {}
         }
+        .alert(String(localized: "恢复测试数据？"), isPresented: $showSampleDataImportConfirm) {
+            Button(String(localized: "清空并导入"), role: .destructive) {
+                importDebugSampleDataWithNotice()
+            }
+            Button(String(localized: "取消"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "会清空当前本机业务数据，并恢复一套更完整的测试项目、报价、图纸、票据、照片和附件样例。"))
+        }
         .operationToast(notice: $operationNotice)
         .onDisappear {
             undoableDeletion.flushPendingCommit()
         }
+    }
+
+    @ViewBuilder
+    private var sampleDataImportCard: some View {
+#if DEBUG
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            Label(String(localized: "测试数据导入"), systemImage: "testtube.2")
+                .font(.subheadline.weight(.semibold))
+
+            Text(String(localized: "开发构建下可一键恢复测试环境。当前样例包含项目、材料、报价、进度、图纸、票据、照片与附件。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if store.hasAnyBusinessData {
+                Label(String(localized: "会覆盖当前本机数据，建议先导出备份 ZIP。"), systemImage: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.appRisk)
+            }
+
+            Button {
+                showSampleDataImportConfirm = true
+            } label: {
+                Label(String(localized: "清空并导入测试数据"), systemImage: "square.and.arrow.down")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.appWarning)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+        )
+        .padding(.horizontal)
+#else
+        EmptyView()
+#endif
     }
 
     private var healthAndCleanupContent: some View {
@@ -313,5 +364,41 @@ struct DataManagementView: View {
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
+    }
+
+    private func importDebugSampleDataWithNotice() {
+#if DEBUG
+        let summary = String(localized: "清空并导入测试数据")
+        let detail = String(localized: "开发构建测试数据恢复")
+        OperationAuditLog.record(
+            action: .import,
+            outcome: .started,
+            summary: summary,
+            detail: detail,
+            source: "DataManagementView"
+        )
+
+        if store.importDebugSampleData(replacingExisting: true) {
+            store.persistenceErrorMessage = nil
+            OperationAuditLog.record(
+                action: .import,
+                outcome: .succeeded,
+                summary: summary,
+                detail: detail,
+                source: "DataManagementView"
+            )
+            operationNotice = .info(String(localized: "已恢复测试数据"))
+        } else {
+            let errorDetail = store.persistenceErrorMessage ?? String(localized: "测试数据导入失败")
+            OperationAuditLog.record(
+                action: .import,
+                outcome: .failed,
+                summary: summary,
+                detail: errorDetail,
+                source: "DataManagementView"
+            )
+            operationNotice = .info(errorDetail)
+        }
+#endif
     }
 }

@@ -50,7 +50,6 @@ enum DrawingStorage {
 
         do {
             try FileManager.default.copyItem(at: sourceURL, to: targetURL)
-            try copyDWGSidecarIfAvailable(from: sourceURL, toDrawingURL: targetURL)
         } catch {
             throw FileStorageError.copyFailed(sourceURL.lastPathComponent)
         }
@@ -132,6 +131,8 @@ enum DrawingStorage {
             name: displayName,
             fileName: storedFileName,
             fileType: fileType,
+            fileAvailabilityStatus: .available,
+            fileAvailabilityCheckedAt: Formatters.now(),
             importedAt: Formatters.now()
         )
     }
@@ -161,7 +162,6 @@ enum DrawingStorage {
             event: "drawing.delete",
             source: "DrawingStorage.deleteOrThrow"
         )
-        quarantineSidecars(for: fileName)
     }
 
     static func data(for fileName: String) -> Data? {
@@ -184,11 +184,10 @@ enum DrawingStorage {
         var seen = Set<String>()
         var files: [DrawingBackupFile] = []
         for drawing in drawings {
-            for fileName in [drawing.fileName] + sidecarFileNames(for: drawing.fileName) {
-                guard !seen.contains(fileName), let data = data(for: fileName) else { continue }
-                seen.insert(fileName)
-                files.append(DrawingBackupFile(fileName: fileName, data: data))
-            }
+            let fileName = drawing.fileName
+            guard !seen.contains(fileName), let data = data(for: fileName) else { continue }
+            seen.insert(fileName)
+            files.append(DrawingBackupFile(fileName: fileName, data: data))
         }
         return files
     }
@@ -198,9 +197,7 @@ enum DrawingStorage {
     }
 
     static func referencedFileNames(for drawings: [ProjectDrawing]) -> Set<String> {
-        Set(drawings.flatMap { drawing in
-            [drawing.fileName] + sidecarFileNames(for: drawing.fileName)
-        })
+        Set(drawings.map(\.fileName))
     }
 
     static func orphanFileNames(for drawings: [ProjectDrawing]) -> [String] {
@@ -218,74 +215,6 @@ enum DrawingStorage {
 
     static func restoreOrThrow(_ files: [DrawingBackupFile]) throws {
         try fileFamily.restoreOrThrow(files.map { ($0.fileName, $0.data) })
-    }
-
-    static func sidecarFileName(for fileName: String) -> String {
-        "\(fileName).sitekeeper-cad.json"
-    }
-
-    static func sidecarFileNames(for fileName: String) -> [String] {
-        let canonical = sidecarFileName(for: fileName)
-        let baseName = (fileName as NSString).deletingPathExtension
-        let legacy = "\(baseName).sitekeeper-cad.json"
-        return canonical == legacy ? [canonical] : [canonical, legacy]
-    }
-
-    static func sidecarURL(for fileName: String) -> URL {
-        fileURL(for: sidecarFileName(for: fileName))
-    }
-
-    private static func copyDWGSidecarIfAvailable(from sourceURL: URL, toDrawingURL targetURL: URL) throws {
-        guard targetURL.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "dwg" else {
-            return
-        }
-        guard let sourceSidecarURL = dwgSidecarCandidates(for: sourceURL).first(where: { candidate in
-            FileManager.default.fileExists(atPath: candidate.path)
-        }) else {
-            return
-        }
-
-        let targetSidecarURL = targetURL.appendingPathExtension("sitekeeper-cad.json")
-        try FileOps.replaceByCopyWithRollback(
-            from: sourceSidecarURL,
-            to: targetSidecarURL,
-            context: .init(
-                event: "drawing.sidecar_replace",
-                category: .fileStorage,
-                source: "DrawingStorage.copyDWGSidecarIfAvailable"
-            )
-        )
-    }
-
-    private static func dwgSidecarCandidates(for sourceURL: URL) -> [URL] {
-        [
-            sourceURL.appendingPathExtension("sitekeeper-cad.json"),
-            sourceURL.deletingPathExtension()
-                .appendingPathExtension("sitekeeper-cad.json"),
-            sourceURL.appendingPathExtension("sitekeeper-cad")
-                .appendingPathComponent("drawing.sitekeeper-cad.json"),
-            sourceURL.deletingPathExtension()
-                .appendingPathExtension("sitekeeper-cad")
-                .appendingPathComponent("drawing.sitekeeper-cad.json"),
-            sourceURL.deletingLastPathComponent()
-                .appendingPathComponent("drawing.sitekeeper-cad.json")
-        ]
-    }
-
-    private static func quarantineSidecars(for fileName: String) {
-        for sidecar in sidecarFileNames(for: fileName) {
-            let url = fileURL(for: sidecar)
-            guard FileManager.default.fileExists(atPath: url.path) else { continue }
-            do {
-                _ = try FileQuarantineStore.quarantine(
-                    fileAt: url,
-                    category: .drawingSidecar,
-                    originalFileName: sidecar
-                )
-            } catch {
-                DocumentStorageIssueLogger.record("drawing.sidecar_quarantine_failed", fileName: sidecar, error: error)
-            }
-        }
     }
 
     private static func ensureDirectoryExists() throws {

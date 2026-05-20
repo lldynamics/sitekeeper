@@ -9,7 +9,7 @@ Chinese guide: `README.zh-CN.md`
 ## Current Features
 
 - Dashboard: quick access, pending material reminders, and recent project activity.
-- Calculators: current, voltage drop with wire-size recommendation, conduit fill, cable tray fill, breaker selection, lighting estimate, concrete, rebar, tile, wall area, and unit conversion.
+- Calculators: current, voltage drop with wire-size recommendation, conduit fill, cable tray fill, breaker selection, concrete, rebar, tile, wall area, and unit conversion.
 - Lists: material list, labor records, quote management, custom material library, and project-linked records.
 - Projects: project list, business dashboard, project detail summary, editable progress tasks, calculation history, and enhanced daily logs.
 - Daily logs: list/calendar views, project/date/search filters, safety and material notes, weather capture, and multiple photo attachments.

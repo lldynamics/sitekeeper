@@ -101,12 +101,104 @@ enum ProjectDetailAssetActions {
         saveDrawing(updated, store: store)
     }
 
-    static func previewDrawingURL(for drawing: ProjectDrawing) -> ProjectDetailActionResult<URL> {
+    static func previewDrawingURL(for drawing: ProjectDrawing, store: DataStore? = nil) -> ProjectDetailActionResult<URL> {
         let url = DrawingStorage.fileURL(for: drawing.fileName)
         guard FileManager.default.fileExists(atPath: url.path) else {
-            return .failure("图纸文件不存在，可能已被清理。")
+            let message = String(localized: "图纸文件不存在，可能已被清理。")
+            if let store {
+                recordDrawingOpenFailure(
+                    drawingID: drawing.id,
+                    availabilityStatus: .missing,
+                    reason: ProjectDetailDrawingHelper.requiresExternalViewer(drawing.fileType) ? message : "",
+                    store: store
+                )
+            }
+            return .failure(message)
+        }
+        if let store {
+            recordDrawingFileAvailable(drawingID: drawing.id, clearExternalFailure: false, store: store)
         }
         return .success(url)
+    }
+
+    static func recordDrawingExternalOpenResult(completed: Bool, drawingID: UUID?, store: DataStore) {
+        guard let drawingID else { return }
+        if completed {
+            recordDrawingFileAvailable(drawingID: drawingID, clearExternalFailure: true, store: store)
+        } else {
+            recordDrawingOpenFailure(
+                drawingID: drawingID,
+                availabilityStatus: .available,
+                reason: String(localized: "外部打开未完成，可能是未选择外部专业看图软件或已取消。"),
+                store: store
+            )
+        }
+    }
+
+    private static func recordDrawingFileAvailable(
+        drawingID: UUID,
+        clearExternalFailure: Bool,
+        store: DataStore
+    ) {
+        let now = Formatters.now()
+        var changed = false
+        store.mutateProjectDrawing(id: drawingID) { drawing in
+            if drawing.fileAvailabilityStatus != .available {
+                drawing.fileAvailabilityStatus = .available
+                changed = true
+            }
+            if drawing.fileAvailabilityCheckedAt != now {
+                drawing.fileAvailabilityCheckedAt = now
+                changed = true
+            }
+            if clearExternalFailure {
+                if !drawing.externalOpenFailureReason.isEmpty {
+                    drawing.externalOpenFailureReason = ""
+                    changed = true
+                }
+                if !drawing.externalOpenFailedAt.isEmpty {
+                    drawing.externalOpenFailedAt = ""
+                    changed = true
+                }
+            }
+        }
+        if changed {
+            store.scheduleSave()
+        }
+    }
+
+    private static func recordDrawingOpenFailure(
+        drawingID: UUID,
+        availabilityStatus: ProjectDrawingFileAvailabilityStatus,
+        reason: String,
+        store: DataStore
+    ) {
+        let trimmedReason = reason.trimmingCharacters(in: .whitespacesAndNewlines)
+        let now = Formatters.now()
+        var changed = false
+        store.mutateProjectDrawing(id: drawingID) { drawing in
+            if drawing.fileAvailabilityStatus != availabilityStatus {
+                drawing.fileAvailabilityStatus = availabilityStatus
+                changed = true
+            }
+            if drawing.fileAvailabilityCheckedAt != now {
+                drawing.fileAvailabilityCheckedAt = now
+                changed = true
+            }
+            if !trimmedReason.isEmpty {
+                if drawing.externalOpenFailureReason != trimmedReason {
+                    drawing.externalOpenFailureReason = trimmedReason
+                    changed = true
+                }
+                if drawing.externalOpenFailedAt != now {
+                    drawing.externalOpenFailedAt = now
+                    changed = true
+                }
+            }
+        }
+        if changed {
+            store.scheduleSave()
+        }
     }
 
     static func deleteDrawing(_ drawing: ProjectDrawing, store: DataStore) {

@@ -12,7 +12,7 @@ enum ProjectFileCategory: CaseIterable {
     var title: String {
         switch self {
         case .images: return "图片"
-        case .drawings: return "CAD与图纸"
+        case .drawings: return "图纸原件"
         case .documents: return "票据资料"
         case .quickNoteAttachments: return "随手记附件"
         }

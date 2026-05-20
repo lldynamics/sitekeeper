@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum CalculatorDestination: CaseIterable {
-    case current, voltageDrop, conduitFill, trayFill, breakerSelect, lightingCalc, concrete, rebar, tile, wallArea, unitConverter
+    case current, voltageDrop, conduitFill, trayFill, breakerSelect, concrete, rebar, tile, wallArea, unitConverter
 
     var icon: String {
         switch self {
@@ -10,7 +10,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "circle.grid.cross"
         case .trayFill: "rectangle.grid.1x2"
         case .breakerSelect: "switch.2"
-        case .lightingCalc: "lightbulb.fill"
         case .concrete: "cube.fill"
         case .rebar: "ruler.fill"
         case .tile: "square.grid.3x3"
@@ -26,7 +25,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "线管穿线率"
         case .trayFill: "桥架填充率"
         case .breakerSelect: "空开/漏保选型"
-        case .lightingCalc: "照明估算"
         case .concrete: "混凝土算量"
         case .rebar: "钢筋重量"
         case .tile: "地砖排料"
@@ -42,7 +40,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: "管内导线截面积占比"
         case .trayFill: "桥架内电缆总截面积"
         case .breakerSelect: "按电流选断路器规格"
-        case .lightingCalc: "房间面积 → 灯具数量"
         case .concrete: "方量 + 水泥砂石估算"
         case .rebar: "每米重 / 总重 / 吨位"
         case .tile: "片数 / 箱数 / 胶粘剂"
@@ -54,7 +51,6 @@ enum CalculatorDestination: CaseIterable {
     var section: String {
         switch self {
         case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect: "电气"
-        case .lightingCalc: "照明"
         case .concrete, .rebar, .tile, .wallArea: "土建"
         case .unitConverter: "通用"
         }
@@ -68,7 +64,6 @@ enum CalculatorDestination: CaseIterable {
         case .conduitFill: ConduitFillView()
         case .trayFill: TrayFillView()
         case .breakerSelect: BreakerSelectView()
-        case .lightingCalc: LightingCalcView()
         case .concrete: ConcreteCalcView()
         case .rebar: RebarCalcView()
         case .tile: TileCalcView()
@@ -109,7 +104,7 @@ struct CalculatorTabView: View {
                 }
 
                 let grouped = Dictionary(grouping: sortedDefs, by: { $0.section })
-                let order = ["电气", "照明", "土建", "通用"]
+                let order = ["电气", "土建", "通用"]
                 ForEach(order, id: \.self) { section in
                     if let items = grouped[section], !items.isEmpty {
                         Section(section) {

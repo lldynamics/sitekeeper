@@ -14,9 +14,8 @@ Removes local Xcode derived outputs that are ignored by git:
   - .DerivedData*
   - build/*.xcresult
 
-It intentionally avoids deleting build/release, build/cad-probe, and
-build/libredwg-ios because those may contain generated deliverables or source
-artifacts.
+It intentionally avoids deleting build/release because it may contain generated
+deliverables.
 EOF
 }
 

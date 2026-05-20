@@ -68,7 +68,7 @@ struct ProjectFileCategoryGuidePanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             ProjectFileCategoryIllustration()
-            ProjectFileGuideStep(icon: "doc.on.doc.fill", title: "分类查看", detail: "图片、CAD、票据、附件分开管理。")
+            ProjectFileGuideStep(icon: "doc.on.doc.fill", title: "分类查看", detail: "图片、图纸原件、票据、附件分开管理。")
             ProjectFileGuideStep(icon: "eye.fill", title: "轻点预览", detail: "点行内菜单可预览文件并快速分享。")
         }
         .padding(.vertical, 1)
@@ -289,7 +289,7 @@ struct ProjectFileItemRow: View {
                     ShareLink(item: item.url) {
                         Label(
                             item.category == .drawings
-                                ? String(localized: "用专业看图软件打开")
+                                ? String(localized: "用外部专业看图软件打开")
                                 : String(localized: "分享/打开"),
                             systemImage: "square.and.arrow.up"
                         )

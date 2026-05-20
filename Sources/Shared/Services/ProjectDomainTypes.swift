@@ -19,6 +19,10 @@ struct ProjectDrawing: Identifiable, Codable {
     var linkedDocumentIDs: [UUID]
     var issueStatus: DrawingIssueStatus
     var issueNote: String
+    var fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus
+    var fileAvailabilityCheckedAt: String
+    var externalOpenFailureReason: String
+    var externalOpenFailedAt: String
     var importedAt: String
     var note: String
 
@@ -41,6 +45,10 @@ struct ProjectDrawing: Identifiable, Codable {
         linkedDocumentIDs: [UUID] = [],
         issueStatus: DrawingIssueStatus = .none,
         issueNote: String = "",
+        fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus = .unknown,
+        fileAvailabilityCheckedAt: String = "",
+        externalOpenFailureReason: String = "",
+        externalOpenFailedAt: String = "",
         importedAt: String = Formatters.now(),
         note: String = ""
     ) {
@@ -62,6 +70,10 @@ struct ProjectDrawing: Identifiable, Codable {
         self.linkedDocumentIDs = linkedDocumentIDs
         self.issueStatus = issueStatus
         self.issueNote = issueNote
+        self.fileAvailabilityStatus = fileAvailabilityStatus
+        self.fileAvailabilityCheckedAt = fileAvailabilityCheckedAt
+        self.externalOpenFailureReason = externalOpenFailureReason
+        self.externalOpenFailedAt = externalOpenFailedAt
         self.importedAt = importedAt
         self.note = note
     }
@@ -69,7 +81,7 @@ struct ProjectDrawing: Identifiable, Codable {
     enum CodingKeys: String, CodingKey {
         case id, projectId, name, drawingNumber, discipline, floorArea, fileName, fileType, version, isCurrentVersion
         case issuedAt, receiver, relatedLogDate, linkedTodoIDs, linkedLogIDs, linkedDocumentIDs
-        case issueStatus, issueNote, importedAt, note
+        case issueStatus, issueNote, fileAvailabilityStatus, fileAvailabilityCheckedAt, externalOpenFailureReason, externalOpenFailedAt, importedAt, note
     }
 
     init(from decoder: Decoder) throws {
@@ -96,6 +108,14 @@ struct ProjectDrawing: Identifiable, Codable {
             default: .none
         )
         issueNote = try container.decodeIfPresent(String.self, forKey: .issueNote) ?? ""
+        fileAvailabilityStatus = try container.decodeStringEnum(
+            ProjectDrawingFileAvailabilityStatus.self,
+            forKey: .fileAvailabilityStatus,
+            default: .unknown
+        )
+        fileAvailabilityCheckedAt = try container.decodeIfPresent(String.self, forKey: .fileAvailabilityCheckedAt) ?? ""
+        externalOpenFailureReason = try container.decodeIfPresent(String.self, forKey: .externalOpenFailureReason) ?? ""
+        externalOpenFailedAt = try container.decodeIfPresent(String.self, forKey: .externalOpenFailedAt) ?? ""
         importedAt = try container.decodeIfPresent(String.self, forKey: .importedAt) ?? Formatters.now()
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
     }
@@ -543,6 +563,23 @@ enum DrawingIssueStatus: String, CaseIterable, Codable {
     case closed = "已关闭"
 
     var displayName: String { rawValue }
+}
+
+enum ProjectDrawingFileAvailabilityStatus: String, CaseIterable, Codable {
+    case unknown
+    case available
+    case missing
+
+    var displayName: String {
+        switch self {
+        case .unknown:
+            return String(localized: "原件未检查")
+        case .available:
+            return String(localized: "原件可用")
+        case .missing:
+            return String(localized: "原件缺失")
+        }
+    }
 }
 
 enum TodoPriority: String, CaseIterable, Codable {

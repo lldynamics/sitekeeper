@@ -13,14 +13,21 @@ targets:
     sources:
       - path: Sources
     preBuildScripts:
-      - name: File Deletion Policy Guard
+      - name: Release Boundary Guards
         script: |
           "${SRCROOT}/scripts/release/check_file_deletion_policy.sh"
           "${SRCROOT}/scripts/release/check_datastore_write_policy.sh"
+          "${SRCROOT}/scripts/release/check_backup_contract_boundary.sh"
+          "${SRCROOT}/scripts/release/check_drawing_release_boundary.sh"
         inputFiles:
           - "$(SRCROOT)/scripts/release/check_file_deletion_policy.sh"
           - "$(SRCROOT)/scripts/release/check_datastore_write_policy.sh"
+          - "$(SRCROOT)/scripts/release/check_backup_contract_boundary.sh"
+          - "$(SRCROOT)/scripts/release/check_drawing_release_boundary.sh"
+          - "$(SRCROOT)/project.yml"
+          - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
           - "$(SRCROOT)/Sources"
+          - "$(SRCROOT)/Widget"
         basedOnDependencyAnalysis: false
     dependencies:
       - target: sitekeeperWidgetExtension

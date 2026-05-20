@@ -4,7 +4,6 @@ struct RootView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedTab: Tab = .dashboard
-    @AppStorage(UserPreferenceKeys.darkMode) private var legacyDarkMode = false
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
     @AppStorage(UserPreferenceKeys.didCompleteOnboarding) private var didCompleteOnboarding = false
     @AppStorage(UserPreferenceKeys.completedOnboardingVersion) private var completedOnboardingVersion = 0
@@ -97,7 +96,6 @@ struct RootView: View {
             }
         }
         .onAppear {
-            migrateLegacyAppearanceIfNeeded()
             migrateOnboardingVersionIfNeeded()
             refreshOnboardingState()
         }
@@ -236,12 +234,6 @@ struct RootView: View {
     private func migrateOnboardingVersionIfNeeded() {
         guard didCompleteOnboarding, completedOnboardingVersion == 0 else { return }
         completedOnboardingVersion = currentOnboardingVersion
-    }
-
-    private func migrateLegacyAppearanceIfNeeded() {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: UserPreferenceKeys.appearanceMode) == nil else { return }
-        appearanceMode = legacyDarkMode ? AppAppearanceMode.dark.rawValue : AppAppearanceMode.system.rawValue
     }
 
     @ViewBuilder

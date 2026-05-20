@@ -60,6 +60,12 @@ scripts/release/check_file_deletion_policy.sh
 echo "==> Checking DataStore write policy"
 scripts/release/check_datastore_write_policy.sh
 
+echo "==> Checking backup contract boundary"
+scripts/release/check_backup_contract_boundary.sh
+
+echo "==> Checking drawing release boundary"
+scripts/release/check_drawing_release_boundary.sh
+
 BUILD_CMD=(
   xcodebuild
   -project sitekeeper.xcodeproj

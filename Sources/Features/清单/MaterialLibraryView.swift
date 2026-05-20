@@ -1,16 +1,5 @@
 import SwiftUI
 
-private enum MaterialSheetTargetMode: String, CaseIterable, Hashable {
-    case existing
-    case create
-}
-
-private enum AppendMaterialField: Hashable {
-    case quantity
-    case unitPrice
-    case note
-}
-
 struct MaterialLibraryView: View {
     private enum PendingMaterialDeleteTarget {
         case preset(CommonMaterial)
@@ -475,95 +464,23 @@ struct MaterialLibraryView: View {
     }
 
     private var defaultMaterialSheetTargetBar: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            if let draft = defaultTargetMaterialSheetDraft {
-                HStack(alignment: .center, spacing: AppSpacing.tight) {
-                    Label(String(localized: "默认目标材料单"), systemImage: "pin.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(Color.appPrimaryAction)
-                    Spacer()
-                    Menu {
-                        ForEach(activeMaterialSheetDrafts) { item in
-                            Button {
-                                appendState.selectedDefaultMaterialSheetDraftID = item.id
-                            } label: {
-                                Label(
-                                    materialSheetDraftPickerTitle(item),
-                                    systemImage: item.id == draft.id ? "checkmark.circle.fill" : "tray"
-                                )
-                            }
-                        }
-                        Divider()
-                        Button {
-                            createAndSelectDefaultMaterialSheetDraft()
-                        } label: {
-                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                        }
-                    } label: {
-                        Label(String(localized: "切换"), systemImage: "arrow.triangle.2.circlepath")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                }
-
-                HStack(alignment: .top, spacing: AppSpacing.tight) {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(draft.title.isEmpty ? "未命名材料单" : draft.title)
-                            .font(.subheadline.weight(.medium))
-                            .lineLimit(1)
-                        Text("项目归属：\(projectName(for: draft.projectId) ?? "无归属") · 当前 \(draft.items.count) 项\(recentlyAddedSummary(for: draft))")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer(minLength: AppSpacing.tight)
-                    Button {
-                        createAndSelectDefaultMaterialSheetDraft()
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.appPrimaryAction)
-                    .accessibilityLabel(String(localized: "新建默认材料单"))
-                    Button {
-                        appendState.recentlyAddedDraftID = draft.id
-                        appendState.navigateToMaterialSheet = true
-                    } label: {
-                        Image(systemName: "arrow.right.circle.fill")
-                            .font(.title3)
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(Color.appPrimaryAction)
-                    .accessibilityLabel(String(localized: "打开当前材料单"))
-                }
-
-                Label(String(localized: "点材料后的 + 默认加入这里；需要换单时先在这里切换。"), systemImage: "bolt.fill")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                HStack(spacing: AppSpacing.tight) {
-                    Label(String(localized: "暂无默认材料单"), systemImage: "tray")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Button {
-                        createAndSelectDefaultMaterialSheetDraft()
-                    } label: {
-                        Label(String(localized: "创建"), systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.appProminent())
-                    .controlSize(.small)
-                }
+        MaterialLibraryDefaultTargetBar(
+            draft: defaultTargetMaterialSheetDraft,
+            activeDrafts: activeMaterialSheetDrafts,
+            draftTitle: materialSheetDraftPickerTitle(_:),
+            projectName: projectName(for:),
+            recentlyAddedSummary: recentlyAddedSummary(for:),
+            onSelectDraft: { draftID in
+                appendState.selectedDefaultMaterialSheetDraftID = draftID
+            },
+            onCreateDraft: {
+                createAndSelectDefaultMaterialSheetDraft()
+            },
+            onOpenDraft: { draftID in
+                appendState.recentlyAddedDraftID = draftID
+                appendState.navigateToMaterialSheet = true
             }
-        }
-        .padding(.horizontal)
-        .padding(.vertical, AppSpacing.tight)
-        .background(Color(uiColor: .secondarySystemGroupedBackground))
-        .overlay(alignment: .bottom) {
-            Divider()
-        }
+        )
     }
 
     // MARK: - Price lookup
@@ -632,76 +549,20 @@ struct MaterialLibraryView: View {
         onAdd: @escaping () -> Void
     ) -> some View {
         let isSelected = batchState.selectedMaterialContextsByKey[appendContext.key] != nil
-        return HStack {
-            if batchState.isBatchSelectionMode {
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .foregroundStyle(isSelected ? Color.appPrimaryAction : .secondary)
-                    .font(.title3)
+        return MaterialLibraryMaterialRowContent(
+            name: name,
+            spec: spec,
+            unit: unit,
+            hasPrice: hasPrice,
+            price: price,
+            isBatchSelectionMode: batchState.isBatchSelectionMode,
+            isSelected: isSelected,
+            onEdit: onEdit,
+            onAdd: onAdd,
+            onToggleSelection: {
+                toggleBatchMaterialSelection(appendContext)
             }
-
-            Group {
-                if batchState.isBatchSelectionMode {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(name).font(.body.weight(.medium))
-                        Text(spec).font(.caption).foregroundStyle(.secondary)
-                    }
-                } else {
-                    Button(action: onEdit) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(name).font(.body.weight(.medium))
-                            Text(spec).font(.caption).foregroundStyle(.secondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
-            Spacer()
-
-            Group {
-                if hasPrice, let price {
-                    Text("¥\(price)/\(unit)")
-                        .font(.caption2.weight(.medium))
-                        .foregroundStyle(Color.appPrimaryAction)
-                } else {
-                    HStack(spacing: 4) {
-                        Image(systemName: "tag").font(.caption)
-                        Text(String(localized: "标价")).font(.caption2)
-                    }
-                    .foregroundStyle(Color.appPrimaryAction)
-                    .padding(.horizontal, 8).padding(.vertical, 4)
-                    .background(Color.appPrimarySurfaceSubtle)
-                    .clipShape(Capsule())
-                }
-            }
-            .onTapGesture {
-                guard !batchState.isBatchSelectionMode else { return }
-                onEdit()
-            }
-
-            if batchState.isBatchSelectionMode {
-                if isSelected {
-                    Text(String(localized: "已选"))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(Color.appPrimaryAction)
-                }
-            } else {
-                Button(action: onAdd) {
-                    Image(systemName: "plus.circle.fill")
-                        .foregroundStyle(Color.appPrimaryAction)
-                        .font(.title3)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel(String(format: String(localized: "添加%@到材料单"), name))
-                .accessibilityValue(materialAccessibilityLabel(name: name, spec: spec, unit: unit, price: price))
-            }
-        }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard batchState.isBatchSelectionMode else { return }
-            toggleBatchMaterialSelection(appendContext)
-        }
+        )
     }
 
     private func makeAppendContext(
@@ -722,21 +583,6 @@ struct MaterialLibraryView: View {
         )
     }
 
-    private func materialAccessibilityLabel(name: String, spec: String, unit: String, price: String?) -> String {
-        var parts = [name]
-        let trimmedSpec = spec.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !trimmedSpec.isEmpty {
-            parts.append("规格 \(trimmedSpec)")
-        }
-        parts.append("单位 \(unit)")
-        if let price, !price.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            parts.append("参考价 \(price) 元每 \(unit)")
-        } else {
-            parts.append("未标价")
-        }
-        return parts.joined(separator: "，")
-    }
-
     private func toggleBatchMaterialSelection(_ context: PendingMaterialAppendContext) {
         var selected = batchState.selectedMaterialContextsByKey
         if selected[context.key] != nil {
@@ -755,32 +601,15 @@ struct MaterialLibraryView: View {
 
     @ViewBuilder
     private var batchAppendActionBar: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Text(selectedBatchMaterialContexts.isEmpty ? "多选模式：勾选后可批量加入材料单" : "已选择 \(selectedBatchMaterialContexts.count) 项材料")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                if !selectedBatchMaterialContexts.isEmpty {
-                    Button(String(localized: "清空")) {
-                        batchState.selectedMaterialContextsByKey = [:]
-                    }
-                    .font(.footnote)
-                }
-            }
-            Button {
+        MaterialLibraryBatchAppendActionBar(
+            selectedCount: selectedBatchMaterialContexts.count,
+            onClear: {
+                batchState.selectedMaterialContextsByKey = [:]
+            },
+            onOpenBatchAppend: {
                 openBatchAppendSheet()
-            } label: {
-                Label(String(localized: "批量加入材料单"), systemImage: "square.and.arrow.down.on.square")
-                    .frame(maxWidth: .infinity)
             }
-            .buttonStyle(.appProminent())
-            .disabled(selectedBatchMaterialContexts.isEmpty)
-        }
-        .padding(.horizontal)
-        .padding(.top, 10)
-        .padding(.bottom, 12)
-        .background(.regularMaterial)
+        )
     }
 
     private func openBatchAppendSheet() {
@@ -846,44 +675,17 @@ struct MaterialLibraryView: View {
     // MARK: - Recycle bin rows
 
     private func deletedPresetRow(key: String) -> some View {
-        let parts = key.components(separatedBy: "|")
-        let name = parts.indices.contains(0) ? parts[0] : key
-        let spec = parts.indices.contains(1) ? parts[1] : ""
-        return HStack {
-            Image(systemName: "trash").foregroundStyle(.secondary).font(.caption)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(name).font(.body.weight(.medium)).foregroundStyle(.secondary)
-                Text(spec).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button(String(localized: "恢复")) {
-                store.hiddenPresetKeys.remove(key)
-                store.scheduleSave()
-            }
-            .font(.caption)
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .tint(.appSuccess)
+        MaterialLibraryDeletedPresetRow(key: key) {
+            store.hiddenPresetKeys.remove(key)
+            store.scheduleSave()
         }
     }
 
     private func deletedUserRow(_ item: UserMaterial) -> some View {
-        HStack {
-            Image(systemName: "trash").foregroundStyle(.secondary).font(.caption)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(item.name).font(.body.weight(.medium)).foregroundStyle(.secondary)
-                Text(item.specification).font(.caption).foregroundStyle(.secondary)
-            }
-            Spacer()
-            Button(String(localized: "恢复")) {
-                store.removeDeletedUserMaterials(ids: Set([item.id]))
-                store.appendUserMaterial(item)
-                store.scheduleSave()
-            }
-            .font(.caption)
-            .buttonStyle(.bordered)
-            .buttonBorderShape(.capsule)
-            .tint(.appSuccess)
+        MaterialLibraryDeletedUserRow(item: item) {
+            store.removeDeletedUserMaterials(ids: Set([item.id]))
+            store.appendUserMaterial(item)
+            store.scheduleSave()
         }
     }
 
@@ -1339,351 +1141,5 @@ struct MaterialLibraryView: View {
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
-    }
-}
-
-private enum MaterialPriceFilter: CaseIterable {
-    case all
-    case priced
-    case unpriced
-
-    var title: String {
-        switch self {
-        case .all:
-            return "全部价格"
-        case .priced:
-            return "已标价"
-        case .unpriced:
-            return "未标价"
-        }
-    }
-}
-
-private struct MaterialPriceEditorContext: Identifiable {
-    let id: UUID
-    let entry: MaterialPriceEntry?
-    let name: String
-    let specification: String
-    let unit: String
-    let category: String
-
-    init(existing entry: MaterialPriceEntry) {
-        id = entry.id
-        self.entry = entry
-        name = entry.name
-        specification = entry.specification
-        unit = entry.unit
-        category = entry.category
-    }
-
-    init(name: String, specification: String, unit: String, category: String) {
-        id = UUID()
-        entry = nil
-        self.name = name
-        self.specification = specification
-        self.unit = unit
-        self.category = category
-    }
-}
-
-private struct PendingMaterialAppendContext: Identifiable {
-    let id = UUID()
-    let name: String
-    let specification: String
-    let unit: String
-    let key: String
-    let defaultBrand: String
-    let defaultSupplier: String
-    let defaultUnitPrice: String
-
-    var displayName: String {
-        let trimmedSpec = specification.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedSpec.isEmpty {
-            return name
-        }
-        return "\(name) \(trimmedSpec)"
-    }
-}
-
-private struct PendingBatchMaterialAppendContext: Identifiable {
-    let id = UUID()
-    let materials: [PendingMaterialAppendContext]
-}
-
-private struct MaterialLibraryCategoryState {
-    var selectedCategory: String?
-    var showCategoryManager = false
-}
-
-private struct MaterialLibraryAppendState {
-    var pendingAddContext: PendingMaterialAppendContext?
-    var pendingAddQuantity = "1"
-    var selectedDefaultMaterialSheetDraftID: UUID?
-    var pendingAddProjectId: UUID?
-    var pendingAddUnitPrice = ""
-    var pendingAddNote = ""
-    var pendingAddTargetMode: MaterialSheetTargetMode = .existing
-    var pendingAddDraftId: UUID?
-    var pendingAddDraftTitle = ""
-    var recentlyAddedDraftID: UUID?
-    var recentlyAddedDraftTitle = ""
-    var recentlyAddedItemCount = 0
-    var showOpenMaterialSheetPrompt = false
-    var navigateToMaterialSheet = false
-    var deferredOperationMessage: String?
-}
-
-private struct MaterialLibraryBatchSelectionState {
-    var isBatchSelectionMode = false
-    var selectedMaterialContextsByKey: [String: PendingMaterialAppendContext] = [:]
-    var pendingBatchAddContext: PendingBatchMaterialAppendContext?
-    var pendingBatchAddQuantity = "1"
-}
-
-private struct RecentMaterialItem: Identifiable {
-    enum Source {
-        case preset(CommonMaterial)
-        case user(UserMaterial)
-    }
-
-    let key: String
-    let source: Source
-
-    var id: String { key }
-}
-
-private struct MaterialLibraryAppendToSheetForm: View {
-    let context: PendingMaterialAppendContext
-    let activeMaterialSheetDrafts: [MaterialSheetDraft]
-    let projects: [Project]
-    let draftPickerTitle: (MaterialSheetDraft) -> String
-    @Binding var quantity: String
-    @Binding var unitPrice: String
-    @Binding var note: String
-    @Binding var targetMode: MaterialSheetTargetMode
-    @Binding var draftId: UUID?
-    @Binding var draftTitle: String
-    @Binding var projectId: UUID?
-    var focusedField: FocusState<AppendMaterialField?>.Binding
-
-    var body: some View {
-        Form {
-            Section(String(localized: "材料")) {
-                LabeledContent("名称", value: context.name)
-                if !context.specification.isEmpty {
-                    LabeledContent("规格", value: context.specification)
-                }
-                LabeledContent("单位", value: context.unit)
-            }
-            Section(String(localized: "添加参数")) {
-                HStack {
-                    TextField(String(localized: "数量"), text: $quantity)
-                        .keyboardType(.decimalPad)
-                        .focused(focusedField, equals: .quantity)
-                    Text(context.unit)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    TextField(String(localized: "单价（可选）"), text: $unitPrice)
-                        .keyboardType(.decimalPad)
-                        .focused(focusedField, equals: .unitPrice)
-                    Text(String(format: String(localized: "元/%@"), context.unit))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                TextField(String(localized: "备注（可选）"), text: $note, axis: .vertical)
-                    .lineLimit(2...4)
-                    .focused(focusedField, equals: .note)
-            }
-            Section(String(localized: "保存到材料单")) {
-                if targetMode == .existing {
-                    if activeMaterialSheetDrafts.isEmpty {
-                        Text(String(localized: "暂无可用材料单，请新建一个材料单。"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button {
-                            targetMode = .create
-                            projectId = nil
-                        } label: {
-                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                        }
-                    } else {
-                        LabeledContent("当前目标") {
-                            Text(selectedDraftTitle)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        Menu {
-                            ForEach(activeMaterialSheetDrafts) { draft in
-                                Button {
-                                    targetMode = .existing
-                                    draftId = draft.id
-                                } label: {
-                                    Label(
-                                        draftPickerTitle(draft),
-                                        systemImage: draft.id == draftId ? "checkmark.circle.fill" : "tray"
-                                    )
-                                }
-                            }
-                            Divider()
-                            Button {
-                                targetMode = .create
-                                projectId = nil
-                            } label: {
-                                Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                            }
-                        } label: {
-                            Label(String(localized: "切换目标"), systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                } else {
-                    TextField(String(localized: "材料单名称"), text: $draftTitle)
-                    Picker(String(localized: "归属项目"), selection: $projectId) {
-                        Text(String(localized: "无归属")).tag(nil as UUID?)
-                        ForEach(projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
-                    }
-                    if !activeMaterialSheetDrafts.isEmpty {
-                        Button {
-                            targetMode = .existing
-                            draftId = draftId ?? activeMaterialSheetDrafts.first?.id
-                        } label: {
-                            Label(String(localized: "改用已有材料单"), systemImage: "tray.full.fill")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var selectedDraftTitle: String {
-        guard let draftId,
-              let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
-            return "未选择材料单"
-        }
-        return draftPickerTitle(draft)
-    }
-}
-
-private struct MaterialLibraryBatchAppendForm: View {
-    let context: PendingBatchMaterialAppendContext
-    let activeMaterialSheetDrafts: [MaterialSheetDraft]
-    let projects: [Project]
-    let draftPickerTitle: (MaterialSheetDraft) -> String
-    @Binding var quantity: String
-    @Binding var targetMode: MaterialSheetTargetMode
-    @Binding var draftId: UUID?
-    @Binding var draftTitle: String
-    @Binding var projectId: UUID?
-
-    var body: some View {
-        Form {
-            Section(String(format: String(localized: "已选材料 (%d)"), context.materials.count)) {
-                ForEach(context.materials.prefix(5)) { item in
-                    Text(item.displayName)
-                }
-                if context.materials.count > 5 {
-                    Text(String(format: String(localized: "其余 %d 项将在保存后一并加入"), context.materials.count - 5))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section(String(localized: "添加参数")) {
-                HStack {
-                    TextField(String(localized: "数量"), text: $quantity)
-                        .keyboardType(.decimalPad)
-                    Text(String(localized: "每项"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section(String(localized: "保存到材料单")) {
-                if targetMode == .existing {
-                    if activeMaterialSheetDrafts.isEmpty {
-                        Text(String(localized: "暂无可用材料单，请新建一个材料单。"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                        Button {
-                            targetMode = .create
-                            projectId = nil
-                        } label: {
-                            Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                        }
-                    } else {
-                        LabeledContent("当前目标") {
-                            Text(selectedDraftTitle)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        Menu {
-                            ForEach(activeMaterialSheetDrafts) { draft in
-                                Button {
-                                    targetMode = .existing
-                                    draftId = draft.id
-                                } label: {
-                                    Label(
-                                        draftPickerTitle(draft),
-                                        systemImage: draft.id == draftId ? "checkmark.circle.fill" : "tray"
-                                    )
-                                }
-                            }
-                            Divider()
-                            Button {
-                                targetMode = .create
-                                projectId = nil
-                            } label: {
-                                Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
-                            }
-                        } label: {
-                            Label(String(localized: "切换目标"), systemImage: "arrow.triangle.2.circlepath")
-                        }
-                    }
-                } else {
-                    TextField(String(localized: "材料单名称"), text: $draftTitle)
-                    Picker(String(localized: "归属项目"), selection: $projectId) {
-                        Text(String(localized: "无归属")).tag(nil as UUID?)
-                        ForEach(projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
-                    }
-                    if !activeMaterialSheetDrafts.isEmpty {
-                        Button {
-                            targetMode = .existing
-                            draftId = draftId ?? activeMaterialSheetDrafts.first?.id
-                        } label: {
-                            Label(String(localized: "改用已有材料单"), systemImage: "tray.full.fill")
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private var selectedDraftTitle: String {
-        guard let draftId,
-              let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
-            return "未选择材料单"
-        }
-        return draftPickerTitle(draft)
-    }
-}
-
-private struct CategoryChip: View {
-    let title: String
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.caption.weight(.medium))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(isSelected ? Color.appPrimaryAction : Color(uiColor: .tertiarySystemGroupedBackground))
-                .foregroundStyle(isSelected ? .white : .primary)
-                .clipShape(Capsule())
-        }
     }
 }
