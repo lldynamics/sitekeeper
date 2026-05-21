@@ -50,7 +50,7 @@ enum ProjectTimelineBuilder {
         var items: [ProjectTimelineItem] = []
 
         items += logs.map {
-            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            let methodSummary = linkedMethodSummary(count: $0.linkedConstructionMethodIDs.count)
             return ProjectTimelineItem(
                 id: "log-\($0.id.uuidString)",
                 date: $0.date,
@@ -82,7 +82,7 @@ enum ProjectTimelineBuilder {
         }
 
         items += siteTodos.map {
-            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            let methodSummary = linkedMethodSummary(count: $0.linkedConstructionMethodIDs.count)
             return ProjectTimelineItem(
                 id: "todo-\($0.id.uuidString)",
                 date: $0.completedAt ?? $0.dueDate,
@@ -166,7 +166,7 @@ enum ProjectTimelineBuilder {
         }
 
         items += documents.map {
-            let methodSummary = $0.linkedConstructionMethodIDs.isEmpty ? "" : "关联工艺 \($0.linkedConstructionMethodIDs.count) 条"
+            let methodSummary = linkedMethodSummary(count: $0.linkedConstructionMethodIDs.count)
             return ProjectTimelineItem(
                 id: "document-\($0.id.uuidString)",
                 date: $0.createdAt,
@@ -219,6 +219,14 @@ enum ProjectTimelineBuilder {
 
     private static func timelineDate(_ text: String) -> Date {
         Formatters.parseDateOrDateTime(text) ?? .distantPast
+    }
+
+    private static func linkedMethodSummary(count: Int) -> String {
+        guard count > 0 else { return "" }
+        return String(
+            format: String(localized: "关联工艺 %lld 条"),
+            Int64(count)
+        )
     }
 }
 
@@ -327,14 +335,14 @@ struct ProjectTimelineSectionView: View {
     var body: some View {
         Group {
             if showsFilters {
-                Section("时间线筛选") {
-                    Picker("类型", selection: $typeFilter) {
+                Section(String(localized: "时间线筛选")) {
+                    Picker(String(localized: "类型"), selection: $typeFilter) {
                         ForEach(typeOptions, id: \.self) { type in
                             Text(type).tag(type)
                         }
                     }
 
-                    Picker("时间", selection: $rangeFilter) {
+                    Picker(String(localized: "时间"), selection: $rangeFilter) {
                         ForEach(ProjectTimelineRangeFilter.allCases, id: \.self) { range in
                             Text(range.displayName).tag(range)
                         }
@@ -343,18 +351,18 @@ struct ProjectTimelineSectionView: View {
                 }
             }
 
-            Section("项目时间线 (\(filteredItems.count))") {
+            Section(String(format: String(localized: "项目时间线 (%lld)"), Int64(filteredItems.count))) {
                 if items.isEmpty {
                     ContentUnavailableView(
-                        "还没有项目动态",
+                        String(localized: "还没有项目动态"),
                         systemImage: "timeline.selection",
-                        description: Text("写日志、导入资料、记账或更新进度后，会自动汇总到这里。")
+                        description: Text(String(localized: "写日志、导入资料、记账或更新进度后，会自动汇总到这里。"))
                     )
                 } else if filteredItems.isEmpty {
                     ContentUnavailableView(
-                        "没有匹配动态",
+                        String(localized: "没有匹配动态"),
                         systemImage: "line.3.horizontal.decrease.circle",
-                        description: Text("调整类型或时间筛选后再查看。")
+                        description: Text(String(localized: "调整类型或时间筛选后再查看。"))
                     )
                 } else {
                     ProjectTimelineView(items: visibleItems, onSelect: onSelect)
@@ -363,7 +371,7 @@ struct ProjectTimelineSectionView: View {
                             showsAllItems.toggle()
                         } label: {
                             Label(
-                                showsAllItems ? "收起时间线" : "查看全部时间线",
+                                showsAllItems ? String(localized: "收起时间线") : String(localized: "查看全部时间线"),
                                 systemImage: showsAllItems ? "chevron.up.circle" : "chevron.down.circle"
                             )
                             .font(.caption.weight(.semibold))
@@ -384,7 +392,7 @@ struct ProjectTimelineSectionView: View {
 }
 
 private enum ProjectTimelineTypeFilter {
-    static let all = "全部"
+    static var all: String { String(localized: "全部") }
 }
 
 private enum ProjectTimelineRangeFilter: String, CaseIterable {
@@ -394,9 +402,9 @@ private enum ProjectTimelineRangeFilter: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .all: "全部"
-        case .sevenDays: "7天"
-        case .thirtyDays: "30天"
+        case .all: String(localized: "全部")
+        case .sevenDays: String(localized: "7天")
+        case .thirtyDays: String(localized: "30天")
         }
     }
 

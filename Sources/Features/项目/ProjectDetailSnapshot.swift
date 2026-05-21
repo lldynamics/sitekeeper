@@ -47,10 +47,15 @@ struct ProjectDetailSnapshot {
         case .current:
             return relatedDrawings.filter(\.isCurrentVersion)
         case .withIssue:
+            let todosByID = Dictionary(uniqueKeysWithValues: relatedTodos.map { ($0.id, $0) })
             return relatedDrawings.filter {
-                return $0.issueStatus == .open
+                let linkedOpenTodoExists = $0.linkedTodoIDs
+                    .compactMap { todosByID[$0] }
+                    .contains { !$0.isDone }
+                return linkedOpenTodoExists
+                    || $0.issueStatus == .open
                     || $0.issueStatus == .inProgress
-                    || !$0.issueNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    || ($0.issueStatus != .closed && !$0.issueNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
         }
     }

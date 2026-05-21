@@ -71,8 +71,8 @@ struct RootView: View {
         .tint(Color.appPrimaryAction)
         .preferredColorScheme(preferredAppearance)
         .environment(\.locale, preferredLocale)
-        .alert("数据读写异常", isPresented: persistenceErrorBinding) {
-            Button("知道了", role: .cancel) {
+        .alert(String(localized: "数据读写异常"), isPresented: persistenceErrorBinding) {
+            Button(String(localized: "知道了"), role: .cancel) {
                 store.persistenceErrorMessage = nil
             }
         } message: {
@@ -88,7 +88,7 @@ struct RootView: View {
                 widgetDeepLinkView(for: destination)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button("关闭") {
+                            Button(String(localized: "关闭")) {
                                 widgetDeepLinkDestination = nil
                             }
                         }
@@ -238,7 +238,7 @@ struct RootView: View {
         switch destination {
         case .todos:
             SiteTodoView()
-                .navigationTitle("现场待办")
+                .navigationTitle(String(localized: "现场待办"))
                 .navigationBarTitleDisplayMode(.inline)
         case .lowStock:
             MaterialCenterView(initialTab: .warehouse)
@@ -253,9 +253,9 @@ struct RootView: View {
                 ProjectDetailView(projectId: projectId)
             } else {
                 ContentUnavailableView(
-                    "项目不存在",
+                    String(localized: "项目不存在"),
                     systemImage: "exclamationmark.triangle",
-                    description: Text("该项目可能已被删除或尚未同步到本机。")
+                    description: Text(String(localized: "该项目可能已被删除或尚未同步到本机。"))
                 )
             }
         }
@@ -384,22 +384,30 @@ private struct FirstLaunchOnboardingView: View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 22) {
                 Spacer(minLength: 0)
-                Text("欢迎使用 \(AppBrand.displayName)")
+                Text("\(String(localized: "欢迎使用")) \(AppBrand.displayName)")
                     .font(.largeTitle.bold())
-                Text("首次打开建议先选择一个开始方式。")
+                Text(String(localized: "首次打开建议先选择一个开始方式"))
                     .font(.body)
                     .foregroundStyle(.secondary)
-                Text("数据默认保存在本机，可随时手动导出完整 ZIP 备份。")
+                Text(String(localized: "数据默认保存在本机，可随时手动导出完整 ZIP 备份"))
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 VStack(spacing: 12) {
                     Button(action: onCreateProject) {
-                        actionRow(title: "新建项目", subtitle: "从空白开始创建你的第一个工程", icon: "building.2.fill")
+                        actionRow(
+                            title: String(localized: "新建项目"),
+                            subtitle: String(localized: "从空白开始创建你的第一个工程"),
+                            icon: "building.2.fill"
+                        )
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.appPrimaryAction)
                     Button(action: onImportBackup) {
-                        actionRow(title: "导入备份", subtitle: "从 ZIP 恢复已有项目数据", icon: "square.and.arrow.down.fill")
+                        actionRow(
+                            title: String(localized: "导入备份"),
+                            subtitle: String(localized: "从 ZIP 恢复已有项目数据"),
+                            icon: "square.and.arrow.down.fill"
+                        )
                     }
                     .buttonStyle(.bordered)
                 }
@@ -407,7 +415,7 @@ private struct FirstLaunchOnboardingView: View {
                 Spacer()
             }
             .padding(20)
-            .navigationTitle("首次设置")
+            .navigationTitle(String(localized: "首次设置"))
             .navigationBarTitleDisplayMode(.inline)
         }
     }

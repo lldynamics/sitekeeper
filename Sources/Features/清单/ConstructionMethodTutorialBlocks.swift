@@ -8,19 +8,19 @@ struct ConstructionMethodTutorialTextBlock: Identifiable {
 
 enum ConstructionMethodTutorialBlockCatalog {
     static let quickTools: [ConstructionMethodTutorialTextBlock] = [
-        ConstructionMethodTutorialTextBlock(title: "标题1", snippet: "# "),
-        ConstructionMethodTutorialTextBlock(title: "标题2", snippet: "## "),
-        ConstructionMethodTutorialTextBlock(title: "重点", snippet: "**重点内容**"),
-        ConstructionMethodTutorialTextBlock(title: "列表", snippet: "- "),
-        ConstructionMethodTutorialTextBlock(title: "引用", snippet: "> ")
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.heading1.title"), snippet: String(localized: "construction.tutorial.block.heading1.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.heading2.title"), snippet: String(localized: "construction.tutorial.block.heading2.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.emphasis.title"), snippet: String(localized: "construction.tutorial.block.emphasis.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.list.title"), snippet: String(localized: "construction.tutorial.block.list.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.quote.title"), snippet: String(localized: "construction.tutorial.block.quote.snippet"))
     ]
 
     static let structureTemplates: [ConstructionMethodTutorialTextBlock] = [
-        ConstructionMethodTutorialTextBlock(title: "适用场景", snippet: "## 适用场景\n- "),
-        ConstructionMethodTutorialTextBlock(title: "施工准备", snippet: "## 施工准备\n- 材料\n- 机具\n- 人员\n"),
-        ConstructionMethodTutorialTextBlock(title: "工序步骤", snippet: "## 工序步骤\n1. \n2. \n3. \n"),
-        ConstructionMethodTutorialTextBlock(title: "质量检查", snippet: "## 质检要点\n- "),
-        ConstructionMethodTutorialTextBlock(title: "安全注意", snippet: "## 安全注意\n- "),
-        ConstructionMethodTutorialTextBlock(title: "验收标准", snippet: "## 验收标准\n- ")
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.scenario.title"), snippet: String(localized: "construction.tutorial.block.scenario.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.preparation.title"), snippet: String(localized: "construction.tutorial.block.preparation.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.steps.title"), snippet: String(localized: "construction.tutorial.block.steps.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.quality.title"), snippet: String(localized: "construction.tutorial.block.quality.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.safety.title"), snippet: String(localized: "construction.tutorial.block.safety.snippet")),
+        ConstructionMethodTutorialTextBlock(title: String(localized: "construction.tutorial.block.acceptance.title"), snippet: String(localized: "construction.tutorial.block.acceptance.snippet"))
     ]
 }

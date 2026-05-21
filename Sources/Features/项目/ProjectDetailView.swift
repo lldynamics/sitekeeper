@@ -230,7 +230,7 @@ struct ProjectDetailContainer: View {
             if let snapshot = projectSnapshot {
                 content(snapshot: snapshot)
             } else {
-                ContentUnavailableView("项目不存在", systemImage: "questionmark.folder")
+                ContentUnavailableView(String(localized: "项目不存在"), systemImage: "questionmark.folder")
             }
         }
     }
@@ -331,82 +331,8 @@ struct ProjectDetailContainer: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                Menu {
-                    Button {
-                        routeState.presentation = .quickAdd(.log)
-                    } label: {
-                        Label(String(localized: "写日志"), systemImage: "book.pages.fill")
-                    }
-                    Button {
-                        openTodoFilterFromMetric()
-                    } label: {
-                        Label(String(localized: "处理待办"), systemImage: "checklist.checked")
-                    }
-                    Divider()
-                    Button {
-                        routeState.presentation = .addFinancial
-                    } label: {
-                        Label(String(localized: "记账"), systemImage: "receipt.fill")
-                    }
-                    Button {
-                        routeState.documentScanCategory = nil
-                        routeState.presentation = .documentScanSetup
-                    } label: {
-                        Label(String(localized: "扫描资料"), systemImage: "doc.viewfinder.fill")
-                    }
-                    Button {
-                        assetState.showDrawingImporter = true
-                    } label: {
-                        Label(String(localized: "导入图纸"), systemImage: "square.on.square.squareshape.controlhandles")
-                    }
-                    Divider()
-                    Button {
-                        routeState.presentation = .quickAdd(.material)
-                    } label: {
-                        Label(String(localized: "材料"), systemImage: "shippingbox.fill")
-                    }
-                    Button {
-                        routeState.presentation = .quickAdd(.quote)
-                    } label: {
-                        Label(String(localized: "报价"), systemImage: "doc.text.fill")
-                    }
-                    Button {
-                        routeState.presentation = .quickAdd(.labor)
-                    } label: {
-                        Label(String(localized: "人工"), systemImage: "person.2.fill")
-                    }
-                    Button {
-                        routeState.presentation = .addContact
-                    } label: {
-                        Label(String(localized: "联系人"), systemImage: "person.crop.circle.badge.plus")
-                    }
-                } label: {
-                    Image(systemName: "bolt.circle.fill").visibleIconStyle()
-                }
-                .buttonStyle(.appIcon())
-                .accessibilityLabel(String(localized: "常用功能"))
-
-                Menu {
-                    Button {
-                        routeState.presentation = .editProject
-                    } label: {
-                        Label("编辑资料", systemImage: "square.and.pencil")
-                    }
-                    Button {
-                        routeState.presentation = .deliveryGuide
-                    } label: {
-                        Label("完工交付向导", systemImage: "checklist.checked")
-                    }
-                    Button {
-                        requestExportProjectPackage(project, snapshot: snapshot)
-                    } label: {
-                        Label("导出项目交付包 ZIP", systemImage: "archivebox.fill")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle").visibleIconStyle()
-                }
-                .buttonStyle(.appIcon())
-                .accessibilityLabel("导出与交付")
+                projectAddMenu
+                projectMoreMenu(project: project, snapshot: snapshot)
             }
         }
         .projectDetailExportHost(
@@ -582,26 +508,26 @@ struct ProjectDetailContainer: View {
             DataManagementView(initialRoute: destination.route)
                 .navigationBarTitleDisplayMode(.inline)
         }
-        .confirmationDialog("删除账目", isPresented: $financeState.showFinancialDeleteConfirm, titleVisibility: .visible) {
-            Button("仅删除账目（保留票据）", role: .destructive) {
+        .confirmationDialog(String(localized: "删除账目"), isPresented: $financeState.showFinancialDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "仅删除账目（保留票据）"), role: .destructive) {
                 performDeleteFinancialRecords(deleteLinkedDocuments: false)
             }
-            Button("删除账目并删除票据", role: .destructive) {
+            Button(String(localized: "删除账目并删除票据"), role: .destructive) {
                 performDeleteFinancialRecords(deleteLinkedDocuments: true)
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 financeState.pendingDeleteFinancialRecordIDs.removeAll()
             }
         } message: {
             Text(String(format: String(localized: "将删除 %d 条账目。可选择保留票据为项目资料。"), financeState.pendingDeleteFinancialRecordIDs.count))
         }
-        .confirmationDialog("同名图纸导入策略", isPresented: $assetState.showDrawingImportStrategyDialog, titleVisibility: .visible) {
+        .confirmationDialog(String(localized: "同名图纸导入策略"), isPresented: $assetState.showDrawingImportStrategyDialog, titleVisibility: .visible) {
             ForEach(ProjectDrawingImportStrategy.allCases) { strategy in
                 Button(strategy.displayName) {
                     applyPendingDrawingImportStrategy(strategy)
                 }
             }
-            Button("取消", role: .cancel) {
+            Button(String(localized: "取消"), role: .cancel) {
                 clearPendingDrawingImportStrategy()
             }
         } message: {
@@ -619,7 +545,94 @@ struct ProjectDetailContainer: View {
                 }
             }
         }
-        .operationToast(notice: $operationNotice)
+            .operationToast(notice: $operationNotice)
+    }
+
+    private var projectAddMenu: some View {
+        Menu {
+            Button {
+                routeState.presentation = .quickAdd(.log)
+            } label: {
+                Label(String(localized: "写施工日志"), systemImage: "book.pages.fill")
+            }
+            Button {
+                routeState.presentation = .addFinancial
+            } label: {
+                Label(String(localized: "新增账目"), systemImage: "receipt.fill")
+            }
+            Button {
+                routeState.presentation = .quickAdd(.material)
+            } label: {
+                Label(String(localized: "新增材料"), systemImage: "shippingbox.fill")
+            }
+            Button {
+                routeState.presentation = .quickAdd(.quote)
+            } label: {
+                Label(String(localized: "新增报价"), systemImage: "doc.text.fill")
+            }
+            Button {
+                routeState.presentation = .quickAdd(.labor)
+            } label: {
+                Label(String(localized: "新增人工记录"), systemImage: "person.2.fill")
+            }
+            Button {
+                routeState.presentation = .addContact
+            } label: {
+                Label(String(localized: "新增联系人"), systemImage: "person.crop.circle.badge.plus")
+            }
+        } label: {
+            Image(systemName: "plus.circle.fill").visibleIconStyle()
+        }
+        .buttonStyle(.appIcon())
+        .accessibilityLabel(String(localized: "新增记录"))
+        .accessibilityIdentifier("project-detail-add-menu")
+    }
+
+    private func projectMoreMenu(project: Project, snapshot: ProjectDetailSnapshot) -> some View {
+        Menu {
+            Button {
+                openTodoFilterFromMetric()
+            } label: {
+                Label(String(localized: "处理待办"), systemImage: "checklist.checked")
+            }
+            Button {
+                routeState.presentation = .editProject
+            } label: {
+                Label(String(localized: "编辑项目资料"), systemImage: "square.and.pencil")
+            }
+
+            Divider()
+
+            Button {
+                routeState.documentScanCategory = nil
+                routeState.presentation = .documentScanSetup
+            } label: {
+                Label(String(localized: "扫描项目资料"), systemImage: "doc.viewfinder.fill")
+            }
+            Button {
+                assetState.showDrawingImporter = true
+            } label: {
+                Label(String(localized: "导入图纸原件"), systemImage: "square.on.square.squareshape.controlhandles")
+            }
+
+            Divider()
+
+            Button {
+                routeState.presentation = .deliveryGuide
+            } label: {
+                Label(String(localized: "打开交付向导"), systemImage: "checklist.checked")
+            }
+            Button {
+                requestExportProjectPackage(project, snapshot: snapshot)
+            } label: {
+                Label(String(localized: "导出交付包"), systemImage: "archivebox.fill")
+            }
+        } label: {
+            Image(systemName: "ellipsis.circle").visibleIconStyle()
+        }
+        .buttonStyle(.appIcon())
+        .accessibilityLabel(String(localized: "更多操作"))
+        .accessibilityIdentifier("project-detail-more-menu")
     }
 
 }

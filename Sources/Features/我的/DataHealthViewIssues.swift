@@ -178,6 +178,7 @@ extension DataHealthView {
         for log in store.dailyLogs {
             if let fileName = log.photoFileName,
                !PhotoStorage.exists(fileName: fileName) {
+                let route = DataHealthIssueRoute.dailyLog(projectId: log.projectId, logId: log.id)
                 issues.append(
                     DataHealthIssue(
                         id: "missing-log-photo-\(log.id.uuidString)-legacy-\(fileName)",
@@ -186,11 +187,19 @@ extension DataHealthView {
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
                         actionTitle: l("打开日志"),
-                        route: .dailyLog(projectId: log.projectId, logId: log.id)
+                        route: route,
+                        actions: [
+                            .navigate(title: l("打开日志补照片"), route: route),
+                            .repair(
+                                title: l("移除缺失引用"),
+                                repair: .clearDailyLogLegacyPhoto(logId: log.id, fileName: fileName)
+                            )
+                        ]
                     )
                 )
             }
             for photo in log.photos where !PhotoStorage.exists(fileName: photo.fileName) {
+                let route = DataHealthIssueRoute.dailyLog(projectId: log.projectId, logId: log.id)
                 issues.append(
                     DataHealthIssue(
                         id: "missing-log-photo-\(log.id.uuidString)-\(photo.id.uuidString)",
@@ -199,7 +208,14 @@ extension DataHealthView {
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
                         actionTitle: l("打开日志"),
-                        route: .dailyLog(projectId: log.projectId, logId: log.id)
+                        route: route,
+                        actions: [
+                            .navigate(title: l("打开日志补照片"), route: route),
+                            .repair(
+                                title: l("移除缺失引用"),
+                                repair: .removeDailyLogPhoto(logId: log.id, photoId: photo.id)
+                            )
+                        ]
                     )
                 )
             }
@@ -207,6 +223,7 @@ extension DataHealthView {
         for todo in store.siteTodos {
             if let fileName = todo.rectificationBeforePhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
+                let route = DataHealthIssueRoute.siteTodo(projectId: todo.projectId, todoId: todo.id)
                 issues.append(
                     DataHealthIssue(
                         id: "missing-todo-photo-\(todo.id.uuidString)-before-\(fileName)",
@@ -215,12 +232,20 @@ extension DataHealthView {
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
                         actionTitle: l("打开待办"),
-                        route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
+                        route: route,
+                        actions: [
+                            .navigate(title: l("打开待办补照片"), route: route),
+                            .repair(
+                                title: l("移除缺失引用"),
+                                repair: .clearSiteTodoBeforePhoto(todoId: todo.id, fileName: fileName)
+                            )
+                        ]
                     )
                 )
             }
             if let fileName = todo.rectificationAfterPhotoFileName,
                !PhotoStorage.exists(fileName: fileName) {
+                let route = DataHealthIssueRoute.siteTodo(projectId: todo.projectId, todoId: todo.id)
                 issues.append(
                     DataHealthIssue(
                         id: "missing-todo-photo-\(todo.id.uuidString)-after-\(fileName)",
@@ -229,7 +254,14 @@ extension DataHealthView {
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
                         actionTitle: l("打开待办"),
-                        route: .siteTodo(projectId: todo.projectId, todoId: todo.id)
+                        route: route,
+                        actions: [
+                            .navigate(title: l("打开待办补照片"), route: route),
+                            .repair(
+                                title: l("移除缺失引用"),
+                                repair: .clearSiteTodoAfterPhoto(todoId: todo.id, fileName: fileName)
+                            )
+                        ]
                     )
                 )
             }
@@ -242,14 +274,22 @@ extension DataHealthView {
             .filter { !ProjectDocumentStorage.exists(fileName: $0.fileName) }
             .sorted { $0.createdAt > $1.createdAt }
             .map { document in
-                DataHealthIssue(
+                let route = DataHealthIssueRoute.document(projectId: document.projectId, documentId: document.id)
+                return DataHealthIssue(
                     id: "missing-document-\(document.id.uuidString)",
                     title: l("项目资料原文件缺失"),
                     detail: issueDetail([projectName(document.projectId), document.title, document.fileName]),
                     systemImage: "doc.badge.exclamationmark",
                     color: .appRisk,
                     actionTitle: l("打开资料"),
-                    route: .document(projectId: document.projectId, documentId: document.id)
+                    route: route,
+                    actions: [
+                        .navigate(title: l("打开资料补原件"), route: route),
+                        .repair(
+                            title: l("移除缺失记录"),
+                            repair: .removeProjectDocument(documentId: document.id)
+                        )
+                    ]
                 )
             }
     }
@@ -259,14 +299,22 @@ extension DataHealthView {
             note.attachments
                 .filter { !QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
                 .map { attachment in
-                    DataHealthIssue(
+                    let route = DataHealthIssueRoute.quickNote(noteId: note.id)
+                    return DataHealthIssue(
                         id: "missing-quicknote-attachment-\(note.id.uuidString)-\(attachment.id.uuidString)",
                         title: l("随手记附件缺失"),
                         detail: issueDetail([note.title.isEmpty ? note.createdAt : note.title, attachment.displayName]),
                         systemImage: "paperclip.badge.ellipsis",
                         color: .appRisk,
                         actionTitle: l("打开随手记"),
-                        route: .quickNote(noteId: note.id)
+                        route: route,
+                        actions: [
+                            .navigate(title: l("打开随手记补附件"), route: route),
+                            .repair(
+                                title: l("移除缺失引用"),
+                                repair: .removeQuickNoteAttachment(noteId: note.id, attachmentId: attachment.id)
+                            )
+                        ]
                     )
                 }
         }
@@ -274,19 +322,19 @@ extension DataHealthView {
     }
 
     var orphanPhotoFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanPhotoFiles, title: l("孤立照片文件"), systemImage: "photo.stack", color: .appWarning)
+        fileOnlyIssues(orphanPhotoFiles, title: l("孤立照片文件"), systemImage: "photo.stack", color: .appWarning, kind: .photo)
     }
 
     var orphanDrawingFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDrawingFiles, title: l("孤立图纸文件"), systemImage: "doc.viewfinder", color: .appWarning)
+        fileOnlyIssues(orphanDrawingFiles, title: l("孤立图纸文件"), systemImage: "doc.viewfinder", color: .appWarning, kind: .drawing)
     }
 
     var orphanDocumentFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDocumentFiles, title: l("孤立票据文件"), systemImage: "doc.richtext", color: .appWarning)
+        fileOnlyIssues(orphanDocumentFiles, title: l("孤立票据文件"), systemImage: "doc.richtext", color: .appWarning, kind: .projectDocument)
     }
 
     var orphanQuickNoteAttachmentIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: l("孤立随手记附件"), systemImage: "paperclip", color: .appWarning)
+        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: l("孤立随手记附件"), systemImage: "paperclip", color: .appWarning, kind: .quickNoteAttachment)
     }
 
     var orphanAttachmentMappingIssues: [DataHealthIssue] {
@@ -301,7 +349,13 @@ extension DataHealthView {
                     systemImage: "receipt.badge.exclamationmark",
                     color: .appWarning,
                     actionTitle: l("打开账目"),
-                    route: .financialRecord(projectId: record.projectId, recordId: record.id)
+                    route: .financialRecord(projectId: record.projectId, recordId: record.id),
+                    actions: [
+                        .repair(
+                            title: l("修复该项"),
+                            repair: .unlinkFinancialDocument(recordId: record.id, documentId: docId)
+                        )
+                    ]
                 )
             }
         }
@@ -320,7 +374,13 @@ extension DataHealthView {
                     systemImage: "shippingbox.and.arrow.backward",
                     color: .appWarning,
                     actionTitle: l("打开仓库"),
-                    route: .warehouseProject(projectId: movement.projectId)
+                    route: .warehouseProject(projectId: movement.projectId),
+                    actions: [
+                        .repair(
+                            title: l("修复该项"),
+                            repair: .unlinkWarehouseDocument(movementId: movement.id, documentId: docId)
+                        )
+                    ]
                 )
             }
         }
@@ -338,7 +398,13 @@ extension DataHealthView {
                 systemImage: "link.badge.plus",
                 color: .appWarning,
                 actionTitle: l("打开资料"),
-                route: .document(projectId: document.projectId, documentId: document.id)
+                route: .document(projectId: document.projectId, documentId: document.id),
+                actions: [
+                    .repair(
+                        title: l("修复该项"),
+                        repair: .clearDocumentLinkedFinancialRecord(documentId: document.id)
+                    )
+                ]
             )
         }
     }
@@ -352,7 +418,8 @@ extension DataHealthView {
                 title: l("材料项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "shippingbox",
-                route: .material(materialId: item.id)
+                route: .material(materialId: item.id),
+                repair: .clearMaterialProject(itemId: item.id)
             )
         }
         issues += store.quoteItems.compactMap { item in
@@ -362,7 +429,8 @@ extension DataHealthView {
                 title: l("报价项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "doc.text",
-                route: .quote(quoteId: item.id)
+                route: .quote(quoteId: item.id),
+                repair: .clearQuoteProject(itemId: item.id)
             )
         }
         issues += store.laborRecords.compactMap { item in
@@ -372,7 +440,8 @@ extension DataHealthView {
                 title: l("人工项目关联无效"),
                 detail: issueDetail([item.date, item.workType, lf("原项目ID %@", shortId(id))]),
                 systemImage: "person.2",
-                route: .labor(laborId: item.id)
+                route: .labor(laborId: item.id),
+                repair: .clearLaborProject(recordId: item.id)
             )
         }
         issues += store.dailyLogs.compactMap { item in
@@ -382,7 +451,8 @@ extension DataHealthView {
                 title: l("日志项目关联无效"),
                 detail: issueDetail([item.date, lf("原项目ID %@", shortId(id))]),
                 systemImage: "book.pages",
-                route: .dailyLog(projectId: nil, logId: item.id)
+                route: .dailyLog(projectId: nil, logId: item.id),
+                repair: .clearDailyLogProject(logId: item.id)
             )
         }
         issues += store.siteTodos.compactMap { item in
@@ -392,7 +462,8 @@ extension DataHealthView {
                 title: l("待办项目关联无效"),
                 detail: issueDetail([item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "checklist",
-                route: .siteTodo(projectId: nil, todoId: item.id)
+                route: .siteTodo(projectId: nil, todoId: item.id),
+                repair: .clearSiteTodoProject(todoId: item.id)
             )
         }
         issues += store.quickNotes.compactMap { item in
@@ -402,7 +473,8 @@ extension DataHealthView {
                 title: l("随手记项目关联无效"),
                 detail: issueDetail([item.title.isEmpty ? item.createdAt : item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "square.and.pencil",
-                route: .quickNote(noteId: item.id)
+                route: .quickNote(noteId: item.id),
+                repair: .clearQuickNoteProject(noteId: item.id)
             )
         }
         return issues
@@ -514,7 +586,13 @@ extension DataHealthView {
             + orphanQuickNoteAttachmentFiles.count
     }
 
-    private func fileOnlyIssues(_ fileNames: [String], title: String, systemImage: String, color: Color) -> [DataHealthIssue] {
+    private func fileOnlyIssues(
+        _ fileNames: [String],
+        title: String,
+        systemImage: String,
+        color: Color,
+        kind: DataHealthOrphanFileKind
+    ) -> [DataHealthIssue] {
         fileNames.map { fileName in
             DataHealthIssue(
                 id: "\(title)-\(fileName)",
@@ -523,7 +601,13 @@ extension DataHealthView {
                 systemImage: systemImage,
                 color: color,
                 actionTitle: nil,
-                route: nil
+                route: nil,
+                actions: [
+                    .moveToTrash(
+                        title: l("移入回收站"),
+                        file: DataHealthOrphanFile(kind: kind, fileName: fileName)
+                    )
+                ]
             )
         }
     }
@@ -533,7 +617,8 @@ extension DataHealthView {
         title: String,
         detail: String,
         systemImage: String,
-        route: DataHealthIssueRoute? = nil
+        route: DataHealthIssueRoute? = nil,
+        repair: DataHealthIssueRepair
     ) -> DataHealthIssue {
         DataHealthIssue(
             id: id,
@@ -542,7 +627,10 @@ extension DataHealthView {
             systemImage: systemImage,
             color: .appWarning,
             actionTitle: l("打开记录"),
-            route: route
+            route: route,
+            actions: [
+                .repair(title: l("修复该项"), repair: repair)
+            ]
         )
     }
 

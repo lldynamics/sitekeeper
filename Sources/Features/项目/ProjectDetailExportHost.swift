@@ -53,7 +53,7 @@ struct ProjectDetailExportHost: ViewModifier {
                         exportPayload = nil
                     }
                 } else {
-                    ProgressView("正在准备导出文件...")
+                    ProgressView(String(localized: "正在准备导出文件..."))
                         .padding()
                 }
             }
@@ -62,11 +62,11 @@ struct ProjectDetailExportHost: ViewModifier {
                     AppHaptics.impact(.light)
                 }
             }
-            .alert("交付包较大", isPresented: $showPackageSizeWarning) {
-                Button("取消", role: .cancel) {
+            .alert(String(localized: "交付包较大"), isPresented: $showPackageSizeWarning) {
+                Button(String(localized: "取消"), role: .cancel) {
                     pendingPackageProject = nil
                 }
-                Button("继续导出") {
+                Button(String(localized: "继续导出")) {
                     AppHaptics.warning()
                     if let project = pendingPackageProject {
                         onContinuePackageExport(project)

@@ -117,6 +117,13 @@ private enum DataSafetyPrimaryTarget {
     case storage
 }
 
+private enum DataSafetySecondaryTarget: Hashable {
+    case backupAndRestore
+    case health
+    case storage
+    case export
+}
+
 private struct DataSafetyPrimaryAction {
     let title: String
     let message: String
@@ -134,10 +141,13 @@ struct DataManagementView: View {
     @State private var shouldAutoOpenBackupImporter: Bool
     @State private var showClearHistoryConfirm = false
     @State private var showSampleDataImportConfirm = false
+    @State private var showUITestOverwriteImportConfirm = false
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
+    @State private var cleanupTrashBatchCount = 0
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
+    @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
 
     init(initialRoute: DataManagementRoute? = nil) {
         _selectedTab = State(initialValue: DataManagementTab.from(route: initialRoute))
@@ -147,6 +157,11 @@ struct DataManagementView: View {
 
     private var sampleDataImportEnabled: Bool {
         AppFeatureFlags.allowsSampleDataImport || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+    }
+
+    private var showsUITestBackupPreviewShortcut: Bool {
+        ProcessInfo.processInfo.arguments.contains("-uitest-backup-preview")
+            || ProcessInfo.processInfo.environment["UITEST_BACKUP_PREVIEW"] == "1"
     }
 
     private var historyTrimCount: Int {
@@ -182,6 +197,27 @@ struct DataManagementView: View {
         latestBackupDate != nil
     }
 
+    private var backupAgeDays: Int? {
+        guard let latestBackupDate else { return nil }
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: latestBackupDate)
+        let end = calendar.startOfDay(for: Date())
+        return max(calendar.dateComponents([.day], from: start, to: end).day ?? 0, 0)
+    }
+
+    private var isBackupStale: Bool {
+        guard let backupAgeDays else { return true }
+        return backupAgeDays >= max(1, backupHealthReminderDays)
+    }
+
+    private var dataHealthIssueCount: Int {
+        store.latestDataHealthScan?.totalIssues ?? 0
+    }
+
+    private var hasDataHealthScan: Bool {
+        store.latestDataHealthScan != nil
+    }
+
     private var usesWideLayout: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
@@ -198,13 +234,39 @@ struct DataManagementView: View {
             )
         }
 
-        if historyTrimCount > 0 {
+        if isBackupStale {
+            let days = Int64(backupAgeDays ?? 0)
             return DataSafetyPrimaryAction(
-                title: String(localized: "有计算历史可按策略清理"),
+                title: String(localized: "备份需要更新"),
                 message: String(
-                    format: String(localized: "当前可按保留策略清理 %lld 条计算历史，清理前已检测到备份记录。"),
-                    Int64(historyTrimCount)
+                    format: String(localized: "最近一次备份已过 %lld 天，超过当前提醒阈值。清理或交付前建议先补一份新备份。"),
+                    days
                 ),
+                buttonTitle: String(localized: "去备份"),
+                systemImage: "externaldrive.badge.plus",
+                tone: .warning,
+                target: .backup
+            )
+        }
+
+        if dataHealthIssueCount > 0 {
+            return DataSafetyPrimaryAction(
+                title: String(localized: "先修复数据异常"),
+                message: String(
+                    format: String(localized: "数据健康扫描发现 %lld 个异常，建议逐项修复后再清理或导出。"),
+                    Int64(dataHealthIssueCount)
+                ),
+                buttonTitle: String(localized: "去修复"),
+                systemImage: "stethoscope",
+                tone: .risk,
+                target: .health
+            )
+        }
+
+        if historyTrimCount > 0 || cleanupTrashBatchCount > 0 {
+            return DataSafetyPrimaryAction(
+                title: String(localized: "有空间可清理"),
+                message: cleanupRiskMessage,
                 buttonTitle: String(localized: "去清理"),
                 systemImage: "clock.arrow.circlepath",
                 tone: .warning,
@@ -233,13 +295,94 @@ struct DataManagementView: View {
         )
     }
 
+    private var cleanupRiskMessage: String {
+        switch (historyTrimCount, cleanupTrashBatchCount) {
+        case let (historyCount, trashCount) where historyCount > 0 && trashCount > 0:
+            return String(
+                format: String(localized: "当前可按策略清理 %lld 条计算历史，回收站还有 %lld 个可恢复批次。"),
+                Int64(historyCount),
+                Int64(trashCount)
+            )
+        case let (historyCount, _) where historyCount > 0:
+            return String(
+                format: String(localized: "当前可按保留策略清理 %lld 条计算历史，清理前已检测到备份记录。"),
+                Int64(historyCount)
+            )
+        case let (_, trashCount) where trashCount > 0:
+            return String(
+                format: String(localized: "清理回收站还有 %lld 个可恢复批次，可继续恢复或永久清理。"),
+                Int64(trashCount)
+            )
+        default:
+            return String(localized: "可以查看大文件、回收站和项目附件占用。")
+        }
+    }
+
+    private var backupStatusValue: String {
+        guard let backupAgeDays else {
+            return String(localized: "未备份")
+        }
+        if backupAgeDays == 0 {
+            return String(localized: "今天已备份")
+        }
+        return String(
+            format: String(localized: "%lld 天前备份"),
+            Int64(backupAgeDays)
+        )
+    }
+
+    private var backupStatusTone: StatusChipTone {
+        if !hasAnyBackupRecord || isBackupStale {
+            return .warning
+        }
+        return .success
+    }
+
+    private var healthStatusValue: String {
+        guard hasDataHealthScan else {
+            return String(localized: "待扫描")
+        }
+        guard dataHealthIssueCount > 0 else {
+            return String(localized: "正常")
+        }
+        return String(
+            format: String(localized: "%lld 个异常"),
+            Int64(dataHealthIssueCount)
+        )
+    }
+
+    private var healthStatusTone: StatusChipTone {
+        guard hasDataHealthScan else {
+            return .neutral
+        }
+        return dataHealthIssueCount > 0 ? .risk : .success
+    }
+
+    private var cleanupStatusValue: String {
+        if cleanupTrashBatchCount > 0 {
+            return String(
+                format: String(localized: "%lld 个回收批次"),
+                Int64(cleanupTrashBatchCount)
+            )
+        }
+        if historyTrimCount > 0 {
+            return String(
+                format: String(localized: "%lld 条待清理"),
+                Int64(historyTrimCount)
+            )
+        }
+        return String(localized: "正常")
+    }
+
+    private var cleanupStatusTone: StatusChipTone {
+        (cleanupTrashBatchCount > 0 || historyTrimCount > 0) ? .warning : .success
+    }
+
     var body: some View {
         VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
-            if usesWideLayout {
-                dataSafetyHeader
-            }
+            dataSafetyHeader
 
-            dataManagementTabPicker
+            secondaryFlowShortcuts
 
             if usesWideLayout {
                 selectedTabSummary
@@ -293,21 +436,21 @@ struct DataManagementView: View {
         } message: {
             Text(String(localized: "会清空当前本机业务数据，并恢复一套更完整的测试项目、报价、图纸、票据、照片和附件样例。"))
         }
+        .alert(String(localized: "确认覆盖导入？"), isPresented: $showUITestOverwriteImportConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
+        }
         .operationToast(notice: $operationNotice)
         .onDisappear {
             undoableDeletion.flushPendingCommit()
         }
-    }
-
-    private var dataManagementTabPicker: some View {
-        Picker(String(localized: "数据管理"), selection: $selectedTab) {
-            ForEach(DataManagementTab.allCases, id: \.self) { tab in
-                Text(tab.displayName).tag(tab)
-            }
+        .onAppear {
+            refreshRiskSnapshot()
         }
-        .pickerStyle(.segmented)
-        .padding(.horizontal)
-        .padding(.top, usesWideLayout ? 8 : 6)
+        .onChange(of: selectedTab) { _, _ in
+            refreshRiskSnapshot()
+        }
     }
 
     private var selectedTabSummary: some View {
@@ -322,6 +465,55 @@ struct DataManagementView: View {
             Spacer()
         }
         .padding(.horizontal)
+    }
+
+    private var secondaryFlowShortcuts: some View {
+        LazyVGrid(
+            columns: [GridItem(.adaptive(minimum: usesWideLayout ? 154 : 134), spacing: AppSpacing.tight)],
+            alignment: .leading,
+            spacing: AppSpacing.tight
+        ) {
+            shortcutButton(.backupAndRestore)
+            shortcutButton(.health)
+            shortcutButton(.storage)
+            shortcutButton(.export)
+        }
+        .padding(.horizontal)
+    }
+
+    private func shortcutButton(_ target: DataSafetySecondaryTarget) -> some View {
+        let selected = isSelectedSecondaryTarget(target)
+        let tone = shortcutTone(target)
+        return Button {
+            selectSecondaryTarget(target)
+        } label: {
+            AppPanel(
+                tone: selected ? selectedCardTone(for: tone) : .grouped,
+                cornerRadius: 10,
+                padding: 10,
+                stroke: selected ? tone.tint.opacity(0.3) : Color.appStrokeSecondary.opacity(0.35)
+            ) {
+                HStack(alignment: .top, spacing: AppSpacing.tight) {
+                    Image(systemName: shortcutIcon(target))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(tone.tint)
+                        .frame(width: 20, height: 20)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(shortcutTitle(target))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                        Text(shortcutSubtitle(target))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("data-management-shortcut-\(shortcutIdentifier(target))")
     }
 
     private var calculationHistoryCard: some View {
@@ -410,6 +602,22 @@ struct DataManagementView: View {
                 Divider()
             }
 
+            if showsUITestBackupPreviewShortcut {
+                Button {
+                    selectedTab = .backupAndRestore
+                } label: {
+                    Label(String(localized: "UI测试：模拟覆盖导入预览"), systemImage: "doc.text.magnifyingglass")
+                }
+                .accessibilityIdentifier("ui-test-backup-preview")
+
+                Button {
+                    showUITestOverwriteImportConfirm = true
+                } label: {
+                    Label(String(localized: "UI测试：触发覆盖二次确认"), systemImage: "exclamationmark.triangle")
+                }
+                .accessibilityIdentifier("ui-test-overwrite-confirm")
+            }
+
             if sampleDataImportEnabled {
                 Button(role: store.hasAnyBusinessData ? .destructive : nil) {
                     showSampleDataImportConfirm = true
@@ -438,6 +646,100 @@ struct DataManagementView: View {
                 .visibleIconStyle()
         }
         .accessibilityLabel(String(localized: "数据安全中心操作"))
+        .accessibilityIdentifier("data-management-actions-menu")
+    }
+
+    private func selectSecondaryTarget(_ target: DataSafetySecondaryTarget) {
+        switch target {
+        case .backupAndRestore:
+            selectedTab = .backupAndRestore
+        case .health:
+            selectedTab = .healthAndCleanup
+            healthCleanupSection = .health
+        case .storage:
+            selectedTab = .healthAndCleanup
+            healthCleanupSection = .storage
+        case .export:
+            selectedTab = .export
+        }
+    }
+
+    private func isSelectedSecondaryTarget(_ target: DataSafetySecondaryTarget) -> Bool {
+        switch target {
+        case .backupAndRestore:
+            return selectedTab == .backupAndRestore
+        case .health:
+            return selectedTab == .healthAndCleanup && healthCleanupSection == .health
+        case .storage:
+            return selectedTab == .healthAndCleanup && healthCleanupSection == .storage
+        case .export:
+            return selectedTab == .export
+        }
+    }
+
+    private func shortcutTitle(_ target: DataSafetySecondaryTarget) -> String {
+        switch target {
+        case .backupAndRestore:
+            return String(localized: "备份恢复")
+        case .health:
+            return String(localized: "健康修复")
+        case .storage:
+            return String(localized: "空间清理")
+        case .export:
+            return String(localized: "导出交付")
+        }
+    }
+
+    private func shortcutSubtitle(_ target: DataSafetySecondaryTarget) -> String {
+        switch target {
+        case .backupAndRestore:
+            return backupStatusValue
+        case .health:
+            return healthStatusValue
+        case .storage:
+            return cleanupStatusValue
+        case .export:
+            return String(localized: "交付包与表格")
+        }
+    }
+
+    private func shortcutIcon(_ target: DataSafetySecondaryTarget) -> String {
+        switch target {
+        case .backupAndRestore:
+            return "externaldrive.badge.icloud"
+        case .health:
+            return "stethoscope"
+        case .storage:
+            return "internaldrive"
+        case .export:
+            return "square.and.arrow.up"
+        }
+    }
+
+    private func shortcutTone(_ target: DataSafetySecondaryTarget) -> StatusChipTone {
+        switch target {
+        case .backupAndRestore:
+            return backupStatusTone
+        case .health:
+            return healthStatusTone
+        case .storage:
+            return cleanupStatusTone
+        case .export:
+            return .doc
+        }
+    }
+
+    private func shortcutIdentifier(_ target: DataSafetySecondaryTarget) -> String {
+        switch target {
+        case .backupAndRestore:
+            return "backup"
+        case .health:
+            return "health"
+        case .storage:
+            return "storage"
+        case .export:
+            return "export"
+        }
     }
 
     @ViewBuilder
@@ -450,28 +752,28 @@ struct DataManagementView: View {
                 stroke: Color.appStrokeSecondary.opacity(0.45)
             ) {
                 VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                    Label(String(localized: "数据安全中心"), systemImage: "externaldrive.badge.shield.half.filled")
+                    Label(String(localized: "数据安全状态"), systemImage: "externaldrive.badge.shield.half.filled")
                         .font(.headline)
 
-                    Text(String(localized: "把备份健康、导入恢复、导出交付和清理风险收进同一条操作链路，先判断风险，再执行动作。"))
+                    Text(String(localized: "先看当前风险，再选择备份、修复、清理或导出；普通入口按处理顺序排列。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
                     HStack(spacing: AppSpacing.tight) {
                         statusChip(
-                            title: String(localized: "本地备份"),
-                            value: localBackupDate.map(relativeDateText) ?? String(localized: "未完成"),
-                            tone: localBackupDate == nil ? .warning : .success
+                            title: String(localized: "备份"),
+                            value: backupStatusValue,
+                            tone: backupStatusTone
                         )
                         statusChip(
-                            title: String(localized: "云备份"),
-                            value: cloudBackupDate.map(relativeDateText) ?? String(localized: "未同步"),
-                            tone: cloudBackupDate == nil ? .neutral : .primary
+                            title: String(localized: "健康"),
+                            value: healthStatusValue,
+                            tone: healthStatusTone
                         )
                         statusChip(
-                            title: String(localized: "清理风险"),
-                            value: historyTrimCount > 0 ? String(format: String(localized: "%lld 条待清理"), Int64(historyTrimCount)) : String(localized: "正常"),
-                            tone: historyTrimCount > 0 ? .warning : .success
+                            title: String(localized: "清理"),
+                            value: cleanupStatusValue,
+                            tone: cleanupStatusTone
                         )
                     }
 
@@ -566,6 +868,11 @@ struct DataManagementView: View {
         }
     }
 
+    private func refreshRiskSnapshot() {
+        cleanupTrashBatchCount = StorageCleanupTrashStore.loadBatches().count
+        store.scheduleDataHealthScanIfStale(reason: .scheduled)
+    }
+
     private func statusChip(title: String, value: String, tone: StatusChipTone) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
@@ -612,10 +919,6 @@ struct DataManagementView: View {
         }
     }
 
-    private func relativeDateText(_ date: Date) -> String {
-        date.formatted(date: .abbreviated, time: .omitted)
-    }
-
     @ViewBuilder
     private var sampleDataImportCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
@@ -644,6 +947,7 @@ struct DataManagementView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(.appWarning)
+            .accessibilityIdentifier("data-management-import-sample-data")
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)

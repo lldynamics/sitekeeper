@@ -39,7 +39,7 @@ extension DashboardView {
     var backupReminderValue: String {
         if isIgnoringBackupReminderToday { return String(localized: "已忽略") }
         guard let daysSinceLastSuccessfulBackup else { return String(localized: "未备份") }
-        return "\(daysSinceLastSuccessfulBackup)天"
+        return String(format: String(localized: "%lld天"), Int64(daysSinceLastSuccessfulBackup))
     }
 
     var backupReminderRiskCount: Int {
@@ -347,7 +347,12 @@ extension DashboardView {
         }
         financeStore.setMaterialPriceSpikeThreshold(raised)
         AppHaptics.success()
-        showDashboardActionFeedback("已上调阈值到 \(Int((raised * 100).rounded()))%")
+        showDashboardActionFeedback(
+            String(
+                format: String(localized: "已上调阈值到 %lld%%"),
+                Int64((raised * 100).rounded())
+            )
+        )
     }
 
     func raiseBackupReminderThreshold() {
@@ -361,14 +366,19 @@ extension DashboardView {
         }
         UserDefaults.standard.set(raised, forKey: UserPreferenceKeys.backupHealthReminderDays)
         AppHaptics.success()
-        showDashboardActionFeedback("备份提醒阈值已调整为 \(raised) 天")
+        showDashboardActionFeedback(
+            String(
+                format: String(localized: "备份提醒阈值已调整为 %lld 天"),
+                Int64(raised)
+            )
+        )
     }
 
     func createBackupFollowupTodo() {
         createRiskTodo(
             marker: "[dashboard-risk:backup-overdue]",
-            title: "检查备份策略",
-            note: "工作台检测到备份超期，请检查本地和云端备份是否成功。",
+            title: String(localized: "检查备份策略"),
+            note: String(localized: "工作台检测到备份超期，请检查本地和云端备份是否成功。"),
             projectId: nil
         )
     }
@@ -378,8 +388,12 @@ extension DashboardView {
         let projectNameText = currentProject?.name ?? String(localized: "全部项目")
         createRiskTodo(
             marker: "[dashboard-risk:missing-receipt]",
-            title: "补齐票据资料",
-            note: "\(projectNameText) 当前有 \(displayedMissingReceiptCount) 笔账目缺票，请补齐附件并关联账目。",
+            title: String(localized: "补齐票据资料"),
+            note: String(
+                format: String(localized: "%@ 当前有 %lld 笔账目缺票，请补齐附件并关联账目。"),
+                projectNameText,
+                Int64(displayedMissingReceiptCount)
+            ),
             projectId: projectId
         )
     }
@@ -389,8 +403,12 @@ extension DashboardView {
         let projectNameText = currentProject?.name ?? String(localized: "全部项目")
         createRiskTodo(
             marker: "[dashboard-risk:price-spike]",
-            title: "处理材料价格异动",
-            note: "\(projectNameText) 当前有 \(displayedPriceSpikeCount) 项价格异动，请复核采购价或调整阈值。",
+            title: String(localized: "处理材料价格异动"),
+            note: String(
+                format: String(localized: "%@ 当前有 %lld 项价格异动，请复核采购价或调整阈值。"),
+                projectNameText,
+                Int64(displayedPriceSpikeCount)
+            ),
             projectId: projectId
         )
     }
@@ -400,8 +418,12 @@ extension DashboardView {
         let projectNameText = currentProject?.name ?? String(localized: "全部项目")
         createRiskTodo(
             marker: "[dashboard-risk:negative-stock]",
-            title: "核对负库存",
-            note: "\(projectNameText) 当前有 \(displayedNegativeStockCount) 项负库存，请补录入库或修正数量。",
+            title: String(localized: "核对负库存"),
+            note: String(
+                format: String(localized: "%@ 当前有 %lld 项负库存，请补录入库或修正数量。"),
+                projectNameText,
+                Int64(displayedNegativeStockCount)
+            ),
             projectId: projectId
         )
     }

@@ -91,17 +91,21 @@ private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
                     )
                 } else {
                     NavigationStack {
-                        ContentUnavailableView("当前设备不支持扫描", systemImage: "camera.viewfinder", description: Text("请在支持相机扫描的 iPhone 或 iPad 上使用。"))
+                        ContentUnavailableView(
+                            String(localized: "当前设备不支持扫描"),
+                            systemImage: "camera.viewfinder",
+                            description: Text(String(localized: "请在支持相机扫描的 iPhone 或 iPad 上使用。"))
+                        )
                             .toolbar {
                                 ToolbarItem(placement: .cancellationAction) {
-                                    Button("关闭") { scanTarget = nil }
+                                    Button(String(localized: "关闭")) { scanTarget = nil }
                                 }
                             }
                     }
                 }
             }
             .alert(importErrorTitle, isPresented: $showImportError) {
-                Button("知道了", role: .cancel) {}
+                Button(String(localized: "知道了"), role: .cancel) {}
             } message: {
                 Text(importErrorMessage)
             }

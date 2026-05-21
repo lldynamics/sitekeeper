@@ -45,9 +45,20 @@ struct StorageCleanupCenterView: View {
                 }
             }
 
-            cleanupTrashPolicySection
+            StorageCleanupTrashPolicySection(
+                cleanupTrashRetentionDays: $cleanupTrashRetentionDays,
+                cleanupTrashRecoveryDeadlineText: cleanupTrashRecoveryDeadlineText
+            )
 
-            cleanupTrashSection
+            StorageCleanupTrashSection(
+                cleanupTrashBatches: cleanupTrashBatches,
+                quarantinedFiles: quarantinedFiles,
+                normalizedCleanupTrashRetentionDays: normalizedCleanupTrashRetentionDays,
+                onRestoreCleanupTrash: restoreCleanupTrash,
+                onPermanentlyDeleteCleanupTrash: permanentlyDeleteCleanupTrash,
+                onRestoreQuarantinedFile: restoreQuarantinedFile,
+                onPermanentlyDeleteQuarantinedFile: permanentlyDeleteQuarantinedFile
+            )
 
             StorageCleanupSummarySection(categorySummaries: categorySummaries)
 
@@ -104,143 +115,6 @@ struct StorageCleanupCenterView: View {
         Formatters.date.string(from: cleanupTrashExpirationDate(from: Date()))
     }
 
-    private var cleanupTrashPolicySection: some View {
-        Section {
-            Picker(selection: $cleanupTrashRetentionDays) {
-                ForEach(StorageCleanupTrashRetentionOption.allCases) { option in
-                    Text(option.displayName)
-                        .tag(option.days)
-                }
-            } label: {
-                Label(String(localized: "回收站保留时间"), systemImage: "clock.arrow.circlepath")
-                    .foregroundStyle(.secondary)
-            }
-
-            Text(
-                String(
-                    format: String(localized: "之后新清理的文件可恢复至 %@。"),
-                    cleanupTrashRecoveryDeadlineText
-                )
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-        } header: {
-            Text(String(localized: "回收站策略"))
-        } footer: {
-            Text(String(localized: "只影响之后新清理的批次；已有回收站批次仍按原到期时间处理。"))
-        }
-    }
-
-    private var cleanupTrashSection: some View {
-        Section {
-            if cleanupTrashBatches.isEmpty && quarantinedFiles.isEmpty {
-                Text(String(localized: "暂无可恢复的回收站项目。"))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(cleanupTrashBatches) { batch in
-                    cleanupTrashBatchRow(batch)
-                }
-
-                ForEach(quarantinedFiles) { entry in
-                    quarantinedFileRow(entry)
-                }
-            }
-        } header: {
-            Text(String(localized: "全局回收站"))
-        } footer: {
-            Text(
-                String(
-                    format: String(localized: "照片、图纸、票据、附件删除和项目文件清理都会先进入回收站，当前保留 %lld 天。过期项目会在进入本页时自动永久删除。"),
-                    Int64(normalizedCleanupTrashRetentionDays)
-                )
-            )
-        }
-    }
-
-    private func cleanupTrashBatchRow(_ batch: StorageCleanupTrashBatch) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(batch.summary)
-                    .font(.callout.weight(.semibold))
-                Spacer()
-                Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.appWarning)
-            }
-            Text(String(localized: "清理批次"))
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(
-                String(
-                    format: String(localized: "可恢复至 %@"),
-                    Formatters.date.string(from: batch.expiresAt)
-                )
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            HStack {
-                Button {
-                    restoreCleanupTrash(batch)
-                } label: {
-                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
-                }
-                .buttonStyle(.bordered)
-
-                Button(role: .destructive) {
-                    permanentlyDeleteCleanupTrash(batch)
-                } label: {
-                    Label(String(localized: "永久删除"), systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-            }
-            .font(.caption)
-        }
-        .padding(.vertical, 3)
-    }
-
-    private func quarantinedFileRow(_ entry: FileQuarantineEntry) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(entry.originalFileName)
-                    .font(.callout.weight(.semibold))
-                Spacer()
-                Text(String(localized: "隔离文件"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.appWarning)
-            }
-            Text(fileQuarantineCategoryTitle(entry.category))
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(.secondary)
-            Text(
-                String(
-                    format: String(localized: "可恢复至 %@"),
-                    Formatters.date.string(from: entry.expiresAt)
-                )
-            )
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            HStack {
-                Button {
-                    restoreQuarantinedFile(entry)
-                } label: {
-                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
-                }
-                .buttonStyle(.bordered)
-
-                Button(role: .destructive) {
-                    permanentlyDeleteQuarantinedFile(entry)
-                } label: {
-                    Label(String(localized: "永久删除"), systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-            }
-            .font(.caption)
-        }
-        .padding(.vertical, 3)
-    }
-
     private var largeFileRuleSuggestionText: String {
         String(
             format: String(localized: "建议规则：照片≥%@、视频≥%@、票据资料≥%@ 时优先检查。"),
@@ -271,23 +145,6 @@ struct StorageCleanupCenterView: View {
 
     private var projectUsages: [ProjectStorageUsage] {
         scanResult.projectUsages
-    }
-
-    private func fileQuarantineCategoryTitle(_ category: FileQuarantineCategory) -> String {
-        switch category {
-        case .photoOriginal:
-            return String(localized: "照片原文件")
-        case .photoThumbnail:
-            return String(localized: "照片缩略图")
-        case .drawing:
-            return String(localized: "图纸原件文件")
-        case .drawingSidecar:
-            return String(localized: "图纸附属文件")
-        case .projectDocument:
-            return String(localized: "项目资料文件")
-        case .quickNoteAttachment:
-            return String(localized: "随手记附件")
-        }
     }
 
     private func normalizeLargeFileThresholdPreference() {

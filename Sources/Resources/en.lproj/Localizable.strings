@@ -3027,3 +3027,217 @@
 "materialSheet.export.table.laborCost" = "Labor Cost";
 "materialSheet.export.table.supplier" = "Supplier";
 "materialSheet.export.table.note" = "Remarks";
+
+/* Localization tail cleanup */
+"该项目可能已被删除或尚未同步到本机。" = "This project may have been deleted or not yet synced to this device.";
+"完工交付向导" = "Completion Delivery Guide";
+"导出与交付" = "Export & Delivery";
+"仅删除账目（保留票据）" = "Delete record only (keep receipt)";
+"删除账目并删除票据" = "Delete record and receipt";
+"反馈内容" = "Feedback";
+"您的邮箱（可选）" = "Your email (optional)";
+"联系方式：%@" = "Contact: %@";
+"收件人：%@" = "To: %@";
+"%@ 意见反馈" = "%@ Feedback";
+"教程排版" = "Tutorial Layout";
+"已恢复上次未保存草稿" = "Restored the last unsaved draft";
+"插入模块" = "Insert Block";
+"完整教程正文" = "Full Tutorial Body";
+"建议写明：适用场景、施工准备、关键工序、质量控制、常见问题、验收标准。" = "Suggested content: applicable scenarios, preparation, key procedures, quality control, common issues, and acceptance criteria.";
+"教程预览" = "Tutorial Preview";
+"输入内容后会在这里显示预览。" = "A preview will appear here after you enter content.";
+"教程图片/视频" = "Tutorial Photos / Videos";
+"相册图/视频" = "Photos / Videos";
+"还没有教程媒体。可补充关键节点图片和短视频。" = "No tutorial media yet. Add key-step images and short videos.";
+
+/* Data health issue actions */
+"生成专项待办" = "Create Issue Todo";
+"打开日志补照片" = "Open Log to Add Photo";
+"移除缺失引用" = "Remove Missing Reference";
+"打开待办补照片" = "Open Todo to Add Photo";
+"打开资料补原件" = "Open Document to Add Original";
+"移除缺失记录" = "Remove Missing Record";
+"打开随手记补附件" = "Open Note to Add Attachment";
+"修复该项" = "Fix This Item";
+"移入回收站" = "Move to Trash";
+"该项已不存在或无需修复" = "This item no longer exists or does not need repair.";
+"已修复该项" = "Fixed this item.";
+"该文件已不存在或无法处理" = "This file no longer exists or cannot be handled.";
+"已移入回收站，可在存储清理中恢复" = "Moved to trash. You can restore it from Storage Cleanup.";
+"该问题的专项待办已存在" = "A todo for this issue already exists.";
+"处理：%@" = "Handle: %@";
+"已生成专项待办" = "Created issue todo.";
+
+/* Project delivery repair wizard */
+"交付修复向导" = "Delivery Repair Guide";
+"回到交付包导出页" = "Back to Delivery Export";
+"当前步骤：%@" = "Current step: %@";
+"当前步骤" = "Current Step";
+"等待前序" = "Waiting";
+"补齐票据" = "Complete Receipts";
+"补齐图纸" = "Complete Drawings";
+"确认当前版" = "Confirm Current Version";
+"补齐原件" = "Complete Originals";
+"关闭图纸问题" = "Close Drawing Issues";
+"处理问题" = "Handle Issues";
+"缺失原件已补齐。" = "Missing originals are complete.";
+"没有未关闭图纸问题。" = "No open drawing issues.";
+"图纸已上传并确认当前版。" = "Drawings are uploaded and current versions are confirmed.";
+
+/* Data safety risk-first flow */
+"备份需要更新" = "Backup Needs Updating";
+"最近一次备份已过 %lld 天，超过当前提醒阈值。清理或交付前建议先补一份新备份。" = "The latest backup is %lld days old, past the reminder threshold. Create a fresh backup before cleanup or delivery.";
+"先修复数据异常" = "Fix Data Issues First";
+"数据健康扫描发现 %lld 个异常，建议逐项修复后再清理或导出。" = "Data health scan found %lld issues. Fix them one by one before cleanup or export.";
+"有空间可清理" = "Cleanup Available";
+"当前可按策略清理 %lld 条计算历史，回收站还有 %lld 个可恢复批次。" = "%lld calculation history items can be cleaned by policy, and trash has %lld recoverable batches.";
+"清理回收站还有 %lld 个可恢复批次，可继续恢复或永久清理。" = "Cleanup trash has %lld recoverable batches. Restore them or delete them permanently.";
+"可以查看大文件、回收站和项目附件占用。" = "Review large files, trash, and project attachment usage.";
+"今天已备份" = "Backed Up Today";
+"%lld 天前备份" = "Backed Up %lld Days Ago";
+"%lld 个异常" = "%lld Issues";
+"%lld 个回收批次" = "%lld Trash Batches";
+"健康修复" = "Health Repair";
+"空间清理" = "Space Cleanup";
+"交付包与表格" = "Delivery & Tables";
+"数据安全状态" = "Data Safety Status";
+"先看当前风险，再选择备份、修复、清理或导出；普通入口按处理顺序排列。" = "Review current risks first, then choose backup, repair, cleanup, or export. Common entries are ordered by workflow.";
+"健康" = "Health";
+
+/* Project detail toolbar rules */
+"新增账目" = "New Transaction";
+"新增报价" = "New Quote";
+"处理待办" = "Handle Todos";
+"编辑项目资料" = "Edit Project Info";
+"导入图纸原件" = "Import Drawing Original";
+"打开交付向导" = "Open Delivery Guide";
+
+/* Project timeline and quick tools localization cleanup */
+"时间线筛选" = "Timeline Filters";
+"项目时间线 (%lld)" = "Project Timeline (%lld)";
+"还没有项目动态" = "No Project Activity Yet";
+"写日志、导入资料、记账或更新进度后，会自动汇总到这里。" = "Logs, imported documents, bookkeeping, and progress updates will appear here automatically.";
+"没有匹配动态" = "No Matching Activity";
+"调整类型或时间筛选后再查看。" = "Adjust the type or time filter and check again.";
+"收起时间线" = "Collapse Timeline";
+"查看全部时间线" = "View Full Timeline";
+"7天" = "7 Days";
+"30天" = "30 Days";
+"拍照标签" = "Camera Photo Tag";
+"选择照片" = "Choose Photos";
+"照片备注" = "Photo Note";
+"从文件导入 PDF/图片" = "Import PDF/Image from Files";
+"从相册选择" = "Choose from Photos";
+"常用工具" = "Favorite Tools";
+"选择专业" = "Choose Discipline";
+"%lld 个常用工具" = "%lld Quick Tools";
+"独立拍照并导出带工程水印的现场图片" = "Take photos separately and export site images with a project watermark.";
+"没有匹配工具" = "No Matching Tools";
+"搜索%@工具" = "Search %@ Tools";
+"取消常用" = "Remove Favorite";
+"设为常用" = "Add Favorite";
+"电气" = "Electrical";
+"土建" = "Civil";
+"通用" = "General";
+
+/* Remaining hardcoded UI localization cleanup */
+"当前目标" = "Current Target";
+"请在支持相机扫描的 iPhone 或 iPad 上使用。" = "Use this on an iPhone or iPad that supports camera scanning.";
+"交付包较大" = "Large Delivery Package";
+"继续导出" = "Continue Export";
+"查看项目仓库（%lld 条出入库）" = "View Project Warehouse (%lld Movements)";
+
+/* Supporting copy localization cleanup */
+"%lld天" = "%lld days";
+"已上调阈值到 %lld%%" = "Threshold raised to %lld%%";
+"备份提醒阈值已调整为 %lld 天" = "Backup reminder threshold set to %lld days";
+"检查备份策略" = "Check Backup Policy";
+"工作台检测到备份超期，请检查本地和云端备份是否成功。" = "The dashboard detected an overdue backup. Check whether local and cloud backups are succeeding.";
+"补齐票据资料" = "Complete Receipt Documents";
+"%@ 当前有 %lld 笔账目缺票，请补齐附件并关联账目。" = "%@ has %lld records missing receipts. Add attachments and link them to the records.";
+"处理材料价格异动" = "Handle Material Price Changes";
+"%@ 当前有 %lld 项价格异动，请复核采购价或调整阈值。" = "%@ has %lld material price changes. Review purchase prices or adjust the threshold.";
+"核对负库存" = "Review Negative Stock";
+"%@ 当前有 %lld 项负库存，请补录入库或修正数量。" = "%@ has %lld negative-stock items. Add inbound records or correct quantities.";
+"当前阈值已覆盖该异动，无需调整" = "The current threshold already covers this change.";
+"已将阈值调整为 %@" = "Threshold set to %@";
+"该材料已生成采购提醒" = "A purchase reminder already exists for this material";
+"已生成采购提醒" = "Purchase reminder created";
+"施工日志照片" = "Daily Log Photo";
+"%@ · 整改前" = "%@ · Before Rectification";
+"%@ · 整改后" = "%@ · After Rectification";
+
+"toolbox.catalog.watermark.title" = "Watermark Camera";
+"toolbox.catalog.watermark.desc" = "Take photos separately and export site images with a project watermark.";
+"toolbox.catalog.materialCenter.title" = "Material Center";
+"toolbox.catalog.materialCenter.desc" = "One entry for warehouse, material sheets, and the material library.";
+"toolbox.catalog.files.title" = "Project Files";
+"toolbox.catalog.files.desc" = "View photos, drawings, receipt documents, and quick-note attachments by project.";
+"toolbox.catalog.calculators.title" = "Quick Calculations";
+"toolbox.catalog.calculators.desc" = "Choose tools by electrical, civil, and general categories.";
+"toolbox.catalog.quotation.title" = "Quotation & Settlement";
+"toolbox.catalog.quotation.desc" = "Versions, status, and customer confirmation details.";
+"toolbox.catalog.labor.title" = "Labor Records";
+"toolbox.catalog.labor.desc" = "Work type, headcount, labor rate, amount, and settlement status.";
+"toolbox.catalog.contacts.title" = "Contacts";
+"toolbox.catalog.contacts.desc" = "Summarize all project contacts and filter by project.";
+"toolbox.catalog.methods.title" = "Construction Method Library";
+"toolbox.catalog.methods.desc" = "Standard practices, quality requirements, and safety notes.";
+
+"project.business.core.title" = "Business Core";
+"project.business.quote" = "Quote";
+"project.business.contract" = "Contract";
+"project.business.collected" = "Collected";
+"project.business.uncollected" = "Uncollected";
+"project.business.materialCost" = "Material Cost";
+"project.business.laborCost" = "Labor Cost";
+"project.business.estimatedGrossProfit" = "Estimated Gross Profit";
+"project.business.pending" = "Pending";
+"project.business.insights.title" = "Business Insights";
+"project.business.receivableAge" = "Receivable Age";
+"project.business.recentCollection" = "Recent Collection";
+"project.business.costException" = "Cost Exceptions";
+"project.business.profitRisk" = "Profit Risk";
+"project.business.noReceivable" = "No receivables";
+"project.business.missingCompletionDate" = "Missing completion date";
+"project.business.notDue" = "Not due";
+"project.business.days" = "%lld days";
+"project.business.noRecentCollection" = "No recent collection";
+"project.business.missingContractAmount" = "Missing contract amount";
+"project.business.pendingItems" = "%lld pending";
+"project.business.noCostRecorded" = "No cost recorded";
+"project.business.overContract" = "Over contract %@";
+"project.business.costRatio" = "Cost ratio %@";
+"project.business.normalCostRatio" = "Normal %@";
+"project.business.lossAmount" = "Loss %@";
+"project.business.lowMargin" = "Low margin %@";
+"project.business.watchMargin" = "Watch %@";
+"project.business.healthyMargin" = "Healthy %@";
+
+"construction.tutorial.block.heading1.title" = "Heading 1";
+"construction.tutorial.block.heading1.snippet" = "# ";
+"construction.tutorial.block.heading2.title" = "Heading 2";
+"construction.tutorial.block.heading2.snippet" = "## ";
+"construction.tutorial.block.emphasis.title" = "Emphasis";
+"construction.tutorial.block.emphasis.snippet" = "**Key point**";
+"construction.tutorial.block.list.title" = "List";
+"construction.tutorial.block.list.snippet" = "- ";
+"construction.tutorial.block.quote.title" = "Quote";
+"construction.tutorial.block.quote.snippet" = "> ";
+"construction.tutorial.block.scenario.title" = "Applicable Scenarios";
+"construction.tutorial.block.scenario.snippet" = "## Applicable Scenarios\n- ";
+"construction.tutorial.block.preparation.title" = "Preparation";
+"construction.tutorial.block.preparation.snippet" = "## Preparation\n- Materials\n- Equipment\n- Workers\n";
+"construction.tutorial.block.steps.title" = "Work Steps";
+"construction.tutorial.block.steps.snippet" = "## Work Steps\n1. \n2. \n3. \n";
+"construction.tutorial.block.quality.title" = "Quality Check";
+"construction.tutorial.block.quality.snippet" = "## Quality Checkpoints\n- ";
+"construction.tutorial.block.safety.title" = "Safety Notes";
+"construction.tutorial.block.safety.snippet" = "## Safety Notes\n- ";
+"construction.tutorial.block.acceptance.title" = "Acceptance Criteria";
+"construction.tutorial.block.acceptance.snippet" = "## Acceptance Criteria\n- ";
+
+"material.priceSpike.ignored.message" = "Ignored: %@";
+"material.priceSpike.unignored.message" = "Unignored: %@";
+"material.priceSpike.purchaseReminder.title" = "Review Purchase Price: %@";
+"material.priceSpike.purchaseReminder.note" = "%@\nPrevious %@/%@ (%@)\nCurrent %@/%@ (%@)\nIncrease +%@\n%@";

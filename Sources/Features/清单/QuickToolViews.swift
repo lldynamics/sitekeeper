@@ -36,7 +36,7 @@ struct QuickToolCategoryListView: View {
     var body: some View {
         List {
             if !favoriteTools.isEmpty {
-                Section("常用工具") {
+                Section(String(localized: "常用工具")) {
                     ForEach(favoriteTools) { tool in
                         QuickToolNavigationRow(tool: tool, color: quickToolColor(for: tool.section))
                     }
@@ -44,27 +44,30 @@ struct QuickToolCategoryListView: View {
             }
 
             if !recentTools.isEmpty {
-                Section("最近使用") {
+                Section(String(localized: "最近使用")) {
                     ForEach(recentTools.prefix(5)) { tool in
                         QuickToolNavigationRow(tool: tool, color: quickToolColor(for: tool.section))
                     }
                 }
             }
 
-            Section("选择专业") {
+            Section(String(localized: "选择专业")) {
                 ForEach(availableSections, id: \.self) { section in
                     NavigationLink { QuickToolSectionView(section: section) } label: {
                         ToolRow(
                             icon: quickToolIcon(for: section),
-                            title: section,
-                            desc: "\(allTools.filter { $0.section == section }.count) 个常用工具",
+                            title: localizedQuickToolSectionName(section),
+                            desc: String(
+                                format: String(localized: "%lld 个常用工具"),
+                                Int64(allTools.filter { $0.section == section }.count)
+                            ),
                             color: quickToolColor(for: section)
                         )
                     }
                 }
             }
         }
-        .navigationTitle("快捷工具")
+        .navigationTitle(String(localized: "快捷工具"))
     }
 
     private func orderedTools(matching titles: [String]) -> [QuickToolItem] {
@@ -76,8 +79,8 @@ struct QuickToolCategoryListView: View {
     private var watermarkCameraTool: QuickToolItem {
         QuickToolItem(
             icon: "camera.aperture",
-            title: "水印相机",
-            desc: "独立拍照并导出带工程水印的现场图片",
+            title: String(localized: "水印相机"),
+            desc: String(localized: "独立拍照并导出带工程水印的现场图片"),
             section: "通用",
             destination: .watermarkCamera
         )
@@ -96,17 +99,20 @@ struct QuickToolSectionView: View {
     var body: some View {
         List {
             if tools.isEmpty {
-                ContentUnavailableView("没有匹配工具", systemImage: "magnifyingglass")
+                ContentUnavailableView(String(localized: "没有匹配工具"), systemImage: "magnifyingglass")
             } else {
-                Section(section) {
+                Section(localizedQuickToolSectionName(section)) {
                     ForEach(tools) { tool in
                         QuickToolNavigationRow(tool: tool, color: quickToolColor(for: section))
                     }
                 }
             }
         }
-        .searchable(text: $searchText, prompt: "搜索\(section)工具")
-        .navigationTitle(section)
+        .searchable(
+            text: $searchText,
+            prompt: String(format: String(localized: "搜索%@工具"), localizedQuickToolSectionName(section))
+        )
+        .navigationTitle(localizedQuickToolSectionName(section))
     }
 }
 
@@ -140,7 +146,10 @@ private struct QuickToolNavigationRow: View {
             Button {
                 toggleFavorite()
             } label: {
-                Label(isFavorite ? "取消常用" : "设为常用", systemImage: isFavorite ? "star.slash" : "star.fill")
+                Label(
+                    isFavorite ? String(localized: "取消常用") : String(localized: "设为常用"),
+                    systemImage: isFavorite ? "star.slash" : "star.fill"
+                )
             }
             .tint(isFavorite ? .appMuted : .appWarning)
         }
@@ -229,5 +238,18 @@ private func quickToolColor(for section: String) -> Color {
         return .appInventory
     default:
         return .appDoc
+    }
+}
+
+private func localizedQuickToolSectionName(_ section: String) -> String {
+    switch section {
+    case "电气":
+        return String(localized: "电气")
+    case "土建":
+        return String(localized: "土建")
+    case "通用":
+        return String(localized: "通用")
+    default:
+        return section
     }
 }

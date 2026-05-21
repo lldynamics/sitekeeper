@@ -123,7 +123,7 @@ struct CalculatorTabView: View {
                         .foregroundStyle(.secondary)
                 }
             }
-            .navigationTitle("计算")
+            .navigationTitle(String(localized: "计算"))
         }
     }
 }

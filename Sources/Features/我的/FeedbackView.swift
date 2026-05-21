@@ -9,19 +9,20 @@ struct FeedbackView: View {
     @State private var copiedToast = false
 
     private var feedbackContent: String {
-        """
-        意见反馈
-
-        联系方式: \(contactEmail.isEmpty ? "未填写" : contactEmail)
-
-        \(feedbackText)
-        """
+        let contact = contactEmail.isEmpty ? String(localized: "未填写") : contactEmail
+        return [
+            String(localized: "意见反馈"),
+            "",
+            String(format: String(localized: "联系方式：%@"), contact),
+            "",
+            feedbackText
+        ].joined(separator: "\n")
     }
 
     var body: some View {
         Form {
-            Section("反馈内容") {
-                TextField("您的邮箱（可选）", text: $contactEmail)
+            Section(String(localized: "反馈内容")) {
+                TextField(String(localized: "您的邮箱（可选）"), text: $contactEmail)
                     .keyboardType(.emailAddress)
                 TextEditor(text: $feedbackText)
                     .frame(minHeight: 150)
@@ -31,22 +32,22 @@ struct FeedbackView: View {
                 Button {
                     showActionSheet = true
                 } label: {
-                    Label("发送反馈", systemImage: "paperplane.fill")
+                    Label(String(localized: "发送反馈"), systemImage: "paperplane.fill")
                         .frame(maxWidth: .infinity)
                 }
                 .disabled(feedbackText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                Text("收件人：\(AppContact.supportEmail)")
+                Text(String(format: String(localized: "收件人：%@"), AppContact.supportEmail))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
         }
-        .navigationTitle("意见反馈")
+        .navigationTitle(String(localized: "意见反馈"))
         .navigationBarTitleDisplayMode(.inline)
-        .confirmationDialog("发送方式", isPresented: $showActionSheet, titleVisibility: .visible) {
+        .confirmationDialog(String(localized: "发送方式"), isPresented: $showActionSheet, titleVisibility: .visible) {
             if MFMailComposeViewController.canSendMail() {
-                Button("系统邮件") { showMail = true }
+                Button(String(localized: "系统邮件")) { showMail = true }
             }
-            Button("复制反馈内容") {
+            Button(String(localized: "复制反馈内容")) {
                 ClipboardService.copy(feedbackContent)
                 copiedToast = true
                 Task { @MainActor in
@@ -54,13 +55,13 @@ struct FeedbackView: View {
                     copiedToast = false
                 }
             }
-            Button("取消", role: .cancel) {}
+            Button(String(localized: "取消"), role: .cancel) {}
         } message: {
-            Text("选择一种方式发送反馈")
+            Text(String(localized: "选择一种方式发送反馈"))
         }
         .sheet(isPresented: $showMail) {
             MailView(
-                subject: "\(AppBrand.displayName) 意见反馈",
+                subject: String(format: String(localized: "%@ 意见反馈"), AppBrand.displayName),
                 recipients: [AppContact.supportEmail],
                 body: feedbackContent
             ) {
@@ -70,7 +71,7 @@ struct FeedbackView: View {
         }
         .overlay(alignment: .bottom) {
             if copiedToast {
-                Text("已复制到剪贴板")
+                Text(String(localized: "已复制到剪贴板"))
                     .font(.caption).padding(.horizontal, 16).padding(.vertical, 8)
                     .background(.ultraThinMaterial).clipShape(Capsule())
                     .padding(.bottom, 32)
