@@ -143,11 +143,11 @@ struct MaterialLibraryAppendToSheetForm: View {
     var body: some View {
         Form {
             Section(String(localized: "材料")) {
-                LabeledContent("名称", value: context.name)
+                LabeledContent(String(localized: "名称"), value: context.name)
                 if !context.specification.isEmpty {
-                    LabeledContent("规格", value: context.specification)
+                    LabeledContent(String(localized: "规格"), value: context.specification)
                 }
-                LabeledContent("单位", value: context.unit)
+                LabeledContent(String(localized: "单位"), value: context.unit)
             }
             Section(String(localized: "添加参数")) {
                 HStack {
@@ -183,7 +183,7 @@ struct MaterialLibraryAppendToSheetForm: View {
                             Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                         }
                     } else {
-                        LabeledContent("当前目标") {
+                        LabeledContent(String(localized: "当前目标")) {
                             Text(selectedDraftTitle)
                                 .multilineTextAlignment(.trailing)
                         }
@@ -349,7 +349,7 @@ struct MaterialLibraryBatchAppendForm: View {
                             Label(String(localized: "新建材料单"), systemImage: "plus.circle.fill")
                         }
                     } else {
-                        LabeledContent("当前目标") {
+                        LabeledContent(String(localized: "当前目标")) {
                             Text(selectedDraftTitle)
                                 .multilineTextAlignment(.trailing)
                         }

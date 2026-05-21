@@ -94,7 +94,7 @@ struct ProjectDetailContent: View {
     }
 
     private func focusPicker(selection: Binding<ProjectDetailMode>) -> some View {
-        Picker("内容", selection: selection) {
+        Picker(String(localized: "内容"), selection: selection) {
             ForEach(ProjectDetailMode.allCases, id: \.self) { item in
                 Text(item.displayName).tag(item)
             }

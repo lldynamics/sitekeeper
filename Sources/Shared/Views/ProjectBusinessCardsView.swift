@@ -36,31 +36,31 @@ struct ProjectBusinessCardsView: View {
             spacing: AppSpacing.tight
         ) {
             ProjectBusinessMetricCard(
-                title: "经营核心",
+                title: String(localized: "project.business.core.title"),
                 systemImage: "chart.bar.xaxis",
                 tint: .appDoc,
                 metrics: [
-                    .init(title: "报价", value: ReportBuilder.money(summary.quoteTotal), color: .appPrimaryAction),
-                    .init(title: "合同", value: ReportBuilder.money(summary.contractAmount)),
-                    .init(title: "已收", value: ReportBuilder.money(summary.paidAmount), color: .appSuccess),
-                    .init(title: "未收", value: ReportBuilder.money(summary.unpaidAmount), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
-                    .init(title: "材料成本", value: ReportBuilder.money(summary.materialCost), color: .appDoc),
-                    .init(title: "人工成本", value: ReportBuilder.money(summary.laborCostAmount), color: .appWarning),
-                    .init(title: "毛利估算", value: ReportBuilder.money(summary.estimatedProfit), color: summary.estimatedProfit >= 0 ? .appSuccess : .appRisk),
-                    .init(title: "待补", value: "\(summary.pendingCount)", color: summary.pendingCount > 0 ? .appPrimaryAction : .secondary)
+                    .init(title: String(localized: "project.business.quote"), value: ReportBuilder.money(summary.quoteTotal), color: .appPrimaryAction),
+                    .init(title: String(localized: "project.business.contract"), value: ReportBuilder.money(summary.contractAmount)),
+                    .init(title: String(localized: "project.business.collected"), value: ReportBuilder.money(summary.paidAmount), color: .appSuccess),
+                    .init(title: String(localized: "project.business.uncollected"), value: ReportBuilder.money(summary.unpaidAmount), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
+                    .init(title: String(localized: "project.business.materialCost"), value: ReportBuilder.money(summary.materialCost), color: .appDoc),
+                    .init(title: String(localized: "project.business.laborCost"), value: ReportBuilder.money(summary.laborCostAmount), color: .appWarning),
+                    .init(title: String(localized: "project.business.estimatedGrossProfit"), value: ReportBuilder.money(summary.estimatedProfit), color: summary.estimatedProfit >= 0 ? .appSuccess : .appRisk),
+                    .init(title: String(localized: "project.business.pending"), value: "\(summary.pendingCount)", color: summary.pendingCount > 0 ? .appPrimaryAction : .secondary)
                 ],
                 action: onOpenCore
             )
 
             ProjectBusinessMetricCard(
-                title: "经营洞察",
+                title: String(localized: "project.business.insights.title"),
                 systemImage: "waveform.path.ecg",
                 tint: .appPrimaryAction,
                 metrics: [
-                    .init(title: "应收账龄", value: receivableAgeText(summary), color: receivableAgeColor(summary)),
-                    .init(title: "最近回款", value: recentCollectionText(summary), color: recentCollectionColor(summary)),
-                    .init(title: "成本异常", value: costAnomalyText(summary), color: costAnomalyColor(summary)),
-                    .init(title: "利润风险", value: profitRiskText(summary), color: profitRiskColor(summary))
+                    .init(title: String(localized: "project.business.receivableAge"), value: receivableAgeText(summary), color: receivableAgeColor(summary)),
+                    .init(title: String(localized: "project.business.recentCollection"), value: recentCollectionText(summary), color: recentCollectionColor(summary)),
+                    .init(title: String(localized: "project.business.costException"), value: costAnomalyText(summary), color: costAnomalyColor(summary)),
+                    .init(title: String(localized: "project.business.profitRisk"), value: profitRiskText(summary), color: profitRiskColor(summary))
                 ],
                 action: onOpenInsight
             )
@@ -68,16 +68,16 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func receivableAgeText(_ summary: ProjectBusinessSummary) -> String {
-        guard summary.receivableAmount > 0 else { return "无应收" }
-        guard let days = summary.receivableAgeDays else { return "未填完工日" }
+        guard summary.receivableAmount > 0 else { return String(localized: "project.business.noReceivable") }
+        guard let days = summary.receivableAgeDays else { return String(localized: "project.business.missingCompletionDate") }
         if days == 0 {
             return DashboardSubtitleBuilder.moneySummary(
-                "未到期",
+                String(localized: "project.business.notDue"),
                 amount: ReportBuilder.money(summary.receivableAmount)
             )
         }
         return DashboardSubtitleBuilder.moneySummary(
-            "\(days)天",
+            String(format: String(localized: "project.business.days"), Int64(days)),
             amount: ReportBuilder.money(summary.receivableAmount)
         )
     }
@@ -92,7 +92,7 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func recentCollectionText(_ summary: ProjectBusinessSummary) -> String {
-        guard let collection = summary.recentCollection else { return "暂无回款" }
+        guard let collection = summary.recentCollection else { return String(localized: "project.business.noRecentCollection") }
         return DashboardSubtitleBuilder.datedAmount(
             collection.date,
             amount: ReportBuilder.money(collection.amount),
@@ -107,21 +107,26 @@ struct ProjectBusinessCardsView: View {
     private func costAnomalyText(_ summary: ProjectBusinessSummary) -> String {
         let totalCost = summary.materialCost + summary.laborCostAmount
         let pendingCount = summary.pendingCount
-        guard summary.contractAmount > 0 else { return "缺合同金额" }
+        guard summary.contractAmount > 0 else { return String(localized: "project.business.missingContractAmount") }
         guard totalCost > 0 else {
-            return pendingCount > 0 ? "待补 \(pendingCount) 项" : "未录成本"
+            return pendingCount > 0
+                ? String(format: String(localized: "project.business.pendingItems"), Int64(pendingCount))
+                : String(localized: "project.business.noCostRecorded")
         }
         let ratio = totalCost / summary.contractAmount
         if ratio > 1 {
-            return "超合同 \(ReportBuilder.money(totalCost - summary.contractAmount))"
+            return String(
+                format: String(localized: "project.business.overContract"),
+                ReportBuilder.money(totalCost - summary.contractAmount)
+            )
         }
         if ratio >= 0.85 {
-            return "成本占比 \(percent(ratio))"
+            return String(format: String(localized: "project.business.costRatio"), percent(ratio))
         }
         if pendingCount > 0 {
-            return "待补 \(pendingCount) 项"
+            return String(format: String(localized: "project.business.pendingItems"), Int64(pendingCount))
         }
-        return "正常 \(percent(ratio))"
+        return String(format: String(localized: "project.business.normalCostRatio"), percent(ratio))
     }
 
     private func costAnomalyColor(_ summary: ProjectBusinessSummary) -> Color {
@@ -136,19 +141,19 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func profitRiskText(_ summary: ProjectBusinessSummary) -> String {
-        guard summary.contractAmount > 0 else { return "缺合同金额" }
+        guard summary.contractAmount > 0 else { return String(localized: "project.business.missingContractAmount") }
         let profit = summary.estimatedProfit
         let margin = profit / summary.contractAmount
         if profit < 0 {
-            return "亏损 \(ReportBuilder.money(abs(profit)))"
+            return String(format: String(localized: "project.business.lossAmount"), ReportBuilder.money(abs(profit)))
         }
         if margin < 0.10 {
-            return "低毛利 \(percent(margin))"
+            return String(format: String(localized: "project.business.lowMargin"), percent(margin))
         }
         if margin < 0.20 {
-            return "关注 \(percent(margin))"
+            return String(format: String(localized: "project.business.watchMargin"), percent(margin))
         }
-        return "健康 \(percent(margin))"
+        return String(format: String(localized: "project.business.healthyMargin"), percent(margin))
     }
 
     private func profitRiskColor(_ summary: ProjectBusinessSummary) -> Color {

@@ -327,7 +327,7 @@ enum ProjectFileCollector {
                 seeds.append(
                     RecentSeed(
                         id: "log-\(log.id.uuidString)-\(fileName)",
-                        title: photo.note.isEmpty ? "施工日志照片" : photo.note,
+                        title: photo.note.isEmpty ? String(localized: "施工日志照片") : photo.note,
                         subtitle: "\(log.date) · \(photo.tag.displayName)",
                         fileType: url.pathExtension.isEmpty ? "jpg" : url.pathExtension,
                         url: url,
@@ -349,7 +349,7 @@ enum ProjectFileCollector {
                 seeds.append(
                     RecentSeed(
                         id: "todo-before-\(todo.id.uuidString)",
-                        title: "\(todo.title) · 整改前",
+                        title: String(format: String(localized: "%@ · 整改前"), todo.title),
                         subtitle: sortText,
                         fileType: url.pathExtension.isEmpty ? "jpg" : url.pathExtension,
                         url: url,
@@ -368,7 +368,7 @@ enum ProjectFileCollector {
                 seeds.append(
                     RecentSeed(
                         id: "todo-after-\(todo.id.uuidString)",
-                        title: "\(todo.title) · 整改后",
+                        title: String(format: String(localized: "%@ · 整改后"), todo.title),
                         subtitle: sortText,
                         fileType: url.pathExtension.isEmpty ? "jpg" : url.pathExtension,
                         url: url,
@@ -475,7 +475,7 @@ enum ProjectFileCollector {
             for photo in log.photoAttachments {
                 result.append(photoItem(
                     id: "log-\(log.id.uuidString)-\(photo.fileName)",
-                    title: photo.note.isEmpty ? "施工日志照片" : photo.note,
+                    title: photo.note.isEmpty ? String(localized: "施工日志照片") : photo.note,
                     subtitle: "\(log.date) · \(photo.tag.displayName)",
                     sortText: log.date,
                     fileName: photo.fileName
@@ -487,7 +487,7 @@ enum ProjectFileCollector {
             if let fileName = todo.rectificationBeforePhotoFileName {
                 result.append(photoItem(
                     id: "todo-before-\(todo.id.uuidString)",
-                    title: "\(todo.title) · 整改前",
+                    title: String(format: String(localized: "%@ · 整改前"), todo.title),
                     subtitle: todo.dueDate,
                     sortText: todo.dueDate,
                     fileName: fileName
@@ -496,7 +496,7 @@ enum ProjectFileCollector {
             if let fileName = todo.rectificationAfterPhotoFileName {
                 result.append(photoItem(
                     id: "todo-after-\(todo.id.uuidString)",
-                    title: "\(todo.title) · 整改后",
+                    title: String(format: String(localized: "%@ · 整改后"), todo.title),
                     subtitle: todo.completedAt ?? todo.dueDate,
                     sortText: todo.completedAt ?? todo.dueDate,
                     fileName: fileName

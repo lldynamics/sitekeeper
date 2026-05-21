@@ -14,25 +14,25 @@ struct ProjectDetailDocumentActionSection: View {
                 Button {
                     onScanDocument()
                 } label: {
-                    Label("扫描项目资料", systemImage: "viewfinder")
+                    Label(String(localized: "扫描项目资料"), systemImage: "viewfinder")
                 }
                 Button {
                     onImportFiles()
                 } label: {
-                    Label("从文件导入 PDF/图片", systemImage: "doc.badge.plus")
+                    Label(String(localized: "从文件导入 PDF/图片"), systemImage: "doc.badge.plus")
                 }
                 PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
-                    Label("从相册选择", systemImage: "photo.on.rectangle")
+                    Label(String(localized: "从相册选择"), systemImage: "photo.on.rectangle")
                 }
                 if UIImagePickerController.isSourceTypeAvailable(.camera) {
                     Button {
                         onCapturePhoto()
                     } label: {
-                        Label("拍照保存", systemImage: "camera")
+                        Label(String(localized: "拍照保存"), systemImage: "camera")
                     }
                 }
             } label: {
-                Label("加资料", systemImage: "plus.circle.fill")
+                Label(String(localized: "加资料"), systemImage: "plus.circle.fill")
             }
         }
     }

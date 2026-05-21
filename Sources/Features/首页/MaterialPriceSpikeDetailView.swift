@@ -164,8 +164,8 @@ struct MaterialPriceSpikeDetailView: View {
         financeStore.setMaterialPriceSpikeIgnored(ignored, for: detail.id)
         AppHaptics.impact(.light)
         actionFeedbackMessage = ignored
-            ? "已忽略：\(spikeMaterialTitle(detail))"
-            : "已取消忽略：\(spikeMaterialTitle(detail))"
+            ? String(format: String(localized: "material.priceSpike.ignored.message"), spikeMaterialTitle(detail))
+            : String(format: String(localized: "material.priceSpike.unignored.message"), spikeMaterialTitle(detail))
     }
 
     private func thresholdSuggestion(for detail: MaterialPriceSpikeDetail) -> Double {
@@ -180,12 +180,15 @@ struct MaterialPriceSpikeDetailView: View {
         let target = thresholdSuggestion(for: detail)
         guard abs(current - target) > 0.0001 else {
             AppHaptics.warning()
-            actionFeedbackMessage = "当前阈值已覆盖该异动，无需调整"
+            actionFeedbackMessage = String(localized: "当前阈值已覆盖该异动，无需调整")
             return
         }
         financeStore.setMaterialPriceSpikeThreshold(target)
         AppHaptics.success()
-        actionFeedbackMessage = "已将阈值调整为 \(percentText(target))"
+        actionFeedbackMessage = String(
+            format: String(localized: "已将阈值调整为 %@"),
+            percentText(target)
+        )
     }
 
     private func createPurchaseReminder(for detail: MaterialPriceSpikeDetail) {
@@ -195,30 +198,38 @@ struct MaterialPriceSpikeDetailView: View {
         }
         if duplicate {
             AppHaptics.warning()
-            actionFeedbackMessage = "该材料已生成采购提醒"
+            actionFeedbackMessage = String(localized: "该材料已生成采购提醒")
             return
         }
 
         let projectName = projectNameByID[detail.projectId] ?? String(localized: "未命名工程")
         let reminder = SiteTodo(
-            title: "复核采购价：\(spikeMaterialTitle(detail))",
+            title: String(
+                format: String(localized: "material.priceSpike.purchaseReminder.title"),
+                spikeMaterialTitle(detail)
+            ),
             owner: "",
             dueDate: Formatters.date.string(from: Date()),
             priority: .medium,
             issueType: .material,
-            note: """
-\(projectName)
-上次 \(ReportBuilder.money(detail.previousPrice))/\(detail.unit)（\(spikeDisplayDate(detail.previousDateText))）
-本次 \(ReportBuilder.money(detail.latestPrice))/\(detail.unit)（\(spikeDisplayDate(detail.latestDateText))）
-涨幅 +\(spikeRatioText(detail))
-\(marker)
-""",
+            note: String(
+                format: String(localized: "material.priceSpike.purchaseReminder.note"),
+                projectName,
+                ReportBuilder.money(detail.previousPrice),
+                detail.unit,
+                spikeDisplayDate(detail.previousDateText),
+                ReportBuilder.money(detail.latestPrice),
+                detail.unit,
+                spikeDisplayDate(detail.latestDateText),
+                spikeRatioText(detail),
+                marker
+            ),
             projectId: detail.projectId
         )
         store.insertSiteTodoAtTop(reminder)
         store.scheduleSave()
         AppHaptics.success()
-        actionFeedbackMessage = "已生成采购提醒"
+        actionFeedbackMessage = String(localized: "已生成采购提醒")
     }
 
     private func percentText(_ value: Double) -> String {

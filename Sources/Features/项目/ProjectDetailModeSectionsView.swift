@@ -183,11 +183,17 @@ struct ProjectDetailModeSectionsView: View {
             quoteSections
             materialSections
             laborSections
-            Section("项目仓库") {
+            Section(String(localized: "项目仓库")) {
                 NavigationLink {
                     ProjectWarehouseView(project: project)
                 } label: {
-                    Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
+                    Label(
+                        String(
+                            format: String(localized: "查看项目仓库（%lld 条出入库）"),
+                            Int64(relatedWarehouseMovements.count)
+                        ),
+                        systemImage: "shippingbox.and.arrow.backward.fill"
+                    )
                 }
             }
         }

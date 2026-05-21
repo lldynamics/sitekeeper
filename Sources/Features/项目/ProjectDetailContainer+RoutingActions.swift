@@ -53,6 +53,9 @@ extension ProjectDetailContainer {
             presentAfterDeliveryGuideDismiss {
                 showTodoFilterView = true
             }
+        case .resolveDrawingIssues:
+            routeState.mode = .assets
+            routeState.drawingFilter = .withIssue
         case .createBackup:
             presentAfterDeliveryGuideDismiss {
                 dataManagementDestination = ProjectDetailDataManagementDestination(route: .backup)

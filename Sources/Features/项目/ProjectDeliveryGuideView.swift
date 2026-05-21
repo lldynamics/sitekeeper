@@ -4,9 +4,19 @@ enum ProjectDeliveryRepairAction: Equatable {
     case attachReceipts
     case importDrawings
     case resolveTodos
+    case resolveDrawingIssues
     case createBackup
     case restoreMissingOriginals
     case markCurrentDrawingVersion
+
+    var dismissesDeliveryGuide: Bool {
+        switch self {
+        case .markCurrentDrawingVersion:
+            return false
+        case .attachReceipts, .importDrawings, .resolveTodos, .resolveDrawingIssues, .createBackup, .restoreMissingOriginals:
+            return true
+        }
+    }
 }
 
 struct ProjectDeliveryBackupState: Equatable {
@@ -306,6 +316,19 @@ struct ProjectDeliveryHealthSummaryRow: View {
     }
 }
 
+private enum ProjectDeliveryGuideAnchor: Hashable {
+    case packageExport
+}
+
+private struct ProjectDeliveryRepairWizardStep: Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let actionTitle: String
+    let action: ProjectDeliveryRepairAction
+    let isResolved: Bool
+}
+
 struct ProjectDeliveryGuideData {
     let projectName: String
     let logCount: Int
@@ -378,18 +401,25 @@ struct ProjectDeliveryGuideView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    readinessCard
-                }
-
-                Section(String(localized: "交付健康分")) {
-                    ForEach(ProjectDeliveryHealth.Issue.allCases) { issue in
-                        healthRow(issue)
+            ScrollViewReader { proxy in
+                List {
+                    Section {
+                        readinessCard
                     }
-                }
 
-                Section(String(localized: "交付检查")) {
+                    repairWizardSection {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            proxy.scrollTo(ProjectDeliveryGuideAnchor.packageExport, anchor: .center)
+                        }
+                    }
+
+                    Section(String(localized: "交付健康分")) {
+                        ForEach(ProjectDeliveryHealth.Issue.allCases) { issue in
+                            healthRow(issue)
+                        }
+                    }
+
+                    Section(String(localized: "交付检查")) {
                     guideRow(
                         title: String(localized: "缺日志检查"),
                         detail: logCoverageDetail,
@@ -432,9 +462,10 @@ struct ProjectDeliveryGuideView: View {
                         detail: data.openDrawingIssueCount == 0
                             ? String(localized: "没有未关闭图纸问题")
                             : String(format: String(localized: "还有 %lld 项未关闭"), Int64(data.openDrawingIssueCount)),
-                        status: data.openDrawingIssueCount == 0 ? .ok : .warning
+                        status: data.openDrawingIssueCount == 0 ? .ok : .warning,
+                        fixActionTitle: String(localized: "处理问题")
                     ) {
-                        onOpenMode(.assets)
+                        onRepair(.resolveDrawingIssues)
                     }
                     guideRow(
                         title: String(localized: "联系人缺失检查"),
@@ -511,6 +542,7 @@ struct ProjectDeliveryGuideView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                .id(ProjectDeliveryGuideAnchor.packageExport)
 
                 Section {
                     Button {
@@ -521,6 +553,7 @@ struct ProjectDeliveryGuideView: View {
                     }
                     .buttonStyle(.appProminent())
                     .disabled(data.hasBlockingMissingOriginals)
+                    .accessibilityIdentifier("project-delivery-export-package")
                 } footer: {
                     if data.hasBlockingMissingOriginals {
                         Text(String(localized: "检测到缺失原件，需先补齐后才能导出。"))
@@ -530,6 +563,154 @@ struct ProjectDeliveryGuideView: View {
             .navigationTitle(String(localized: "完工交付向导"))
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+    }
+
+    @ViewBuilder
+    private func repairWizardSection(onReturnToExport: @escaping () -> Void) -> some View {
+        Section(String(localized: "交付修复向导")) {
+            ForEach(Array(repairWizardSteps.enumerated()), id: \.element.id) { offset, step in
+                repairWizardRow(
+                    step: step,
+                    number: offset + 1,
+                    isCurrent: firstPendingRepairStepID == step.id
+                )
+            }
+            if repairWizardSteps.allSatisfy(\.isResolved) {
+                Button {
+                    onReturnToExport()
+                } label: {
+                    Label(String(localized: "回到交付包导出页"), systemImage: "archivebox.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.appProminent())
+            } else if let currentStep = repairWizardSteps.first(where: { $0.id == firstPendingRepairStepID }) {
+                Text(String(format: String(localized: "当前步骤：%@"), currentStep.title))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func repairWizardRow(
+        step: ProjectDeliveryRepairWizardStep,
+        number: Int,
+        isCurrent: Bool
+    ) -> some View {
+        let isWaiting = !step.isResolved && !isCurrent
+        return HStack(alignment: .top, spacing: AppSpacing.tight) {
+            Text("\(number)")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(step.isResolved ? Color.appSuccess : (isCurrent ? Color.appRisk : .secondary))
+                .frame(width: 22, height: 22)
+                .background(
+                    Circle()
+                        .fill(step.isResolved ? Color.appSuccessSurfaceSubtle : Color(.secondarySystemBackground))
+                )
+            VStack(alignment: .leading, spacing: 4) {
+                Text(step.title)
+                    .font(.callout.weight(.semibold))
+                Text(step.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                Text(repairWizardStatusText(step: step, isCurrent: isCurrent))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(step.isResolved ? Color.appSuccess : (isCurrent ? Color.appRisk : .secondary))
+            }
+            Spacer()
+            if step.isResolved {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(Color.appSuccess)
+            } else if isWaiting {
+                Text(String(localized: "等待前序"))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            } else {
+                Button(step.actionTitle) {
+                    onRepair(step.action)
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(.vertical, 2)
+    }
+
+    private var repairWizardSteps: [ProjectDeliveryRepairWizardStep] {
+        [
+            ProjectDeliveryRepairWizardStep(
+                id: "receipts",
+                title: String(localized: "补齐票据"),
+                detail: data.deliveryHealth.detail(for: .missingReceipts),
+                actionTitle: String(localized: "补票据"),
+                action: .attachReceipts,
+                isResolved: data.missingReceiptCount == 0
+            ),
+            drawingRepairWizardStep,
+            ProjectDeliveryRepairWizardStep(
+                id: "originals",
+                title: String(localized: "补齐原件"),
+                detail: data.hasBlockingMissingOriginals
+                    ? String(format: String(localized: "检测到 %lld 个缺失原件"), Int64(data.missingOriginalEntries.count))
+                    : String(localized: "缺失原件已补齐。"),
+                actionTitle: String(localized: "重新导入"),
+                action: .restoreMissingOriginals,
+                isResolved: !data.hasBlockingMissingOriginals
+            ),
+            ProjectDeliveryRepairWizardStep(
+                id: "drawingIssues",
+                title: String(localized: "关闭图纸问题"),
+                detail: data.openDrawingIssueCount == 0
+                    ? String(localized: "没有未关闭图纸问题。")
+                    : String(format: String(localized: "还有 %lld 项未关闭"), Int64(data.openDrawingIssueCount)),
+                actionTitle: String(localized: "处理问题"),
+                action: .resolveDrawingIssues,
+                isResolved: data.openDrawingIssueCount == 0
+            )
+        ]
+    }
+
+    private var drawingRepairWizardStep: ProjectDeliveryRepairWizardStep {
+        if data.drawingCount == 0 {
+            return ProjectDeliveryRepairWizardStep(
+                id: "drawings",
+                title: String(localized: "补齐图纸"),
+                detail: String(localized: "项目还没有图纸文件。"),
+                actionTitle: String(localized: "导入图纸"),
+                action: .importDrawings,
+                isResolved: false
+            )
+        }
+        if data.drawingWithoutCurrentCount > 0 {
+            return ProjectDeliveryRepairWizardStep(
+                id: "drawings",
+                title: String(localized: "确认当前版"),
+                detail: drawingCurrentVersionDetail,
+                actionTitle: String(localized: "标当前版"),
+                action: .markCurrentDrawingVersion,
+                isResolved: false
+            )
+        }
+        return ProjectDeliveryRepairWizardStep(
+            id: "drawings",
+            title: String(localized: "补齐图纸"),
+            detail: String(localized: "图纸已上传并确认当前版。"),
+            actionTitle: String(localized: "导入图纸"),
+            action: .importDrawings,
+            isResolved: true
+        )
+    }
+
+    private var firstPendingRepairStepID: String? {
+        repairWizardSteps.first { !$0.isResolved }?.id
+    }
+
+    private func repairWizardStatusText(step: ProjectDeliveryRepairWizardStep, isCurrent: Bool) -> String {
+        if step.isResolved {
+            return String(localized: "已完成")
+        }
+        return isCurrent ? String(localized: "当前步骤") : String(localized: "等待前序")
     }
 
     private var readinessCard: some View {

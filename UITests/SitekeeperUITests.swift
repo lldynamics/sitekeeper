@@ -106,6 +106,38 @@ final class SitekeeperUITests: XCTestCase {
         return button
     }
 
+    private func openDataSafetyCenter(_ app: XCUIApplication) {
+        tapPrimaryModule(app, name: "我的")
+        let dataEntry = app.buttons["profile-data-management-link"]
+        XCTAssertTrue(dataEntry.waitForExistence(timeout: 5))
+        dataEntry.tap()
+        XCTAssertTrue(app.navigationBars["数据安全中心"].waitForExistence(timeout: 5))
+    }
+
+    private func openSampleDataImportConfirmation(_ app: XCUIApplication) {
+        openDataSafetyCenter(app)
+
+        let directImportButton = app.buttons["data-management-import-sample-data"]
+        if directImportButton.waitForExistence(timeout: 2), directImportButton.isHittable {
+            directImportButton.tap()
+        } else {
+            let actionMenu = app.buttons["data-management-actions-menu"]
+            XCTAssertTrue(actionMenu.waitForExistence(timeout: 5))
+            actionMenu.tap()
+            let importButton = app.buttons["导入测试数据"]
+            XCTAssertTrue(importButton.waitForExistence(timeout: 5))
+            importButton.tap()
+        }
+
+        XCTAssertTrue(app.alerts["恢复测试数据？"].waitForExistence(timeout: 5))
+    }
+
+    private func importSampleDataThroughUI(_ app: XCUIApplication) {
+        openSampleDataImportConfirmation(app)
+        app.alerts["恢复测试数据？"].buttons["清空并导入"].tap()
+        XCTAssertTrue(app.staticTexts["已恢复测试数据"].waitForExistence(timeout: 8))
+    }
+
     func testColdLaunchShowsPrimaryTabs() {
         let app = launchApp()
         XCTAssertTrue(app.tabBars.buttons["工作台"].waitForExistence(timeout: 5))
@@ -117,14 +149,36 @@ final class SitekeeperUITests: XCTestCase {
 
     func testBackupScreenShowsImportAndExportActions() {
         let app = launchApp()
-        app.tabBars.buttons["我的"].tap()
+        openDataSafetyCenter(app)
 
-        let backupEntry = app.buttons["profile-data-management-link"]
-        XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
-        backupEntry.tap()
+        XCTAssertTrue(button(app, identifier: "导出完整备份 ZIP").waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["导入备份 ZIP"].exists || button(app, identifier: "导入备份 ZIP").exists)
+    }
 
-        XCTAssertTrue(app.buttons["导出完整备份 ZIP"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["导入备份 ZIP"].exists)
+    func testDataSafetyCenterShowsRiskFirstReleasePaths() {
+        let app = launchApp(resetState: true)
+        openDataSafetyCenter(app)
+
+        XCTAssertTrue(app.staticTexts["数据安全状态"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["data-management-shortcut-backup"].exists)
+        XCTAssertTrue(app.buttons["data-management-shortcut-health"].exists)
+        XCTAssertTrue(app.buttons["data-management-shortcut-storage"].exists)
+        XCTAssertTrue(app.buttons["data-management-shortcut-export"].exists)
+
+        app.buttons["data-management-shortcut-health"].tap()
+        XCTAssertTrue(app.staticTexts["健康概览"].waitForExistence(timeout: 5))
+
+        app.buttons["data-management-shortcut-storage"].tap()
+        XCTAssertTrue(app.buttons["存储清理"].waitForExistence(timeout: 5))
+
+        app.buttons["data-management-shortcut-export"].tap()
+        XCTAssertTrue(app.staticTexts["导出交付"].waitForExistence(timeout: 5))
+    }
+
+    func testSampleDataImportEntryShowsRestoreConfirmation() {
+        let app = launchApp(resetState: true)
+        openSampleDataImportConfirmation(app)
+        app.alerts["恢复测试数据？"].buttons["取消"].tap()
     }
 
     func testQuickNoteComposerShowsMediaAndAttachmentActions() {
@@ -198,21 +252,44 @@ final class SitekeeperUITests: XCTestCase {
 
     func testBackupOverwriteImportShowsSecondConfirmation() {
         let app = launchApp(resetState: true, enableBackupPreview: true)
-        app.tabBars.buttons["我的"].tap()
+        openDataSafetyCenter(app)
 
-        let backupEntry = app.buttons["profile-data-management-link"]
-        XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
-        backupEntry.tap()
+        let actionMenu = app.buttons["data-management-actions-menu"]
+        XCTAssertTrue(actionMenu.waitForExistence(timeout: 5))
+        actionMenu.tap()
 
-        let previewButton = app.buttons["UI测试：模拟覆盖导入预览"]
+        let previewButton = button(app, identifier: "ui-test-backup-preview")
         XCTAssertTrue(previewButton.waitForExistence(timeout: 5))
-        let confirmShortcutButton = app.buttons["UI测试：触发覆盖二次确认"]
+        let confirmShortcutButton = button(app, identifier: "ui-test-overwrite-confirm")
         XCTAssertTrue(confirmShortcutButton.waitForExistence(timeout: 5))
         confirmShortcutButton.tap()
 
         let overwriteAlert = app.alerts["确认覆盖导入？"]
         XCTAssertTrue(overwriteAlert.waitForExistence(timeout: 5))
         overwriteAlert.buttons["取消"].tap()
+    }
+
+    func testProjectDeliveryGuideReachesExportActionWithSampleData() {
+        let app = launchApp(resetState: true)
+        importSampleDataThroughUI(app)
+
+        tapPrimaryModule(app, name: "项目")
+        let sampleProject = app.staticTexts["阳光花园 3# 楼"]
+        XCTAssertTrue(sampleProject.waitForExistence(timeout: 8))
+        sampleProject.tap()
+
+        XCTAssertTrue(app.navigationBars["阳光花园 3# 楼"].waitForExistence(timeout: 5))
+        let moreMenu = app.buttons["project-detail-more-menu"]
+        XCTAssertTrue(moreMenu.waitForExistence(timeout: 5))
+        moreMenu.tap()
+
+        let deliveryGuideButton = app.buttons["打开交付向导"]
+        XCTAssertTrue(deliveryGuideButton.waitForExistence(timeout: 5))
+        deliveryGuideButton.tap()
+
+        XCTAssertTrue(app.navigationBars["完工交付向导"].waitForExistence(timeout: 5))
+        let exportButton = button(app, identifier: "project-delivery-export-package", scrollingAttempts: 8)
+        XCTAssertTrue(exportButton.waitForExistence(timeout: 5))
     }
 
     func testSwitchingFromSettingsToToolboxRefreshesDetail() {
@@ -271,7 +348,7 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "08-profile")
 
         backupEntry.tap()
-        XCTAssertTrue(app.navigationBars["数据管理"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["数据安全中心"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "09-backup")
     }
 

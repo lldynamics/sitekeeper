@@ -172,23 +172,20 @@ struct DataHealthView: View {
 
     @ViewBuilder
     private func issueRow(_ item: DataHealthIssue) -> some View {
-        if let route = item.route {
-            NavigationLink {
-                issueDestination(route)
-            } label: {
-                issueLabel(item, canNavigate: true)
-            }
-        } else {
-            issueLabel(item, canNavigate: false)
+        VStack(alignment: .leading, spacing: 8) {
+            issueLabel(item)
+            issueActionBar(item)
         }
+        .padding(.vertical, 2)
     }
 
-    private func issueLabel(_ item: DataHealthIssue, canNavigate: Bool) -> some View {
-        HStack(spacing: 10) {
+    private func issueLabel(_ item: DataHealthIssue) -> some View {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: item.systemImage)
                 .font(.body.weight(.semibold))
                 .foregroundStyle(item.color)
                 .frame(width: 24)
+                .padding(.top, 1)
             VStack(alignment: .leading, spacing: 3) {
                 Text(item.title)
                     .font(.callout.weight(.medium))
@@ -196,16 +193,76 @@ struct DataHealthView: View {
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
-                if let actionTitle = item.actionTitle {
-                    Text(canNavigate ? actionTitle : lf("%@（目标不可用）", actionTitle))
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(canNavigate ? .appWarning : .secondary)
-                }
             }
         }
-        .padding(.vertical, 2)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(item.exportText)
+    }
+
+    @ViewBuilder
+    private func issueActionBar(_ item: DataHealthIssue) -> some View {
+        let actions = issueActions(for: item)
+        if !actions.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.tight) {
+                    ForEach(actions) { action in
+                        issueActionControl(action, for: item)
+                    }
+                }
+            }
+            .padding(.leading, 34)
+        }
+    }
+
+    private func issueActions(for item: DataHealthIssue) -> [DataHealthIssueAction] {
+        var actions = item.actions
+        if let route = item.route,
+           !actions.contains(where: { action in
+               if case .navigate = action.kind { return true }
+               return false
+           }) {
+            actions.insert(
+                .navigate(
+                    title: item.actionTitle ?? l("打开记录"),
+                    route: route
+                ),
+                at: 0
+            )
+        }
+        if !actions.contains(where: { action in
+            if case .createTodo = action.kind { return true }
+            return false
+        }) {
+            actions.append(.createTodo(title: l("生成专项待办")))
+        }
+        return actions
+    }
+
+    @ViewBuilder
+    private func issueActionControl(_ action: DataHealthIssueAction, for item: DataHealthIssue) -> some View {
+        switch action.kind {
+        case .navigate(let route):
+            NavigationLink {
+                issueDestination(route)
+            } label: {
+                issueActionLabel(action)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+        case .repair, .moveOrphanFileToTrash, .createTodo:
+            Button(role: action.role) {
+                performIssueAction(action, for: item)
+            } label: {
+                issueActionLabel(action)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.mini)
+        }
+    }
+
+    private func issueActionLabel(_ action: DataHealthIssueAction) -> some View {
+        Label(action.title, systemImage: action.systemImage)
+            .font(.caption2.weight(.semibold))
     }
 
     @ViewBuilder

@@ -18,6 +18,13 @@ info_plist_files=(
   "Widget/en.lproj/InfoPlist.strings"
 )
 
+english_resource_files=(
+  "Sources/Resources/en.lproj/Localizable.strings"
+  "Sources/Resources/en.lproj/InfoPlist.strings"
+  "Widget/en.lproj/Localizable.strings"
+  "Widget/en.lproj/InfoPlist.strings"
+)
+
 required_app_info_plist_keys=(
   "CFBundleDisplayName"
   "NSCameraUsageDescription"
@@ -99,6 +106,27 @@ check_required_app_info_plist_keys() {
   done
 }
 
+check_english_resource_values() {
+  local file="$1"
+
+  if [[ ! -f "$file" ]]; then
+    return
+  fi
+
+  # Language names may intentionally be shown in their native script.
+  untranslated_values="$(
+    rg -n '=\s*"[^"]*[\p{Han}][^"]*";' "$file" \
+      | rg -v ':"中文" = "中文";$' \
+      || true
+  )"
+
+  if [[ -n "$untranslated_values" ]]; then
+    echo "[localization-integrity] ERROR: Chinese text remains in English resources: $file" >&2
+    printf '%s\n' "$untranslated_values" | sed 's/^/  - /' >&2
+    failed=1
+  fi
+}
+
 for file in "${localizable_files[@]}" "${info_plist_files[@]}"; do
   check_file "$file"
 done
@@ -110,6 +138,10 @@ check_matching_keys "Widget/zh-Hans.lproj/InfoPlist.strings" "Widget/en.lproj/In
 
 check_required_app_info_plist_keys "Sources/Resources/zh-Hans.lproj/InfoPlist.strings"
 check_required_app_info_plist_keys "Sources/Resources/en.lproj/InfoPlist.strings"
+
+for file in "${english_resource_files[@]}"; do
+  check_english_resource_values "$file"
+done
 
 if [[ "$failed" -ne 0 ]]; then
   exit 1

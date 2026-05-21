@@ -92,7 +92,9 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                             onOpenModeFromDeliveryGuide(mode)
                         },
                         onRepair: { action in
-                            self.presentation = nil
+                            if action.dismissesDeliveryGuide {
+                                self.presentation = nil
+                            }
                             onRepairFromDeliveryGuide(action)
                         }
                     )

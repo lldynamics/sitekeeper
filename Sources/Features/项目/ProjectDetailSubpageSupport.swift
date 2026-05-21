@@ -9,7 +9,7 @@ struct ProjectDetailPrimaryActionList<Content: View>: View {
 
     var body: some View {
         List {
-            Section("快捷操作") {
+            Section(String(localized: "快捷操作")) {
                 Button(action: action) {
                     Label(title, systemImage: systemImage)
                 }

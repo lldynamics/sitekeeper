@@ -114,10 +114,10 @@ struct QuickToolEditorView: View {
             .environment(\.editMode, .constant(.active))
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") { dismiss() }
+                    Button(String(localized: "取消")) { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("保存") {
+                    Button(String(localized: "保存")) {
                         let saved = orderedIDs.filter { selectedIDs.contains($0) }
                         onSave(saved)
                         dismiss()
