@@ -8,43 +8,21 @@ struct ProjectListFiltersSection: View {
     let allowedStatuses: [ProjectStatus]
     let searchSuggestions: [RealtimeSearchSuggestion]
     let hasAnyFilterApplied: Bool
-    let isSplitNavigation: Bool
     let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
     let onClearAll: () -> Void
 
     var body: some View {
         Section {
-            HStack(spacing: AppSpacing.tight) {
-                Image(systemName: "magnifyingglass")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                TextField(String(localized: "搜索项目名称或地点"), text: $searchText)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                if !searchText.isEmpty {
-                    Button {
-                        searchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
+            InlineSearchPanel(
+                text: $searchText,
+                prompt: String(localized: "搜索项目名称或地点"),
+                suggestions: searchSuggestions,
+                emptyStateText: String(localized: "未找到匹配的项目、地点或客户"),
+                materialTone: .secondary,
+                onSelectSuggestion: onSelectSuggestion
+            )
 
-            if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !searchSuggestions.isEmpty {
-                RealtimeSearchSuggestionInlineList(
-                    suggestions: searchSuggestions,
-                    onSelect: onSelectSuggestion
-                )
-                .padding(.top, 2)
-            }
-
-            if isSplitNavigation {
-                splitToolbar
-            } else {
-                compactToolbar
-            }
+            compactToolbar
 
             if overviewFilter != nil {
                 HStack(spacing: AppSpacing.tight) {
@@ -70,48 +48,6 @@ struct ProjectListFiltersSection: View {
             }
         } header: {
             Text(String(localized: "搜索与筛选"))
-        }
-    }
-
-    private var splitToolbar: some View {
-        HStack(spacing: AppSpacing.tight) {
-            Menu {
-                Button(String(localized: "全部状态")) { statusFilter = nil }
-                ForEach(allowedStatuses, id: \.rawValue) { status in
-                    Button(status.displayName) {
-                        statusFilter = status
-                    }
-                }
-            } label: {
-                Label(statusFilter?.displayName ?? String(localized: "全部状态"), systemImage: "line.3.horizontal.decrease.circle")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, AppSpacing.normal)
-                    .padding(.vertical, 6)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-            }
-
-            Menu {
-                ForEach(ProjectSortOption.allCases, id: \.self) { option in
-                    Button(option.displayName) {
-                        sortOption = option
-                    }
-                }
-            } label: {
-                Label(sortOption.displayName, systemImage: "arrow.up.arrow.down.circle")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, AppSpacing.normal)
-                    .padding(.vertical, 6)
-                    .background(Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-            }
-
-            Spacer(minLength: 0)
-
-            if hasAnyFilterApplied {
-                Button(action: onClearAll) {
-                    Label(String(localized: "清除"), systemImage: "xmark.circle")
-                        .font(.caption.weight(.semibold))
-                }
-            }
         }
     }
 

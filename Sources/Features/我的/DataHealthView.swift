@@ -8,6 +8,7 @@ struct DataHealthView: View {
     @State var exportPayload: ExportPayload?
     @State var showExporter = false
     @State var storageIssuesVersion = UUID()
+    @State var operationNotice: OperationToastNotice?
     private let showsNavigationTitle: Bool
 
     init(showsNavigationTitle: Bool = true) {
@@ -84,6 +85,12 @@ struct DataHealthView: View {
                 }
                 .disabled(orphanFileIssueCount == 0)
                 Button {
+                    createDataHealthRepairTodo()
+                } label: {
+                    Label(l("生成健康整改待办"), systemImage: "checklist.checked")
+                }
+                .disabled(totalIssues == 0)
+                Button {
                     exportHealthReport()
                 } label: {
                     Label(l("导出健康报告"), systemImage: "square.and.arrow.up")
@@ -116,6 +123,9 @@ struct DataHealthView: View {
             isEnabled: showsNavigationTitle,
             title: l("数据健康检查")
         ))
+        .task {
+            store.runDataHealthScanNow(reason: .manual)
+        }
         .alert(l("修复引用与关联？"), isPresented: $showReferenceFixConfirm) {
             Button(l("取消"), role: .cancel) {}
             Button(l("修复"), role: .destructive) {
@@ -138,6 +148,7 @@ struct DataHealthView: View {
             contentType: exportPayload?.contentType ?? .plainText,
             defaultFilename: exportPayload?.defaultFilename ?? l("数据健康报告.txt")
         ) { _ in }
+        .operationToast(notice: $operationNotice)
     }
 
     @ViewBuilder

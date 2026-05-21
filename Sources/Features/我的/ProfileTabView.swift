@@ -10,6 +10,7 @@ struct ProfileTabView: View {
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
     @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.jiangnanSpring.rawValue
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
+    @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) private var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) private var cloudBackupLastSuccessAt = 0.0
     @State private var languageSwitchFeedback = ""
     @State private var localStorageUsageText = String(localized: "正在统计...")
@@ -45,9 +46,13 @@ struct ProfileTabView: View {
     }
 
     private var backupStatusText: String {
-        guard cloudBackupLastSuccessAt > 0 else { return String(localized: "尚未记录云备份成功") }
-        let date = Date(timeIntervalSince1970: cloudBackupLastSuccessAt)
-        return String(format: String(localized: "最近云备份：%@"), Formatters.dateTime.string(from: date))
+        let backupDates = [localBackupLastSuccessAt, cloudBackupLastSuccessAt]
+            .filter { $0 > 0 }
+            .map(Date.init(timeIntervalSince1970:))
+        guard let latestDate = backupDates.max() else {
+            return String(localized: "尚未记录成功备份")
+        }
+        return String(format: String(localized: "最近备份：%@"), Formatters.dateTime.string(from: latestDate))
     }
 
     private var storageCaptionText: String {
@@ -137,7 +142,7 @@ struct ProfileTabView: View {
                             .foregroundStyle(Color.appPrimaryAction)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(String(localized: "数据管理"))
-                            Text(String(localized: "导出、备份、导入恢复、体检与清理"))
+                            Text(String(localized: "先看风险，再备份、恢复、清理"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

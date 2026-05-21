@@ -346,7 +346,7 @@ private func spikeRatioText(_ detail: MaterialPriceSpikeDetail) -> String {
 private func spikeMaterialTitle(_ detail: MaterialPriceSpikeDetail) -> String {
     let spec = detail.specification.trimmingCharacters(in: .whitespacesAndNewlines)
     if spec.isEmpty { return detail.materialName }
-    return "\(detail.materialName) · \(spec)"
+    return DashboardSubtitleBuilder.joined([detail.materialName, spec])
 }
 
 private func spikeDisplayDate(_ text: String) -> String {

@@ -15,6 +15,7 @@ final class DataStore {
     /// 仅用于“是否变更”判定，主线程自增即可。
     var searchIndexVersion = 0
     var dataVersion = UUID()
+    var latestDataHealthScan: DataHealthScanSummary?
 
     let storeURL: URL
     let persistenceActor: DataStorePersistenceActor
@@ -28,6 +29,9 @@ final class DataStore {
     var autosaveLastMutationAt: ContinuousClock.Instant?
     let autosaveDebounceInterval: Duration = .milliseconds(500)
     let autosaveMaxLatency: Duration = .seconds(3)
+    @ObservationIgnored var dataHealthScanTask: Task<Void, Never>?
+    let dataHealthScanDebounceInterval: Duration = .milliseconds(900)
+    let dataHealthScheduledScanMaxAge: TimeInterval = 6 * 60 * 60
 
     init(storageDirectory: URL? = nil) {
         let documentsDirectory = storageDirectory ?? Self.defaultDocumentsDirectory

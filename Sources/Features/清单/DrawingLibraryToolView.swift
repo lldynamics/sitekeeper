@@ -49,6 +49,24 @@ struct DrawingLibraryToolView: View {
         DrawingImportCoordinator.importStrategyMessage(for: pendingImportConflictNames)
     }
 
+    private var drawingSearchSuggestions: [RealtimeSearchSuggestion] {
+        listModel.filteredDrawings.prefix(8).map { drawing in
+            RealtimeSearchSuggestion(
+                id: "drawing-\(drawing.id.uuidString)",
+                category: .drawing,
+                entityId: drawing.id,
+                title: drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                subtitleParts: [
+                    listModel.projectName(for: drawing.projectId),
+                    drawing.drawingNumber,
+                    drawing.discipline,
+                    drawing.floorArea
+                ],
+                score: drawing.isCurrentVersion ? 120 : 100
+            )
+        }
+    }
+
     private var shareSheetPresented: Binding<Bool> {
         Binding(
             get: { shareURL != nil },
@@ -72,23 +90,23 @@ struct DrawingLibraryToolView: View {
                 }
             }
 
+            Section(String(localized: "图纸能力边界")) {
+                InlineNotice(
+                    title: String(localized: "图纸台账 + 外部打开"),
+                    message: String(localized: "App 管理 DWG / DXF / PDF 原件、版本、当前版和交付导出；DWG/DXF 原件通过外部专业看图软件打开，PDF 使用系统预览。"),
+                    tone: .info
+                )
+            }
+
             Section(String(localized: "快速查找")) {
-                HStack(spacing: 8) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    TextField(String(localized: "搜索名称、图号、专业、楼层、项目"), text: $searchText)
-                        .textInputAutocapitalization(.never)
-                        .disableAutocorrection(true)
-                    if !searchText.isEmpty {
-                        Button {
-                            searchText = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundStyle(.secondary)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "清空搜索"))
-                    }
+                InlineSearchPanel(
+                    text: $searchText,
+                    prompt: String(localized: "搜索名称、图号、专业、楼层、项目"),
+                    suggestions: drawingSearchSuggestions,
+                    emptyStateText: String(localized: "未找到匹配图纸")
+                ) { suggestion in
+                    guard let drawing = listModel.filteredDrawings.first(where: { $0.id == suggestion.entityId }) else { return }
+                    openDrawing(drawing)
                 }
                 if !listModel.normalizedSearchText.isEmpty {
                     Text(String(format: String(localized: "匹配 %lld 张图纸"), Int64(listModel.filteredDrawings.count)))
@@ -137,7 +155,7 @@ struct DrawingLibraryToolView: View {
                     ContentUnavailableView(
                         String(localized: "暂无图纸"),
                         systemImage: "doc.viewfinder",
-                        description: Text(String(localized: "先导入 DWG / DXF / PDF 图纸原件，后续按项目、版本和当前版管理。"))
+                        description: Text(String(localized: "先导入 DWG / DXF / PDF 图纸原件，App 负责台账、版本、当前版和交付导出；DWG/DXF 通过外部专业看图软件打开。"))
                     )
                 } else {
                     ForEach(listModel.currentFilteredDrawings) { drawing in
@@ -173,7 +191,7 @@ struct DrawingLibraryToolView: View {
                 }
             }
         }
-        .navigationTitle(String(localized: "图纸管理"))
+        .navigationTitle(String(localized: "图纸台账"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
@@ -195,7 +213,7 @@ struct DrawingLibraryToolView: View {
                 handleImportedDrawings(urls)
             case .failure(let error):
                 StorageIssueLog.record(
-                    String(format: String(localized: "图纸管理导入失败：%@"), error.localizedDescription)
+                    String(format: String(localized: "图纸台账导入失败：%@"), error.localizedDescription)
                 )
                 operationMessage = String(format: String(localized: "图纸导入失败：%@"), error.localizedDescription)
             }

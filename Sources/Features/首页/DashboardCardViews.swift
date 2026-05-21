@@ -9,7 +9,7 @@ struct ProjectContextRow: View {
             HStack {
                 Text(project.name)
                     .font(.callout.weight(.semibold))
-                    .lineLimit(1)
+                    .appListPrimaryTextLayout()
                 Spacer()
                 Text(project.status.displayName)
                     .font(.caption2.weight(.semibold))
@@ -47,6 +47,67 @@ struct DashboardProjectSignal {
     let subtitle: String
     let color: Color
     let score: Int
+}
+
+enum DashboardSubtitleBuilder {
+    static func joined(_ parts: [String]) -> String {
+        parts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
+    }
+
+    static func moneySummary(_ leading: String, amount: String) -> String {
+        joined([leading, amount])
+    }
+
+    static func datedAmount(_ date: String, amount: String, projectName: String? = nil) -> String {
+        joined([date, amount, projectName ?? ""])
+    }
+
+    static func versionState(_ versionLabel: String, state: String) -> String {
+        joined([versionLabel, state])
+    }
+
+    static func progress(_ completion: Double) -> String {
+        String(format: String(localized: "%lld%%"), Int64(completion.rounded(.towardZero)))
+    }
+
+    static func todoStatus(isDone: Bool) -> String {
+        isDone ? String(localized: "已完成") : String(localized: "未完成")
+    }
+
+    static func labor(workers: String, hours: String) -> String {
+        joined(["\(workers)人", "\(hours)h"])
+    }
+
+    static func document(category: String, pageCount: Int) -> String {
+        joined([category, String(format: String(localized: "%lld页"), Int64(pageCount))])
+    }
+
+    static func projectSignal(label: String, count: Int) -> String {
+        String(format: String(localized: "%@ %lld"), label, Int64(count))
+    }
+
+    static func overdue(_ count: Int) -> String {
+        projectSignal(label: String(localized: "延期"), count: count)
+    }
+
+    static func today(_ count: Int) -> String {
+        projectSignal(label: String(localized: "今日"), count: count)
+    }
+
+    static func missingReceipt(_ count: Int) -> String {
+        projectSignal(label: String(localized: "缺票"), count: count)
+    }
+
+    static func priceSpike(_ count: Int) -> String {
+        projectSignal(label: String(localized: "价格异动"), count: count)
+    }
+
+    static func openTodo(_ count: Int) -> String {
+        projectSignal(label: String(localized: "待办"), count: count)
+    }
 }
 
 struct DashboardProjectPickerSheet: View {
@@ -140,10 +201,10 @@ struct DashboardProjectChip: View {
             Text(subtitle)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(isSelected ? .white.opacity(0.88) : color)
-                .lineLimit(1)
+                .appListSecondaryTextLayout()
         }
         .frame(minWidth: minChipWidth, maxWidth: maxChipWidth, alignment: .leading)
-        .frame(minHeight: 52, alignment: .topLeading)
+        .frame(minHeight: 64, alignment: .topLeading)
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight)
         .background(
@@ -238,17 +299,18 @@ struct TimelineActivityRow: View {
                 Text(activity.title)
                     .font(.callout)
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .appListPrimaryTextLayout()
                 HStack(spacing: AppSpacing.tight * 0.75) {
                     if let name = projectName {
                         Text(name)
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                            .appListSecondaryTextLayout(lines: 1)
                     }
                     Text(activity.subtitle)
                         .font(.caption2)
                         .foregroundStyle(tint)
+                        .appListSecondaryTextLayout(lines: 1)
                 }
             }
             Spacer()
@@ -304,19 +366,18 @@ struct DashboardToastView: View {
     let message: String
 
     var body: some View {
-        Text(message)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.primary)
-            .padding(.horizontal, AppSpacing.normal)
-            .padding(.vertical, AppSpacing.tight)
-            .background(
-                Capsule()
-                    .fill(.ultraThinMaterial)
-            )
-            .overlay(
-                Capsule()
-                    .stroke(Color(uiColor: .separator).opacity(0.45), lineWidth: 0.8)
-            )
-            .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        AppPanel(
+            tone: .materialThin,
+            cornerRadius: 999,
+            padding: 0,
+            shadow: .card,
+            stroke: Color(uiColor: .separator).opacity(0.45)
+        ) {
+            Text(message)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .padding(.horizontal, AppSpacing.normal)
+                .padding(.vertical, AppSpacing.tight)
+        }
     }
 }

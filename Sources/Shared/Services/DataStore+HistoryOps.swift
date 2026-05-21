@@ -2,8 +2,20 @@ import Foundation
 
 @MainActor
 extension DataStore {
-    func appendCalculationHistory(tool: String, input: String, result: String, date: String = Formatters.now()) {
-        let record = HistoryRecord(tool: tool, input: input, result: result, date: date)
+    func appendCalculationHistory(
+        tool: String,
+        input: String,
+        result: String,
+        date: String = Formatters.now(),
+        projectId: UUID? = nil
+    ) {
+        let record = HistoryRecord(
+            tool: tool,
+            input: input,
+            result: result,
+            date: date,
+            projectId: projectId
+        )
         replaceHistoryRecords([record] + historyRecords)
         scheduleSave()
     }

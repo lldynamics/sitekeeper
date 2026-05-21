@@ -45,34 +45,9 @@ struct MaterialSheetEditableItemRow: View {
             if isExpanded {
                 Divider().padding(.vertical, 6)
                 VStack(spacing: 8) {
-                    HStack(spacing: 10) {
-                        TextField(String(localized: "估价 ¥"), text: $item.unitPrice)
-                            .keyboardType(.decimalPad)
-                            .frame(width: 100)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.callout)
-
-                        if let suggestedPrice,
-                           suggestedPrice != item.unitPrice {
-                            Button {
-                                item.unitPrice = suggestedPrice
-                            } label: {
-                                Text("¥\(suggestedPrice)")
-                                    .font(.caption2.weight(.semibold))
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 3)
-                                    .background(Color.appPrimarySurfaceSubtle, in: Capsule())
-                                    .foregroundStyle(Color.appPrimaryAction)
-                            }
-                            .buttonStyle(.borderless)
-                        }
-
-                        TextField(String(localized: "人工费 ¥"), text: $item.laborCost)
-                            .keyboardType(.decimalPad)
-                            .frame(width: 100)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.callout)
-                        Spacer()
+                    ViewThatFits(in: .horizontal) {
+                        priceFieldsRow
+                        priceFieldsColumn
                     }
 
                     HStack(spacing: 10) {
@@ -106,7 +81,7 @@ struct MaterialSheetEditableItemRow: View {
                             Text(item.attachmentFileName ?? "附件")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
+                                .appListSecondaryTextLayout()
                             Button {
                                 item.attachmentData = nil
                                 item.attachmentFileName = nil
@@ -134,6 +109,59 @@ struct MaterialSheetEditableItemRow: View {
             }
         }
         .padding(.vertical, 6)
+    }
+
+    private var unitPriceField: some View {
+        TextField(String(localized: "估价 ¥"), text: $item.unitPrice)
+            .keyboardType(.decimalPad)
+            .frame(minWidth: 100)
+            .textFieldStyle(.roundedBorder)
+            .font(.callout)
+    }
+
+    private var laborCostField: some View {
+        TextField(String(localized: "人工费 ¥"), text: $item.laborCost)
+            .keyboardType(.decimalPad)
+            .frame(minWidth: 100)
+            .textFieldStyle(.roundedBorder)
+            .font(.callout)
+    }
+
+    @ViewBuilder
+    private var suggestedPriceButton: some View {
+        if let suggestedPrice,
+           suggestedPrice != item.unitPrice {
+            Button {
+                item.unitPrice = suggestedPrice
+            } label: {
+                Text("¥\(suggestedPrice)")
+                    .font(.caption2.weight(.semibold))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 3)
+                    .background(Color.appPrimarySurfaceSubtle, in: Capsule())
+                    .foregroundStyle(Color.appPrimaryAction)
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private var priceFieldsRow: some View {
+        HStack(spacing: 10) {
+            unitPriceField
+            suggestedPriceButton
+            laborCostField
+            Spacer()
+        }
+    }
+
+    private var priceFieldsColumn: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                unitPriceField
+                suggestedPriceButton
+            }
+            laborCostField
+        }
     }
 }
 
@@ -245,9 +273,22 @@ struct MaterialSheetCreateDraftSheet: View {
     let onCancel: () -> Void
     let onCreate: () -> Void
 
+    private var titleIsEmpty: Bool {
+        titleInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "新建材料单"),
+            primaryActionTitle: String(localized: "创建"),
+            isPrimaryActionDisabled: titleIsEmpty,
+            onCancel: onCancel,
+            onPrimaryAction: onCreate
+        ) {
             Form {
+                AppBusinessFormValidationSection(
+                    messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
+                )
                 Section(String(localized: "基本信息")) {
                     TextField(String(localized: "材料单名称"), text: $titleInput)
                     Picker(String(localized: "归属项目"), selection: $projectIdInput) {
@@ -256,16 +297,6 @@ struct MaterialSheetCreateDraftSheet: View {
                             Text(project.name).tag(project.id as UUID?)
                         }
                     }
-                }
-            }
-            .navigationTitle("新建材料单")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消"), action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "创建"), action: onCreate)
                 }
             }
         }
@@ -277,21 +308,23 @@ struct MaterialSheetRenameDraftSheet: View {
     let onCancel: () -> Void
     let onSave: () -> Void
 
+    private var titleIsEmpty: Bool {
+        renameTitleInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "重命名材料单"),
+            isPrimaryActionDisabled: titleIsEmpty,
+            onCancel: onCancel,
+            onPrimaryAction: onSave
+        ) {
             Form {
+                AppBusinessFormValidationSection(
+                    messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
+                )
                 Section(String(localized: "材料单名称")) {
                     TextField(String(localized: "材料单名称"), text: $renameTitleInput)
-                }
-            }
-            .navigationTitle("重命名材料单")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消"), action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存"), action: onSave)
                 }
             }
         }

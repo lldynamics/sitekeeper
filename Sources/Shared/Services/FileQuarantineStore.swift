@@ -110,6 +110,87 @@ enum FileQuarantineStore {
         return true
     }
 
+    static func loadEntries() -> [FileQuarantineEntry] {
+        do {
+            return try loadManifest().entries.sorted { lhs, rhs in
+                lhs.createdAt > rhs.createdAt
+            }
+        } catch {
+            StorageIssueLog.record(
+                String(format: String(localized: "隔离文件清单读取失败：%@"), error.localizedDescription)
+            )
+            return []
+        }
+    }
+
+    static func restore(_ entry: FileQuarantineEntry) throws {
+        guard let quarantinedURL = quarantinedURL(for: entry) else {
+            throw FileStorageError.directoryCreationFailed(rootDirectoryName)
+        }
+
+        let manager = FileManager.default
+        let originalURL = URL(fileURLWithPath: entry.originalPath)
+        guard manager.fileExists(atPath: quarantinedURL.path) else {
+            if manager.fileExists(atPath: originalURL.path) {
+                try removeEntry(entry.id)
+                invalidateCache(for: entry)
+                return
+            }
+            throw FileStorageError.readFailed(entry.originalFileName)
+        }
+
+        do {
+            try manager.createDirectory(
+                at: originalURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            if manager.fileExists(atPath: originalURL.path) {
+                _ = try FileOps.removeIfExists(
+                    at: quarantinedURL,
+                    context: .init(
+                        event: "quarantine.restore_cleanup",
+                        category: .fileStorage,
+                        source: "FileQuarantineStore.restore"
+                    )
+                )
+            } else {
+                try manager.moveItem(at: quarantinedURL, to: originalURL)
+            }
+            invalidateCache(for: entry)
+        } catch {
+            StorageIssueLog.recordEvent(
+                "quarantine.restore_failed",
+                category: .fileStorage,
+                details: [
+                    "category": entry.category.rawValue,
+                    "file": entry.originalFileName
+                ],
+                error: error
+            )
+            throw FileStorageError.copyFailed(entry.originalFileName)
+        }
+
+        try removeEntry(entry.id)
+    }
+
+    static func permanentlyDelete(_ entry: FileQuarantineEntry) throws {
+        if let quarantinedURL = quarantinedURL(for: entry) {
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: quarantinedURL,
+                    context: .init(
+                        event: "quarantine.permanent_delete",
+                        category: .fileStorage,
+                        source: "FileQuarantineStore.permanentlyDelete"
+                    )
+                )
+            } catch {
+                throw FileStorageError.deleteFailed(entry.originalFileName)
+            }
+        }
+        try removeEntry(entry.id)
+    }
+
     @discardableResult
     static func purgeExpiredEntries(now: Date = Date()) -> Int {
         guard let rootURL else { return 0 }
@@ -133,7 +214,14 @@ enum FileQuarantineStore {
             let quarantinedURL = rootURL.appendingPathComponent(entry.quarantinedRelativePath)
             guard manager.fileExists(atPath: quarantinedURL.path) else { continue }
             do {
-                try manager.removeItem(at: quarantinedURL)
+                _ = try FileOps.removeIfExists(
+                    at: quarantinedURL,
+                    context: .init(
+                        event: "quarantine.expired_delete",
+                        category: .fileStorage,
+                        source: "FileQuarantineStore.purgeExpiredEntries"
+                    )
+                )
             } catch {
                 StorageIssueLog.recordEvent(
                     "quarantine.expired_delete_failed",
@@ -172,6 +260,25 @@ enum FileQuarantineStore {
         allowedRetentionDays.min { lhs, rhs in
             abs(lhs - days) < abs(rhs - days)
         } ?? defaultRetentionDays
+    }
+
+    private static func quarantinedURL(for entry: FileQuarantineEntry) -> URL? {
+        rootURL?.appendingPathComponent(entry.quarantinedRelativePath)
+    }
+
+    private static func removeEntry(_ id: UUID) throws {
+        var manifest = try loadManifest()
+        manifest.entries.removeAll { $0.id == id }
+        try saveManifest(manifest)
+    }
+
+    private static func invalidateCache(for entry: FileQuarantineEntry) {
+        switch entry.category {
+        case .photoOriginal, .photoThumbnail:
+            PhotoCache.shared.invalidate(fileName: entry.originalFileName)
+        case .drawing, .drawingSidecar, .projectDocument, .quickNoteAttachment:
+            break
+        }
     }
 
     private static func loadManifest() throws -> FileQuarantineManifest {

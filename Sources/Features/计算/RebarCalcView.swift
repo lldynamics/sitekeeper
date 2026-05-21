@@ -6,7 +6,6 @@ struct RebarCalcView: View {
     @AppStorage(UserPreferenceKeys.Calculator.rebarLen) private var len = "9"
     @AppStorage(UserPreferenceKeys.Calculator.rebarQty) private var qty = "30"
     @AppStorage(UserPreferenceKeys.Calculator.rebarPrice) private var price = ""
-    @State private var result = ""
     @State private var resultModel: CalculationResult?
     @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
@@ -70,10 +69,10 @@ struct RebarCalcView: View {
     }
 
     var body: some View {
-        Form {
-            Section("钢筋规格") {
-                CalculatorValidatedNumericField(
-                    title: "直径",
+        CalculatorForm(title: CalculatorCopy.rebarTool, focus: $isInputFocused) {
+            Section(CalculatorCopy.rebarSpecSection) {
+                CalculatorInputField(
+                    title: CalculatorCopy.rebarDiameter,
                     placeholder: "12",
                     unit: "mm",
                     text: $dia,
@@ -81,9 +80,9 @@ struct RebarCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用直径", options: ["6", "8", "10", "12", "14", "16", "20"], selection: $dia)
-                CalculatorValidatedNumericField(
-                    title: "每根长",
+                CalculatorPresetChips(title: CalculatorCopy.rebarCommonDiameter, options: ["6", "8", "10", "12", "14", "16", "20"], selection: $dia)
+                CalculatorInputField(
+                    title: CalculatorCopy.rebarLengthEach,
                     placeholder: "9",
                     unit: "m",
                     text: $len,
@@ -91,22 +90,22 @@ struct RebarCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用长度", options: ["6", "9", "12"], selection: $len)
-                CalculatorValidatedNumericField(
-                    title: "根数",
+                CalculatorPresetChips(title: CalculatorCopy.rebarCommonLength, options: ["6", "9", "12"], selection: $len)
+                CalculatorInputField(
+                    title: CalculatorCopy.rebarQuantity,
                     placeholder: "30",
-                    unit: "根",
+                    unit: CalculatorCopy.unitRoots,
                     text: $qty,
                     rule: quantityRule,
                     keyboardType: .numberPad,
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用根数", options: ["10", "20", "30", "50", "100"], selection: $qty)
-                CalculatorValidatedNumericField(
-                    title: "单价",
-                    placeholder: "选填",
-                    unit: "元/kg",
+                CalculatorPresetChips(title: CalculatorCopy.rebarCommonQuantity, options: ["10", "20", "30", "50", "100"], selection: $qty)
+                CalculatorInputField(
+                    title: CalculatorCopy.unitPrice,
+                    placeholder: CalculatorCopy.optionalPlaceholder,
+                    unit: CalculatorCopy.unitYuanPerKilogram,
                     text: $price,
                     rule: priceRule,
                     showWhenEmpty: false,
@@ -114,27 +113,14 @@ struct RebarCalcView: View {
                 )
             }
             Section {
-                Button("估算") {
+                CalculatorPrimaryActionButton(title: CalculatorCopy.actionEstimate) {
                     isInputFocused = false
                     didAttemptSubmit = true
                     calc()
                 }
-                .frame(maxWidth: .infinity)
-                .fontWeight(.semibold)
             }
             if let resultModel {
-                Section("结果") {
-                    CalculatorResultCard(
-                        title: "钢筋重量估算",
-                        result: resultModel
-                    )
-                }
-            }
-        }
-        .navigationTitle("钢筋重量").navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            KeyboardDismissToolbar {
-                isInputFocused = false
+                CalculatorResultPanel(cardTitle: CalculatorCopy.rebarResultTitle, result: resultModel)
             }
         }
     }
@@ -144,47 +130,35 @@ struct RebarCalcView: View {
               let l = lengthValidation.doubleValue,
               let qValue = quantityValidation.doubleValue,
               priceValidation.errorMessage == nil else {
-            result = ""
             resultModel = nil
             return
         }
         let q = qValue.rounded(.towardZero)
         let uw = d * d / 162
         let tw = uw * l * q
-        var lines = ["单位重: \(fmt(uw)) kg/m", "总重: \(fmt(tw)) kg", "吨位: \(fmt(tw/1000)) t"]
-        if let p = priceValidation.doubleValue, p > 0 { lines.append("造价: \(fmt(tw * p)) 元") }
         var items: [CalculationResult.ResultItem] = [
-            CalculationResult.item("单位重", "\(fmt(uw)) kg/m"),
-            CalculationResult.item("总重", "\(fmt(tw)) kg", status: .pass),
-            CalculationResult.item("吨位", "\(fmt(tw / 1000)) t"),
+            CalculationResult.item(CalculatorResultLabel.unitWeight, CalculatorFormatting.kilogramsPerMeter(uw)),
+            CalculationResult.item(CalculatorResultLabel.totalWeight, CalculatorFormatting.kilograms(tw), status: .pass),
+            CalculationResult.item(CalculatorResultLabel.tonnage, CalculatorFormatting.tons(tw / 1000)),
         ]
         if let p = priceValidation.doubleValue, p > 0 {
-            items.append(CalculationResult.item("造价", "\(fmt(tw * p)) 元"))
+            items.append(CalculationResult.item(CalculatorResultLabel.estimatedCost, CalculatorFormatting.yuan(tw * p)))
         }
         resultModel = .singleSection(
-            headline: "总重 \(fmt(tw)) kg",
-            formula: "单位重(kg/m)=d²÷162；总重=单位重×长度×根数",
+            headline: "\(CalculatorCopy.totalWeightPrefix) \(CalculatorFormatting.kilograms(tw))",
+            formula: CalculatorResultCopy.rebarFormula(),
             items: items
         )
-        result = lines.joined(separator: "\n")
-        saveHistory("总重 \(fmt(tw)) kg")
+        CalculatorHistorySupport.record(
+            store: store,
+            tool: CalculatorCopy.rebarTool,
+            input: CalculatorFormatting.rebarSpec(diameter: dia, length: len, quantity: qty),
+            result: CalculatorHistoryCopy.weightResult(prefix: CalculatorCopy.totalWeightPrefix, value: tw)
+        )
         dia = NumericInputSupport.normalizedStorageText(dia, kind: .quantity, preservingInvalid: false)
         len = NumericInputSupport.normalizedStorageText(len, kind: .quantity, preservingInvalid: false)
         qty = NumericInputSupport.normalizedStorageText(qty, kind: .quantity, preservingInvalid: false)
         price = NumericInputSupport.normalizedStorageText(price, kind: .amount, preservingInvalid: false)
-    }
-
-    private func fmt(_ v: Double) -> String {
-        let f = NumberFormatter(); f.minimumFractionDigits = 0; f.maximumFractionDigits = 3
-        return f.string(from: NSNumber(value: v)) ?? String(v)
-    }
-
-    private func saveHistory(_ r: String) {
-        store.appendCalculationHistory(
-            tool: "钢筋重量",
-            input: "Φ\(dia)mm, \(len)m × \(qty)根",
-            result: r
-        )
     }
 
 }

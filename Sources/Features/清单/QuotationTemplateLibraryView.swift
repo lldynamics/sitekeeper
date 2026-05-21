@@ -2,6 +2,7 @@ import SwiftUI
 
 struct QuotationTemplateLibraryView: View {
     @Environment(DataStore.self) private var store
+    @Environment(MaterialLibraryStore.self) private var materialLibraryStore
     let focusedTemplateId: UUID?
     @State private var searchText = ""
     @State private var showAdd = false
@@ -15,7 +16,7 @@ struct QuotationTemplateLibraryView: View {
     }
 
     private var templates: [ProjectTemplate] {
-        let items = store.templates.filter { $0.category == .quotation }
+        let items = materialLibraryStore.templates.filter { $0.category == .quotation }
         return SearchMatcher.filter(items, keyword: searchText)
     }
 
@@ -90,7 +91,7 @@ struct QuotationTemplateLibraryView: View {
     private func deleteTemplateIds(_ ids: Set<UUID>) {
         guard !ids.isEmpty else { return }
 
-        let snapshot = store.templates
+        let snapshot = materialLibraryStore.templates
         let targets = snapshot.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
 
@@ -120,7 +121,7 @@ struct QuotationTemplateLibraryView: View {
 
     private func openFocusedTemplateIfNeeded() {
         guard let focusedTemplateId, !didOpenFocusedTemplate,
-              let template = store.templates.first(where: { $0.id == focusedTemplateId }) else { return }
+              let template = materialLibraryStore.templates.first(where: { $0.id == focusedTemplateId }) else { return }
         didOpenFocusedTemplate = true
         searchText = ""
         Task { @MainActor in

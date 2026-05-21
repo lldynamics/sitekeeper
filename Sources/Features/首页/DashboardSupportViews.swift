@@ -8,6 +8,7 @@ enum DashboardDestination {
         projectId: UUID,
         autoOpenFinancialAdd: Bool = false,
         autoOpenDocumentScanSetup: Bool = false,
+        autoOpenDeliveryGuide: Bool = false,
         initialMode: ProjectDetailMode? = nil
     )
     case bookkeepingProjectPicker(projects: [Project])
@@ -41,12 +42,19 @@ func dashboardDestinationView(_ destination: DashboardDestination) -> some View 
             initialProjectId: initialProjectId,
             autoOpenCameraOnAppear: autoOpenCameraOnAppear
         )
-    case .projectDetail(let projectId, let autoOpenFinancialAdd, let autoOpenDocumentScanSetup, let initialMode):
+    case .projectDetail(
+        let projectId,
+        let autoOpenFinancialAdd,
+        let autoOpenDocumentScanSetup,
+        let autoOpenDeliveryGuide,
+        let initialMode
+    ):
         ProjectDetailView(
             projectId: projectId,
             initialMode: initialMode,
             autoOpenFinancialAdd: autoOpenFinancialAdd,
-            autoOpenDocumentScanSetup: autoOpenDocumentScanSetup
+            autoOpenDocumentScanSetup: autoOpenDocumentScanSetup,
+            autoOpenDeliveryGuide: autoOpenDeliveryGuide
         )
     case .bookkeepingProjectPicker(let projects):
         BookkeepingProjectPickerView(projects: projects)
@@ -125,10 +133,11 @@ struct TodayMiniAction: View {
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.tight)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-            )
+            .background {
+                AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
+                    Color.clear
+                }
+            }
         }
         .simultaneousGesture(TapGesture().onEnded {
             AppHaptics.impact(.light)
@@ -197,10 +206,11 @@ struct TodayCommandAction: View {
             .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
             .padding(.horizontal, horizontalPadding)
             .padding(.vertical, verticalPadding)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.tight)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-            )
+            .background {
+                AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
+                    Color.clear
+                }
+            }
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)

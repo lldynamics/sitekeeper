@@ -28,20 +28,16 @@ struct ProjectListView: View {
     @State private var statusFilter: ProjectStatus? = nil
     @State private var overviewFilter: ProjectOverviewFilter? = nil
     @State private var sortOption: ProjectSortOption = .recentUpdate
-    @State private var selectedProjectId: UUID?
     @State private var lastHandledAutoOpenComposerToken = 0
     @FocusState private var newProjectFocusedField: ProjectCreateNumericField?
     private let autoOpenComposerToken: Int
-    private let prefersSplitNavigation: Bool?
 
     init(
         initialOverviewFilter: ProjectOverviewFilter? = nil,
-        autoOpenComposerToken: Int = 0,
-        prefersSplitNavigation: Bool? = nil
+        autoOpenComposerToken: Int = 0
     ) {
         _overviewFilter = State(initialValue: initialOverviewFilter)
         self.autoOpenComposerToken = autoOpenComposerToken
-        self.prefersSplitNavigation = prefersSplitNavigation
     }
 
     private var allowedStatuses: [ProjectStatus] {
@@ -107,30 +103,8 @@ struct ProjectListView: View {
         )
     }
 
-    private var shouldUseSplitNavigation: Bool {
-        if let prefersSplitNavigation {
-            return prefersSplitNavigation
-        }
-        return false
-    }
-
-    private var visibleProjectIDs: [UUID] {
-        sortedProjects.map(\.id)
-    }
-
-    private var selectedProject: Project? {
-        guard let selectedProjectId else { return nil }
-        return projectStore.projects.first { $0.id == selectedProjectId }
-    }
-
     var body: some View {
-        Group {
-            if shouldUseSplitNavigation {
-                splitProjectLayout
-            } else {
-                compactProjectLayout
-            }
-        }
+        compactProjectLayout
         .sheet(isPresented: $showAdd) {
             ProjectCreateSheet(
                 name: $newName,
@@ -173,16 +147,9 @@ struct ProjectListView: View {
         }
         .onAppear {
             handleAutoOpenComposer()
-            syncSelectedProjectIfNeeded()
         }
         .onChange(of: autoOpenComposerToken) { _, _ in
             handleAutoOpenComposer()
-        }
-        .onChange(of: visibleProjectIDs) { _, _ in
-            syncSelectedProjectIfNeeded()
-        }
-        .onChange(of: shouldUseSplitNavigation) { _, _ in
-            syncSelectedProjectIfNeeded()
         }
         .onDisappear {
             undoableDeletion.flushPendingCommit()
@@ -191,32 +158,11 @@ struct ProjectListView: View {
     }
 
     private var compactProjectLayout: some View {
-        projectList(isSplitNavigation: false)
+        projectList
             .navigationTitle(String(localized: "项目"))
             .toolbar {
                 projectToolbar
             }
-    }
-
-    private var splitProjectLayout: some View {
-        NavigationSplitView {
-            projectList(isSplitNavigation: true)
-                .navigationTitle(String(localized: "项目"))
-                .toolbar {
-                    projectToolbar
-                }
-        } detail: {
-            if let selectedProject {
-                ProjectDetailView(projectId: selectedProject.id)
-            } else {
-                ContentUnavailableView(
-                    String(localized: "请选择项目"),
-                    systemImage: "building.2.crop.circle",
-                    description: Text(String(localized: "在左侧选择工程后，右侧常驻展示项目详情。"))
-                )
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
     }
 
     @ToolbarContentBuilder
@@ -230,33 +176,47 @@ struct ProjectListView: View {
             .buttonStyle(.appIcon())
             .accessibilityLabel(String(localized: "项目资料"))
             .accessibilityIdentifier("project-file-browser-entry")
-            Button {
-                showAdd = true
-            } label: {
-                Image(systemName: "plus").visibleIconStyle()
+            if shouldUseProminentProjectCreateAction {
+                Button {
+                    showAdd = true
+                } label: {
+                    Label(String(localized: "新建项目"), systemImage: "plus.circle.fill")
+                }
+                .buttonStyle(.appProminent())
+                .accessibilityLabel(String(localized: "新建项目"))
+            } else {
+                Button {
+                    showAdd = true
+                } label: {
+                    Image(systemName: "plus").visibleIconStyle()
+                }
+                .buttonStyle(.appIcon())
+                .accessibilityLabel(String(localized: "新建项目"))
             }
-            .buttonStyle(.appIcon())
-            .accessibilityLabel(String(localized: "新建项目"))
         }
     }
 
+    private var shouldUseProminentProjectCreateAction: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad || projectStore.projects.isEmpty
+    }
+
     @ViewBuilder
-    private func projectList(isSplitNavigation: Bool) -> some View {
+    private var projectList: some View {
         List {
-            searchFilterSection(isSplitNavigation: isSplitNavigation)
+            searchFilterSection
 
             if sortedProjects.isEmpty {
                 emptyProjectSection
             }
 
-            projectRowsSection(isSplitNavigation: isSplitNavigation)
+            projectRowsSection
         }
     }
 
     // MARK: - 内联搜索与筛选
 
     @ViewBuilder
-    private func searchFilterSection(isSplitNavigation: Bool) -> some View {
+    private var searchFilterSection: some View {
         ProjectListFiltersSection(
             searchText: $searchText,
             statusFilter: $statusFilter,
@@ -265,7 +225,6 @@ struct ProjectListView: View {
             allowedStatuses: allowedStatuses,
             searchSuggestions: projectSearchSuggestions,
             hasAnyFilterApplied: hasAnyFilterApplied,
-            isSplitNavigation: isSplitNavigation,
             onSelectSuggestion: applyProjectSuggestion,
             onClearAll: clearAllFilters
         )
@@ -306,34 +265,17 @@ struct ProjectListView: View {
     // MARK: - 项目列表行
 
     @ViewBuilder
-    private func projectRowsSection(isSplitNavigation: Bool) -> some View {
+    private var projectRowsSection: some View {
         ForEach(sortedProjects) { project in
-            Group {
-                if isSplitNavigation {
-                    Button {
-                        selectedProjectId = project.id
-                    } label: {
-                        ProjectRowContent(
-                            project: project,
-                            isSelected: selectedProjectId == project.id,
-                            unpaidAmount: unpaidAmount(for: project),
-                            badges: projectRiskBadges(for: project)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(selectedProjectId == project.id ? Color.appPeachSurfaceSubtle : Color.clear)
-                } else {
-                    NavigationLink {
-                        ProjectDetailView(projectId: project.id)
-                    } label: {
-                        ProjectRowContent(
-                            project: project,
-                            isSelected: false,
-                            unpaidAmount: unpaidAmount(for: project),
-                            badges: projectRiskBadges(for: project)
-                        )
-                    }
-                }
+            NavigationLink {
+                ProjectDetailView(projectId: project.id)
+            } label: {
+                ProjectRowContent(
+                    project: project,
+                    isSelected: false,
+                    unpaidAmount: unpaidAmount(for: project),
+                    badges: projectRiskBadges(for: project)
+                )
             }
             .swipeActions(edge: .leading, allowsFullSwipe: false) {
                 NavigationLink {
@@ -398,18 +340,6 @@ struct ProjectListView: View {
         }
     }
 
-    private func syncSelectedProjectIfNeeded() {
-        guard shouldUseSplitNavigation else { return }
-        guard !visibleProjectIDs.isEmpty else {
-            selectedProjectId = nil
-            return
-        }
-        if let selectedProjectId, visibleProjectIDs.contains(selectedProjectId) {
-            return
-        }
-        selectedProjectId = visibleProjectIDs.first
-    }
-
     private func clearAllFilters() {
         searchText = ""
         statusFilter = nil
@@ -439,7 +369,6 @@ struct ProjectListView: View {
             }
 
             projectToDelete = nil
-            syncSelectedProjectIfNeeded()
             undoableDeletion.queue(
                 notice: $operationNotice,
                 message: String(format: String(localized: "已删除项目 %@"), normalizedName),
@@ -449,9 +378,6 @@ struct ProjectListView: View {
                 },
                 undo: {
                     store.restoreProjectCascade(deletion)
-                    if shouldUseSplitNavigation {
-                        selectedProjectId = pid
-                    }
                     store.scheduleSave()
                 },
                 audit: UndoableDeletionAuditContext(
@@ -594,7 +520,6 @@ struct ProjectListView: View {
         guard suggestion.category == .project else { return }
         if let project = projectStore.projects.first(where: { $0.id == suggestion.entityId }) {
             searchText = project.name
-            selectedProjectId = project.id
         } else {
             searchText = suggestion.title
         }

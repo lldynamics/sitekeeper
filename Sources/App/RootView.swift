@@ -180,10 +180,7 @@ struct RootView: View {
             DashboardView()
         case .records:
             NavigationStack {
-                ProjectListView(
-                    autoOpenComposerToken: projectComposerOpenToken,
-                    prefersSplitNavigation: true
-                )
+                ProjectListView(autoOpenComposerToken: projectComposerOpenToken)
             }
         case .checklist:
             NavigationStack {

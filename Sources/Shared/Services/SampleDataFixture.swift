@@ -1,6 +1,5 @@
 import Foundation
 
-#if DEBUG
 @MainActor
 extension DataStore {
     func loadSampleFixtureSnapshot() -> BackupSnapshot? {
@@ -13,13 +12,6 @@ extension DataStore {
             return nil
         }
         return snapshot
-    }
-
-    @discardableResult
-    func seedDefaults() -> Bool {
-        guard let snapshot = loadSampleFixtureSnapshot() else { return false }
-        applySampleFixtureSnapshot(snapshot)
-        return true
     }
 
     func applySampleFixtureSnapshot(_ snapshot: BackupSnapshot) {
@@ -97,4 +89,3 @@ private enum SampleDataFixtureLoader {
 
     private final class BundleToken {}
 }
-#endif

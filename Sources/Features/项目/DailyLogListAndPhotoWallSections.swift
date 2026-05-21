@@ -205,11 +205,11 @@ struct DailyLogPhotoWallSection: View {
                                 Text(item.logDate)
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    .lineLimit(1)
+                                    .appListSecondaryTextLayout(lines: 1)
                                 Text(item.photo.tag.displayName)
                                     .font(.caption2.weight(.medium))
                                     .foregroundStyle(Color.appDoc)
-                                    .lineLimit(1)
+                                    .appListPrimaryTextLayout(lines: 2)
                                 if hasRectificationPair(item.logId),
                                    (item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter) {
                                     Text(String(localized: "已配对"))
@@ -220,15 +220,16 @@ struct DailyLogPhotoWallSection: View {
                                     Text(item.photo.note)
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
-                                        .lineLimit(1)
+                                        .appListSecondaryTextLayout()
                                 }
                                 if let project = item.projectId.flatMap({ pid in projects.first(where: { $0.id == pid }) }) {
                                     Text(project.name)
                                         .font(.caption2)
                                         .foregroundStyle(Color.appDoc)
-                                        .lineLimit(1)
+                                        .appListSecondaryTextLayout()
                                 }
                             }
+                            .frame(maxWidth: .infinity, alignment: .leading)
                         }
                         .buttonStyle(.plain)
                         .accessibilityElement(children: .combine)

@@ -2,37 +2,24 @@ import SwiftUI
 
 extension ProjectDetailContainer {
     func updateProjectPhoto(context: ProjectPhotoContext, note: String, tag: PhotoTag) {
-        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = projectStore.dailyLogs[logIndex]
-        if let photoIndex = log.photos.firstIndex(where: { $0.id == context.photoId }) {
-            log.photos[photoIndex].note = note
-            log.photos[photoIndex].tag = tag
-        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
-        }
-        store.updateDailyLog(log)
+        guard store.updateDailyLogPhoto(
+            logId: context.logId,
+            photoId: context.photoId,
+            legacyFileName: context.legacyFileName,
+            note: note,
+            tag: tag
+        ) else { return }
         store.scheduleSave()
     }
 
     func deleteProjectPhoto(context: ProjectPhotoContext) {
         flushPendingProjectDeletionIfNeeded()
         let snapshot = store.dailyLogs
-        guard let logIndex = projectStore.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = projectStore.dailyLogs[logIndex]
-        var deletedFileName: String?
-        if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
-            let fileName = log.photos[index].fileName
-            deletedFileName = fileName
-            log.photos.remove(at: index)
-            if log.photoFileName == fileName {
-                log.photoFileName = log.photos.first?.fileName
-            }
-        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            deletedFileName = legacy
-            log.photoFileName = nil
-        }
-        guard let deletedFileName else { return }
-        store.updateDailyLog(log)
+        guard let deletedFileName = store.removeDailyLogPhoto(
+            logId: context.logId,
+            photoId: context.photoId,
+            legacyFileName: context.legacyFileName
+        ) else { return }
         undoableDeletion.queue(
             notice: $operationNotice,
             message: String(localized: "已删除项目照片"),

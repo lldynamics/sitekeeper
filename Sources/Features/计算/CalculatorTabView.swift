@@ -90,14 +90,14 @@ struct CalculatorTabView: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("记录") {
+                Section(CalculatorCopy.historySection) {
                     NavigationLink {
                         CalculationHistoryView()
                     } label: {
                         ToolRow(
                             icon: "clock.arrow.circlepath",
-                            title: "计算历史",
-                            desc: "查看、删除历史计算结果",
+                            title: CalculatorCopy.historyTitle,
+                            desc: CalculatorCopy.historyDescription,
                             color: .appCalculations
                         )
                     }

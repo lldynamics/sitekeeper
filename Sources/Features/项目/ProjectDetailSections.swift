@@ -34,6 +34,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     let onOpenAssets: () -> Void
     let onOpenLogs: () -> Void
     let onOpenTodos: () -> Void
+    let onOpenTimeline: () -> Void
     let onAddLog: () -> Void
     let onEditProgress: (ProgressTask) -> Void
     let onOpenTimelineItem: (ProjectTimelineItem) -> Void
@@ -41,86 +42,12 @@ struct ProjectOverviewView<LogRowContent: View>: View {
 
     var body: some View {
         Group {
-            Section("概览") {
-                ProjectBusinessCardsView(
-                    summary: businessSummary,
-                    onOpenCore: onOpenFinance,
-                    onOpenInsight: onOpenFinanceUnsettled
-                )
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 190), spacing: AppSpacing.tight)], spacing: AppSpacing.tight) {
-                    ProjectOverviewSummaryCard(
-                        title: "资料",
-                        systemImage: "folder.badge.gearshape.fill",
-                        tint: .appDoc,
-                        metrics: [
-                            .init(title: "资料", value: "\(documentCount) 份"),
-                            .init(title: "缺项", value: "\(documentMissingCategoryCount) 类", color: documentMissingCategoryCount > 0 ? .appWarning : .secondary),
-                            .init(title: "待处理", value: "\(documentActionCount) 份", color: documentActionCount > 0 ? .appPrimaryAction : .secondary),
-                            .init(title: "已归档", value: "\(documentArchivedCount) 份", color: documentArchivedCount > 0 ? .appSuccess : .secondary)
-                        ],
-                        action: onOpenAssets
-                    )
-                    ProjectOverviewSummaryCard(
-                        title: "日志",
-                        systemImage: "book.pages.fill",
-                        tint: .appSuccess,
-                        metrics: [
-                            .init(title: "日志天数", value: "\(logDayCount) 天"),
-                            .init(title: "今日日志", value: hasTodayLog ? "已填写" : "未填写", color: hasTodayLog ? .appSuccess : .appWarning)
-                        ],
-                        action: onOpenLogs
-                    )
-                    ProjectOverviewSummaryCard(
-                        title: "待办",
-                        systemImage: "checklist.checked",
-                        tint: .appWarning,
-                        metrics: [
-                            .init(title: "未完成", value: "\(todos.count) 项"),
-                            .init(title: "延期", value: "\(todos.filter(\.isOverdue).count) 项", color: todos.contains(where: \.isOverdue) ? .appRisk : .secondary)
-                        ],
-                        action: onOpenTodos
-                    )
-                    ProjectOverviewSummaryCard(
-                        title: "风险",
-                        systemImage: "exclamationmark.triangle.fill",
-                        tint: .appRisk,
-                        metrics: [
-                            .init(title: "延期事项", value: "\(overdueCount) 项", color: overdueCount > 0 ? .appRisk : .secondary),
-                            .init(title: "缺票账目", value: "\(missingReceiptCount) 笔", color: missingReceiptCount > 0 ? .appFinance : .secondary),
-                            .init(title: "今日日志", value: hasTodayLog ? "已填写" : "未填写", color: hasTodayLog ? .appSuccess : .appWarning),
-                            .init(title: "未回款", value: ReportBuilder.money(unpaidAmount), color: unpaidAmount > 0 ? .appFinance : .appSuccess)
-                        ],
-                        style: .risk(hasRisk: hasActiveRisk),
-                        action: riskCardAction
-                    )
-                }
-                Button {
-                    onOpenRecords()
-                } label: {
-                    Label("查看明细", systemImage: "checklist.checked")
-                }
-            }
-
-            Section("日志") {
-                if recentLogs.isEmpty {
-                    ProjectInlineEmptyState(
-                        "还没有日志",
-                        systemImage: "book.pages",
-                        detail: "点击顶部“日志”记录今天的现场情况。"
-                    )
-                } else {
-                    ForEach(recentLogs.sorted { $0.date > $1.date }.prefix(3)) { log in
-                        logRow(log)
-                    }
-                }
-            }
-
-            Section("进度") {
-                ProjectProgressGanttView(tasks: progressTasks, onEditTask: onEditProgress)
+            Section(String(localized: "项目入口")) {
+                ProjectDetailEntryShortcutsView(entries: compactEntries)
             }
 
             if !nextStepSuggestions.isEmpty {
-                Section("优先处理") {
+                Section(String(localized: "优先处理")) {
                     ProjectNextStepSuggestionsView(
                         suggestions: nextStepSuggestions,
                         onAddLog: onAddLog,
@@ -130,58 +57,123 @@ struct ProjectOverviewView<LogRowContent: View>: View {
                     )
                 }
             }
-
-            Section("动态") {
-                if recentItems.isEmpty {
-                    ProjectInlineEmptyState(
-                        "还没有动态",
-                        systemImage: "clock.badge.questionmark",
-                        detail: "日志、资料、记账和进度会汇总到这里。"
-                    )
-                } else {
-                    ProjectTimelineView(items: recentItems, onSelect: onOpenTimelineItem)
-                }
-            }
-
-            Section("待办") {
-                if todos.isEmpty {
-                    ProjectInlineEmptyState(
-                        "没有未完成待办",
-                        systemImage: "checklist.checked",
-                        detail: "新增待办后会显示最近需要处理的事项。"
-                    )
-                } else {
-                    ForEach(todos.prefix(4)) { todo in
-                        HStack {
-                            Text(todo.title).font(.callout)
-                            Spacer()
-                            Text(todo.isOverdue ? "延期" : todo.dueDate)
-                                .font(.caption)
-                                .foregroundStyle(todo.isOverdue ? Color.appRisk : .secondary)
-                        }
-                    }
-                }
-            }
         }
+    }
+
+    private var compactEntries: [ProjectDetailEntryShortcut] {
+        [
+            .init(
+                title: String(localized: "现场"),
+                subtitle: siteShortcutSubtitle,
+                systemImage: "checklist.checked",
+                tint: .appSuccess,
+                statusColor: siteShortcutColor,
+                action: onOpenRecords
+            ),
+            .init(
+                title: String(localized: "资料"),
+                subtitle: assetShortcutSubtitle,
+                systemImage: "folder.fill",
+                tint: .appDoc,
+                statusColor: assetShortcutColor,
+                action: onOpenAssets
+            ),
+            .init(
+                title: String(localized: "成本"),
+                subtitle: financeShortcutSubtitle,
+                systemImage: "yensign.circle.fill",
+                tint: .appFinance,
+                statusColor: financeShortcutColor,
+                action: onOpenFinance
+            ),
+            .init(
+                title: String(localized: "时间线"),
+                subtitle: timelineShortcutSubtitle,
+                systemImage: "clock.arrow.circlepath",
+                tint: .appPrimaryAction,
+                statusColor: .secondary,
+                action: onOpenTimeline
+            )
+        ]
+    }
+
+    private var siteShortcutSubtitle: String {
+        if !hasTodayLog {
+            return String(localized: "今日日志未填")
+        }
+        if overdueCount > 0 {
+            return String(format: String(localized: "%lld 项延期"), Int64(overdueCount))
+        }
+        if !todos.isEmpty {
+            return String(format: String(localized: "%lld 项待办"), Int64(todos.count))
+        }
+        return String(localized: "现场正常")
+    }
+
+    private var siteShortcutColor: Color {
+        if !hasTodayLog || overdueCount > 0 || !todos.isEmpty {
+            return .appWarning
+        }
+        return .appSuccess
+    }
+
+    private var assetShortcutSubtitle: String {
+        if documentMissingCategoryCount > 0 {
+            return String(format: String(localized: "%lld 类缺项"), Int64(documentMissingCategoryCount))
+        }
+        if documentReturnedCount > 0 {
+            return String(format: String(localized: "%lld 份退回"), Int64(documentReturnedCount))
+        }
+        return countValue(documentCount, unit: String(localized: "份"))
+    }
+
+    private var assetShortcutColor: Color {
+        documentMissingCategoryCount > 0 || documentReturnedCount > 0 ? .appWarning : .secondary
+    }
+
+    private var financeShortcutSubtitle: String {
+        if unpaidAmount > 0 {
+            return ReportBuilder.money(unpaidAmount)
+        }
+        if missingReceiptCount > 0 {
+            return String(format: String(localized: "%lld 笔缺票"), Int64(missingReceiptCount))
+        }
+        return countValue(financialCount, unit: String(localized: "笔"))
+    }
+
+    private var financeShortcutColor: Color {
+        if unpaidAmount > 0 { return .appFinance }
+        if missingReceiptCount > 0 { return .appWarning }
+        return .secondary
+    }
+
+    private var timelineShortcutSubtitle: String {
+        if !recentItems.isEmpty {
+            return countValue(recentItems.count, unit: String(localized: "条"))
+        }
+        if contactCount > 0 {
+            return countValue(contactCount, unit: String(localized: "人"))
+        }
+        return String(localized: "暂无动态")
     }
 
     private var nextStepSuggestions: [ProjectNextStepSuggestion] {
         var suggestions: [ProjectNextStepSuggestion] = []
         if !hasTodayLog {
-            suggestions.append(.init(title: "补写今日日志", subtitle: "今天还没有施工日志", systemImage: "book.pages.fill", tint: .appSuccess, action: .addLog))
+            suggestions.append(.init(title: String(localized: "补写今日日志"), subtitle: String(localized: "今天还没有施工日志"), systemImage: "book.pages.fill", tint: .appSuccess, action: .addLog))
         }
         if overdueCount > 0 {
-            suggestions.append(.init(title: "处理延期事项", subtitle: "\(overdueCount) 项需要跟进", systemImage: "calendar.badge.exclamationmark", tint: .appRisk, action: .records))
+            suggestions.append(.init(title: String(localized: "处理延期事项"), subtitle: String(format: String(localized: "%lld 项需要跟进"), Int64(overdueCount)), systemImage: "calendar.badge.exclamationmark", tint: .appRisk, action: .records))
         }
         if unpaidAmount > 0 {
-            suggestions.append(.init(title: "跟进未收款", subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .appFinance, action: .finance))
+            suggestions.append(.init(title: String(localized: "跟进未收款"), subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .appFinance, action: .finance))
         }
         if missingReceiptCount > 0 {
-            suggestions.append(.init(title: "补齐票据资料", subtitle: "\(missingReceiptCount) 笔账目缺票", systemImage: "doc.badge.plus", tint: .appDoc, action: .assets))
+            suggestions.append(.init(title: String(localized: "补齐票据资料"), subtitle: String(format: String(localized: "%lld 笔账目缺票"), Int64(missingReceiptCount)), systemImage: "doc.badge.plus", tint: .appDoc, action: .assets))
         }
         if documentMissingCategoryCount > 0 || documentReturnedCount > 0 {
             suggestions.append(.init(
-                title: "补齐施工资料",
+                title: String(localized: "补齐施工资料"),
                 subtitle: documentArchiveSuggestionSubtitle,
                 systemImage: "folder.badge.plus",
                 tint: .appWarning,
@@ -189,7 +181,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
             ))
         }
         if progressTasks.isEmpty {
-            suggestions.append(.init(title: "添加进度任务", subtitle: "用项目看板跟踪节点", systemImage: "checklist.checked", tint: .appWarning, action: .records))
+            suggestions.append(.init(title: String(localized: "添加进度任务"), subtitle: String(localized: "用项目看板跟踪节点"), systemImage: "checklist.checked", tint: .appWarning, action: .records))
         }
         return Array(suggestions.prefix(4))
     }
@@ -197,175 +189,97 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     private var documentArchiveSuggestionSubtitle: String {
         switch (documentMissingCategoryCount, documentReturnedCount) {
         case let (missing, returned) where missing > 0 && returned > 0:
-            return "\(missing) 类缺项 · \(returned) 份退回"
+            return String(format: String(localized: "%1$lld 类缺项 · %2$lld 份退回"), Int64(missing), Int64(returned))
         case let (missing, _) where missing > 0:
-            return "\(missing) 类施工资料缺项"
+            return String(format: String(localized: "%lld 类施工资料缺项"), Int64(missing))
         case let (_, returned) where returned > 0:
-            return "\(returned) 份资料退回修改"
+            return String(format: String(localized: "%lld 份资料退回修改"), Int64(returned))
         default:
-            return "施工资料需要检查"
+            return String(localized: "施工资料需要检查")
         }
     }
 
-    private var paymentStatus: PaymentStatus {
-        let contract = project.contractAmountValue.doubleValue
-        if paidAmount <= 0 { return .unpaid }
-        if contract > 0, paidAmount >= contract { return .paid }
-        if contract <= 0 { return .partial }
-        return .partial
-    }
-
-    private var hasActiveRisk: Bool {
-        overdueCount > 0 ||
-            missingReceiptCount > 0 ||
-            documentMissingCategoryCount > 0 ||
-            documentReturnedCount > 0 ||
-            !hasTodayLog ||
-            unpaidAmount > 0
-    }
-
-    private func riskCardAction() {
-        if missingReceiptCount > 0 {
-            onOpenFinanceMissingReceipt()
-            return
-        }
-        if unpaidAmount > 0 {
-            onOpenFinanceUnsettled()
-            return
-        }
-        if !hasTodayLog {
-            onOpenLogs()
-            return
-        }
-        if documentMissingCategoryCount > 0 || documentReturnedCount > 0 {
-            onOpenAssets()
-            return
-        }
-        if overdueCount > 0 {
-            onOpenTodos()
-            return
-        }
-        onOpenRecords()
+    private func countValue(_ count: Int, unit: String) -> String {
+        String(format: String(localized: "%1$lld %2$@"), Int64(count), unit)
     }
 }
 
-private struct ProjectOverviewSummaryMetric: Identifiable {
-    let id = UUID()
+private struct ProjectDetailEntryShortcut: Identifiable {
+    var id: String { title }
     let title: String
-    let value: String
-    var color: Color = .primary
-}
-
-private struct ProjectOverviewSummaryCard: View {
-    enum Style {
-        case regular
-        case risk(hasRisk: Bool)
-    }
-
-    let title: String
+    let subtitle: String
     let systemImage: String
     let tint: Color
-    let metrics: [ProjectOverviewSummaryMetric]
-    var style: Style = .regular
+    let statusColor: Color
     let action: () -> Void
+}
+
+private struct ProjectDetailEntryShortcutsView: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    let entries: [ProjectDetailEntryShortcut]
+
+    private var usesWideLayout: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    private var columns: [GridItem] {
+        if usesWideLayout {
+            return [GridItem(.adaptive(minimum: 176), spacing: AppSpacing.tight)]
+        }
+        return [
+            GridItem(.flexible(), spacing: AppSpacing.tight),
+            GridItem(.flexible(), spacing: AppSpacing.tight)
+        ]
+    }
+
+    private var iconSize: CGFloat {
+        usesWideLayout ? 30 : 28
+    }
+
+    private var minHeight: CGFloat {
+        usesWideLayout ? 72 : 56
+    }
+
+    private var horizontalPadding: CGFloat {
+        usesWideLayout ? AppSpacing.normal : AppSpacing.tight
+    }
 
     var body: some View {
-        Button(action: action) {
-            VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                HStack(spacing: AppSpacing.tight * 0.75) {
-                    Image(systemName: systemImage)
-                        .foregroundStyle(headerIconColor)
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(primaryTextColor)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(secondaryTextColor)
-                }
+        LazyVGrid(columns: columns, spacing: AppSpacing.tight) {
+            ForEach(entries) { entry in
+                Button(action: entry.action) {
+                    HStack(spacing: AppSpacing.tight) {
+                        Image(systemName: entry.systemImage)
+                            .font(.callout.weight(.semibold))
+                            .foregroundStyle(entry.tint)
+                            .frame(width: iconSize, height: iconSize)
+                            .background(entry.tint.opacity(0.12), in: Circle())
 
-                ForEach(metrics) { metric in
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(metric.title)
-                            .font(.caption2)
-                            .foregroundStyle(secondaryTextColor)
-                        Spacer(minLength: AppSpacing.tight)
-                        Text(metric.value)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(metricValueColor(metric))
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.75)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(entry.title)
+                                .font(usesWideLayout ? .subheadline.weight(.semibold) : .caption.weight(.semibold))
+                                .foregroundStyle(.primary)
+                                .appListPrimaryTextLayout(lines: 1)
+                            Text(entry.subtitle)
+                                .font((usesWideLayout ? Font.caption : Font.caption2).weight(.medium))
+                                .foregroundStyle(entry.statusColor)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.72)
+                                .monospacedDigit()
+                        }
+                        Spacer(minLength: 0)
                     }
+                    .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
+                    .padding(.horizontal, horizontalPadding)
+                    .padding(.vertical, 6)
+                    .background(Color.appPrimarySurfaceSubtle, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+                .buttonStyle(.plain)
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel("\(entry.title)，\(entry.subtitle)")
             }
-            .frame(maxWidth: .infinity, minHeight: 136, alignment: .topLeading)
-            .padding(AppSpacing.normal)
-            .background(
-                RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                    .fill(backgroundColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                    .strokeBorder(borderColor, lineWidth: borderWidth)
-            )
         }
-        .buttonStyle(.plain)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(accessibilityLabelText)
-    }
-
-    private var isSolidRisk: Bool {
-        if case .risk(let hasRisk) = style {
-            return hasRisk
-        }
-        return false
-    }
-
-    private var isSafeRisk: Bool {
-        if case .risk(let hasRisk) = style {
-            return !hasRisk
-        }
-        return false
-    }
-
-    private var backgroundColor: Color {
-        switch style {
-        case .regular:
-            return Color(uiColor: .secondarySystemGroupedBackground)
-        case .risk(let hasRisk):
-            return hasRisk ? Color.appRisk : Color.appSuccessSurfaceSubtle
-        }
-    }
-
-    private var borderColor: Color {
-        isSafeRisk ? Color.appSuccess.opacity(0.35) : Color.clear
-    }
-
-    private var borderWidth: CGFloat {
-        isSafeRisk ? 1 : 0
-    }
-
-    private var headerIconColor: Color {
-        if isSolidRisk { return .white }
-        if isSafeRisk { return .appSuccess }
-        return tint
-    }
-
-    private var primaryTextColor: Color {
-        isSolidRisk ? .white : .primary
-    }
-
-    private var secondaryTextColor: Color {
-        isSolidRisk ? Color.white.opacity(0.82) : .secondary
-    }
-
-    private func metricValueColor(_ metric: ProjectOverviewSummaryMetric) -> Color {
-        isSolidRisk ? .white : metric.color
-    }
-
-    private var accessibilityLabelText: String {
-        let values = metrics.map { "\($0.title)\($0.value)" }.joined(separator: "，")
-        return "\(title)，\(values)"
     }
 }
 
@@ -395,10 +309,10 @@ private struct ProjectNextStepSuggestionsView: View {
     var body: some View {
         if suggestions.isEmpty {
             VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                Label("当前项目状态良好", systemImage: "checkmark.seal.fill")
+                Label(String(localized: "当前项目状态良好"), systemImage: "checkmark.seal.fill")
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(Color.appSuccess)
-                Text("暂无需要优先处理的日志、延期、回款或票据问题。")
+                Text(String(localized: "暂无需要优先处理的日志、延期、回款或票据问题。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -484,9 +398,9 @@ private struct ProjectProgressGanttView: View {
     var body: some View {
         if bars.isEmpty {
             ProjectInlineEmptyState(
-                "没有可展示的进度",
+                String(localized: "没有可展示的进度"),
                 systemImage: "chart.bar.xaxis",
-                detail: "补充任务开始和截止日期后显示。"
+                detail: String(localized: "补充任务开始和截止日期后显示。")
             )
         } else {
             GeometryReader { proxy in
@@ -496,14 +410,14 @@ private struct ProjectProgressGanttView: View {
 
                 VStack(alignment: .leading, spacing: AppSpacing.tight) {
                     HStack {
-                        Text("\(Formatters.date.string(from: rangeStart)) 至 \(Formatters.date.string(from: rangeEnd))")
+                        Text(String(format: String(localized: "%1$@ 至 %2$@"), Formatters.date.string(from: rangeStart), Formatters.date.string(from: rangeEnd)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Text("今天")
+                        Text(String(localized: "今天"))
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(Color.appPrimaryAction)
-                        Text("共 \(bars.count) 项")
+                        Text(String(format: String(localized: "共 %lld 项"), Int64(bars.count)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -552,11 +466,11 @@ private struct ProjectProgressGanttView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(bar.task.title)
                         .font(.caption.weight(.semibold))
-                        .lineLimit(1)
+                        .appListPrimaryTextLayout()
                     Text("\(bar.task.startDate) → \(bar.task.dueDate)")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .appListSecondaryTextLayout()
                 }
                 .frame(width: labelWidth, alignment: .leading)
 

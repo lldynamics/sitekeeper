@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="/Applications/Codex.app/Contents/Resources:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
@@ -8,6 +10,10 @@ fail() {
   echo "[backup-contract-boundary] FAIL: $1" >&2
   exit 1
 }
+
+if ! command -v rg >/dev/null 2>&1; then
+  fail "ripgrep (rg) is unavailable in the build script PATH."
+fi
 
 require_file() {
   local description="$1"

@@ -43,6 +43,73 @@ struct ExportView: View {
         filteredSnapshotResult(filterProjectId: filterProjectId)
     }
 
+    private var selectedProjectName: String {
+        guard let filterProjectId,
+              let project = store.projects.first(where: { $0.id == filterProjectId }) else {
+            return String(localized: "全部项目")
+        }
+        return project.name
+    }
+
+    private var exportRangeSummary: String {
+        if enableDateFilter {
+            let start = formatDataSafetyDate(min(filterStart, filterEnd))
+            let end = formatDataSafetyDate(max(filterStart, filterEnd))
+            return "\(selectedProjectName) · \(start) - \(end)"
+        }
+        return selectedProjectName
+    }
+
+    private var enabledExportModuleCount: Int {
+        [
+            includeMaterials,
+            includeQuotes,
+            includeLabor,
+            includeDailyLogs,
+            includeProgress,
+            includeTodos,
+            includeProjectFinance,
+            includeProjectDocuments,
+            includeProjectContacts,
+            includeProjectDrawings,
+            includeWarehouseMovements,
+            includeQuickNotes,
+            includeOperationAuditLogs,
+        ].filter { $0 }.count
+    }
+
+    private var exportStatusItems: [DataSafetyStatusItem] {
+        var items: [DataSafetyStatusItem] = [
+            DataSafetyStatusItem(
+                title: String(localized: "当前范围"),
+                value: exportRangeSummary,
+                tone: .primary
+            ),
+            DataSafetyStatusItem(
+                title: String(localized: "导出内容"),
+                value: String(format: String(localized: "%lld 个模块"), Int64(enabledExportModuleCount)),
+                tone: enabledExportModuleCount == 0 ? .warning : .doc
+            ),
+            DataSafetyStatusItem(
+                title: String(localized: "输出文件"),
+                value: previewFilename,
+                tone: .neutral
+            ),
+        ]
+
+        if enableDateFilter {
+            items.append(
+                DataSafetyStatusItem(
+                    title: String(localized: "日期格式异常"),
+                    value: String(format: String(localized: "%lld 条"), Int64(previewResult.invalidDateCount)),
+                    tone: previewResult.invalidDateCount == 0 ? .success : .warning
+                )
+            )
+        }
+
+        return items
+    }
+
     private var usesWideLayout: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
@@ -95,7 +162,7 @@ struct ExportView: View {
         Group {
             if showsNavigationTitle {
                 exportSurface
-                    .navigationTitle(String(localized: "导出数据"))
+                    .navigationTitle(String(localized: "数据安全中心"))
                     .navigationBarTitleDisplayMode(.inline)
             } else {
                 exportSurface
@@ -114,15 +181,14 @@ struct ExportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(String(localized: "导出数据"), systemImage: "square.and.arrow.up")
+                    Label(String(localized: "导出交付"), systemImage: "square.and.arrow.up")
                         .font(.headline)
-                    Text(String(localized: "选择格式与导出内容模块"))
+                    Text(String(localized: "从安全中心筛选交付范围、格式和字段，再生成导出文件。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                .modifier(DataSafetySidebarPanelModifier())
 
                 exportFormatSection
                 exportContentSection
@@ -134,6 +200,7 @@ struct ExportView: View {
     private var exportDetail: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                DataSafetyStatusStrip(items: exportStatusItems)
                 exportScopeSection
                 exportPreviewSection
                 exportButtonSection
@@ -152,18 +219,27 @@ struct ExportView: View {
                 .foregroundStyle(.secondary)
             content()
         }
-        .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
+        .modifier(DataSafetySidebarPanelModifier())
+    }
+
+    private struct DataSafetySidebarPanelModifier: ViewModifier {
+        func body(content: Content) -> some View {
+            AppPanel(
+                tone: .grouped,
+                cornerRadius: 12,
+                padding: 12,
+                stroke: Color.appStrokeSecondary.opacity(0.45)
+            ) {
+                content
+            }
+        }
     }
 
     private var exportFormatSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel(String(localized: "导出格式")) {
+                iPadPanel(String(localized: "1. 选择格式")) {
                     exportFormatContent
                 }
             } else {
@@ -177,7 +253,7 @@ struct ExportView: View {
     private var exportContentSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel(String(localized: "导出内容")) {
+                iPadPanel(String(localized: "2. 选择内容")) {
                     exportContentRows
                 }
             } else {
@@ -191,7 +267,7 @@ struct ExportView: View {
     private var exportScopeSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel(String(localized: "导出范围")) {
+                iPadPanel(String(localized: "3. 选择范围")) {
                     exportScopeRows
                 }
             } else {
@@ -205,7 +281,7 @@ struct ExportView: View {
     private var exportPreviewSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel(String(localized: "格式预览")) {
+                iPadPanel(String(localized: "4. 预览输出")) {
                     exportPreviewRows
                 }
             } else {
@@ -219,7 +295,7 @@ struct ExportView: View {
     private var exportButtonSection: some View {
         Group {
             if usesWideLayout {
-                iPadPanel(String(localized: "导出操作")) {
+                iPadPanel(String(localized: "5. 生成交付文件")) {
                     exportButtonRow
                 }
             } else {
@@ -431,6 +507,10 @@ struct ExportView: View {
         }
     }
 
+    private func formatDataSafetyDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .omitted)
+    }
+
     private func filteredSnapshotResult(filterProjectId: UUID? = nil) -> FilteredExportResult {
         var snapshot = store.makeSnapshot(includePhotoFiles: false)
         if let pid = filterProjectId {
@@ -446,6 +526,8 @@ struct ExportView: View {
             snapshot.projectDrawings = snapshot.projectDrawings.filter { $0.projectId == pid }
             snapshot.projectWarehouseMovements = snapshot.projectWarehouseMovements.filter { $0.projectId == pid }
             snapshot.quickNotes = snapshot.quickNotes.filter { $0.projectId == pid }
+            snapshot.materialSheetDrafts = snapshot.materialSheetDrafts.filter { $0.projectId == pid }
+            snapshot.historyRecords = snapshot.historyRecords.filter { $0.projectId == pid }
             snapshot.projects = snapshot.projects.filter { $0.id == pid }
         }
 

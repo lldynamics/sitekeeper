@@ -1,5 +1,14 @@
 import SwiftUI
 
+enum ProjectDeliveryRepairAction: Equatable {
+    case attachReceipts
+    case importDrawings
+    case resolveTodos
+    case createBackup
+    case restoreMissingOriginals
+    case markCurrentDrawingVersion
+}
+
 struct ProjectDeliveryBackupState: Equatable {
     let latestBackupDate: Date?
     let reminderDays: Int
@@ -131,6 +140,57 @@ struct ProjectDeliveryHealth: Equatable {
                 return .records
             case .backupOverdue:
                 return nil
+            }
+        }
+
+        var repairAction: ProjectDeliveryRepairAction {
+            switch self {
+            case .missingReceipts:
+                return .attachReceipts
+            case .missingDrawings:
+                return .importDrawings
+            case .openTodos:
+                return .resolveTodos
+            case .backupOverdue:
+                return .createBackup
+            case .missingOriginals:
+                return .restoreMissingOriginals
+            case .missingCurrentDrawingVersion:
+                return .markCurrentDrawingVersion
+            }
+        }
+
+        var repairButtonTitle: String {
+            switch self {
+            case .missingReceipts:
+                return String(localized: "补票据")
+            case .missingDrawings:
+                return String(localized: "导入图纸")
+            case .openTodos:
+                return String(localized: "处理待办")
+            case .backupOverdue:
+                return String(localized: "去备份")
+            case .missingOriginals:
+                return String(localized: "重新导入")
+            case .missingCurrentDrawingVersion:
+                return String(localized: "标当前版")
+            }
+        }
+
+        var repairHint: String {
+            switch self {
+            case .missingReceipts:
+                return String(localized: "打开第一笔缺票账目的票据附件管理。")
+            case .missingDrawings:
+                return String(localized: "直接进入图纸导入流程。")
+            case .openTodos:
+                return String(localized: "进入本项目待办列表，关闭或补充整改记录。")
+            case .backupOverdue:
+                return String(localized: "进入数据安全中心完成本地或 iCloud 备份。")
+            case .missingOriginals:
+                return String(localized: "回到资料区重新导入缺失的图纸、票据或附件原件。")
+            case .missingCurrentDrawingVersion:
+                return String(localized: "自动把首个缺当前版图纸组的最新版本标为当前版。")
             }
         }
     }
@@ -314,6 +374,7 @@ struct ProjectDeliveryGuideView: View {
     let data: ProjectDeliveryGuideData
     let onStartExport: () -> Void
     let onOpenMode: (ProjectDetailMode) -> Void
+    let onRepair: (ProjectDeliveryRepairAction) -> Void
 
     var body: some View {
         NavigationStack {
@@ -341,25 +402,30 @@ struct ProjectDeliveryGuideView: View {
                         detail: data.missingReceiptCount == 0
                             ? String(localized: "全部已关联")
                             : String(format: String(localized: "还有 %lld 条待关联"), Int64(data.missingReceiptCount)),
-                        status: data.missingReceiptCount == 0 ? .ok : .warning
+                        status: data.missingReceiptCount == 0 ? .ok : .warning,
+                        fixActionTitle: String(localized: "补票据")
                     ) {
-                        onOpenMode(.finance)
+                        onRepair(.attachReceipts)
                     }
                     guideRow(
                         title: String(localized: "未完成待办"),
                         detail: data.openTodoCount == 0
                             ? String(localized: "没有未完成待办")
                             : String(format: String(localized: "还有 %lld 条待办未完成"), Int64(data.openTodoCount)),
-                        status: data.openTodoCount == 0 ? .ok : .warning
+                        status: data.openTodoCount == 0 ? .ok : .warning,
+                        fixActionTitle: String(localized: "处理待办")
                     ) {
-                        onOpenMode(.records)
+                        onRepair(.resolveTodos)
                     }
                     guideRow(
                         title: String(localized: "图纸当前版检查"),
                         detail: drawingCurrentVersionDetail,
-                        status: drawingCurrentVersionStatus
+                        status: drawingCurrentVersionStatus,
+                        fixActionTitle: data.drawingCount == 0
+                            ? String(localized: "导入图纸")
+                            : String(localized: "标当前版")
                     ) {
-                        onOpenMode(.assets)
+                        onRepair(data.drawingCount == 0 ? .importDrawings : .markCurrentDrawingVersion)
                     }
                     guideRow(
                         title: String(localized: "未关闭图纸问题"),
@@ -391,16 +457,12 @@ struct ProjectDeliveryGuideView: View {
                         detail: data.hasBlockingMissingOriginals
                             ? String(format: String(localized: "检测到 %lld 个缺失原件"), Int64(data.missingOriginalEntries.count))
                             : String(localized: "未发现缺失原件"),
-                        status: data.hasBlockingMissingOriginals ? .error : .ok
+                        status: data.hasBlockingMissingOriginals ? .error : .ok,
+                        fixActionTitle: String(localized: "重新导入")
                     ) {
-                        onOpenMode(.assets)
+                        onRepair(.restoreMissingOriginals)
                     }
-                    guideRow(
-                        title: String(localized: "最近备份"),
-                        detail: data.backupState.detail,
-                        status: data.backupState.isFresh ? .ok : .warning,
-                        fixAction: nil
-                    )
+                    backupGuideRow
                 }
 
                 if data.hasDeliveryChecklistWarning {
@@ -558,8 +620,39 @@ struct ProjectDeliveryGuideView: View {
             : String(localized: "一键导出交付包 ZIP")
     }
 
+    private var backupGuideRow: some View {
+        HStack(spacing: AppSpacing.tight) {
+            let status: GuideStatus = data.backupState.isFresh ? .ok : .warning
+            Image(systemName: status.icon)
+                .foregroundStyle(status.color)
+                .font(.caption.weight(.semibold))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(localized: "最近备份"))
+                    .font(.callout.weight(.semibold))
+                Text(data.backupState.detail)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if !data.backupState.isFresh {
+                Button {
+                    onRepair(.createBackup)
+                } label: {
+                    Text(String(localized: "去备份"))
+                        .font(.caption.weight(.semibold))
+                }
+            }
+        }
+    }
+
     @ViewBuilder
-    private func guideRow(title: String, detail: String, status: GuideStatus, fixAction: (() -> Void)? = nil) -> some View {
+    private func guideRow(
+        title: String,
+        detail: String,
+        status: GuideStatus,
+        fixActionTitle: String = String(localized: "去处理"),
+        fixAction: (() -> Void)? = nil
+    ) -> some View {
         HStack(spacing: AppSpacing.tight) {
             Image(systemName: status.icon)
                 .foregroundStyle(status.color)
@@ -573,7 +666,7 @@ struct ProjectDeliveryGuideView: View {
             }
             Spacer()
             if status != .ok, let fixAction {
-                Button(String(localized: "去处理")) {
+                Button(fixActionTitle) {
                     fixAction()
                 }
                 .font(.caption.weight(.semibold))
@@ -594,15 +687,25 @@ struct ProjectDeliveryGuideView: View {
                 Text(data.deliveryHealth.detail(for: issue))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if !isPassed {
+                    Text(issue.repairHint)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
             }
             Spacer()
-            if !isPassed, let mode = issue.repairMode {
-                Button(String(localized: "去处理")) {
-                    onOpenMode(mode)
-                }
-                .font(.caption.weight(.semibold))
+            if !isPassed {
+                repairButton(for: issue)
             }
         }
+    }
+
+    @ViewBuilder
+    private func repairButton(for issue: ProjectDeliveryHealth.Issue) -> some View {
+        Button(issue.repairButtonTitle) {
+            onRepair(issue.repairAction)
+        }
+        .font(.caption.weight(.semibold))
     }
 
     private var drawingCurrentVersionDetail: String {

@@ -47,25 +47,25 @@ struct ProjectFileCategoryView: View {
                         Text("\(summary.totalCount)")
                             .font(.title.weight(.bold))
                             .foregroundStyle(summary.totalCount > 0 ? Color.appPrimaryAction : .secondary)
-                        Text("个文件")
+                        Text(String(localized: "个文件"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     LazyVGrid(columns: summaryColumns, alignment: .leading, spacing: 8) {
-                        ProjectFileCountChip(title: "图片", value: summary.imageCount, color: .appDoc)
+                        ProjectFileCountChip(title: String(localized: "图片"), value: summary.imageCount, color: .appDoc)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "图纸", value: summary.drawingCount, color: .appPrimaryAction)
+                        ProjectFileCountChip(title: String(localized: "图纸"), value: summary.drawingCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "票据", value: summary.documentCount, color: .appPrimaryAction)
+                        ProjectFileCountChip(title: String(localized: "票据"), value: summary.documentCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
-                        ProjectFileCountChip(title: "附件", value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
+                        ProjectFileCountChip(title: String(localized: "附件"), value: summary.quickNoteAttachmentCount, color: .appPrimaryAction)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
                 .padding(.vertical, 4)
             }
 
-            Section("文件分类") {
+            Section(String(localized: "文件分类")) {
                 ForEach(ProjectFileCategory.allCases, id: \.self) { category in
                     let count = summary.count(for: category)
                     NavigationLink {
@@ -99,7 +99,7 @@ struct ProjectFileCategoryView: View {
             ProjectFileHealthFilterSection(selection: $healthFilter)
 
             if !recentItems.isEmpty {
-                Section("最近文件") {
+                Section(String(localized: "最近文件")) {
                     ForEach(recentItems) { item in
                         ProjectFileItemRow(item: item) {
                             previewURL = item.url
@@ -149,26 +149,26 @@ struct ProjectFileListView: View {
     private var emptyDescription: String {
         switch category {
         case .images:
-            return "先去施工日志或随手记添加照片，这里会按项目自动汇总。"
+            return String(localized: "先去施工日志或随手记添加照片，这里会按项目自动汇总。")
         case .drawings:
-            return "先去项目详情导入图纸原件。"
+            return String(localized: "先去项目详情导入图纸原件；DWG/DXF 后续通过外部专业看图软件打开。")
         case .documents:
-            return "先去项目详情添加票据或扫描资料。"
+            return String(localized: "先去项目详情添加票据或扫描资料。")
         case .quickNoteAttachments:
-            return "先去随手记添加视频或文档附件。"
+            return String(localized: "先去随手记添加视频或文档附件。")
         }
     }
 
     private var emptyActionTitle: String {
         switch category {
         case .images:
-            return "去写日志并添加照片"
+            return String(localized: "去写日志并添加照片")
         case .drawings:
-            return "去项目详情导入图纸"
+            return String(localized: "去项目详情导入图纸原件")
         case .documents:
-            return "去项目详情添加资料"
+            return String(localized: "去项目详情添加资料")
         case .quickNoteAttachments:
-            return "去随手记添加附件"
+            return String(localized: "去随手记添加附件")
         }
     }
 
@@ -193,28 +193,40 @@ struct ProjectFileListView: View {
             }
 
             if rawItems.isEmpty {
-                Section("建议下一步") {
-                    ContentUnavailableView(
-                        "暂无\(category.title)",
+                Section(String(localized: "建议下一步")) {
+                    AppActionableEmptyState(
+                        title: String(format: String(localized: "暂无%@"), category.title),
                         systemImage: category.systemImage,
-                        description: Text(emptyDescription)
-                    )
-                    NavigationLink {
-                        emptyActionDestination
-                    } label: {
-                        Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
+                        message: emptyDescription
+                    ) {
+                        NavigationLink {
+                            emptyActionDestination
+                        } label: {
+                            Label(emptyActionTitle, systemImage: "arrow.right.circle.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appProminent())
                     }
-                    .buttonStyle(.appProminent())
                 }
             } else if items.isEmpty {
-                Section("筛选结果") {
-                    Text("当前筛选下没有文件。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                Section(String(localized: "筛选结果")) {
+                    AppActionableEmptyState(
+                        title: String(localized: "没有匹配文件"),
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        message: String(localized: "当前筛选下没有文件。")
+                    ) {
+                        Button {
+                            healthFilter = .all
+                        } label: {
+                            Label(String(localized: "查看全部文件"), systemImage: "tray.full")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appProminent())
+                    }
                 }
             } else {
                 if missingItemCount > 0 {
-                    Section("建议下一步") {
+                    Section(String(localized: "建议下一步")) {
                         ProjectFileMicroGuideRow(
                             icon: "exclamationmark.triangle.fill",
                             color: .appRisk,
@@ -222,7 +234,9 @@ struct ProjectFileListView: View {
                                 format: String(localized: "本分类有 %lld 个文件缺失"),
                                 Int64(missingItemCount)
                             ),
-                            detail: "建议尽快补齐，避免预览、分享或导出时失败。"
+                            detail: category == .drawings
+                                ? String(localized: "建议尽快补齐，避免外部打开、分享或导出时失败。")
+                                : String(localized: "建议尽快补齐，避免预览、分享或导出时失败。")
                         )
                         NavigationLink {
                             emptyActionDestination

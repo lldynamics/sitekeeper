@@ -171,4 +171,44 @@ struct ProjectDetailRoutingHelpersTests {
         #expect(selectedContact?.id == contact.id)
         #expect(ProjectDetailFocusedItem.contact(contact).mode == .assets)
     }
+
+    @Test func realtimeSearchBuilderReturnsCommandSuggestions() throws {
+        let suggestions = RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: "备份",
+            categories: [.command],
+            limit: 5
+        )
+
+        let backup = try #require(suggestions.first { suggestion in
+            RealtimeSearchCommand(suggestionId: suggestion.id) == .backupNow
+        })
+
+        #expect(backup.category == .command)
+        #expect(backup.title == String(localized: "立即备份"))
+    }
+
+    @Test func realtimeSearchCommandAliasesCoverReceiptAndDelivery() {
+        let receiptSuggestions = RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: "缺票",
+            categories: [.command],
+            limit: 5
+        )
+        let deliverySuggestions = RealtimeSearchSuggestionBuilder.suggestions(
+            keyword: "delivery",
+            categories: [.command],
+            limit: 5
+        )
+
+        #expect(receiptSuggestions.contains { suggestion in
+            RealtimeSearchCommand(suggestionId: suggestion.id) == .attachReceipt
+        })
+        #expect(deliverySuggestions.contains { suggestion in
+            RealtimeSearchCommand(suggestionId: suggestion.id) == .exportDeliveryPackage
+        })
+    }
+
+    @Test func realtimeSearchCommandParsesStableSuggestionId() {
+        #expect(RealtimeSearchCommand(suggestionId: "command-data-health-check") == .dataHealthCheck)
+        #expect(RealtimeSearchCommand(suggestionId: "project-data-health-check") == nil)
+    }
 }

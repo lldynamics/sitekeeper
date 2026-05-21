@@ -148,26 +148,114 @@ struct ProjectFinancialMetricsTests {
         #expect(!none.hasDueReminder)
     }
 
+    @Test func duplicateDetectorMatchesNormalizedInvoiceNumber() {
+        let projectId = UUID()
+        let existing = ProjectFinancialRecord(
+            projectId: projectId,
+            date: "2026-05-09 09:00",
+            direction: .expense,
+            amount: "1200.50",
+            invoiceNumber: "fp-2026-000188"
+        )
+        let draft = ProjectFinancialRecord(
+            projectId: projectId,
+            date: "2026-05-10 10:00",
+            direction: .expense,
+            amount: "800",
+            invoiceNumber: "FP2026000188"
+        )
+
+        let warnings = ProjectFinancialDuplicateDetector.warnings(for: draft, in: [existing])
+
+        #expect(warnings.count == 1)
+        #expect(warnings.first?.record.id == existing.id)
+        #expect(warnings.first?.reasons.contains(.invoiceNumber) == true)
+    }
+
+    @Test func duplicateDetectorMatchesSameAmountAndDateWithinProject() {
+        let projectId = UUID()
+        let otherProjectId = UUID()
+        let existing = ProjectFinancialRecord(
+            projectId: projectId,
+            date: "2026-05-09 09:00",
+            direction: .expense,
+            amount: "1200.50"
+        )
+        let otherProject = ProjectFinancialRecord(
+            projectId: otherProjectId,
+            date: "2026-05-09 12:00",
+            direction: .expense,
+            amount: "1200.50"
+        )
+        let draft = ProjectFinancialRecord(
+            projectId: projectId,
+            date: "2026-05-09 18:30",
+            direction: .expense,
+            amount: "1200.5"
+        )
+
+        let warnings = ProjectFinancialDuplicateDetector.warnings(for: draft, in: [existing, otherProject])
+
+        #expect(warnings.count == 1)
+        #expect(warnings.first?.record.id == existing.id)
+        #expect(warnings.first?.reasons.contains(.amountAndDate) == true)
+    }
+
+    @Test func duplicateDetectorIgnoresCurrentRecordWhenEditing() {
+        let projectId = UUID()
+        let record = ProjectFinancialRecord(
+            projectId: projectId,
+            date: "2026-05-09 09:00",
+            direction: .expense,
+            amount: "1200.50",
+            invoiceNumber: "FP2026000188"
+        )
+
+        let warnings = ProjectFinancialDuplicateDetector.warnings(
+            for: record,
+            in: [record],
+            ignoring: record.id
+        )
+
+        #expect(warnings.isEmpty)
+    }
+
     @Test func constructionMethodVersionAndPublishStatusCodable() throws {
         let method = ConstructionMethod(
             title: "墙面找平",
             trade: "泥工",
             versionName: "V2",
             publishStatus: .published,
-            tutorialBody: "基层处理"
+            tutorialBody: "基层处理",
+            procedureSteps: ["放线", "打点"],
+            qualityChecklist: ["平整度检查"],
+            safetyChecklist: ["高处作业佩戴安全带"]
         )
 
         let data = try JSONEncoder().encode(method)
         let decoded = try JSONDecoder().decode(ConstructionMethod.self, from: data)
+        let encodedObject = try #require(
+            JSONSerialization.jsonObject(with: data) as? [String: Any]
+        )
         let legacy = try JSONDecoder().decode(
             ConstructionMethod.self,
             from: #"{"title":"旧工艺","trade":"水电","steps":"放线\n开槽"}"#.data(using: .utf8)!
         )
 
+        #expect(encodedObject["steps"] == nil)
+        #expect(encodedObject["qualityStandard"] == nil)
+        #expect(encodedObject["safetyNotes"] == nil)
+        #expect((encodedObject["procedureSteps"] as? [String]) == ["放线", "打点"])
+        #expect((encodedObject["qualityChecklist"] as? [String]) == ["平整度检查"])
+        #expect((encodedObject["safetyChecklist"] as? [String]) == ["高处作业佩戴安全带"])
         #expect(decoded.versionName == "V2")
         #expect(decoded.publishStatus == .published)
+        #expect(decoded.procedureSteps == ["放线", "打点"])
+        #expect(decoded.qualityChecklist == ["平整度检查"])
+        #expect(decoded.safetyChecklist == ["高处作业佩戴安全带"])
         #expect(legacy.versionName == "V1")
         #expect(legacy.publishStatus == .draft)
+        #expect(legacy.procedureSteps == ["放线", "开槽"])
     }
 
     @Test func projectTimelineSortsMixedItemsByDate() {

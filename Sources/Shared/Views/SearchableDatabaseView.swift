@@ -35,7 +35,11 @@ struct SearchableDatabaseView<
     let emptyTitle: String
     let emptySystemImage: String
     let emptyDescription: Text
+    var emptyActionTitle: String?
+    var emptyActionSystemImage: String = "plus.circle.fill"
+    var onEmptyAction: (() -> Void)?
     var searchSuggestions: [RealtimeSearchSuggestion] = []
+    var searchEmptyStateText: String = String(localized: "未找到匹配内容")
     let onSelect: (Item) -> Void
     var onSelectSuggestion: ((RealtimeSearchSuggestion) -> Void)? = nil
     var deleteConfig: SearchableDatabaseDeleteConfig? = nil
@@ -50,14 +54,38 @@ struct SearchableDatabaseView<
 
     var body: some View {
         List {
+            Section {
+                InlineSearchPanel(
+                    text: $searchText,
+                    prompt: searchPrompt,
+                    suggestions: searchSuggestions,
+                    emptyStateText: searchEmptyStateText,
+                    materialTone: .secondary,
+                    onSelectSuggestion: { suggestion in
+                        searchText = suggestion.title
+                        onSelectSuggestion?(suggestion)
+                    }
+                )
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            }
+
             headerContent()
 
             if items.isEmpty {
-                ContentUnavailableView(
-                    emptyTitle,
+                AppActionableEmptyState(
+                    title: emptyTitle,
                     systemImage: emptySystemImage,
-                    description: emptyDescription
-                )
+                    message: emptyDescription
+                ) {
+                    if let emptyActionTitle, let onEmptyAction {
+                        Button(action: onEmptyAction) {
+                            Label(emptyActionTitle, systemImage: emptyActionSystemImage)
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appProminent())
+                    }
+                }
             } else if onDeleteConfirmed != nil {
                 ForEach(items) { item in
                     Button {
@@ -97,44 +125,29 @@ struct SearchableDatabaseView<
             footerContent()
         }
         .navigationTitle(title)
-        .searchable(
-            text: $searchText,
-            placement: .navigationBarDrawer(displayMode: .always),
-            prompt: searchPrompt
-        )
-        .searchSuggestions {
-            let keyword = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-            if !keyword.isEmpty {
-                ForEach(searchSuggestions) { suggestion in
-                    Button {
-                        searchText = suggestion.title
-                        onSelectSuggestion?(suggestion)
-                    } label: {
-                        RealtimeSearchSuggestionMenuRow(suggestion: suggestion)
-                    }
-                }
-            }
-        }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 toolbarContent()
             }
         }
-        .alert(deleteConfig?.title ?? "确认删除？", isPresented: $showDeleteConfirm) {
-            Button("取消", role: .cancel) {
+        .alert(deleteConfig?.title ?? String(localized: "确认删除？"), isPresented: $showDeleteConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {
                 pendingDeleteItems.removeAll()
             }
-            Button("删除", role: .destructive) {
+            Button(String(localized: "删除"), role: .destructive) {
                 let targets = pendingDeleteItems
                 pendingDeleteItems.removeAll()
                 onDeleteConfirmed?(targets)
             }
         } message: {
-            let noun = deleteConfig?.itemNoun ?? "记录"
+            let noun = deleteConfig?.itemNoun ?? String(localized: "记录")
             if pendingDeleteItems.count > 1 {
-                Text(deleteConfig?.pluralMessage(pendingDeleteItems.count, noun) ?? "将删除 \(pendingDeleteItems.count) 条\(noun)，此操作不可撤销。")
+                Text(
+                    deleteConfig?.pluralMessage(pendingDeleteItems.count, noun)
+                        ?? String(format: String(localized: "将删除 %lld 条%@，此操作不可撤销。"), Int64(pendingDeleteItems.count), noun)
+                )
             } else {
-                Text(deleteConfig?.singularMessage ?? "删除后不可撤销。")
+                Text(deleteConfig?.singularMessage ?? String(localized: "删除后不可撤销。"))
             }
         }
     }

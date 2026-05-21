@@ -73,6 +73,12 @@ struct ProjectDocumentsView: View {
             .filter { !enabledCategories.contains($0) }
     }
 
+    private var primaryDocumentCategoryForEmptyAction: ProjectDocumentCategory {
+        missingRecommendedCategories.first
+            ?? checklistSnapshot.items.first(where: { $0.documentCount == 0 })?.category
+            ?? .receipt
+    }
+
     private var outsideTemplateChecklistItems: [DocumentArchiveChecklistItem] {
         let enabledCategories = Set(checklistSnapshot.requiredCategories)
         return outsideTemplateCategoryOrder(enabledCategories: enabledCategories).compactMap { category in
@@ -115,11 +121,26 @@ struct ProjectDocumentsView: View {
 
             Section(String(format: String(localized: "资料 (%lld)"), Int64(filteredDocuments.count))) {
                 if filteredDocuments.isEmpty {
-                    ProjectInlineEmptyState(
-                        documents.isEmpty ? String(localized: "还没有资料") : String(localized: "没有匹配资料"),
+                    AppActionableEmptyState(
+                        title: documents.isEmpty ? String(localized: "还没有资料") : String(localized: "没有匹配资料"),
                         systemImage: "doc.viewfinder",
-                        detail: documents.isEmpty ? String(localized: "扫描票据或导入资料后可关联账目。") : String(localized: "调整筛选条件后再看。")
-                    )
+                        message: documents.isEmpty ? String(localized: "扫描票据或导入资料后可关联账目。") : String(localized: "调整筛选条件后再看。")
+                    ) {
+                        Button {
+                            if documents.isEmpty {
+                                onScanCategory(primaryDocumentCategoryForEmptyAction)
+                            } else {
+                                resetFilters()
+                            }
+                        } label: {
+                            Label(
+                                documents.isEmpty ? String(localized: "扫描/导入资料") : String(localized: "清除筛选"),
+                                systemImage: documents.isEmpty ? "doc.viewfinder" : "line.3.horizontal.decrease.circle"
+                            )
+                            .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.appProminent())
+                    }
                 } else {
                     if !suggestedMatches.isEmpty {
                         VStack(alignment: .leading, spacing: AppSpacing.tight) {

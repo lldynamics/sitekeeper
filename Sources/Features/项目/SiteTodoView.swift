@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import ImageIO
 
 struct SiteTodoView: View {
     @Environment(DataStore.self) private var store
@@ -62,18 +61,18 @@ struct SiteTodoView: View {
     }
 
     var body: some View {
-        Group {
-            if usesSidebarLayout {
-                NavigationSplitView {
-                    filterSidebar
-                } detail: {
-                    todoListContent
-                }
-                .navigationSplitViewStyle(.balanced)
-            } else {
+        AdaptiveListDetailLayout(
+            forceSplit: usesSidebarLayout,
+            compact: {
                 compactTodoLayout
+            },
+            sidebar: {
+                filterSidebar
+            },
+            detail: {
+                todoListContent
             }
-        }
+        )
         .navigationTitle(String(localized: "现场待办"))
         .searchable(text: $searchText, prompt: String(localized: "搜索事项、负责人、备注"))
         .toolbar {
@@ -321,6 +320,15 @@ private struct SiteTodoRow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
             }
+            if !drawingIssueTags.isEmpty {
+                FlowTagLine(tags: drawingIssueTags)
+            }
+            if !todo.drawingIssueCloseEvidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(String(format: String(localized: "关闭证据: %@"), todo.drawingIssueCloseEvidence))
+                    .font(.caption2)
+                    .foregroundStyle(Color.appSuccess)
+                    .lineLimit(2)
+            }
             if !methodTitles.isEmpty {
                 HStack(spacing: 6) {
                     Image(systemName: "wrench.and.screwdriver.fill")
@@ -344,6 +352,15 @@ private struct SiteTodoRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    private var drawingIssueTags: [String] {
+        [
+            todo.drawingIssueLocation.isEmpty ? "" : String(format: String(localized: "位置: %@"), todo.drawingIssueLocation),
+            todo.drawingIssueLayerOrPage.isEmpty ? "" : String(format: String(localized: "图层/页码: %@"), todo.drawingIssueLayerOrPage),
+            todo.drawingIssueMeasurement.isEmpty ? "" : String(format: String(localized: "测量: %@"), todo.drawingIssueMeasurement)
+        ]
+        .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
     }
 
     private func priorityBadge(_ priority: TodoPriority) -> some View {
@@ -415,6 +432,10 @@ private struct SiteTodoEditSheet: View {
     @State private var dueDate: Date
     @State private var priority: TodoPriority
     @State private var issueType: TodoIssueType
+    @State private var drawingIssueLocation: String
+    @State private var drawingIssueLayerOrPage: String
+    @State private var drawingIssueMeasurement: String
+    @State private var drawingIssueCloseEvidence: String
     @State private var beforePhotoFileName: String?
     @State private var afterPhotoFileName: String?
     @State private var isDone: Bool
@@ -459,6 +480,10 @@ private struct SiteTodoEditSheet: View {
         _dueDate = State(initialValue: todo.flatMap { Formatters.date.date(from: $0.dueDate) } ?? Date())
         _priority = State(initialValue: todo?.priority ?? .medium)
         _issueType = State(initialValue: todo?.issueType ?? .general)
+        _drawingIssueLocation = State(initialValue: todo?.drawingIssueLocation ?? "")
+        _drawingIssueLayerOrPage = State(initialValue: todo?.drawingIssueLayerOrPage ?? "")
+        _drawingIssueMeasurement = State(initialValue: todo?.drawingIssueMeasurement ?? "")
+        _drawingIssueCloseEvidence = State(initialValue: todo?.drawingIssueCloseEvidence ?? "")
         _beforePhotoFileName = State(initialValue: todo?.rectificationBeforePhotoFileName)
         _afterPhotoFileName = State(initialValue: todo?.rectificationAfterPhotoFileName)
         _isDone = State(initialValue: todo?.isDone ?? false)
@@ -488,6 +513,20 @@ private struct SiteTodoEditSheet: View {
                     }
                     TextField(String(localized: "备注"), text: $note, axis: .vertical)
                         .lineLimit(2...5)
+                }
+                if showsDrawingIssueClosureFields {
+                    Section(String(localized: "图纸问题闭环")) {
+                        TextField(String(localized: "问题位置"), text: $drawingIssueLocation, axis: .vertical)
+                            .lineLimit(1...3)
+                        TextField(String(localized: "图层/页码"), text: $drawingIssueLayerOrPage)
+                        TextField(String(localized: "测量结果"), text: $drawingIssueMeasurement, axis: .vertical)
+                            .lineLimit(1...4)
+                        TextField(String(localized: "关闭证据（验收人/复测/照片说明）"), text: $drawingIssueCloseEvidence, axis: .vertical)
+                            .lineLimit(1...4)
+                        Text(String(localized: "整改后照片和关闭证据会进入交付包的图纸问题清单。"))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 Section(String(localized: "关联施工工艺")) {
                     if constructionMethods.isEmpty {
@@ -590,6 +629,16 @@ private struct SiteTodoEditSheet: View {
         }
     }
 
+    private var showsDrawingIssueClosureFields: Bool {
+        let haystack = "\(title)\n\(note)"
+        return !drawingIssueLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !drawingIssueLayerOrPage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !drawingIssueMeasurement.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !drawingIssueCloseEvidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || haystack.localizedCaseInsensitiveContains(String(localized: "图纸问题"))
+            || haystack.localizedCaseInsensitiveContains("Drawing Issue")
+    }
+
     private func photoPickerRow(title: String, fileName: String?, selection: Binding<PhotosPickerItem?>, clear: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -641,7 +690,11 @@ private struct SiteTodoEditSheet: View {
             return
         }
         guard !Task.isCancelled else { return }
-        let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) ?? data
+        let normalizedData = ImageDownsampleService.downsampledJPEGData(
+            data,
+            maxPixelSize: 1600,
+            compressionQuality: 0.8
+        ) ?? data
         guard !Task.isCancelled else { return }
         await saveTodoPhotoData(normalizedData, kind: kind)
     }
@@ -748,6 +801,10 @@ private struct SiteTodoEditSheet: View {
         value.dueDate = Formatters.date.string(from: dueDate)
         value.priority = priority
         value.issueType = issueType
+        value.drawingIssueLocation = drawingIssueLocation.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.drawingIssueLayerOrPage = drawingIssueLayerOrPage.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.drawingIssueMeasurement = drawingIssueMeasurement.trimmingCharacters(in: .whitespacesAndNewlines)
+        value.drawingIssueCloseEvidence = drawingIssueCloseEvidence.trimmingCharacters(in: .whitespacesAndNewlines)
         value.rectificationBeforePhotoFileName = beforePhotoFileName
         value.rectificationAfterPhotoFileName = afterPhotoFileName
         value.isDone = isDone
@@ -776,24 +833,6 @@ private struct SiteTodoEditSheet: View {
     private func methodTitle(_ method: ConstructionMethod) -> String {
         let title = method.title.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? String(localized: "未命名工艺") : title
-    }
-
-    private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
-        let sourceOptions: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return nil
-        }
-        let downsampleOptions: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: false
-        ] as CFDictionary
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
     }
 }
 

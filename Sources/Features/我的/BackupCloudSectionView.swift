@@ -18,9 +18,6 @@ struct BackupCloudSectionView: View {
     let cloudCellularTrafficHint: String
     let cloudAutoNetworkHint: String
     let cloudAutoInterval: CloudBackupAutoInterval
-    let cloudLastSuccessDate: Date?
-    let cloudNextAutoBackupDate: Date?
-    let cloudAutoLastStatus: String
     let onUploadBackup: () -> Void
     let onRefreshBackups: () -> Void
     let onRestoreBackup: (CloudBackupFile) -> Void
@@ -91,18 +88,6 @@ struct BackupCloudSectionView: View {
                 Toggle(String(localized: "仅在 Wi‑Fi 下自动备份"), isOn: $cloudAutoBackupRequiresWiFi)
                     .disabled(isBusy)
                 Text(cloudAutoNetworkHint)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                if let nextDate = cloudNextAutoBackupDate {
-                    LabeledContent(String(localized: "下次预计"), value: Formatters.dateTime.string(from: nextDate))
-                }
-            }
-
-            if let lastSuccessDate = cloudLastSuccessDate {
-                LabeledContent(String(localized: "最近成功"), value: Formatters.dateTime.string(from: lastSuccessDate))
-            }
-            if !cloudAutoLastStatus.isEmpty {
-                Text(cloudAutoLastStatus)
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

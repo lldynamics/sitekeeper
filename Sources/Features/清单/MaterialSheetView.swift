@@ -176,45 +176,28 @@ struct MaterialSheetView: View {
                 summarySection
             }
 
-            // Export actions
-            if !sheetItems.isEmpty {
-                Section(String(localized: "导出与操作")) {
-                    Button { exportAsPDF() } label: { Label(String(localized: "导出 PDF"), systemImage: "doc.richtext.fill") }.disabled(isExporting)
-                    Button { exportAsCSV() } label: { Label(String(localized: "导出 CSV"), systemImage: "tablecells.fill") }.disabled(isExporting)
-                    Button { exportAsImage() } label: { Label(String(localized: "导出图片"), systemImage: "photo") }.disabled(isExporting)
-                    Button(role: .destructive) { showClearConfirm = true } label: { Label(String(localized: "清空材料单"), systemImage: "trash") }
-                }
-            }
         }
-        .navigationTitle("材料单").navigationBarTitleDisplayMode(.inline)
+        .navigationTitle(String(localized: "材料单"))
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !sheetItems.isEmpty {
-                ToolbarItem(placement: .primaryAction) {
-                    Menu {
-                        Button(action: exportAsPDF) {
-                            Label(String(localized: "导出 PDF"), systemImage: "doc.richtext.fill")
-                        }
-                        Button(action: exportAsCSV) {
-                            Label(String(localized: "导出 CSV"), systemImage: "tablecells.fill")
-                        }
-                        Button(action: exportAsImage) {
-                            Label(String(localized: "导出图片"), systemImage: "photo")
-                        }
-                        Divider()
-                        Button(action: saveSheetToMaterialListAndClear) {
-                            Label(String(localized: "保存到材料清单"), systemImage: "shippingbox.fill")
-                        }
-                    } label: {
-                        if isExporting { ProgressView().controlSize(.small) }
-                        else { Image(systemName: "square.and.arrow.up") }
-                    }.disabled(isExporting)
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if !sheetItems.isEmpty {
+                    materialSheetMoreMenu
                 }
+
+                Button {
+                    prepareCreateDraftSheet()
+                } label: {
+                    Image(systemName: "plus").visibleIconStyle()
+                }
+                .accessibilityLabel(String(localized: "新建材料单"))
             }
+
             KeyboardDismissToolbar {
                 AppKeyboard.dismiss()
             }
         }
-        .confirmationDialog("导出方式", isPresented: $showExportChoice) {
+        .confirmationDialog(String(localized: "导出方式"), isPresented: $showExportChoice) {
             if let url = exportFileURL {
                 Button { showExporter = true } label: { Label(String(localized: "保存到文件"), systemImage: "folder") }
                 ShareLink(item: url) { Label(String(localized: "分享"), systemImage: "square.and.arrow.up") }
@@ -230,7 +213,7 @@ struct MaterialSheetView: View {
                     cleanupExportFileIfNeeded()
                 }
             } else {
-                ProgressView("正在准备导出文件...")
+                ProgressView(String(localized: "正在准备导出文件..."))
                     .padding()
             }
         }
@@ -300,6 +283,42 @@ struct MaterialSheetView: View {
         .onDisappear {
             undoableDeletion.flushPendingCommit()
         }
+    }
+
+    private var materialSheetMoreMenu: some View {
+        Menu {
+            Section(String(localized: "导出")) {
+                Button(action: exportAsPDF) {
+                    Label(String(localized: "导出 PDF"), systemImage: "doc.richtext.fill")
+                }
+                Button(action: exportAsCSV) {
+                    Label(String(localized: "导出 CSV"), systemImage: "tablecells.fill")
+                }
+                Button(action: exportAsImage) {
+                    Label(String(localized: "导出图片"), systemImage: "photo")
+                }
+            }
+
+            Section(String(localized: "材料单操作")) {
+                Button(action: saveSheetToMaterialListAndClear) {
+                    Label(String(localized: "保存到材料清单"), systemImage: "shippingbox.fill")
+                }
+                Button(role: .destructive) {
+                    showClearConfirm = true
+                } label: {
+                    Label(String(localized: "清空材料单"), systemImage: "trash")
+                }
+            }
+        } label: {
+            if isExporting {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Image(systemName: "ellipsis.circle").visibleIconStyle()
+            }
+        }
+        .disabled(isExporting)
+        .accessibilityLabel(String(localized: "更多操作"))
     }
 
     private var exportColumnToggleSection: some View {
@@ -725,7 +744,7 @@ struct MaterialSheetView: View {
             exportProjectName: exportProjectName,
             exportPreparer: exportPreparer
         )
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).pdf")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("material_sheet_\(MaterialSheetExportRenderer.timestampToken()).pdf")
         do {
             try data.write(to: url)
             exportFileURL = url
@@ -744,7 +763,7 @@ struct MaterialSheetView: View {
                 options: exportOptions
             ).utf8
         )
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).csv")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("material_sheet_\(MaterialSheetExportRenderer.timestampToken()).csv")
         do {
             try data.write(to: url)
             exportFileURL = url
@@ -765,7 +784,7 @@ struct MaterialSheetView: View {
         ) else {
             return
         }
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("材料单_\(MaterialSheetExportRenderer.timestampToken()).png")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("material_sheet_\(MaterialSheetExportRenderer.timestampToken()).png")
         do {
             try data.write(to: url)
             exportFileURL = url

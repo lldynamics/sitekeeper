@@ -8,7 +8,6 @@ struct TileCalcView: View {
     @AppStorage(UserPreferenceKeys.Calculator.tileTileWidth) private var tw = "600"
     @AppStorage(UserPreferenceKeys.Calculator.tileWaste) private var waste = "8"
     @AppStorage(UserPreferenceKeys.Calculator.tileBox) private var box = "4"
-    @State private var result = ""
     @State private var resultModel: CalculationResult?
     @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
@@ -80,10 +79,10 @@ struct TileCalcView: View {
     }
 
     var body: some View {
-        Form {
-            Section("房间") {
-                CalculatorValidatedNumericField(
-                    title: "长度",
+        CalculatorForm(title: CalculatorCopy.tileTool, focus: $isInputFocused) {
+            Section(CalculatorCopy.tileRoomSection) {
+                CalculatorInputField(
+                    title: CalculatorCopy.tileRoomLength,
                     placeholder: "6",
                     unit: "m",
                     text: $rl,
@@ -91,9 +90,9 @@ struct TileCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "长度预设", options: ["4", "6", "8", "10"], selection: $rl)
-                CalculatorValidatedNumericField(
-                    title: "宽度",
+                CalculatorPresetChips(title: CalculatorCopy.lengthPreset, options: ["4", "6", "8", "10"], selection: $rl)
+                CalculatorInputField(
+                    title: CalculatorCopy.tileRoomWidth,
                     placeholder: "4",
                     unit: "m",
                     text: $rw,
@@ -101,11 +100,11 @@ struct TileCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "宽度预设", options: ["3", "4", "5", "6"], selection: $rw)
+                CalculatorPresetChips(title: CalculatorCopy.widthPreset, options: ["3", "4", "5", "6"], selection: $rw)
             }
-            Section("瓷砖") {
-                CalculatorValidatedNumericField(
-                    title: "长度",
+            Section(CalculatorCopy.tileMaterialSection) {
+                CalculatorInputField(
+                    title: CalculatorCopy.tileLength,
                     placeholder: "600",
                     unit: "mm",
                     text: $tl,
@@ -113,9 +112,9 @@ struct TileCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用长度", options: ["300", "600", "800"], selection: $tl)
-                CalculatorValidatedNumericField(
-                    title: "宽度",
+                CalculatorPresetChips(title: CalculatorCopy.commonLength, options: ["300", "600", "800"], selection: $tl)
+                CalculatorInputField(
+                    title: CalculatorCopy.tileWidth,
                     placeholder: "600",
                     unit: "mm",
                     text: $tw,
@@ -123,9 +122,9 @@ struct TileCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "常用宽度", options: ["300", "600", "800"], selection: $tw)
-                CalculatorValidatedNumericField(
-                    title: "损耗",
+                CalculatorPresetChips(title: CalculatorCopy.commonWidth, options: ["300", "600", "800"], selection: $tw)
+                CalculatorInputField(
+                    title: CalculatorCopy.tileWaste,
                     placeholder: "8",
                     unit: "%",
                     text: $waste,
@@ -133,41 +132,28 @@ struct TileCalcView: View {
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "损耗预设", options: ["5", "8", "10", "12"], selection: $waste)
-                CalculatorValidatedNumericField(
-                    title: "每箱片数",
+                CalculatorPresetChips(title: CalculatorCopy.wastePreset, options: ["5", "8", "10", "12"], selection: $waste)
+                CalculatorInputField(
+                    title: CalculatorCopy.tileBoxPieces,
                     placeholder: "4",
-                    unit: "片",
+                    unit: CalculatorCopy.unitPieces,
                     text: $box,
                     rule: boxRule,
                     keyboardType: .numberPad,
                     showWhenEmpty: didAttemptSubmit,
                     focus: $isInputFocused
                 )
-                CalculatorPresetChips(title: "每箱片数", options: ["4", "6", "8", "10"], selection: $box)
+                CalculatorPresetChips(title: CalculatorCopy.tileBoxPieces, options: ["4", "6", "8", "10"], selection: $box)
             }
             Section {
-                Button("估算") {
+                CalculatorPrimaryActionButton(title: CalculatorCopy.actionEstimate) {
                     isInputFocused = false
                     didAttemptSubmit = true
                     calc()
                 }
-                .frame(maxWidth: .infinity)
-                .fontWeight(.semibold)
             }
             if let resultModel {
-                Section("结果") {
-                    CalculatorResultCard(
-                        title: "地砖排料结果",
-                        result: resultModel
-                    )
-                }
-            }
-        }
-        .navigationTitle("地砖排料").navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            KeyboardDismissToolbar {
-                isInputFocused = false
+                CalculatorResultPanel(cardTitle: CalculatorCopy.tileResultTitle, result: resultModel)
             }
         }
     }
@@ -179,7 +165,6 @@ struct TileCalcView: View {
               let tileWidth = tileWidthValidation.doubleValue,
               let wastePercent = wasteValidation.doubleValue,
               let boxPiecesValue = boxValidation.doubleValue else {
-            result = ""
             resultModel = nil
             return
         }
@@ -190,42 +175,35 @@ struct TileCalcView: View {
         let count = Int(ceil(ra / ta))
         let boxes = Int(ceil(Double(count) / Double(boxPieces)))
         resultModel = .singleSection(
-            headline: "需瓷砖 \(count) 片 / \(boxes) 箱",
-            formula: "片数=ceil(含损耗面积÷单片面积)；箱数=ceil(片数÷每箱片数)",
+            headline: "\(CalculatorCopy.tileHeadlinePrefix) \(CalculatorFormatting.pieces(count)) / \(CalculatorFormatting.packages(boxes))",
+            formula: CalculatorResultCopy.tileFormula(),
             items: [
-                CalculationResult.item("地面面积", "\(fmt(area)) m²"),
-                CalculationResult.item("含损耗面积", "\(fmt(ra)) m²"),
-                CalculationResult.item("胶粘剂", "\(fmt(ra * 5)) kg"),
-                CalculationResult.item("箱数", "\(boxes) 箱", status: .pass),
+                CalculationResult.item(CalculatorResultLabel.floorArea, CalculatorFormatting.squareMeters(area)),
+                CalculationResult.item(CalculatorResultLabel.adjustedArea, CalculatorFormatting.squareMeters(ra)),
+                CalculationResult.item(CalculatorResultLabel.adhesive, CalculatorFormatting.kilograms(ra * 5)),
+                CalculationResult.item(CalculatorResultLabel.packageCount, CalculatorFormatting.packages(boxes), status: .pass),
             ]
         )
-        result = """
-        地面面积: \(fmt(area)) m²
-        含损耗: \(fmt(ra)) m²
-        需瓷砖: \(count) 片
-        需箱数: \(boxes) 箱
-        胶粘剂: \(fmt(ra * 5)) kg
-        """
-        saveHistory("\(count) 片 / \(boxes) 箱")
+        CalculatorHistorySupport.record(
+            store: store,
+            tool: CalculatorCopy.tileTool,
+            input: CalculatorHistoryCopy.tileInput(
+                roomLength: rl,
+                roomWidth: rw,
+                tileLength: tl,
+                tileWidth: tw
+            ),
+            result: CalculatorHistoryCopy.tileResult(
+                pieceCount: count,
+                packageCount: boxes
+            )
+        )
         rl = NumericInputSupport.normalizedStorageText(rl, kind: .quantity, preservingInvalid: false)
         rw = NumericInputSupport.normalizedStorageText(rw, kind: .quantity, preservingInvalid: false)
         tl = NumericInputSupport.normalizedStorageText(tl, kind: .quantity, preservingInvalid: false)
         tw = NumericInputSupport.normalizedStorageText(tw, kind: .quantity, preservingInvalid: false)
         waste = NumericInputSupport.normalizedStorageText(waste, kind: .quantity, preservingInvalid: false)
         box = NumericInputSupport.normalizedStorageText(box, kind: .quantity, preservingInvalid: false)
-    }
-
-    private func fmt(_ v: Double) -> String {
-        let f = NumberFormatter(); f.minimumFractionDigits = 0; f.maximumFractionDigits = 3
-        return f.string(from: NSNumber(value: v)) ?? String(v)
-    }
-
-    private func saveHistory(_ r: String) {
-        store.appendCalculationHistory(
-            tool: "地砖排料",
-            input: "\(rl)×\(rw)m, \(tl)×\(tw)mm",
-            result: r
-        )
     }
 
 }

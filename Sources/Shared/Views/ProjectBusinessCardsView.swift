@@ -70,8 +70,16 @@ struct ProjectBusinessCardsView: View {
     private func receivableAgeText(_ summary: ProjectBusinessSummary) -> String {
         guard summary.receivableAmount > 0 else { return "无应收" }
         guard let days = summary.receivableAgeDays else { return "未填完工日" }
-        if days == 0 { return "未到期 · \(ReportBuilder.money(summary.receivableAmount))" }
-        return "\(days)天 · \(ReportBuilder.money(summary.receivableAmount))"
+        if days == 0 {
+            return DashboardSubtitleBuilder.moneySummary(
+                "未到期",
+                amount: ReportBuilder.money(summary.receivableAmount)
+            )
+        }
+        return DashboardSubtitleBuilder.moneySummary(
+            "\(days)天",
+            amount: ReportBuilder.money(summary.receivableAmount)
+        )
     }
 
     private func receivableAgeColor(_ summary: ProjectBusinessSummary) -> Color {
@@ -85,11 +93,11 @@ struct ProjectBusinessCardsView: View {
 
     private func recentCollectionText(_ summary: ProjectBusinessSummary) -> String {
         guard let collection = summary.recentCollection else { return "暂无回款" }
-        let base = "\(collection.date) · \(ReportBuilder.money(collection.amount))"
-        if let projectName = collection.projectName, !projectName.isEmpty {
-            return "\(base) · \(projectName)"
-        }
-        return base
+        return DashboardSubtitleBuilder.datedAmount(
+            collection.date,
+            amount: ReportBuilder.money(collection.amount),
+            projectName: collection.projectName
+        )
     }
 
     private func recentCollectionColor(_ summary: ProjectBusinessSummary) -> Color {

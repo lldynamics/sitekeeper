@@ -40,6 +40,12 @@ struct ProjectDetailView: View {
     }
 }
 
+struct ProjectDetailDataManagementDestination: Identifiable, Hashable {
+    let route: DataManagementRoute
+
+    var id: DataManagementRoute { route }
+}
+
 struct ProjectDetailContainer: View {
     @Environment(DataStore.self) var store
     @Environment(ProjectStore.self) var projectStore
@@ -63,6 +69,7 @@ struct ProjectDetailContainer: View {
     @State var didAutoOpenDeliveryGuide = false
     @State var didOpenFocusedItem = false
     @State var showTodoFilterView = false
+    @State var dataManagementDestination: ProjectDetailDataManagementDestination?
 
     init(
         projectId: UUID,
@@ -274,7 +281,7 @@ struct ProjectDetailContainer: View {
                 onOpenTodoFilter: openTodoFilterFromMetric,
                 onOpenFinanceFilter: openFinanceModeFromMetric(filter:),
                 onEditProject: { routeState.presentation = .editProject },
-                onExportDeliveryPackage: { routeState.presentation = .deliveryGuide },
+                onOpenDeliveryGuide: { routeState.presentation = .deliveryGuide },
                 onAddLog: { routeState.presentation = .quickAdd(.log) },
                 onAddMaterial: { routeState.presentation = .quickAdd(.material) },
                 onAddQuote: { routeState.presentation = .quickAdd(.quote) },
@@ -323,7 +330,62 @@ struct ProjectDetailContainer: View {
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        routeState.presentation = .quickAdd(.log)
+                    } label: {
+                        Label(String(localized: "写日志"), systemImage: "book.pages.fill")
+                    }
+                    Button {
+                        openTodoFilterFromMetric()
+                    } label: {
+                        Label(String(localized: "处理待办"), systemImage: "checklist.checked")
+                    }
+                    Divider()
+                    Button {
+                        routeState.presentation = .addFinancial
+                    } label: {
+                        Label(String(localized: "记账"), systemImage: "receipt.fill")
+                    }
+                    Button {
+                        routeState.documentScanCategory = nil
+                        routeState.presentation = .documentScanSetup
+                    } label: {
+                        Label(String(localized: "扫描资料"), systemImage: "doc.viewfinder.fill")
+                    }
+                    Button {
+                        assetState.showDrawingImporter = true
+                    } label: {
+                        Label(String(localized: "导入图纸"), systemImage: "square.on.square.squareshape.controlhandles")
+                    }
+                    Divider()
+                    Button {
+                        routeState.presentation = .quickAdd(.material)
+                    } label: {
+                        Label(String(localized: "材料"), systemImage: "shippingbox.fill")
+                    }
+                    Button {
+                        routeState.presentation = .quickAdd(.quote)
+                    } label: {
+                        Label(String(localized: "报价"), systemImage: "doc.text.fill")
+                    }
+                    Button {
+                        routeState.presentation = .quickAdd(.labor)
+                    } label: {
+                        Label(String(localized: "人工"), systemImage: "person.2.fill")
+                    }
+                    Button {
+                        routeState.presentation = .addContact
+                    } label: {
+                        Label(String(localized: "联系人"), systemImage: "person.crop.circle.badge.plus")
+                    }
+                } label: {
+                    Image(systemName: "bolt.circle.fill").visibleIconStyle()
+                }
+                .buttonStyle(.appIcon())
+                .accessibilityLabel(String(localized: "常用功能"))
+
                 Menu {
                     Button {
                         routeState.presentation = .editProject
@@ -369,6 +431,9 @@ struct ProjectDetailContainer: View {
             onOpenModeFromDeliveryGuide: { mode in
                 routeState.mode = mode
                 focusModeInSingleCanvas(mode)
+            },
+            onRepairFromDeliveryGuide: { action in
+                handleDeliveryRepairAction(action, snapshot: snapshot)
             },
             onStartDeliveryExport: {
                 requestExportProjectPackage(project, snapshot: snapshot)
@@ -511,6 +576,10 @@ struct ProjectDetailContainer: View {
         }
         .navigationDestination(isPresented: $showTodoFilterView) {
             SiteTodoView(initialProjectId: projectId)
+                .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationDestination(item: $dataManagementDestination) { destination in
+            DataManagementView(initialRoute: destination.route)
                 .navigationBarTitleDisplayMode(.inline)
         }
         .confirmationDialog("删除账目", isPresented: $financeState.showFinancialDeleteConfirm, titleVisibility: .visible) {

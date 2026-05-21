@@ -68,10 +68,11 @@ struct DashboardRiskPill: View {
                         .foregroundStyle(.secondary)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 5)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppSpacing.tight * 0.75, style: .continuous)
-                                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                        )
+                        .background {
+                            AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight * 0.75) {
+                                Color.clear
+                            }
+                        }
                 }
             }
         }
@@ -98,7 +99,11 @@ struct DashboardInventoryPill: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(AppSpacing.tight + 1)
-        .background(RoundedRectangle(cornerRadius: AppSpacing.tight).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .background {
+            AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
+                Color.clear
+            }
+        }
 
         if let destination {
             NavigationLink {
@@ -145,8 +150,19 @@ struct DashboardPanel<Content: View>: View {
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.normal + 2)
-        .background(RoundedRectangle(cornerRadius: AppSpacing.tight).fill(.ultraThinMaterial))
+        .modifier(DashboardPanelSurfaceModifier())
+    }
+}
+
+private struct DashboardPanelSurfaceModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        AppPanel(
+            tone: .materialThin,
+            cornerRadius: AppSpacing.tight,
+            padding: AppSpacing.normal + 2
+        ) {
+            content
+        }
     }
 }
 
@@ -172,11 +188,11 @@ struct DashboardMustDoRow: View {
                 Text(item.title)
                     .font(.callout.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .appListPrimaryTextLayout()
                 Text(item.detail)
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .appListSecondaryTextLayout()
             }
             Spacer()
             Image(systemName: "chevron.right")
@@ -213,13 +229,13 @@ struct LogPreviewRow: View {
                     Text(projectName)
                         .font(.caption2)
                         .foregroundStyle(Color.appDoc)
-                        .lineLimit(1)
+                        .appListSecondaryTextLayout(lines: 1)
                 }
             }
             Text(log.content)
                 .font(.caption)
                 .foregroundStyle(.secondary)
-                .lineLimit(2)
+                .appListSecondaryTextLayout()
         }
         .accessibilityElement(children: .combine)
     }
@@ -236,16 +252,11 @@ struct TodoPreviewRow: View {
             VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
                 Text(todo.title)
                     .font(.callout.weight(.medium))
-                    .lineLimit(1)
-                HStack(spacing: AppSpacing.tight) {
-                    Text(todo.dueDate)
-                    Text(todo.priority.displayName)
-                    Text(todo.issueType.displayName)
-                    if !todo.owner.isEmpty { Text(todo.owner) }
-                    if let projectName { Text(projectName).foregroundStyle(Color.appDoc) }
+                    .appListPrimaryTextLayout()
+                ViewThatFits(in: .horizontal) {
+                    todoMetadataRow
+                    todoMetadataColumn
                 }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
                 if let completedAt = todo.completedAt, todo.isDone {
                     Text(String(format: String(localized: "完成 %@"), completedAt))
                         .font(.caption2)
@@ -255,6 +266,32 @@ struct TodoPreviewRow: View {
             Spacer()
         }
         .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private var todoMetadataContent: some View {
+        Text(todo.dueDate)
+        Text(todo.priority.displayName)
+        Text(todo.issueType.displayName)
+        if !todo.owner.isEmpty { Text(todo.owner) }
+        if let projectName { Text(projectName).foregroundStyle(Color.appDoc) }
+    }
+
+    private var todoMetadataRow: some View {
+        HStack(spacing: AppSpacing.tight) {
+            todoMetadataContent
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+    }
+
+    private var todoMetadataColumn: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            todoMetadataContent
+        }
+        .font(.caption2)
+        .foregroundStyle(.secondary)
     }
 }
 

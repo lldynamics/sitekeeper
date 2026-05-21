@@ -346,7 +346,7 @@ extension DashboardView {
     var dashboardSearchSuggestions: [RealtimeSearchSuggestion] {
         RealtimeSearchSuggestionBuilder.suggestions(
             keyword: dashboardSearchText,
-            categories: [.project, .contact, .supplier, .material],
+            categories: [.command, .project, .contact, .supplier, .material],
             projects: projectStore.projects,
             contacts: projectStore.projectContacts,
             suppliers: store.supplierProfiles,
@@ -382,7 +382,7 @@ extension DashboardView {
                     type: .progress,
                     title: task.title,
                     date: task.dueDate.isEmpty ? task.startDate : task.dueDate,
-                    subtitle: "\(Int(task.clampedCompletion * 100))%"
+                    subtitle: DashboardSubtitleBuilder.progress(task.clampedCompletion * 100)
                 )
             )
         }
@@ -395,7 +395,7 @@ extension DashboardView {
                     type: .todo,
                     title: todo.title,
                     date: todo.completedAt ?? todo.dueDate,
-                    subtitle: todo.isDone ? String(localized: "已完成") : String(localized: "未完成")
+                    subtitle: DashboardSubtitleBuilder.todoStatus(isDone: todo.isDone)
                 )
             )
         }
@@ -434,7 +434,10 @@ extension DashboardView {
                     type: .labor,
                     title: item.workType.isEmpty ? String(localized: "人工记录") : item.workType,
                     date: item.date,
-                    subtitle: "\(item.workers)人 · \(item.hours)h"
+                    subtitle: DashboardSubtitleBuilder.labor(
+                        workers: "\(item.workers)",
+                        hours: "\(item.hours)"
+                    )
                 )
             )
         }
@@ -460,7 +463,10 @@ extension DashboardView {
                     type: .document,
                     title: document.title,
                     date: document.createdAt,
-                    subtitle: "\(document.category.displayName) · \(document.pageCount)页"
+                    subtitle: DashboardSubtitleBuilder.document(
+                        category: document.category.displayName,
+                        pageCount: document.pageCount
+                    )
                 )
             )
         }
@@ -523,6 +529,11 @@ extension DashboardView {
 
     func dashboardDestination(for suggestion: RealtimeSearchSuggestion) -> DashboardDestination {
         switch suggestion.category {
+        case .command:
+            guard let command = RealtimeSearchCommand(suggestionId: suggestion.id) else {
+                return .projectList()
+            }
+            return dashboardCommandDestination(for: command)
         case .project:
             return .projectDetail(projectId: suggestion.entityId)
         case .contact:
@@ -533,6 +544,31 @@ extension DashboardView {
             return .constructionMethodLibrary(focusedMethodId: suggestion.entityId)
         default:
             return .projectList()
+        }
+    }
+
+    func dashboardCommandDestination(for command: RealtimeSearchCommand) -> DashboardDestination {
+        switch command {
+        case .newDailyLog:
+            return .dailyLog(initialProjectId: currentProject?.id, autoOpenComposer: true)
+        case .attachReceipt:
+            if let project = currentProject {
+                return .projectDetail(
+                    projectId: project.id,
+                    autoOpenDocumentScanSetup: true,
+                    initialMode: .assets
+                )
+            }
+            return .projectList(initialOverviewFilter: .missingReceipt)
+        case .exportDeliveryPackage:
+            if let project = currentProject {
+                return .projectDetail(projectId: project.id, autoOpenDeliveryGuide: true)
+            }
+            return .dataManagement(initialRoute: .export)
+        case .backupNow:
+            return .dataManagement(initialRoute: .backup)
+        case .dataHealthCheck:
+            return .dataManagement(initialRoute: .health)
         }
     }
 
@@ -630,28 +666,28 @@ extension DashboardView {
 
         if overdue > 0 {
             return DashboardProjectSignal(
-                subtitle: String(format: String(localized: "延期 %lld"), Int64(overdue)),
+                subtitle: DashboardSubtitleBuilder.overdue(overdue),
                 color: .appRisk,
                 score: score
             )
         }
         if todayTodo > 0 {
             return DashboardProjectSignal(
-                subtitle: String(format: String(localized: "今日 %lld"), Int64(todayTodo)),
+                subtitle: DashboardSubtitleBuilder.today(todayTodo),
                 color: .appPrimaryAction,
                 score: score
             )
         }
         if missingReceipt > 0 {
             return DashboardProjectSignal(
-                subtitle: String(format: String(localized: "缺票 %lld"), Int64(missingReceipt)),
+                subtitle: DashboardSubtitleBuilder.missingReceipt(missingReceipt),
                 color: .appPrimaryAction,
                 score: score
             )
         }
         if priceSpike > 0 {
             return DashboardProjectSignal(
-                subtitle: String(format: String(localized: "价格异动 %lld"), Int64(priceSpike)),
+                subtitle: DashboardSubtitleBuilder.priceSpike(priceSpike),
                 color: .appPrimaryAction,
                 score: score
             )
@@ -661,7 +697,7 @@ extension DashboardView {
         }
         if openTodos > 0 {
             return DashboardProjectSignal(
-                subtitle: String(format: String(localized: "待办 %lld"), Int64(openTodos)),
+                subtitle: DashboardSubtitleBuilder.openTodo(openTodos),
                 color: .appPrimaryAction,
                 score: score
             )

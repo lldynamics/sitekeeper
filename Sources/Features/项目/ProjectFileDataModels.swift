@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import ImageIO
 
 enum ProjectFileCategory: CaseIterable {
     case images
@@ -191,7 +190,7 @@ enum ProjectFileThumbnailToken: Hashable {
             case .photo, .drawing:
                 guard let data = await QuickNoteAttachmentStorage.dataAsync(for: fileName) else { return nil }
                 return await Task.detached(priority: .utility) {
-                    Self.downsampleImage(data, maxPixelSize: 256)
+                    ImageDownsampleService.downsampledImage(data, maxPixelSize: 256)
                 }.value
             case .video:
                 return await Task.detached(priority: .utility) {
@@ -203,20 +202,6 @@ enum ProjectFileThumbnailToken: Hashable {
         }
     }
 
-    private static func downsampleImage(_ data: Data, maxPixelSize: CGFloat) -> UIImage? {
-        let options: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, options) else { return nil }
-        let thumbnailOptions: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceShouldCacheImmediately: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize
-        ] as CFDictionary
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, thumbnailOptions) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
-    }
 }
 
 enum ProjectFileThumbnailCache {

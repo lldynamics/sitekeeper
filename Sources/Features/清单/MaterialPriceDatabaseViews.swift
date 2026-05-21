@@ -5,6 +5,7 @@ import AVFoundation
 
 struct MaterialPriceDatabaseView: View {
     @Environment(DataStore.self) private var store
+    @Environment(MaterialLibraryStore.self) private var materialLibraryStore
     let focusedEntryId: UUID?
     @State private var searchText = ""
     @State private var showAdd = false
@@ -17,9 +18,17 @@ struct MaterialPriceDatabaseView: View {
         self.focusedEntryId = focusedEntryId
     }
 
+    private var materialPriceEntries: [MaterialPriceEntry] {
+        materialLibraryStore.materialPriceEntries
+    }
+
+    private var supplierProfiles: [SupplierProfile] {
+        materialLibraryStore.supplierProfiles
+    }
+
     private var filtered: [MaterialPriceEntry] {
         SearchMatcher.filter(
-            store.materialPriceEntries,
+            materialPriceEntries,
             keyword: searchText,
             sort: { $0.updatedAt > $1.updatedAt }
         )
@@ -29,7 +38,7 @@ struct MaterialPriceDatabaseView: View {
         RealtimeSearchSuggestionBuilder.suggestions(
             keyword: searchText,
             categories: [.material],
-            materials: store.materialPriceEntries,
+            materials: materialPriceEntries,
             limit: 6
         )
     }
@@ -43,13 +52,18 @@ struct MaterialPriceDatabaseView: View {
             emptyTitle: String(localized: "暂无材料价格"),
             emptySystemImage: "yensign.circle",
             emptyDescription: Text(String(localized: "记录常用材料的品牌、规格、供应商和参考价。")),
+            emptyActionTitle: String(localized: "添加材料价格"),
+            onEmptyAction: {
+                showAdd = true
+            },
             searchSuggestions: searchSuggestions,
+            searchEmptyStateText: String(localized: "未找到匹配的材料、品牌或供应商"),
             onSelect: { entry in
                 editingEntry = entry
             },
             onSelectSuggestion: { suggestion in
                 guard suggestion.category == .material else { return }
-                if let entry = store.materialPriceEntries.first(where: { $0.id == suggestion.entityId }) {
+                if let entry = materialPriceEntries.first(where: { $0.id == suggestion.entityId }) {
                     editingEntry = entry
                 }
             },
@@ -84,13 +98,13 @@ struct MaterialPriceDatabaseView: View {
         )
         .onAppear(perform: openFocusedEntryIfNeeded)
         .sheet(isPresented: $showAdd) {
-            MaterialPriceEditSheet(entry: nil, suppliers: store.supplierProfiles) { entry in
+            MaterialPriceEditSheet(entry: nil, suppliers: supplierProfiles) { entry in
                 upsertMaterialPriceEntry(entry)
                 showAdd = false
             }
         }
         .sheet(item: $editingEntry) { entry in
-            MaterialPriceEditSheet(entry: entry, suppliers: store.supplierProfiles) { updated in
+            MaterialPriceEditSheet(entry: entry, suppliers: supplierProfiles) { updated in
                 upsertMaterialPriceEntry(updated)
                 editingEntry = nil
             } onDelete: { target in
@@ -108,7 +122,7 @@ struct MaterialPriceDatabaseView: View {
         let ids = Set(items.map(\.id))
         guard !ids.isEmpty else { return }
 
-        let targets = store.materialPriceEntries.filter { ids.contains($0.id) }
+        let targets = materialPriceEntries.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
 
         let deletion = store.removeMaterialPriceEntries(
@@ -136,7 +150,7 @@ struct MaterialPriceDatabaseView: View {
     }
 
     private func importCommonMaterials() {
-        let existingKeys = Set(store.materialPriceEntries.map { MaterialIdentity.key(name: $0.name, specification: $0.specification, unit: $0.unit) })
+        let existingKeys = Set(materialPriceEntries.map { MaterialIdentity.key(name: $0.name, specification: $0.specification, unit: $0.unit) })
         let newItems = MaterialLibrary.all.compactMap { item -> MaterialPriceEntry? in
             let key = MaterialIdentity.key(name: item.name, specification: item.specification, unit: item.unit)
             guard !existingKeys.contains(key) else { return nil }
@@ -154,7 +168,7 @@ struct MaterialPriceDatabaseView: View {
 
     private func openFocusedEntryIfNeeded() {
         guard let focusedEntryId, !didOpenFocusedEntry,
-              let entry = store.materialPriceEntries.first(where: { $0.id == focusedEntryId }) else { return }
+              let entry = materialPriceEntries.first(where: { $0.id == focusedEntryId }) else { return }
         didOpenFocusedEntry = true
         searchText = ""
         Task { @MainActor in

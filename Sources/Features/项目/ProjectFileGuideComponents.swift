@@ -270,6 +270,10 @@ struct ProjectFileItemRow: View {
     let item: ProjectFileItem
     let onPreview: () -> Void
 
+    private var requiresExternalDrawingViewer: Bool {
+        item.category == .drawings && ProjectDetailDrawingHelper.requiresExternalViewer(item.fileType)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             ProjectFileThumbnail(item: item)
@@ -307,8 +311,10 @@ struct ProjectFileItemRow: View {
             Spacer(minLength: 8)
             if item.exists {
                 Menu {
-                    Button(action: onPreview) {
-                        Label(String(localized: "project.files.action.preview"), systemImage: "eye")
+                    if !requiresExternalDrawingViewer {
+                        Button(action: onPreview) {
+                            Label(String(localized: "project.files.action.preview"), systemImage: "eye")
+                        }
                     }
                     ShareLink(item: item.url) {
                         Label(
@@ -327,7 +333,7 @@ struct ProjectFileItemRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if item.exists {
+            if item.exists && !requiresExternalDrawingViewer {
                 onPreview()
             }
         }

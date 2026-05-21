@@ -6,6 +6,7 @@ struct DashboardView: View {
     @Environment(FinanceStore.self) var financeStore
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var dashboardSearchText = ""
+    @State private var selectedDashboardSuggestion: RealtimeSearchSuggestion?
     @State var showDashboardProjectPicker = false
     @State var quickActionToastMessage: String?
     @AppStorage("dashboardCurrentProjectId") var selectedProjectIdRaw = ""
@@ -36,6 +37,9 @@ struct DashboardView: View {
             .animation(.snappy(duration: 0.22), value: quickActionToastMessage)
             .navigationTitle(String(localized: "今日工作台"))
             .navigationBarTitleDisplayMode(.large)
+            .task {
+                store.scheduleDataHealthScanIfStale()
+            }
             .sheet(isPresented: $showDashboardProjectPicker) {
                 DashboardProjectPickerSheet(
                     rows: rankedDashboardProjectRows,
@@ -45,6 +49,9 @@ struct DashboardView: View {
                         showDashboardProjectPicker = false
                     }
                 )
+            }
+            .navigationDestination(item: $selectedDashboardSuggestion) { suggestion in
+                dashboardDestinationView(dashboardDestination(for: suggestion))
             }
             .onAppear(perform: cleanupSelectedProject)
             .task(id: quickActionToastMessage) {
@@ -114,29 +121,51 @@ struct DashboardView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.normal, style: .continuous)
-                        .fill(Color(uiColor: .secondarySystemGroupedBackground))
-                )
+                .background {
+                    AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal) {
+                        Color.clear
+                    }
+                }
             }
             projectTimelinePanel
         }
         .padding()
     }
 
+    @ViewBuilder
     private func wideDashboardContent(containerWidth: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.relaxed - 2) {
-            globalSearchInput
-            currentProjectSelector
+        if containerWidth < 820 {
+            compactDashboardContent
+        } else {
+            wideDashboardTwoColumnContent(containerWidth: containerWidth)
+        }
+    }
+
+    private func wideDashboardTwoColumnContent(containerWidth: CGFloat) -> some View {
+        let sidebarWidth = min(max(containerWidth * 0.27, 300), 336)
+        return VStack(alignment: .leading, spacing: AppSpacing.normal) {
+            wideDashboardTopSection
+
             HStack(alignment: .top, spacing: AppSpacing.normal) {
                 wideDashboardSidebar
-                    .frame(minWidth: 286, maxWidth: 340)
+                    .frame(width: sidebarWidth, alignment: .topLeading)
 
-                wideDashboardMainPanels(containerWidth: containerWidth)
+                VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                    wideDashboardMainPanels
+                    projectTimelinePanel
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            projectTimelinePanel
         }
-        .padding()
+        .padding(.horizontal, AppSpacing.relaxed)
+        .padding(.vertical, AppSpacing.normal)
+    }
+
+    private var wideDashboardTopSection: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            globalSearchInput
+            currentProjectSelector
+        }
     }
 
     private var wideDashboardSidebar: some View {
@@ -154,13 +183,8 @@ struct DashboardView: View {
         }
     }
 
-    private func wideDashboardMainPanels(containerWidth: CGFloat) -> some View {
-        let canUseTwoColumns = containerWidth >= 1180
-        let columns = canUseTwoColumns
-            ? [GridItem(.flexible(), spacing: AppSpacing.normal), GridItem(.flexible(), spacing: AppSpacing.normal)]
-            : [GridItem(.flexible(), spacing: AppSpacing.normal)]
-
-        return LazyVGrid(columns: columns, alignment: .leading, spacing: AppSpacing.normal) {
+    private var wideDashboardMainPanels: some View {
+        LazyVGrid(columns: wideDashboardPanelColumns, alignment: .leading, spacing: AppSpacing.normal) {
             if showsBusinessOverviewPanel {
                 businessOverviewPanel
             }
@@ -172,63 +196,28 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
+    private var wideDashboardPanelColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 310), spacing: AppSpacing.normal)]
+    }
+
+    private var dashboardTimelineColumns: [GridItem] {
+        usesWideDashboardLayout
+            ? [GridItem(.adaptive(minimum: 320), spacing: AppSpacing.tight)]
+            : [GridItem(.flexible(), spacing: AppSpacing.tight)]
+    }
+
     private var globalSearchInput: some View {
-        let hasSearchKeyword = !dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-
-        return VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: AppSpacing.tight + 2) {
-                Image(systemName: "magnifyingglass")
-                    .foregroundStyle(.secondary)
-                TextField(String(localized: "搜索项目、联系人、供应商、材料"), text: $dashboardSearchText)
-                    .textInputAutocapitalization(.never)
-                    .submitLabel(.done)
-                if hasSearchKeyword {
-                    Button {
-                        dashboardSearchText = ""
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(String(localized: "清空搜索"))
-                }
+        InlineSearchPanel(
+            text: $dashboardSearchText,
+            prompt: String(localized: "搜索项目、联系人、供应商、材料或命令"),
+            suggestions: dashboardSearchSuggestions,
+            emptyStateText: String(localized: "未找到匹配的项目、联系人、供应商、材料或命令"),
+            materialTone: .materialThin,
+            onSelectSuggestion: { suggestion in
+                dashboardSearchText = ""
+                selectedDashboardSuggestion = suggestion
             }
-            .padding(AppSpacing.normal)
-
-            if hasSearchKeyword {
-                Divider()
-                    .padding(.horizontal, AppSpacing.normal)
-                if dashboardSearchSuggestions.isEmpty {
-                    Text(String(localized: "未找到匹配内容"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, AppSpacing.normal)
-                        .padding(.vertical, AppSpacing.tight + 1)
-                } else {
-                    VStack(spacing: 0) {
-                        ForEach(Array(dashboardSearchSuggestions.enumerated()), id: \.element.id) { index, suggestion in
-                            NavigationLink {
-                                dashboardDestinationView(dashboardDestination(for: suggestion))
-                            } label: {
-                                RealtimeSearchSuggestionRow(
-                                    suggestion: suggestion,
-                                    showsCategoryBadge: true,
-                                    showsChevron: true
-                                )
-                            }
-                            .buttonStyle(.plain)
-
-                            if index < dashboardSearchSuggestions.count - 1 {
-                                Divider()
-                                    .padding(.leading, AppSpacing.normal + 20 + AppSpacing.tight)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(.thinMaterial))
+        )
     }
 
     @ViewBuilder
@@ -253,7 +242,11 @@ struct DashboardView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, AppSpacing.normal)
         .padding(.vertical, AppSpacing.tight + 1)
-        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .background {
+            AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal - 2) {
+                Color.clear
+            }
+        }
     }
 
     private var focusedProjectScrollerShell: some View {
@@ -293,7 +286,11 @@ struct DashboardView: View {
         }
         .padding(.horizontal, AppSpacing.normal)
         .padding(.vertical, AppSpacing.tight + 1)
-        .background(RoundedRectangle(cornerRadius: AppSpacing.normal - 2).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+        .background {
+            AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal - 2) {
+                Color.clear
+            }
+        }
     }
 
     private func dashboardProjectButton(_ row: DashboardProjectRow) -> some View {
@@ -501,7 +498,7 @@ struct DashboardView: View {
             } else {
                 if usesWideDashboardLayout {
                     LazyVGrid(
-                        columns: [GridItem(.flexible(), spacing: AppSpacing.tight), GridItem(.flexible(), spacing: AppSpacing.tight)],
+                        columns: dashboardTimelineColumns,
                         alignment: .leading,
                         spacing: AppSpacing.tight * 0.75
                     ) {

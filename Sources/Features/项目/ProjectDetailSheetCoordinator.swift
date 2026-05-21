@@ -55,6 +55,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
     let relatedProgress: [ProgressTask]
     let recentFinancialRecords: [ProjectFinancialRecord]
     let onOpenModeFromDeliveryGuide: (ProjectDetailMode) -> Void
+    let onRepairFromDeliveryGuide: (ProjectDeliveryRepairAction) -> Void
     let onStartDeliveryExport: () -> Void
     let onUpdateProject: (Project) -> Void
     let onCreateContact: (ProjectContact) -> Void
@@ -89,6 +90,10 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         onOpenMode: { mode in
                             self.presentation = nil
                             onOpenModeFromDeliveryGuide(mode)
+                        },
+                        onRepair: { action in
+                            self.presentation = nil
+                            onRepairFromDeliveryGuide(action)
                         }
                     )
                 case .addContact:
@@ -248,7 +253,8 @@ private struct ProjectDetailEditingSheetCoordinatorModifier<AttachmentSheet: Vie
                 ProjectFinancialRecordEditSheet(
                     record: record,
                     linkedDocuments: linkedDocuments(record),
-                    linkedAttachmentCount: linkedDocuments(record).count
+                    linkedAttachmentCount: linkedDocuments(record).count,
+                    existingRecords: relatedFinancialRecords
                 ) { updated in
                     onSaveFinancialRecord(updated)
                 } onDelete: { target in
@@ -293,6 +299,7 @@ extension View {
         relatedProgress: [ProgressTask],
         recentFinancialRecords: [ProjectFinancialRecord],
         onOpenModeFromDeliveryGuide: @escaping (ProjectDetailMode) -> Void,
+        onRepairFromDeliveryGuide: @escaping (ProjectDeliveryRepairAction) -> Void,
         onStartDeliveryExport: @escaping () -> Void,
         onUpdateProject: @escaping (Project) -> Void,
         onCreateContact: @escaping (ProjectContact) -> Void,
@@ -313,6 +320,7 @@ extension View {
                 relatedProgress: relatedProgress,
                 recentFinancialRecords: recentFinancialRecords,
                 onOpenModeFromDeliveryGuide: onOpenModeFromDeliveryGuide,
+                onRepairFromDeliveryGuide: onRepairFromDeliveryGuide,
                 onStartDeliveryExport: onStartDeliveryExport,
                 onUpdateProject: onUpdateProject,
                 onCreateContact: onCreateContact,

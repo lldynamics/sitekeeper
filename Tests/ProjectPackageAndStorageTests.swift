@@ -512,6 +512,10 @@ struct ProjectPackageAndStorageTests {
             dueDate: "2026-05-20",
             priority: .high,
             issueType: .quality,
+            drawingIssueLocation: "一层 A/3 轴洞口",
+            drawingIssueLayerOrPage: "PDF 第 3 页 / A-WALL",
+            drawingIssueMeasurement: "洞口 900x2100，现场偏差 40mm",
+            drawingIssueCloseEvidence: "复测合格后监理签字",
             projectId: project.id
         )
         currentDrawing.name = "一层平面"
@@ -575,12 +579,36 @@ struct ProjectPackageAndStorageTests {
 
         let issueEntry = try #require(entries.first { $0.path == "\(folder)/00-delivery/open_drawing_issues.tsv" })
         let issueText = try #require(String(data: issueEntry.data, encoding: .utf8))
+        #expect(issueText.contains("issue_location\tlayer_or_page\tmeasurement_result\tclose_evidence\tscreenshot_file_names\tclosing_evidence_file_names"))
         #expect(issueText.contains("洞口尺寸需确认"))
         #expect(issueText.contains("确认洞口尺寸"))
+        #expect(issueText.contains("一层 A/3 轴洞口"))
+        #expect(issueText.contains("PDF 第 3 页 / A-WALL"))
+        #expect(issueText.contains("洞口 900x2100，现场偏差 40mm"))
+        #expect(issueText.contains("复测合格后监理签字"))
         #expect(issueText.contains("李工"))
 
         #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(currentDrawing.fileName)" })
         #expect(entries.contains { $0.path == "\(folder)/02-drawings/一层平面-\(historicalDrawing.fileName)" })
+    }
+
+    @Test func siteTodoDecodesLegacyDrawingIssueFieldsAsEmpty() throws {
+        let data = Data("""
+        {
+          "title": "旧待办",
+          "owner": "李工",
+          "dueDate": "2026-05-20",
+          "priority": "高",
+          "issueType": "质量"
+        }
+        """.utf8)
+
+        let todo = try JSONDecoder().decode(SiteTodo.self, from: data)
+
+        #expect(todo.drawingIssueLocation.isEmpty)
+        #expect(todo.drawingIssueLayerOrPage.isEmpty)
+        #expect(todo.drawingIssueMeasurement.isEmpty)
+        #expect(todo.drawingIssueCloseEvidence.isEmpty)
     }
 
     @Test func preDeliveryInspectionTSVListsActionableIssues() throws {

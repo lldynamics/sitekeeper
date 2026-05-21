@@ -19,9 +19,7 @@ struct CloudBackupListRow: View {
                     Text(file.formattedModifiedAt)
                         .font(.subheadline.weight(.semibold))
                     if isLatest {
-                        Text(String(localized: "最近"))
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.appWarning)
+                        StatusChip(text: String(localized: "最近"), tone: .warning, compact: true)
                     }
                 }
                 Text(file.formattedSize)
@@ -131,25 +129,29 @@ struct BackupTaskProgressCard: View {
     let onCancel: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline)
-            Text(subtitle)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-            ProgressView(value: progressValue)
-            Text(detail)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            HStack {
-                Spacer()
-                Button(cancelTitle, role: .destructive, action: onCancel)
+        AppPanel(
+            tone: .materialThick,
+            cornerRadius: 14,
+            padding: 16,
+            shadow: .overlay
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                Text(title)
+                    .font(.headline)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                ProgressView(value: progressValue)
+                Text(detail)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Spacer()
+                    Button(cancelTitle, role: .destructive, action: onCancel)
+                }
             }
         }
-        .padding(16)
         .frame(maxWidth: 320)
-        .background(.ultraThickMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 }
 
