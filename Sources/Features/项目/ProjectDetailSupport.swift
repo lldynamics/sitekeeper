@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import ImageIO
 import UniformTypeIdentifiers
 
 struct ProjectDrawingTimelineSheet: View {
@@ -289,7 +288,7 @@ struct ProjectDrawingEditSheet: View {
                 }
                 if requiresExternalViewer {
                     Section(String(localized: "图纸原件")) {
-                        Text(String(localized: "DWG / DXF 作为图纸原件管理，可交给外部专业看图软件打开；PDF 使用系统预览。"))
+                        Text(String(localized: "DWG / DXF 作为图纸原件管理，需通过外部专业看图软件打开；App 保留台账、版本、当前版和交付导出。"))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -496,6 +495,12 @@ private struct DrawingIssueTodoLabel: View {
                     .foregroundStyle(Color.appWarning)
             }
             FlowTagLine(tags: issueTags)
+            if !todo.drawingIssueCloseEvidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                Text(String(format: String(localized: "关闭证据: %@"), todo.drawingIssueCloseEvidence))
+                    .font(.caption2)
+                    .foregroundStyle(Color.appSuccess)
+                    .lineLimit(2)
+            }
             if !todo.note.isEmpty {
                 Text(todo.note)
                     .font(.caption2)
@@ -519,6 +524,9 @@ private struct DrawingIssueTodoLabel: View {
             todo.isDone ? String(localized: "已完成") : String(localized: "未完成"),
             todo.owner.isEmpty ? "" : String(format: String(localized: "责任人 %@"), todo.owner),
             todo.dueDate.isEmpty ? "" : String(format: String(localized: "截止 %@"), todo.dueDate),
+            todo.drawingIssueLocation.isEmpty ? "" : String(format: String(localized: "位置: %@"), todo.drawingIssueLocation),
+            todo.drawingIssueLayerOrPage.isEmpty ? "" : String(format: String(localized: "图层/页码: %@"), todo.drawingIssueLayerOrPage),
+            todo.drawingIssueMeasurement.isEmpty ? "" : String(format: String(localized: "测量: %@"), todo.drawingIssueMeasurement),
             todo.issueType.displayName
         ]
         .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -531,6 +539,10 @@ private struct ProjectDrawingIssueSheet: View {
     let onCreate: (SiteTodo) -> Void
 
     @State private var descriptionText = ""
+    @State private var issueLocation = ""
+    @State private var layerOrPage = ""
+    @State private var measurementResult = ""
+    @State private var closeEvidence = ""
     @State private var owner = ""
     @State private var dueDate = Date()
     @State private var priority: TodoPriority = .high
@@ -557,6 +569,16 @@ private struct ProjectDrawingIssueSheet: View {
                             Text(item.displayName).tag(item)
                         }
                     }
+                }
+                Section(String(localized: "定位与测量")) {
+                    TextField(String(localized: "问题位置"), text: $issueLocation, axis: .vertical)
+                        .lineLimit(1...3)
+                    TextField(String(localized: "图层/页码"), text: $layerOrPage)
+                    TextField(String(localized: "测量结果"), text: $measurementResult, axis: .vertical)
+                        .lineLimit(1...4)
+                    Text(String(localized: "可填写轴线、房间、坐标、构件编号、PDF 页码、CAD 图层或现场测量结果。"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 Section(String(localized: "照片/截图")) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
@@ -596,6 +618,13 @@ private struct ProjectDrawingIssueSheet: View {
                             .font(.caption)
                         }
                     }
+                }
+                Section(String(localized: "关闭证据")) {
+                    TextField(String(localized: "关闭证据（验收人/复测/照片说明）"), text: $closeEvidence, axis: .vertical)
+                        .lineLimit(1...4)
+                    Text(String(localized: "后续可在现场待办里补整改后照片，并用完成状态关闭问题。"))
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
                 }
                 Section {
                     Text(String(localized: "问题单会进入现场待办，可用完成状态做闭环，不写入 DWG 红线。"))
@@ -656,6 +685,10 @@ private struct ProjectDrawingIssueSheet: View {
             dueDate: Formatters.date.string(from: dueDate),
             priority: priority,
             issueType: .quality,
+            drawingIssueLocation: issueLocation.trimmingCharacters(in: .whitespacesAndNewlines),
+            drawingIssueLayerOrPage: layerOrPage.trimmingCharacters(in: .whitespacesAndNewlines),
+            drawingIssueMeasurement: measurementResult.trimmingCharacters(in: .whitespacesAndNewlines),
+            drawingIssueCloseEvidence: closeEvidence.trimmingCharacters(in: .whitespacesAndNewlines),
             rectificationBeforePhotoFileName: photoFileName,
             note: issueNoteText(description: text),
             projectId: drawing.projectId
@@ -669,6 +702,10 @@ private struct ProjectDrawingIssueSheet: View {
             String(format: String(localized: "版本: %@"), drawing.version),
             drawing.drawingNumber.isEmpty ? "" : String(format: String(localized: "图号: %@"), drawing.drawingNumber),
             drawing.floorArea.isEmpty ? "" : String(format: String(localized: "楼层/区域: %@"), drawing.floorArea),
+            issueLocation.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : String(format: String(localized: "位置: %@"), issueLocation.trimmingCharacters(in: .whitespacesAndNewlines)),
+            layerOrPage.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : String(format: String(localized: "图层/页码: %@"), layerOrPage.trimmingCharacters(in: .whitespacesAndNewlines)),
+            measurementResult.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : String(format: String(localized: "测量: %@"), measurementResult.trimmingCharacters(in: .whitespacesAndNewlines)),
+            closeEvidence.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "" : String(format: String(localized: "关闭证据: %@"), closeEvidence.trimmingCharacters(in: .whitespacesAndNewlines)),
             description
         ]
         .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -703,7 +740,11 @@ private struct ProjectDrawingIssueSheet: View {
 
     @MainActor
     private func savePhotoData(_ data: Data) async {
-        let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.82) ?? data
+        let normalizedData = ImageDownsampleService.downsampledJPEGData(
+            data,
+            maxPixelSize: 1600,
+            compressionQuality: 0.82
+        ) ?? data
         let fileName = "drawing-issue-\(drawing.id.uuidString)-\(UUID().uuidString).jpg"
         let saved: String
         do {
@@ -741,29 +782,4 @@ private struct ProjectDrawingIssueSheet: View {
         )?.perform()
     }
 
-    private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
-        let sourceOptions: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return nil
-        }
-        let downsampleOptions: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCache: false
-        ] as CFDictionary
-        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else {
-            return nil
-        }
-        let output = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil) else {
-            return nil
-        }
-        let options: CFDictionary = [kCGImageDestinationLossyCompressionQuality: compressionQuality] as CFDictionary
-        CGImageDestinationAddImage(destination, image, options)
-        guard CGImageDestinationFinalize(destination) else {
-            return nil
-        }
-        return output as Data
-    }
 }

@@ -59,13 +59,18 @@ struct TaskProgressView: View {
     }
 
     var body: some View {
-        Group {
-            if usesSplitLayout {
-                splitProgressLayout
-            } else {
+        AdaptiveListDetailLayout(
+            forceSplit: usesSplitLayout,
+            compact: {
                 compactProgressLayout
+            },
+            sidebar: {
+                progressSidebar
+            },
+            detail: {
+                progressDetail
             }
-        }
+        )
         .navigationTitle(String(localized: "施工进度"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
@@ -136,54 +141,53 @@ struct TaskProgressView: View {
         }
     }
 
-    private var splitProgressLayout: some View {
-        NavigationSplitView {
-            List {
-                Section(String(localized: "筛选")) {
-                    ProjectContextStrip(
-                        title: String(localized: "当前工程"),
-                        projects: store.projects,
-                        selectedProjectId: $projectFilter,
-                        emptyText: String(localized: "全部项目")
-                    )
-                    Picker(String(localized: "视图"), selection: $mode) {
-                        ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
-                            Text(mode.displayName).tag(mode)
-                        }
+    private var progressSidebar: some View {
+        List {
+            Section(String(localized: "筛选")) {
+                ProjectContextStrip(
+                    title: String(localized: "当前工程"),
+                    projects: store.projects,
+                    selectedProjectId: $projectFilter,
+                    emptyText: String(localized: "全部项目")
+                )
+                Picker(String(localized: "视图"), selection: $mode) {
+                    ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
+                        Text(mode.displayName).tag(mode)
                     }
-                    .pickerStyle(.segmented)
-                    FilterChipBar(
-                        options: ProgressStatusFilter.allCases,
-                        selection: $statusFilter,
-                        title: { $0.displayName }
-                    )
                 }
-                Section(String(localized: "快捷操作")) {
-                    Button {
-                        showAdd = true
-                    } label: {
-                        Label(String(localized: "新建进度任务"), systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.appProminent())
-                }
+                .pickerStyle(.segmented)
+                FilterChipBar(
+                    options: ProgressStatusFilter.allCases,
+                    selection: $statusFilter,
+                    title: { $0.displayName }
+                )
             }
-            .navigationTitle(String(localized: "进度筛选"))
-        } detail: {
-            List {
-                if visibleTasks.isEmpty {
-                    ContentUnavailableView(
-                        String(localized: "暂无进度任务"),
-                        systemImage: "calendar.badge.plus",
-                        description: Text(String(localized: "添加任务后可按项目跟踪节点、完成率和延期情况"))
-                    )
-                } else if mode == .timeline {
-                    timelineContent
-                } else {
-                    listContent
+            Section(String(localized: "快捷操作")) {
+                Button {
+                    showAdd = true
+                } label: {
+                    Label(String(localized: "新建进度任务"), systemImage: "plus.circle.fill")
                 }
+                .buttonStyle(.appProminent())
             }
         }
-        .navigationSplitViewStyle(.balanced)
+        .navigationTitle(String(localized: "进度筛选"))
+    }
+
+    private var progressDetail: some View {
+        List {
+            if visibleTasks.isEmpty {
+                ContentUnavailableView(
+                    String(localized: "暂无进度任务"),
+                    systemImage: "calendar.badge.plus",
+                    description: Text(String(localized: "添加任务后可按项目跟踪节点、完成率和延期情况"))
+                )
+            } else if mode == .timeline {
+                timelineContent
+            } else {
+                listContent
+            }
+        }
     }
 
     private var timelineContent: some View {

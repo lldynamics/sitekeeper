@@ -22,28 +22,28 @@ struct ProjectDetailRiskStripView: View {
         return .appSuccess
     }
 
-    private var riskItems: [(text: String, color: Color)] {
-        var items: [(String, Color)] = []
+    private var riskItems: [(text: String, tone: StatusChipTone)] {
+        var items: [(String, StatusChipTone)] = []
         if overdueCount > 0 {
-            items.append((String(format: String(localized: "延期 %lld"), Int64(overdueCount)), .appRisk))
+            items.append((String(format: String(localized: "延期 %lld"), Int64(overdueCount)), .risk))
         }
         if unpaidAmount > 0 {
-            items.append((String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)), .appPrimaryAction))
+            items.append((String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)), .primary))
         }
         if unpricedQuoteCount > 0 {
-            items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .appPrimaryAction))
+            items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .primary))
         }
         if missingDocumentCategoryCount > 0 {
-            items.append((String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)), .appWarning))
+            items.append((String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)), .warning))
         }
         if documentActionCount > 0 {
-            items.append((String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)), .appPrimaryAction))
+            items.append((String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)), .primary))
         }
         if legacyDocumentCount > 0 {
-            items.append((String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)), .appWarning))
+            items.append((String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)), .warning))
         }
         if !hasTodayLog {
-            items.append((String(localized: "今日日志未写"), .appRisk))
+            items.append((String(localized: "今日日志未写"), .risk))
         }
         return items
     }
@@ -67,7 +67,7 @@ struct ProjectDetailRiskStripView: View {
                             let item = riskItems[index]
                             ProjectDetailRiskChipView(
                                 text: item.text,
-                                color: item.color
+                                tone: item.tone
                             )
                         }
                     }
@@ -82,22 +82,10 @@ struct ProjectDetailRiskStripView: View {
 
 private struct ProjectDetailRiskChipView: View {
     let text: String
-    let color: Color
+    let tone: StatusChipTone
 
     var body: some View {
-        Text(text)
-            .font(.caption2.weight(.semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, AppSpacing.tight)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(color)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .stroke(color, lineWidth: 0.5)
-            )
+        StatusChip(text: text, tone: tone, compact: true)
             .accessibilityLabel(text)
             .accessibilityValue(String(localized: "需要关注"))
     }

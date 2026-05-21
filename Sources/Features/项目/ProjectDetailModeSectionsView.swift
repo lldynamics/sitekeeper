@@ -72,57 +72,16 @@ struct ProjectDetailModeSectionsView: View {
     let onResetFinanceJumpFilter: () -> Void
 
     var body: some View {
-        if showsAllSections {
-            inlineFocusedSections
-        } else {
-            CompactProjectDetailModeContent(mode: mode) {
-                overviewSections
-            } records: {
-                recordModeSections
-            } assets: {
-                assetModeSections
-            } finance: {
-                financeModeSections
-            } timeline: {
-                ProjectTimelineSectionView(items: timelineItems, onSelect: onOpenTimelineItem)
-            }
-        }
-    }
-
-    private var inlineFocusedSections: some View {
-        Group {
-            anchorMarker(.overview)
+        CompactProjectDetailModeContent(mode: mode) {
             overviewSections
-
-            anchorMarker(.records)
-            logSections
-            progressSections
-            photoSections
-
-            anchorMarker(.assets)
-            drawingSections
-            projectDocumentSections
-            contactSections
-
-            anchorMarker(.finance)
-            projectBookkeepingSection
-            quoteSections
-            materialSections
-            laborSections
-            Section("项目仓库") {
-                NavigationLink {
-                    ProjectWarehouseView(project: project)
-                } label: {
-                    Label("查看项目仓库（\(relatedWarehouseMovements.count) 条出入库）", systemImage: "shippingbox.and.arrow.backward.fill")
-                }
-            }
-
-            anchorMarker(.timeline)
-            ProjectTimelineSectionView(
-                items: timelineItems,
-                showsFilters: false,
-                onSelect: onOpenTimelineItem
-            )
+        } records: {
+            recordModeSections
+        } assets: {
+            assetModeSections
+        } finance: {
+            financeModeSections
+        } timeline: {
+            ProjectTimelineSectionView(items: timelineItems, onSelect: onOpenTimelineItem)
         }
     }
 
@@ -169,6 +128,7 @@ struct ProjectDetailModeSectionsView: View {
             onOpenAssets: { onOpenMode(.assets) },
             onOpenLogs: { onOpenMode(.records) },
             onOpenTodos: onOpenTodoFilter,
+            onOpenTimeline: { onOpenMode(.timeline) },
             onAddLog: onAddLog,
             onEditProgress: onEditProgress,
             onOpenTimelineItem: onOpenTimelineItem,

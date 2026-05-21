@@ -9,49 +9,66 @@ struct WallAreaView: View {
     @AppStorage(UserPreferenceKeys.Calculator.wallHeight) private var height = "2.8"
     @AppStorage(UserPreferenceKeys.Calculator.wallDoors) private var doors = ""
     @AppStorage(UserPreferenceKeys.Calculator.wallWindows) private var windows = ""
-    @State private var result = ""
     @State private var resultModel: CalculationResult?
+    @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
 
+    private var wallLengthRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredNonNegative,
+            min: 0,
+            max: 10_000,
+            rangeMessage: CalculatorCopy.wallLengthRange
+        )
+    }
+
+    private var heightRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredPositive,
+            min: 1.8,
+            max: 20,
+            rangeMessage: CalculatorCopy.wallHeightRange
+        )
+    }
+
+    private var openingAreaRule: CalculatorNumericFieldRule {
+        CalculatorNumericFieldRule(
+            kind: .quantity,
+            requirement: .requiredNonNegative,
+            min: 0,
+            max: 5_000,
+            rangeMessage: CalculatorCopy.wallOpeningRange
+        )
+    }
+
     var body: some View {
-        Form {
-            Section(calculatorLoc("墙面尺寸 (m)")) {
-                LabeledContent(calculatorLoc("墙 1 长 (m)")) { TextField("0", text: $l1.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent(calculatorLoc("墙 2 长 (m)")) { TextField("0", text: $l2.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent(calculatorLoc("墙 3 长 (m)")) { TextField("0", text: $l3.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent(calculatorLoc("墙 4 长 (m)")) { TextField("0", text: $l4.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent(calculatorLoc("层高 (m)")) { TextField("2.8", text: $height.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: rangeMessage(height, min: 1.8, max: 20, hint: calculatorLoc("请输入 1.8–20")))
-                CalculatorPresetChips(title: calculatorLoc("层高预设"), options: ["2.6", "2.8", "3.0", "3.2", "3.6"], selection: $height)
-                CalculatorValidationHint(message: wallLengthMessage)
+        CalculatorForm(title: CalculatorCopy.wallTool, focus: $isInputFocused) {
+            Section(CalculatorCopy.wallDimensionSection) {
+                CalculatorInputField(title: CalculatorCopy.wallLength1, placeholder: "0", unit: "m", text: $l1, rule: wallLengthRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorInputField(title: CalculatorCopy.wallLength2, placeholder: "0", unit: "m", text: $l2, rule: wallLengthRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorInputField(title: CalculatorCopy.wallLength3, placeholder: "0", unit: "m", text: $l3, rule: wallLengthRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorInputField(title: CalculatorCopy.wallLength4, placeholder: "0", unit: "m", text: $l4, rule: wallLengthRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorInputField(title: CalculatorCopy.wallHeight, placeholder: "2.8", unit: "m", text: $height, rule: heightRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorPresetChips(title: CalculatorCopy.wallHeightPreset, options: ["2.6", "2.8", "3.0", "3.2", "3.6"], selection: $height)
+                if let wallLengthMessage {
+                    CalculatorInlineNotice(message: wallLengthMessage, tone: .warning)
+                }
             }
-            Section(calculatorLoc("扣除面积 (m²)")) {
-                LabeledContent(calculatorLoc("门总面积 (m²)")) { TextField("0", text: $doors.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                LabeledContent(calculatorLoc("窗总面积 (m²)")) { TextField("0", text: $windows.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                CalculatorValidationHint(message: optionalRangeMessage(doors, min: 0, max: 5000, hint: calculatorLoc("请输入 0–5000")))
-                CalculatorValidationHint(message: optionalRangeMessage(windows, min: 0, max: 5000, hint: calculatorLoc("请输入 0–5000")))
+            Section(CalculatorCopy.wallOpeningSection) {
+                CalculatorInputField(title: CalculatorCopy.wallDoorArea, placeholder: "0", unit: "m²", text: $doors, rule: openingAreaRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
+                CalculatorInputField(title: CalculatorCopy.wallWindowArea, placeholder: "0", unit: "m²", text: $windows, rule: openingAreaRule, showWhenEmpty: didAttemptSubmit, focus: $isInputFocused)
             }
             Section {
-                Button(calculatorLoc("计算")) {
+                CalculatorPrimaryActionButton(title: CalculatorCopy.actionCalculate) {
                     isInputFocused = false
+                    didAttemptSubmit = true
                     calc()
                 }
-                .frame(maxWidth: .infinity)
-                .fontWeight(.semibold)
             }
             if let resultModel {
-                Section(calculatorLoc("结果")) {
-                    CalculatorResultCard(
-                        title: calculatorLoc("墙面面积结果"),
-                        result: resultModel
-                    )
-                }
-            }
-        }
-        .navigationTitle(calculatorLoc("墙面面积")).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            KeyboardDismissToolbar {
-                isInputFocused = false
+                CalculatorResultPanel(cardTitle: CalculatorCopy.wallResultTitle, result: resultModel)
             }
         }
     }
@@ -59,7 +76,7 @@ struct WallAreaView: View {
     private func calc() {
         let walls = [l1, l2, l3, l4].compactMap { CalculatorInputParser.double($0) }.filter { $0 > 0 }
         guard let h = CalculatorInputParser.double(height), h > 0, !walls.isEmpty else {
-            presentError(calculatorLoc("请至少输入一面墙长度"))
+            presentError(CalculatorCopy.wallLengthRequired)
             return
         }
         let perimeter = walls.reduce(0, +)
@@ -68,34 +85,23 @@ struct WallAreaView: View {
         let w = CalculatorInputParser.double(windows) ?? 0
         let net = max(gross - d - w, 0)
         resultModel = .singleSection(
-            headline: calculatorLocFormat("净面积 %@ m²", fmt(net)),
-            formula: calculatorLoc("净面积 = (墙体总周长×层高) - 门窗总面积"),
+            headline: calculatorLocFormat("净面积 %@", CalculatorFormatting.squareMeters(net)),
+            formula: CalculatorResultCopy.wallAreaFormula(),
             items: [
-                CalculationResult.item(calculatorLoc("周长"), "\(fmt(perimeter)) m"),
-                CalculationResult.item(calculatorLoc("毛面积"), "\(fmt(gross)) m²"),
-                CalculationResult.item(calculatorLoc("扣除门窗"), "\(fmt(d + w)) m²"),
-                CalculationResult.item(calculatorLoc("净面积"), "\(fmt(net)) m²", status: .pass),
+                CalculationResult.item(CalculatorResultLabel.perimeter, CalculatorFormatting.meters(perimeter, digits: 2)),
+                CalculationResult.item(CalculatorResultLabel.grossArea, CalculatorFormatting.squareMeters(gross)),
+                CalculationResult.item(CalculatorResultLabel.deductionArea, CalculatorFormatting.squareMeters(d + w)),
+                CalculationResult.item(CalculatorResultLabel.netArea, CalculatorFormatting.squareMeters(net), status: .pass),
             ]
         )
-        result = """
-        \(calculatorLoc("周长")): \(fmt(perimeter)) m
-        \(calculatorLoc("毛面积")): \(fmt(gross)) m²
-        \(calculatorLoc("扣除门窗")): \(fmt(d + w)) m²
-        \(calculatorLoc("净面积")): \(fmt(net)) m²
-        """
-        saveHistory(calculatorLocFormat("净面积 %@ m²", fmt(net)))
-    }
-
-    private func fmt(_ v: Double) -> String {
-        let f = NumberFormatter(); f.minimumFractionDigits = 0; f.maximumFractionDigits = 2
-        return f.string(from: NSNumber(value: v)) ?? String(v)
-    }
-
-    private func saveHistory(_ r: String) {
-        store.appendCalculationHistory(
-            tool: calculatorLoc("墙面面积"),
-            input: calculatorLocFormat("层高 %@m", height),
-            result: r
+        CalculatorHistorySupport.record(
+            store: store,
+            tool: CalculatorCopy.wallTool,
+            input: CalculatorHistoryCopy.wallHeightInput(height),
+            result: CalculatorHistoryCopy.areaResult(
+                prefix: CalculatorResultLabel.netArea,
+                value: net
+            )
         )
     }
 
@@ -103,24 +109,10 @@ struct WallAreaView: View {
         let values = [l1, l2, l3, l4]
             .compactMap { CalculatorInputParser.double($0) }
             .filter { $0 > 0 }
-        return values.isEmpty ? calculatorLoc("请至少输入一面墙长度（>0）") : nil
-    }
-
-    private func rangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        guard let value = CalculatorInputParser.double(trimmed) else { return calculatorLoc("请输入数值") }
-        return (value >= min && value <= max) ? nil : hint
-    }
-
-    private func optionalRangeMessage(_ text: String, min: Double, max: Double, hint: String) -> String? {
-        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
-        return rangeMessage(trimmed, min: min, max: max, hint: hint)
+        return values.isEmpty ? CalculatorCopy.wallLengthRequiredHint : nil
     }
 
     private func presentError(_ message: String) {
-        result = message
         resultModel = .error(message)
     }
 }

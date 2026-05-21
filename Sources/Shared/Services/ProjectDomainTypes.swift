@@ -392,7 +392,7 @@ extension ProjectDocument {
         case .current:
             return versionLabel
         case .superseded, .voided:
-            return "\(versionLabel) · \(versionState.displayName)"
+            return DashboardSubtitleBuilder.versionState(versionLabel, state: versionState.displayName)
         }
     }
 }
@@ -958,7 +958,7 @@ struct DocumentArchiveChecklistSnapshot {
         if legacyDocumentCount > 0 {
             parts.append(String(format: String(localized: "待细分 %lld 份"), Int64(legacyDocumentCount)))
         }
-        return parts.joined(separator: " · ")
+        return DashboardSubtitleBuilder.joined(parts)
     }
 }
 
@@ -999,7 +999,7 @@ struct DocumentArchiveChecklistItem: Identifiable {
         if archivedCount > 0 {
             parts.append(String(format: String(localized: "已归档 %lld"), Int64(archivedCount)))
         }
-        return parts.joined(separator: " · ")
+        return DashboardSubtitleBuilder.joined(parts)
     }
 
     var systemImage: String {

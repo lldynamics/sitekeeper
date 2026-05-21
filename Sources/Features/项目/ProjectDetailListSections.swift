@@ -469,7 +469,7 @@ struct ProjectDrawingSectionView: View {
                 ProjectInlineEmptyState(
                     String(localized: "还没有图纸"),
                     systemImage: "doc.viewfinder",
-                    detail: String(localized: "可上传 DWG、DXF、PDF；PDF 可系统预览，DWG/DXF 原件可分享给外部专业看图软件。")
+                    detail: String(localized: "可上传 DWG、DXF、PDF；PDF 可系统预览，DWG/DXF 原件需通过外部专业看图软件打开。")
                 )
                 Button(action: onImportDrawing) {
                     Label(String(localized: "导图纸"), systemImage: "doc.viewfinder.fill")

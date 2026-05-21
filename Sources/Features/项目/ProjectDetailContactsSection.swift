@@ -17,32 +17,52 @@ struct ProjectContactsView: View {
         Section(String(format: String(localized: "联系人 (%lld)"), Int64(filteredContacts.count))) {
             if !filteredContacts.isEmpty {
                 Button(action: onAdd) {
-                    Label("添加联系人", systemImage: "person.crop.circle.badge.plus")
+                    Label(String(localized: "添加联系人"), systemImage: "person.crop.circle.badge.plus")
                 }
             }
-            TextField("搜索姓名、电话、公司、备注", text: $searchText)
-            Picker("角色筛选", selection: $roleFilter) {
-                Text("全部").tag(ProjectContactRole?.none)
+            TextField(String(localized: "搜索姓名、电话、公司、备注"), text: $searchText)
+            Picker(String(localized: "角色筛选"), selection: $roleFilter) {
+                Text(String(localized: "全部")).tag(ProjectContactRole?.none)
                 ForEach(roleOptions, id: \.self) { item in
                     Text(item.displayName).tag(Optional(item))
                 }
             }
-            ContactPickerView(
-                contacts: filteredContacts,
-                projectName: { _ in "" },
-                showsProjectName: false,
-                showsPhoneActions: true,
-                emptyTitle: "暂无联系人",
-                emptySystemImage: "person.crop.circle",
-                emptyDescription: Text("记录客户、监理、供应商和施工班组等联系人。"),
-                onSelect: onEdit,
-                onDelete: onDelete
-            )
             if filteredContacts.isEmpty {
-                Button(action: onAdd) {
-                    Label("添加联系人", systemImage: "person.crop.circle.badge.plus")
+                AppActionableEmptyState(
+                    title: contacts.isEmpty ? String(localized: "暂无联系人") : String(localized: "没有匹配联系人"),
+                    systemImage: "person.crop.circle",
+                    message: contacts.isEmpty
+                        ? String(localized: "记录客户、监理、供应商和施工班组等联系人。")
+                        : String(localized: "调整搜索或角色筛选后再看。")
+                ) {
+                    Button {
+                        if contacts.isEmpty {
+                            onAdd()
+                        } else {
+                            searchText = ""
+                            roleFilter = nil
+                        }
+                    } label: {
+                        Label(
+                            contacts.isEmpty ? String(localized: "添加联系人") : String(localized: "清除筛选"),
+                            systemImage: contacts.isEmpty ? "person.crop.circle.badge.plus" : "line.3.horizontal.decrease.circle"
+                        )
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.appProminent())
                 }
-                .buttonStyle(.appProminent())
+            } else {
+                ContactPickerView(
+                    contacts: filteredContacts,
+                    projectName: { _ in "" },
+                    showsProjectName: false,
+                    showsPhoneActions: true,
+                    emptyTitle: String(localized: "暂无联系人"),
+                    emptySystemImage: "person.crop.circle",
+                    emptyDescription: Text(String(localized: "记录客户、监理、供应商和施工班组等联系人。")),
+                    onSelect: onEdit,
+                    onDelete: onDelete
+                )
             }
         }
     }

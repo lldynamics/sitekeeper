@@ -51,6 +51,38 @@
       "paymentStatus": "已收款",
       "materialCost": "48600",
       "laborCost": "33200"
+    },
+    {
+      "id": "44444444-4444-4444-4444-444444444444",
+      "name": "星河厂房照明节能改造",
+      "location": "临港园区",
+      "status": "进行中",
+      "customerName": "星河制造",
+      "customerPhone": "13800000004",
+      "startDate": "2026-05-03",
+      "expectedEndDate": "2026-06-10",
+      "managerName": "陈工",
+      "contractAmount": "214000",
+      "paidAmount": "96000",
+      "paymentStatus": "部分收款",
+      "materialCost": "73200",
+      "laborCost": "41800"
+    },
+    {
+      "id": "55555555-5555-5555-5555-555555555555",
+      "name": "锦程酒店弱电整改",
+      "location": "会展片区",
+      "status": "进行中",
+      "customerName": "锦程酒店管理",
+      "customerPhone": "13800000005",
+      "startDate": "2026-05-06",
+      "expectedEndDate": "2026-06-18",
+      "managerName": "孙工",
+      "contractAmount": "132000",
+      "paidAmount": "52000",
+      "paymentStatus": "部分收款",
+      "materialCost": "46800",
+      "laborCost": "28600"
     }
   ],
   "materialItems": [
@@ -118,6 +150,71 @@
       "purchaseStatus": "已使用",
       "arrivalDate": "2026-04-22",
       "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "34444444-4444-4444-4444-444444444444",
+      "name": "LED 工矿灯 150W",
+      "quantity": "48",
+      "unit": "套",
+      "unitPrice": "218",
+      "specification": "5000K / 吊装",
+      "brand": "星耀",
+      "supplier": "供应商E",
+      "purchaseStatus": "已进场",
+      "arrivalDate": "2026-05-14",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "34444444-4444-4444-4444-555555555555",
+      "name": "YJV 5x10 电缆",
+      "quantity": "420",
+      "unit": "米",
+      "unitPrice": "18.6",
+      "specification": "国标",
+      "brand": "远东",
+      "supplier": "供应商E",
+      "purchaseStatus": "已采购",
+      "arrivalDate": "2026-05-15",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "35555555-5555-5555-5555-444444444444",
+      "name": "Cat6 网线",
+      "quantity": "16",
+      "unit": "箱",
+      "unitPrice": "465",
+      "specification": "305m/箱",
+      "brand": "讯连",
+      "supplier": "供应商F",
+      "purchaseStatus": "已进场",
+      "arrivalDate": "2026-05-13",
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "35555555-5555-5555-5555-555555555556",
+      "name": "无线吸顶 AP",
+      "quantity": "22",
+      "unit": "台",
+      "unitPrice": "368",
+      "specification": "Wi-Fi 6",
+      "brand": "云联",
+      "supplier": "供应商F",
+      "purchaseStatus": "已采购",
+      "arrivalDate": "2026-05-16",
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "35555555-5555-5555-5555-555555555557",
+      "name": "24口弱电配线架",
+      "quantity": "10",
+      "unit": "个",
+      "unitPrice": "96",
+      "specification": "机柜式",
+      "brand": "云联",
+      "supplier": "供应商F",
+      "purchaseStatus": "未采购",
+      "arrivalDate": "",
+      "projectId": "55555555-5555-5555-5555-555555555555"
     }
   ],
   "quoteItems": [
@@ -180,6 +277,66 @@
       "customerConfirmedDate": "2026-04-25",
       "contractAmount": "71920",
       "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "44441111-4444-4444-4444-444444444444",
+      "name": "厂房高顶灯更换",
+      "unitPrice": "265",
+      "quantity": "48",
+      "unit": "套",
+      "notes": "含拆旧、吊装与调试",
+      "taxRate": "3",
+      "discountRate": "1",
+      "versionName": "V2",
+      "status": "已发送",
+      "customerConfirmedDate": "2026-05-12",
+      "contractAmount": "12593",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "44442222-4444-4444-4444-444444444444",
+      "name": "厂房支路改造",
+      "unitPrice": "82",
+      "quantity": "420",
+      "unit": "米",
+      "notes": "含桥架整理",
+      "taxRate": "3",
+      "discountRate": "0",
+      "versionName": "V1",
+      "status": "草稿",
+      "customerConfirmedDate": "",
+      "contractAmount": "34440",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "55551111-5555-5555-5555-555555555555",
+      "name": "客房信息点整改",
+      "unitPrice": "185",
+      "quantity": "72",
+      "unit": "点",
+      "notes": "含面板与标签",
+      "taxRate": "3",
+      "discountRate": "2",
+      "versionName": "V3",
+      "status": "已确认",
+      "customerConfirmedDate": "2026-05-14",
+      "contractAmount": "13054",
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "55552222-5555-5555-5555-555555555555",
+      "name": "AP 覆盖优化",
+      "unitPrice": "420",
+      "quantity": "22",
+      "unit": "台",
+      "notes": "含调试与信道优化",
+      "taxRate": "3",
+      "discountRate": "0",
+      "versionName": "V1",
+      "status": "已发送",
+      "customerConfirmedDate": "",
+      "contractAmount": "9240",
+      "projectId": "55555555-5555-5555-5555-555555555555"
     }
   ],
   "laborRecords": [
@@ -230,6 +387,54 @@
       "isSettled": true,
       "note": "消防回路整改与应急照明切换测试",
       "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "54441111-4444-4444-4444-444444444444",
+      "date": "2026-05-13",
+      "workers": "8",
+      "hours": "9",
+      "unitRate": "158",
+      "workType": "电工",
+      "teamName": "厂房照明组",
+      "isSettled": false,
+      "note": "高空灯具吊装",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "54442222-4444-4444-4444-444444444444",
+      "date": "2026-05-15",
+      "workers": "6",
+      "hours": "8",
+      "unitRate": "162",
+      "workType": "电工",
+      "teamName": "厂房配电组",
+      "isSettled": true,
+      "note": "分区回路切换与试亮",
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "55551111-6666-5555-5555-555555555555",
+      "date": "2026-05-12",
+      "workers": "5",
+      "hours": "10",
+      "unitRate": "148",
+      "workType": "弱电",
+      "teamName": "酒店网络组",
+      "isSettled": false,
+      "note": "客房信息点重压水晶头",
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "55552222-6666-5555-5555-555555555555",
+      "date": "2026-05-16",
+      "workers": "4",
+      "hours": "8",
+      "unitRate": "152",
+      "workType": "调试",
+      "teamName": "酒店调试组",
+      "isSettled": false,
+      "note": "AP 覆盖与漫游测试",
+      "projectId": "55555555-5555-5555-5555-555555555555"
     }
   ],
   "dailyLogs": [
@@ -313,6 +518,103 @@
         "d5555555-5555-5555-5555-555555555555"
       ],
       "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "64441111-4444-4444-4444-444444444444",
+      "date": "2026-05-14",
+      "weather": "晴",
+      "content": "厂房 A 区高顶灯替换完成 28 套，照度复测通过。",
+      "workers": "8",
+      "photoFileName": null,
+      "photos": [
+        {
+          "id": "64441111-aaaa-4444-4444-444444444444",
+          "fileName": "sample-log-photo-44444444-a.jpg",
+          "note": "A 区工矿灯安装完成",
+          "tag": "现场"
+        }
+      ],
+      "safety": "高空车作业区域已拉警戒带",
+      "materials": "工矿灯 48 套分两批到场",
+      "tomorrowPlan": "完成 B 区回路切换与整组试亮",
+      "qualityIssue": "南侧 2 盏灯角度需微调",
+      "rectification": "晚班前完成角度复调",
+      "confirmer": "陈工",
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "64442222-4444-4444-4444-444444444444",
+      "date": "2026-05-16",
+      "weather": "阴",
+      "content": "厂房 B 区试亮和配电支路切换完成，能耗采样已记录。",
+      "workers": "6",
+      "photoFileName": null,
+      "photos": [],
+      "safety": "停送电双人复核完成",
+      "materials": "YJV 5x10 电缆剩余 110 米",
+      "tomorrowPlan": "整理节能改造验收资料",
+      "qualityIssue": "",
+      "rectification": "",
+      "confirmer": "陈工",
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "65551111-5555-5555-5555-555555555555",
+      "date": "2026-05-13",
+      "weather": "多云",
+      "content": "客房信息点编号重整完成 26 间，弱电井配线同步梳理。",
+      "workers": "5",
+      "photoFileName": null,
+      "photos": [
+        {
+          "id": "65551111-aaaa-5555-5555-555555555555",
+          "fileName": "sample-log-photo-55555555-a.jpg",
+          "note": "弱电配线架重新编号",
+          "tag": "现场"
+        }
+      ],
+      "safety": "弱电井作业通道无堆料",
+      "materials": "Cat6 网线 6 箱已上楼",
+      "tomorrowPlan": "AP 吸顶位复核与覆盖测试",
+      "qualityIssue": "2 间客房标签需补打",
+      "rectification": "当晚补打并复核",
+      "confirmer": "孙工",
+      "linkedConstructionMethodIDs": [
+        "d7777777-7777-7777-7777-777777777777"
+      ],
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "65552222-5555-5555-5555-555555555555",
+      "date": "2026-05-17",
+      "weather": "小雨",
+      "content": "酒店大堂与走廊 AP 漫游测试完成，弱电整改进入收口。",
+      "workers": "4",
+      "photoFileName": null,
+      "photos": [
+        {
+          "id": "65552222-aaaa-5555-5555-555555555555",
+          "fileName": "sample-log-photo-55555555-b.jpg",
+          "note": "AP 覆盖测试完成",
+          "tag": "完工验收"
+        }
+      ],
+      "safety": "雨天设备转运加防水措施",
+      "materials": "AP 设备上电标签已补齐",
+      "tomorrowPlan": "整理整改前后点位与验收回执",
+      "qualityIssue": "",
+      "rectification": "",
+      "confirmer": "孙工",
+      "linkedConstructionMethodIDs": [
+        "d7777777-7777-7777-7777-777777777777"
+      ],
+      "projectId": "55555555-5555-5555-5555-555555555555"
     }
   ],
   "historyRecords": [
@@ -343,6 +645,27 @@
       "input": "65m / 32A / 4mm²",
       "result": "2.87%",
       "date": "2026-05-12 14:18"
+    },
+    {
+      "id": "74444444-4444-4444-4444-444444444444",
+      "tool": "照度估算",
+      "input": "1800㎡ 厂房 / 300lux",
+      "result": "48 盏",
+      "date": "2026-05-12 09:20"
+    },
+    {
+      "id": "75555555-5555-5555-5555-555555555555",
+      "tool": "网线箱数换算",
+      "input": "72 点位 / 每箱 305m",
+      "result": "16 箱",
+      "date": "2026-05-13 11:40"
+    },
+    {
+      "id": "76666666-6666-6666-6666-666666666666",
+      "tool": "人工费计算",
+      "input": "5 人 x 10 小时 x 148",
+      "result": "7400",
+      "date": "2026-05-12 20:05"
     }
   ],
   "progressTasks": [
@@ -381,6 +704,42 @@
       "dueDate": "2026-05-11",
       "completion": 1,
       "note": "已完成并验收"
+    },
+    {
+      "id": "84441111-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "title": "厂房 A 区高顶灯替换",
+      "startDate": "2026-05-08",
+      "dueDate": "2026-05-18",
+      "completion": 0.88,
+      "note": "待归档照度复测记录"
+    },
+    {
+      "id": "84442222-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "title": "厂房配电支路节能切换",
+      "startDate": "2026-05-10",
+      "dueDate": "2026-05-20",
+      "completion": 0.74,
+      "note": "B 区试亮已完成"
+    },
+    {
+      "id": "85551111-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "title": "客房信息点整改",
+      "startDate": "2026-05-09",
+      "dueDate": "2026-05-17",
+      "completion": 0.82,
+      "note": "剩余 8 间房复核"
+    },
+    {
+      "id": "85552222-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "title": "AP 覆盖优化与验收",
+      "startDate": "2026-05-12",
+      "dueDate": "2026-05-19",
+      "completion": 0.69,
+      "note": "待补充漫游测试报告"
     }
   ],
   "siteTodos": [
@@ -447,6 +806,74 @@
         "d5555555-5555-5555-5555-555555555555"
       ],
       "projectId": "33333333-3333-3333-3333-333333333333"
+    },
+    {
+      "id": "a5555555-4444-4444-4444-444444444444",
+      "title": "复核厂房南侧灯具照射角度",
+      "owner": "陈工",
+      "dueDate": "2026-05-15",
+      "priority": "中",
+      "issueType": "质量",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": true,
+      "completedAt": "2026-05-15 19:10",
+      "note": "已调整到位",
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "a5555556-4444-4444-4444-444444444444",
+      "title": "补传节能改造照度记录",
+      "owner": "陈工",
+      "dueDate": "2026-05-18",
+      "priority": "高",
+      "issueType": "进度",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": false,
+      "completedAt": null,
+      "note": "需同步给业主和设备部",
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "projectId": "44444444-4444-4444-4444-444444444444"
+    },
+    {
+      "id": "a6666665-5555-5555-5555-555555555555",
+      "title": "补打 2 间客房信息点标签",
+      "owner": "孙工",
+      "dueDate": "2026-05-14",
+      "priority": "中",
+      "issueType": "质量",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": true,
+      "completedAt": "2026-05-14 21:00",
+      "note": "已由弱电组完成",
+      "linkedConstructionMethodIDs": [
+        "d7777777-7777-7777-7777-777777777777"
+      ],
+      "projectId": "55555555-5555-5555-5555-555555555555"
+    },
+    {
+      "id": "a6666666-5555-5555-5555-555555555555",
+      "title": "提交酒店漫游测试报告",
+      "owner": "孙工",
+      "dueDate": "2026-05-19",
+      "priority": "高",
+      "issueType": "进度",
+      "rectificationBeforePhotoFileName": null,
+      "rectificationAfterPhotoFileName": null,
+      "isDone": false,
+      "completedAt": null,
+      "note": "需附覆盖热力图与问题点位",
+      "linkedConstructionMethodIDs": [
+        "d7777777-7777-7777-7777-777777777777"
+      ],
+      "projectId": "55555555-5555-5555-5555-555555555555"
     }
   ],
   "projectDrawings": [
@@ -481,6 +908,70 @@
       "externalOpenFailedAt": "",
       "importedAt": "2026-05-16 18:10",
       "note": "样板段定位复核"
+    },
+    {
+      "id": "91114444-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "name": "厂房照明布置与回路图",
+      "drawingNumber": "XM-ZM-05",
+      "discipline": "电气",
+      "floorArea": "A/B 区",
+      "fileName": "sample-factory-lighting-layout.pdf",
+      "fileType": "pdf",
+      "version": "V2",
+      "isCurrentVersion": true,
+      "issuedAt": "2026-05-13",
+      "receiver": "陈工",
+      "relatedLogDate": "2026-05-14",
+      "linkedTodoIDs": [
+        "a5555556-4444-4444-4444-444444444444"
+      ],
+      "linkedLogIDs": [
+        "64441111-4444-4444-4444-444444444444"
+      ],
+      "linkedDocumentIDs": [
+        "94441111-4444-4444-4444-444444444444"
+      ],
+      "issueStatus": "整改中",
+      "issueNote": "能耗采样点位已补充，待归档。",
+      "fileAvailabilityStatus": "available",
+      "fileAvailabilityCheckedAt": "2026-05-16 19:20",
+      "externalOpenFailureReason": "",
+      "externalOpenFailedAt": "",
+      "importedAt": "2026-05-13 15:20",
+      "note": "节能改造版图纸"
+    },
+    {
+      "id": "91115555-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "name": "酒店弱电点位与 AP 布置图",
+      "drawingNumber": "JD-RD-02",
+      "discipline": "弱电",
+      "floorArea": "5F-8F",
+      "fileName": "sample-hotel-lowvoltage-layout.pdf",
+      "fileType": "pdf",
+      "version": "V4",
+      "isCurrentVersion": true,
+      "issuedAt": "2026-05-12",
+      "receiver": "孙工",
+      "relatedLogDate": "2026-05-13",
+      "linkedTodoIDs": [
+        "a6666666-5555-5555-5555-555555555555"
+      ],
+      "linkedLogIDs": [
+        "65551111-5555-5555-5555-555555555555"
+      ],
+      "linkedDocumentIDs": [
+        "95551111-5555-5555-5555-555555555555"
+      ],
+      "issueStatus": "待整改",
+      "issueNote": "大堂 AP 编号与竣工图需同步。",
+      "fileAvailabilityStatus": "available",
+      "fileAvailabilityCheckedAt": "2026-05-17 18:05",
+      "externalOpenFailureReason": "",
+      "externalOpenFailedAt": "",
+      "importedAt": "2026-05-12 11:10",
+      "note": "酒店整改最新版图纸"
     }
   ],
   "projectContacts": [
@@ -527,6 +1018,50 @@
       "company": "滨江监理",
       "phone": "13900010009",
       "note": "兼顾商业街与住宅配套验收"
+    },
+    {
+      "id": "b5555555-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "relatedProjectIds": [],
+      "name": "何主任",
+      "role": "客户",
+      "company": "星河制造",
+      "phone": "13900010010",
+      "note": "设备部对接照度与能耗验收"
+    },
+    {
+      "id": "b5555556-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "relatedProjectIds": [
+        "11111111-1111-1111-1111-111111111111"
+      ],
+      "name": "许班长",
+      "role": "班组",
+      "company": "厂房照明组",
+      "phone": "13900010011",
+      "note": "夜间停电窗口负责班组"
+    },
+    {
+      "id": "b6666665-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "relatedProjectIds": [],
+      "name": "唐经理",
+      "role": "客户",
+      "company": "锦程酒店管理",
+      "phone": "13900010012",
+      "note": "营业协调与客房封房安排"
+    },
+    {
+      "id": "b6666666-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "relatedProjectIds": [
+        "22222222-2222-2222-2222-222222222222"
+      ],
+      "name": "韩工",
+      "role": "监理",
+      "company": "城建监理",
+      "phone": "13900010013",
+      "note": "弱电整改与网络验收监理"
     }
   ],
   "projectFinancialRecords": [
@@ -593,6 +1128,72 @@
       "dueDate": "2026-05-12",
       "reminderStatus": "待提醒",
       "note": "尾款到账"
+    },
+    {
+      "id": "c5555555-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "date": "2026-05-16 19:30",
+      "direction": "收入",
+      "category": "请款",
+      "amount": "42000",
+      "counterparty": "星河制造",
+      "invoiceNumber": "QK-20260516-01",
+      "linkedDocumentIds": [
+        "94441111-4444-4444-4444-444444444444"
+      ],
+      "status": "正式",
+      "dueDate": "2026-05-20",
+      "reminderStatus": "待提醒",
+      "note": "节能改造阶段请款"
+    },
+    {
+      "id": "c5555556-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "date": "2026-05-14 11:00",
+      "direction": "支出",
+      "category": "材料",
+      "amount": "10464",
+      "counterparty": "供应商E",
+      "invoiceNumber": "CL-20260514-08",
+      "linkedDocumentIds": [
+        "94442222-4444-4444-4444-444444444444"
+      ],
+      "status": "正式",
+      "dueDate": "2026-05-18",
+      "reminderStatus": "待提醒",
+      "note": "工矿灯到货款"
+    },
+    {
+      "id": "c6666666-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "date": "2026-05-17 20:20",
+      "direction": "收入",
+      "category": "请款",
+      "amount": "28000",
+      "counterparty": "锦程酒店管理",
+      "invoiceNumber": "QK-20260517-02",
+      "linkedDocumentIds": [
+        "95551111-5555-5555-5555-555555555555"
+      ],
+      "status": "草稿",
+      "dueDate": "2026-05-21",
+      "reminderStatus": "待提醒",
+      "note": "弱电整改阶段请款待盖章"
+    },
+    {
+      "id": "c6666667-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "date": "2026-05-13 15:10",
+      "direction": "支出",
+      "category": "材料",
+      "amount": "7440",
+      "counterparty": "供应商F",
+      "invoiceNumber": "",
+      "linkedDocumentIds": [],
+      "status": "正式",
+      "dueDate": "2026-05-16",
+      "reminderStatus": "待提醒",
+      "note": "网线与 AP 首批到货"
     }
   ],
   "projectDocuments": [
@@ -665,6 +1266,111 @@
       "versionState": "当前版",
       "replacesDocumentId": null,
       "replacedByDocumentId": null
+    },
+    {
+      "id": "94441111-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "title": "厂房节能改造照度复测表",
+      "category": "施工试验",
+      "fileName": "44444444-4444-4444-4444-444444444444-sample-lighting-test.pdf",
+      "fileType": "pdf",
+      "pageCount": 1,
+      "amount": "",
+      "linkedFinancialRecordId": "c5555555-4444-4444-4444-444444444444",
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "submissionStatus": "已确认",
+      "responsiblePerson": "陈工",
+      "formedAt": "2026-05-16",
+      "archiveNumber": "XN-20260516-01",
+      "workSection": "厂房照明节能改造",
+      "createdAt": "2026-05-16 19:10",
+      "note": "抽测平均照度满足目标值。",
+      "statusHistory": [
+        {
+          "id": "94441111-aaaa-4444-4444-444444444444",
+          "fromStatus": "待报验",
+          "toStatus": "已确认",
+          "operatorName": "陈工",
+          "changedAt": "2026-05-16 20:00",
+          "reason": "业主设备部确认"
+        }
+      ],
+      "versionNumber": 1,
+      "versionState": "当前版",
+      "replacesDocumentId": null,
+      "replacedByDocumentId": null
+    },
+    {
+      "id": "94442222-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "title": "高空作业安全交底记录",
+      "category": "施工管理",
+      "fileName": "44444444-4444-4444-4444-444444444444-sample-safety-briefing.pdf",
+      "fileType": "pdf",
+      "pageCount": 1,
+      "amount": "",
+      "linkedFinancialRecordId": null,
+      "linkedConstructionMethodIDs": [
+        "d6666666-6666-6666-6666-666666666666"
+      ],
+      "submissionStatus": "已归档",
+      "responsiblePerson": "陈工",
+      "formedAt": "2026-05-10",
+      "archiveNumber": "AQ-20260510-03",
+      "workSection": "高空灯具安装",
+      "createdAt": "2026-05-10 08:30",
+      "note": "班前交底与防坠措施检查。",
+      "statusHistory": [
+        {
+          "id": "94442222-aaaa-4444-4444-444444444444",
+          "fromStatus": "已报验",
+          "toStatus": "已归档",
+          "operatorName": "陈工",
+          "changedAt": "2026-05-10 18:00",
+          "reason": "资料归档完成"
+        }
+      ],
+      "versionNumber": 1,
+      "versionState": "当前版",
+      "replacesDocumentId": null,
+      "replacedByDocumentId": null
+    },
+    {
+      "id": "95551111-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "title": "酒店弱电整改验收单",
+      "category": "过程验收",
+      "fileName": "55555555-5555-5555-5555-555555555555-sample-lowvoltage-acceptance.pdf",
+      "fileType": "pdf",
+      "pageCount": 1,
+      "amount": "2860",
+      "linkedFinancialRecordId": "c6666666-5555-5555-5555-555555555555",
+      "linkedConstructionMethodIDs": [
+        "d7777777-7777-7777-7777-777777777777"
+      ],
+      "submissionStatus": "待报验",
+      "responsiblePerson": "孙工",
+      "formedAt": "2026-05-17",
+      "archiveNumber": "RD-20260517-01",
+      "workSection": "客房与走廊弱电整改",
+      "createdAt": "2026-05-17 20:10",
+      "note": "待附漫游测试报告后报验。",
+      "statusHistory": [
+        {
+          "id": "95551111-aaaa-5555-5555-555555555555",
+          "fromStatus": "未报验",
+          "toStatus": "待报验",
+          "operatorName": "孙工",
+          "changedAt": "2026-05-17 20:15",
+          "reason": "资料已整理待盖章"
+        }
+      ],
+      "versionNumber": 1,
+      "versionState": "当前版",
+      "replacesDocumentId": null,
+      "replacedByDocumentId": null
     }
   ],
   "quickNotes": [
@@ -709,6 +1415,60 @@
           "fileName": "quick-note-sample-checklist.txt",
           "originalName": "消防整改复核要点.txt",
           "createdAt": "2026-05-12 10:30",
+          "durationSeconds": null
+        }
+      ]
+    },
+    {
+      "id": "d5555555-4444-4444-4444-444444444444",
+      "title": "厂房节能改造班前交底",
+      "content": "强调高空车交叉作业与停送电复核。",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "createdAt": "2026-05-10 07:50",
+      "updatedAt": "2026-05-10 07:50",
+      "attachments": []
+    },
+    {
+      "id": "d5555556-4444-4444-4444-444444444444",
+      "title": "厂房节能改造移交清单",
+      "content": "整理设备部移交前要核对的照度、能耗和回路标识。",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "createdAt": "2026-05-16 20:30",
+      "updatedAt": "2026-05-16 20:30",
+      "attachments": [
+        {
+          "id": "d5555556-aaaa-4444-4444-444444444444",
+          "kind": "file",
+          "fileName": "quick-note-sample-factory-handover.txt",
+          "originalName": "厂房节能改造移交清单.txt",
+          "createdAt": "2026-05-16 20:30",
+          "durationSeconds": null
+        }
+      ]
+    },
+    {
+      "id": "d6666665-5555-5555-5555-555555555555",
+      "title": "酒店客房整改排班",
+      "content": "优先处理入住率低的楼层，减少对营业影响。",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "createdAt": "2026-05-11 09:20",
+      "updatedAt": "2026-05-11 09:20",
+      "attachments": []
+    },
+    {
+      "id": "d6666666-5555-5555-5555-555555555555",
+      "title": "酒店漫游测试问题清单",
+      "content": "大堂与 6F 电梯厅漫游切换需复核，附问题点位文字清单。",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "createdAt": "2026-05-17 20:40",
+      "updatedAt": "2026-05-17 20:40",
+      "attachments": [
+        {
+          "id": "d6666666-aaaa-5555-5555-555555555555",
+          "kind": "file",
+          "fileName": "quick-note-sample-hotel-punchlist.txt",
+          "originalName": "酒店漫游测试问题清单.txt",
+          "createdAt": "2026-05-17 20:40",
           "durationSeconds": null
         }
       ]
@@ -778,6 +1538,72 @@
         "92222222-2222-2222-2222-222222222222"
       ],
       "createdAt": "2026-05-11 16:50"
+    },
+    {
+      "id": "e5555555-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "date": "2026-05-14",
+      "movementType": "入库",
+      "materialName": "LED 工矿灯 150W",
+      "specification": "5000K / 吊装",
+      "unit": "套",
+      "quantity": "48",
+      "counterparty": "供应商E",
+      "handler": "库管",
+      "note": "厂房节能改造首批到货",
+      "linkedDocumentIds": [
+        "94442222-4444-4444-4444-444444444444"
+      ],
+      "createdAt": "2026-05-14 10:40"
+    },
+    {
+      "id": "e5555556-4444-4444-4444-444444444444",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "date": "2026-05-16",
+      "movementType": "出库",
+      "materialName": "YJV 5x10 电缆",
+      "specification": "国标",
+      "unit": "米",
+      "quantity": "310",
+      "counterparty": "厂房配电组",
+      "handler": "陈工",
+      "note": "B 区回路切换领用",
+      "linkedDocumentIds": [
+        "94441111-4444-4444-4444-444444444444"
+      ],
+      "createdAt": "2026-05-16 18:40"
+    },
+    {
+      "id": "e6666665-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "date": "2026-05-13",
+      "movementType": "入库",
+      "materialName": "Cat6 网线",
+      "specification": "305m/箱",
+      "unit": "箱",
+      "quantity": "16",
+      "counterparty": "供应商F",
+      "handler": "库管",
+      "note": "酒店弱电整改首批到货",
+      "linkedDocumentIds": [],
+      "createdAt": "2026-05-13 11:20"
+    },
+    {
+      "id": "e6666666-5555-5555-5555-555555555555",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "date": "2026-05-17",
+      "movementType": "出库",
+      "materialName": "无线吸顶 AP",
+      "specification": "Wi-Fi 6",
+      "unit": "台",
+      "quantity": "22",
+      "counterparty": "酒店调试组",
+      "handler": "孙工",
+      "note": "大堂与走廊安装领用",
+      "linkedDocumentIds": [
+        "95551111-5555-5555-5555-555555555555"
+      ],
+      "createdAt": "2026-05-17 16:50"
     }
   ],
   "templates": [
@@ -810,6 +1636,30 @@
       "name": "商业消防整改报价",
       "category": "报价模板",
       "content": "耐火电缆整改 ¥58/m\n应急灯安装 ¥125/套\n联动测试 ¥1800/项"
+    },
+    {
+      "id": "f5555555-4444-4444-4444-444444444444",
+      "name": "厂房节能改造报价",
+      "category": "报价模板",
+      "content": "LED 工矿灯更换 ¥265/套\n配电支路切换 ¥82/米\n照度复测 ¥1800/项"
+    },
+    {
+      "id": "f5555556-4444-4444-4444-444444444444",
+      "name": "弱电整改日志",
+      "category": "日志模板",
+      "content": "日期:\n楼层:\n封房范围:\n整改内容:\n测试结果:\n待复核点位:\n明日计划:"
+    },
+    {
+      "id": "f6666665-5555-5555-5555-555555555555",
+      "name": "弱电常用材料",
+      "category": "材料模板",
+      "content": "Cat6 网线 305m/箱\n无线吸顶 AP 台\n24口配线架 个\n信息面板 个"
+    },
+    {
+      "id": "f6666666-5555-5555-5555-555555555555",
+      "name": "机电交付资料清单",
+      "category": "资料清单模板",
+      "content": "sitekeeper_document_checklist_template_v1\n施工技术\n施工物资\n施工测量\n施工记录\n施工试验\n过程验收\n竣工验收"
     }
   ],
   "materialPriceEntries": [
@@ -872,6 +1722,54 @@
       "category": "配电设备",
       "note": "消防项目常用",
       "updatedAt": "2026-04-20 08:40"
+    },
+    {
+      "id": "a5555555-4444-4444-4444-444444444444",
+      "name": "LED 工矿灯",
+      "specification": "150W / 5000K",
+      "brand": "星耀",
+      "unit": "套",
+      "referencePrice": "218",
+      "supplier": "供应商E",
+      "category": "照明",
+      "note": "厂房节能改造常用",
+      "updatedAt": "2026-05-14 09:40"
+    },
+    {
+      "id": "a5555556-4444-4444-4444-444444444444",
+      "name": "YJV 电缆",
+      "specification": "5x10",
+      "brand": "远东",
+      "unit": "米",
+      "referencePrice": "18.6",
+      "supplier": "供应商E",
+      "category": "电缆",
+      "note": "",
+      "updatedAt": "2026-05-15 10:10"
+    },
+    {
+      "id": "a6666665-5555-5555-5555-555555555555",
+      "name": "Cat6 网线",
+      "specification": "305m/箱",
+      "brand": "讯连",
+      "unit": "箱",
+      "referencePrice": "465",
+      "supplier": "供应商F",
+      "category": "弱电",
+      "note": "酒店整改批量采购价",
+      "updatedAt": "2026-05-13 10:20"
+    },
+    {
+      "id": "a6666666-5555-5555-5555-555555555555",
+      "name": "无线吸顶 AP",
+      "specification": "Wi-Fi 6",
+      "brand": "云联",
+      "unit": "台",
+      "referencePrice": "368",
+      "supplier": "供应商F",
+      "category": "弱电",
+      "note": "",
+      "updatedAt": "2026-05-16 08:55"
     }
   ],
   "materialSheetDrafts": [
@@ -936,6 +1834,80 @@
       ],
       "createdAt": "2026-05-09 18:20",
       "updatedAt": "2026-05-10 09:10"
+    },
+    {
+      "id": "b5555555-4444-4444-4444-444444444444",
+      "title": "星河厂房照明节能改造补料单",
+      "projectId": "44444444-4444-4444-4444-444444444444",
+      "isArchived": false,
+      "exportProjectName": "星河厂房照明节能改造",
+      "exportPreparer": "陈工",
+      "exportDate": "2026-05-16",
+      "items": [
+        {
+          "id": "b5555555-aaaa-4444-4444-444444444444",
+          "name": "LED 工矿灯",
+          "specification": "150W / 5000K",
+          "unit": "套",
+          "quantity": "12",
+          "unitPrice": "226",
+          "laborCost": "28",
+          "supplier": "供应商E",
+          "usageLocation": "B 区补装",
+          "note": "含角度可调支架"
+        },
+        {
+          "id": "b5555555-bbbb-4444-4444-444444444444",
+          "name": "YJV 5x10 电缆",
+          "specification": "国标",
+          "unit": "米",
+          "quantity": "110",
+          "unitPrice": "18.6",
+          "laborCost": "0",
+          "supplier": "供应商E",
+          "usageLocation": "B 区回路切换",
+          "note": ""
+        }
+      ],
+      "createdAt": "2026-05-16 09:10",
+      "updatedAt": "2026-05-16 09:40"
+    },
+    {
+      "id": "b6666666-5555-5555-5555-555555555555",
+      "title": "锦程酒店弱电整改补料单",
+      "projectId": "55555555-5555-5555-5555-555555555555",
+      "isArchived": false,
+      "exportProjectName": "锦程酒店弱电整改",
+      "exportPreparer": "孙工",
+      "exportDate": "2026-05-17",
+      "items": [
+        {
+          "id": "b6666666-aaaa-5555-5555-555555555555",
+          "name": "Cat6 网线",
+          "specification": "305m/箱",
+          "unit": "箱",
+          "quantity": "4",
+          "unitPrice": "472",
+          "laborCost": "0",
+          "supplier": "供应商F",
+          "usageLocation": "6F-8F 客房",
+          "note": "预留两箱给后续复测"
+        },
+        {
+          "id": "b6666666-bbbb-5555-5555-555555555555",
+          "name": "无线吸顶 AP",
+          "specification": "Wi-Fi 6",
+          "unit": "台",
+          "quantity": "6",
+          "unitPrice": "378",
+          "laborCost": "36",
+          "supplier": "供应商F",
+          "usageLocation": "大堂与走廊补点",
+          "note": "补强弱信号区"
+        }
+      ],
+      "createdAt": "2026-05-17 09:00",
+      "updatedAt": "2026-05-17 10:15"
     }
   ],
   "supplierProfiles": [
@@ -978,6 +1950,26 @@
       "address": "城东灯具市场",
       "note": "样板段先发 36 套",
       "updatedAt": "2026-05-16 11:50"
+    },
+    {
+      "id": "c5555555-4444-1111-4444-444444444444",
+      "name": "供应商E",
+      "category": "厂房照明",
+      "contact": "郑经理",
+      "phone": "13700020005",
+      "address": "临港仓",
+      "note": "高空灯具与电缆打包供货",
+      "updatedAt": "2026-05-14 09:00"
+    },
+    {
+      "id": "c6666666-5555-1111-5555-555555555555",
+      "name": "供应商F",
+      "category": "弱电设备",
+      "contact": "谢经理",
+      "phone": "13700020006",
+      "address": "会展仓",
+      "note": "AP 与配线架供货",
+      "updatedAt": "2026-05-13 09:30"
     }
   ],
   "constructionMethods": [
@@ -1060,18 +2052,78 @@
       ],
       "attachments": [],
       "updatedAt": "2026-05-10 15:20"
+    },
+    {
+      "id": "d6666666-6666-6666-6666-666666666666",
+      "title": "厂房高空灯具安装",
+      "trade": "电气",
+      "versionName": "V1",
+      "publishStatus": "已发布",
+      "tutorialBody": "",
+      "tutorialTextSize": "normal",
+      "tutorialAttachments": [],
+      "procedureSteps": [
+        "停电确认",
+        "高空车定位",
+        "拆旧换新",
+        "照度复测"
+      ],
+      "qualityChecklist": [
+        "灯具角度一致",
+        "照度抽测达标",
+        "回路编号清晰"
+      ],
+      "safetyChecklist": [
+        "高空车支腿稳定",
+        "双人监护停送电",
+        "作业区拉设警戒"
+      ],
+      "attachments": [],
+      "updatedAt": "2026-05-12 08:40"
+    },
+    {
+      "id": "d7777777-7777-7777-7777-777777777777",
+      "title": "酒店弱电信息点测试",
+      "trade": "弱电",
+      "versionName": "V2",
+      "publishStatus": "已发布",
+      "tutorialBody": "",
+      "tutorialTextSize": "normal",
+      "tutorialAttachments": [],
+      "procedureSteps": [
+        "端接检查",
+        "编号复核",
+        "链路测试",
+        "漫游抽测"
+      ],
+      "qualityChecklist": [
+        "标签完整",
+        "测试结果通过",
+        "问题点位留痕"
+      ],
+      "safetyChecklist": [
+        "客房施工断电确认",
+        "营业时段控制噪声",
+        "设备上电防误插"
+      ],
+      "attachments": [],
+      "updatedAt": "2026-05-13 14:20"
     }
   ],
   "favoriteMaterialKeys": [
     "bv 铜芯线|2.5mm²|卷(100m)",
     "阻燃线管|φ20|米",
     "led 平板灯|600×600 / 48w|套",
-    "耐火电缆|nh-bv 4mm²|卷(100m)"
+    "耐火电缆|nh-bv 4mm²|卷(100m)",
+    "led 工矿灯|150w / 5000k|套",
+    "cat6 网线|305m/箱|箱"
   ],
   "recentMaterialKeys": [
     "应急照明集中电源|eps-2kw|台",
     "阻燃线管|φ20|米",
-    "bv 2.5mm² 电线|100m/卷|卷"
+    "bv 2.5mm² 电线|100m/卷|卷",
+    "无线吸顶 ap|wi-fi 6|台",
+    "yjv 电缆|5x10|米"
   ],
   "userMaterials": [
     {
@@ -1101,6 +2153,27 @@
       "specification": "白底黑字",
       "unit": "盒",
       "category": "标识辅材"
+    },
+    {
+      "id": "e8888881-8888-8888-8888-888888888888",
+      "name": "电缆吊卡",
+      "specification": "重型",
+      "unit": "个",
+      "category": "厂房辅材"
+    },
+    {
+      "id": "e8888882-8888-8888-8888-888888888888",
+      "name": "理线架",
+      "specification": "1U",
+      "unit": "个",
+      "category": "弱电辅材"
+    },
+    {
+      "id": "e8888883-8888-8888-8888-888888888888",
+      "name": "标签保护膜",
+      "specification": "透明",
+      "unit": "卷",
+      "category": "弱电辅材"
     }
   ],
   "deletedUserMaterials": [
@@ -1110,6 +2183,13 @@
       "specification": "T8 兼容型",
       "unit": "套",
       "category": "废弃样例"
+    },
+    {
+      "id": "e8888884-8888-8888-8888-888888888888",
+      "name": "旧 AP 支架",
+      "specification": "早期型号",
+      "unit": "个",
+      "category": "废弃样例"
     }
   ],
   "hiddenPresetKeys": [],
@@ -1117,11 +2197,31 @@
     {
       "fileName": "sample-log-photo-11111111.jpg",
       "data": "/9j/4AAQSkZJRgABAQAASABIAAD/4QBARXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAEKADAAQAAAABAAAAEAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+ICGElDQ19QUk9GSUxFAAEBAAACCGFwcGwEAAAAbW50clJHQiBYWVogB+oABQAUAAkALwA1YWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKZGVzYwAAAPwAAAAwY3BydAAAASwAAABQd3RwdAAAAXwAAAAUclhZWgAAAZAAAAAUZ1hZWgAAAaQAAAAUYlhZWgAAAbgAAAAUclRSQwAAAcwAAAAQY2hhZAAAAdwAAAAsYlRSQwAAAcwAAAAQZ1RSQwAAAcwAAAAQbWx1YwAAAAAAAAABAAAADGVuVVMAAAAUAAAAHABNAGkAIABNAG8AbgBpAHQAbwBybWx1YwAAAAAAAAABAAAADGVuVVMAAAA0AAAAHABDAG8AcAB5AHIAaQBnAGgAdAAgAEEAcABwAGwAZQAgAEkAbgBjAC4ALAAgADIAMAAyADZYWVogAAAAAAAA9tYAAQAAAADTLVhZWiAAAAAAAAB8CQAAOKoAAAE/WFlaIAAAAAAAAFNGAAC4mwAAD5FYWVogAAAAAAAAJ4YAAA67AADCXXBhcmEAAAAAAAAAAAAB9gRzZjMyAAAAAAABDHIAAAX4///zHQAAB7oAAP1y///7nf///aQAAAPZAADAcf/AABEIABAAEAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAAEBAQEBAQIBAQIDAgICAwQDAwMDBAUEBAQEBAUGBQUFBQUFBgYGBgYGBgYHBwcHBwcICAgICAkJCQkJCQkJCQn/2wBDAQEBAQICAgQCAgQJBgUGCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQn/3QAEAAH/2gAMAwEAAhEDEQA/APviiiiv8Hz/AHgP/9k="
+    },
+    {
+      "fileName": "sample-log-photo-44444444-a.jpg",
+      "data": "/9j/4AAQSkZJRgABAQAASABIAAD/4QBARXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAEKADAAQAAAABAAAAEAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+ICGElDQ19QUk9GSUxFAAEBAAACCGFwcGwEAAAAbW50clJHQiBYWVogB+oABQAUAAkALwA1YWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKZGVzYwAAAPwAAAAwY3BydAAAASwAAABQd3RwdAAAAXwAAAAUclhZWgAAAZAAAAAUZ1hZWgAAAaQAAAAUYlhZWgAAAbgAAAAUclRSQwAAAcwAAAAQY2hhZAAAAdwAAAAsYlRSQwAAAcwAAAAQZ1RSQwAAAcwAAAAQbWx1YwAAAAAAAAABAAAADGVuVVMAAAAUAAAAHABNAGkAIABNAG8AbgBpAHQAbwBybWx1YwAAAAAAAAABAAAADGVuVVMAAAA0AAAAHABDAG8AcAB5AHIAaQBnAGgAdAAgAEEAcABwAGwAZQAgAEkAbgBjAC4ALAAgADIAMAAyADZYWVogAAAAAAAA9tYAAQAAAADTLVhZWiAAAAAAAAB8CQAAOKoAAAE/WFlaIAAAAAAAAFNGAAC4mwAAD5FYWVogAAAAAAAAJ4YAAA67AADCXXBhcmEAAAAAAAAAAAAB9gRzZjMyAAAAAAABDHIAAAX4///zHQAAB7oAAP1y///7nf///aQAAAPZAADAcf/AABEIABAAEAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAAEBAQEBAQIBAQIDAgICAwQDAwMDBAUEBAQEBAUGBQUFBQUFBgYGBgYGBgYHBwcHBwcICAgICAkJCQkJCQkJCQn/2wBDAQEBAQICAgQCAgQJBgUGCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQn/3QAEAAH/2gAMAwEAAhEDEQA/APviiiiv8Hz/AHgP/9k="
+    },
+    {
+      "fileName": "sample-log-photo-55555555-a.jpg",
+      "data": "/9j/4AAQSkZJRgABAQAASABIAAD/4QBARXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAEKADAAQAAAABAAAAEAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+ICGElDQ19QUk9GSUxFAAEBAAACCGFwcGwEAAAAbW50clJHQiBYWVogB+oABQAUAAkALwA1YWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKZGVzYwAAAPwAAAAwY3BydAAAASwAAABQd3RwdAAAAXwAAAAUclhZWgAAAZAAAAAUZ1hZWgAAAaQAAAAUYlhZWgAAAbgAAAAUclRSQwAAAcwAAAAQY2hhZAAAAdwAAAAsYlRSQwAAAcwAAAAQZ1RSQwAAAcwAAAAQbWx1YwAAAAAAAAABAAAADGVuVVMAAAAUAAAAHABNAGkAIABNAG8AbgBpAHQAbwBybWx1YwAAAAAAAAABAAAADGVuVVMAAAA0AAAAHABDAG8AcAB5AHIAaQBnAGgAdAAgAEEAcABwAGwAZQAgAEkAbgBjAC4ALAAgADIAMAAyADZYWVogAAAAAAAA9tYAAQAAAADTLVhZWiAAAAAAAAB8CQAAOKoAAAE/WFlaIAAAAAAAAFNGAAC4mwAAD5FYWVogAAAAAAAAJ4YAAA67AADCXXBhcmEAAAAAAAAAAAAB9gRzZjMyAAAAAAABDHIAAAX4///zHQAAB7oAAP1y///7nf///aQAAAPZAADAcf/AABEIABAAEAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAAEBAQEBAQIBAQIDAgICAwQDAwMDBAUEBAQEBAUGBQUFBQUFBgYGBgYGBgYHBwcHBwcICAgICAkJCQkJCQkJCQn/2wBDAQEBAQICAgQCAgQJBgUGCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQn/3QAEAAH/2gAMAwEAAhEDEQA/APviiiiv8Hz/AHgP/9k="
+    },
+    {
+      "fileName": "sample-log-photo-55555555-b.jpg",
+      "data": "/9j/4AAQSkZJRgABAQAASABIAAD/4QBARXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAEKADAAQAAAABAAAAEAAAAAD/7QA4UGhvdG9zaG9wIDMuMAA4QklNBAQAAAAAAAA4QklNBCUAAAAAABDUHYzZjwCyBOmACZjs+EJ+/+ICGElDQ19QUk9GSUxFAAEBAAACCGFwcGwEAAAAbW50clJHQiBYWVogB+oABQAUAAkALwA1YWNzcEFQUEwAAAAAQVBQTAAAAAAAAAAAAAAAAAAAAAAAAPbWAAEAAAAA0y1hcHBsAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKZGVzYwAAAPwAAAAwY3BydAAAASwAAABQd3RwdAAAAXwAAAAUclhZWgAAAZAAAAAUZ1hZWgAAAaQAAAAUYlhZWgAAAbgAAAAUclRSQwAAAcwAAAAQY2hhZAAAAdwAAAAsYlRSQwAAAcwAAAAQZ1RSQwAAAcwAAAAQbWx1YwAAAAAAAAABAAAADGVuVVMAAAAUAAAAHABNAGkAIABNAG8AbgBpAHQAbwBybWx1YwAAAAAAAAABAAAADGVuVVMAAAA0AAAAHABDAG8AcAB5AHIAaQBnAGgAdAAgAEEAcABwAGwAZQAgAEkAbgBjAC4ALAAgADIAMAAyADZYWVogAAAAAAAA9tYAAQAAAADTLVhZWiAAAAAAAAB8CQAAOKoAAAE/WFlaIAAAAAAAAFNGAAC4mwAAD5FYWVogAAAAAAAAJ4YAAA67AADCXXBhcmEAAAAAAAAAAAAB9gRzZjMyAAAAAAABDHIAAAX4///zHQAAB7oAAP1y///7nf///aQAAAPZAADAcf/AABEIABAAEAMBIgACEQEDEQH/xAAfAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgv/xAC1EAACAQMDAgQDBQUEBAAAAX0BAgMABBEFEiExQQYTUWEHInEUMoGRoQgjQrHBFVLR8CQzYnKCCQoWFxgZGiUmJygpKjQ1Njc4OTpDREVGR0hJSlNUVVZXWFlaY2RlZmdoaWpzdHV2d3h5eoOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmqsrO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4eLj5OXm5+jp6vHy8/T19vf4+fr/xAAfAQADAQEBAQEBAQEBAAAAAAAAAQIDBAUGBwgJCgv/xAC1EQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2wBDAAEBAQEBAQIBAQIDAgICAwQDAwMDBAUEBAQEBAUGBQUFBQUFBgYGBgYGBgYHBwcHBwcICAgICAkJCQkJCQkJCQn/2wBDAQEBAQICAgQCAgQJBgUGCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQn/3QAEAAH/2gAMAwEAAhEDEQA/APviiiiv8Hz/AHgP/9k="
     }
   ],
   "drawingFiles": [
     {
       "fileName": "sample-lighting-layout.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "sample-factory-lighting-layout.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "sample-hotel-lowvoltage-layout.pdf",
       "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
     }
   ],
@@ -1133,12 +2233,32 @@
     {
       "fileName": "33333333-3333-3333-3333-333333333333-sample-fire-acceptance.pdf",
       "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "44444444-4444-4444-4444-444444444444-sample-lighting-test.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "44444444-4444-4444-4444-444444444444-sample-safety-briefing.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
+    },
+    {
+      "fileName": "55555555-5555-5555-5555-555555555555-sample-lowvoltage-acceptance.pdf",
+      "data": "JVBERi0xLjQKMSAwIG9iago8PCAvVHlwZSAvQ2F0YWxvZyAvUGFnZXMgMiAwIFIgPj4KZW5kb2JqCjIgMCBvYmoKPDwgL1R5cGUgL1BhZ2VzIC9Db3VudCAxIC9LaWRzIFszIDAgUl0gPj4KZW5kb2JqCjMgMCBvYmoKPDwgL1R5cGUgL1BhZ2UgL1BhcmVudCAyIDAgUiAvTWVkaWFCb3ggWzAgMCAyMDAgMjAwXSAvQ29udGVudHMgNCAwIFIgL1Jlc291cmNlcyA8PCAvRm9udCA8PCAvRjEgNSAwIFIgPj4gPj4gPj4KZW5kb2JqCjQgMCBvYmoKPDwgL0xlbmd0aCA0NCA+PgpzdHJlYW0KQlQgL0YxIDE4IFRmIDM2IDEyMCBUZCAoU2l0ZWtlZXBlciBTYW1wbGUpIFRqIEVUCmVuZHN0cmVhbQplbmRvYmoKNSAwIG9iago8PCAvVHlwZSAvRm9udCAvU3VidHlwZSAvVHlwZTEgL0Jhc2VGb250IC9IZWx2ZXRpY2EgPj4KZW5kb2JqCnhyZWYKMCA2CjAwMDAwMDAwMDAgNjU1MzUgZiAKMDAwMDAwMDAxMCAwMDAwMCBuIAowMDAwMDAwMDYzIDAwMDAwIG4gCjAwMDAwMDAxMjIgMDAwMDAgbiAKMDAwMDAwMDI0OCAwMDAwMCBuIAowMDAwMDAwMzQyIDAwMDAwIG4gCnRyYWlsZXIKPDwgL1Jvb3QgMSAwIFIgL1NpemUgNiA+PgpzdGFydHhyZWYKNDEyCiUlRU9GCg=="
     }
   ],
   "quickNoteAttachmentFiles": [
     {
       "fileName": "quick-note-sample-checklist.txt",
       "data": "5raI6Ziy5pW05pS55aSN5qC46KaB54K5CjEuIOW6lOaApeeFp+aYjuWIh+aNoua1i+ivlQoyLiDnlo/mlaPmjIfnpLrov57nu63mgKcKMy4g6YWN55S1566x5qCH562+5aSN5qC4Cg=="
+    },
+    {
+      "fileName": "quick-note-sample-factory-handover.txt",
+      "data": "5Y6C5oi/6IqC6IO95pS56YCg56e75Lqk5riF5Y2VCjEuIOeFp+W6puWkjea1i+ihqAoyLiDog73ogJfph4fmoLforrDlvZUKMy4g5Zue6Lev57yW5Y+35qC45a+5CjQuIOWuieWFqOS6pOW6leW9kuahow=="
+    },
+    {
+      "fileName": "quick-note-sample-hotel-punchlist.txt",
+      "data": "6YWS5bqX5ryr5ri45rWL6K+V6Zeu6aKY5riF5Y2VCjEuIOWkp+WggiBBUCDnvJblj7fpnIDlkIzmraUKMi4gNkYg55S15qKv5Y6F5ryr5ri46ZiI5YC85b6F5aSN5qC4CjMuIOS4pOmXtOWuouaIv+agh+etvumcgOihpeaLjQ=="
     }
   ]
 }

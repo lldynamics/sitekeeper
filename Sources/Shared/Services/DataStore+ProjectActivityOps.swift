@@ -38,6 +38,57 @@ extension DataStore {
         return true
     }
 
+    @discardableResult
+    func updateDailyLogPhoto(
+        logId: UUID,
+        photoId: UUID,
+        legacyFileName: String,
+        note: String,
+        tag: PhotoTag
+    ) -> Bool {
+        var current = dailyLogs
+        guard let logIndex = current.firstIndex(where: { $0.id == logId }) else { return false }
+        var log = current[logIndex]
+        if let photoIndex = log.photos.firstIndex(where: { $0.id == photoId }) {
+            log.photos[photoIndex].note = note
+            log.photos[photoIndex].tag = tag
+        } else if let legacy = log.photoFileName, legacy == legacyFileName {
+            log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
+        } else {
+            return false
+        }
+        current[logIndex] = log
+        replaceDailyLogs(current)
+        return true
+    }
+
+    @discardableResult
+    func removeDailyLogPhoto(
+        logId: UUID,
+        photoId: UUID,
+        legacyFileName: String
+    ) -> String? {
+        var current = dailyLogs
+        guard let logIndex = current.firstIndex(where: { $0.id == logId }) else { return nil }
+        var log = current[logIndex]
+        var deletedFileName: String?
+        if let index = log.photos.firstIndex(where: { $0.id == photoId }) {
+            let fileName = log.photos[index].fileName
+            deletedFileName = fileName
+            log.photos.remove(at: index)
+            if log.photoFileName == fileName {
+                log.photoFileName = log.photos.first?.fileName
+            }
+        } else if let legacy = log.photoFileName, legacy == legacyFileName {
+            deletedFileName = legacy
+            log.photoFileName = nil
+        }
+        guard let deletedFileName else { return nil }
+        current[logIndex] = log
+        replaceDailyLogs(current)
+        return deletedFileName
+    }
+
     func mergeDailyLogsByID(_ logs: [DailyLog]) {
         replaceDailyLogs(mergedProjectActivityElementsByID(dailyLogs, with: logs))
     }

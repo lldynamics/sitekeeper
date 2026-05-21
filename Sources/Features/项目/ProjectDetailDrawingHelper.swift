@@ -44,7 +44,7 @@ enum ProjectDetailDrawingHelper {
             return String(localized: "PDF 可预览")
         }
         if requiresExternalViewer(normalized) {
-            return String(localized: "用外部专业看图软件打开")
+            return String(localized: "外部专业看图软件打开")
         }
         return String(localized: "文件独立打开")
     }

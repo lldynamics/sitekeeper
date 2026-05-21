@@ -139,6 +139,471 @@ extension ButtonStyle where Self == AppProminentButtonStyle {
     }
 }
 
+struct AppBusinessEditForm<Content: View>: View {
+    let title: String
+    var cancelTitle: String = String(localized: "取消")
+    var primaryActionTitle: String = String(localized: "保存")
+    var isPrimaryActionDisabled = false
+    let onCancel: () -> Void
+    let onPrimaryAction: () -> Void
+    @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        cancelTitle: String = String(localized: "取消"),
+        primaryActionTitle: String = String(localized: "保存"),
+        isPrimaryActionDisabled: Bool = false,
+        onCancel: @escaping () -> Void,
+        onPrimaryAction: @escaping () -> Void,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.cancelTitle = cancelTitle
+        self.primaryActionTitle = primaryActionTitle
+        self.isPrimaryActionDisabled = isPrimaryActionDisabled
+        self.onCancel = onCancel
+        self.onPrimaryAction = onPrimaryAction
+        self.content = content()
+    }
+
+    var body: some View {
+        NavigationStack {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(cancelTitle, action: onCancel)
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(primaryActionTitle, action: onPrimaryAction)
+                            .disabled(isPrimaryActionDisabled)
+                    }
+                }
+        }
+    }
+}
+
+struct AppBusinessFormValidationSection: View {
+    let messages: [String]
+
+    var body: some View {
+        if !messages.isEmpty {
+            Section(String(localized: "表单问题")) {
+                ForEach(messages, id: \.self) { message in
+                    Label(message, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(.appWarning)
+                }
+            }
+        }
+    }
+}
+
+struct AppBusinessFormDestructiveActionSection: View {
+    let title: String
+    var systemImage: String = "trash"
+    let action: () -> Void
+
+    var body: some View {
+        Section {
+            Button(role: .destructive, action: action) {
+                Label(title, systemImage: systemImage)
+            }
+        }
+    }
+}
+
+extension View {
+    func appListPrimaryTextLayout(lines: Int = 2) -> some View {
+        lineLimit(lines)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    func appListSecondaryTextLayout(lines: Int = 2) -> some View {
+        lineLimit(lines)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+enum AppSurfaceTone {
+    case grouped
+    case secondary
+    case tertiary
+    case materialThin
+    case materialThick
+    case tinted(Color)
+
+    var fillStyle: AnyShapeStyle {
+        switch self {
+        case .grouped:
+            AnyShapeStyle(Color(uiColor: .secondarySystemGroupedBackground))
+        case .secondary:
+            AnyShapeStyle(Color(uiColor: .secondarySystemBackground))
+        case .tertiary:
+            AnyShapeStyle(Color(uiColor: .tertiarySystemGroupedBackground))
+        case .materialThin:
+            AnyShapeStyle(.ultraThinMaterial)
+        case .materialThick:
+            AnyShapeStyle(.ultraThickMaterial)
+        case .tinted(let color):
+            AnyShapeStyle(color)
+        }
+    }
+}
+
+enum AppSurfaceShadow {
+    case none
+    case card
+    case overlay
+
+    var color: Color {
+        switch self {
+        case .none:
+            .clear
+        case .card:
+            .black.opacity(0.06)
+        case .overlay:
+            .black.opacity(0.12)
+        }
+    }
+
+    var radius: CGFloat {
+        switch self {
+        case .none:
+            0
+        case .card:
+            6
+        case .overlay:
+            12
+        }
+    }
+
+    var y: CGFloat {
+        switch self {
+        case .none:
+            0
+        case .card:
+            2
+        case .overlay:
+            4
+        }
+    }
+}
+
+struct AppSurface<Content: View>: View {
+    let tone: AppSurfaceTone
+    var cornerRadius: CGFloat = 12
+    var shadow: AppSurfaceShadow = .none
+    var stroke: Color? = nil
+    var strokeWidth: CGFloat = 0.5
+    @ViewBuilder let content: Content
+
+    init(
+        tone: AppSurfaceTone = .grouped,
+        cornerRadius: CGFloat = 12,
+        shadow: AppSurfaceShadow = .none,
+        stroke: Color? = nil,
+        strokeWidth: CGFloat = 0.5,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tone = tone
+        self.cornerRadius = cornerRadius
+        self.shadow = shadow
+        self.stroke = stroke
+        self.strokeWidth = strokeWidth
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(backgroundShape)
+            .overlay {
+                if let stroke, strokeWidth > 0 {
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .stroke(stroke, lineWidth: strokeWidth)
+                }
+            }
+            .shadow(color: shadow.color, radius: shadow.radius, y: shadow.y)
+    }
+
+    private var backgroundShape: some View {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+            .fill(tone.fillStyle)
+    }
+}
+
+struct AppPanel<Content: View>: View {
+    let tone: AppSurfaceTone
+    var cornerRadius: CGFloat = 12
+    var padding: CGFloat = AppSpacing.normal
+    var shadow: AppSurfaceShadow = .none
+    var stroke: Color? = nil
+    @ViewBuilder let content: Content
+
+    init(
+        tone: AppSurfaceTone = .grouped,
+        cornerRadius: CGFloat = 12,
+        padding: CGFloat = AppSpacing.normal,
+        shadow: AppSurfaceShadow = .none,
+        stroke: Color? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.tone = tone
+        self.cornerRadius = cornerRadius
+        self.padding = padding
+        self.shadow = shadow
+        self.stroke = stroke
+        self.content = content()
+    }
+
+    var body: some View {
+        AppSurface(
+            tone: tone,
+            cornerRadius: cornerRadius,
+            shadow: shadow,
+            stroke: stroke
+        ) {
+            content
+                .padding(padding)
+        }
+    }
+}
+
+enum StatusChipTone: Equatable {
+    case neutral
+    case primary
+    case success
+    case warning
+    case risk
+    case doc
+    case finance
+
+    var tint: Color {
+        switch self {
+        case .neutral:
+            .secondary
+        case .primary:
+            .appPrimaryAction
+        case .success:
+            .appSuccess
+        case .warning:
+            .appWarning
+        case .risk:
+            .appRisk
+        case .doc:
+            .appDoc
+        case .finance:
+            .appFinance
+        }
+    }
+
+    var foreground: Color {
+        switch self {
+        case .neutral:
+            .primary
+        default:
+            .white
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .neutral:
+            Color(uiColor: .secondarySystemGroupedBackground)
+        default:
+            tint
+        }
+    }
+}
+
+struct StatusChip: View {
+    let text: String
+    var tone: StatusChipTone = .neutral
+    var compact: Bool = false
+
+    var body: some View {
+        Text(text)
+            .font((compact ? Font.caption2 : .caption).weight(.semibold))
+            .foregroundStyle(tone.foreground)
+            .padding(.horizontal, compact ? 8 : AppSpacing.tight)
+            .padding(.vertical, compact ? 4 : 5)
+            .background(
+                RoundedRectangle(cornerRadius: compact ? 6 : 8, style: .continuous)
+                    .fill(tone.background)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: compact ? 6 : 8, style: .continuous)
+                    .stroke(tone.tint.opacity(tone == .neutral ? 0.18 : 1), lineWidth: 0.5)
+            )
+    }
+}
+
+enum InlineNoticeTone {
+    case info
+    case success
+    case warning
+    case error
+
+    var icon: String {
+        switch self {
+        case .info:
+            "info.circle.fill"
+        case .success:
+            "checkmark.circle.fill"
+        case .warning:
+            "exclamationmark.triangle.fill"
+        case .error:
+            "xmark.octagon.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .info:
+            .appPrimaryAction
+        case .success:
+            .appSuccess
+        case .warning:
+            .appWarning
+        case .error:
+            .appRisk
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .info:
+            .appPrimarySurfaceSubtle
+        case .success:
+            .appSuccessSurfaceSubtle
+        case .warning:
+            .appDynamicTint(AppTheme.current.palette.warningUIColor, lightOpacity: 0.12, darkOpacity: 0.24)
+        case .error:
+            .appRiskSurface
+        }
+    }
+}
+
+struct InlineNotice: View {
+    let title: String
+    var message: String? = nil
+    var tone: InlineNoticeTone = .info
+
+    var body: some View {
+        AppPanel(
+            tone: .tinted(tone.background),
+            cornerRadius: 10,
+            padding: AppSpacing.normal,
+            stroke: tone.tint.opacity(0.18)
+        ) {
+            HStack(alignment: .top, spacing: AppSpacing.tight) {
+                Image(systemName: tone.icon)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(tone.tint)
+                    .frame(width: 18, height: 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    if let message, !message.isEmpty {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+struct DataSafetyStatusItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let value: String
+    var tone: StatusChipTone = .neutral
+}
+
+struct DataSafetyStatusStrip: View {
+    let items: [DataSafetyStatusItem]
+
+    var body: some View {
+        AppPanel(
+            tone: .grouped,
+            cornerRadius: 12,
+            padding: AppSpacing.normal,
+            stroke: Color.appStrokeSecondary.opacity(0.45)
+        ) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 132), alignment: .topLeading)],
+                alignment: .leading,
+                spacing: AppSpacing.normal
+            ) {
+                ForEach(items) { item in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(item.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        StatusChip(text: item.title, tone: item.tone, compact: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+}
+
+struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    var forceSplit: Bool? = nil
+    var visibility: NavigationSplitViewVisibility = .all
+    @ViewBuilder let compact: () -> Compact
+    @ViewBuilder let sidebar: () -> Sidebar
+    @ViewBuilder let detail: () -> Detail
+
+    init(
+        forceSplit: Bool? = nil,
+        visibility: NavigationSplitViewVisibility = .all,
+        @ViewBuilder compact: @escaping () -> Compact,
+        @ViewBuilder sidebar: @escaping () -> Sidebar,
+        @ViewBuilder detail: @escaping () -> Detail
+    ) {
+        self.forceSplit = forceSplit
+        self.visibility = visibility
+        self.compact = compact
+        self.sidebar = sidebar
+        self.detail = detail
+    }
+
+    private var usesSplitLayout: Bool {
+        if let forceSplit {
+            return forceSplit
+        }
+        return UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    var body: some View {
+        Group {
+            if usesSplitLayout {
+                NavigationSplitView(columnVisibility: .constant(visibility)) {
+                    sidebar()
+                } detail: {
+                    detail()
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                compact()
+            }
+        }
+    }
+}
+
 struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
     let focusedField: FocusState<Field?>.Binding
     let fields: [Field]
@@ -325,7 +790,7 @@ struct ProjectContextStrip: View {
                 Spacer(minLength: 8)
                 Text(currentProjectName)
                     .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
+                    .appListPrimaryTextLayout()
                     .foregroundStyle(.primary)
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.semibold))
@@ -333,10 +798,11 @@ struct ProjectContextStrip: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(uiColor: .secondarySystemGroupedBackground))
-            )
+            .background {
+                AppSurface(tone: .grouped, cornerRadius: 10) {
+                    Color.clear
+                }
+            }
         }
         .buttonStyle(.plain)
     }
@@ -363,18 +829,18 @@ struct BusinessRecordRow: View {
                 Text(title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(.primary)
-                    .lineLimit(1)
+                    .appListPrimaryTextLayout()
                 if !meta.isEmpty {
                     Text(meta)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
+                        .appListSecondaryTextLayout()
                 }
                 if !note.isEmpty {
                     Text(note)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .appListSecondaryTextLayout()
                 }
             }
 
@@ -405,41 +871,6 @@ struct BusinessRecordRow: View {
     }
 }
 
-struct OperationToastModifier: ViewModifier {
-    @Binding var message: String?
-    @State private var hideTask: Task<Void, Never>?
-
-    func body(content: Content) -> some View {
-        content
-            .overlay(alignment: .top) {
-                if let message {
-                    Text(message)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(
-                            Capsule().fill(Color.black.opacity(0.78))
-                        )
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                }
-            }
-            .onChange(of: message) { _, newValue in
-                hideTask?.cancel()
-                guard newValue != nil else { return }
-                AppHaptics.success()
-                hideTask = Task { @MainActor in
-                    guard await DebouncedTask.wait(for: .milliseconds(1_600)) else { return }
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        message = nil
-                    }
-                }
-            }
-            .animation(.easeOut(duration: 0.2), value: message)
-    }
-}
-
 struct OperationToastNotice: Identifiable {
     let id = UUID()
     let message: String
@@ -449,6 +880,37 @@ struct OperationToastNotice: Identifiable {
 
     static func info(_ message: String) -> OperationToastNotice {
         OperationToastNotice(message: message)
+    }
+}
+
+private struct OperationToastBanner: View {
+    let notice: OperationToastNotice
+    var actionOverride: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Text(notice.message)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.white)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
+
+            if let actionTitle = notice.actionTitle {
+                Button(actionTitle) {
+                    actionOverride?() ?? notice.action?()
+                }
+                .font(.caption.weight(.bold))
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.appWarning)
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            Capsule().fill(Color.black.opacity(0.78))
+        )
+        .padding(.top, 8)
+        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
@@ -574,45 +1036,32 @@ final class UndoableDeletionCoordinator {
 
 struct OperationToastNoticeModifier: ViewModifier {
     @Binding var notice: OperationToastNotice?
+    var onDismiss: (() -> Void)? = nil
     @State private var hideTask: Task<Void, Never>?
 
     func body(content: Content) -> some View {
         content
             .overlay(alignment: .top) {
                 if let notice {
-                    HStack(spacing: 10) {
-                        Text(notice.message)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-
-                        if let actionTitle = notice.actionTitle {
-                            Button(actionTitle) {
-                                let action = notice.action
-                                hideTask?.cancel()
-                                withAnimation(.easeOut(duration: 0.2)) {
-                                    self.notice = nil
-                                }
-                                action?()
+                    OperationToastBanner(
+                        notice: notice,
+                        actionOverride: {
+                            hideTask?.cancel()
+                            withAnimation(.easeOut(duration: 0.2)) {
+                                self.notice = nil
                             }
-                            .font(.caption.weight(.bold))
-                            .buttonStyle(.plain)
-                            .foregroundStyle(Color.appWarning)
+                            onDismiss?()
+                            notice.action?()
                         }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule().fill(Color.black.opacity(0.78))
                     )
-                    .padding(.top, 8)
-                    .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
             .onChange(of: notice?.id) { _, newID in
                 hideTask?.cancel()
-                guard newID != nil else { return }
+                guard newID != nil else {
+                    onDismiss?()
+                    return
+                }
                 AppHaptics.success()
                 let duration = notice?.autoDismissDuration ?? .milliseconds(1_600)
                 hideTask = Task { @MainActor in
@@ -620,19 +1069,127 @@ struct OperationToastNoticeModifier: ViewModifier {
                     withAnimation(.easeOut(duration: 0.2)) {
                         notice = nil
                     }
+                    onDismiss?()
                 }
             }
             .animation(.easeOut(duration: 0.2), value: notice?.id)
     }
 }
 
+private struct OperationToastMessageBridgeModifier: ViewModifier {
+    @Binding var message: String?
+    @State private var notice: OperationToastNotice?
+
+    func body(content: Content) -> some View {
+        content
+            .modifier(OperationToastNoticeModifier(
+                notice: $notice,
+                onDismiss: {
+                    message = nil
+                }
+            ))
+            .onChange(of: message) { _, newValue in
+                guard let newValue, !newValue.isEmpty else {
+                    notice = nil
+                    return
+                }
+                notice = .info(newValue)
+            }
+            .onAppear {
+                if let message, !message.isEmpty {
+                    notice = .info(message)
+                }
+            }
+    }
+}
+
 extension View {
     func operationToast(message: Binding<String?>) -> some View {
-        modifier(OperationToastModifier(message: message))
+        modifier(OperationToastMessageBridgeModifier(message: message))
     }
 
     func operationToast(notice: Binding<OperationToastNotice?>) -> some View {
         modifier(OperationToastNoticeModifier(notice: notice))
+    }
+}
+
+struct AppActionableEmptyState<Action: View>: View {
+    let title: String
+    let systemImage: String
+    let message: Text
+    @ViewBuilder let action: Action
+
+    init(
+        title: String,
+        systemImage: String,
+        message: String,
+        @ViewBuilder action: () -> Action
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.message = Text(message)
+        self.action = action()
+    }
+
+    init(
+        title: String,
+        systemImage: String,
+        message: Text,
+        @ViewBuilder action: () -> Action
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.message = message
+        self.action = action()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            HStack(alignment: .top, spacing: AppSpacing.tight) {
+                Image(systemName: systemImage)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color.appPrimaryAction)
+                    .frame(width: 28, height: 28)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                    message
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+
+                Spacer(minLength: 0)
+            }
+
+            action
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+extension AppActionableEmptyState where Action == EmptyView {
+    init(
+        title: String,
+        systemImage: String,
+        message: String
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.message = Text(message)
+        self.action = EmptyView()
+    }
+
+    init(
+        title: String,
+        systemImage: String,
+        message: Text
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.message = message
+        self.action = EmptyView()
     }
 }
 

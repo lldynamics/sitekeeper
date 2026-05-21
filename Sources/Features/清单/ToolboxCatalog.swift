@@ -43,7 +43,7 @@ enum ToolboxCatalog {
         QuickToolEntry(id: "quotation", icon: "doc.text.fill", title: "预结算信息", desc: "版本、状态和客户确认信息", color: .appQuotation, destination: .quotation),
         QuickToolEntry(id: "labor", icon: "person.2.fill", title: "人工记录", desc: "工种、人数、工价、金额和结算状态", color: .appSuccess, destination: .labor),
         QuickToolEntry(id: "contacts", icon: "person.crop.rectangle.stack.fill", title: "联系人", desc: "汇总所有项目联系人，按项目筛选", color: .appPeople, destination: .contacts),
-        QuickToolEntry(id: "drawing-library", icon: "folder.badge.gearshape", title: "图纸管理", desc: "按项目管理 DWG / DXF / PDF 原件、版本和当前版", color: .appDoc, destination: .drawingLibrary),
+        QuickToolEntry(id: "drawing-library", icon: "folder.badge.gearshape", title: String(localized: "图纸台账"), desc: String(localized: "按项目管理 DWG / DXF / PDF 原件、版本和当前版；DWG/DXF 通过外部专业看图软件打开。"), color: .appDoc, destination: .drawingLibrary),
         QuickToolEntry(id: "methods", icon: "hammer.fill", title: "施工工艺库", desc: "标准做法、质量要求和安全注意", color: .appSuccess, destination: .methods)
     ]
 }

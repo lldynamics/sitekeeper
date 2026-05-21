@@ -7,7 +7,6 @@ struct ConcreteCalcView: View {
     @AppStorage(UserPreferenceKeys.Calculator.concreteThickness) private var thickness = "12"
     @AppStorage(UserPreferenceKeys.Calculator.concreteWaste) private var waste = "5"
     @AppStorage(UserPreferenceKeys.Calculator.concreteGrade) private var gradeRawValue = ConcreteGrade.c25.rawValue
-    @State private var result = ""
     @State private var resultModel: CalculationResult?
     @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
@@ -23,7 +22,7 @@ struct ConcreteCalcView: View {
             requirement: .requiredPositive,
             min: 0.1,
             max: 10_000,
-            rangeMessage: calculatorLoc(String(localized: "请输入 0.1–10000"))
+            rangeMessage: CalculatorCopy.concreteLengthRange
         )
     }
 
@@ -34,7 +33,7 @@ struct ConcreteCalcView: View {
             requirement: .requiredPositive,
             min: 0.1,
             max: 10_000,
-            rangeMessage: calculatorLoc(String(localized: "请输入 0.1–10000"))
+            rangeMessage: CalculatorCopy.concreteLengthRange
         )
     }
 
@@ -45,7 +44,7 @@ struct ConcreteCalcView: View {
             requirement: .requiredPositive,
             min: 1,
             max: 200,
-            rangeMessage: calculatorLoc(String(localized: "请输入 1–200"))
+            rangeMessage: CalculatorCopy.concreteThicknessRange
         )
     }
 
@@ -56,51 +55,91 @@ struct ConcreteCalcView: View {
             requirement: .requiredNonNegative,
             min: 0,
             max: 40,
-            rangeMessage: calculatorLoc(String(localized: "请输入 0–40"))
+            rangeMessage: CalculatorCopy.concreteWasteRange
         )
     }
 
     var body: some View {
-        Form {
-            Section(String(localized: "板面尺寸")) {
-                LabeledContent(String(localized: "长度 (m)")) { TextField("10", text: $length.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                NumericInputFieldValidationHint(validation: lengthValidation, showWhenEmpty: didAttemptSubmit)
-                CalculatorPresetChips(title: String(localized: "长度预设"), options: ["6", "8", "10", "12", "15"], selection: $length)
-                LabeledContent(String(localized: "宽度 (m)")) { TextField("8", text: $width.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                NumericInputFieldValidationHint(validation: widthValidation, showWhenEmpty: didAttemptSubmit)
-                CalculatorPresetChips(title: String(localized: "宽度预设"), options: ["4", "6", "8", "10"], selection: $width)
-                LabeledContent(String(localized: "厚度 (cm)")) { TextField("12", text: $thickness.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                NumericInputFieldValidationHint(validation: thicknessValidation, showWhenEmpty: didAttemptSubmit)
-                CalculatorPresetChips(title: String(localized: "厚度预设"), options: ["10", "12", "15", "18"], selection: $thickness)
-                LabeledContent(String(localized: "损耗 (%)")) { TextField("5", text: $waste.numericInput(.quantity)).keyboardType(.decimalPad).multilineTextAlignment(.trailing).focused($isInputFocused) }
-                NumericInputFieldValidationHint(validation: wasteValidation, showWhenEmpty: didAttemptSubmit)
-                CalculatorPresetChips(title: String(localized: "损耗预设"), options: ["3", "5", "8", "10"], selection: $waste)
-                Picker(String(localized: "标号"), selection: $gradeRawValue) {
+        CalculatorForm(title: CalculatorCopy.concreteTool, focus: $isInputFocused) {
+            Section(CalculatorCopy.concreteDimensionSection) {
+                CalculatorInputField(
+                    title: CalculatorCopy.concreteLength,
+                    placeholder: "10",
+                    unit: "m",
+                    text: $length,
+                    rule: CalculatorNumericFieldRule(
+                        kind: .quantity,
+                        requirement: .requiredPositive,
+                        min: 0.1,
+                        max: 10_000,
+                        rangeMessage: CalculatorCopy.concreteLengthRange
+                    ),
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
+                CalculatorPresetChips(title: CalculatorCopy.lengthPreset, options: ["6", "8", "10", "12", "15"], selection: $length)
+                CalculatorInputField(
+                    title: CalculatorCopy.concreteWidth,
+                    placeholder: "8",
+                    unit: "m",
+                    text: $width,
+                    rule: CalculatorNumericFieldRule(
+                        kind: .quantity,
+                        requirement: .requiredPositive,
+                        min: 0.1,
+                        max: 10_000,
+                        rangeMessage: CalculatorCopy.concreteLengthRange
+                    ),
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
+                CalculatorPresetChips(title: CalculatorCopy.widthPreset, options: ["4", "6", "8", "10"], selection: $width)
+                CalculatorInputField(
+                    title: CalculatorCopy.concreteThickness,
+                    placeholder: "12",
+                    unit: "cm",
+                    text: $thickness,
+                    rule: CalculatorNumericFieldRule(
+                        kind: .quantity,
+                        requirement: .requiredPositive,
+                        min: 1,
+                        max: 200,
+                        rangeMessage: CalculatorCopy.concreteThicknessRange
+                    ),
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
+                CalculatorPresetChips(title: CalculatorCopy.concreteThicknessPreset, options: ["10", "12", "15", "18"], selection: $thickness)
+                CalculatorInputField(
+                    title: CalculatorCopy.concreteWaste,
+                    placeholder: "5",
+                    unit: "%",
+                    text: $waste,
+                    rule: CalculatorNumericFieldRule(
+                        kind: .quantity,
+                        requirement: .requiredNonNegative,
+                        min: 0,
+                        max: 40,
+                        rangeMessage: CalculatorCopy.concreteWasteRange
+                    ),
+                    showWhenEmpty: didAttemptSubmit,
+                    focus: $isInputFocused
+                )
+                CalculatorPresetChips(title: CalculatorCopy.wastePreset, options: ["3", "5", "8", "10"], selection: $waste)
+                Picker(CalculatorCopy.concreteGrade, selection: $gradeRawValue) {
                     ForEach(ConcreteGrade.allCases, id: \.self) { Text($0.displayName).tag($0.rawValue) }
                 }
+                CalculatorInlineNotice(message: CalculatorCopy.concreteMixNotice)
             }
             Section {
-                Button(String(localized: "估算")) {
+                CalculatorPrimaryActionButton(title: CalculatorCopy.actionEstimate) {
                     isInputFocused = false
                     didAttemptSubmit = true
                     calc()
                 }
-                .frame(maxWidth: .infinity)
-                .fontWeight(.semibold)
             }
             if let resultModel {
-                Section(String(localized: "结果")) {
-                    CalculatorResultCard(
-                        title: String(localized: "混凝土估算"),
-                        result: resultModel
-                    )
-                }
-            }
-        }
-        .navigationTitle(String(localized: "混凝土算量")).navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            KeyboardDismissToolbar {
-                isInputFocused = false
+                CalculatorResultPanel(cardTitle: CalculatorCopy.concreteResultTitle, result: resultModel)
             }
         }
     }
@@ -110,7 +149,6 @@ struct ConcreteCalcView: View {
               let w = widthValidation.doubleValue,
               let t = thicknessValidation.doubleValue,
               let ws = wasteValidation.doubleValue else {
-            result = ""
             resultModel = nil
             return
         }
@@ -120,48 +158,41 @@ struct ConcreteCalcView: View {
         let sand = total * grade.sandM3PerM3
         let gravel = total * grade.gravelM3PerM3
         resultModel = .singleSection(
-            headline: String(format: String(localized: "含损耗 %@ m³"), fmt(total)),
-            formula: String(localized: "净方量 = 长×宽×厚(cm)÷100；含损耗 = 净方量×(1+损耗%)"),
+            headline: CalculatorResultCopy.concreteHeadline(total: total),
+            formula: CalculatorResultCopy.concreteFormula(),
             items: [
                 CalculationResult.item(
-                    String(localized: "净方量"),
-                    String(format: String(localized: "%@ m³"), fmt(net))
+                    CalculatorResultLabel.netVolume,
+                    CalculatorFormatting.cubicMeters(net)
                 ),
                 CalculationResult.item(
-                    String(localized: "水泥"),
-                    String(format: String(localized: "%@ kg (%lld 袋)"), fmt(cement), Int64(ceil(cement / 50))),
+                    CalculatorResultLabel.cement,
+                    CalculatorResultCopy.concreteCementWithBags(cement: cement),
                     status: .pass
                 ),
                 CalculationResult.item(
-                    String(localized: "砂"),
-                    String(format: String(localized: "%@ m³"), fmt(sand))
+                    CalculatorResultLabel.sand,
+                    CalculatorFormatting.cubicMeters(sand)
                 ),
                 CalculationResult.item(
-                    String(localized: "碎石"),
-                    String(format: String(localized: "%@ m³"), fmt(gravel))
+                    CalculatorResultLabel.gravel,
+                    CalculatorFormatting.cubicMeters(gravel)
                 ),
             ]
         )
-        result = """
-        \(String(format: String(localized: "净方量: %@ m³"), fmt(net)))
-        \(String(format: String(localized: "含损耗: %@ m³"), fmt(total)))
-        \(String(format: String(localized: "水泥: %@ kg (%lld 袋)"), fmt(cement), Int64(ceil(cement / 50))))
-        \(String(format: String(localized: "砂: %@ m³"), fmt(sand)))
-        \(String(format: String(localized: "碎石: %@ m³"), fmt(gravel)))
-        """
-        saveHistory(String(format: String(localized: "净方量 %@ m³"), fmt(net)))
-    }
-
-    private func fmt(_ v: Double) -> String {
-        let f = NumberFormatter(); f.minimumFractionDigits = 0; f.maximumFractionDigits = 3
-        return f.string(from: NSNumber(value: v)) ?? String(v)
-    }
-
-    private func saveHistory(_ r: String) {
-        store.appendCalculationHistory(
-            tool: String(localized: "混凝土算量"),
-            input: "\(length)×\(width)m, \(thickness)cm, \(grade.displayName)",
-            result: r
+        CalculatorHistorySupport.record(
+            store: store,
+            tool: CalculatorCopy.concreteTool,
+            input: CalculatorHistoryCopy.concreteInput(
+                length: length,
+                width: width,
+                thickness: thickness,
+                grade: grade.displayName
+            ),
+            result: CalculatorHistoryCopy.volumeResult(
+                prefix: CalculatorResultLabel.netVolume,
+                value: net
+            )
         )
     }
 }

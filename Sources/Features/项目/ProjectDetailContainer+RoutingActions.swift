@@ -31,6 +31,119 @@ extension ProjectDetailContainer {
         routeState.mode = mode
     }
 
+    func handleDeliveryRepairAction(_ action: ProjectDeliveryRepairAction, snapshot: ProjectDetailSnapshot) {
+        switch action {
+        case .attachReceipts:
+            routeState.mode = .finance
+            routeState.financeJumpFilter = .missingReceipt
+            guard let record = firstMissingReceiptRecord(snapshot: snapshot) else {
+                operationNotice = .info(String(localized: "没有需要补票据的账目。"))
+                return
+            }
+            presentAfterDeliveryGuideDismiss {
+                financeState.attachmentManagingRecord = record
+            }
+        case .importDrawings:
+            routeState.mode = .assets
+            presentAfterDeliveryGuideDismiss {
+                assetState.showDrawingImporter = true
+            }
+        case .resolveTodos:
+            routeState.mode = .records
+            presentAfterDeliveryGuideDismiss {
+                showTodoFilterView = true
+            }
+        case .createBackup:
+            presentAfterDeliveryGuideDismiss {
+                dataManagementDestination = ProjectDetailDataManagementDestination(route: .backup)
+            }
+        case .restoreMissingOriginals:
+            routeState.mode = .assets
+            presentAfterDeliveryGuideDismiss {
+                if missingOriginalEntriesPreferDrawingImport(snapshot: snapshot) {
+                    assetState.showDrawingImporter = true
+                } else {
+                    assetState.showDocumentFileImporter = true
+                }
+            }
+        case .markCurrentDrawingVersion:
+            routeState.mode = .assets
+            guard let drawing = latestDrawingFromFirstGroupWithoutCurrentVersion(snapshot.relatedDrawings) else {
+                operationNotice = .info(String(localized: "没有需要标记当前版的图纸组。"))
+                return
+            }
+            setDrawingAsCurrentVersion(drawing)
+            operationNotice = .info(
+                String(
+                    format: String(localized: "已将“%@”标为当前版。"),
+                    drawing.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? drawing.fileName : drawing.name
+                )
+            )
+        }
+    }
+
+    private func presentAfterDeliveryGuideDismiss(_ action: @escaping @MainActor () -> Void) {
+        Task { @MainActor in
+            await Task.yield()
+            action()
+        }
+    }
+
+    private func firstMissingReceiptRecord(snapshot: ProjectDetailSnapshot) -> ProjectFinancialRecord? {
+        snapshot.relatedFinancialRecords
+            .sorted { lhs, rhs in
+                if lhs.date == rhs.date {
+                    return lhs.id.uuidString < rhs.id.uuidString
+                }
+                return lhs.date > rhs.date
+            }
+            .first { record in
+                record.requiresAttachment && linkedDocuments(for: record).isEmpty
+            }
+    }
+
+    private func missingOriginalEntriesPreferDrawingImport(snapshot: ProjectDetailSnapshot) -> Bool {
+        let entries = ProjectDetailImportExportActions.missingProjectPackageFiles(
+            documents: snapshot.relatedDocuments,
+            drawings: snapshot.relatedDrawings,
+            logs: snapshot.relatedLogs,
+            quickNotes: snapshot.relatedQuickNotes
+        )
+        return entries.contains { entry in
+            entry.localizedStandardContains(String(localized: "图纸")) || entry.localizedCaseInsensitiveContains("drawing")
+        }
+    }
+
+    private func latestDrawingFromFirstGroupWithoutCurrentVersion(_ drawings: [ProjectDrawing]) -> ProjectDrawing? {
+        guard !drawings.isEmpty else { return nil }
+        let grouped = Dictionary(grouping: drawings) { drawing in
+            let nameKey = ProjectDetailDrawingHelper.normalizedDrawingNameKey(drawing.name)
+            return nameKey.isEmpty ? drawing.fileName : nameKey
+        }
+        let unresolvedGroups = grouped.values
+            .filter { !$0.contains(where: \.isCurrentVersion) }
+            .sorted { lhs, rhs in
+                let left = drawingGroupDisplayName(lhs)
+                let right = drawingGroupDisplayName(rhs)
+                return left.localizedStandardCompare(right) == .orderedAscending
+            }
+        guard let firstGroup = unresolvedGroups.first else { return nil }
+        return firstGroup.sorted { lhs, rhs in
+            let leftVersion = ProjectDetailDrawingHelper.versionNumber(lhs.version) ?? -1
+            let rightVersion = ProjectDetailDrawingHelper.versionNumber(rhs.version) ?? -1
+            if leftVersion == rightVersion {
+                return lhs.importedAt > rhs.importedAt
+            }
+            return leftVersion > rightVersion
+        }.first
+    }
+
+    private func drawingGroupDisplayName(_ drawings: [ProjectDrawing]) -> String {
+        guard let drawing = drawings.first else { return "" }
+        let name = drawing.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        return name.isEmpty ? drawing.fileName : name
+    }
+
     func requestAnchorScroll(_ anchor: ProjectDetailAnchor) {
         routeState.anchorRequest = ProjectDetailAnchorRequest(anchor: anchor)
     }

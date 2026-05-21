@@ -80,4 +80,81 @@ struct DataHealthPhotoTests {
         #expect(combined.contains("rect_before_combined.jpg"))
         #expect(!combined.contains("rect_after_combined.jpg")) // 没有设置 after
     }
+
+    @Test func scannerSummarizesTriggeredHealthIssues() {
+        let validProjectId = UUID()
+        let invalidProjectId = UUID()
+        let missingDocumentId = UUID()
+        let missingFinancialRecordId = UUID()
+        let document = ProjectDocument(
+            projectId: validProjectId,
+            title: "Receipt",
+            fileName: "missing-receipt.pdf",
+            linkedFinancialRecordId: missingFinancialRecordId
+        )
+        let financialRecord = ProjectFinancialRecord(
+            projectId: validProjectId,
+            linkedDocumentIds: [missingDocumentId]
+        )
+        let log = DailyLog(
+            date: "2026-05-21",
+            weather: "",
+            content: "",
+            workers: "",
+            photoFileName: "missing-log.jpg",
+            projectId: invalidProjectId
+        )
+        let todo = SiteTodo(
+            title: "Fix",
+            rectificationBeforePhotoFileName: "missing-before.jpg",
+            projectId: invalidProjectId
+        )
+        let material = MaterialItem(
+            name: "Cement",
+            quantity: "1",
+            unit: "bag",
+            projectId: invalidProjectId
+        )
+        let warehouseMovement = ProjectWarehouseMovement(
+            projectId: invalidProjectId,
+            linkedDocumentIds: [missingDocumentId]
+        )
+        let input = DataHealthScanInput(
+            projects: [Project(id: validProjectId, name: "Project", location: "")],
+            dailyLogs: [log],
+            siteTodos: [todo],
+            projectDocuments: [document],
+            projectFinancialRecords: [financialRecord],
+            projectWarehouseMovements: [warehouseMovement],
+            materialItems: [material],
+            storageIssues: ["photo.save_failed"]
+        )
+        var storage = DataHealthScanStorage()
+        storage.photoExists = { _ in false }
+        storage.projectDocumentExists = { _ in false }
+        storage.quickNoteAttachmentExists = { _ in true }
+        storage.orphanPhotoFileNames = { _, _ in ["orphan-photo.jpg"] }
+        storage.orphanDrawingFileNames = { _ in [] }
+        storage.orphanProjectDocumentFileNames = { _ in [] }
+        storage.orphanQuickNoteAttachmentFileNames = { _, _ in [] }
+
+        let summary = DataHealthScanner.scan(
+            input: input,
+            reason: .dataChanged,
+            scannedAt: Date(timeIntervalSince1970: 1_800_000_000),
+            storage: storage
+        )
+
+        #expect(summary.reason == .dataChanged)
+        #expect(summary.missingPhotoFiles == 2)
+        #expect(summary.missingDocumentFiles == 1)
+        #expect(summary.orphanPhotoFiles == 1)
+        #expect(summary.orphanAttachmentMappings == 1)
+        #expect(summary.orphanWarehouseAttachmentMappings == 1)
+        #expect(summary.danglingDocumentLinks == 1)
+        #expect(summary.invalidProjectRefs == 4)
+        #expect(summary.storageIssues == 1)
+        #expect(summary.totalIssues == 12)
+        #expect(summary.hasIssues)
+    }
 }

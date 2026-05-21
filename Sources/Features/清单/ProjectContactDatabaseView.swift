@@ -25,8 +25,16 @@ struct ProjectContactDatabaseView: View {
         self.focusedContactId = focusedContactId
     }
 
+    private var projects: [Project] {
+        projectStore.projects
+    }
+
+    private var projectContacts: [ProjectContact] {
+        projectStore.projectContacts
+    }
+
     private var scopedContacts: [ProjectContact] {
-        store.projectContacts.filter { contact in
+        projectContacts.filter { contact in
             guard let selectedProjectId else { return true }
             return contact.isLinked(to: selectedProjectId)
         }
@@ -56,14 +64,14 @@ struct ProjectContactDatabaseView: View {
         RealtimeSearchSuggestionBuilder.suggestions(
             keyword: searchText,
             categories: [.contact],
-            projects: store.projects,
+            projects: projects,
             contacts: scopedContacts,
             limit: 6
         )
     }
 
     private var duplicatePhoneGroups: [(phone: String, contacts: [ProjectContact])] {
-        let grouped = Dictionary(grouping: store.projectContacts) { normalizedPhone($0.phone) }
+        let grouped = Dictionary(grouping: projectContacts) { normalizedPhone($0.phone) }
         return grouped
             .filter { !$0.key.isEmpty && $0.value.count > 1 }
             .map { (phone: $0.key, contacts: $0.value.sorted { projectName($0.projectId) < projectName($1.projectId) }) }
@@ -79,13 +87,25 @@ struct ProjectContactDatabaseView: View {
             emptyTitle: String(localized: "暂无联系人"),
             emptySystemImage: "person.crop.rectangle.stack",
             emptyDescription: Text(String(localized: "项目联系人会统一显示在这里，可按项目筛选。")),
+            emptyActionTitle: projectContacts.isEmpty ? String(localized: "添加联系人") : String(localized: "清除筛选"),
+            emptyActionSystemImage: projectContacts.isEmpty ? "person.crop.circle.badge.plus" : "line.3.horizontal.decrease.circle",
+            onEmptyAction: {
+                if projectContacts.isEmpty {
+                    showAdd = true
+                } else {
+                    searchText = ""
+                    selectedProjectId = nil
+                    roleFilter = nil
+                }
+            },
             searchSuggestions: searchSuggestions,
+            searchEmptyStateText: String(localized: "未找到匹配的联系人、电话、公司或项目"),
             onSelect: { contact in
                 editingContact = contact
             },
             onSelectSuggestion: { suggestion in
                 guard suggestion.category == .contact else { return }
-                guard let contact = store.projectContacts.first(where: { $0.id == suggestion.entityId }) else { return }
+                guard let contact = projectContacts.first(where: { $0.id == suggestion.entityId }) else { return }
                 selectedProjectId = contact.projectId
                 editingContact = contact
             },
@@ -170,14 +190,14 @@ struct ProjectContactDatabaseView: View {
         )
         .onAppear(perform: openFocusedContactIfNeeded)
         .sheet(isPresented: $showAdd) {
-            ProjectContactDatabaseEditSheet(contact: nil, projects: store.projects, initialProjectId: selectedProjectId) { contact in
+            ProjectContactDatabaseEditSheet(contact: nil, projects: projects, initialProjectId: selectedProjectId) { contact in
                 store.upsertProjectContact(contact, insertAtTopWhenNew: true)
                 store.scheduleSave()
                 showAdd = false
             }
         }
         .sheet(item: $editingContact) { contact in
-            ProjectContactDatabaseEditSheet(contact: contact, projects: store.projects, initialProjectId: contact.projectId) { updated in
+            ProjectContactDatabaseEditSheet(contact: contact, projects: projects, initialProjectId: contact.projectId) { updated in
                 store.upsertProjectContact(updated)
                 store.scheduleSave()
                 editingContact = nil
@@ -233,7 +253,7 @@ struct ProjectContactDatabaseView: View {
                         selectedProjectId = nil
                         roleFilter = nil
                     }
-                    ForEach(store.projects.sorted { $0.name < $1.name }) { project in
+                    ForEach(projects.sorted { $0.name < $1.name }) { project in
                         contactFilterChip(title: project.name, isSelected: selectedProjectId == project.id, isColored: true) {
                             selectedProjectId = project.id
                             roleFilter = nil
@@ -279,7 +299,7 @@ struct ProjectContactDatabaseView: View {
 
     private func openFocusedContactIfNeeded() {
         guard let focusedContactId, !didOpenFocusedContact,
-              let contact = store.projectContacts.first(where: { $0.id == focusedContactId }) else { return }
+              let contact = projectContacts.first(where: { $0.id == focusedContactId }) else { return }
         didOpenFocusedContact = true
         searchText = ""
         selectedProjectId = contact.projectId
@@ -294,7 +314,7 @@ struct ProjectContactDatabaseView: View {
 
     private func deleteContacts(_ ids: Set<UUID>, source: String = "ProjectContactDatabaseView") {
         guard !ids.isEmpty else { return }
-        let targets = store.projectContacts.filter { ids.contains($0.id) }
+        let targets = projectContacts.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
 
         let deletion = store.removeProjectContacts(
@@ -350,7 +370,7 @@ struct ProjectContactDatabaseView: View {
         let phoneKey = normalizedPhone(contact.phone)
         var projectIDs = Set(contact.relatedProjectIds)
         if !phoneKey.isEmpty {
-            let all = store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey && $0.id != contact.id }
+            let all = projectContacts.filter { normalizedPhone($0.phone) == phoneKey && $0.id != contact.id }
             projectIDs.formUnion(all.map(\.projectId))
             projectIDs.formUnion(all.flatMap(\.relatedProjectIds))
         }
@@ -361,7 +381,7 @@ struct ProjectContactDatabaseView: View {
     /// 合并同一手机号的重复联系人（每个项目仅保留一条最完整的记录）
     private func mergeDuplicateContacts(phone: String) {
         let phoneKey = normalizedPhone(phone)
-        let all = store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
+        let all = projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
         guard all.count > 1 else { return }
         // 按项目分组，每个项目只保留一条
         var toKeep = Set<UUID>()
@@ -377,7 +397,7 @@ struct ProjectContactDatabaseView: View {
             }
         }
         let idsToDelete = Set(all.map(\.id)).subtracting(toKeep)
-        let targets = store.projectContacts.filter { idsToDelete.contains($0.id) }
+        let targets = projectContacts.filter { idsToDelete.contains($0.id) }
         guard !targets.isEmpty else { return }
 
         let deletion = store.removeProjectContacts(
@@ -431,12 +451,12 @@ struct ProjectContactDatabaseView: View {
     }
 
     private func projectName(_ id: UUID) -> String {
-        store.projects.first(where: { $0.id == id })?.name ?? String(localized: "未知项目")
+        projects.first(where: { $0.id == id })?.name ?? String(localized: "未知项目")
     }
 
     private func projectNames(for ids: [UUID]) -> [String] {
         ids.compactMap { id in
-            store.projects.first(where: { $0.id == id })?.name
+            projects.first(where: { $0.id == id })?.name
         }
     }
 
@@ -470,25 +490,25 @@ struct ProjectContactDatabaseView: View {
     private func contactCluster(for contact: ProjectContact) -> [ProjectContact] {
         let phoneKey = normalizedPhone(contact.phone)
         if !phoneKey.isEmpty {
-            return store.projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
+            return projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
         }
         let nameKey = contact.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !nameKey.isEmpty else { return [contact] }
-        return store.projectContacts.filter {
+        return projectContacts.filter {
             $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nameKey
         }
     }
 
     private func recentActivityDate(for projectId: UUID) -> Date {
         let summaryDate = projectStore.projectActivitySummary(for: projectId).latestActivityDate
-        let startDate = store.projects.first(where: { $0.id == projectId })
+        let startDate = projects.first(where: { $0.id == projectId })
             .flatMap { Formatters.parseDateOrDateTime($0.startDate) }
             ?? .distantPast
         return max(summaryDate ?? .distantPast, startDate)
     }
 
     private func unpaidAmount(for projectId: UUID) -> Double {
-        guard let project = store.projects.first(where: { $0.id == projectId }) else { return 0 }
+        guard let project = projects.first(where: { $0.id == projectId }) else { return 0 }
         let contract = project.contractAmountValue.doubleValue
         let paidFromSummary = projectStore.projectActivitySummary(for: projectId).collectedIncomeAmount
         let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
@@ -496,7 +516,7 @@ struct ProjectContactDatabaseView: View {
     }
 
     private func beginSystemContactImport() {
-        guard !store.projects.isEmpty else {
+        guard !projects.isEmpty else {
             showImportFeedback(String(localized: "请先创建项目，再导入联系人。"))
             return
         }
@@ -511,8 +531,8 @@ struct ProjectContactDatabaseView: View {
         if let selectedProjectId {
             return selectedProjectId
         }
-        if store.projects.count == 1 {
-            return store.projects[0].id
+        if projects.count == 1 {
+            return projects[0].id
         }
         return nil
     }
@@ -530,7 +550,7 @@ struct ProjectContactDatabaseView: View {
 
         let normalizedPrimary = normalizedPhone(imported.primaryPhone)
         if !normalizedPrimary.isEmpty,
-           let existing = store.projectContacts.first(where: {
+           let existing = projectContacts.first(where: {
                normalizedPhone($0.phone) == normalizedPrimary && $0.isLinked(to: projectId)
            }) {
             selectedProjectId = projectId

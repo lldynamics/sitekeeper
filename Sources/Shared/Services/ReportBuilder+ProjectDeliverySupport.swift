@@ -214,6 +214,39 @@ extension ReportBuilder {
             let titles = openTodos.map(\.title).filter { !$0.isEmpty }
             return titles.isEmpty ? ReportBuilder.loc("关联待办未关闭") : titles.joined(separator: ReportBuilder.loc("、"))
         }
+
+        var issueLocations: String {
+            joined(openTodos.map(\.drawingIssueLocation))
+        }
+
+        var layerOrPages: String {
+            joined(openTodos.map(\.drawingIssueLayerOrPage))
+        }
+
+        var measurements: String {
+            joined(openTodos.map(\.drawingIssueMeasurement))
+        }
+
+        var closeEvidence: String {
+            joined(openTodos.map(\.drawingIssueCloseEvidence))
+        }
+
+        var screenshotFileNames: String {
+            joined(openTodos.compactMap(\.rectificationBeforePhotoFileName))
+        }
+
+        var closingEvidenceFileNames: String {
+            joined(openTodos.compactMap(\.rectificationAfterPhotoFileName))
+        }
+
+        private func joined(_ values: [String]) -> String {
+            var seen: Set<String> = []
+            return values
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+                .filter { seen.insert($0).inserted }
+                .joined(separator: "；")
+        }
     }
 
     static func projectPackageArchiveFileName(projectName: String) -> String {
@@ -608,6 +641,12 @@ extension ReportBuilder {
             "issue_status_raw",
             "issue_status_display",
             "issue_note",
+            "issue_location",
+            "layer_or_page",
+            "measurement_result",
+            "close_evidence",
+            "screenshot_file_names",
+            "closing_evidence_file_names",
             "open_todo_count",
             "open_todo_titles",
             "owners",
@@ -626,6 +665,12 @@ extension ReportBuilder {
                 drawingIssueStatusKey(issue.drawing.issueStatus),
                 issue.drawing.issueStatus == .none ? loc("关联待办未关闭") : issue.drawing.issueStatus.displayName,
                 issue.drawing.issueNote,
+                issue.issueLocations,
+                issue.layerOrPages,
+                issue.measurements,
+                issue.closeEvidence,
+                issue.screenshotFileNames,
+                issue.closingEvidenceFileNames,
                 "\(issue.openTodos.count)",
                 issue.openTodos.map(\.title).joined(separator: "；"),
                 issue.openTodos.map(\.owner).filter { !$0.isEmpty }.joined(separator: "；"),

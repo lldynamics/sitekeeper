@@ -74,6 +74,15 @@ extension DashboardView {
         isIgnoringNegativeStockToday ? 0 : warehouseNegativeCount
     }
 
+    var displayedDataHealthIssueCount: Int {
+        store.latestDataHealthScan?.totalIssues ?? 0
+    }
+
+    var dataHealthRiskValue: String {
+        guard let summary = store.latestDataHealthScan else { return String(localized: "待扫描") }
+        return "\(summary.totalIssues)"
+    }
+
     var isDisplayedBackupReminderOverdue: Bool {
         guard !isIgnoringBackupReminderToday else { return false }
         return isBackupReminderOverdue
@@ -87,6 +96,7 @@ extension DashboardView {
             + unsettledFinancialCount
             + displayedPriceSpikeCount
             + displayedNegativeStockCount
+            + displayedDataHealthIssueCount
             + (isDisplayedBackupReminderOverdue ? 1 : 0)
     }
 
@@ -133,6 +143,16 @@ extension DashboardView {
                 priority: 820,
                 destination: .materialPriceSpikeDetails,
                 quickActions: priceSpikeRiskActions
+            ),
+            DashboardRiskPin(
+                id: "dataHealth",
+                title: String(localized: "数据异常"),
+                value: dataHealthRiskValue,
+                color: displayedDataHealthIssueCount > 0 ? .appRisk : .appSuccess,
+                hasRisk: displayedDataHealthIssueCount > 0,
+                priority: 800,
+                destination: .dataManagement(initialRoute: .health),
+                quickActions: dataHealthRiskActions
             ),
             DashboardRiskPin(
                 id: "negativeStock",
@@ -183,6 +203,24 @@ extension DashboardView {
 
     var visibleDashboardRiskPins: [DashboardRiskPin] {
         dashboardRiskPins.filter(\.hasRisk)
+    }
+
+    var dataHealthRiskActions: [DashboardRiskQuickAction] {
+        guard displayedDataHealthIssueCount > 0 else { return [] }
+        return [
+            DashboardRiskQuickAction(
+                id: "dataHealth.scan",
+                title: String(localized: "重新扫描"),
+                systemImage: "arrow.clockwise",
+                action: refreshDataHealthRisk
+            ),
+            DashboardRiskQuickAction(
+                id: "dataHealth.todo",
+                title: String(localized: "生成待办"),
+                systemImage: "checklist",
+                action: createDataHealthTodo
+            )
+        ]
     }
 
     var backupReminderRiskActions: [DashboardRiskQuickAction] {
@@ -293,6 +331,12 @@ extension DashboardView {
         showDashboardActionFeedback(String(localized: "已忽略今日“负库存”提醒"))
     }
 
+    func refreshDataHealthRisk() {
+        store.runDataHealthScanNow(reason: .manual)
+        AppHaptics.impact(.light)
+        showDashboardActionFeedback(String(localized: "已安排数据健康检查"))
+    }
+
     func raisePriceSpikeThreshold() {
         let current = financeStore.materialPriceSpikeThreshold
         let raised = min(current + 0.05, 0.50)
@@ -359,6 +403,18 @@ extension DashboardView {
             title: "核对负库存",
             note: "\(projectNameText) 当前有 \(displayedNegativeStockCount) 项负库存，请补录入库或修正数量。",
             projectId: projectId
+        )
+    }
+
+    func createDataHealthTodo() {
+        createRiskTodo(
+            marker: "[dashboard-risk:data-health]",
+            title: String(localized: "处理数据健康异常"),
+            note: String(
+                format: String(localized: "工作台检测到数据健康检查有 %lld 个异常，请打开数据健康检查处理。"),
+                Int64(displayedDataHealthIssueCount)
+            ),
+            projectId: nil
         )
     }
 

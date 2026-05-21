@@ -122,12 +122,23 @@ extension DataHealthView {
             detail: "\(String(format: l("%d 项"), fixedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
+        store.runDataHealthScanNow(reason: .manual)
+        AppHaptics.success()
+        operationNotice = .info(
+            String(
+                format: l("已修复 %lld 项，剩余 %lld 项"),
+                Int64(fixedCount),
+                Int64(afterCount)
+            )
+        )
     }
 
     func clearMediaThumbnailCaches() {
         PhotoStorage.clearThumbnailCache()
         QuickNoteAttachmentStorage.clearThumbnailCache()
         storageIssuesVersion = UUID()
+        AppHaptics.success()
+        operationNotice = .info(l("已清理缩略图缓存"))
     }
 
     func cleanupOrphanFiles() {
@@ -171,6 +182,47 @@ extension DataHealthView {
             detail: "\(String(format: l("%d 项"), cleanedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
+        store.runDataHealthScanNow(reason: .manual)
+        AppHaptics.success()
+        operationNotice = .info(
+            String(
+                format: l("已清理 %lld 个孤立原文件，剩余 %lld 个"),
+                Int64(cleanedCount),
+                Int64(afterCount)
+            )
+        )
+    }
+
+    func createDataHealthRepairTodo() {
+        let issueCount = totalIssues
+        guard issueCount > 0 else {
+            AppHaptics.warning()
+            operationNotice = .info(l("没有可生成待办的数据健康异常"))
+            return
+        }
+
+        let marker = "[data-health:repair]"
+        let hasDuplicate = store.siteTodos.contains { todo in
+            !todo.isDone && todo.note.contains(marker)
+        }
+        guard !hasDuplicate else {
+            AppHaptics.warning()
+            operationNotice = .info(l("数据健康整改待办已存在"))
+            return
+        }
+
+        let todo = SiteTodo(
+            title: l("处理数据健康异常"),
+            dueDate: Formatters.date.string(from: Date()),
+            priority: .high,
+            issueType: .general,
+            note: dataHealthRepairTodoNote(issueCount: issueCount, marker: marker),
+            projectId: nil
+        )
+        store.insertSiteTodoAtTop(todo)
+        store.scheduleSave()
+        AppHaptics.success()
+        operationNotice = .info(l("已生成健康整改待办"))
     }
 
     func exportHealthReport() {
@@ -215,5 +267,33 @@ extension DataHealthView {
     private func invalidOptionalProjectId(_ id: UUID?, validProjectIds: Set<UUID>) -> Bool {
         guard let id else { return false }
         return !validProjectIds.contains(id)
+    }
+
+    private func dataHealthRepairTodoNote(issueCount: Int, marker: String) -> String {
+        var lines = [
+            String(
+                format: l("数据健康检查发现 %lld 个异常，请处理缺失文件、无效关联或孤立原文件。"),
+                Int64(issueCount)
+            )
+        ]
+        let breakdown: [(String, Int)] = [
+            (l("缺失照片"), missingPhotoFiles.count),
+            (l("缺失票据文件"), missingDocumentFiles.count),
+            (l("缺失随手记附件"), missingQuickNoteAttachmentFiles.count),
+            (l("孤立照片文件"), orphanPhotoFiles.count),
+            (l("孤立图纸文件"), orphanDrawingFiles.count),
+            (l("孤立票据文件"), orphanDocumentFiles.count),
+            (l("孤立随手记附件"), orphanQuickNoteAttachmentFiles.count),
+            (l("孤立附件映射"), orphanAttachmentMappings.count),
+            (l("仓库悬空附件映射"), orphanWarehouseAttachmentMappings.count),
+            (l("资料悬空关联"), danglingDocumentLinks.count),
+            (l("无效项目关联"), invalidProjectRefs.count),
+            (l("存储错误记录"), storageIssues.count)
+        ]
+        for (title, count) in breakdown where count > 0 {
+            lines.append("\(title): \(count)")
+        }
+        lines.append(marker)
+        return lines.joined(separator: "\n")
     }
 }

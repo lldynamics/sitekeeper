@@ -12,6 +12,7 @@ cd "$repo_root"
 scripts/localization/check_localization_integrity.sh
 
 targets=(
+  "Sources/App"
   "Widget"
   "Sources/Features"
   "Sources/Shared/Services"

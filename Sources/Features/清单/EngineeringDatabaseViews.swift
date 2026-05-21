@@ -5,13 +5,14 @@ import AVFoundation
 
 struct ConstructionMethodLibraryView: View {
     @Environment(DataStore.self) private var store
+    @Environment(MaterialLibraryStore.self) private var materialLibraryStore
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let focusedMethodId: UUID?
     @State private var searchText = ""
     @State private var showAdd = false
     @State private var viewingMethod: ConstructionMethod?
     @State private var didOpenFocusedMethod = false
-    @State private var selectedTradeFilter = "全部"
+    @State private var selectedTradeFilter = String(localized: "全部")
     @State private var selectedMethodID: UUID?
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
@@ -20,14 +21,22 @@ struct ConstructionMethodLibraryView: View {
         self.focusedMethodId = focusedMethodId
     }
 
+    private var constructionMethods: [ConstructionMethod] {
+        materialLibraryStore.constructionMethods
+    }
+
+    private var allTradeFilter: String {
+        String(localized: "全部")
+    }
+
     private var tradeFilters: [String] {
-        let values = Set(store.constructionMethods.map { $0.trade.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
-        return ["全部"] + values.sorted()
+        let values = Set(constructionMethods.map { $0.trade.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty })
+        return [allTradeFilter] + values.sorted()
     }
 
     private var scopedMethods: [ConstructionMethod] {
-        store.constructionMethods.filter {
-            selectedTradeFilter == "全部"
+        constructionMethods.filter {
+            selectedTradeFilter == allTradeFilter
                 || $0.trade.trimmingCharacters(in: .whitespacesAndNewlines) == selectedTradeFilter
         }
     }
@@ -62,7 +71,20 @@ struct ConstructionMethodLibraryView: View {
                             onSave: updateMethod
                         )
                     } else {
-                        ContentUnavailableView("选择施工工艺", systemImage: "hammer.fill")
+                        AppActionableEmptyState(
+                            title: String(localized: "选择施工工艺"),
+                            systemImage: "hammer.fill",
+                            message: String(localized: "从左侧选择工艺查看详情，或先新建一条标准做法。")
+                        ) {
+                            Button {
+                                showAdd = true
+                            } label: {
+                                Label(String(localized: "新建施工工艺"), systemImage: "plus.circle.fill")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.appProminent())
+                        }
+                        .padding()
                     }
                 }
             } else {
@@ -105,14 +127,19 @@ struct ConstructionMethodLibraryView: View {
 
     private var methodList: some View {
         SearchableDatabaseView(
-            title: "施工工艺库",
+            title: String(localized: "施工工艺库"),
             searchText: $searchText,
-            searchPrompt: "搜索工艺、专业、教程、质量要求",
+            searchPrompt: String(localized: "搜索工艺、专业、教程、质量要求"),
             items: filtered,
-            emptyTitle: "暂无施工工艺",
+            emptyTitle: String(localized: "暂无施工工艺"),
             emptySystemImage: "hammer.fill",
-            emptyDescription: Text("沉淀标准做法、质量要求和安全注意事项。"),
+            emptyDescription: Text(String(localized: "沉淀标准做法、质量要求和安全注意事项。")),
+            emptyActionTitle: String(localized: "新建施工工艺"),
+            onEmptyAction: {
+                showAdd = true
+            },
             searchSuggestions: searchSuggestions,
+            searchEmptyStateText: String(localized: "未找到匹配的工艺、专业、教程或质量要求"),
             onSelect: { method in
                 if horizontalSizeClass == .regular {
                     selectedMethodID = method.id
@@ -122,7 +149,7 @@ struct ConstructionMethodLibraryView: View {
             },
             onSelectSuggestion: { suggestion in
                 guard suggestion.category == .method else { return }
-                guard let method = store.constructionMethods.first(where: { $0.id == suggestion.entityId }) else { return }
+                guard let method = constructionMethods.first(where: { $0.id == suggestion.entityId }) else { return }
                 if horizontalSizeClass == .regular {
                     selectedMethodID = method.id
                 } else {
@@ -130,31 +157,31 @@ struct ConstructionMethodLibraryView: View {
                 }
             },
             deleteConfig: SearchableDatabaseDeleteConfig(
-                title: "删除施工工艺？",
-                itemNoun: "施工工艺",
-                singularMessage: "删除后可在提示中撤销，附件会延迟清理。",
+                title: String(localized: "删除施工工艺？"),
+                itemNoun: String(localized: "施工工艺"),
+                singularMessage: String(localized: "删除后可在提示中撤销，附件会延迟清理。"),
                 pluralMessage: { count, noun in
-                    "将删除 \(count) 条\(noun)，可在提示中撤销，附件会延迟清理。"
+                    String(format: String(localized: "将删除 %lld 条%@，可在提示中撤销，附件会延迟清理。"), Int64(count), noun)
                 }
             ),
             onDeleteConfirmed: deleteMethods,
             rowContent: { method in
                 VStack(alignment: .leading, spacing: 5) {
-                    Text(method.title.isEmpty ? "未命名工艺" : method.title)
+                    Text(method.title.isEmpty ? String(localized: "未命名工艺") : method.title)
                         .font(.body.weight(.semibold))
                         .foregroundStyle(.primary)
                     HStack(spacing: 8) {
-                        Text(method.trade.isEmpty ? "未分类" : method.trade)
+                        Text(method.trade.isEmpty ? String(localized: "未分类") : method.trade)
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(.appDoc)
-                        Text(method.versionName.isEmpty ? "V1" : method.versionName)
+                        Text(method.versionName.isEmpty ? String(localized: "V1") : method.versionName)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(.secondary)
                         Text(method.publishStatus.displayName)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(method.publishStatus == .published ? .appSuccess : method.publishStatus == .deprecated ? .appRisk : .appWarning)
                         if !method.qualityStandard.isEmpty {
-                            Label("有质检要点", systemImage: "checkmark.seal")
+                            Label(String(localized: "有质检要点"), systemImage: "checkmark.seal")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -172,7 +199,7 @@ struct ConstructionMethodLibraryView: View {
                     let tutorialMediaCount = method.tutorialAttachments.count
                     if tutorialMediaCount > 0 {
                         ConstructionMethodAttachmentMiniStrip(attachments: method.tutorialAttachments)
-                        Text("教程媒体 \(tutorialMediaCount) 个")
+                        Text(String(format: String(localized: "教程媒体 %lld 个"), Int64(tutorialMediaCount)))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -199,7 +226,7 @@ struct ConstructionMethodLibraryView: View {
             },
             toolbarContent: {
                 Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel("添加工艺")
+                    .accessibilityLabel(String(localized: "添加工艺"))
             }
         )
     }
@@ -211,7 +238,7 @@ struct ConstructionMethodLibraryView: View {
         let todoSnapshot = store.siteTodos
         let logSnapshot = store.dailyLogs
         let previousSelection = selectedMethodID
-        let targets = store.constructionMethods.filter { ids.contains($0.id) }
+        let targets = constructionMethods.filter { ids.contains($0.id) }
         guard !targets.isEmpty else { return }
 
         let attachments = uniqueAttachments(targets.flatMap(\.attachments) + targets.flatMap(\.tutorialAttachments))
@@ -231,7 +258,7 @@ struct ConstructionMethodLibraryView: View {
 
         unlinkDeletedMethodReferences(Array(ids))
         if let selectedMethodID, ids.contains(selectedMethodID) {
-            self.selectedMethodID = store.constructionMethods.first?.id
+            self.selectedMethodID = constructionMethods.first?.id
         }
         queueMethodDeletion(
             deletion,
@@ -244,7 +271,7 @@ struct ConstructionMethodLibraryView: View {
 
     private func openFocusedMethodIfNeeded() {
         guard let focusedMethodId, !didOpenFocusedMethod,
-              let method = store.constructionMethods.first(where: { $0.id == focusedMethodId }) else { return }
+              let method = constructionMethods.first(where: { $0.id == focusedMethodId }) else { return }
         didOpenFocusedMethod = true
         searchText = ""
         Task { @MainActor in
@@ -296,7 +323,7 @@ struct ConstructionMethodLibraryView: View {
                     links: \.linkedConstructionMethodIDs
                 ))
                 if let previousSelection,
-                   store.constructionMethods.contains(where: { $0.id == previousSelection }) {
+                   constructionMethods.contains(where: { $0.id == previousSelection }) {
                     selectedMethodID = previousSelection
                 }
                 store.scheduleSave()
@@ -335,7 +362,7 @@ struct ConstructionMethodLibraryView: View {
     }
 
     private func updateMethod(_ updated: ConstructionMethod) {
-        guard let existing = store.constructionMethods.first(where: { $0.id == updated.id }) else { return }
+        guard let existing = constructionMethods.first(where: { $0.id == updated.id }) else { return }
         let oldFiles = Set((existing.attachments + existing.tutorialAttachments).map(\.fileName))
         let newFiles = Set((updated.attachments + updated.tutorialAttachments).map(\.fileName))
         store.upsertConstructionMethod(updated)

@@ -26,6 +26,9 @@ struct ProjectFinancialRecordAddSheet: View {
     @State private var ocrErrorMessage = ""
     @State private var showOCRError = false
     @State private var ocrTask: Task<Void, Never>?
+    @State private var duplicateConfirmMessage = ""
+    @State private var pendingDuplicateRecord: ProjectFinancialRecord?
+    @State private var showDuplicateConfirm = false
     @FocusState private var isInputFocused: Bool
 
     private var availableCategories: [ProjectFinancialCategory] {
@@ -45,7 +48,15 @@ struct ProjectFinancialRecordAddSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "项目记账"),
+            isPrimaryActionDisabled: !InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid,
+            onCancel: { dismiss() },
+            onPrimaryAction: {
+                isInputFocused = false
+                saveWithDuplicateCheck()
+            }
+        ) {
             Form {
                 if !recentRecords.isEmpty {
                     Section(String(localized: "快速录入")) {
@@ -87,6 +98,9 @@ struct ProjectFinancialRecordAddSheet: View {
                             }
                         }
                     }
+                }
+                if !duplicateWarnings.isEmpty {
+                    ProjectFinancialDuplicateWarningsSection(warnings: duplicateWarnings)
                 }
                 Section(String(localized: "账目")) {
                     DatePicker(String(localized: "日期时间"), selection: $date, displayedComponents: [.date, .hourAndMinute])
@@ -135,40 +149,15 @@ struct ProjectFinancialRecordAddSheet: View {
                     Toggle(String(localized: "保存后立即扫描票据（可选）"), isOn: $scanAfterSave)
                 }
             }
-            .navigationTitle(String(localized: "项目记账"))
-            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        isInputFocused = false
-                        let record = ProjectFinancialRecord(
-                            projectId: projectId,
-                            date: Formatters.dateTime.string(from: date),
-                            direction: direction,
-                            category: category,
-                            amount: NumericInputSupport.normalizedStorageText(amount, kind: .amount),
-                            counterparty: counterparty,
-                            invoiceNumber: invoiceNumber,
-                            status: status,
-                            dueDate: hasDueDate ? Formatters.date.string(from: dueDate) : "",
-                            reminderStatus: hasDueDate ? reminderStatus : .none,
-                            note: note
-                        )
-                        onSave(record, scanAfterSave)
-                        dismiss()
-                    }
-                    .disabled(!InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid)
-                }
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }
             }
+        }
             .onAppear {
                 if let preset {
                     apply(record: preset)
@@ -186,10 +175,39 @@ struct ProjectFinancialRecordAddSheet: View {
             } message: {
                 Text(ocrErrorMessage)
             }
+            .alert(String(localized: "可能重复票据"), isPresented: $showDuplicateConfirm) {
+                Button(String(localized: "返回检查"), role: .cancel) {}
+                Button(String(localized: "仍然保存")) {
+                    if let pendingDuplicateRecord {
+                        commitSave(pendingDuplicateRecord)
+                    }
+                }
+            } message: {
+                Text(duplicateConfirmMessage)
+            }
             .onDisappear {
                 ocrTask?.cancel()
             }
-        }
+    }
+
+    private var draftRecord: ProjectFinancialRecord {
+        ProjectFinancialRecord(
+            projectId: projectId,
+            date: Formatters.dateTime.string(from: date),
+            direction: direction,
+            category: category,
+            amount: NumericInputSupport.normalizedStorageText(amount, kind: .amount),
+            counterparty: counterparty,
+            invoiceNumber: invoiceNumber,
+            status: status,
+            dueDate: hasDueDate ? Formatters.date.string(from: dueDate) : "",
+            reminderStatus: hasDueDate ? reminderStatus : .none,
+            note: note
+        )
+    }
+
+    private var duplicateWarnings: [ProjectFinancialDuplicateWarning] {
+        ProjectFinancialDuplicateDetector.warnings(for: draftRecord, in: recentRecords)
     }
 
     private func apply(record: ProjectFinancialRecord) {
@@ -207,6 +225,24 @@ struct ProjectFinancialRecordAddSheet: View {
             reminderStatus = record.normalizedReminderStatus
         }
         note = record.note
+    }
+
+    private func saveWithDuplicateCheck() {
+        let record = draftRecord
+        let warnings = ProjectFinancialDuplicateDetector.warnings(for: record, in: recentRecords)
+        guard warnings.isEmpty else {
+            pendingDuplicateRecord = record
+            duplicateConfirmMessage = ProjectFinancialReceiptOCRSupport.duplicateConfirmationMessage(from: warnings)
+            showDuplicateConfirm = true
+            AppHaptics.warning()
+            return
+        }
+        commitSave(record)
+    }
+
+    private func commitSave(_ record: ProjectFinancialRecord) {
+        onSave(record, scanAfterSave)
+        dismiss()
     }
 
     @MainActor
@@ -286,6 +322,7 @@ struct ProjectFinancialRecordEditSheet: View {
     let record: ProjectFinancialRecord
     let linkedDocuments: [ProjectDocument]
     let linkedAttachmentCount: Int
+    let existingRecords: [ProjectFinancialRecord]
     let onSave: (ProjectFinancialRecord) -> Void
     let onDelete: (ProjectFinancialRecord) -> Void
     let onScan: (ProjectFinancialRecord) -> Void
@@ -309,6 +346,9 @@ struct ProjectFinancialRecordEditSheet: View {
     @State private var ocrErrorMessage = ""
     @State private var showOCRError = false
     @State private var ocrTask: Task<Void, Never>?
+    @State private var duplicateConfirmMessage = ""
+    @State private var pendingDuplicateRecord: ProjectFinancialRecord?
+    @State private var showDuplicateConfirm = false
     @FocusState private var isInputFocused: Bool
 
     private var availableCategories: [ProjectFinancialCategory] {
@@ -323,6 +363,7 @@ struct ProjectFinancialRecordEditSheet: View {
         record: ProjectFinancialRecord,
         linkedDocuments: [ProjectDocument],
         linkedAttachmentCount: Int,
+        existingRecords: [ProjectFinancialRecord] = [],
         onSave: @escaping (ProjectFinancialRecord) -> Void,
         onDelete: @escaping (ProjectFinancialRecord) -> Void,
         onScan: @escaping (ProjectFinancialRecord) -> Void,
@@ -331,6 +372,7 @@ struct ProjectFinancialRecordEditSheet: View {
         self.record = record
         self.linkedDocuments = linkedDocuments
         self.linkedAttachmentCount = linkedAttachmentCount
+        self.existingRecords = existingRecords
         self.onSave = onSave
         self.onDelete = onDelete
         self.onScan = onScan
@@ -351,7 +393,15 @@ struct ProjectFinancialRecordEditSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "编辑账目"),
+            isPrimaryActionDisabled: !InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid,
+            onCancel: { dismiss() },
+            onPrimaryAction: {
+                isInputFocused = false
+                saveWithDuplicateCheck()
+            }
+        ) {
             Form {
                 Section(String(localized: "智能录入（票据 OCR）")) {
                     Button {
@@ -394,6 +444,9 @@ struct ProjectFinancialRecordEditSheet: View {
                             }
                         }
                     }
+                }
+                if !duplicateWarnings.isEmpty {
+                    ProjectFinancialDuplicateWarningsSection(warnings: duplicateWarnings)
                 }
                 Section(String(localized: "账目")) {
                     DatePicker(String(localized: "日期时间"), selection: $date, displayedComponents: [.date, .hourAndMinute])
@@ -446,33 +499,19 @@ struct ProjectFinancialRecordEditSheet: View {
                         onManageAttachments(updatedRecord)
                     }
                 }
-                Section {
-                    Button(String(localized: "删除账目"), role: .destructive) {
-                        showDeleteConfirm = true
-                    }
+                AppBusinessFormDestructiveActionSection(title: String(localized: "删除账目")) {
+                    showDeleteConfirm = true
                 }
             }
-            .navigationTitle(String(localized: "编辑账目"))
-            .navigationBarTitleDisplayMode(.inline)
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        isInputFocused = false
-                        onSave(updatedRecord)
-                        dismiss()
-                    }
-                    .disabled(!InputValidator.validate(amount, kind: .amount, requirement: .requiredPositive).isValid)
-                }
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }
             }
+        }
             .alert(String(localized: "删除这条账目？"), isPresented: $showDeleteConfirm) {
                 Button(String(localized: "取消"), role: .cancel) {}
                 Button(String(localized: "删除"), role: .destructive) {
@@ -492,10 +531,49 @@ struct ProjectFinancialRecordEditSheet: View {
             } message: {
                 Text(ocrErrorMessage)
             }
+            .alert(String(localized: "可能重复票据"), isPresented: $showDuplicateConfirm) {
+                Button(String(localized: "返回检查"), role: .cancel) {}
+                Button(String(localized: "仍然保存")) {
+                    if let pendingDuplicateRecord {
+                        commitSave(pendingDuplicateRecord)
+                    }
+                }
+            } message: {
+                Text(duplicateConfirmMessage)
+            }
             .onDisappear {
                 ocrTask?.cancel()
             }
+    }
+
+    private var duplicateWarnings: [ProjectFinancialDuplicateWarning] {
+        ProjectFinancialDuplicateDetector.warnings(
+            for: updatedRecord,
+            in: existingRecords,
+            ignoring: record.id
+        )
+    }
+
+    private func saveWithDuplicateCheck() {
+        let record = updatedRecord
+        let warnings = ProjectFinancialDuplicateDetector.warnings(
+            for: record,
+            in: existingRecords,
+            ignoring: self.record.id
+        )
+        guard warnings.isEmpty else {
+            pendingDuplicateRecord = record
+            duplicateConfirmMessage = ProjectFinancialReceiptOCRSupport.duplicateConfirmationMessage(from: warnings)
+            showDuplicateConfirm = true
+            AppHaptics.warning()
+            return
         }
+        commitSave(record)
+    }
+
+    private func commitSave(_ record: ProjectFinancialRecord) {
+        onSave(record)
+        dismiss()
     }
 
     private var updatedRecord: ProjectFinancialRecord {
@@ -676,6 +754,39 @@ private struct ReceiptOCRAmountCandidatesView: View {
     }
 }
 
+private struct ProjectFinancialDuplicateWarningsSection: View {
+    let warnings: [ProjectFinancialDuplicateWarning]
+
+    var body: some View {
+        Section(String(localized: "重复票据风险")) {
+            Text(String(localized: "检测到当前票据可能已经入账，请确认后再保存。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            ForEach(warnings.prefix(3)) { warning in
+                VStack(alignment: .leading, spacing: 4) {
+                    Label(warning.reasonText, systemImage: "exclamationmark.triangle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Color.appWarning)
+                    Text(
+                        String(
+                            format: String(localized: "已有账目：%@"),
+                            ProjectFinancialReceiptOCRSupport.duplicateRecordSummary(warning.record)
+                        )
+                    )
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    if !warning.record.invoiceNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(String(format: String(localized: "票号 %@"), warning.record.invoiceNumber))
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private enum ProjectFinancialReceiptOCRSupport {
     static let allowedImportTypes: [UTType] = [.image, .pdf]
 
@@ -707,6 +818,29 @@ private enum ProjectFinancialReceiptOCRSupport {
             lines.append(String(localized: "未提取到结构化字段，可手动补录。"))
         }
         return lines
+    }
+
+    static func duplicateRecordSummary(_ record: ProjectFinancialRecord) -> String {
+        let dateText = ProjectFinancialDuplicateDetector.normalizedDay(from: record.date) ?? record.date
+        var parts = [
+            dateText,
+            record.normalizedDirection.displayName,
+            ReportBuilder.money(record.amountValue.doubleValue)
+        ]
+        let party = record.counterparty.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !party.isEmpty {
+            parts.append(party)
+        }
+        return parts.joined(separator: " · ")
+    }
+
+    static func duplicateConfirmationMessage(from warnings: [ProjectFinancialDuplicateWarning]) -> String {
+        guard let first = warnings.first else { return "" }
+        return String(
+            format: String(localized: "%lld 条现有账目可能重复：%@"),
+            Int64(warnings.count),
+            duplicateRecordSummary(first.record)
+        )
     }
 
     static func mergeDate(_ recognizedDay: Date, keepingTimeOf reference: Date) -> Date {

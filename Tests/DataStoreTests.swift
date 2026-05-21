@@ -35,7 +35,7 @@ struct DataStoreTests {
     @Test func importSampleDataPopulatesProjects() {
         testStore.importSampleData(replacingExisting: false)
         #expect(!testStore.projects.isEmpty)
-        #expect(testStore.projects.count >= 2)
+        #expect(testStore.projects.count >= 5)
     }
 
     @Test func importSampleDataPopulatesMaterials() {
@@ -46,7 +46,7 @@ struct DataStoreTests {
     @Test func importSampleDataReplacingClearsFirst() {
         testStore.importSampleData(replacingExisting: false)
         testStore.importSampleData(replacingExisting: true)
-        #expect(testStore.projects.count >= 2)
+        #expect(testStore.projects.count >= 5)
     }
 
     @Test func importSampleDataSetsHistory() {
@@ -56,11 +56,15 @@ struct DataStoreTests {
 
     @Test func importSampleDataRestoresExpandedFixtureCoverage() throws {
         #expect(testStore.importSampleData(replacingExisting: true))
-        #expect(testStore.projects.count >= 3)
-        #expect(testStore.materialItems.count >= 5)
-        #expect(testStore.quoteItems.count >= 4)
-        #expect(testStore.projectDrawings.count >= 1)
-        #expect(testStore.projectDocuments.count >= 2)
+        #expect(testStore.projects.count >= 5)
+        #expect(testStore.materialItems.count >= 10)
+        #expect(testStore.quoteItems.count >= 8)
+        #expect(testStore.projectDrawings.count >= 3)
+        #expect(testStore.projectDocuments.count >= 5)
+        #expect(testStore.projectContacts.count >= 8)
+        #expect(testStore.projectFinancialRecords.count >= 8)
+        #expect(testStore.projectWarehouseMovements.count >= 8)
+        #expect(testStore.materialSheetDrafts.count >= 4)
         #expect(testStore.quickNotes.contains { !$0.attachments.isEmpty })
         #expect(testStore.dailyLogs.contains { !$0.allPhotoFileNames.isEmpty })
 
@@ -432,6 +436,60 @@ struct DataStoreTests {
         #expect(cleanedTodo.rectificationAfterPhotoFileName == nil)
         #expect(untouchedTodo.rectificationBeforePhotoFileName == "other-before.jpg")
         #expect(result.photoFileNames == Set(["legacy.jpg", "target.jpg", "before.jpg", "after.jpg"]))
+    }
+
+    @Test func updateDailyLogPhotoPromotesLegacyPhotoIntoStructuredPhotos() {
+        testStore.clearAllBusinessData(deleteStoredFiles: false)
+        let log = DailyLog(
+            date: "2026-05-16",
+            weather: "晴",
+            content: "日志",
+            workers: "2",
+            photoFileName: "legacy.jpg"
+        )
+        testStore.replaceDailyLogs([log])
+
+        let updated = testStore.updateDailyLogPhoto(
+            logId: log.id,
+            photoId: UUID(),
+            legacyFileName: "legacy.jpg",
+            note: "现场门口",
+            tag: .hiddenWork
+        )
+
+        #expect(updated)
+        let stored = try! #require(testStore.dailyLogs.first)
+        #expect(stored.photoFileName == "legacy.jpg")
+        #expect(stored.photos.count == 1)
+        #expect(stored.photos.first?.fileName == "legacy.jpg")
+        #expect(stored.photos.first?.note == "现场门口")
+        #expect(stored.photos.first?.tag == .hiddenWork)
+    }
+
+    @Test func removeDailyLogPhotoRepairsPrimaryPhotoReference() {
+        testStore.clearAllBusinessData(deleteStoredFiles: false)
+        let firstPhoto = LogPhoto(fileName: "first.jpg")
+        let secondPhoto = LogPhoto(fileName: "second.jpg")
+        let log = DailyLog(
+            date: "2026-05-16",
+            weather: "晴",
+            content: "日志",
+            workers: "2",
+            photoFileName: "first.jpg",
+            photos: [firstPhoto, secondPhoto]
+        )
+        testStore.replaceDailyLogs([log])
+
+        let deletedFileName = testStore.removeDailyLogPhoto(
+            logId: log.id,
+            photoId: firstPhoto.id,
+            legacyFileName: firstPhoto.fileName
+        )
+
+        #expect(deletedFileName == "first.jpg")
+        let stored = try! #require(testStore.dailyLogs.first)
+        #expect(stored.photoFileName == "second.jpg")
+        #expect(stored.photos.map(\.fileName) == ["second.jpg"])
     }
 
     @Test func projectFileCleanupRemovesDocumentsDrawingsAndUnlinksReferences() throws {

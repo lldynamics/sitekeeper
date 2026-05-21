@@ -26,6 +26,11 @@ struct CalculationHistoryView: View {
                         Text(String(format: String(localized: "输入: %@"), r.input))
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                        if let projectName = projectName(for: r.projectId) {
+                            Label(String(format: String(localized: "项目: %@"), projectName), systemImage: "building.2")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                         Text(String(format: String(localized: "结果: %@"), r.result))
                             .font(.callout)
                     }
@@ -56,6 +61,9 @@ struct CalculationHistoryView: View {
                     Section(String(localized: "计算详情")) {
                         LabeledContent(String(localized: "工具"), value: record.tool)
                         LabeledContent(String(localized: "时间"), value: record.date)
+                        if let projectName = projectName(for: record.projectId) {
+                            LabeledContent(String(localized: "项目"), value: projectName)
+                        }
                     }
                     Section(String(localized: "输入")) { Text(record.input).font(.callout) }
                     Section(String(localized: "结果")) { Text(record.result).font(.title3.monospaced()) }
@@ -118,5 +126,10 @@ struct CalculationHistoryView: View {
             },
             audit: deletion.audit.map(UndoableDeletionAuditContext.init)
         )
+    }
+
+    private func projectName(for projectId: UUID?) -> String? {
+        guard let projectId else { return nil }
+        return store.projects.first { $0.id == projectId }?.name ?? String(localized: "未知项目")
     }
 }

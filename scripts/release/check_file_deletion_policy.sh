@@ -1,8 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+export PATH="/Applications/Codex.app/Contents/Resources:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+
+if ! command -v rg >/dev/null 2>&1; then
+  echo "[file-deletion-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
+  exit 127
+fi
 
 # Production code must route destructive project-asset deletes through
 # DataStoreDeletionPolicy so audit, undo, and deferred cleanup stay consistent.

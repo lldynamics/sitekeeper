@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import UIKit
-import ImageIO
 
 struct DailyLogView: View {
     @Environment(DataStore.self) private var store
@@ -134,6 +133,26 @@ struct DailyLogView: View {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
     }
 
+    private var dailyLogSearchSuggestions: [RealtimeSearchSuggestion] {
+        filtered.prefix(8).map { log in
+            let title = log.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? log.date : log.content
+            return RealtimeSearchSuggestion(
+                id: "log-\(log.id.uuidString)",
+                category: .log,
+                entityId: log.id,
+                title: title,
+                subtitleParts: [
+                    log.date,
+                    log.projectId.flatMap { projectId in
+                        store.projects.first(where: { $0.id == projectId })?.name
+                    } ?? "",
+                    log.safety,
+                ],
+                score: 100
+            )
+        }
+    }
+
     var body: some View {
         Group {
             if usesSplitLogLayout {
@@ -142,7 +161,6 @@ struct DailyLogView: View {
                 compactLogLayout
             }
         }
-        .searchable(text: $searchText, prompt: String(localized: "按日期、内容、安全事项搜索"))
         .navigationTitle(String(localized: "施工日志"))
         .toolbar {
             if !usesSplitLogLayout {
@@ -253,6 +271,7 @@ struct DailyLogView: View {
 
     private var compactLogLayout: some View {
         List {
+            searchPanelSection
             modePickerSection
             logDetailContent
         }
@@ -261,6 +280,7 @@ struct DailyLogView: View {
     private var splitLogLayout: some View {
         NavigationSplitView {
             List {
+                searchPanelSection
                 modePickerSection
                 splitFilterSection
                 Section(String(localized: "快捷操作")) {
@@ -279,6 +299,20 @@ struct DailyLogView: View {
             }
         }
         .navigationSplitViewStyle(.balanced)
+    }
+
+    private var searchPanelSection: some View {
+        Section(String(localized: "快速查找")) {
+            InlineSearchPanel(
+                text: $searchText,
+                prompt: String(localized: "按日期、内容、安全事项搜索"),
+                suggestions: dailyLogSearchSuggestions,
+                emptyStateText: String(localized: "未找到匹配日志")
+            ) { suggestion in
+                searchText = suggestion.title
+                viewMode = .list
+            }
+        }
     }
 
     private var modePickerSection: some View {
@@ -662,7 +696,11 @@ struct DailyLogView: View {
                 for item in newItems.prefix(remainingSlots) {
                     do {
                         guard let data = try await item.loadTransferable(type: Data.self) else { continue }
-                        if let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) {
+                        if let normalizedData = ImageDownsampleService.downsampledJPEGData(
+                            data,
+                            maxPixelSize: 1600,
+                            compressionQuality: 0.8
+                        ) {
                             drafts.append(PhotoDraft(data: normalizedData))
                         }
                     } catch {
@@ -823,36 +861,23 @@ struct DailyLogView: View {
     }
 
     private func updatePhoto(context: SelectedPhotoContext, note: String, tag: PhotoTag) {
-        guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = store.dailyLogs[logIndex]
-        if let photoIndex = log.photos.firstIndex(where: { $0.id == context.photoId }) {
-            log.photos[photoIndex].note = note
-            log.photos[photoIndex].tag = tag
-        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            log.photos.append(LogPhoto(fileName: legacy, note: note, tag: tag))
-        }
-        store.updateDailyLog(log)
+        guard store.updateDailyLogPhoto(
+            logId: context.logId,
+            photoId: context.photoId,
+            legacyFileName: context.legacyFileName,
+            note: note,
+            tag: tag
+        ) else { return }
         store.scheduleSave()
     }
 
     private func deletePhoto(context: SelectedPhotoContext) {
         let snapshot = store.dailyLogs
-        guard let logIndex = store.dailyLogs.firstIndex(where: { $0.id == context.logId }) else { return }
-        var log = store.dailyLogs[logIndex]
-        var deletedFileName: String?
-        if let index = log.photos.firstIndex(where: { $0.id == context.photoId }) {
-            let fileName = log.photos[index].fileName
-            deletedFileName = fileName
-            log.photos.remove(at: index)
-            if log.photoFileName == fileName {
-                log.photoFileName = log.photos.first?.fileName
-            }
-        } else if let legacy = log.photoFileName, legacy == context.legacyFileName {
-            deletedFileName = legacy
-            log.photoFileName = nil
-        }
-        guard let deletedFileName else { return }
-        store.updateDailyLog(log)
+        guard let deletedFileName = store.removeDailyLogPhoto(
+            logId: context.logId,
+            photoId: context.photoId,
+            legacyFileName: context.legacyFileName
+        ) else { return }
         let deferredCleanup = DataStoreDeferredFileCleanup.photoFiles(
             [deletedFileName],
             summary: "dailyLog.photoFiles.single"
@@ -1067,8 +1092,12 @@ struct DailyLogView: View {
 
     private func appendCameraPhoto(_ image: UIImage, capturedAt: Date) {
         guard composer.photoDrafts.count < 6,
-              let data = image.jpegData(compressionQuality: 0.82),
-              let normalizedData = normalizePhotoData(data, maxPixelSize: 1600, compressionQuality: 0.8) else { return }
+              let normalizedData = ImageDownsampleService.downsampledJPEGData(
+                image,
+                maxPixelSize: 1600,
+                sourceCompressionQuality: 0.82,
+                compressionQuality: 0.8
+              ) else { return }
         composer.photoDrafts.append(
             PhotoDraft(
                 data: normalizedData,
@@ -1076,24 +1105,6 @@ struct DailyLogView: View {
                 tag: composer.cameraPhotoTag
             )
         )
-    }
-
-    private func normalizePhotoData(_ data: Data, maxPixelSize: CGFloat, compressionQuality: CGFloat) -> Data? {
-        let sourceOptions: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
-        guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
-            return nil
-        }
-        let downsampleOptions: CFDictionary = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: maxPixelSize,
-            kCGImageSourceShouldCache: false,
-            kCGImageSourceShouldCacheImmediately: false
-        ] as CFDictionary
-        guard let cgImage = CGImageSourceCreateThumbnailAtIndex(source, 0, downsampleOptions) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage).jpegData(compressionQuality: compressionQuality)
     }
 
     private func logWatermarkPhotoNote(capturedAt: Date) -> String {

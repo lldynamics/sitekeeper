@@ -17,6 +17,7 @@ struct StorageCleanupCenterView: View {
     @State private var showCleanupProjectAlert = false
     @State private var cleanupStatusMessage = ""
     @State private var cleanupTrashBatches: [StorageCleanupTrashBatch] = []
+    @State private var quarantinedFiles: [FileQuarantineEntry] = []
 
     private let showsNavigationTitle: Bool
     private let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
@@ -132,59 +133,112 @@ struct StorageCleanupCenterView: View {
 
     private var cleanupTrashSection: some View {
         Section {
-            if cleanupTrashBatches.isEmpty {
-                Text(String(localized: "暂无可恢复的清理记录。"))
+            if cleanupTrashBatches.isEmpty && quarantinedFiles.isEmpty {
+                Text(String(localized: "暂无可恢复的回收站项目。"))
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(cleanupTrashBatches) { batch in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(alignment: .firstTextBaseline) {
-                            Text(batch.summary)
-                                .font(.callout.weight(.semibold))
-                            Spacer()
-                            Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.appWarning)
-                        }
-                        Text(
-                            String(
-                                format: String(localized: "可恢复至 %@"),
-                                Formatters.date.string(from: batch.expiresAt)
-                            )
-                        )
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+                    cleanupTrashBatchRow(batch)
+                }
 
-                        HStack {
-                            Button {
-                                restoreCleanupTrash(batch)
-                            } label: {
-                                Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
-                            }
-                            .buttonStyle(.bordered)
-
-                            Button(role: .destructive) {
-                                permanentlyDeleteCleanupTrash(batch)
-                            } label: {
-                                Label(String(localized: "永久删除"), systemImage: "trash")
-                            }
-                            .buttonStyle(.bordered)
-                        }
-                        .font(.caption)
-                    }
-                    .padding(.vertical, 3)
+                ForEach(quarantinedFiles) { entry in
+                    quarantinedFileRow(entry)
                 }
             }
         } header: {
-            Text(String(localized: "清理回收站"))
+            Text(String(localized: "全局回收站"))
         } footer: {
             Text(
                 String(
-                    format: String(localized: "项目文件清理后会先进入回收站，当前保留 %lld 天。过期批次会在进入本页时自动永久删除。"),
+                    format: String(localized: "照片、图纸、票据、附件删除和项目文件清理都会先进入回收站，当前保留 %lld 天。过期项目会在进入本页时自动永久删除。"),
                     Int64(normalizedCleanupTrashRetentionDays)
                 )
             )
         }
+    }
+
+    private func cleanupTrashBatchRow(_ batch: StorageCleanupTrashBatch) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(batch.summary)
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.appWarning)
+            }
+            Text(String(localized: "清理批次"))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(
+                String(
+                    format: String(localized: "可恢复至 %@"),
+                    Formatters.date.string(from: batch.expiresAt)
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            HStack {
+                Button {
+                    restoreCleanupTrash(batch)
+                } label: {
+                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                }
+                .buttonStyle(.bordered)
+
+                Button(role: .destructive) {
+                    permanentlyDeleteCleanupTrash(batch)
+                } label: {
+                    Label(String(localized: "永久删除"), systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.caption)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private func quarantinedFileRow(_ entry: FileQuarantineEntry) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(entry.originalFileName)
+                    .font(.callout.weight(.semibold))
+                Spacer()
+                Text(String(localized: "隔离文件"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.appWarning)
+            }
+            Text(fileQuarantineCategoryTitle(entry.category))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.secondary)
+            Text(
+                String(
+                    format: String(localized: "可恢复至 %@"),
+                    Formatters.date.string(from: entry.expiresAt)
+                )
+            )
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            HStack {
+                Button {
+                    restoreQuarantinedFile(entry)
+                } label: {
+                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                }
+                .buttonStyle(.bordered)
+
+                Button(role: .destructive) {
+                    permanentlyDeleteQuarantinedFile(entry)
+                } label: {
+                    Label(String(localized: "永久删除"), systemImage: "trash")
+                }
+                .buttonStyle(.bordered)
+            }
+            .font(.caption)
+        }
+        .padding(.vertical, 3)
     }
 
     private var largeFileRuleSuggestionText: String {
@@ -217,6 +271,23 @@ struct StorageCleanupCenterView: View {
 
     private var projectUsages: [ProjectStorageUsage] {
         scanResult.projectUsages
+    }
+
+    private func fileQuarantineCategoryTitle(_ category: FileQuarantineCategory) -> String {
+        switch category {
+        case .photoOriginal:
+            return String(localized: "照片原文件")
+        case .photoThumbnail:
+            return String(localized: "照片缩略图")
+        case .drawing:
+            return String(localized: "图纸原件文件")
+        case .drawingSidecar:
+            return String(localized: "图纸附属文件")
+        case .projectDocument:
+            return String(localized: "项目资料文件")
+        case .quickNoteAttachment:
+            return String(localized: "随手记附件")
+        }
     }
 
     private func normalizeLargeFileThresholdPreference() {
@@ -345,13 +416,24 @@ struct StorageCleanupCenterView: View {
     }
 
     private func refreshCleanupTrash() {
-        let purgedCount = StorageCleanupTrashStore.purgeExpiredBatches(now: Date())
+        let now = Date()
+        let purgedCount = StorageCleanupTrashStore.purgeExpiredBatches(now: now)
+        let purgedFileCount = FileQuarantineStore.purgeExpiredEntries(now: now)
         cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+        quarantinedFiles = FileQuarantineStore.loadEntries()
         if purgedCount > 0 {
             StorageIssueLog.record(
                 String(
                     format: String(localized: "清理回收站已自动永久删除 %lld 个过期批次。"),
                     Int64(purgedCount)
+                )
+            )
+        }
+        if purgedFileCount > 0 {
+            StorageIssueLog.record(
+                String(
+                    format: String(localized: "回收站已自动永久删除 %lld 个过期隔离文件。"),
+                    Int64(purgedFileCount)
                 )
             )
         }
@@ -369,7 +451,7 @@ struct StorageCleanupCenterView: View {
             try StorageCleanupTrashStore.restore(batch)
             batch.snapshot.restore(into: store)
             store.scheduleSave()
-            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            refreshCleanupTrash()
             cleanupStatusMessage = String(
                 format: String(localized: "已从清理回收站恢复：%@。"),
                 batch.summary
@@ -406,7 +488,7 @@ struct StorageCleanupCenterView: View {
         )
         do {
             try StorageCleanupTrashStore.permanentlyDelete(batch)
-            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            refreshCleanupTrash()
             cleanupStatusMessage = String(
                 format: String(localized: "已永久删除清理回收站批次：%@。"),
                 batch.summary
@@ -428,6 +510,80 @@ struct StorageCleanupCenterView: View {
                 outcome: .failed,
                 summary: String(localized: "永久删除清理回收站"),
                 detail: "\(batch.summary) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
+    private func restoreQuarantinedFile(_ entry: FileQuarantineEntry) {
+        OperationAuditLog.record(
+            action: .restore,
+            outcome: .started,
+            summary: String(localized: "恢复隔离文件"),
+            detail: "\(entry.category.rawValue) · \(entry.originalFileName)",
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try FileQuarantineStore.restore(entry)
+            refreshCleanupTrash()
+            cleanupStatusMessage = String(
+                format: String(localized: "已从回收站恢复隔离文件：%@。"),
+                entry.originalFileName
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .succeeded,
+                summary: String(localized: "恢复隔离文件"),
+                detail: "\(entry.category.rawValue) · \(entry.originalFileName)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "隔离文件恢复失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .restore,
+                outcome: .failed,
+                summary: String(localized: "恢复隔离文件"),
+                detail: "\(entry.category.rawValue) · \(entry.originalFileName) · error=\(error.localizedDescription)",
+                source: "StorageCleanupCenterView"
+            )
+        }
+    }
+
+    private func permanentlyDeleteQuarantinedFile(_ entry: FileQuarantineEntry) {
+        OperationAuditLog.record(
+            action: .cleanup,
+            outcome: .started,
+            summary: String(localized: "永久删除隔离文件"),
+            detail: "\(entry.category.rawValue) · \(entry.originalFileName)",
+            source: "StorageCleanupCenterView"
+        )
+        do {
+            try FileQuarantineStore.permanentlyDelete(entry)
+            refreshCleanupTrash()
+            cleanupStatusMessage = String(
+                format: String(localized: "已永久删除隔离文件：%@。"),
+                entry.originalFileName
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .succeeded,
+                summary: String(localized: "永久删除隔离文件"),
+                detail: "\(entry.category.rawValue) · \(entry.originalFileName)",
+                source: "StorageCleanupCenterView"
+            )
+        } catch {
+            cleanupStatusMessage = String(
+                format: String(localized: "隔离文件永久删除失败：%@"),
+                error.localizedDescription
+            )
+            OperationAuditLog.record(
+                action: .cleanup,
+                outcome: .failed,
+                summary: String(localized: "永久删除隔离文件"),
+                detail: "\(entry.category.rawValue) · \(entry.originalFileName) · error=\(error.localizedDescription)",
                 source: "StorageCleanupCenterView"
             )
         }
@@ -475,7 +631,7 @@ struct StorageCleanupCenterView: View {
                 summary: summary,
                 retentionDays: retentionDays
             )
-            cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
+            refreshCleanupTrash()
             cleanupStatusMessage = String(
                 format: String(localized: "已将 %@ 的%@移入清理回收站：%lld 个文件，可恢复至 %@。"),
                 usage.projectName,

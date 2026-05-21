@@ -28,7 +28,7 @@ struct ProjectDetailContent: View {
     let onOpenTodoFilter: () -> Void
     let onOpenFinanceFilter: (ProjectFinanceJumpFilter) -> Void
     let onEditProject: () -> Void
-    let onExportDeliveryPackage: () -> Void
+    let onOpenDeliveryGuide: () -> Void
     let onAddLog: () -> Void
     let onAddMaterial: () -> Void
     let onAddQuote: () -> Void
@@ -67,9 +67,6 @@ struct ProjectDetailContent: View {
             },
             header: {
                 projectHeader(showsStatus: prefersInlineSections || mode == .overview)
-            },
-            quickActions: {
-                quickActionSection
             },
             modePicker: {
                 modePickerSection
@@ -134,53 +131,81 @@ struct ProjectDetailContent: View {
         return ProjectDetailHeaderSection(
             project: project,
             status: statusBinding,
-            progressValue: "\(Int(ProjectDetailMetrics.averageProgress(snapshot.relatedProgress) * 100))%",
-            quoteValue: ReportBuilder.money(snapshot.quoteTotal),
-            todoValue: "\(snapshot.openTodoCount)",
-            unpaidAmount: unpaidAmountValue,
-            riskStrip: VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                ProjectDeliveryHealthSummaryRow(
-                    health: deliveryHealth,
-                    action: onExportDeliveryPackage
-                )
-                ProjectDetailRiskStripView(
-                    overdueCount: snapshot.overdueProgressCount + snapshot.overdueTodoCount,
+            todayValue: snapshot.hasTodayLog ? String(localized: "已写日志") : String(localized: "未写日志"),
+            todayColor: snapshot.hasTodayLog ? .appSuccess : .appWarning,
+            riskValue: riskSignalCount(
+                unpaidAmount: unpaidAmountValue,
+                checklist: documentArchiveChecklist
+            ) == 0
+                ? String(localized: "正常")
+                : String(format: String(localized: "%lld 项"), Int64(riskSignalCount(unpaidAmount: unpaidAmountValue, checklist: documentArchiveChecklist))),
+            riskColor: riskSignalCount(unpaidAmount: unpaidAmountValue, checklist: documentArchiveChecklist) == 0 ? .appSuccess : .appRisk,
+            pendingValue: pendingSignalCount(checklist: documentArchiveChecklist) == 0
+                ? String(localized: "无待处理")
+                : String(format: String(localized: "%lld 项"), Int64(pendingSignalCount(checklist: documentArchiveChecklist))),
+            pendingColor: pendingSignalCount(checklist: documentArchiveChecklist) == 0 ? .appSuccess : .appWarning,
+            deliveryValue: deliveryHealth.verdictTitle,
+            deliveryColor: deliveryHealth.isDeliverable ? .appSuccess : .appRisk,
+            showsStatus: showsStatus,
+            onOpenToday: {
+                if snapshot.hasTodayLog {
+                    onOpenRecordsMetric()
+                } else {
+                    onAddLog()
+                }
+            },
+            onOpenRisk: {
+                openPrimaryRisk(
                     unpaidAmount: unpaidAmountValue,
-                    unpricedQuoteCount: snapshot.unpricedQuoteCount,
-                    hasTodayLog: snapshot.hasTodayLog,
-                    missingDocumentCategoryCount: documentArchiveChecklist.missingCount,
-                    documentActionCount: documentArchiveChecklist.actionCount,
-                    legacyDocumentCount: documentArchiveChecklist.legacyDocumentCount
+                    checklist: documentArchiveChecklist
                 )
             },
-            customerLine: (!project.customerName.isEmpty || !project.customerPhone.isEmpty)
-                ? "客户: \(project.customerName) \(project.customerPhone)"
-                : nil,
-            periodLine: (!project.startDate.isEmpty || !project.expectedEndDate.isEmpty)
-                ? "工期: \(project.startDate.isEmpty ? "未填写" : project.startDate) 至 \(project.expectedEndDate.isEmpty ? "未填写" : project.expectedEndDate)"
-                : nil,
-            showsStatus: showsStatus,
-            onOpenRecords: onOpenRecordsMetric,
-            onOpenFinanceFromQuote: onOpenFinanceFromQuoteMetric,
-            onOpenTodoFilter: onOpenTodoFilter,
-            onOpenFinanceFromUnpaid: { onOpenFinanceFilter(.none) },
-            onEditProject: onEditProject,
-            canExportDeliveryPackage: project.status == .completed || project.status == .settled,
-            onExportDeliveryPackage: onExportDeliveryPackage
+            onOpenPending: onOpenTodoFilter,
+            onOpenDelivery: onOpenDeliveryGuide
         )
     }
 
-    private var quickActionSection: some View {
-        ProjectDetailQuickActionSection(
-            onAddLog: onAddLog,
-            onAddFinance: onAddFinancialRecord,
-            onAddDocument: onScanDocument,
-            onAddContact: onAddContact,
-            onImportDrawing: onImportDrawing,
-            onAddMaterial: onAddMaterial,
-            onAddQuote: onAddQuote,
-            onAddLabor: onAddLabor
-        )
+    private func riskSignalCount(unpaidAmount: Double, checklist: DocumentArchiveChecklistSnapshot) -> Int {
+        snapshot.overdueProgressCount
+            + snapshot.overdueTodoCount
+            + snapshot.missingReceiptCount
+            + snapshot.unpricedQuoteCount
+            + checklist.missingCount
+            + checklist.returnedDocumentCount
+            + checklist.legacyDocumentCount
+            + (snapshot.hasTodayLog ? 0 : 1)
+            + (unpaidAmount > 0 ? 1 : 0)
+    }
+
+    private func pendingSignalCount(checklist: DocumentArchiveChecklistSnapshot) -> Int {
+        snapshot.openTodoCount
+            + checklist.actionCount
+            + checklist.returnedDocumentCount
+            + checklist.legacyDocumentCount
+    }
+
+    private func openPrimaryRisk(unpaidAmount: Double, checklist: DocumentArchiveChecklistSnapshot) {
+        if snapshot.missingReceiptCount > 0 {
+            onOpenFinanceFilter(.missingReceipt)
+            return
+        }
+        if unpaidAmount > 0 {
+            onOpenFinanceFilter(.unsettled)
+            return
+        }
+        if checklist.missingCount > 0 || checklist.returnedDocumentCount > 0 || checklist.legacyDocumentCount > 0 {
+            onOpenMode(.assets)
+            return
+        }
+        if snapshot.overdueProgressCount > 0 || snapshot.overdueTodoCount > 0 {
+            onOpenTodoFilter()
+            return
+        }
+        if !snapshot.hasTodayLog {
+            onAddLog()
+            return
+        }
+        onOpenRecordsMetric()
     }
 
     private var detailModeSections: some View {

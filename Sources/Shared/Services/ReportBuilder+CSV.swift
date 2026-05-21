@@ -109,7 +109,7 @@ extension ReportBuilder {
         }
         if options.includeTodos {
             rows.append(csvMachineSection("site_todos"))
-            rows.append(csv(["title", "owner", "due_date", "priority_key", "priority_display", "issue_type_key", "issue_type_display", "status_key", "status_display", "completed_at", "rectification_before_photo", "rectification_after_photo", "note", "project_id"]))
+            rows.append(csv(["title", "owner", "due_date", "priority_key", "priority_display", "issue_type_key", "issue_type_display", "drawing_issue_location", "drawing_issue_layer_or_page", "drawing_issue_measurement", "drawing_issue_close_evidence", "status_key", "status_display", "completed_at", "rectification_before_photo", "rectification_after_photo", "note", "project_id"]))
             rows += snapshot.siteTodos.map { todo in
                 csv([
                     todo.title,
@@ -119,6 +119,10 @@ extension ReportBuilder {
                     todo.priority.displayName,
                     todo.issueType.exportKey,
                     todo.issueType.displayName,
+                    todo.drawingIssueLocation,
+                    todo.drawingIssueLayerOrPage,
+                    todo.drawingIssueMeasurement,
+                    todo.drawingIssueCloseEvidence,
                     siteTodoStatusKey(todo),
                     siteTodoStatusDisplay(todo),
                     todo.completedAt ?? "",

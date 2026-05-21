@@ -290,10 +290,10 @@ enum AppTheme: String, CaseIterable {
                                dark: UIColor(red: 0.58, green: 0.78, blue: 0.52, alpha: 1)),
                 success: Color(light: UIColor(red: 0.35, green: 0.62, blue: 0.35, alpha: 1),
                                dark: UIColor(red: 0.50, green: 0.75, blue: 0.48, alpha: 1)),
-                warning: Color(light: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
-                               dark: UIColor(red: 0.85, green: 0.62, blue: 0.68, alpha: 1)),
-                risk: Color(light: UIColor(red: 0.35, green: 0.31, blue: 0.28, alpha: 1),
-                            dark: UIColor(red: 0.55, green: 0.50, blue: 0.45, alpha: 1)),
+                warning: Color(light: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                               dark: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1)),
+                risk: Color(light: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
+                            dark: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1)),
                 doc: Color(light: UIColor(red: 0.55, green: 0.66, blue: 0.73, alpha: 1),
                            dark: UIColor(red: 0.65, green: 0.75, blue: 0.80, alpha: 1)),
                 finance: Color(light: UIColor(red: 0.83, green: 0.66, blue: 0.33, alpha: 1),
@@ -312,8 +312,8 @@ enum AppTheme: String, CaseIterable {
                                  dark: UIColor(red: 0.84, green: 0.69, blue: 0.56, alpha: 1)),
                 primaryUIColor: UIColor(red: 0.48, green: 0.69, blue: 0.42, alpha: 1),
                 successUIColor: UIColor(red: 0.35, green: 0.62, blue: 0.35, alpha: 1),
-                warningUIColor: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
-                riskUIColor: UIColor(red: 0.35, green: 0.31, blue: 0.28, alpha: 1),
+                warningUIColor: UIColor(red: 0.90, green: 0.40, blue: 0.10, alpha: 1),
+                riskUIColor: UIColor(red: 0.91, green: 0.57, blue: 0.64, alpha: 1),
                 docUIColor: UIColor(red: 0.55, green: 0.66, blue: 0.73, alpha: 1),
                 financeUIColor: UIColor(red: 0.83, green: 0.66, blue: 0.33, alpha: 1),
                 inventoryUIColor: UIColor(red: 0.61, green: 0.55, blue: 0.71, alpha: 1),
@@ -418,10 +418,13 @@ enum AppPolicy {
 
 enum AppFeatureFlags {
     static var allowsSampleDataImport: Bool {
+        if TransferLimitPolicy.allowsSampleDataImport {
+            return true
+        }
 #if DEBUG
-        TransferLimitPolicy.allowsSampleDataImport
+        return true
 #else
-        false
+        return false
 #endif
     }
 

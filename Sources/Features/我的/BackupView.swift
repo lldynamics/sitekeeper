@@ -10,11 +10,11 @@ private enum BackupSection: CaseIterable {
     var displayName: String {
         switch self {
         case .local:
-            return String(localized: "本地备份")
+            return String(localized: "本地备份与恢复")
         case .cloud:
-            return String(localized: "iCloud 云备份")
+            return String(localized: "iCloud 同步备份")
         case .overview:
-            return String(localized: "备份概览")
+            return String(localized: "备份健康概览")
         }
     }
     var systemImage: String {
@@ -68,12 +68,18 @@ struct BackupView: View {
     @State private var selectedBackupSection: BackupSection = .local
     private let autoOpenImporter: Bool
     private let showsNavigationTitle: Bool
+    private let onAutoOpenImporterConsumed: (() -> Void)?
     private let cloudBackupScopeHint = String(localized: "可按业务模块选择备份范围。关闭“原文件附件”可显著减小体积。")
     private let cloudCellularTrafficHint = String(localized: "提示：在蜂窝网络下手动或自动备份 iCloud 会消耗移动数据流量，建议大包资料优先在 Wi‑Fi 下操作。")
 
-    init(autoOpenImporter: Bool = false, showsNavigationTitle: Bool = true) {
+    init(
+        autoOpenImporter: Bool = false,
+        showsNavigationTitle: Bool = true,
+        onAutoOpenImporterConsumed: (() -> Void)? = nil
+    ) {
         self.autoOpenImporter = autoOpenImporter
         self.showsNavigationTitle = showsNavigationTitle
+        self.onAutoOpenImporterConsumed = onAutoOpenImporterConsumed
     }
 
     var backupEstimateSignature: Int {
@@ -180,6 +186,81 @@ struct BackupView: View {
             : String(localized: "当前允许在蜂窝网络下自动备份，可能消耗移动数据流量。")
     }
 
+    private var localBackupDate: Date? {
+        guard localBackupLastSuccessAt > 0 else { return nil }
+        return Date(timeIntervalSince1970: localBackupLastSuccessAt)
+    }
+
+    private var backupStatusItems: [DataSafetyStatusItem] {
+        var items: [DataSafetyStatusItem] = [
+            DataSafetyStatusItem(
+                title: String(localized: "上次备份"),
+                value: localBackupDate.map(formatDataSafetyDate) ?? String(localized: "尚未完成"),
+                tone: localBackupDate == nil ? .warning : .success
+            ),
+            DataSafetyStatusItem(
+                title: String(localized: "缺失文件"),
+                value: estimateState.backupEstimate.missingFiles.isEmpty
+                    ? String(localized: "0 个")
+                    : String(format: String(localized: "%lld 个"), Int64(estimateState.backupEstimate.missingFiles.count)),
+                tone: estimateState.backupEstimate.missingFiles.isEmpty ? .success : .warning
+            ),
+        ]
+
+        if selectedBackupSection == .cloud {
+            items.append(
+                DataSafetyStatusItem(
+                    title: String(localized: "云端最近成功"),
+                    value: cloudLastSuccessDate.map(formatDataSafetyDate) ?? String(localized: "尚未完成"),
+                    tone: cloudLastSuccessDate == nil ? .warning : .success
+                )
+            )
+            items.append(
+                DataSafetyStatusItem(
+                    title: String(localized: "下次自动备份"),
+                    value: cloudAutoInterval == .disabled
+                        ? String(localized: "已关闭")
+                        : cloudNextAutoBackupDate.map(formatDataSafetyDate) ?? String(localized: "等待首次成功"),
+                    tone: cloudAutoInterval == .disabled ? .neutral : .doc
+                )
+            )
+            items.append(
+                DataSafetyStatusItem(
+                    title: String(localized: "自动备份状态"),
+                    value: normalizedCloudAutoStatus,
+                    tone: cloudAutoStatusTone
+                )
+            )
+        } else {
+            items.append(
+                DataSafetyStatusItem(
+                    title: String(localized: "当前环节"),
+                    value: selectedBackupSection.displayName,
+                    tone: .primary
+                )
+            )
+        }
+
+        return items
+    }
+
+    private var normalizedCloudAutoStatus: String {
+        let trimmed = cloudAutoLastStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? String(localized: "未记录") : trimmed
+    }
+
+    private var cloudAutoStatusTone: StatusChipTone {
+        let trimmed = cloudAutoLastStatus.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .neutral }
+        if trimmed.contains(String(localized: "失败")) || trimmed.contains(String(localized: "未能")) {
+            return .warning
+        }
+        if trimmed.contains(String(localized: "成功")) || trimmed.contains(String(localized: "完成")) {
+            return .success
+        }
+        return .doc
+    }
+
     private var cloudBackupSection: some View {
         BackupCloudSectionView(
             cloudIncludeBusinessRecords: $cloudIncludeBusinessRecords,
@@ -198,9 +279,6 @@ struct BackupView: View {
             cloudCellularTrafficHint: cloudCellularTrafficHint,
             cloudAutoNetworkHint: cloudAutoNetworkHint,
             cloudAutoInterval: cloudAutoInterval,
-            cloudLastSuccessDate: cloudLastSuccessDate,
-            cloudNextAutoBackupDate: cloudNextAutoBackupDate,
-            cloudAutoLastStatus: cloudAutoLastStatus,
             onUploadBackup: uploadBackupToICloud,
             onRefreshBackups: { refreshCloudBackups(force: true) },
             onRestoreBackup: { file in
@@ -319,6 +397,7 @@ struct BackupView: View {
             refreshCloudBackups()
             guard autoOpenImporter, !didAutoOpenImporter else { return }
             didAutoOpenImporter = true
+            onAutoOpenImporterConsumed?()
             showImporter = true
         }
         .onChange(of: backupEstimateSignature) { _, _ in
@@ -335,7 +414,7 @@ struct BackupView: View {
         Group {
             if showsNavigationTitle {
                 backupSurface
-                    .navigationTitle(String(localized: "数据备份"))
+                    .navigationTitle(String(localized: "数据安全中心"))
             } else {
                 backupSurface
             }
@@ -348,19 +427,18 @@ struct BackupView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 10) {
-                    Label(String(localized: "数据备份"), systemImage: "arrow.triangle.2.circlepath.icloud")
+                    Label(String(localized: "备份恢复"), systemImage: "arrow.triangle.2.circlepath.icloud")
                         .font(.headline)
 
-                    Text(String(localized: "导出、导入与 iCloud 同步"))
+                    Text(String(localized: "先做本地或 iCloud 备份，再执行恢复预览和正式导入。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
-                .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 12).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                .modifier(DataSafetySidebarPanelModifier())
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "导航"))
+                    Text(String(localized: "安全链路"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                     ForEach(BackupSection.allCases, id: \.self) { section in
@@ -381,24 +459,28 @@ struct BackupView: View {
                             }
                             .padding(.horizontal, 10)
                             .padding(.vertical, 8)
-                            .background(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .fill(selectedBackupSection == section ? Color.appPrimarySurface : Color(uiColor: .secondarySystemGroupedBackground))
-                            )
+                            .background {
+                                AppSurface(
+                                    tone: selectedBackupSection == section ? .tinted(Color.appPrimarySurface) : .grouped,
+                                    cornerRadius: 10
+                                ) {
+                                    Color.clear
+                                }
+                            }
                         }
                         .buttonStyle(.plain)
                     }
                 }
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(String(localized: "快捷操作"))
+                    Text(String(localized: "立即执行"))
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
 
                     Button {
                         exportBackupZIP()
                     } label: {
-                        Label(String(localized: "导出备份 ZIP"), systemImage: "archivebox")
+                        Label(String(localized: "生成本地备份 ZIP"), systemImage: "archivebox")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -408,7 +490,7 @@ struct BackupView: View {
                     Button {
                         showImporter = true
                     } label: {
-                        Label(String(localized: "导入备份 ZIP"), systemImage: "square.and.arrow.down")
+                        Label(String(localized: "读取恢复备份 ZIP"), systemImage: "square.and.arrow.down")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -417,7 +499,7 @@ struct BackupView: View {
                     Button {
                         uploadBackupToICloud()
                     } label: {
-                        Label(String(localized: "备份到 iCloud"), systemImage: "icloud.and.arrow.up")
+                        Label(String(localized: "同步备份到 iCloud"), systemImage: "icloud.and.arrow.up")
                             .font(.subheadline)
                     }
                     .buttonStyle(.bordered)
@@ -426,12 +508,11 @@ struct BackupView: View {
                 }
 
                 if !statusMessage.isEmpty {
-                    Text(statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color(uiColor: .secondarySystemGroupedBackground)))
+                    InlineNotice(
+                        title: String(localized: "当前状态"),
+                        message: statusMessage,
+                        tone: .info
+                    )
                 }
 
                 Spacer()
@@ -443,6 +524,7 @@ struct BackupView: View {
     private var backupDetailContent: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                DataSafetyStatusStrip(items: backupStatusItems)
                 switch selectedBackupSection {
                 case .local:
                     backupQuickStartSection
@@ -459,6 +541,19 @@ struct BackupView: View {
             .padding(4)
         }
         .background(Color(uiColor: .systemGroupedBackground))
+    }
+
+    private struct DataSafetySidebarPanelModifier: ViewModifier {
+        func body(content: Content) -> some View {
+            AppPanel(
+                tone: .grouped,
+                cornerRadius: 12,
+                padding: 12,
+                stroke: Color.appStrokeSecondary.opacity(0.45)
+            ) {
+                content
+            }
+        }
     }
 
     // MARK: - 提取的 Section 视图
@@ -604,5 +699,9 @@ struct BackupView: View {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: Int64(size))
+    }
+
+    private func formatDataSafetyDate(_ date: Date) -> String {
+        date.formatted(date: .abbreviated, time: .shortened)
     }
 }

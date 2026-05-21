@@ -11,12 +11,14 @@ extension DataStore {
                 guard let snapshot = try await persistenceActor.loadSnapshot() else {
                     initialLoadTask = nil
                     flushDeferredSaveIfNeededAfterInitialLoad()
+                    scheduleDataHealthScan(reason: .startup, delay: .zero)
                     return
                 }
                 guard !Task.isCancelled else { return }
                 applyLoadedSnapshot(snapshot)
                 initialLoadTask = nil
                 flushDeferredSaveIfNeededAfterInitialLoad()
+                scheduleDataHealthScan(reason: .startup, delay: .milliseconds(150))
             } catch let decodeError as DataStorePersistenceActor.LoadDecodeError {
                 guard !Task.isCancelled else { return }
                 let backupName = "sitekeeper_corrupt_\(Formatters.now().replacingOccurrences(of: ":", with: "-").replacingOccurrences(of: " ", with: "_")).json"
@@ -62,6 +64,7 @@ extension DataStore {
             )
         }
         publishWidgetData()
+        scheduleDataHealthScan(reason: .dataChanged)
     }
 
     func save(includePhotoFiles: Bool = false) {
@@ -91,11 +94,13 @@ extension DataStore {
             }
         }
         publishWidgetData()
+        scheduleDataHealthScan(reason: .dataChanged)
     }
 
     func scheduleSave() {
         refreshSearchIndexVersion()
         dataVersion = UUID()
+        scheduleDataHealthScan(reason: .dataChanged)
         guard UserPreferences.bool(UserPreferenceKeys.autoSave, default: true) else { return }
         let now = autosaveClock.now
         autosaveLastMutationAt = now

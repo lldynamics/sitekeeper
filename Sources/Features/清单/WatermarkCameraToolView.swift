@@ -34,6 +34,7 @@ struct WatermarkCameraToolView: View {
     @State private var savingToAlbum = false
     @State private var didAutoOpenCamera = false
     @State private var showLogDraft = false
+    @State private var showClearPhotosConfirm = false
     @State private var toast: WatermarkToast?
     @StateObject private var locationManager = WatermarkCameraLocationManager()
 
@@ -96,6 +97,20 @@ struct WatermarkCameraToolView: View {
         }
         .navigationTitle(String(localized: "wm_camera_nav_title"))
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if capturedPhoto != nil {
+                    watermarkMoreMenu(isToolbar: true)
+                }
+
+                Button {
+                    openCamera()
+                } label: {
+                    Image(systemName: "plus").visibleIconStyle()
+                }
+                .accessibilityLabel(String(localized: "wm_camera_capture_button"))
+            }
+        }
         .sheet(isPresented: $showCamera) {
             WatermarkCameraCaptureView(
                 watermarkContext: currentContext,
@@ -133,6 +148,14 @@ struct WatermarkCameraToolView: View {
             Button(String(localized: "wm_camera_ack_button"), role: .cancel) {}
         } message: {
             Text(alertMessage)
+        }
+        .alert(String(localized: "wm_camera_clear_photos_confirm_title"), isPresented: $showClearPhotosConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "wm_camera_clear_photos_confirm_button"), role: .destructive) {
+                clearCapturedPhotos()
+            }
+        } message: {
+            Text(String(localized: "wm_camera_clear_photos_confirm_message"))
         }
         .navigationDestination(isPresented: $showLogDraft) {
             if let logSeedPhoto {
@@ -372,38 +395,41 @@ struct WatermarkCameraToolView: View {
             .controlSize(.small)
             .disabled(savingToAlbum)
 
-            if hasMultipleCapturedPhotos {
+            watermarkMoreMenu(isToolbar: false)
+            .buttonStyle(.bordered)
+            .controlSize(.small)
+        }
+    }
+
+    private func watermarkMoreMenu(isToolbar: Bool) -> some View {
+        Menu {
+            Section(String(localized: "导出")) {
                 Button {
-                    saveAllImagesToAlbum()
+                    exportCurrentImage()
                 } label: {
-                    Label(String(localized: "wm_camera_save_all_button"), systemImage: "photo.stack")
-                        .font(.caption.weight(.semibold))
+                    Label(String(localized: "wm_camera_export_button"), systemImage: "square.and.arrow.up")
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(savingToAlbum)
             }
 
-            Button {
-                saveCurrentImageAsProjectDocument()
-            } label: {
-                Label(String(localized: "wm_camera_attach_project_document_button"), systemImage: "folder.badge.plus")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(selectedProjectId == nil)
+            Section(String(localized: "wm_camera_save_section_title")) {
+                if hasMultipleCapturedPhotos {
+                    Button {
+                        saveAllImagesToAlbum()
+                    } label: {
+                        Label(String(localized: "wm_camera_save_all_button"), systemImage: "photo.stack")
+                    }
+                    .disabled(savingToAlbum)
+                }
 
-            Button {
-                exportCurrentImage()
-            } label: {
-                Label(String(localized: "wm_camera_export_button"), systemImage: "square.and.arrow.up")
-                    .font(.caption.weight(.semibold))
+                Button {
+                    saveCurrentImageAsProjectDocument()
+                } label: {
+                    Label(String(localized: "wm_camera_attach_project_document_button"), systemImage: "folder.badge.plus")
+                }
+                .disabled(selectedProjectId == nil)
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
 
-            Menu {
+            Section(String(localized: "wm_camera_convert_section_title")) {
                 if let logSeedPhoto {
                     NavigationLink {
                         DailyLogView(
@@ -436,19 +462,24 @@ struct WatermarkCameraToolView: View {
                         Label(String(localized: "wm_camera_convert_to_after_fix_todo_menu"), systemImage: "checkmark.seal.fill")
                     }
                 }
-                Divider()
+            }
+
+            Section(String(localized: "删除")) {
                 Button(role: .destructive) {
-                    clearCapturedPhotos()
+                    showClearPhotosConfirm = true
                 } label: {
                     Label(String(localized: "wm_camera_clear_photos_menu"), systemImage: "trash")
                 }
-            } label: {
+            }
+        } label: {
+            if isToolbar {
+                Image(systemName: "ellipsis.circle").visibleIconStyle()
+            } else {
                 Label(String(localized: "wm_camera_more_menu"), systemImage: "ellipsis.circle")
                     .font(.caption.weight(.semibold))
             }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
+        .accessibilityLabel(String(localized: "更多操作"))
     }
 
     private var currentContext: CameraWatermarkContext {

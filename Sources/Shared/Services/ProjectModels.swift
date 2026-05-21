@@ -241,6 +241,10 @@ struct SiteTodo: Identifiable, Codable {
     var dueDate: String
     var priority: TodoPriority
     var issueType: TodoIssueType
+    var drawingIssueLocation: String
+    var drawingIssueLayerOrPage: String
+    var drawingIssueMeasurement: String
+    var drawingIssueCloseEvidence: String
     var rectificationBeforePhotoFileName: String?
     var rectificationAfterPhotoFileName: String?
     var isDone: Bool
@@ -256,6 +260,10 @@ struct SiteTodo: Identifiable, Codable {
         dueDate: String = Formatters.date.string(from: Date()),
         priority: TodoPriority = .medium,
         issueType: TodoIssueType = .general,
+        drawingIssueLocation: String = "",
+        drawingIssueLayerOrPage: String = "",
+        drawingIssueMeasurement: String = "",
+        drawingIssueCloseEvidence: String = "",
         rectificationBeforePhotoFileName: String? = nil,
         rectificationAfterPhotoFileName: String? = nil,
         isDone: Bool = false,
@@ -270,6 +278,10 @@ struct SiteTodo: Identifiable, Codable {
         self.dueDate = dueDate
         self.priority = priority
         self.issueType = issueType
+        self.drawingIssueLocation = drawingIssueLocation
+        self.drawingIssueLayerOrPage = drawingIssueLayerOrPage
+        self.drawingIssueMeasurement = drawingIssueMeasurement
+        self.drawingIssueCloseEvidence = drawingIssueCloseEvidence
         self.rectificationBeforePhotoFileName = rectificationBeforePhotoFileName
         self.rectificationAfterPhotoFileName = rectificationAfterPhotoFileName
         self.isDone = isDone
@@ -281,6 +293,7 @@ struct SiteTodo: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, owner, dueDate, priority, issueType
+        case drawingIssueLocation, drawingIssueLayerOrPage, drawingIssueMeasurement, drawingIssueCloseEvidence
         case rectificationBeforePhotoFileName, rectificationAfterPhotoFileName
         case isDone, completedAt, note, linkedConstructionMethodIDs, projectId
     }
@@ -301,6 +314,10 @@ struct SiteTodo: Identifiable, Codable {
             forKey: .issueType,
             default: .general
         )
+        drawingIssueLocation = try container.decodeIfPresent(String.self, forKey: .drawingIssueLocation) ?? ""
+        drawingIssueLayerOrPage = try container.decodeIfPresent(String.self, forKey: .drawingIssueLayerOrPage) ?? ""
+        drawingIssueMeasurement = try container.decodeIfPresent(String.self, forKey: .drawingIssueMeasurement) ?? ""
+        drawingIssueCloseEvidence = try container.decodeIfPresent(String.self, forKey: .drawingIssueCloseEvidence) ?? ""
         rectificationBeforePhotoFileName = try container.decodeIfPresent(String.self, forKey: .rectificationBeforePhotoFileName)
         rectificationAfterPhotoFileName = try container.decodeIfPresent(String.self, forKey: .rectificationAfterPhotoFileName)
         isDone = try container.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
@@ -317,11 +334,42 @@ struct SiteTodo: Identifiable, Codable {
 }
 
 struct HistoryRecord: Identifiable, Codable {
-    var id = UUID()
+    var id: UUID
     var tool: String
     var input: String
     var result: String
     var date: String
+    var projectId: UUID?
+
+    init(
+        id: UUID = UUID(),
+        tool: String,
+        input: String,
+        result: String,
+        date: String,
+        projectId: UUID? = nil
+    ) {
+        self.id = id
+        self.tool = tool
+        self.input = input
+        self.result = result
+        self.date = date
+        self.projectId = projectId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, tool, input, result, date, projectId
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        tool = try container.decodeIfPresent(String.self, forKey: .tool) ?? ""
+        input = try container.decodeIfPresent(String.self, forKey: .input) ?? ""
+        result = try container.decodeIfPresent(String.self, forKey: .result) ?? ""
+        date = try container.decodeIfPresent(String.self, forKey: .date) ?? Formatters.now()
+        projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+    }
 }
 
 enum QuickNoteAttachmentKind: String, CaseIterable, Codable {
@@ -659,11 +707,8 @@ struct ConstructionMethod: Identifiable, Codable {
         try container.encode(versionName, forKey: .versionName)
         try container.encode(publishStatus, forKey: .publishStatus)
         try container.encode(tutorialBody, forKey: .tutorialBody)
-        // Keep decoding legacy field, but stop writing it for new data.
+        // Keep decoding legacy fields, but stop writing them for new data.
         try container.encode(tutorialAttachments, forKey: .tutorialAttachments)
-        try container.encode(steps, forKey: .steps)
-        try container.encode(qualityStandard, forKey: .qualityStandard)
-        try container.encode(safetyNotes, forKey: .safetyNotes)
         try container.encode(procedureSteps, forKey: .procedureSteps)
         try container.encode(qualityChecklist, forKey: .qualityChecklist)
         try container.encode(safetyChecklist, forKey: .safetyChecklist)

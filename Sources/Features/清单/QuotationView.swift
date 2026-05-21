@@ -44,6 +44,7 @@ struct QuotationView: View {
     @State private var formContractAmount = ""
     @State private var formProjectId: UUID?
     @State private var showGenerateSheet = false
+    @State private var showQuoteDeleteConfirm = false
     @State private var generateProjectId: UUID?
     @State private var defaultMaterialPrice = ""
     @State private var defaultLaborRate = "120"
@@ -249,8 +250,17 @@ struct QuotationView: View {
     // MARK: - Form
 
     private var quoteForm: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: editingId == nil ? String(localized: "添加报价") : String(localized: "编辑报价"),
+            isPrimaryActionDisabled: !canSaveQuoteForm,
+            onCancel: { showForm = false },
+            onPrimaryAction: {
+                saveItem()
+                showForm = false
+            }
+        ) {
             Form {
+                AppBusinessFormValidationSection(messages: quoteFormValidationMessages)
                 Section(String(localized: "必填信息")) {
                     if !store.templates.filter({ $0.category == .quotation }).isEmpty {
                         Menu(String(localized: "套用报价模板")) {
@@ -368,25 +378,43 @@ struct QuotationView: View {
                 Section(String(localized: "备注")) {
                     TextField(String(localized: "备注"), text: $formNotes)
                 }
-            }
-            .navigationTitle(editingId == nil ? String(localized: "添加报价") : String(localized: "编辑报价"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showForm = false } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) { saveItem(); showForm = false }
-                        .disabled(!canSaveQuoteForm)
+                if editingId != nil {
+                    AppBusinessFormDestructiveActionSection(title: String(localized: "删除报价")) {
+                        showQuoteDeleteConfirm = true
+                    }
                 }
+            }
+            .toolbar {
                 KeyboardNavigationToolbar(
                     focusedField: $quoteFormFocusedField,
                     fields: [.price, .quantity, .contractAmount, .taxRate, .discountRate]
                 )
             }
         }
+        .alert(String(localized: "删除这条报价？"), isPresented: $showQuoteDeleteConfirm) {
+            Button(String(localized: "取消"), role: .cancel) {}
+            Button(String(localized: "删除"), role: .destructive) {
+                if let editingId {
+                    deleteQuotesWithUndo(ids: [editingId])
+                    showForm = false
+                }
+            }
+        } message: {
+            Text(String(localized: "删除后可在短时间内撤销。"))
+        }
     }
 
     private var generateQuoteForm: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "生成报价"),
+            primaryActionTitle: String(localized: "生成报价"),
+            isPrimaryActionDisabled: !canGenerateQuoteForm,
+            onCancel: { showGenerateSheet = false },
+            onPrimaryAction: {
+                generateQuoteItems()
+                showGenerateSheet = false
+            }
+        ) {
             Form {
                 Section(String(localized: "范围")) {
                     Picker(String(localized: "选择工程"), selection: $generateProjectId) {
@@ -460,22 +488,8 @@ struct QuotationView: View {
                         }
                     }
                 }
-                Section {
-                    Button(String(localized: "生成报价")) {
-                        generateQuoteItems()
-                        showGenerateSheet = false
-                    }
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
-                    .disabled(!canGenerateQuoteForm)
-                }
             }
-            .navigationTitle(String(localized: "生成报价"))
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { showGenerateSheet = false }
-                }
                 KeyboardNavigationToolbar(
                     focusedField: $generateQuoteFocusedField,
                     fields: [.materialPrice, .laborRate, .taxRate, .discountRate]
@@ -625,7 +639,16 @@ struct QuotationView: View {
     }
 
     private var quotationExportForm: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "导出报价单"),
+            primaryActionTitle: String(localized: "导出 PDF"),
+            isPrimaryActionDisabled: filtered.isEmpty || !isCompanyProfileComplete,
+            onCancel: { showQuoteExportSheet = false },
+            onPrimaryAction: {
+                showQuoteExportSheet = false
+                exportQuotationPDF()
+            }
+        ) {
             Form {
                 Section(String(localized: "客户信息")) {
                     TextField(String(localized: "客户名称"), text: $quoteCustomerName)
@@ -645,22 +668,6 @@ struct QuotationView: View {
                             .font(.caption)
                             .foregroundStyle(.appWarning)
                     }
-                }
-                Section {
-                    Button(String(localized: "导出 PDF")) {
-                        showQuoteExportSheet = false
-                        exportQuotationPDF()
-                    }
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
-                    .disabled(filtered.isEmpty || !isCompanyProfileComplete)
-                }
-            }
-            .navigationTitle(String(localized: "导出报价单"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { showQuoteExportSheet = false }
                 }
             }
         }
@@ -716,6 +723,17 @@ struct QuotationView: View {
         InputValidator.validate(formTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(formDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(formContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+    }
+
+    private var quoteFormValidationMessages: [String] {
+        var messages: [String] = []
+        if formName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messages.append(String(localized: "请填写报价名称"))
+        }
+        if formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messages.append(String(localized: "请填写报价单位"))
+        }
+        return messages
     }
 
     private var canGenerateQuoteForm: Bool {

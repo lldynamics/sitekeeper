@@ -1,9 +1,5 @@
 import Foundation
 
-private enum BackupArchiveDataCache {
-    static let storage = NSCache<NSString, NSData>()
-}
-
 func recordBackupArchiveIssue(
     _ event: String,
     fileName: String? = nil,
@@ -38,48 +34,6 @@ struct BackupArchive {
     let rawFilesBytes: Int
 
     var totalBytes: Int { QuickNoteAttachmentStorage.fileSize(at: fileURL) }
-
-    // 兼容旧调用：需要内存数据时按需读取。
-    @available(*, deprecated, message: "请优先使用 fileURL 流式读取，避免整包加载到内存。")
-    var data: Data {
-        let cacheKey = fileURL.path as NSString
-        if let cached = BackupArchiveDataCache.storage.object(forKey: cacheKey) {
-            return Data(referencing: cached)
-        }
-        do {
-            let loaded = try Data(contentsOf: fileURL, options: .mappedIfSafe)
-            BackupArchiveDataCache.storage.setObject(loaded as NSData, forKey: cacheKey)
-            return loaded
-        } catch {
-            recordBackupArchiveIssue(
-                "backup.archive.data_read_failed",
-                fileName: fileURL.lastPathComponent,
-                error: error
-            )
-            return Data()
-        }
-    }
-
-    func loadData() async -> Data {
-        let cacheKey = fileURL.path as NSString
-        if let cached = BackupArchiveDataCache.storage.object(forKey: cacheKey) {
-            return Data(referencing: cached)
-        }
-        return await Task.detached(priority: .utility) {
-            do {
-                let loaded = try Data(contentsOf: fileURL, options: .mappedIfSafe)
-                BackupArchiveDataCache.storage.setObject(loaded as NSData, forKey: cacheKey)
-                return loaded
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.archive.async_data_read_failed",
-                    fileName: fileURL.lastPathComponent,
-                    error: error
-                )
-                return Data()
-            }
-        }.value
-    }
 }
 
 struct BackupArchiveEstimate {
