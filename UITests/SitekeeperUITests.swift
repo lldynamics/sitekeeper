@@ -1,18 +1,40 @@
 import XCTest
+import UIKit
 
 final class SitekeeperUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 
-    private var screenshotOutputDirectory: URL {
+    private var shouldWriteAppStoreScreenshots: Bool {
+        let value = ProcessInfo.processInfo.environment["UITEST_CAPTURE_APP_STORE_SCREENSHOTS"]?.lowercased()
+        return value == "1" || value == "true" || value == "yes"
+            || FileManager.default.fileExists(atPath: screenshotCaptureFlagURL.path)
+    }
+
+    private var screenshotCaptureFlagURL: URL {
+        screenshotRootDirectory.deletingLastPathComponent()
+            .appendingPathComponent(".capture-app-store-screenshots")
+    }
+
+    private var screenshotRootDirectory: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("AppStoreShots", isDirectory: true)
     }
 
+    private var screenshotOutputDirectory: URL {
+        let environmentFamily = ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_DEVICE_FAMILY"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let deviceFamily = environmentFamily?.isEmpty == false
+            ? environmentFamily!
+            : (UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")
+        return screenshotRootDirectory.appendingPathComponent(deviceFamily, isDirectory: true)
+    }
+
     private func prepareScreenshotDirectory() {
+        guard shouldWriteAppStoreScreenshots else { return }
         let manager = FileManager.default
         let directory = screenshotOutputDirectory
         if manager.fileExists(atPath: directory.path) {
@@ -22,6 +44,7 @@ final class SitekeeperUITests: XCTestCase {
     }
 
     private func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
+        guard shouldWriteAppStoreScreenshots else { return }
         let url = screenshotOutputDirectory.appendingPathComponent("\(name).png")
         do {
             try FileManager.default.createDirectory(at: screenshotOutputDirectory, withIntermediateDirectories: true)
@@ -76,6 +99,16 @@ final class SitekeeperUITests: XCTestCase {
         if sidebarText.waitForExistence(timeout: 2) {
             sidebarText.tap()
         }
+    }
+
+    private func waitForPrimaryModule(_ app: XCUIApplication, name: String, timeout: TimeInterval = 5) -> Bool {
+        if app.tabBars.buttons[name].waitForExistence(timeout: timeout) {
+            return true
+        }
+        if app.buttons[name].waitForExistence(timeout: timeout) {
+            return true
+        }
+        return app.staticTexts[name].waitForExistence(timeout: timeout)
     }
 
     private func button(
@@ -321,28 +354,32 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(onboardingApp, named: "02-project-composer")
         onboardingApp.terminate()
 
+        let importApp = launchApp(resetState: true, enableBackupPreview: true)
+        XCTAssertTrue(waitForPrimaryModule(importApp, name: "工作台"))
+        importSampleDataThroughUI(importApp)
+        importApp.terminate()
+
         let app = launchApp(resetState: false, enableBackupPreview: true)
-        XCTAssertTrue(app.tabBars.buttons["工作台"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForPrimaryModule(app, name: "工作台"))
         saveScreenshot(app, named: "03-dashboard")
 
-        app.tabBars.buttons["项目"].tap()
+        tapPrimaryModule(app, name: "项目")
         XCTAssertTrue(app.buttons["project-file-browser-entry"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "04-project-home")
 
         app.buttons["project-file-browser-entry"].tap()
         XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "05-project-files")
-        app.navigationBars.buttons.firstMatch.tap()
 
-        app.tabBars.buttons["工具箱"].tap()
-        XCTAssertTrue(app.tabBars.buttons["工具箱"].isSelected)
+        tapPrimaryModule(app, name: "工具箱")
+        XCTAssertTrue(waitForPrimaryModule(app, name: "工具箱"))
         saveScreenshot(app, named: "06-database")
 
-        app.tabBars.buttons["随手记"].tap()
+        tapPrimaryModule(app, name: "随手记")
         XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "07-quick-note")
 
-        app.tabBars.buttons["我的"].tap()
+        tapPrimaryModule(app, name: "我的")
         let backupEntry = app.buttons["profile-data-management-link"]
         XCTAssertTrue(backupEntry.waitForExistence(timeout: 5))
         saveScreenshot(app, named: "08-profile")
