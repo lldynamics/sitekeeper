@@ -26,7 +26,7 @@ struct OperationAuditEntry: Codable, Identifiable {
 }
 
 enum OperationAuditLog {
-    private static let key = "operationAuditLogEntries"
+    private static let key = UserPreferenceKeys.operationAuditLogEntries
     private static let maxEntries = 240
 
     static func record(
@@ -71,11 +71,12 @@ enum OperationAuditLog {
     }
 
     static func clear() {
-        UserDefaults.standard.removeObject(forKey: key)
+        UserPreferencesStore.shared.removeObject(for: key)
     }
 
     private static func loadEntries() -> [OperationAuditEntry] {
-        guard let data = UserDefaults.standard.data(forKey: key), !data.isEmpty else {
+        let preferenceStore = UserPreferencesStore.shared
+        guard let data = preferenceStore.data(key), !data.isEmpty else {
             return []
         }
         do {
@@ -87,15 +88,16 @@ enum OperationAuditLog {
                 details: ["store": key],
                 error: error
             )
-            UserDefaults.standard.removeObject(forKey: key)
+            preferenceStore.removeObject(for: key)
             return []
         }
     }
 
     private static func saveEntries(_ entries: [OperationAuditEntry]) {
+        let preferenceStore = UserPreferencesStore.shared
         do {
             let data = try JSONEncoder().encode(entries)
-            UserDefaults.standard.set(data, forKey: key)
+            preferenceStore.set(data, for: key)
         } catch {
             StorageIssueLog.recordEvent(
                 "operation_audit.save_failed",

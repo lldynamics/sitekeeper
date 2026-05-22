@@ -108,27 +108,23 @@ enum CloudBackupSettingsStore {
     }
 
     static func loadLastSuccessDate() -> Date? {
-        let raw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
-        guard raw > 0 else { return nil }
-        return Date(timeIntervalSince1970: raw)
+        UserPreferencesStore.shared.unixDate(for: UserPreferenceKeys.cloudBackupLastSuccessAt)
     }
 
     static func saveLastSuccessDate(_ date: Date) {
-        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        UserPreferencesStore.shared.setUnixDate(date, for: UserPreferenceKeys.cloudBackupLastSuccessAt)
     }
 
     static func loadAutoLastAttemptDate() -> Date? {
-        let raw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupAutoLastAttemptAt)
-        guard raw > 0 else { return nil }
-        return Date(timeIntervalSince1970: raw)
+        UserPreferencesStore.shared.unixDate(for: UserPreferenceKeys.cloudBackupAutoLastAttemptAt)
     }
 
     static func saveAutoLastAttemptDate(_ date: Date) {
-        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: UserPreferenceKeys.cloudBackupAutoLastAttemptAt)
+        UserPreferencesStore.shared.setUnixDate(date, for: UserPreferenceKeys.cloudBackupAutoLastAttemptAt)
     }
 
     static func saveAutoLastStatus(_ value: String) {
-        UserDefaults.standard.set(value, forKey: UserPreferenceKeys.cloudBackupAutoLastStatus)
+        UserPreferencesStore.shared.set(value, for: UserPreferenceKeys.cloudBackupAutoLastStatus)
     }
 }
 

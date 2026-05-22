@@ -2,25 +2,11 @@ import SwiftUI
 
 extension DashboardView {
     var effectiveBackupReminderDays: Int {
-        let raw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
-        return max(1, raw == 0 ? 7 : raw)
+        UserPreferencesStore.shared.backupReminderDays
     }
 
     var latestSuccessfulBackupDate: Date? {
-        let localRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
-        let cloudRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
-        let localDate = localRaw > 0 ? Date(timeIntervalSince1970: localRaw) : nil
-        let cloudDate = cloudRaw > 0 ? Date(timeIntervalSince1970: cloudRaw) : nil
-        switch (localDate, cloudDate) {
-        case let (lhs?, rhs?):
-            return max(lhs, rhs)
-        case let (lhs?, nil):
-            return lhs
-        case let (nil, rhs?):
-            return rhs
-        case (nil, nil):
-            return nil
-        }
+        UserPreferencesStore.shared.latestSuccessfulBackupDate
     }
 
     var daysSinceLastSuccessfulBackup: Int? {
@@ -356,15 +342,14 @@ extension DashboardView {
     }
 
     func raiseBackupReminderThreshold() {
-        let raw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
-        let current = max(1, raw == 0 ? 7 : raw)
+        let current = UserPreferencesStore.shared.backupReminderDays
         let raised = min(current + 1, 30)
         guard raised != current else {
             AppHaptics.warning()
             showDashboardActionFeedback(String(localized: "备份提醒阈值已到上限"))
             return
         }
-        UserDefaults.standard.set(raised, forKey: UserPreferenceKeys.backupHealthReminderDays)
+        UserPreferencesStore.shared.set(raised, for: UserPreferenceKeys.backupHealthReminderDays)
         AppHaptics.success()
         showDashboardActionFeedback(
             String(

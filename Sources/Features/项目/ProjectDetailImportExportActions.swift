@@ -29,7 +29,7 @@ enum ProjectDetailImportExportActions {
         // 此处保留断言以防直接调用此方法时跳过预检。
         assert(
             missingProjectPackageFiles(documents: documents, drawings: drawings, logs: logs, quickNotes: quickNotes).isEmpty,
-            "缺失文件应在调用 makeProjectPackageExport 前通过 packageRequestDecision 检查"
+            "Missing files must be checked by packageRequestDecision before makeProjectPackageExport is called."
         )
 
         do {
@@ -98,19 +98,35 @@ enum ProjectDetailImportExportActions {
     ) -> [String] {
         var issues: [String] = []
         issues += documents.compactMap { document in
-            ProjectDocumentStorage.exists(fileName: document.fileName) ? nil : "资料 \(document.title)"
+            ProjectDocumentStorage.exists(fileName: document.fileName)
+                ? nil
+                : String(format: String(localized: "资料 %@"), document.title)
         }
         issues += drawings.compactMap { drawing in
-            DrawingStorage.exists(fileName: drawing.fileName) ? nil : "图纸 \(drawing.name)"
+            DrawingStorage.exists(fileName: drawing.fileName)
+                ? nil
+                : String(format: String(localized: "图纸 %@"), drawing.name)
         }
         for log in logs {
             for photo in log.photoAttachments where !PhotoStorage.exists(fileName: photo.fileName) {
-                issues.append("照片 \(log.date) \(photo.tag.displayName)")
+                issues.append(
+                    String(
+                        format: String(localized: "照片 %@ %@"),
+                        log.date,
+                        photo.tag.displayName
+                    )
+                )
             }
         }
         for note in quickNotes {
             for attachment in note.attachments where !QuickNoteAttachmentStorage.exists(fileName: attachment.fileName) {
-                issues.append("随手记附件 \(note.title.isEmpty ? note.createdAt : note.title)")
+                let title = note.title.isEmpty ? note.createdAt : note.title
+                issues.append(
+                    String(
+                        format: String(localized: "随手记附件 %@"),
+                        title
+                    )
+                )
             }
         }
         return issues

@@ -1,8 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
-import Photos
-import AVFoundation
 
 struct WatermarkCameraToolView: View {
     @Environment(DataStore.self) private var store
@@ -88,28 +86,63 @@ struct WatermarkCameraToolView: View {
     var body: some View {
         Form {
             projectSection
-            templateSection
-            captureSection
-            watermarkInfoSection
-            cameraSettingsSection
-            autoSaveSection
-            recentCaptureSection
+            WatermarkTemplateSection(templateRaw: $templateRaw)
+            WatermarkCaptureSection(openCamera: openCamera)
+            WatermarkInfoSection(
+                tag: $tag,
+                photographer: $photographer,
+                locationText: $locationText,
+                locationStatusText: locationStatusText,
+                requestLocation: locationManager.requestLocation
+            )
+            WatermarkCameraSettingsSection(
+                exportQuality: exportQualityBinding,
+                showGrid: $showGrid,
+                flashEnabled: $flashEnabled,
+                burstCount: $burstCount,
+                boundedBurstCount: boundedBurstCount
+            )
+            WatermarkAutoSaveSection(
+                autoSaveToAlbum: $autoSaveToAlbum,
+                autoOpenLogDraft: $autoOpenLogDraft
+            )
+            WatermarkRecentCaptureSection(
+                capturedPhoto: capturedPhoto,
+                capturedPhotos: capturedPhotos,
+                selectedCapturedPhotoID: $selectedCapturedPhotoID,
+                hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
+                selectedCapturedPhotoNumber: selectedCapturedPhotoNumber,
+                projectAssociationText: projectAssociationText,
+                capturedPhotoMetaText: capturedPhotoMetaText(capturedAt:),
+                savingToAlbum: savingToAlbum,
+                selectedProjectId: selectedProjectId,
+                logSeedPhoto: logSeedPhoto,
+                logDraftContent: logDraftContent,
+                todoSeedData: todoSeedData,
+                saveCurrentImageToAlbum: saveCurrentImageToAlbum,
+                exportCurrentImage: exportCurrentImage,
+                saveAllImagesToAlbum: saveAllImagesToAlbum,
+                saveCurrentImageAsProjectDocument: saveCurrentImageAsProjectDocument,
+                requestClearPhotos: { showClearPhotosConfirm = true }
+            )
         }
         .navigationTitle(String(localized: "wm_camera_nav_title"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                if capturedPhoto != nil {
-                    watermarkMoreMenu(isToolbar: true)
-                }
-
-                Button {
-                    openCamera()
-                } label: {
-                    Image(systemName: "plus").visibleIconStyle()
-                }
-                .accessibilityLabel(String(localized: "wm_camera_capture_button"))
-            }
+            WatermarkCameraToolbarContent(
+                hasCapturedPhoto: capturedPhoto != nil,
+                hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
+                savingToAlbum: savingToAlbum,
+                selectedProjectId: selectedProjectId,
+                logSeedPhoto: logSeedPhoto,
+                logDraftContent: logDraftContent,
+                todoSeedData: todoSeedData,
+                openCamera: openCamera,
+                exportCurrentImage: exportCurrentImage,
+                saveAllImagesToAlbum: saveAllImagesToAlbum,
+                saveCurrentImageAsProjectDocument: saveCurrentImageAsProjectDocument,
+                requestClearPhotos: { showClearPhotosConfirm = true }
+            )
         }
         .sheet(isPresented: $showCamera) {
             WatermarkCameraCaptureView(
@@ -218,270 +251,6 @@ struct WatermarkCameraToolView: View {
         }
     }
 
-    private var templateSection: some View {
-        Section {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(CameraWatermarkTemplate.allCases, id: \.rawValue) { tmpl in
-                        let isSelected = templateRaw == tmpl.rawValue
-                        Button {
-                            templateRaw = tmpl.rawValue
-                        } label: {
-                            WatermarkTemplateChip(
-                                title: tmpl.displayName,
-                                systemImage: tmpl.icon,
-                                isSelected: isSelected
-                            )
-                        }
-                    }
-                }
-            }
-        } header: {
-            Label(String(localized: "wm_camera_template_section_title"), systemImage: "rectangle.and.pencil.and.ellipsis")
-        }
-    }
-
-    private var captureSection: some View {
-        Section {
-            Button {
-                openCamera()
-            } label: {
-                Label(String(localized: "wm_camera_capture_button"), systemImage: "camera.fill")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, alignment: .center)
-            }
-            .buttonStyle(.appProminent())
-        }
-    }
-
-    private var watermarkInfoSection: some View {
-        Section {
-            TextField(String(localized: "wm_camera_tag_field"), text: $tag)
-            TextField(String(localized: "wm_camera_photographer_field"), text: $photographer)
-            HStack {
-                TextField(String(localized: "wm_camera_location_field"), text: $locationText)
-                Button {
-                    locationManager.requestLocation()
-                } label: {
-                    Image(systemName: "location.fill").visibleIconStyle()
-                }
-                .buttonStyle(.appIcon())
-            }
-            if !locationStatusText.isEmpty {
-                Text(locationStatusText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        } header: {
-            Label(String(localized: "wm_camera_info_section_title"), systemImage: "info.circle")
-        }
-    }
-
-    private var cameraSettingsSection: some View {
-        Section {
-            DisclosureGroup {
-                Picker(String(localized: "wm_camera_export_quality_picker"), selection: exportQualityBinding) {
-                    ForEach(WatermarkExportQuality.allCases, id: \.self) { quality in
-                        Text(quality.displayName).tag(quality)
-                    }
-                }
-                Toggle(String(localized: "wm_camera_show_grid_toggle"), isOn: $showGrid)
-                Toggle(String(localized: "wm_camera_flash_default_toggle"), isOn: $flashEnabled)
-                Stepper(
-                    String(
-                        format: String(localized: "wm_camera_burst_count_stepper_format"),
-                        boundedBurstCount
-                    ),
-                    value: $burstCount,
-                    in: 1...5
-                )
-            } label: {
-                Label(String(localized: "wm_camera_settings_section_title"), systemImage: "camera.fill")
-            }
-        }
-    }
-
-    private var autoSaveSection: some View {
-        Section {
-            Toggle(String(localized: "wm_camera_auto_save_album_toggle"), isOn: $autoSaveToAlbum)
-            Toggle(String(localized: "wm_camera_auto_open_log_draft_toggle"), isOn: $autoOpenLogDraft)
-        }
-    }
-
-    @ViewBuilder
-    private var recentCaptureSection: some View {
-        if let capturedPhoto {
-            Section(String(localized: "wm_camera_recent_capture_section_title")) {
-                Image(uiImage: capturedPhoto.image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, maxHeight: 280)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-
-                if hasMultipleCapturedPhotos {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 8) {
-                            ForEach(Array(capturedPhotos.enumerated()), id: \.element.id) { index, photo in
-                                Button {
-                                    selectedCapturedPhotoID = photo.id
-                                } label: {
-                                    ZStack(alignment: .topTrailing) {
-                                        Image(uiImage: photo.image)
-                                            .resizable()
-                                            .scaledToFill()
-                                            .frame(width: 72, height: 54)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8))
-                                            .overlay {
-                                                RoundedRectangle(cornerRadius: 8)
-                                                    .stroke(
-                                                        photo.id == capturedPhoto.id ? Color.appPrimaryAction : Color.appStrokeSecondary,
-                                                        lineWidth: photo.id == capturedPhoto.id ? 2 : 1
-                                                    )
-                                            }
-                                        Text("\(index + 1)")
-                                            .font(.caption2.weight(.bold))
-                                            .foregroundStyle(.white)
-                                            .padding(.horizontal, 5)
-                                            .padding(.vertical, 2)
-                                            .background(Color.black.opacity(0.55), in: Capsule())
-                                            .padding(4)
-                                    }
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                        .padding(.vertical, 2)
-                    }
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(capturedPhotoMetaText(capturedAt: capturedPhoto.capturedAt))
-                    Text(projectAssociationText)
-                    if hasMultipleCapturedPhotos {
-                        Text(
-                            String(
-                                format: String(localized: "wm_camera_burst_progress_text_format"),
-                                capturedPhotos.count,
-                                selectedCapturedPhotoNumber
-                            )
-                        )
-                    }
-                }
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-                recentCaptureActions
-            }
-        } else {
-            Section(String(localized: "wm_camera_recent_capture_section_title")) {
-                ContentUnavailableView(
-                    String(localized: "wm_camera_no_photo_title"),
-                    systemImage: "camera.aperture",
-                    description: Text(String(localized: "wm_camera_no_photo_message"))
-                )
-            }
-        }
-    }
-
-    private var recentCaptureActions: some View {
-        HStack(spacing: 12) {
-            Button {
-                saveCurrentImageToAlbum()
-            } label: {
-                Label(String(localized: "wm_camera_save_album_button"), systemImage: "photo.on.rectangle.angled")
-                    .font(.caption.weight(.semibold))
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-            .disabled(savingToAlbum)
-
-            watermarkMoreMenu(isToolbar: false)
-            .buttonStyle(.bordered)
-            .controlSize(.small)
-        }
-    }
-
-    private func watermarkMoreMenu(isToolbar: Bool) -> some View {
-        Menu {
-            Section(String(localized: "导出")) {
-                Button {
-                    exportCurrentImage()
-                } label: {
-                    Label(String(localized: "wm_camera_export_button"), systemImage: "square.and.arrow.up")
-                }
-            }
-
-            Section(String(localized: "wm_camera_save_section_title")) {
-                if hasMultipleCapturedPhotos {
-                    Button {
-                        saveAllImagesToAlbum()
-                    } label: {
-                        Label(String(localized: "wm_camera_save_all_button"), systemImage: "photo.stack")
-                    }
-                    .disabled(savingToAlbum)
-                }
-
-                Button {
-                    saveCurrentImageAsProjectDocument()
-                } label: {
-                    Label(String(localized: "wm_camera_attach_project_document_button"), systemImage: "folder.badge.plus")
-                }
-                .disabled(selectedProjectId == nil)
-            }
-
-            Section(String(localized: "wm_camera_convert_section_title")) {
-                if let logSeedPhoto {
-                    NavigationLink {
-                        DailyLogView(
-                            initialProjectId: selectedProjectId,
-                            autoOpenComposer: true,
-                            initialPhotoDrafts: [logSeedPhoto],
-                            initialContent: logDraftContent
-                        )
-                    } label: {
-                        Label(String(localized: "wm_camera_enter_daily_log_menu"), systemImage: "book.pages.fill")
-                    }
-                }
-                if let todoSeedData {
-                    NavigationLink {
-                        SiteTodoView(
-                            initialProjectId: selectedProjectId,
-                            autoOpenComposer: true,
-                            initialBeforePhotoData: todoSeedData
-                        )
-                    } label: {
-                        Label(String(localized: "wm_camera_convert_to_before_fix_todo_menu"), systemImage: "checklist")
-                    }
-                    NavigationLink {
-                        SiteTodoView(
-                            initialProjectId: selectedProjectId,
-                            autoOpenComposer: true,
-                            initialAfterPhotoData: todoSeedData
-                        )
-                    } label: {
-                        Label(String(localized: "wm_camera_convert_to_after_fix_todo_menu"), systemImage: "checkmark.seal.fill")
-                    }
-                }
-            }
-
-            Section(String(localized: "删除")) {
-                Button(role: .destructive) {
-                    showClearPhotosConfirm = true
-                } label: {
-                    Label(String(localized: "wm_camera_clear_photos_menu"), systemImage: "trash")
-                }
-            }
-        } label: {
-            if isToolbar {
-                Image(systemName: "ellipsis.circle").visibleIconStyle()
-            } else {
-                Label(String(localized: "wm_camera_more_menu"), systemImage: "ellipsis.circle")
-                    .font(.caption.weight(.semibold))
-            }
-        }
-        .accessibilityLabel(String(localized: "更多操作"))
-    }
-
     private var currentContext: CameraWatermarkContext {
         CameraWatermarkContext(
             projectName: effectiveProjectName,
@@ -505,28 +274,24 @@ struct WatermarkCameraToolView: View {
         locationManager.statusText
     }
 
-    private var appSettingsURL: URL? {
-        URL(string: UIApplication.openSettingsURLString)
-    }
-
     private var projectAssociationText: String {
         guard let name = effectiveProjectName else { return String(localized: "wm_camera_unlinked_project_text") }
         return String(format: String(localized: "wm_camera_project_association_format"), name)
     }
 
     private func capturedPhotoMetaText(capturedAt: Date) -> String {
-        let time = Formatters.dateTime.string(from: capturedAt)
-        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedTag.isEmpty {
-            return String(format: String(localized: "wm_camera_capture_meta_without_tag_format"), time, template.displayName)
-        }
-        return String(format: String(localized: "wm_camera_capture_meta_with_tag_format"), time, template.displayName, trimmedTag)
+        WatermarkCameraTextBuilder.capturedPhotoMetaText(
+            capturedAt: capturedAt,
+            template: template,
+            tag: tag
+        )
     }
 
     private var exportFileName: String {
-        let base = effectiveProjectName ?? String(localized: "wm_camera_export_default_name")
-        let safe = base.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: ":", with: "_")
-        return "\(safe)_\(Formatters.compactTimestamp(from: capturedPhoto?.capturedAt ?? Date()))"
+        WatermarkCameraTextBuilder.exportFileName(
+            projectName: effectiveProjectName,
+            capturedAt: capturedPhoto?.capturedAt
+        )
     }
 
     private var logSeedPhoto: DailyLogSeedPhoto? {
@@ -545,11 +310,7 @@ struct WatermarkCameraToolView: View {
     }
 
     private var logDraftContent: String {
-        let trimmedTag = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmedTag.isEmpty {
-            return String(localized: "wm_camera_log_draft_default_content")
-        }
-        return String(format: String(localized: "wm_camera_log_draft_with_tag_format"), trimmedTag)
+        WatermarkCameraTextBuilder.logDraftContent(tag: tag)
     }
 
     private func handleCapturedImages(_ images: [UIImage], capturedAt: Date) {
@@ -583,38 +344,20 @@ struct WatermarkCameraToolView: View {
     }
 
     private func openCamera() {
-        guard AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) != nil else {
+        guard WatermarkCameraAccess.hasBackCamera else {
             presentBlockingError(String(localized: "wm_camera_device_unavailable_error"))
             return
         }
         Task { @MainActor in
-            let isGranted = await requestCameraAccessIfNeeded()
+            let isGranted = await WatermarkCameraAccess.requestCameraAccessIfNeeded()
             guard isGranted else {
                 presentBlockingError(
                     String(localized: "wm_camera_permission_denied_error"),
-                    settingsURL: appSettingsURL
+                    settingsURL: WatermarkCameraAccess.appSettingsURL
                 )
                 return
             }
             showCamera = true
-        }
-    }
-
-    private func requestCameraAccessIfNeeded() async -> Bool {
-        let status = AVCaptureDevice.authorizationStatus(for: .video)
-        switch status {
-        case .authorized:
-            return true
-        case .notDetermined:
-            return await withCheckedContinuation { continuation in
-                AVCaptureDevice.requestAccess(for: .video) { granted in
-                    continuation.resume(returning: granted)
-                }
-            }
-        case .denied, .restricted:
-            return false
-        @unknown default:
-            return false
         }
     }
 
@@ -634,9 +377,7 @@ struct WatermarkCameraToolView: View {
             return
         }
 
-        performWithPhotoLibraryAccess {
-            writeImagesToAlbum([image])
-        }
+        saveImagesToAlbum([image])
     }
 
     private func saveAllImagesToAlbum() {
@@ -645,83 +386,60 @@ struct WatermarkCameraToolView: View {
             presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
         }
-        performWithPhotoLibraryAccess {
-            writeImagesToAlbum(images)
-        }
+        saveImagesToAlbum(images)
     }
 
-    private func performWithPhotoLibraryAccess(_ action: @escaping () -> Void) {
-        let status = PHPhotoLibrary.authorizationStatus(for: .addOnly)
-        switch status {
-        case .authorized, .limited:
-            action()
-        case .notDetermined:
-            PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
-                Task { @MainActor in
-                    if newStatus == .authorized || newStatus == .limited {
-                        action()
-                    } else {
-                        presentBlockingError(
-                            String(localized: "wm_camera_album_permission_missing_error"),
-                            settingsURL: appSettingsURL
-                        )
-                    }
-                }
+    private func saveImagesToAlbum(_ images: [UIImage]) {
+        Task { @MainActor in
+            let access = await WatermarkCameraAccess.requestPhotoLibraryAddAccessIfNeeded()
+            switch access {
+            case .granted:
+                break
+            case .rejectedRequest:
+                presentBlockingError(
+                    String(localized: "wm_camera_album_permission_missing_error"),
+                    settingsURL: WatermarkCameraAccess.appSettingsURL
+                )
+                return
+            case .denied:
+                presentBlockingError(
+                    String(localized: "wm_camera_album_permission_settings_error"),
+                    settingsURL: WatermarkCameraAccess.appSettingsURL
+                )
+                return
+            case .unknown:
+                presentError(String(localized: "wm_camera_album_permission_unknown_error"))
+                return
             }
-        case .denied, .restricted:
-            presentBlockingError(
-                String(localized: "wm_camera_album_permission_settings_error"),
-                settingsURL: appSettingsURL
-            )
-        @unknown default:
-            presentError(String(localized: "wm_camera_album_permission_unknown_error"))
-        }
-    }
 
-    private func writeImagesToAlbum(_ images: [UIImage]) {
-        savingToAlbum = true
-        PHPhotoLibrary.shared().performChanges {
-            for image in images {
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
-            }
-        } completionHandler: { success, error in
-            Task { @MainActor in
+            savingToAlbum = true
+            do {
+                try await WatermarkPhotoAlbumWriter.write(images)
                 savingToAlbum = false
-                if success {
-                    if images.count > 1 {
-                        presentInfo(String(format: String(localized: "wm_camera_save_album_multi_success_format"), images.count))
-                    } else {
-                        presentInfo(String(localized: "wm_camera_save_album_single_success"))
-                    }
+                if images.count > 1 {
+                    presentInfo(String(format: String(localized: "wm_camera_save_album_multi_success_format"), images.count))
                 } else {
-                    presentError(
-                        String(
-                            format: String(localized: "wm_camera_save_album_failed_format"),
-                            error?.localizedDescription ?? String(localized: "wm_camera_unknown_error")
-                        )
-                    )
+                    presentInfo(String(localized: "wm_camera_save_album_single_success"))
                 }
+            } catch {
+                savingToAlbum = false
+                presentError(
+                    String(
+                        format: String(localized: "wm_camera_save_album_failed_format"),
+                        error.localizedDescription
+                    )
+                )
             }
         }
     }
 
     private func watermarkPhotoNote(capturedAt: Date) -> String {
-        [
-            String(localized: "wm_camera_photo_note_source"),
-            String(
-                format: String(localized: "wm_camera_photo_note_capture_time_format"),
-                Formatters.dateTime.string(from: capturedAt)
-            ),
-            photographer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: String(localized: "wm_camera_photo_note_photographer_format"), photographer),
-            locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: String(localized: "wm_camera_photo_note_location_format"), locationText),
-            tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? nil
-            : String(format: String(localized: "wm_camera_photo_note_tag_format"), tag)
-        ].compactMap { $0 }.joined(separator: "\n")
+        WatermarkCameraTextBuilder.photoNote(
+            capturedAt: capturedAt,
+            photographer: photographer,
+            locationText: locationText,
+            tag: tag
+        )
     }
 
     @MainActor
@@ -734,16 +452,10 @@ struct WatermarkCameraToolView: View {
             presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
         }
-        let error = ProjectDetailFinanceDocumentActions.importCapturedImage(
-            capturedPhoto.image,
-            title: String(
-                format: String(localized: "wm_camera_project_document_title_format"),
-                Formatters.dateTime.string(from: capturedPhoto.capturedAt)
-            ),
-            createdAt: Formatters.dateTime.string(from: capturedPhoto.capturedAt),
-            category: .constructionRecord,
-            note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
+        let error = WatermarkCameraProjectDocumentWriter.attach(
+            photo: capturedPhoto,
             projectId: selectedProjectId,
+            note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
             store: store
         )
         if let error {
@@ -785,109 +497,5 @@ struct WatermarkCameraToolView: View {
                 self.toast = nil
             }
         }
-    }
-}
-
-private struct WatermarkTemplateChip: View {
-    let title: String
-    let systemImage: String
-    let isSelected: Bool
-
-    var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(isSelected ? Color.appPrimaryAction : Color(uiColor: .secondarySystemBackground))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .clipShape(Capsule())
-    }
-}
-
-private struct WatermarkCapturedPhoto: Identifiable {
-    let id = UUID()
-    let image: UIImage
-    let capturedAt: Date
-}
-
-private enum WatermarkExportQuality: String, CaseIterable {
-    case standard
-    case high
-
-    var displayName: String {
-        switch self {
-        case .standard:
-            return String(localized: "wm_camera_export_quality_standard")
-        case .high:
-            return String(localized: "wm_camera_export_quality_high")
-        }
-    }
-
-    var compression: CGFloat {
-        switch self {
-        case .standard:
-            return 0.88
-        case .high:
-            return 0.96
-        }
-    }
-}
-
-private enum WatermarkToastStyle {
-    case success
-    case error
-
-    var tint: Color {
-        switch self {
-        case .success:
-            return .appSuccess
-        case .error:
-            return .appRisk
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .success:
-            return "checkmark.circle.fill"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        }
-    }
-}
-
-private struct WatermarkToast: Identifiable {
-    let id = UUID()
-    let message: String
-    let style: WatermarkToastStyle
-}
-
-private struct WatermarkToastView: View {
-    let toast: WatermarkToast
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(systemName: toast.style.icon)
-                .font(.callout.weight(.semibold))
-            Text(toast.message)
-                .font(.callout)
-                .lineLimit(2)
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            Capsule()
-                .fill(toast.style.tint.opacity(0.92))
-        )
-    }
-}
-
-private extension Formatters {
-    static func compactTimestamp(from date: Date = Date()) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "zh_CN")
-        formatter.dateFormat = "yyyyMMdd_HHmmss"
-        return formatter.string(from: date)
     }
 }

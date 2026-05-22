@@ -14,14 +14,25 @@ struct SitekeeperApp: App {
         _store = State(initialValue: DataStore())
     }
 
+    @ViewBuilder
+    private var rootContent: some View {
+        let rootView = RootView()
+            .environment(store)
+            .environment(store.projectStore)
+            .environment(store.financeStore)
+            .environment(store.materialLibraryStore)
+            .environment(store.userPreferenceStore)
+
+        if let size = UITestLaunchConfig.dynamicTypeSizeOverride {
+            rootView.dynamicTypeSize(size)
+        } else {
+            rootView
+        }
+    }
+
     var body: some Scene {
         WindowGroup {
-            RootView()
-                .environment(store)
-                .environment(store.projectStore)
-                .environment(store.financeStore)
-                .environment(store.materialLibraryStore)
-                .environment(store.userPreferenceStore)
+            rootContent
         }
         .onChange(of: scenePhase) { _, newPhase in
             scenePhaseTask?.cancel()
@@ -41,6 +52,7 @@ struct SitekeeperApp: App {
 
 private enum UITestLaunchConfig {
     private static let resetArguments = ["-uitest-reset-state"]
+    private static let dynamicTypeSizeArgument = "-uitest-dynamic-type-size"
 
     static var shouldResetLocalState: Bool {
         let processInfo = ProcessInfo.processInfo
@@ -50,10 +62,24 @@ private enum UITestLaunchConfig {
         return resetArguments.contains { processInfo.arguments.contains($0) }
     }
 
+    static var dynamicTypeSizeOverride: DynamicTypeSize? {
+        let processInfo = ProcessInfo.processInfo
+        if let raw = processInfo.environment["UITEST_DYNAMIC_TYPE_SIZE"] {
+            return DynamicTypeSize.uiTestValue(raw)
+        }
+
+        if let index = processInfo.arguments.firstIndex(of: dynamicTypeSizeArgument),
+           processInfo.arguments.indices.contains(index + 1) {
+            return DynamicTypeSize.uiTestValue(processInfo.arguments[index + 1])
+        }
+
+        return nil
+    }
+
     static func resetLocalState() {
-        let defaults = UserDefaults.standard
+        let preferenceStore = UserPreferencesStore.shared
         if let bundleID = Bundle.main.bundleIdentifier {
-            defaults.removePersistentDomain(forName: bundleID)
+            preferenceStore.removePersistentDomain(forName: bundleID)
         }
 
         if let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
@@ -70,7 +96,15 @@ private enum UITestLaunchConfig {
                         )
                     )
                 } catch {
-                    StorageIssueLog.record("UI 测试重置删除本地数据失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+                    StorageIssueLog.recordEvent(
+                        "ui_test.reset_local_state_remove_file_failed",
+                        category: .dataStore,
+                        details: [
+                            "source": "SitekeeperApp.resetLocalState",
+                            "file_name": fileURL.lastPathComponent
+                        ],
+                        error: error
+                    )
                 }
             }
         }
@@ -98,6 +132,43 @@ private enum UITestLaunchConfig {
         )
         .perform()
         StorageIssueLog.clear()
-        defaults.synchronize()
+        preferenceStore.synchronize()
+    }
+}
+
+private extension DynamicTypeSize {
+    static func uiTestValue(_ rawValue: String) -> DynamicTypeSize? {
+        let key = rawValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+
+        switch key {
+        case "xsmall", "x-small", ".xsmall", "uictcontentsizecategoryxs":
+            return .xSmall
+        case "small", ".small", "uictcontentsizecategorys":
+            return .small
+        case "medium", ".medium", "uictcontentsizecategorym":
+            return .medium
+        case "large", ".large", "uictcontentsizecategoryl":
+            return .large
+        case "xlarge", "x-large", ".xlarge", "uictcontentsizecategoryxl":
+            return .xLarge
+        case "xxlarge", "xx-large", ".xxlarge", "uictcontentsizecategoryxxl":
+            return .xxLarge
+        case "xxxlarge", "xxx-large", ".xxxlarge", "uictcontentsizecategoryxxxl":
+            return .xxxLarge
+        case "accessibility1", "a1", ".accessibility1", "uictcontentsizecategoryaccessibilitym":
+            return .accessibility1
+        case "accessibility2", "a2", ".accessibility2", "uictcontentsizecategoryaccessibilityl":
+            return .accessibility2
+        case "accessibility3", "a3", ".accessibility3", "uictcontentsizecategoryaccessibilityxl":
+            return .accessibility3
+        case "accessibility4", "a4", ".accessibility4", "uictcontentsizecategoryaccessibilityxxl":
+            return .accessibility4
+        case "accessibility5", "a5", ".accessibility5", "axxxl", "uictcontentsizecategoryaccessibilityxxxl":
+            return .accessibility5
+        default:
+            return nil
+        }
     }
 }

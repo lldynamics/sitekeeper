@@ -30,6 +30,26 @@ if ! command -v xcodegen >/dev/null 2>&1; then
   fi
 fi
 
+if ! command -v swiftformat >/dev/null 2>&1; then
+  echo "swiftformat not found. Installing via Homebrew..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install swiftformat
+  else
+    echo "Homebrew not found. Install Homebrew first: https://brew.sh"
+    exit 1
+  fi
+fi
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "swiftlint not found. Installing via Homebrew..."
+  if command -v brew >/dev/null 2>&1; then
+    brew install swiftlint
+  else
+    echo "Homebrew not found. Install Homebrew first: https://brew.sh"
+    exit 1
+  fi
+fi
+
 echo "Generating Xcode project..."
 xcodegen generate
 

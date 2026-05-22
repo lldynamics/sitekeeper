@@ -6,7 +6,9 @@ struct TrayFillView: View {
     @AppStorage(UserPreferenceKeys.Calculator.trayHeight) private var trayH = "100"
     @AppStorage(UserPreferenceKeys.Calculator.trayCables) private var cablesDraft = ""
     @State private var cables: [CableEntry] = [CableEntry(odia: 12, count: 5), CableEntry(odia: 18, count: 3)]
-    @State private var showAdd = false; @State private var newDia = ""; @State private var newCount = ""
+    @State private var showAdd = false
+    @State private var newDia = ""
+    @State private var newCount = ""
     @State private var resultModel: CalculationResult?
     @State private var didAttemptSubmit = false
     @FocusState private var isInputFocused: Bool
@@ -92,7 +94,8 @@ struct TrayFillView: View {
         .alert(CalculatorCopy.trayAddCable, isPresented: $showAdd) {
             TextField(CalculatorCopy.trayCableOuterDiameter, text: $newDia.numericInput(.quantity)).keyboardType(.decimalPad).focused($isInputFocused)
             TextField(CalculatorCopy.trayCableCount, text: $newCount.numericInput(.quantity)).keyboardType(.numberPad).focused($isInputFocused)
-            Button(CalculatorCopy.actionCancel, role: .cancel) { newDia = ""; newCount = "" }
+            Button(CalculatorCopy.actionCancel, role: .cancel) { newDia = ""
+            newCount = "" }
             Button(CalculatorCopy.actionAdd) {
                 if let d = CalculatorInputParser.double(newDia),
                    let c = CalculatorInputParser.int(newCount),
@@ -100,7 +103,8 @@ struct TrayFillView: View {
                     cables.append(CableEntry(odia: d, count: c))
                     persistCableDraft()
                 }
-                newDia = ""; newCount = ""
+                newDia = ""
+                newCount = ""
             }
         }
         .onAppear(perform: restoreCableDraftIfNeeded)
@@ -203,8 +207,14 @@ struct TrayFillView: View {
             guard !decoded.isEmpty else { return }
             cables = decoded
         } catch {
-            StorageIssueLog.record(
-                CalculatorResultCopy.trayDraftDecodeFailed(error.localizedDescription)
+            StorageIssueLog.recordEvent(
+                "calculator.tray_draft_decode_failed",
+                category: .dataStore,
+                details: [
+                    "source": "TrayFillView.restoreCableDraftIfNeeded",
+                    "stored_bytes": "\(data.count)"
+                ],
+                error: error
             )
         }
     }
@@ -213,16 +223,30 @@ struct TrayFillView: View {
         do {
             let data = try JSONEncoder().encode(cables)
             guard let encoded = String(data: data, encoding: .utf8) else {
-                StorageIssueLog.record(CalculatorCopy.trayDraftUTF8EncodeFailed)
+                StorageIssueLog.recordEvent(
+                    "calculator.tray_draft_utf8_encode_failed",
+                    category: .dataStore,
+                    details: [
+                        "source": "TrayFillView.persistCableDraft",
+                        "cable_count": "\(cables.count)"
+                    ]
+                )
                 return
             }
             cablesDraft = encoded
         } catch {
-            StorageIssueLog.record(
-                CalculatorResultCopy.trayDraftEncodeFailed(error.localizedDescription)
+            StorageIssueLog.recordEvent(
+                "calculator.tray_draft_encode_failed",
+                category: .dataStore,
+                details: [
+                    "source": "TrayFillView.persistCableDraft",
+                    "cable_count": "\(cables.count)"
+                ],
+                error: error
             )
         }
     }
 }
 
-struct CableEntry: Codable { var odia: Double; var count: Int }
+struct CableEntry: Codable { var odia: Double
+var count: Int }

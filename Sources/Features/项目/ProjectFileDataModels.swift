@@ -201,7 +201,6 @@ enum ProjectFileThumbnailToken: Hashable {
             }
         }
     }
-
 }
 
 enum ProjectFileThumbnailCache {

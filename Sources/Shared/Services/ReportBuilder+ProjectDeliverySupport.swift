@@ -57,24 +57,9 @@ extension ReportBuilder {
         let referenceDate: Date
 
         static func current(referenceDate: Date = Date()) -> ProjectDeliveryPackageBackupState {
-            let reminderDaysRaw = UserDefaults.standard.integer(forKey: UserPreferenceKeys.backupHealthReminderDays)
-            let reminderDays = max(1, reminderDaysRaw == 0 ? 7 : reminderDaysRaw)
-            let localBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.localBackupLastSuccessAt)
-            let cloudBackupRaw = UserDefaults.standard.double(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
-            let localBackupDate = localBackupRaw > 0 ? Date(timeIntervalSince1970: localBackupRaw) : nil
-            let cloudBackupDate = cloudBackupRaw > 0 ? Date(timeIntervalSince1970: cloudBackupRaw) : nil
-            let latestBackupDate: Date? = {
-                switch (localBackupDate, cloudBackupDate) {
-                case let (lhs?, rhs?):
-                    return max(lhs, rhs)
-                case let (lhs?, nil):
-                    return lhs
-                case let (nil, rhs?):
-                    return rhs
-                case (nil, nil):
-                    return nil
-                }
-            }()
+            let preferenceStore = UserPreferencesStore.shared
+            let reminderDays = preferenceStore.backupReminderDays
+            let latestBackupDate = preferenceStore.latestSuccessfulBackupDate
 
             return ProjectDeliveryPackageBackupState(
                 latestBackupDate: latestBackupDate,

@@ -78,81 +78,6 @@ struct DailyLogView: View {
         String(localized: "暂无新增材料进场")
     ]
 
-    var filtered: [DailyLog] {
-        var result = store.dailyLogs
-        if let filterProjectId {
-            result = result.filter { $0.projectId == filterProjectId }
-        }
-        result = SearchMatcher.filter(
-            result,
-            keyword: searchText,
-            extraFields: { log in
-                linkedMethodTitles(for: log.linkedConstructionMethodIDs)
-            }
-        )
-        if isDateFilterActive {
-            let df = Formatters.date
-            let start = Calendar.current.startOfDay(for: filterStart)
-            let end = Calendar.current.date(byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: filterEnd)) ?? filterEnd
-            result = result.filter {
-                guard let d = df.date(from: $0.date) else { return false }
-                return d >= start && d < end
-            }
-        }
-        return result
-    }
-
-    var selectedDateLogs: [DailyLog] {
-        logs(on: selectedCalendarDate)
-    }
-
-    var calendarDays: [Date?] {
-        let calendar = Calendar.current
-        guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: calendarMonth)),
-              let range = calendar.range(of: .day, in: .month, for: monthStart) else {
-            return []
-        }
-        let weekday = calendar.component(.weekday, from: monthStart)
-        let leading = (weekday + 5) % 7
-        let days = range.compactMap { day -> Date? in
-            calendar.date(byAdding: .day, value: day - 1, to: monthStart)
-        }
-        let trailing = (7 - ((leading + days.count) % 7)) % 7
-        return Array(repeating: nil, count: leading) + days + Array(repeating: nil, count: trailing)
-    }
-
-    var isCalendarOnCurrentMonth: Bool {
-        Calendar.current.isDate(calendarMonth, equalTo: Date(), toGranularity: .month)
-    }
-
-    var isTodaySelected: Bool {
-        Calendar.current.isDateInToday(selectedCalendarDate)
-    }
-
-    var usesSplitLogLayout: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
-
-    var dailyLogSearchSuggestions: [RealtimeSearchSuggestion] {
-        filtered.prefix(8).map { log in
-            let title = log.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? log.date : log.content
-            return RealtimeSearchSuggestion(
-                id: "log-\(log.id.uuidString)",
-                category: .log,
-                entityId: log.id,
-                title: title,
-                subtitleParts: [
-                    log.date,
-                    log.projectId.flatMap { projectId in
-                        store.projects.first(where: { $0.id == projectId })?.name
-                    } ?? "",
-                    log.safety,
-                ],
-                score: 100
-            )
-        }
-    }
-
     var body: some View {
         Group {
             if usesSplitLogLayout {
@@ -163,67 +88,10 @@ struct DailyLogView: View {
         }
         .navigationTitle(String(localized: "施工日志"))
         .toolbar {
-            if !usesSplitLogLayout {
-                ToolbarItem(placement: .topBarLeading) {
-                    Menu {
-                        Picker(String(localized: "项目"), selection: $filterProjectId) {
-                            Text(String(localized: "全部项目")).tag(nil as UUID?)
-                            ForEach(store.projects) { project in
-                                Text(project.name).tag(project.id as UUID?)
-                            }
-                        }
-                        Button {
-                            showDateFilter = true
-                        } label: {
-                            Label(isDateFilterActive ? String(localized: "调整日期筛选") : String(localized: "日期筛选"), systemImage: "calendar")
-                        }
-                        if filterProjectId != nil || isDateFilterActive {
-                            Button(String(localized: "清除筛选")) {
-                                filterProjectId = nil
-                                isDateFilterActive = false
-                            }
-                        }
-                    } label: {
-                        Image(systemName: filterProjectId != nil || isDateFilterActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
-                            .visibleIconStyle()
-                    }
-                    .buttonStyle(.appIcon())
-                    .accessibilityLabel(String(localized: "筛选与排序"))
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button { showAdd = true } label: {
-                        Image(systemName: "plus").visibleIconStyle()
-                    }
-                    .buttonStyle(.appIcon())
-                        .accessibilityLabel(String(localized: "新建施工日志"))
-                }
-            }
+            logToolbar
         }
         .sheet(isPresented: $showDateFilter) {
-            NavigationStack {
-                Form {
-                    DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
-                    DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
-                    Toggle(String(localized: "启用日期筛选"), isOn: $isDateFilterActive)
-                }
-                .navigationTitle(String(localized: "日期筛选"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "清除")) {
-                            isDateFilterActive = false
-                            showDateFilter = false
-                        }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "确定")) {
-                            isDateFilterActive = true
-                            showDateFilter = false
-                        }
-                    }
-                }
-            }
-            .presentationDetents([.medium])
+            dateFilterSheet
         }
         .sheet(isPresented: $showAdd) {
             addLogForm
@@ -268,5 +136,4 @@ struct DailyLogView: View {
             undoableDeletion.flushPendingCommit()
         }
     }
-
 }

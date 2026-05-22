@@ -7,7 +7,7 @@ struct VoltageDropView: View {
     @AppStorage(UserPreferenceKeys.Calculator.voltageDropMaterial) private var materialRawValue: String = WireMaterial.copper.rawValue
     @AppStorage(UserPreferenceKeys.Calculator.voltageDropSection) private var section: String = "2.5"
     @AppStorage(UserPreferenceKeys.Calculator.voltageDropVoltage) private var voltage: String = "220"
-    @AppStorage(UserPreferenceKeys.Calculator.voltageDropIsLoopLength) private var isLoopLength: Bool = false  // true = loop length(round trip included), false = one-way length
+    @AppStorage(UserPreferenceKeys.Calculator.voltageDropIsLoopLength) private var isLoopLength: Bool = false // true = loop length(round trip included), false = one-way length
 
     @State private var resultModel: CalculationResult?
     @State private var didAttemptSubmit = false

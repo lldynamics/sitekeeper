@@ -130,5 +130,4 @@ struct ProjectDetailHeaderSection: View {
         }
         .buttonStyle(.plain)
     }
-
 }

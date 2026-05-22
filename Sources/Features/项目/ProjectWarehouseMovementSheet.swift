@@ -266,7 +266,6 @@ struct ProjectWarehouseMovementSheet: View {
         }
         return String(format: String(localized: "以下文件未添加：\n%@"), lines)
     }
-
 }
 
 private struct ProjectWarehouseMaterialSuggestion: Identifiable {

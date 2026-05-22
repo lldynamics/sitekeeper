@@ -1,43 +1,43 @@
 import SwiftUI
 
 struct MaterialLibraryView: View {
-    @Environment(DataStore.self) private var store
+    @Environment(DataStore.self) var store
     @Environment(MaterialLibraryStore.self) private var materialLibraryStore
     @Environment(ProjectStore.self) private var projectStore
     @Environment(UserPreferenceStore.self) private var userPreferenceStore
     @State private var categoryState = MaterialLibraryCategoryState()
-    @State private var priceFilter: MaterialPriceFilter = .all
+    @State var priceFilter: MaterialPriceFilter = .all
     @State private var searchText = ""
     @State private var showAddSheet = false
-    @State private var priceEditorContext: MaterialPriceEditorContext?
-    @State private var appendState = MaterialLibraryAppendState()
-    @State private var pendingDeleteTarget: MaterialLibraryPendingDeleteTarget?
-    @State private var showDeleteConfirm = false
-    @State private var operationMessage: String?
-    @State private var operationNotice: OperationToastNotice?
-    @State private var undoableDeletion = UndoableDeletionCoordinator()
-    @State private var batchState = MaterialLibraryBatchSelectionState()
+    @State var priceEditorContext: MaterialPriceEditorContext?
+    @State var appendState = MaterialLibraryAppendState()
+    @State var pendingDeleteTarget: MaterialLibraryPendingDeleteTarget?
+    @State var showDeleteConfirm = false
+    @State var operationMessage: String?
+    @State var operationNotice: OperationToastNotice?
+    @State var undoableDeletion = UndoableDeletionCoordinator()
+    @State var batchState = MaterialLibraryBatchSelectionState()
     @FocusState private var appendMaterialFocusedField: AppendMaterialField?
     @AppStorage("recentMaterialSearches") private var recentSearchKeywordsRaw = ""
-    @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) private var promptAfterAdd = true
-    @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) private var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
-    @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) private var lastAppendDraftIDRaw = ""
-    @AppStorage(UserPreferenceKeys.materialLibraryLastProjectID) private var lastAppendProjectIDRaw = ""
+    @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) var promptAfterAdd = true
+    @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
+    @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) var lastAppendDraftIDRaw = ""
+    @AppStorage(UserPreferenceKeys.materialLibraryLastProjectID) var lastAppendProjectIDRaw = ""
 
-    private var materialPriceEntries: [MaterialPriceEntry] { materialLibraryStore.materialPriceEntries }
-    private var userMaterials: [UserMaterial] { materialLibraryStore.userMaterials }
-    private var deletedUserMaterials: [UserMaterial] { materialLibraryStore.deletedUserMaterials }
+    var materialPriceEntries: [MaterialPriceEntry] { materialLibraryStore.materialPriceEntries }
+    var userMaterials: [UserMaterial] { materialLibraryStore.userMaterials }
+    var deletedUserMaterials: [UserMaterial] { materialLibraryStore.deletedUserMaterials }
     private var supplierProfiles: [SupplierProfile] { materialLibraryStore.supplierProfiles }
-    private var materialSheetDrafts: [MaterialSheetDraft] { materialLibraryStore.materialSheetDrafts }
-    private var recentMaterialKeys: [String] { userPreferenceStore.recentMaterialKeys }
-    private var hiddenPresetKeys: Set<String> { userPreferenceStore.hiddenPresetKeys }
-    private var projects: [Project] { projectStore.projects }
+    var materialSheetDrafts: [MaterialSheetDraft] { materialLibraryStore.materialSheetDrafts }
+    var recentMaterialKeys: [String] { userPreferenceStore.recentMaterialKeys }
+    var hiddenPresetKeys: Set<String> { userPreferenceStore.hiddenPresetKeys }
+    var projects: [Project] { projectStore.projects }
 
     private var visiblePresetMaterials: [CommonMaterial] {
         MaterialLibrary.all.filter { !isPresetHidden($0) }
     }
 
-    private var priceEntryByKey: [String: MaterialPriceEntry] {
+    var priceEntryByKey: [String: MaterialPriceEntry] {
         var map: [String: MaterialPriceEntry] = [:]
         for entry in materialPriceEntries {
             let key = materialKey(name: entry.name, specification: entry.specification, unit: entry.unit)
@@ -48,11 +48,11 @@ struct MaterialLibraryView: View {
         return map
     }
 
-    private var normalizedSearchKeyword: String {
+    var normalizedSearchKeyword: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var recentSearchKeywords: [String] {
+    var recentSearchKeywords: [String] {
         MaterialLibraryLogicHelpers.recentSearchKeywords(from: recentSearchKeywordsRaw)
     }
 
@@ -124,27 +124,8 @@ struct MaterialLibraryView: View {
         }
     }
 
-    private var showRecycleBin: Bool {
+    var showRecycleBin: Bool {
         !deletedUserMaterials.isEmpty || !hiddenPresetKeys.isEmpty
-    }
-
-    private var selectedBatchMaterialContexts: [PendingMaterialAppendContext] {
-        batchState.selectedMaterialContextsByKey.values
-            .sorted { lhs, rhs in
-                lhs.displayName.localizedStandardCompare(rhs.displayName) == .orderedAscending
-            }
-    }
-
-    private var activeMaterialSheetDraftIDs: [UUID] {
-        activeMaterialSheetDrafts.map(\.id)
-    }
-
-    private var defaultTargetMaterialSheetDraft: MaterialSheetDraft? {
-        MaterialLibraryLogicHelpers.defaultTargetDraft(
-            activeDrafts: activeMaterialSheetDrafts,
-            selectedDefaultDraftID: appendState.selectedDefaultMaterialSheetDraftID,
-            rememberedDraftIDRaw: lastAppendDraftIDRaw
-        )
     }
 
     var body: some View {
@@ -227,131 +208,73 @@ struct MaterialLibraryView: View {
                 Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel(String(localized: "materials.library.addCustomMaterial.accessibility"))
             }
         }
-        .sheet(isPresented: $showAddSheet) {
-            AddMaterialSheet(
-                initialCategory: categoryState.selectedCategory,
-                suggestedCategories: availableCategories
-            ) { material, price in
-                let key = materialKey(name: material.name, specification: material.specification, unit: material.unit)
-                if !userMaterials.contains(where: { materialKey(name: $0.name, specification: $0.specification, unit: $0.unit) == key }) {
-                    store.appendUserMaterial(material)
-                }
-                if !price.isEmpty {
-                    let entry = MaterialPriceEntry(
-                        name: material.name,
-                        specification: material.specification,
-                        unit: material.unit,
-                        referencePrice: price,
-                        category: material.category
-                    )
-                    upsertMaterialPriceEntry(entry)
-                }
-                let displayName = material.specification.isEmpty ? material.name : "\(material.name) \(material.specification)"
-                store.appendMaterialItem(MaterialItem(
-                    name: displayName,
-                    quantity: "1",
-                    unit: material.unit,
-                    unitPrice: price,
-                    specification: material.specification
-                ))
-                store.scheduleSave()
-            }
-        }
-        .sheet(item: $priceEditorContext) { context in
-            MaterialPriceEditSheet(
-                entry: context.entry,
-                suppliers: supplierProfiles,
-                initialName: context.name,
-                initialSpecification: context.specification,
-                initialUnit: context.unit,
-                initialCategory: context.category
-            ) { updated in
+        .materialLibrarySheetPresentations(
+            showAddSheet: $showAddSheet,
+            initialCategory: categoryState.selectedCategory,
+            availableCategories: availableCategories,
+            onAddMaterial: handleAddMaterialSave,
+            priceEditorContext: $priceEditorContext,
+            supplierProfiles: supplierProfiles,
+            onSavePriceEntry: { updated in
                 upsertMaterialPriceEntry(updated)
                 priceEditorContext = nil
-            } onDelete: { target in
-                MaterialLibraryLogicHelpers.deleteMaterialPriceEntryWithUndo(
-                    target,
-                    store: store,
-                    undoableDeletion: undoableDeletion,
-                    notice: $operationNotice
-                )
+            },
+            onDeletePriceEntry: { target in
+                handleDeletePriceEntry(target)
                 priceEditorContext = nil
-            }
-        }
-        .sheet(item: $appendState.pendingAddContext) { context in
-            MaterialLibraryAppendToSheetModal(
-                context: context,
-                activeMaterialSheetDrafts: activeMaterialSheetDrafts,
-                projects: projects,
-                draftPickerTitle: { draft in
-                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
-                },
-                quantity: $appendState.pendingAddQuantity,
-                unitPrice: $appendState.pendingAddUnitPrice,
-                note: $appendState.pendingAddNote,
-                targetMode: $appendState.pendingAddTargetMode,
-                draftId: $appendState.pendingAddDraftId,
-                draftTitle: $appendState.pendingAddDraftTitle,
-                projectId: $appendState.pendingAddProjectId,
-                focusedField: $appendMaterialFocusedField,
-                operationMessage: $operationMessage,
-                canAppendMaterialToSheet: canAppendMaterialToSheet,
-                onCancel: {
-                    appendState.pendingAddContext = nil
-                },
-                onConfirm: {
-                    appendMaterialsToSheet(
-                        [context],
-                        quantityText: appendState.pendingAddQuantity,
-                        showPostAddPrompt: false,
-                        deferToastUntilSheetDismissal: true
-                    ) { _ in
-                        appendState.pendingAddUnitPrice
-                    }
-                },
-                onEnsureExistingDraftSelection: {
-                    appendState.pendingAddDraftId = appendState.pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
+            },
+            pendingAddContext: $appendState.pendingAddContext,
+            activeMaterialSheetDrafts: activeMaterialSheetDrafts,
+            projects: projects,
+            draftPickerTitle: { draft in
+                MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
+            },
+            pendingAddQuantity: $appendState.pendingAddQuantity,
+            pendingAddUnitPrice: $appendState.pendingAddUnitPrice,
+            pendingAddNote: $appendState.pendingAddNote,
+            pendingAddTargetMode: $appendState.pendingAddTargetMode,
+            pendingAddDraftID: $appendState.pendingAddDraftId,
+            pendingAddDraftTitle: $appendState.pendingAddDraftTitle,
+            pendingAddProjectID: $appendState.pendingAddProjectId,
+            appendMaterialFocusedField: $appendMaterialFocusedField,
+            operationMessage: $operationMessage,
+            canAppendMaterialToSheet: canAppendMaterialToSheet,
+            onCancelAppend: {
+                appendState.pendingAddContext = nil
+            },
+            onConfirmAppend: { context in
+                appendMaterialsToSheet(
+                    [context],
+                    quantityText: appendState.pendingAddQuantity,
+                    showPostAddPrompt: false,
+                    deferToastUntilSheetDismissal: true
+                ) { _ in
+                    appendState.pendingAddUnitPrice
                 }
-            )
-        }
-        .sheet(item: $batchState.pendingBatchAddContext) { context in
-            MaterialLibraryBatchAppendSheet(
-                context: context,
-                activeMaterialSheetDrafts: activeMaterialSheetDrafts,
-                projects: projects,
-                draftPickerTitle: { draft in
-                    MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
-                },
-                quantity: $batchState.pendingBatchAddQuantity,
-                targetMode: $appendState.pendingAddTargetMode,
-                draftId: $appendState.pendingAddDraftId,
-                draftTitle: $appendState.pendingAddDraftTitle,
-                projectId: $appendState.pendingAddProjectId,
-                operationMessage: $operationMessage,
-                canAppendMaterialToSheet: canAppendMaterialToSheet,
-                onCancel: {
-                    batchState.pendingBatchAddContext = nil
-                },
-                onConfirm: {
-                    let appended = confirmAppendMaterials(
-                        context.materials,
-                        quantityText: batchState.pendingBatchAddQuantity,
-                        deferToastUntilSheetDismissal: true
-                    )
-                    guard appended else { return false }
-                    batchState.selectedMaterialContextsByKey = [:]
-                    return true
-                },
-                onEnsureExistingDraftSelection: {
-                    appendState.pendingAddDraftId = appendState.pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
-                }
-            )
-        }
-        .sheet(isPresented: $categoryState.showCategoryManager) {
-            NavigationStack {
-                MaterialCategoryManagementView()
-            }
-        }
+            },
+            onEnsureExistingDraftSelectionForAppend: {
+                appendState.pendingAddDraftId = appendState.pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
+            },
+            pendingBatchAddContext: $batchState.pendingBatchAddContext,
+            pendingBatchAddQuantity: $batchState.pendingBatchAddQuantity,
+            onCancelBatchAppend: {
+                batchState.pendingBatchAddContext = nil
+            },
+            onConfirmBatchAppend: { context in
+                let appended = confirmAppendMaterials(
+                    context.materials,
+                    quantityText: batchState.pendingBatchAddQuantity,
+                    deferToastUntilSheetDismissal: true
+                )
+                guard appended else { return false }
+                batchState.selectedMaterialContextsByKey = [:]
+                return true
+            },
+            onEnsureExistingDraftSelectionForBatch: {
+                appendState.pendingAddDraftId = appendState.pendingAddDraftId ?? activeMaterialSheetDrafts.first?.id
+            },
+            showCategoryManager: $categoryState.showCategoryManager
+        )
         .onChange(of: categoryState.showCategoryManager) { _, isShowing in
             if !isShowing, let selectedCategory = categoryState.selectedCategory, !availableCategories.contains(selectedCategory) {
                 categoryState.selectedCategory = nil
@@ -418,385 +341,11 @@ struct MaterialLibraryView: View {
             lastAppendDraftIDRaw = newValue.uuidString
             lastAppendProjectIDRaw = draft.projectId?.uuidString ?? ""
         }
-        .onChange(of: appendState.pendingAddContext?.id) { _, newValue in
-            guard newValue == nil else { return }
-            flushDeferredOperationMessage()
-        }
-        .onChange(of: batchState.pendingBatchAddContext?.id) { _, newValue in
-            guard newValue == nil else { return }
-            flushDeferredOperationMessage()
-        }
+        .onChange(of: pendingAddContextID, initial: false, handlePendingAddContextChange)
+        .onChange(of: pendingBatchAddContextID, initial: false, handlePendingBatchAddContextChange)
     }
 
-    private var defaultMaterialSheetTargetBar: some View {
-        MaterialLibraryDefaultTargetBar(
-            draft: defaultTargetMaterialSheetDraft,
-            activeDrafts: activeMaterialSheetDrafts,
-            draftTitle: { draft in
-                MaterialLibraryLogicHelpers.materialSheetDraftPickerTitle(draft, projects: projects)
-            },
-            projectName: { projectID in
-                MaterialLibraryLogicHelpers.projectName(for: projectID, projects: projects)
-            },
-            recentlyAddedSummary: { draft in
-                MaterialLibraryLogicHelpers.recentlyAddedSummary(
-                    for: draft,
-                    recentlyAddedDraftID: appendState.recentlyAddedDraftID,
-                    recentlyAddedItemCount: appendState.recentlyAddedItemCount
-                )
-            },
-            onSelectDraft: { draftID in
-                appendState.selectedDefaultMaterialSheetDraftID = draftID
-            },
-            onCreateDraft: {
-                createAndSelectDefaultMaterialSheetDraft()
-            },
-            onOpenDraft: { draftID in
-                appendState.recentlyAddedDraftID = draftID
-                appendState.navigateToMaterialSheet = true
-            }
-        )
-    }
-
-    // MARK: - Price lookup
-
-    private func priceEntry(for item: CommonMaterial) -> MaterialPriceEntry? {
-        priceEntryByKey[materialKey(item)]
-    }
-
-    private func priceEntry(forUser item: UserMaterial) -> MaterialPriceEntry? {
-        priceEntryByKey[materialKey(name: item.name, specification: item.specification, unit: item.unit)]
-    }
-
-    // MARK: - Preset material row
-
-    private func presetMaterialRow(_ item: CommonMaterial) -> some View {
-        let entry = priceEntry(for: item)
-        let hasPrice = entry?.referencePrice.isEmpty == false
-        let context = makeAppendContext(
-            name: item.name,
-            specification: item.specification,
-            unit: item.unit,
-            key: materialKey(item),
-            priceEntry: entry
-        )
-        return materialRowContent(
-            name: item.name, spec: item.specification, unit: item.unit,
-            hasPrice: hasPrice, price: entry?.referencePrice,
-            appendContext: context,
-            onEdit: { openPriceEditSheet(name: item.name, spec: item.specification, unit: item.unit, category: item.category.rawValue, entry: entry) },
-            onAdd: {
-                prepareAppendMaterial(context)
-            }
-        )
-    }
-
-    // MARK: - User material row
-
-    private func userMaterialRow(_ item: UserMaterial) -> some View {
-        let entry = priceEntry(forUser: item)
-        let hasPrice = entry?.referencePrice.isEmpty == false
-        let context = makeAppendContext(
-            name: item.name,
-            specification: item.specification,
-            unit: item.unit,
-            key: materialKey(name: item.name, specification: item.specification, unit: item.unit),
-            priceEntry: entry
-        )
-        return materialRowContent(
-            name: item.name, spec: item.specification, unit: item.unit,
-            hasPrice: hasPrice, price: entry?.referencePrice,
-            appendContext: context,
-            onEdit: { openPriceEditSheet(name: item.name, spec: item.specification, unit: item.unit, category: item.category, entry: entry) },
-            onAdd: {
-                prepareAppendMaterial(context)
-            }
-        )
-    }
-
-    // MARK: - Shared row content
-
-    private func materialRowContent(
-        name: String, spec: String, unit: String,
-        hasPrice: Bool, price: String?,
-        appendContext: PendingMaterialAppendContext,
-        onEdit: @escaping () -> Void,
-        onAdd: @escaping () -> Void
-    ) -> some View {
-        let isSelected = batchState.selectedMaterialContextsByKey[appendContext.key] != nil
-        return MaterialLibraryMaterialRowContent(
-            name: name,
-            spec: spec,
-            unit: unit,
-            hasPrice: hasPrice,
-            price: price,
-            isBatchSelectionMode: batchState.isBatchSelectionMode,
-            isSelected: isSelected,
-            onEdit: onEdit,
-            onAdd: onAdd,
-            onToggleSelection: {
-                toggleBatchMaterialSelection(appendContext)
-            }
-        )
-    }
-
-    private func makeAppendContext(
-        name: String,
-        specification: String,
-        unit: String,
-        key: String,
-        priceEntry: MaterialPriceEntry?
-    ) -> PendingMaterialAppendContext {
-        PendingMaterialAppendContext(
-            name: name,
-            specification: specification,
-            unit: unit,
-            key: key,
-            defaultBrand: priceEntry?.brand ?? "",
-            defaultSupplier: priceEntry?.supplier ?? "",
-            defaultUnitPrice: priceEntry?.referencePrice ?? ""
-        )
-    }
-
-    private func toggleBatchMaterialSelection(_ context: PendingMaterialAppendContext) {
-        batchState.selectedMaterialContextsByKey = MaterialLibraryLogicHelpers.toggledBatchSelection(
-            selectedByKey: batchState.selectedMaterialContextsByKey,
-            context: context
-        )
-    }
-
-    private func exitBatchSelectionMode() {
-        batchState.isBatchSelectionMode = false
-        batchState.selectedMaterialContextsByKey = [:]
-        batchState.pendingBatchAddContext = nil
-    }
-
-    @ViewBuilder
-    private var batchAppendActionBar: some View {
-        MaterialLibraryBatchAppendActionBar(
-            selectedCount: selectedBatchMaterialContexts.count,
-            onClear: {
-                batchState.selectedMaterialContextsByKey = [:]
-            },
-            onOpenBatchAppend: {
-                openBatchAppendSheet()
-            }
-        )
-    }
-
-    private func openBatchAppendSheet() {
-        let contexts = selectedBatchMaterialContexts
-        guard !contexts.isEmpty else {
-            operationMessage = "请先选择材料"
-            return
-        }
-        batchState.pendingBatchAddQuantity = "1"
-        appendState.pendingAddNote = ""
-        appendState.pendingAddProjectId = nil
-        applyDefaultAppendTarget()
-        appendState.pendingAddDraftTitle = MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
-            projectId: appendState.pendingAddProjectId,
-            projects: projects
-        )
-        batchState.pendingBatchAddContext = PendingBatchMaterialAppendContext(materials: contexts)
-    }
-
-    // MARK: - Recycle bin rows
-
-    private func deletedPresetRow(key: String) -> some View {
-        MaterialLibraryDeletedPresetRow(key: key) {
-            store.hiddenPresetKeys.remove(key)
-            store.scheduleSave()
-        }
-    }
-
-    private func deletedUserRow(_ item: UserMaterial) -> some View {
-        MaterialLibraryDeletedUserRow(item: item) {
-            store.removeDeletedUserMaterials(ids: Set([item.id]))
-            store.appendUserMaterial(item)
-            store.scheduleSave()
-        }
-    }
-
-    // MARK: - Actions
-
-    private func openPriceEditSheet(name: String, spec: String, unit: String, category: String, entry: MaterialPriceEntry?) {
-        if let existing = entry {
-            priceEditorContext = MaterialPriceEditorContext(existing: existing)
-        } else {
-            priceEditorContext = MaterialPriceEditorContext(
-                name: name,
-                specification: spec,
-                unit: unit,
-                category: category
-            )
-        }
-    }
-
-    private func prepareAppendMaterial(_ context: PendingMaterialAppendContext) {
-        appendState.pendingAddContext = context
-        appendState.pendingAddQuantity = "1"
-        appendState.pendingAddUnitPrice = context.defaultUnitPrice
-        appendState.pendingAddNote = ""
-        appendState.pendingAddProjectId = nil
-        applyDefaultAppendTarget()
-        appendState.pendingAddDraftTitle = MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
-            projectId: appendState.pendingAddProjectId,
-            projects: projects
-        )
-    }
-
-    @discardableResult
-    private func confirmAppendMaterials(
-        _ contexts: [PendingMaterialAppendContext],
-        quantityText: String,
-        showPostAddPrompt: Bool = true,
-        deferToastUntilSheetDismissal: Bool = false
-    ) -> Bool {
-        appendMaterialsToSheet(
-            contexts,
-            quantityText: quantityText,
-            showPostAddPrompt: showPostAddPrompt,
-            deferToastUntilSheetDismissal: deferToastUntilSheetDismissal
-        ) { context in
-            context.defaultUnitPrice
-        }
-    }
-
-    @discardableResult
-    private func appendMaterialsToSheet(
-        _ contexts: [PendingMaterialAppendContext],
-        quantityText: String,
-        showPostAddPrompt: Bool = true,
-        deferToastUntilSheetDismissal: Bool = false,
-        unitPriceResolver: (PendingMaterialAppendContext) -> String
-    ) -> Bool {
-        guard !contexts.isEmpty else { return false }
-        let computation = MaterialLibraryLogicHelpers.computeAppendComputation(
-            contexts: contexts,
-            quantityText: quantityText,
-            noteText: appendState.pendingAddNote,
-            targetMode: appendState.pendingAddTargetMode,
-            targetDraftID: appendState.pendingAddDraftId,
-            targetProjectID: appendState.pendingAddProjectId,
-            draftTitleInput: appendState.pendingAddDraftTitle,
-            drafts: materialSheetDrafts,
-            projects: projects,
-            now: Formatters.now(),
-            unitPriceResolver: unitPriceResolver
-        )
-
-        switch computation {
-        case .failure(let message, let nextPendingTargetMode, let nextPendingDraftID):
-            operationMessage = message
-            appendState.pendingAddTargetMode = nextPendingTargetMode
-            appendState.pendingAddDraftId = nextPendingDraftID
-            return false
-        case .success(let output):
-            store.replaceMaterialSheetDrafts(output.drafts)
-            contexts.forEach { appendRecentMaterialKey($0.key) }
-            store.scheduleSave()
-
-            lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
-            lastAppendDraftIDRaw = output.targetDraftID.uuidString
-            lastAppendProjectIDRaw = output.lastProjectIDRaw
-
-            appendState.pendingAddTargetMode = output.nextPendingTargetMode
-            appendState.pendingAddDraftId = output.nextPendingDraftID
-            appendState.selectedDefaultMaterialSheetDraftID = output.nextSelectedDefaultDraftID
-            showOperationMessage(
-                MaterialLibraryLogicHelpers.appendSuccessMessage(
-                    itemCount: contexts.count,
-                    draftTitle: output.targetTitle
-                ),
-                deferUntilDismissal: deferToastUntilSheetDismissal
-            )
-            appendState.selectedDefaultMaterialSheetDraftID = output.targetDraftID
-            appendState.recentlyAddedDraftID = output.targetDraftID
-            appendState.recentlyAddedDraftTitle = output.targetTitle
-            appendState.recentlyAddedItemCount = contexts.count
-            appendState.showOpenMaterialSheetPrompt = promptAfterAdd && showPostAddPrompt
-            return true
-        }
-    }
-
-    private func showOperationMessage(_ message: String, deferUntilDismissal: Bool = false) {
-        if deferUntilDismissal {
-            appendState.deferredOperationMessage = message
-        } else {
-            operationMessage = message
-        }
-    }
-
-    private func flushDeferredOperationMessage() {
-        guard let message = appendState.deferredOperationMessage else { return }
-        appendState.deferredOperationMessage = nil
-        operationMessage = message
-    }
-
-    private var activeMaterialSheetDrafts: [MaterialSheetDraft] {
-        MaterialLibraryLogicHelpers.activeMaterialSheetDrafts(from: materialSheetDrafts)
-    }
-
-    private func applyDefaultAppendTarget() {
-        if let draft = defaultTargetMaterialSheetDraft {
-            appendState.pendingAddTargetMode = .existing
-            appendState.pendingAddDraftId = draft.id
-            appendState.pendingAddProjectId = nil
-            return
-        }
-        let target = MaterialLibraryLogicHelpers.rememberedTargetState(
-            lastModeRaw: lastAppendTargetModeRaw,
-            lastDraftIDRaw: lastAppendDraftIDRaw,
-            lastProjectIDRaw: lastAppendProjectIDRaw,
-            activeDrafts: activeMaterialSheetDrafts,
-            projects: projects
-        )
-        appendState.pendingAddTargetMode = target.mode
-        appendState.pendingAddDraftId = target.draftID
-        appendState.pendingAddProjectId = target.projectID
-    }
-
-    private func ensureDefaultMaterialSheetSelection() {
-        appendState.selectedDefaultMaterialSheetDraftID = MaterialLibraryLogicHelpers.ensureDefaultSelection(
-            selectedDefaultDraftID: appendState.selectedDefaultMaterialSheetDraftID,
-            rememberedDraftIDRaw: lastAppendDraftIDRaw,
-            activeDrafts: activeMaterialSheetDrafts
-        )
-    }
-
-    @discardableResult
-    private func createAndSelectDefaultMaterialSheetDraft() -> UUID {
-        let now = Formatters.now()
-        let newDraft = MaterialSheetDraft(
-            title: MaterialLibraryLogicHelpers.defaultMaterialSheetDraftTitle(
-                projectId: nil,
-                projects: projects
-            ),
-            items: [],
-            createdAt: now,
-            updatedAt: now
-        )
-        store.insertMaterialSheetDraftAtTop(newDraft)
-        store.scheduleSave()
-        appendState.selectedDefaultMaterialSheetDraftID = newDraft.id
-        lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
-        lastAppendDraftIDRaw = newDraft.id.uuidString
-        lastAppendProjectIDRaw = ""
-        operationMessage = "已创建默认材料单「\(newDraft.title)」"
-        return newDraft.id
-    }
-
-    private var canAppendMaterialToSheet: Bool {
-        switch appendState.pendingAddTargetMode {
-        case .existing:
-            return appendState.pendingAddDraftId != nil
-        case .create:
-            return true
-        }
-    }
-
-    private func appendRecentMaterialKey(_ key: String) {
+    func appendRecentMaterialKey(_ key: String) {
         store.recentMaterialKeys = MaterialLibraryLogicHelpers.appendingRecentMaterialKey(
             key,
             to: recentMaterialKeys
@@ -823,76 +372,5 @@ struct MaterialLibraryView: View {
             term: term,
             from: recentSearchKeywordsRaw
         )
-    }
-
-    private var deleteConfirmMessage: String {
-        MaterialLibraryLogicHelpers.deleteConfirmMessage(for: pendingDeleteTarget)
-    }
-
-    private func requestDeletePresetMaterial(_ item: CommonMaterial) {
-        pendingDeleteTarget = .preset(item)
-        showDeleteConfirm = true
-    }
-
-    private func requestDeleteUserMaterial(_ item: UserMaterial) {
-        pendingDeleteTarget = .user(item)
-        showDeleteConfirm = true
-    }
-
-    private func confirmPendingDeleteMaterial() {
-        guard let pendingDeleteTarget else { return }
-        switch pendingDeleteTarget {
-        case .preset(let item):
-            MaterialLibraryLogicHelpers.hidePresetMaterial(item, store: store)
-        case .user(let item):
-            MaterialLibraryLogicHelpers.deleteUserMaterial(
-                item,
-                store: store,
-                undoableDeletion: undoableDeletion,
-                notice: $operationNotice
-            )
-        }
-        self.pendingDeleteTarget = nil
-    }
-
-    private func materialKey(_ item: CommonMaterial) -> String {
-        MaterialLibraryLogicHelpers.materialKey(item)
-    }
-
-    private func legacyMaterialKey(_ item: CommonMaterial) -> String {
-        MaterialLibraryLogicHelpers.legacyMaterialKey(item)
-    }
-
-    private func materialKey(name: String, specification: String, unit: String) -> String {
-        MaterialLibraryLogicHelpers.materialKey(name: name, specification: specification, unit: unit)
-    }
-
-    private func legacyMaterialKey(name: String, specification: String, unit: String) -> String {
-        MaterialLibraryLogicHelpers.legacyMaterialKey(name: name, specification: specification, unit: unit)
-    }
-
-    private func isPresetHidden(_ item: CommonMaterial) -> Bool {
-        MaterialLibraryLogicHelpers.isPresetHidden(item, hiddenPresetKeys: hiddenPresetKeys)
-    }
-
-    private func normalizedCategory(_ value: String) -> String {
-        MaterialLibraryLogicHelpers.normalizedCategory(value)
-    }
-
-    private func matchesPriceFilter(_ entry: MaterialPriceEntry?) -> Bool {
-        MaterialLibraryLogicHelpers.matchesPriceFilter(entry, priceFilter: priceFilter)
-    }
-
-    private func matchesSearch<Item: Searchable>(_ item: Item, extraFields: [String]) -> Bool {
-        MaterialLibraryLogicHelpers.matchesSearch(
-            item: item,
-            normalizedKeyword: normalizedSearchKeyword,
-            extraFields: extraFields
-        )
-    }
-
-    private func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
-        store.upsertMaterialPriceEntry(entry)
-        store.scheduleSave()
     }
 }

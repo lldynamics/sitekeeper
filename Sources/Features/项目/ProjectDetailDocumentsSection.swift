@@ -687,7 +687,6 @@ struct ProjectDocumentsView: View {
     private func archiveTodoTitle(for category: ProjectDocumentCategory) -> String {
         String(format: String(localized: "补齐施工资料：%@"), category.displayName)
     }
-
 }
 
 extension DocumentArchiveChecklistItem {

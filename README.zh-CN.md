@@ -78,6 +78,15 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -projec
 scripts/release/preflight.sh
 ```
 
+Swift 代码格式：
+
+```sh
+brew install swiftformat swiftlint
+scripts/dev/check_swift_format.sh
+scripts/dev/check_swift_lint.sh
+scripts/dev/format_swift.sh
+```
+
 启用本地提交前守卫（一次性）：
 
 ```sh

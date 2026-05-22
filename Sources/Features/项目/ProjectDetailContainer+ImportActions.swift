@@ -87,12 +87,15 @@ extension ProjectDetailContainer {
                 assetState.drawingShareURL = url
             }
         case .failure(let message):
-            StorageIssueLog.record(
-                String(
-                    format: String(localized: "图纸原件打开失败：%@，%@"),
-                    drawing.name.isEmpty ? drawing.fileName : drawing.name,
-                    message
-                )
+            StorageIssueLog.recordEvent(
+                "project_detail.drawing_open_source_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "ProjectDetailContainerImportActions.previewDrawing",
+                    "drawing_id": drawing.id.uuidString,
+                    "drawing_name": drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                    "error_message": message
+                ]
             )
             presentImportError(message)
         }

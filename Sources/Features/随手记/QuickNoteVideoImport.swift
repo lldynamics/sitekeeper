@@ -25,7 +25,15 @@ struct QuickNoteVideoTransfer: Transferable {
                         summary: "quickNoteVideoImport.durationRollback"
                     )
                 } catch {
-                    StorageIssueLog.record("超长视频回滚删除失败：\(result.fileName)，\(error.localizedDescription)")
+                    StorageIssueLog.recordEvent(
+                        "quick_note.video_duration_rollback_delete_failed",
+                        category: .fileStorage,
+                        details: [
+                            "source": "QuickNoteVideoTransfer.transferRepresentation",
+                            "file_name": result.fileName
+                        ],
+                        error: error
+                    )
                 }
                 throw QuickNoteVideoTransferError.tooLong(duration)
             }

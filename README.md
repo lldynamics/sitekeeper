@@ -78,6 +78,15 @@ Release preflight:
 scripts/release/preflight.sh
 ```
 
+Swift formatting:
+
+```sh
+brew install swiftformat swiftlint
+scripts/dev/check_swift_format.sh
+scripts/dev/check_swift_lint.sh
+scripts/dev/format_swift.sh
+```
+
 Enable local pre-commit guards (one time):
 
 ```sh

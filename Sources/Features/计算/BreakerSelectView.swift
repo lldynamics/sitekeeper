@@ -128,6 +128,8 @@ enum LoadType: String, CaseIterable {
         case .power: CalculatorCopy.breakerPowerLoad
         }
     }
-    var factor: Double { switch self { case .socket: 1.25; case .power: 1.5 } }
-    var poles: String { switch self { case .socket: "1P+N"; case .power: "3P" } }
+    var factor: Double { switch self { case .socket: 1.25
+    case .power: 1.5 } }
+    var poles: String { switch self { case .socket: "1P+N"
+    case .power: "3P" } }
 }

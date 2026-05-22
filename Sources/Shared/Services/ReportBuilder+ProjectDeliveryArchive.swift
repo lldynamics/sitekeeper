@@ -35,9 +35,25 @@ extension ReportBuilder {
             completedSteps += 1
             progress?(ProjectPackageExportProgress(completedSteps: completedSteps, totalSteps: totalSteps, currentItem: item))
         }
+        func recordPackageIssue(
+            _ event: String,
+            details: [String: String] = [:],
+            error: Error? = nil
+        ) {
+            var payload = details
+            payload["source"] = "ReportBuilder.makeProjectPackageZIP"
+            payload["project_id"] = project.id.uuidString
+            payload["project_name"] = project.name
+            StorageIssueLog.recordEvent(
+                event,
+                category: .zipArchive,
+                details: payload,
+                error: error
+            )
+        }
 
         try failIfCancelled()
-        let packagePDF = makeProjectPackagePDF(
+        let packagePDF = ReportBuilder.makeProjectPackagePDF(
             project: project,
             materials: materials,
             quotes: quotes,
@@ -61,7 +77,11 @@ extension ReportBuilder {
                 do {
                     try zip.close()
                 } catch {
-                    StorageIssueLog.record(locFormat("项目交付包 ZIP 关闭失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
+                    recordPackageIssue(
+                        "project_package.close_zip_failed",
+                        details: ["archive_file": packageURL.lastPathComponent],
+                        error: error
+                    )
                 }
                 do {
                     _ = try FileOps.removeIfExists(
@@ -73,7 +93,11 @@ extension ReportBuilder {
                         )
                     )
                 } catch {
-                    StorageIssueLog.record(locFormat("项目交付包临时文件清理失败：%@，%@", packageURL.lastPathComponent, error.localizedDescription))
+                    recordPackageIssue(
+                        "project_package.cleanup_temporary_zip_failed",
+                        details: ["archive_file": packageURL.lastPathComponent],
+                        error: error
+                    )
                 }
             }
         }
@@ -243,7 +267,14 @@ extension ReportBuilder {
             let fileBytes = ProjectDocumentStorage.fileSize(for: document.fileName)
             let sourceURL = ProjectDocumentStorage.fileURL(for: document.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                StorageIssueLog.record(locFormat("项目交付包缺少票据原件：%@", document.fileName))
+                recordPackageIssue(
+                    "project_package.missing_original_file",
+                    details: [
+                        "asset_type": "project_document",
+                        "file_name": document.fileName,
+                        "item_title": document.title
+                    ]
+                )
                 reportProgress(locFormat("检查票据 %@", document.title))
                 continue
             }
@@ -264,7 +295,14 @@ extension ReportBuilder {
             let fileBytes = DrawingStorage.fileSize(for: drawing.fileName)
             let sourceURL = DrawingStorage.fileURL(for: drawing.fileName)
             guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                StorageIssueLog.record(locFormat("项目交付包缺少图纸原件：%@", drawing.fileName))
+                recordPackageIssue(
+                    "project_package.missing_original_file",
+                    details: [
+                        "asset_type": "project_drawing",
+                        "file_name": drawing.fileName,
+                        "item_title": drawing.name
+                    ]
+                )
                 reportProgress(locFormat("检查图纸 %@", drawing.name))
                 continue
             }
@@ -285,7 +323,15 @@ extension ReportBuilder {
                 let fileBytes = PhotoStorage.fileSize(for: photo.fileName)
                 let sourceURL = PhotoStorage.fileURL(for: photo.fileName)
                 guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                    StorageIssueLog.record(locFormat("项目交付包缺少现场照片原件：%@", photo.fileName))
+                    recordPackageIssue(
+                        "project_package.missing_original_file",
+                        details: [
+                            "asset_type": "daily_log_photo",
+                            "file_name": photo.fileName,
+                            "log_date": log.date,
+                            "photo_tag": photo.tag.displayName
+                        ]
+                    )
                     reportProgress(locFormat("检查照片 %@ %@", log.date, photo.tag.displayName))
                     continue
                 }
@@ -321,7 +367,14 @@ extension ReportBuilder {
                     let fileBytes = QuickNoteAttachmentStorage.fileSize(for: attachment.fileName)
                     let sourceURL = QuickNoteAttachmentStorage.fileURL(for: attachment.fileName)
                     guard FileManager.default.fileExists(atPath: sourceURL.path) else {
-                        StorageIssueLog.record(locFormat("项目交付包缺少随手记附件原件：%@", attachment.fileName))
+                        recordPackageIssue(
+                            "project_package.missing_original_file",
+                            details: [
+                                "asset_type": "quick_note_attachment",
+                                "file_name": attachment.fileName,
+                                "item_title": note.title
+                            ]
+                        )
                         reportProgress(locFormat("检查随手记附件 %@", note.title.isEmpty ? note.createdAt : note.title))
                         continue
                     }

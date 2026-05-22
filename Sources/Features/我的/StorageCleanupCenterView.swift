@@ -184,7 +184,14 @@ struct StorageCleanupCenterView: View {
         if let errorMessage, !errorMessage.isEmpty {
             cloudBackups = []
             cloudBackupError = errorMessage
-            StorageIssueLog.record(String(format: String(localized: "存储清理中心读取云备份失败：%@"), errorMessage))
+            StorageIssueLog.recordEvent(
+                "storage_cleanup.cloud_backup_list_failed",
+                category: .cloudBackup,
+                details: [
+                    "source": "StorageCleanupCenterView.refreshCloudBackups",
+                    "error_message": errorMessage
+                ]
+            )
         } else {
             cloudBackups = backups
             cloudBackupError = nil
@@ -279,19 +286,23 @@ struct StorageCleanupCenterView: View {
         cleanupTrashBatches = StorageCleanupTrashStore.loadBatches()
         quarantinedFiles = FileQuarantineStore.loadEntries()
         if purgedCount > 0 {
-            StorageIssueLog.record(
-                String(
-                    format: String(localized: "清理回收站已自动永久删除 %lld 个过期批次。"),
-                    Int64(purgedCount)
-                )
+            StorageIssueLog.recordEvent(
+                "storage_cleanup.cleanup_trash_batches_purged",
+                category: .dataStore,
+                details: [
+                    "source": "StorageCleanupCenterView.refreshCleanupTrash",
+                    "purged_count": "\(purgedCount)"
+                ]
             )
         }
         if purgedFileCount > 0 {
-            StorageIssueLog.record(
-                String(
-                    format: String(localized: "回收站已自动永久删除 %lld 个过期隔离文件。"),
-                    Int64(purgedFileCount)
-                )
+            StorageIssueLog.recordEvent(
+                "storage_cleanup.quarantined_files_purged",
+                category: .fileStorage,
+                details: [
+                    "source": "StorageCleanupCenterView.refreshCleanupTrash",
+                    "purged_count": "\(purgedFileCount)"
+                ]
             )
         }
     }

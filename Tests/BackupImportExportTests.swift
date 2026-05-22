@@ -478,6 +478,129 @@ struct BackupImportExportTests {
         #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile) == false)
     }
 
+    @Test func backupPreparedEmbeddedFileRestoreRollbackRestoresExistingFile() throws {
+        let projectId = UUID()
+        let quickNoteFile = "backup-transaction-rollback-\(UUID().uuidString).bin"
+        let oldData = Data([0x11, 0x22, 0x33])
+        let newData = Data([0xAA, 0xBB, 0xCC])
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(newData, fileName: quickNoteFile)
+
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "事务回滚恢复项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
+            templates: []
+        )
+
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+            try? FileManager.default.removeItem(at: archive.fileURL)
+        }
+
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(oldData, fileName: quickNoteFile)
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+
+        let transaction = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
+        _ = try transaction.commit()
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == newData)
+
+        transaction.rollback()
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+    }
+
+    @Test func backupPreparedEmbeddedFileRestoreDeinitRollsBackWhenNotFinalized() throws {
+        let projectId = UUID()
+        let quickNoteFile = "backup-transaction-deinit-\(UUID().uuidString).bin"
+        let oldData = Data([0x31, 0x32, 0x33])
+        let newData = Data([0xC1, 0xC2, 0xC3])
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(newData, fileName: quickNoteFile)
+
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "事务释放回滚项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
+            templates: []
+        )
+
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+            try? FileManager.default.removeItem(at: archive.fileURL)
+        }
+
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(oldData, fileName: quickNoteFile)
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+
+        var transaction: BackupArchiveService.EmbeddedFileRestoreTransaction? = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
+        _ = try transaction?.commit()
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == newData)
+        transaction = nil
+
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+    }
+
+    @Test @MainActor func backupImportTransactionRollsBackFilesWhenMetadataPersistFails() async throws {
+        let projectId = UUID()
+        let quickNoteFile = "backup-transaction-persist-failure-\(UUID().uuidString).bin"
+        let oldData = Data([0x41, 0x42, 0x43])
+        let newData = Data([0xD1, 0xD2, 0xD3])
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(newData, fileName: quickNoteFile)
+
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "事务持久化失败回滚项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
+            templates: []
+        )
+
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        let invalidStorageRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("backup-persist-fail-\(UUID().uuidString).tmp")
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+            try? FileManager.default.removeItem(at: archive.fileURL)
+            try? FileManager.default.removeItem(at: invalidStorageRoot)
+        }
+
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(oldData, fileName: quickNoteFile)
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+
+        try Data("not-a-directory".utf8).write(to: invalidStorageRoot, options: .atomic)
+        let store = DataStore(storageDirectory: invalidStorageRoot)
+        await store.awaitInitialLoad()
+        let previousSnapshot = store.makeSnapshot(includePhotoFiles: false)
+        let restoreTransaction = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
+
+        do {
+            _ = try await BackupImportCoordinator.commitAndPersistImport(
+                restoreTransaction: restoreTransaction,
+                importedSnapshot: snapshot,
+                previousSnapshot: previousSnapshot,
+                importMode: .overwrite,
+                store: store,
+                sourceFileName: archive.fileURL.lastPathComponent
+            )
+            Issue.record("预期应因数据持久化失败而抛错")
+        } catch {
+            #expect(Bool(true))
+        }
+
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+    }
+
     @Test func backupRestoreEmbeddedFilesHandlesLargeZipEntry() throws {
         let projectId = UUID()
         let quickNoteFile = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x5A]), fileName: "backup-large-stream-\(UUID().uuidString).bin")

@@ -211,7 +211,7 @@ struct DailyLogPhotoWallSection: View {
                                     .foregroundStyle(Color.appDoc)
                                     .appListPrimaryTextLayout(lines: 2)
                                 if hasRectificationPair(item.logId),
-                                   (item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter) {
+                                   item.photo.tag == .rectificationBefore || item.photo.tag == .rectificationAfter {
                                     Text(String(localized: "已配对"))
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(Color.appSuccess)

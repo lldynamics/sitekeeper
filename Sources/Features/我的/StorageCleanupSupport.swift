@@ -169,8 +169,14 @@ enum StorageCleanupTrashStore {
             return try JSONDecoder().decode([StorageCleanupTrashBatch].self, from: data)
                 .sorted { lhs, rhs in lhs.createdAt > rhs.createdAt }
         } catch {
-            StorageIssueLog.record(
-                String(format: String(localized: "清理回收站清单读取失败：%@"), error.localizedDescription)
+            StorageIssueLog.recordEvent(
+                "storage_cleanup.trash_manifest_read_failed",
+                category: .dataStore,
+                details: [
+                    "source": "StorageCleanupTrashStore.loadBatches",
+                    "manifest_file": manifestURL.lastPathComponent
+                ],
+                error: error
             )
             return []
         }
@@ -253,8 +259,14 @@ enum StorageCleanupTrashStore {
         do {
             try saveBatches(active)
         } catch {
-            StorageIssueLog.record(
-                String(format: String(localized: "清理回收站过期清单更新失败：%@"), error.localizedDescription)
+            StorageIssueLog.recordEvent(
+                "storage_cleanup.trash_manifest_update_failed",
+                category: .dataStore,
+                details: [
+                    "source": "StorageCleanupTrashStore.purgeExpiredBatches",
+                    "expired_count": "\(expired.count)"
+                ],
+                error: error
             )
         }
         return expired.count

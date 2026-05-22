@@ -161,12 +161,14 @@ enum DrawingImportCoordinator {
                 let drawing = try DrawingStorage.saveImportedFileOrThrow(from: url, projectId: projectId)
                 importDrawing(drawing)
             } catch {
-                StorageIssueLog.record(
-                    String(
-                        format: String(localized: "图纸导入失败：%@，%@"),
-                        url.lastPathComponent,
-                        error.localizedDescription
-                    )
+                StorageIssueLog.recordEvent(
+                    "drawing.import_file_failed",
+                    category: .fileStorage,
+                    details: [
+                        "source": "DrawingImportCoordinator.importDrawings",
+                        "file_name": url.lastPathComponent
+                    ],
+                    error: error
                 )
                 result.failures.append(DrawingImportFailure(fileName: url.lastPathComponent, reason: error.localizedDescription))
             }
@@ -197,12 +199,14 @@ enum DrawingImportCoordinator {
                     drawing.note = ProjectDetailDrawingHelper.packageNote(for: entry.path)
                     importDrawing(drawing)
                 } catch {
-                    StorageIssueLog.record(
-                        String(
-                            format: String(localized: "图纸 ZIP 导入失败：%@，%@"),
-                            entry.path,
-                            error.localizedDescription
-                        )
+                    StorageIssueLog.recordEvent(
+                        "drawing.import_zip_entry_failed",
+                        category: .fileStorage,
+                        details: [
+                            "source": "DrawingImportCoordinator.importZipDrawings",
+                            "entry_path": entry.path
+                        ],
+                        error: error
                     )
                     result.failures.append(DrawingImportFailure(fileName: entry.path, reason: error.localizedDescription))
                 }
@@ -216,12 +220,14 @@ enum DrawingImportCoordinator {
                 )
             }
         } catch {
-            StorageIssueLog.record(
-                String(
-                    format: String(localized: "图纸 ZIP 读取失败：%@，%@"),
-                    url.lastPathComponent,
-                    error.localizedDescription
-                )
+            StorageIssueLog.recordEvent(
+                "drawing.import_zip_read_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "DrawingImportCoordinator.importZipDrawings",
+                    "file_name": url.lastPathComponent
+                ],
+                error: error
             )
             result.failures.append(DrawingImportFailure(fileName: url.lastPathComponent, reason: error.localizedDescription))
         }

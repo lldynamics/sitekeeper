@@ -169,7 +169,7 @@ struct QuickNoteAttachmentPickerBar: View {
 
     private func compactToolIcon(_ systemImage: String, isActive: Bool = false) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 16, weight: .semibold))
+            .font(.body.weight(.semibold))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(isActive ? Color.white : Color.appPrimaryAction)
             .frame(width: 32, height: 30)

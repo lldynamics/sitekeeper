@@ -205,5 +205,4 @@ struct TileCalcView: View {
         waste = NumericInputSupport.normalizedStorageText(waste, kind: .quantity, preservingInvalid: false)
         box = NumericInputSupport.normalizedStorageText(box, kind: .quantity, preservingInvalid: false)
     }
-
 }

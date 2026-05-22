@@ -267,7 +267,15 @@ struct QuickNoteView: View {
                 let decoded = try JSONDecoder().decode([QuickNoteAttachment].self, from: data)
                 draftAttachments = decoded.filter { QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
             } catch {
-                StorageIssueLog.record("随手记草稿附件解析失败：\(error.localizedDescription)")
+                StorageIssueLog.recordEvent(
+                    "quick_note.draft_attachments_decode_failed",
+                    category: .dataStore,
+                    details: [
+                        "source": "QuickNoteView.restoreDraftIfNeeded",
+                        "stored_bytes": "\(data.count)"
+                    ],
+                    error: error
+                )
             }
         }
         saveDraftState()
@@ -282,10 +290,25 @@ struct QuickNoteView: View {
             if let text = String(data: data, encoding: .utf8) {
                 storedDraftAttachments = text
             } else {
-                StorageIssueLog.record("随手记草稿附件编码后 UTF8 转换失败")
+                StorageIssueLog.recordEvent(
+                    "quick_note.draft_attachments_utf8_encode_failed",
+                    category: .dataStore,
+                    details: [
+                        "source": "QuickNoteView.saveDraftState",
+                        "attachment_count": "\(draftAttachments.count)"
+                    ]
+                )
             }
         } catch {
-            StorageIssueLog.record("随手记草稿附件编码失败：\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "quick_note.draft_attachments_encode_failed",
+                category: .dataStore,
+                details: [
+                    "source": "QuickNoteView.saveDraftState",
+                    "attachment_count": "\(draftAttachments.count)"
+                ],
+                error: error
+            )
         }
     }
 

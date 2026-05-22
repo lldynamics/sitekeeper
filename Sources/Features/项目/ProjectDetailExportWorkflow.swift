@@ -26,9 +26,20 @@ enum ProjectDetailExportWorkflow {
             quickNotes: quickNotes
         )
         if !missingFiles.isEmpty {
-            let preview = missingFiles.prefix(8).joined(separator: "、")
-            let more = missingFiles.count > 8 ? " 等 \(missingFiles.count) 项" : ""
-            return .reject("交付包存在缺失原件：\(preview)\(more)。请先到数据健康检查处理后再导出。")
+            let preview = missingFiles.prefix(8).joined(separator: String(localized: "、"))
+            let more = missingFiles.count > 8
+                ? String(
+                    format: String(localized: " 等 %lld 项"),
+                    Int64(missingFiles.count)
+                )
+                : ""
+            return .reject(
+                String(
+                    format: String(localized: "交付包存在缺失原件：%@%@。请先到数据健康检查处理后再导出。"),
+                    preview,
+                    more
+                )
+            )
         }
 
         // ② 再检查体积（警告性，不阻断）
@@ -43,7 +54,10 @@ enum ProjectDetailExportWorkflow {
             return .proceed
         case .warn:
             return .warn(
-                "预计原始附件约 \(ProjectDetailImportExportActions.formattedBytes(estimatedBytes))。导出不设体积上限，会使用 ZIP64 流式打包；大照片、视频和图纸原件会增加导出时间，并需要设备有足够剩余空间。"
+                String(
+                    format: String(localized: "预计原始附件约 %@。导出不设体积上限，会使用 ZIP64 流式打包；大照片、视频和图纸原件会增加导出时间，并需要设备有足够剩余空间。"),
+                    ProjectDetailImportExportActions.formattedBytes(estimatedBytes)
+                )
             )
         }
     }

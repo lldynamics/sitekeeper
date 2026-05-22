@@ -198,11 +198,19 @@ struct ConcreteCalcView: View {
 }
 
 enum ConcreteGrade: String, CaseIterable {
-    case c20 = "C20"; case c25 = "C25"; case c30 = "C30"
+    case c20 = "C20"
+    case c25 = "C25"
+    case c30 = "C30"
 
     var displayName: String { rawValue }
 
-    var cementKgPerM3: Double { switch self { case .c20: 320; case .c25: 350; case .c30: 380 } }
-    var sandM3PerM3: Double { switch self { case .c20: 0.53; case .c25: 0.50; case .c30: 0.47 } }
-    var gravelM3PerM3: Double { switch self { case .c20: 0.84; case .c25: 0.80; case .c30: 0.77 } }
+    var cementKgPerM3: Double { switch self { case .c20: 320
+    case .c25: 350
+    case .c30: 380 } }
+    var sandM3PerM3: Double { switch self { case .c20: 0.53
+    case .c25: 0.50
+    case .c30: 0.47 } }
+    var gravelM3PerM3: Double { switch self { case .c20: 0.84
+    case .c25: 0.80
+    case .c30: 0.77 } }
 }

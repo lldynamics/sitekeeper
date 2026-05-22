@@ -19,11 +19,11 @@ enum MaterialPriceFilter: CaseIterable {
     var title: String {
         switch self {
         case .all:
-            return "全部价格"
+            return String(localized: "全部价格")
         case .priced:
-            return "已标价"
+            return String(localized: "已标价")
         case .unpriced:
-            return "未标价"
+            return String(localized: "未标价")
         }
     }
 }
@@ -234,7 +234,7 @@ struct MaterialLibraryAppendToSheetForm: View {
     private var selectedDraftTitle: String {
         guard let draftId,
               let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
-            return "未选择材料单"
+            return String(localized: "未选择材料单")
         }
         return draftPickerTitle(draft)
     }
@@ -400,7 +400,7 @@ struct MaterialLibraryBatchAppendForm: View {
     private var selectedDraftTitle: String {
         guard let draftId,
               let draft = activeMaterialSheetDrafts.first(where: { $0.id == draftId }) else {
-            return "未选择材料单"
+            return String(localized: "未选择材料单")
         }
         return draftPickerTitle(draft)
     }

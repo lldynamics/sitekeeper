@@ -22,24 +22,26 @@ enum StorageIssueLog {
     }
 
     static func entries() -> [String] {
-        combinedEntries(
+        let preferenceStore = UserPreferencesStore.shared
+        return combinedEntries(
             shared: WidgetSharedStorageIssueLog.entries(),
-            localFallback: UserDefaults.standard.stringArray(forKey: localFallbackKey) ?? []
+            localFallback: preferenceStore.stringArray(localFallbackKey)
         )
     }
 
     static func clear() {
         WidgetSharedStorageIssueLog.clear()
-        UserDefaults.standard.removeObject(forKey: localFallbackKey)
+        UserPreferencesStore.shared.removeObject(for: localFallbackKey)
     }
 
     private static func recordLocalFallback(_ message: String) {
-        var entries = UserDefaults.standard.stringArray(forKey: localFallbackKey) ?? []
+        let preferenceStore = UserPreferencesStore.shared
+        var entries = preferenceStore.stringArray(localFallbackKey)
         entries.insert("[\(Formatters.now())] \(message)", at: 0)
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
-        UserDefaults.standard.set(entries, forKey: localFallbackKey)
+        preferenceStore.set(entries, for: localFallbackKey)
     }
 
     private static func combinedEntries(shared: [String], localFallback: [String]) -> [String] {

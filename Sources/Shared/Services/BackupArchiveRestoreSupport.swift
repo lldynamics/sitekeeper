@@ -8,7 +8,14 @@ extension BackupArchiveService {
         private let drawingStage: URL
         private let documentStage: URL
         private let quickNoteStage: URL
-        private var isFinished = false
+        private enum State {
+            case pending
+            case committed
+            case finished
+        }
+
+        private var state: State = .pending
+        private var committedFiles: [CommittedBackupFile] = []
 
         init(
             stageRoot: URL,
@@ -27,56 +34,86 @@ extension BackupArchiveService {
         }
 
         deinit {
-            if !isFinished {
+            switch state {
+            case .pending:
                 cleanupTemporaryFiles()
+            case .committed:
+                BackupArchiveService.rollbackCommittedFiles(committedFiles)
+                cleanupTemporaryFiles()
+            case .finished:
+                break
             }
         }
 
         func cancel() {
-            guard !isFinished else { return }
-            isFinished = true
+            switch state {
+            case .pending:
+                state = .finished
+                cleanupTemporaryFiles()
+            case .committed:
+                rollback()
+            case .finished:
+                return
+            }
+        }
+
+        func rollback() {
+            guard state != .finished else { return }
+            if state == .committed {
+                BackupArchiveService.rollbackCommittedFiles(committedFiles)
+            }
+            state = .finished
+            committedFiles = []
+            cleanupTemporaryFiles()
+        }
+
+        func finalize() {
+            guard state != .finished else { return }
+            state = .finished
+            committedFiles = []
             cleanupTemporaryFiles()
         }
 
         @discardableResult
         func commit() throws -> BackupEmbeddedRestoreCounts {
-            guard !isFinished else { return counts }
+            guard state == .pending else { return counts }
 
             let rollbackRoot = stageRoot.appendingPathComponent("rollback", isDirectory: true)
-            var committedFiles: [CommittedBackupFile] = []
+            var currentCommittedFiles: [CommittedBackupFile] = []
             do {
                 try FileManager.default.createDirectory(at: rollbackRoot, withIntermediateDirectories: true)
                 let restoredPhotoFileNames = try BackupArchiveService.commitStagedFiles(
                     from: photoStage,
                     destinationURL: PhotoStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &committedFiles
+                    committedFiles: &currentCommittedFiles
                 )
                 PhotoStorage.regenerateThumbnails(for: restoredPhotoFileNames)
                 try BackupArchiveService.commitStagedFiles(
                     from: drawingStage,
                     destinationURL: DrawingStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &committedFiles
+                    committedFiles: &currentCommittedFiles
                 )
                 try BackupArchiveService.commitStagedFiles(
                     from: documentStage,
                     destinationURL: ProjectDocumentStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &committedFiles
+                    committedFiles: &currentCommittedFiles
                 )
                 try BackupArchiveService.commitStagedFiles(
                     from: quickNoteStage,
                     destinationURL: QuickNoteAttachmentStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &committedFiles
+                    committedFiles: &currentCommittedFiles
                 )
-                isFinished = true
-                cleanupTemporaryFiles()
+                committedFiles = currentCommittedFiles
+                state = .committed
                 return counts
             } catch {
-                BackupArchiveService.rollbackCommittedFiles(committedFiles)
-                isFinished = true
+                BackupArchiveService.rollbackCommittedFiles(currentCommittedFiles)
+                state = .finished
+                committedFiles = []
                 cleanupTemporaryFiles()
                 throw error
             }

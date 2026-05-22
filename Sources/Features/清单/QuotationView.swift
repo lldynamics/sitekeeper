@@ -161,9 +161,15 @@ struct QuotationView: View {
 
             Section {
                 VStack(spacing: 4) {
-                    HStack { Text(String(localized: "小计")).foregroundStyle(.secondary); Spacer(); Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
-                    if totalTaxValue.isPositive { HStack { Text(String(localized: "税额")).foregroundStyle(.appRisk); Spacer(); Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
-                    if totalDiscountValue.isPositive { HStack { Text(String(localized: "折扣")).foregroundStyle(.appSuccess); Spacer(); Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
+                    HStack { Text(String(localized: "小计")).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
+                    if totalTaxValue.isPositive { HStack { Text(String(localized: "税额")).foregroundStyle(.appRisk)
+                    Spacer()
+                    Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
+                    if totalDiscountValue.isPositive { HStack { Text(String(localized: "折扣")).foregroundStyle(.appSuccess)
+                    Spacer()
+                    Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
                     Divider()
                     HStack {
                         Text(String(localized: "合计")).font(.title3.weight(.bold))
@@ -500,16 +506,30 @@ struct QuotationView: View {
 
     private func openAdd() {
         editingId = nil
-        formName = ""; formUnit = String(localized: "项"); formPrice = ""; formQty = ""; formNotes = ""; formTax = "0"; formDiscount = "0"
-        formVersionName = "V1"; formStatus = .draft; formCustomerConfirmedDate = ""; formContractAmount = ""
+        formName = ""
+        formUnit = String(localized: "项")
+        formPrice = ""
+        formQty = ""
+        formNotes = ""
+        formTax = "0"
+        formDiscount = "0"
+        formVersionName = "V1"
+        formStatus = .draft
+        formCustomerConfirmedDate = ""
+        formContractAmount = ""
         formProjectId = nil
         showForm = true
     }
 
     private func openEdit(_ item: QuoteItem) {
         editingId = item.id
-        formName = item.name; formUnit = item.unit; formPrice = item.unitPrice; formQty = item.quantity
-        formNotes = item.notes; formTax = item.taxRate; formDiscount = item.discountRate
+        formName = item.name
+        formUnit = item.unit
+        formPrice = item.unitPrice
+        formQty = item.quantity
+        formNotes = item.notes
+        formTax = item.taxRate
+        formDiscount = item.discountRate
         formVersionName = item.versionName
         formStatus = item.status
         formCustomerConfirmedDate = item.customerConfirmedDate

@@ -250,7 +250,7 @@ enum FileQuarantineStore {
     }
 
     private static func configuredRetentionDays() -> Int {
-        guard let raw = UserDefaults.standard.object(forKey: UserPreferenceKeys.storageCleanupTrashRetentionDays) as? Int else {
+        guard let raw = UserPreferencesStore.shared.optionalInt(UserPreferenceKeys.storageCleanupTrashRetentionDays) else {
             return defaultRetentionDays
         }
         return normalizedRetentionDays(raw)

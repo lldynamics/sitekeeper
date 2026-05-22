@@ -1,0 +1,23 @@
+# SwiftFormat configuration for this project.
+# Keep this conservative to avoid noisy whole-repo churn.
+
+--swiftversion 5.9
+--indent 4
+--linebreaks lf
+--semicolons never
+--trimwhitespace always
+--maxwidth none
+
+# Start with low-churn formatting only. Broader rules can be enabled after a
+# dedicated baseline formatting commit.
+--disable all
+--enable blankLinesAtEndOfScope,consecutiveBlankLines,consecutiveSpaces,linebreakAtEndOfFile,linebreaks,semicolons,trailingSpace
+
+--exclude build
+--exclude .build
+--exclude .git
+--exclude DerivedData
+--exclude .DerivedData*
+--exclude sitekeeper.xcodeproj
+--exclude AppStoreShots
+--exclude docs

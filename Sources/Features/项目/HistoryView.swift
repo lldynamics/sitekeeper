@@ -21,7 +21,8 @@ struct CalculationHistoryView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(r.tool).font(.body.weight(.medium))
-                            Spacer(); Text(r.date).font(.caption2).foregroundStyle(.secondary)
+                            Spacer()
+                            Text(r.date).font(.caption2).foregroundStyle(.secondary)
                         }
                         Text(String(format: String(localized: "输入: %@"), r.input))
                             .font(.caption)

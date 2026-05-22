@@ -476,7 +476,7 @@ final class FinanceStore {
         let clamped = Self.clampedMaterialPriceSpikeThreshold(value)
         guard abs(materialPriceSpikeThreshold - clamped) > 0.0001 else { return }
         materialPriceSpikeThreshold = clamped
-        UserDefaults.standard.set(clamped, forKey: UserPreferenceKeys.materialPriceSpikeThreshold)
+        UserPreferencesStore.shared.set(clamped, for: UserPreferenceKeys.materialPriceSpikeThreshold)
         rebuildMaterialPriceSpikeIndex()
     }
 
@@ -505,7 +505,7 @@ final class FinanceStore {
         guard keys != ignoredMaterialPriceSpikeKeys else { return }
         ignoredMaterialPriceSpikeKeys = keys
         let rawValue = keys.sorted().joined(separator: "\n")
-        UserDefaults.standard.set(rawValue, forKey: UserPreferenceKeys.materialPriceSpikeIgnoredKeys)
+        UserPreferencesStore.shared.set(rawValue, for: UserPreferenceKeys.materialPriceSpikeIgnoredKeys)
         rebuildMaterialPriceSpikeIndex()
     }
 
@@ -652,17 +652,19 @@ final class FinanceStore {
     }
 
     private static func loadMaterialPriceSpikeThreshold() -> Double {
-        let defaults = UserDefaults.standard
-        let key = UserPreferenceKeys.materialPriceSpikeThreshold
-        guard defaults.object(forKey: key) != nil else {
-            return 0.1
-        }
-        return clampedMaterialPriceSpikeThreshold(defaults.double(forKey: key))
+        let value = UserPreferencesStore.shared.double(
+            UserPreferenceKeys.materialPriceSpikeThreshold,
+            default: 0.1
+        )
+        return clampedMaterialPriceSpikeThreshold(value)
     }
 
     private static func loadMaterialPriceSpikeIgnoredKeys() -> Set<String> {
-        let defaults = UserDefaults.standard
-        let rawValue = defaults.string(forKey: UserPreferenceKeys.materialPriceSpikeIgnoredKeys) ?? ""
+        let rawValue = UserPreferencesStore.shared.string(
+            UserPreferenceKeys.materialPriceSpikeIgnoredKeys,
+            default: "",
+            trimWhitespace: false
+        )
         let keys = rawValue
             .split(separator: "\n")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }

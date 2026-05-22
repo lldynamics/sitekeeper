@@ -31,11 +31,16 @@ struct TransferLimitSet: Equatable {
 
 enum TransferLimitPolicy {
     static let profileEnvironmentKey = "SITEKEEPER_LIMIT_PROFILE"
-    static let profileUserDefaultsKey = "sitekeeper.limit.profile"
+    static let profileUserDefaultsKey = UserPreferenceKeys.transferLimitProfile
 
     static var activeProfile: TransferLimitProfile {
-        resolveProfile(
-            userDefaultRaw: UserDefaults.standard.string(forKey: profileUserDefaultsKey),
+        let preferenceStore = UserPreferencesStore.shared
+        return resolveProfile(
+            userDefaultRaw: preferenceStore.string(
+                profileUserDefaultsKey,
+                default: "",
+                trimWhitespace: false
+            ),
             environmentRaw: ProcessInfo.processInfo.environment[profileEnvironmentKey]
         )
     }
@@ -50,11 +55,11 @@ enum TransferLimitPolicy {
     static var allowsSampleDataImport: Bool { allowsSampleDataImport(for: activeProfile) }
 
     static func setRuntimeProfileOverride(_ profile: TransferLimitProfile?) {
-        let defaults = UserDefaults.standard
+        let preferenceStore = UserPreferencesStore.shared
         if let profile {
-            defaults.set(profile.rawValue, forKey: profileUserDefaultsKey)
+            preferenceStore.set(profile.rawValue, for: profileUserDefaultsKey)
         } else {
-            defaults.removeObject(forKey: profileUserDefaultsKey)
+            preferenceStore.removeObject(for: profileUserDefaultsKey)
         }
     }
 

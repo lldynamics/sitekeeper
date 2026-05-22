@@ -28,11 +28,26 @@ final class PhotoCache {
         do {
             data = try Data(contentsOf: url, options: .mappedIfSafe)
         } catch {
-            StorageIssueLog.record("照片缩略图读取失败：\(fileName)，\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "photo_cache.thumbnail_read_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "PhotoCache.loadThumbnailFromDisk",
+                    "file_name": fileName
+                ],
+                error: error
+            )
             return nil
         }
         guard let img = UIImage(data: data) else {
-            StorageIssueLog.record("照片缩略图解码失败：\(fileName)")
+            StorageIssueLog.recordEvent(
+                "photo_cache.thumbnail_decode_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "PhotoCache.loadThumbnailFromDisk",
+                    "file_name": fileName
+                ]
+            )
             return nil
         }
         cache.setObject(img, forKey: fileName as NSString)
