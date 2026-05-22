@@ -294,8 +294,12 @@ enum QuickNoteAttachmentStorage {
     }
 
     private static func draftReferencedFileNames() -> Set<String> {
-        guard let raw = UserDefaults.standard.string(forKey: "quickNoteDraftAttachments"),
-              let data = raw.data(using: .utf8) else {
+        let raw = UserPreferencesStore.shared.string(
+            UserPreferenceKeys.quickNoteDraftAttachments,
+            default: "",
+            trimWhitespace: false
+        )
+        guard !raw.isEmpty, let data = raw.data(using: .utf8) else {
             return []
         }
         let attachments: [QuickNoteAttachment]

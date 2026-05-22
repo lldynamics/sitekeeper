@@ -686,7 +686,14 @@ private struct SiteTodoEditSheet: View {
             guard let loaded = try await item.loadTransferable(type: Data.self) else { return }
             data = loaded
         } catch {
-            StorageIssueLog.record(String(format: String(localized: "待办整改照片导入失败：%@"), error.localizedDescription))
+            StorageIssueLog.recordEvent(
+                "site_todo.rectification_photo_import_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "SiteTodoView.importTodoPhoto"
+                ],
+                error: error
+            )
             return
         }
         guard !Task.isCancelled else { return }

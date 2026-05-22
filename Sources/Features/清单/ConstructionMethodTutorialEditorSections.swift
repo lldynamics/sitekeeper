@@ -13,14 +13,6 @@ struct ConstructionMethodTutorialEditorSections: View {
     let onPreviewAttachment: (QuickNoteAttachment) -> Void
     let onRemoveAttachment: (QuickNoteAttachment) -> Void
 
-    private var renderedTutorialPreview: AttributedString {
-        let normalized = tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let markdown = try? AttributedString(markdown: normalized) {
-            return markdown
-        }
-        return AttributedString(normalized)
-    }
-
     var body: some View {
         Group {
             Section(String(localized: "教程排版")) {
@@ -49,31 +41,7 @@ struct ConstructionMethodTutorialEditorSections: View {
                     }
                 }
             }
-            Section(String(localized: "完整教程正文")) {
-                ZStack(alignment: .topLeading) {
-                    if tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(String(localized: "建议写明：适用场景、施工准备、关键工序、质量控制、常见问题、验收标准。"))
-                            .font(.callout)
-                            .foregroundStyle(.secondary)
-                            .padding(.top, 8)
-                            .padding(.leading, 4)
-                    }
-                    TextEditor(text: $tutorialBody)
-                        .font(.body)
-                        .frame(minHeight: 220)
-                }
-            }
-            Section(String(localized: "教程预览")) {
-                if tutorialBody.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                    Text(String(localized: "输入内容后会在这里显示预览。"))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Text(renderedTutorialPreview)
-                        .font(.body)
-                        .textSelection(.enabled)
-                }
-            }
+            ConstructionMethodTutorialRichTextEditor(text: $tutorialBody)
             Section(String(localized: "教程图片/视频")) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 8) {

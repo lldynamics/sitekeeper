@@ -312,7 +312,7 @@ struct QuickNoteAudioPlayer: View {
     private var fullPlayer: some View {
         VStack(spacing: 16) {
             Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 64))
+                .font(.largeTitle)
                 .foregroundStyle(.appWarning)
             Slider(value: Binding(
                 get: { currentTime },
@@ -342,7 +342,7 @@ struct QuickNoteAudioPlayer: View {
         HStack(spacing: 10) {
             Button { togglePlay() } label: {
                 Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(.white)
                     .frame(width: 30, height: 30)
                     .background(Color.appWarning, in: Circle())

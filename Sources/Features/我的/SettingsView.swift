@@ -349,7 +349,7 @@ private struct ClearLocalDataConfirmationSheet: View {
             ScrollView {
                 VStack(spacing: 20) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.system(size: 48))
+                        .font(.largeTitle)
                         .foregroundStyle(.appRisk)
                         .padding(.top, 24)
 

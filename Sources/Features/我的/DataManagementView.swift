@@ -1,138 +1,5 @@
 import SwiftUI
 
-enum DataManagementRoute: Hashable {
-    case export
-    case backup
-    case restore
-    case health
-    case storage
-    case audit
-}
-
-private enum HealthCleanupSection: CaseIterable {
-    case health
-    case storage
-    case audit
-
-    var displayName: String {
-        switch self {
-        case .health:
-            return String(localized: "健康检查")
-        case .storage:
-            return String(localized: "存储清理")
-        case .audit:
-            return String(localized: "审计")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .health:
-            return "stethoscope"
-        case .storage:
-            return "internaldrive"
-        case .audit:
-            return "checklist.checked"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .health:
-            return String(localized: "扫描缺失文件、无效关联与孤立文件，并支持一键修复。")
-        case .storage:
-            return String(localized: "查看照片/视频/图纸原件/备份/历史计算占用，支持按项目清理附件文件。")
-        case .audit:
-            return String(localized: "查看导入、恢复、清理、修复、删除等高风险操作记录。")
-        }
-    }
-
-    static func from(route: DataManagementRoute?) -> Self {
-        guard let route else { return .health }
-        switch route {
-        case .storage:
-            return .storage
-        case .audit:
-            return .audit
-        default:
-            return .health
-        }
-    }
-}
-
-private enum DataManagementTab: CaseIterable {
-    case backupAndRestore
-    case export
-    case healthAndCleanup
-
-    var displayName: String {
-        switch self {
-        case .backupAndRestore:
-            return String(localized: "备份恢复")
-        case .export:
-            return String(localized: "导出交付")
-        case .healthAndCleanup:
-            return String(localized: "体检清理")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .export:
-            return "square.and.arrow.up"
-        case .backupAndRestore:
-            return "arrow.triangle.2.circlepath.icloud"
-        case .healthAndCleanup:
-            return "cross.case.fill"
-        }
-    }
-
-    var summary: String {
-        switch self {
-        case .backupAndRestore:
-            return String(localized: "统一完成本地/iCloud 备份、恢复预览与导入校验。")
-        case .export:
-            return String(localized: "按项目或日期筛选后导出 CSV / Excel / PDF。")
-        case .healthAndCleanup:
-            return String(localized: "统一查看健康检查、存储占用、审计记录与清理风险。")
-        }
-    }
-
-    static func from(route: DataManagementRoute?) -> Self {
-        guard let route else { return .backupAndRestore }
-        switch route {
-        case .export:
-            return .export
-        case .backup, .restore:
-            return .backupAndRestore
-        case .health, .storage, .audit:
-            return .healthAndCleanup
-        }
-    }
-}
-
-private enum DataSafetyPrimaryTarget {
-    case backup
-    case health
-    case storage
-}
-
-private enum DataSafetySecondaryTarget: Hashable {
-    case backupAndRestore
-    case health
-    case storage
-    case export
-}
-
-private struct DataSafetyPrimaryAction {
-    let title: String
-    let message: String
-    let buttonTitle: String
-    let systemImage: String
-    let tone: StatusChipTone
-    let target: DataSafetyPrimaryTarget
-}
-
 struct DataManagementView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -378,17 +245,67 @@ struct DataManagementView: View {
         (cleanupTrashBatchCount > 0 || historyTrimCount > 0) ? .warning : .success
     }
 
+    private var secondaryShortcutCards: [DataManagementShortcutCardModel] {
+        let targets: [DataSafetySecondaryTarget] = [.backupAndRestore, .health, .storage, .export]
+        return targets.map { target in
+            DataManagementShortcutCardModel(
+                id: shortcutIdentifier(target),
+                target: target,
+                title: shortcutTitle(target),
+                subtitle: shortcutSubtitle(target),
+                icon: shortcutIcon(target),
+                tone: shortcutTone(target),
+                isSelected: isSelectedSecondaryTarget(target)
+            )
+        }
+    }
+
     var body: some View {
         VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
-            dataSafetyHeader
+            DataManagementSafetyHeaderSection(
+                backupStatusValue: backupStatusValue,
+                backupStatusTone: backupStatusTone,
+                healthStatusValue: healthStatusValue,
+                healthStatusTone: healthStatusTone,
+                cleanupStatusValue: cleanupStatusValue,
+                cleanupStatusTone: cleanupStatusTone,
+                action: primarySafetyAction,
+                onPrimaryAction: {
+                    performPrimarySafetyAction(primarySafetyAction)
+                },
+                onOpenBackupImport: {
+                    selectedTab = .backupAndRestore
+                    shouldAutoOpenBackupImporter = true
+                },
+                onOpenExport: {
+                    selectedTab = .export
+                },
+                onOpenStorageCleanup: {
+                    selectedTab = .healthAndCleanup
+                    healthCleanupSection = .storage
+                },
+                onOpenAudit: {
+                    selectedTab = .healthAndCleanup
+                    healthCleanupSection = .audit
+                }
+            )
 
-            secondaryFlowShortcuts
+            DataManagementSecondaryFlowShortcutGrid(
+                usesWideLayout: usesWideLayout,
+                cards: secondaryShortcutCards,
+                onSelect: selectSecondaryTarget(_:)
+            )
 
             if usesWideLayout {
                 selectedTabSummary
 
                 if selectedTab == .backupAndRestore, sampleDataImportEnabled {
-                    sampleDataImportCard
+                    DataManagementSampleDataImportCard(
+                        hasAnyBusinessData: store.hasAnyBusinessData,
+                        onImport: {
+                            showSampleDataImportConfirm = true
+                        }
+                    )
                 }
 
                 if !store.historyRecords.isEmpty {
@@ -420,7 +337,20 @@ struct DataManagementView: View {
         .toolbar {
             if !usesWideLayout {
                 ToolbarItem(placement: .topBarTrailing) {
-                    compactActionMenu
+                    DataManagementCompactActionMenu(
+                        selectedTab: $selectedTab,
+                        healthCleanupSection: $healthCleanupSection,
+                        shouldAutoOpenBackupImporter: $shouldAutoOpenBackupImporter,
+                        showClearHistoryConfirm: $showClearHistoryConfirm,
+                        showSampleDataImportConfirm: $showSampleDataImportConfirm,
+                        showUITestOverwriteImportConfirm: $showUITestOverwriteImportConfirm,
+                        sampleDataImportEnabled: sampleDataImportEnabled,
+                        showsUITestBackupPreviewShortcut: showsUITestBackupPreviewShortcut,
+                        hasHistoryRecords: !store.historyRecords.isEmpty,
+                        hasAnyBusinessData: store.hasAnyBusinessData,
+                        historyTrimCount: historyTrimCount,
+                        onTrimHistory: trimCalculationHistoryWithUndo
+                    )
                 }
             }
         }
@@ -467,55 +397,6 @@ struct DataManagementView: View {
         .padding(.horizontal)
     }
 
-    private var secondaryFlowShortcuts: some View {
-        LazyVGrid(
-            columns: [GridItem(.adaptive(minimum: usesWideLayout ? 154 : 134), spacing: AppSpacing.tight)],
-            alignment: .leading,
-            spacing: AppSpacing.tight
-        ) {
-            shortcutButton(.backupAndRestore)
-            shortcutButton(.health)
-            shortcutButton(.storage)
-            shortcutButton(.export)
-        }
-        .padding(.horizontal)
-    }
-
-    private func shortcutButton(_ target: DataSafetySecondaryTarget) -> some View {
-        let selected = isSelectedSecondaryTarget(target)
-        let tone = shortcutTone(target)
-        return Button {
-            selectSecondaryTarget(target)
-        } label: {
-            AppPanel(
-                tone: selected ? selectedCardTone(for: tone) : .grouped,
-                cornerRadius: 10,
-                padding: 10,
-                stroke: selected ? tone.tint.opacity(0.3) : Color.appStrokeSecondary.opacity(0.35)
-            ) {
-                HStack(alignment: .top, spacing: AppSpacing.tight) {
-                    Image(systemName: shortcutIcon(target))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(tone.tint)
-                        .frame(width: 20, height: 20)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(shortcutTitle(target))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                        Text(shortcutSubtitle(target))
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityIdentifier("data-management-shortcut-\(shortcutIdentifier(target))")
-    }
-
     private var calculationHistoryCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight * 0.6) {
             HStack(spacing: AppSpacing.tight) {
@@ -552,101 +433,6 @@ struct DataManagementView: View {
             }
         }
         .padding(.horizontal)
-    }
-
-    private var compactActionMenu: some View {
-        Menu {
-            Button {
-                selectedTab = .backupAndRestore
-            } label: {
-                Label(String(localized: "去备份"), systemImage: "externaldrive.badge.plus")
-            }
-
-            Button {
-                selectedTab = .backupAndRestore
-                shouldAutoOpenBackupImporter = true
-            } label: {
-                Label(String(localized: "导入恢复"), systemImage: "square.and.arrow.down")
-            }
-
-            Button {
-                selectedTab = .export
-            } label: {
-                Label(String(localized: "导出交付"), systemImage: "square.and.arrow.up")
-            }
-
-            Divider()
-
-            Button {
-                selectedTab = .healthAndCleanup
-                healthCleanupSection = .health
-            } label: {
-                Label(String(localized: "健康检查"), systemImage: "stethoscope")
-            }
-
-            Button {
-                selectedTab = .healthAndCleanup
-                healthCleanupSection = .storage
-            } label: {
-                Label(String(localized: "存储清理"), systemImage: "internaldrive")
-            }
-
-            Button {
-                selectedTab = .healthAndCleanup
-                healthCleanupSection = .audit
-            } label: {
-                Label(String(localized: "审计"), systemImage: "checklist.checked")
-            }
-
-            if sampleDataImportEnabled || !store.historyRecords.isEmpty {
-                Divider()
-            }
-
-            if showsUITestBackupPreviewShortcut {
-                Button {
-                    selectedTab = .backupAndRestore
-                } label: {
-                    Label(String(localized: "UI测试：模拟覆盖导入预览"), systemImage: "doc.text.magnifyingglass")
-                }
-                .accessibilityIdentifier("ui-test-backup-preview")
-
-                Button {
-                    showUITestOverwriteImportConfirm = true
-                } label: {
-                    Label(String(localized: "UI测试：触发覆盖二次确认"), systemImage: "exclamationmark.triangle")
-                }
-                .accessibilityIdentifier("ui-test-overwrite-confirm")
-            }
-
-            if sampleDataImportEnabled {
-                Button(role: store.hasAnyBusinessData ? .destructive : nil) {
-                    showSampleDataImportConfirm = true
-                } label: {
-                    Label(String(localized: "导入测试数据"), systemImage: "testtube.2")
-                }
-            }
-
-            if !store.historyRecords.isEmpty {
-                if historyTrimCount > 0 {
-                    Button {
-                        trimCalculationHistoryWithUndo()
-                    } label: {
-                        Label(String(format: String(localized: "按策略清理 %lld 条"), Int64(historyTrimCount)), systemImage: "clock.arrow.circlepath")
-                    }
-                }
-
-                Button(role: .destructive) {
-                    showClearHistoryConfirm = true
-                } label: {
-                    Label(String(localized: "清空计算历史"), systemImage: "trash")
-                }
-            }
-        } label: {
-            Image(systemName: "ellipsis.circle")
-                .visibleIconStyle()
-        }
-        .accessibilityLabel(String(localized: "数据安全中心操作"))
-        .accessibilityIdentifier("data-management-actions-menu")
     }
 
     private func selectSecondaryTarget(_ target: DataSafetySecondaryTarget) {
@@ -742,119 +528,6 @@ struct DataManagementView: View {
         }
     }
 
-    @ViewBuilder
-    private var dataSafetyHeader: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.normal) {
-            AppPanel(
-                tone: .grouped,
-                cornerRadius: 12,
-                padding: AppSpacing.normal,
-                stroke: Color.appStrokeSecondary.opacity(0.45)
-            ) {
-                VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                    Label(String(localized: "数据安全状态"), systemImage: "externaldrive.badge.shield.half.filled")
-                        .font(.headline)
-
-                    Text(String(localized: "先看当前风险，再选择备份、修复、清理或导出；普通入口按处理顺序排列。"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack(spacing: AppSpacing.tight) {
-                        statusChip(
-                            title: String(localized: "备份"),
-                            value: backupStatusValue,
-                            tone: backupStatusTone
-                        )
-                        statusChip(
-                            title: String(localized: "健康"),
-                            value: healthStatusValue,
-                            tone: healthStatusTone
-                        )
-                        statusChip(
-                            title: String(localized: "清理"),
-                            value: cleanupStatusValue,
-                            tone: cleanupStatusTone
-                        )
-                    }
-
-                    primarySafetyActionCard(primarySafetyAction)
-                }
-            }
-            .padding(.horizontal)
-        }
-    }
-
-    private func primarySafetyActionCard(_ action: DataSafetyPrimaryAction) -> some View {
-        AppPanel(
-            tone: selectedCardTone(for: action.tone),
-            cornerRadius: 10,
-            padding: 12,
-            stroke: action.tone.tint.opacity(0.2)
-        ) {
-            VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                HStack(alignment: .top, spacing: AppSpacing.tight) {
-                    Image(systemName: action.systemImage)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(action.tone.tint)
-                        .frame(width: 24, height: 24)
-
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(action.title)
-                            .font(.subheadline.weight(.semibold))
-                        Text(action.message)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    Spacer(minLength: 4)
-                }
-
-                HStack(spacing: AppSpacing.tight) {
-                    Button {
-                        performPrimarySafetyAction(action)
-                    } label: {
-                        Label(action.buttonTitle, systemImage: "arrow.right.circle.fill")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.appProminent(tint: action.tone.tint))
-
-                    Menu {
-                        Button {
-                            selectedTab = .backupAndRestore
-                            shouldAutoOpenBackupImporter = true
-                        } label: {
-                            Label(String(localized: "导入恢复"), systemImage: "square.and.arrow.down")
-                        }
-
-                        Button {
-                            selectedTab = .export
-                        } label: {
-                            Label(String(localized: "导出交付"), systemImage: "square.and.arrow.up")
-                        }
-
-                        Button {
-                            selectedTab = .healthAndCleanup
-                            healthCleanupSection = .storage
-                        } label: {
-                            Label(String(localized: "存储清理"), systemImage: "internaldrive")
-                        }
-
-                        Button {
-                            selectedTab = .healthAndCleanup
-                            healthCleanupSection = .audit
-                        } label: {
-                            Label(String(localized: "审计"), systemImage: "checklist.checked")
-                        }
-                    } label: {
-                        Label(String(localized: "更多操作"), systemImage: "ellipsis.circle")
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-        }
-    }
-
     private func performPrimarySafetyAction(_ action: DataSafetyPrimaryAction) {
         switch action.target {
         case .backup:
@@ -871,91 +544,6 @@ struct DataManagementView: View {
     private func refreshRiskSnapshot() {
         cleanupTrashBatchCount = StorageCleanupTrashStore.loadBatches().count
         store.scheduleDataHealthScanIfStale(reason: .scheduled)
-    }
-
-    private func statusChip(title: String, value: String, tone: StatusChipTone) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-            Text(value)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.primary)
-                .fixedSize(horizontal: false, vertical: true)
-            StatusChip(text: chipLabel(for: tone), tone: tone)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func chipLabel(for tone: StatusChipTone) -> String {
-        switch tone {
-        case .success:
-            return String(localized: "正常")
-        case .warning:
-            return String(localized: "注意")
-        case .risk:
-            return String(localized: "风险")
-        case .primary:
-            return String(localized: "已启用")
-        default:
-            return String(localized: "待处理")
-        }
-    }
-
-    private func selectedCardTone(for tone: StatusChipTone) -> AppSurfaceTone {
-        switch tone {
-        case .success:
-            return .tinted(Color.appSuccessSurfaceSubtle)
-        case .warning:
-            return .tinted(Color.appWarning.opacity(0.12))
-        case .risk:
-            return .tinted(Color.appRiskSurface)
-        case .doc:
-            return .tinted(Color.appDocSurfaceSubtle)
-        case .primary:
-            return .tinted(Color.appPrimarySurfaceSubtle)
-        default:
-            return .grouped
-        }
-    }
-
-    @ViewBuilder
-    private var sampleDataImportCard: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            Label(String(localized: "测试数据导入"), systemImage: "testtube.2")
-                .font(.subheadline.weight(.semibold))
-
-            Text(String(localized: "可一键恢复一套更完整的测试环境。当前样例包含多个项目、材料、报价、进度、图纸、票据、照片与附件。"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Label(String(localized: "当前环境允许导入测试数据。"), systemImage: "checkmark.shield")
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.appSuccess)
-
-            if store.hasAnyBusinessData {
-                Label(String(localized: "会覆盖当前本机数据，建议先导出备份 ZIP。"), systemImage: "exclamationmark.triangle.fill")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.appRisk)
-            }
-
-            Button {
-                showSampleDataImportConfirm = true
-            } label: {
-                Label(String(localized: "清空并导入测试数据"), systemImage: "square.and.arrow.down")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(.appWarning)
-            .accessibilityIdentifier("data-management-import-sample-data")
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
-        )
-        .padding(.horizontal)
     }
 
     private var healthAndCleanupContent: some View {

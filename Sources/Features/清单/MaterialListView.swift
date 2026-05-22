@@ -222,7 +222,8 @@ struct MaterialListView: View {
                 .navigationTitle(String(localized: "添加材料")).navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showAdd = false } }
-                    ToolbarItem(placement: .confirmationAction) { Button(String(localized: "添加")) { addItem(); showAdd = false }.disabled(!canAddMaterial) }
+                    ToolbarItem(placement: .confirmationAction) { Button(String(localized: "添加")) { addItem()
+                    showAdd = false }.disabled(!canAddMaterial) }
                     KeyboardNavigationToolbar(
                         focusedField: $addMaterialFocusedField,
                         fields: [.quantity, .unitPrice]
@@ -507,8 +508,14 @@ struct MaterialListView: View {
         )
         store.scheduleSave()
         operationMessage = String(localized: "已添加材料")
-        newName = ""; newQty = ""; newUnit = ""; newUnitPrice = ""; newProjectId = nil
-        newSpecification = ""; newBrand = ""; newSupplier = ""
+        newName = ""
+        newQty = ""
+        newUnit = ""
+        newUnitPrice = ""
+        newProjectId = nil
+        newSpecification = ""
+        newBrand = ""
+        newSupplier = ""
         newPurchaseStatus = .notPurchased
         newArrivalDate = ""
     }

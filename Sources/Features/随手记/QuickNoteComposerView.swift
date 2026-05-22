@@ -67,7 +67,7 @@ struct QuickNoteComposerView: View {
                     onPublish()
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 32, weight: .semibold))
+                        .font(.title.weight(.semibold))
                         .symbolRenderingMode(.hierarchical)
                         .foregroundStyle(canPublish ? Color.appPrimaryAction : Color(uiColor: .tertiaryLabel))
                         .frame(width: 36, height: 40)

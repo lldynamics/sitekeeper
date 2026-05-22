@@ -83,7 +83,7 @@ struct AppIconButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: 17, weight: .semibold))
+            .font(.headline.weight(.semibold))
             .symbolRenderingMode(.hierarchical)
             .foregroundStyle(tone.iconColor)
             .frame(width: 44, height: 44)

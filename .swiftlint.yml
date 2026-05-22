@@ -1,0 +1,32 @@
+included:
+  - Sources
+  - Tests
+  - UITests
+  - Widget
+
+excluded:
+  - .git
+  - .build
+  - build
+  - DerivedData
+  - .DerivedData*
+  - sitekeeper.xcodeproj
+  - AppStoreShots
+  - docs
+
+reporter: xcode
+
+# Keep lint scope focused on style consistency; avoid noisy business-rule checks.
+only_rules:
+  - closure_spacing
+  - colon
+  - comma
+  - control_statement
+  - empty_parentheses_with_trailing_closure
+  - opening_brace
+  - return_arrow_whitespace
+  - statement_position
+  - trailing_newline
+  - trailing_semicolon
+  - trailing_whitespace
+  - vertical_whitespace

@@ -422,25 +422,39 @@ struct ProjectPackageAndStorageTests {
     }
 
     @Test func projectPackageManifestUsesStableMachineKeys() throws {
-        let defaults = UserDefaults.standard
+        let preferenceStore = UserPreferencesStore.shared
         let backupKeys = [
             UserPreferenceKeys.localBackupLastSuccessAt,
             UserPreferenceKeys.cloudBackupLastSuccessAt,
             UserPreferenceKeys.backupHealthReminderDays
         ]
-        let previousBackupValues = backupKeys.map { ($0, defaults.object(forKey: $0)) }
+        let previousBackupValues = backupKeys.map { ($0, preferenceStore.object(for: $0)) }
         defer {
             for (key, value) in previousBackupValues {
                 if let value {
-                    defaults.set(value, forKey: key)
+                    if let boolValue = value as? Bool {
+                        preferenceStore.set(boolValue, for: key)
+                    } else if let intValue = value as? Int {
+                        preferenceStore.set(intValue, for: key)
+                    } else if let doubleValue = value as? Double {
+                        preferenceStore.set(doubleValue, for: key)
+                    } else if let stringValue = value as? String {
+                        preferenceStore.set(stringValue, for: key)
+                    } else if let stringArrayValue = value as? [String] {
+                        preferenceStore.set(stringArrayValue, for: key)
+                    } else if let dataValue = value as? Data {
+                        preferenceStore.set(dataValue, for: key)
+                    } else {
+                        preferenceStore.removeObject(for: key)
+                    }
                 } else {
-                    defaults.removeObject(forKey: key)
+                    preferenceStore.removeObject(for: key)
                 }
             }
         }
-        defaults.set(Date().timeIntervalSince1970, forKey: UserPreferenceKeys.localBackupLastSuccessAt)
-        defaults.removeObject(forKey: UserPreferenceKeys.cloudBackupLastSuccessAt)
-        defaults.set(7, forKey: UserPreferenceKeys.backupHealthReminderDays)
+        preferenceStore.set(Date().timeIntervalSince1970, for: UserPreferenceKeys.localBackupLastSuccessAt)
+        preferenceStore.removeObject(for: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        preferenceStore.set(7, for: UserPreferenceKeys.backupHealthReminderDays)
 
         let project = Project(name: "项目交付测试", location: "工地", status: .active)
         let archiveURL = try ReportBuilder.makeProjectPackageZIP(

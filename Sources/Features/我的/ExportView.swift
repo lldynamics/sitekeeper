@@ -493,16 +493,38 @@ struct ExportView: View {
         do {
             let values = try fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey])
             guard values.isRegularFile == true else {
-                StorageIssueLog.record("导出文件校验失败：目标不是普通文件，\(fileURL.lastPathComponent)")
+                StorageIssueLog.recordEvent(
+                    "export.validate_file_not_regular",
+                    category: .fileStorage,
+                    details: [
+                        "source": "ExportView.validateExportedFile",
+                        "file_name": fileURL.lastPathComponent
+                    ]
+                )
                 return false
             }
             guard let fileSize = values.fileSize, fileSize > 0 else {
-                StorageIssueLog.record("导出文件校验失败：文件为空，\(fileURL.lastPathComponent)")
+                StorageIssueLog.recordEvent(
+                    "export.validate_file_empty",
+                    category: .fileStorage,
+                    details: [
+                        "source": "ExportView.validateExportedFile",
+                        "file_name": fileURL.lastPathComponent
+                    ]
+                )
                 return false
             }
             return true
         } catch {
-            StorageIssueLog.record("导出文件校验失败：\(fileURL.lastPathComponent)，\(error.localizedDescription)")
+            StorageIssueLog.recordEvent(
+                "export.validate_file_metadata_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "ExportView.validateExportedFile",
+                    "file_name": fileURL.lastPathComponent
+                ],
+                error: error
+            )
             return false
         }
     }

@@ -81,6 +81,12 @@ scripts/release/check_backup_contract_boundary.sh
 echo "==> Checking drawing release boundary"
 scripts/release/check_drawing_release_boundary.sh
 
+echo "==> Checking Dynamic Type font policy"
+scripts/release/check_dynamic_type_policy.sh
+
+echo "==> Checking UserDefaults direct access policy"
+scripts/release/check_userdefaults_policy.sh
+
 echo "==> Checking legal policy generated copies"
 python3 scripts/legal/export_privacy_policy.py --check
 

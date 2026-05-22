@@ -37,7 +37,7 @@ struct CalendarDayCell: View {
                                 .frame(width: 5, height: 5)
                             if logs.contains(where: { !$0.photoAttachments.isEmpty }) {
                                 Image(systemName: "camera.fill")
-                                    .font(.system(size: 7))
+                                    .font(.caption2.weight(.bold))
                                     .foregroundStyle(isSelected ? .white : Color.appDoc)
                             }
                         }

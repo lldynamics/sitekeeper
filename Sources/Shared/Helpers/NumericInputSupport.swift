@@ -106,7 +106,7 @@ enum NumericInputSupport {
         for char in normalizedSeparators {
             if char.isWhitespace { continue }
 
-            if (char == "-" || char == "+"), !didConsumePrefix, !signCaptured {
+            if char == "-" || char == "+", !didConsumePrefix, !signCaptured {
                 result.append(char)
                 signCaptured = true
                 didConsumePrefix = true

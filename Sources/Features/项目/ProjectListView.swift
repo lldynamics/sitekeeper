@@ -2,35 +2,35 @@ import Foundation
 import SwiftUI
 
 struct ProjectListView: View {
-    @Environment(DataStore.self) private var store
-    @Environment(ProjectStore.self) private var projectStore
-    @Environment(FinanceStore.self) private var financeStore
-    @Environment(\.openURL) private var openURL
-    @State private var searchText = ""
-    @State private var showAdd = false
-    @State private var newName = ""
-    @State private var newLocation = ""
-    @State private var newCustomerName = ""
-    @State private var newCustomerPhone = ""
-    @State private var newManagerName = ""
-    @State private var newStartDate = Date()
-    @State private var newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-    @State private var newContractAmount = ""
-    @State private var newPaidAmount = ""
-    @State private var newMaterialCost = ""
-    @State private var newLaborCost = ""
-    @State private var newPaymentStatus: PaymentStatus = .unpaid
-    @State private var newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
-    @State private var projectToDelete: Project?
-    @State private var showDeleteConfirm = false
-    @State private var operationNotice: OperationToastNotice?
-    @State private var undoableDeletion = UndoableDeletionCoordinator()
-    @State private var statusFilter: ProjectStatus? = nil
-    @State private var overviewFilter: ProjectOverviewFilter? = nil
-    @State private var sortOption: ProjectSortOption = .recentUpdate
-    @State private var lastHandledAutoOpenComposerToken = 0
+    @Environment(DataStore.self) var store
+    @Environment(ProjectStore.self) var projectStore
+    @Environment(FinanceStore.self) var financeStore
+    @Environment(\.openURL) var openURL
+    @State var searchText = ""
+    @State var showAdd = false
+    @State var newName = ""
+    @State var newLocation = ""
+    @State var newCustomerName = ""
+    @State var newCustomerPhone = ""
+    @State var newManagerName = ""
+    @State var newStartDate = Date()
+    @State var newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
+    @State var newContractAmount = ""
+    @State var newPaidAmount = ""
+    @State var newMaterialCost = ""
+    @State var newLaborCost = ""
+    @State var newPaymentStatus: PaymentStatus = .unpaid
+    @State var newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
+    @State var projectToDelete: Project?
+    @State var showDeleteConfirm = false
+    @State var operationNotice: OperationToastNotice?
+    @State var undoableDeletion = UndoableDeletionCoordinator()
+    @State var statusFilter: ProjectStatus? = nil
+    @State var overviewFilter: ProjectOverviewFilter? = nil
+    @State var sortOption: ProjectSortOption = .recentUpdate
+    @State var lastHandledAutoOpenComposerToken = 0
     @FocusState private var newProjectFocusedField: ProjectCreateNumericField?
-    private let autoOpenComposerToken: Int
+    let autoOpenComposerToken: Int
 
     init(
         initialOverviewFilter: ProjectOverviewFilter? = nil,
@@ -40,11 +40,11 @@ struct ProjectListView: View {
         self.autoOpenComposerToken = autoOpenComposerToken
     }
 
-    private var allowedStatuses: [ProjectStatus] {
+    var allowedStatuses: [ProjectStatus] {
         ProjectStatus.allCases
     }
 
-    private var filtered: [Project] {
+    var filtered: [Project] {
         var result = projectStore.projects
         result = SearchMatcher.filter(result, keyword: searchText)
         if let sf = statusFilter {
@@ -73,7 +73,7 @@ struct ProjectListView: View {
         return result
     }
 
-    private var sortedProjects: [Project] {
+    var sortedProjects: [Project] {
         filtered.sorted { lhs, rhs in
             switch sortOption {
             case .recentUpdate:
@@ -86,15 +86,15 @@ struct ProjectListView: View {
         }
     }
 
-    private var normalizedSearchText: String {
+    var normalizedSearchText: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var hasAnyFilterApplied: Bool {
+    var hasAnyFilterApplied: Bool {
         !normalizedSearchText.isEmpty || statusFilter != nil || overviewFilter != nil
     }
 
-    private var projectSearchSuggestions: [RealtimeSearchSuggestion] {
+    var projectSearchSuggestions: [RealtimeSearchSuggestion] {
         RealtimeSearchSuggestionBuilder.suggestions(
             keyword: searchText,
             categories: [.project],
@@ -157,7 +157,7 @@ struct ProjectListView: View {
         .operationToast(notice: $operationNotice)
     }
 
-    private var compactProjectLayout: some View {
+    var compactProjectLayout: some View {
         projectList
             .navigationTitle(String(localized: "项目"))
             .toolbar {
@@ -166,7 +166,7 @@ struct ProjectListView: View {
     }
 
     @ToolbarContentBuilder
-    private var projectToolbar: some ToolbarContent {
+    var projectToolbar: some ToolbarContent {
         ToolbarItemGroup(placement: .topBarTrailing) {
             NavigationLink {
                 ProjectFileBrowserView()
@@ -196,12 +196,12 @@ struct ProjectListView: View {
         }
     }
 
-    private var shouldUseProminentProjectCreateAction: Bool {
+    var shouldUseProminentProjectCreateAction: Bool {
         UIDevice.current.userInterfaceIdiom == .pad || projectStore.projects.isEmpty
     }
 
     @ViewBuilder
-    private var projectList: some View {
+    var projectList: some View {
         List {
             searchFilterSection
 
@@ -216,7 +216,7 @@ struct ProjectListView: View {
     // MARK: - 内联搜索与筛选
 
     @ViewBuilder
-    private var searchFilterSection: some View {
+    var searchFilterSection: some View {
         ProjectListFiltersSection(
             searchText: $searchText,
             statusFilter: $statusFilter,
@@ -233,7 +233,7 @@ struct ProjectListView: View {
     // MARK: - 空状态
 
     @ViewBuilder
-    private var emptyProjectSection: some View {
+    var emptyProjectSection: some View {
         Section(String(localized: "建议下一步")) {
             if hasAnyFilterApplied {
                 ContentUnavailableView(
@@ -260,307 +260,5 @@ struct ProjectListView: View {
                 .buttonStyle(.appProminent())
             }
         }
-    }
-
-    // MARK: - 项目列表行
-
-    @ViewBuilder
-    private var projectRowsSection: some View {
-        ForEach(sortedProjects) { project in
-            NavigationLink {
-                ProjectDetailView(projectId: project.id)
-            } label: {
-                ProjectRowContent(
-                    project: project,
-                    isSelected: false,
-                    unpaidAmount: unpaidAmount(for: project),
-                    badges: projectRiskBadges(for: project)
-                )
-            }
-            .swipeActions(edge: .leading, allowsFullSwipe: false) {
-                NavigationLink {
-                    ProjectDetailView(projectId: project.id, initialMode: .finance)
-                } label: {
-                    Label(String(localized: "财务"), systemImage: "wallet.pass.fill")
-                }
-                .tint(Color.appFinance)
-
-                NavigationLink {
-                    SiteTodoView(initialProjectId: project.id)
-                } label: {
-                    Label(String(localized: "待办"), systemImage: "checkmark.circle.fill")
-                }
-                .tint(Color.appSuccess)
-
-                NavigationLink {
-                    ProjectDetailView(projectId: project.id, initialMode: .assets)
-                } label: {
-                    Label(String(localized: "图纸"), systemImage: "square.on.square.squareshape.controlhandles")
-                }
-                .tint(Color.appPrimaryAction)
-            }
-            .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                NavigationLink {
-                    ProjectDetailView(projectId: project.id, autoOpenDocumentScanSetup: true)
-                } label: {
-                    Label(String(localized: "加资料"), systemImage: "doc.badge.plus")
-                }
-                .tint(Color.appDoc)
-
-                NavigationLink {
-                    DailyLogView(initialProjectId: project.id, autoOpenComposer: true)
-                } label: {
-                    Label(String(localized: "写日志"), systemImage: "book.pages.fill")
-                }
-                .tint(Color.appSuccess)
-
-                NavigationLink {
-                    ProjectDetailView(projectId: project.id, autoOpenFinancialAdd: true)
-                } label: {
-                    Label(String(localized: "记账"), systemImage: "receipt.fill")
-                }
-                .tint(Color.appFinance)
-
-                if let url = customerPhoneURL(for: project) {
-                    Button {
-                        openURL(url)
-                    } label: {
-                        Label(String(localized: "联系客户"), systemImage: "phone.fill")
-                    }
-                    .tint(Color.appDoc)
-                }
-            }
-        }
-        .onDelete { indexSet in
-            let ids = indexSet.map { sortedProjects[$0].id }
-            if let target = projectStore.projects.first(where: { ids.contains($0.id) }) {
-                projectToDelete = target
-                showDeleteConfirm = true
-            }
-        }
-    }
-
-    private func clearAllFilters() {
-        searchText = ""
-        statusFilter = nil
-        overviewFilter = nil
-    }
-
-    private func handleAutoOpenComposer() {
-        guard autoOpenComposerToken > 0,
-              autoOpenComposerToken != lastHandledAutoOpenComposerToken else { return }
-        lastHandledAutoOpenComposerToken = autoOpenComposerToken
-        showAdd = true
-    }
-
-    private func deleteProject(keepData: Bool) {
-        guard let pid = projectToDelete?.id else { return }
-        if keepData {
-            archiveProject()
-            return
-        } else {
-            let projectName = projectToDelete?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            let normalizedName = projectName.isEmpty ? String(localized: "项目") : projectName
-            let relationCount = relatedCount
-            let deletion = store.removeProjectCascade(pid)
-            guard !deletion.isEmpty else {
-                projectToDelete = nil
-                return
-            }
-
-            projectToDelete = nil
-            undoableDeletion.queue(
-                notice: $operationNotice,
-                message: String(format: String(localized: "已删除项目 %@"), normalizedName),
-                commit: {
-                    deletion.performDeferredFileCleanup()
-                    store.scheduleSave()
-                },
-                undo: {
-                    store.restoreProjectCascade(deletion)
-                    store.scheduleSave()
-                },
-                audit: UndoableDeletionAuditContext(
-                    summary: String(localized: "删除项目及全部关联数据"),
-                    detail: [
-                        "\(normalizedName)",
-                        "related=\(relationCount)",
-                        "records=\(deletion.deletedRecordCount)",
-                        "files=\(deletion.deferredFileCleanup?.fileCount ?? 0)"
-                    ].joined(separator: " · "),
-                    source: "ProjectListView"
-                )
-            )
-        }
-    }
-
-    private func archiveProject() {
-        guard let pid = projectToDelete?.id,
-              let index = projectStore.projects.firstIndex(where: { $0.id == pid }) else { return }
-        var project = projectStore.projects[index]
-        project.status = .archived
-        guard store.updateProject(project) else { return }
-        projectToDelete = nil
-        store.scheduleSave()
-    }
-
-    private func addProject() {
-        guard canCreateProject else { return }
-        store.appendProject(Project(
-            name: newName.trimmingCharacters(in: .whitespacesAndNewlines),
-            location: newLocation,
-            status: .active,
-            customerName: newCustomerName,
-            customerPhone: newCustomerPhone,
-            startDate: Formatters.date.string(from: newStartDate),
-            expectedEndDate: Formatters.date.string(from: newExpectedEndDate),
-            managerName: newManagerName,
-            contractAmount: NumericInputSupport.normalizedStorageText(newContractAmount, kind: .amount),
-            paidAmount: NumericInputSupport.normalizedStorageText(newPaidAmount, kind: .amount),
-            paymentStatus: newPaymentStatus,
-            materialCost: NumericInputSupport.normalizedStorageText(newMaterialCost, kind: .amount),
-            laborCost: NumericInputSupport.normalizedStorageText(newLaborCost, kind: .amount),
-            requiredDocumentCategories: ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
-                Array(newRequiredDocumentCategories)
-            )
-        ))
-        store.scheduleSave()
-        clearProject()
-    }
-    private func clearProject() {
-        newName = ""
-        newLocation = ""
-        newCustomerName = ""
-        newCustomerPhone = ""
-        newManagerName = ""
-        newContractAmount = ""
-        newPaidAmount = ""
-        newMaterialCost = ""
-        newLaborCost = ""
-        newPaymentStatus = .unpaid
-        newRequiredDocumentCategories = Set(ProjectDocumentRecommendationStage.preConstruction.recommendedCategories)
-        newStartDate = Date()
-        newExpectedEndDate = Calendar.current.date(byAdding: .day, value: 30, to: Date()) ?? Date()
-    }
-
-    private var canCreateProject: Bool {
-        !newName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-        !newRequiredDocumentCategories.isEmpty &&
-        InputValidator.validate(newContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
-        InputValidator.validate(newPaidAmount, kind: .amount, requirement: .optionalNonNegative).isValid &&
-        InputValidator.validate(newMaterialCost, kind: .amount, requirement: .optionalNonNegative).isValid &&
-        InputValidator.validate(newLaborCost, kind: .amount, requirement: .optionalNonNegative).isValid
-    }
-
-    private var relatedCount: Int {
-        guard let pid = projectToDelete?.id else { return 0 }
-        return store.relatedDataCount(for: pid)
-    }
-
-    private func expectedEndDate(for project: Project) -> Date {
-        Formatters.date.date(from: project.expectedEndDate) ?? .distantFuture
-    }
-
-    private func paidAmount(for project: Project) -> Double {
-        let projectId = project.id
-        let summary = projectStore.projectActivitySummary(for: projectId)
-        if summary.collectedIncomeAmount > 0 {
-            return summary.collectedIncomeAmount
-        }
-        return project.paidAmountValue.doubleValue
-    }
-
-    private func customerPhoneURL(for project: Project) -> URL? {
-        let raw = project.customerPhone.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !raw.isEmpty else { return nil }
-        let normalized = raw.replacingOccurrences(of: " ", with: "")
-        return URL(string: "tel:\(normalized)")
-    }
-
-    private func unpaidAmount(for project: Project) -> Double {
-        max(project.contractAmountValue.doubleValue - paidAmount(for: project), 0)
-    }
-
-    private func projectRiskBadges(for project: Project) -> [ProjectRiskBadge] {
-        var badges: [ProjectRiskBadge] = []
-        if hasOverdueItem(for: project) {
-            badges.append(ProjectRiskBadge(title: String(localized: "延期"), systemImage: "exclamationmark.triangle.fill", color: .appRisk))
-        }
-        let todos = openTodoCount(for: project)
-        if todos > 0 {
-            badges.append(ProjectRiskBadge(
-                title: String(format: String(localized: "%d待办"), todos),
-                systemImage: "checklist",
-                color: .appWarning
-            ))
-        }
-        let missingReceipts = unattachedReceiptCount(for: project)
-        if missingReceipts > 0 {
-            badges.append(ProjectRiskBadge(
-                title: String(format: String(localized: "%d缺票"), missingReceipts),
-                systemImage: "doc.badge.exclamationmark",
-                color: .appFinance
-            ))
-        }
-        let priceSpikes = materialPriceSpikeCount(for: project)
-        if priceSpikes > 0 {
-            badges.append(ProjectRiskBadge(
-                title: String(format: String(localized: "%d价格异动"), priceSpikes),
-                systemImage: "arrow.up.right.circle.fill",
-                color: .appFinance
-            ))
-        }
-        if unpaidAmount(for: project) > 0 {
-            badges.append(ProjectRiskBadge(title: String(localized: "未收"), systemImage: "yensign.circle.fill", color: .appDoc))
-        }
-        return Array(badges.prefix(4))
-    }
-
-    private func applyProjectSuggestion(_ suggestion: RealtimeSearchSuggestion) {
-        guard suggestion.category == .project else { return }
-        if let project = projectStore.projects.first(where: { $0.id == suggestion.entityId }) {
-            searchText = project.name
-        } else {
-            searchText = suggestion.title
-        }
-    }
-
-    private func hasOverdueItem(for project: Project) -> Bool {
-        projectStore.projectActivitySummary(for: project.id).overdueItemCount > 0
-    }
-
-    private func openTodoCount(for project: Project) -> Int {
-        projectStore.projectActivitySummary(for: project.id).openTodoCount
-    }
-
-    private func unattachedReceiptCount(for project: Project) -> Int {
-        projectStore.projectActivitySummary(for: project.id).unattachedReceiptCount
-    }
-
-    private func hasUnsettledFinancial(for project: Project) -> Bool {
-        projectStore.projectActivitySummary(for: project.id).hasUnsettledFinancial
-    }
-
-    private func materialPriceSpikeCount(for project: Project) -> Int {
-        financeStore.materialPriceSpikeCount(for: project.id)
-    }
-
-    private func missingTodayLog(for project: Project) -> Bool {
-        guard project.status.isActiveOrPaused else {
-            return false
-        }
-        return !projectStore.hasTodayLog(for: project.id)
-    }
-
-    private func recentActivityDate(for project: Project) -> Date {
-        let projectId = project.id
-        var latest = projectStore.projectActivitySummary(for: projectId).latestActivityDate ?? .distantPast
-        if let startDate = Formatters.parseDateOrDateTime(project.startDate) {
-            latest = max(latest, startDate)
-        }
-        if let latestLabor = financeStore.latestLaborDate(for: projectId) {
-            latest = max(latest, latestLabor)
-        }
-        return latest
     }
 }

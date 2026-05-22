@@ -12,7 +12,7 @@ struct ToolboxIconCard: View {
             HStack {
                 if iconCentered { Spacer(minLength: 0) }
                 Image(systemName: icon)
-                    .font(.system(size: 24, weight: .semibold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(color)
                 Spacer(minLength: 0)
             }
@@ -34,7 +34,7 @@ struct ToolboxIconCard: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(title)
         .accessibilityValue(desc)
-        .accessibilityHint("双击打开")
+        .accessibilityHint(String(localized: "双击打开"))
     }
 }
 
@@ -69,7 +69,7 @@ struct QuickToolEditorView: View {
                                     Text(tool.desc).font(.caption).foregroundStyle(.secondary)
                                 }
                             }
-                            .accessibilityHint("双击切换是否显示在快捷工具")
+                            .accessibilityHint(String(localized: "双击切换是否显示在快捷工具"))
                         }
                     }
                 } header: {
@@ -96,7 +96,7 @@ struct QuickToolEditorView: View {
                             if let tool = allTools.first(where: { $0.id == id }) {
                                 Label(tool.title, systemImage: tool.icon)
                                     .font(.subheadline)
-                                    .accessibilityHint("按住后拖动可调整顺序")
+                                    .accessibilityHint(String(localized: "按住后拖动可调整顺序"))
                             }
                         }
                         .onMove { source, destination in

@@ -72,17 +72,36 @@ struct ProjectDetailModeSectionsView: View {
     let onResetFinanceJumpFilter: () -> Void
 
     var body: some View {
-        CompactProjectDetailModeContent(mode: mode) {
-            overviewSections
-        } records: {
-            recordModeSections
-        } assets: {
-            assetModeSections
-        } finance: {
-            financeModeSections
-        } timeline: {
-            ProjectTimelineSectionView(items: timelineItems, onSelect: onOpenTimelineItem)
+        Group {
+            if showsAllSections {
+                anchorMarker(.overview)
+                overviewSections
+                anchorMarker(.records)
+                recordModeSections
+                anchorMarker(.assets)
+                assetModeSections
+                anchorMarker(.finance)
+                financeModeSections
+                anchorMarker(.timeline)
+                timelineSection
+            } else {
+                CompactProjectDetailModeContent(mode: mode) {
+                    overviewSections
+                } records: {
+                    recordModeSections
+                } assets: {
+                    assetModeSections
+                } finance: {
+                    financeModeSections
+                } timeline: {
+                    timelineSection
+                }
+            }
         }
+    }
+
+    private var timelineSection: some View {
+        ProjectTimelineSectionView(items: timelineItems, onSelect: onOpenTimelineItem)
     }
 
     private var overviewSections: some View {
@@ -319,6 +338,14 @@ struct ProjectDetailModeSectionsView: View {
     private func anchorMarker(_ anchor: ProjectDetailAnchor) -> some View {
         Color.clear
             .frame(height: 0)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(
+                        key: ProjectDetailAnchorOffsetPreferenceKey.self,
+                        value: [anchor: proxy.frame(in: .named(ProjectDetailScrollTracking.coordinateSpaceName)).minY]
+                    )
+                }
+            }
             .listRowInsets(EdgeInsets())
             .listRowSeparator(.hidden)
             .id(anchor.scrollID)

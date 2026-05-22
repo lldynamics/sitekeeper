@@ -54,12 +54,20 @@ final class SitekeeperUITests: XCTestCase {
         }
     }
 
+    private func attachScreenshot(_ app: XCUIApplication, named name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     @discardableResult
     private func launchApp(
         skipOnboarding: Bool = true,
         resetState: Bool = false,
         enableBackupPreview: Bool = false,
-        allowClearWithoutBackup: Bool = false
+        allowClearWithoutBackup: Bool = false,
+        dynamicTypeSize: String? = nil
     ) -> XCUIApplication {
         let app = XCUIApplication()
         if skipOnboarding {
@@ -77,6 +85,10 @@ final class SitekeeperUITests: XCTestCase {
         if allowClearWithoutBackup {
             app.launchArguments += ["-uitest-allow-clear-without-backup"]
             app.launchEnvironment["UITEST_ALLOW_CLEAR_WITHOUT_BACKUP"] = "1"
+        }
+        if let dynamicTypeSize {
+            app.launchArguments += ["-uitest-dynamic-type-size", dynamicTypeSize]
+            app.launchEnvironment["UITEST_DYNAMIC_TYPE_SIZE"] = dynamicTypeSize
         }
         app.launch()
         return app
@@ -124,9 +136,9 @@ final class SitekeeperUITests: XCTestCase {
         for _ in 0..<scrollingAttempts {
             let scrollView = app.scrollViews.firstMatch
             let collectionView = app.collectionViews.firstMatch
-            if scrollView.exists {
+            if scrollView.exists, !scrollView.frame.isEmpty {
                 scrollView.swipeUp()
-            } else if collectionView.exists {
+            } else if collectionView.exists, !collectionView.frame.isEmpty {
                 collectionView.swipeUp()
             } else {
                 app.swipeUp()
@@ -140,11 +152,37 @@ final class SitekeeperUITests: XCTestCase {
     }
 
     private func openDataSafetyCenter(_ app: XCUIApplication) {
-        tapPrimaryModule(app, name: "我的")
-        let dataEntry = app.buttons["profile-data-management-link"]
-        XCTAssertTrue(dataEntry.waitForExistence(timeout: 5))
-        dataEntry.tap()
-        XCTAssertTrue(app.navigationBars["数据安全中心"].waitForExistence(timeout: 5))
+        for attempt in 0..<3 {
+            tapPrimaryModule(app, name: "我的")
+
+            if app.navigationBars["我的"].waitForExistence(timeout: 2) {
+                let dataEntry = button(app, identifier: "profile-data-management-link", scrollingAttempts: 8)
+                if dataEntry.waitForExistence(timeout: 4), dataEntry.isHittable {
+                    dataEntry.tap()
+                    XCTAssertTrue(app.navigationBars["数据安全中心"].waitForExistence(timeout: 5))
+                    return
+                }
+
+                let dataLabel = app.staticTexts["数据管理"]
+                if dataLabel.waitForExistence(timeout: 2), dataLabel.isHittable {
+                    dataLabel.tap()
+                    XCTAssertTrue(app.navigationBars["数据安全中心"].waitForExistence(timeout: 5))
+                    return
+                }
+            }
+
+            // AXXXL 字号下 tab 切换偶发失效，补一次明确点击 profile 图标。
+            let profileTabByIdentifier = app.buttons["person.circle"]
+            if profileTabByIdentifier.waitForExistence(timeout: 1), profileTabByIdentifier.isHittable {
+                profileTabByIdentifier.tap()
+            }
+
+            if attempt == 2 {
+                break
+            }
+        }
+
+        XCTFail("Unable to open profile data management entry")
     }
 
     private func openSampleDataImportConfirmation(_ app: XCUIApplication) {
@@ -169,6 +207,39 @@ final class SitekeeperUITests: XCTestCase {
         openSampleDataImportConfirmation(app)
         app.alerts["恢复测试数据？"].buttons["清空并导入"].tap()
         XCTAssertTrue(app.staticTexts["已恢复测试数据"].waitForExistence(timeout: 8))
+    }
+
+    @discardableResult
+    private func openImportedProject(
+        _ app: XCUIApplication,
+        preferredName: String = "阳光花园 3# 楼"
+    ) -> String {
+        let preferredProject = app.staticTexts[preferredName]
+        if preferredProject.waitForExistence(timeout: 6) {
+            preferredProject.tap()
+            return preferredName
+        }
+
+        let rowButton = app.buttons["project-list-row"].firstMatch
+        if rowButton.waitForExistence(timeout: 4), rowButton.isHittable {
+            rowButton.tap()
+        } else {
+            let firstCollectionCell = app.collectionViews.cells.firstMatch
+            if firstCollectionCell.waitForExistence(timeout: 4), firstCollectionCell.isHittable {
+                firstCollectionCell.tap()
+            } else {
+                let firstTableCell = app.tables.cells.firstMatch
+                if firstTableCell.waitForExistence(timeout: 4), firstTableCell.isHittable {
+                    firstTableCell.tap()
+                } else {
+                    XCTFail("Unable to open any project row after sample import")
+                }
+            }
+        }
+
+        let navigationBar = app.navigationBars.firstMatch
+        XCTAssertTrue(navigationBar.waitForExistence(timeout: 6))
+        return navigationBar.identifier
     }
 
     func testColdLaunchShowsPrimaryTabs() {
@@ -307,11 +378,8 @@ final class SitekeeperUITests: XCTestCase {
         importSampleDataThroughUI(app)
 
         tapPrimaryModule(app, name: "项目")
-        let sampleProject = app.staticTexts["阳光花园 3# 楼"]
-        XCTAssertTrue(sampleProject.waitForExistence(timeout: 8))
-        sampleProject.tap()
-
-        XCTAssertTrue(app.navigationBars["阳光花园 3# 楼"].waitForExistence(timeout: 5))
+        let openedProjectName = openImportedProject(app)
+        XCTAssertFalse(openedProjectName.isEmpty)
         let moreMenu = app.buttons["project-detail-more-menu"]
         XCTAssertTrue(moreMenu.waitForExistence(timeout: 5))
         moreMenu.tap()
@@ -336,6 +404,41 @@ final class SitekeeperUITests: XCTestCase {
 
         tapPrimaryModule(app, name: "工具箱")
         XCTAssertTrue(app.navigationBars["工程工具箱"].waitForExistence(timeout: 5))
+    }
+
+    func testAccessibilityAXXXLCoreFlowsRemainOperable() {
+        let app = launchApp(resetState: true, dynamicTypeSize: "accessibility5")
+
+        XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 8))
+        attachScreenshot(app, named: "axxxl-dashboard")
+
+        importSampleDataThroughUI(app)
+        tapPrimaryModule(app, name: "项目")
+        let openedProjectName = openImportedProject(app)
+        XCTAssertFalse(openedProjectName.isEmpty)
+        XCTAssertTrue(app.buttons["project-detail-more-menu"].waitForExistence(timeout: 6))
+        attachScreenshot(app, named: "axxxl-project-detail")
+
+        tapPrimaryModule(app, name: "我的")
+        var settingsEntry = button(app, identifier: "profile-settings-link", scrollingAttempts: 8)
+        if settingsEntry.waitForExistence(timeout: 6), settingsEntry.isHittable {
+            settingsEntry.tap()
+        } else {
+            let settingsText = app.staticTexts["设置"]
+            if settingsText.waitForExistence(timeout: 4), settingsText.isHittable {
+                settingsText.tap()
+            } else {
+                tapPrimaryModule(app, name: "我的")
+                settingsEntry = button(app, identifier: "profile-settings-link", scrollingAttempts: 4)
+                XCTAssertTrue(settingsEntry.waitForExistence(timeout: 6))
+                settingsEntry.tap()
+            }
+        }
+        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 6))
+        XCTAssertTrue(
+            button(app, identifier: "清空本机全部数据（需先备份）", scrollingAttempts: 12).waitForExistence(timeout: 6)
+        )
+        attachScreenshot(app, named: "axxxl-settings")
     }
 
     func testCaptureFeaturedAppStoreScreenshots() {

@@ -15,6 +15,7 @@ fi
 # DataStoreDeletionPolicy so audit, undo, and deferred cleanup stay consistent.
 ALLOWED_FILES=(
   "Sources/Shared/Services/DataStoreDeletionPolicy.swift"
+  "Sources/Shared/Services/DataStoreDeferredFileCleanup.swift"
   "Sources/Shared/Services/PhotoStorage.swift"
   "Sources/Shared/Services/DocumentStorage.swift"
   "Sources/Shared/Services/ProjectDocumentStorage.swift"

@@ -160,5 +160,4 @@ struct RebarCalcView: View {
         qty = NumericInputSupport.normalizedStorageText(qty, kind: .quantity, preservingInvalid: false)
         price = NumericInputSupport.normalizedStorageText(price, kind: .amount, preservingInvalid: false)
     }
-
 }

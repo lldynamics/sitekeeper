@@ -348,15 +348,15 @@ enum Tab: Hashable, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .dashboard:
-            return "工作台"
+            return String(localized: "工作台")
         case .records:
-            return "项目"
+            return String(localized: "项目")
         case .checklist:
-            return "工具箱"
+            return String(localized: "工具箱")
         case .quickNote:
-            return "随手记"
+            return String(localized: "随手记")
         case .profile:
-            return "我的"
+            return String(localized: "我的")
         }
     }
 

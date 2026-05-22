@@ -344,9 +344,9 @@ struct PanelSummaryLabel: View {
             } else {
                 HStack(spacing: AppSpacing.tight * 0.75) {
                     if warehouse > 0 { tag(String(format: String(localized: "📦 %lld"), Int64(warehouse)), color: .appInventory) }
-                    if overdue > 0   { tag(String(format: String(localized: "⚠️ %lld"), Int64(overdue)), color: .appRisk) }
-                    if todos > 0     { tag(String(format: String(localized: "✅ %lld"), Int64(todos)), color: .appWarning) }
-                    if logs > 0      { tag(String(format: String(localized: "📝 %lld"), Int64(logs)), color: .appDoc) }
+                    if overdue > 0 { tag(String(format: String(localized: "⚠️ %lld"), Int64(overdue)), color: .appRisk) }
+                    if todos > 0 { tag(String(format: String(localized: "✅ %lld"), Int64(todos)), color: .appWarning) }
+                    if logs > 0 { tag(String(format: String(localized: "📝 %lld"), Int64(logs)), color: .appDoc) }
                 }
             }
         }

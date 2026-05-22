@@ -212,8 +212,13 @@ struct DrawingLibraryToolView: View {
             case .success(let urls):
                 handleImportedDrawings(urls)
             case .failure(let error):
-                StorageIssueLog.record(
-                    String(format: String(localized: "图纸台账导入失败：%@"), error.localizedDescription)
+                StorageIssueLog.recordEvent(
+                    "drawing_library.import_picker_failed",
+                    category: .fileStorage,
+                    details: [
+                        "source": "DrawingLibraryToolView.fileImporter"
+                    ],
+                    error: error
                 )
                 operationMessage = String(format: String(localized: "图纸导入失败：%@"), error.localizedDescription)
             }
@@ -279,12 +284,15 @@ struct DrawingLibraryToolView: View {
                 shareURL = url
             }
         case .failure(let message):
-            StorageIssueLog.record(
-                String(
-                    format: String(localized: "图纸原件打开失败：%@，%@"),
-                    drawing.name.isEmpty ? drawing.fileName : drawing.name,
-                    message
-                )
+            StorageIssueLog.recordEvent(
+                "drawing_library.open_source_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "DrawingLibraryToolView.openDrawing",
+                    "drawing_id": drawing.id.uuidString,
+                    "drawing_name": drawing.name.isEmpty ? drawing.fileName : drawing.name,
+                    "error_message": message
+                ]
             )
             operationMessage = message
         }

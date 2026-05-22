@@ -111,7 +111,7 @@ struct DashboardView: View {
             } else {
                 VStack(spacing: AppSpacing.normal) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.system(size: 40, weight: .semibold))
+                        .font(.largeTitle.weight(.semibold))
                         .foregroundStyle(Color.appSuccess)
                     Text(String(localized: "全部良好"))
                         .font(.title3.weight(.semibold))
@@ -609,5 +609,4 @@ struct DashboardView: View {
             }
         }
     }
-
 }

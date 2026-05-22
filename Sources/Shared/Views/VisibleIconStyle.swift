@@ -5,7 +5,7 @@ extension View {
     func visibleIconStyle() -> some View {
         self
             .symbolRenderingMode(.hierarchical)
-            .font(.system(size: 17, weight: .semibold))
+            .font(.headline.weight(.semibold))
             .foregroundStyle(.primary)
             .frame(width: 20, height: 20)
     }

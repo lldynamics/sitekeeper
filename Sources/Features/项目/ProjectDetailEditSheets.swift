@@ -35,7 +35,12 @@ struct MaterialEditSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "编辑材料"),
+            isPrimaryActionDisabled: !canSave,
+            onCancel: { dismiss() },
+            onPrimaryAction: { saveAndDismiss() }
+        ) {
             Form {
                 TextField(String(localized: "材料名称"), text: $name)
                 TextField(String(localized: "数量"), text: $quantity.numericInput(.quantity)).keyboardType(.decimalPad)
@@ -53,40 +58,33 @@ struct MaterialEditSheet: View {
                 LabeledContent(String(localized: "金额")) {
                     Text(ReportBuilder.money(ReportBuilder.number(quantity) * ReportBuilder.number(unitPrice)))
                 }
-                Section {
-                    Button(String(localized: "删除材料"), role: .destructive) {
-                        onDelete(item.id)
-                        dismiss()
-                    }
-                }
-            }
-            .navigationTitle(String(localized: "编辑材料"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        var updated = item
-                        updated.name = name
-                        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
-                        updated.unit = unit
-                        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
-                        updated.specification = specification.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.purchaseStatus = purchaseStatus
-                        updated.arrivalDate = ProjectDateInput.normalizedStorageText(arrivalDate)
-                        onSave(updated)
-                        dismiss()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              !InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid ||
-                              !InputValidator.validate(unitPrice, kind: .amount, requirement: .optionalNonNegative).isValid)
+                AppBusinessFormDestructiveActionSection(title: String(localized: "删除材料")) {
+                    onDelete(item.id)
+                    dismiss()
                 }
             }
         }
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid
+            && InputValidator.validate(unitPrice, kind: .amount, requirement: .optionalNonNegative).isValid
+    }
+
+    private func saveAndDismiss() {
+        var updated = item
+        updated.name = name
+        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
+        updated.unit = unit
+        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
+        updated.specification = specification.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.brand = brand.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.supplier = supplier.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.purchaseStatus = purchaseStatus
+        updated.arrivalDate = ProjectDateInput.normalizedStorageText(arrivalDate)
+        onSave(updated)
+        dismiss()
     }
 }
 
@@ -126,7 +124,12 @@ struct QuoteEditSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "编辑报价"),
+            isPrimaryActionDisabled: !canSave,
+            onCancel: { dismiss() },
+            onPrimaryAction: { saveAndDismiss() }
+        ) {
             Form {
                 TextField(String(localized: "项目名称"), text: $name)
                 TextField(String(localized: "单价"), text: $unitPrice.numericInput(.amount)).keyboardType(.decimalPad)
@@ -161,45 +164,38 @@ struct QuoteEditSheet: View {
                     )
                     Text(ReportBuilder.money(ReportBuilder.quoteGrandTotal(preview)))
                 }
-                Section {
-                    Button(String(localized: "删除报价"), role: .destructive) {
-                        onDelete(item.id)
-                        dismiss()
-                    }
-                }
-            }
-            .navigationTitle(String(localized: "编辑报价"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        var updated = item
-                        updated.name = name
-                        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
-                        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
-                        updated.unit = unit
-                        updated.taxRate = NumericInputSupport.normalizedStorageText(taxRate, kind: .taxRate)
-                        updated.discountRate = NumericInputSupport.normalizedStorageText(discountRate, kind: .discountRate)
-                        updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
-                        updated.status = status
-                        updated.customerConfirmedDate = ProjectDateInput.normalizedStorageText(customerConfirmedDate)
-                        updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
-                        updated.notes = notes
-                        onSave(updated)
-                        dismiss()
-                    }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
-                              !InputValidator.validate(unitPrice, kind: .amount, requirement: .requiredNonNegative).isValid ||
-                              !InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid ||
-                              !InputValidator.validate(taxRate, kind: .taxRate, requirement: .requiredNonNegative).isValid ||
-                              !InputValidator.validate(discountRate, kind: .discountRate, requirement: .requiredNonNegative).isValid ||
-                              !InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid)
+                AppBusinessFormDestructiveActionSection(title: String(localized: "删除报价")) {
+                    onDelete(item.id)
+                    dismiss()
                 }
             }
         }
+    }
+
+    private var canSave: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && InputValidator.validate(unitPrice, kind: .amount, requirement: .requiredNonNegative).isValid
+            && InputValidator.validate(quantity, kind: .quantity, requirement: .requiredNonNegative).isValid
+            && InputValidator.validate(taxRate, kind: .taxRate, requirement: .requiredNonNegative).isValid
+            && InputValidator.validate(discountRate, kind: .discountRate, requirement: .requiredNonNegative).isValid
+            && InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+    }
+
+    private func saveAndDismiss() {
+        var updated = item
+        updated.name = name
+        updated.unitPrice = NumericInputSupport.normalizedStorageText(unitPrice, kind: .amount)
+        updated.quantity = NumericInputSupport.normalizedStorageText(quantity, kind: .quantity)
+        updated.unit = unit
+        updated.taxRate = NumericInputSupport.normalizedStorageText(taxRate, kind: .taxRate)
+        updated.discountRate = NumericInputSupport.normalizedStorageText(discountRate, kind: .discountRate)
+        updated.versionName = versionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.status = status
+        updated.customerConfirmedDate = ProjectDateInput.normalizedStorageText(customerConfirmedDate)
+        updated.contractAmount = NumericInputSupport.normalizedStorageText(contractAmount, kind: .amount)
+        updated.notes = notes
+        onSave(updated)
+        dismiss()
     }
 }
 
@@ -227,7 +223,12 @@ struct ProgressEditSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "编辑进度"),
+            isPrimaryActionDisabled: !canSave,
+            onCancel: { dismiss() },
+            onPrimaryAction: { saveAndDismiss() }
+        ) {
             Form {
                 TextField(String(localized: "任务"), text: $title)
                 OptionalProjectDatePicker(String(localized: "开始日期"), text: $startDate)
@@ -236,34 +237,27 @@ struct ProgressEditSheet: View {
                 LabeledContent(String(localized: "完成率"), value: "\(Int(completion * 100))%")
                 TextField(String(localized: "备注"), text: $note, axis: .vertical)
                     .lineLimit(2...4)
-                Section {
-                    Button(String(localized: "删除任务"), role: .destructive) {
-                        onDelete(item.id)
-                        dismiss()
-                    }
-                }
-            }
-            .navigationTitle(String(localized: "编辑进度"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        var updated = item
-                        updated.title = title
-                        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
-                        updated.dueDate = ProjectDateInput.normalizedStorageText(dueDate)
-                        updated.completion = completion
-                        updated.note = note
-                        onSave(updated)
-                        dismiss()
-                    }
-                    .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                AppBusinessFormDestructiveActionSection(title: String(localized: "删除任务")) {
+                    onDelete(item.id)
+                    dismiss()
                 }
             }
         }
+    }
+
+    private var canSave: Bool {
+        !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private func saveAndDismiss() {
+        var updated = item
+        updated.title = title
+        updated.startDate = ProjectDateInput.normalizedStorageText(startDate)
+        updated.dueDate = ProjectDateInput.normalizedStorageText(dueDate)
+        updated.completion = completion
+        updated.note = note
+        onSave(updated)
+        dismiss()
     }
 }
 
@@ -379,7 +373,9 @@ struct QuickAddSheet: View {
     let projectId: UUID
     let constructionMethods: [ConstructionMethod]
 
-    @State private var name = ""; @State private var qty = ""; @State private var unit = ""
+    @State private var name = ""
+    @State private var qty = ""
+    @State private var unit = ""
     @State private var unitPrice = ""
     @State private var materialSpecification = ""
     @State private var materialBrand = ""
@@ -395,10 +391,14 @@ struct QuickAddSheet: View {
     @State private var laborTeamName = ""
     @State private var laborIsSettled = false
     @State private var laborLines: [QuickAddLaborLine] = [.init()]
-    @State private var content = ""; @State private var weather = String(localized: "晴")
-    @State private var safety = ""; @State private var materials = ""
-    @State private var tomorrowPlan = ""; @State private var qualityIssue = ""
-    @State private var rectification = ""; @State private var confirmer = ""
+    @State private var content = ""
+    @State private var weather = String(localized: "晴")
+    @State private var safety = ""
+    @State private var materials = ""
+    @State private var tomorrowPlan = ""
+    @State private var qualityIssue = ""
+    @State private var rectification = ""
+    @State private var confirmer = ""
     @State private var logDate = Date()
     @State private var laborDate = Date()
     @State private var linkedMethodIDs: Set<UUID> = []

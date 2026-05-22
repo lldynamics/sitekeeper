@@ -38,8 +38,18 @@ private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
                 case .success(let urls):
                     onImportDrawings(urls)
                 case .failure(let error):
-                    StorageIssueLog.record("项目图纸导入失败：\(error.localizedDescription)")
-                    onPresentImportError("图纸导入失败：\(error.localizedDescription)")
+                    StorageIssueLog.recordEvent(
+                        "project.drawing.import_failed",
+                        category: .fileStorage,
+                        details: ["source": "ProjectDetailImportFlowCoordinator.fileImporter.drawing"],
+                        error: error
+                    )
+                    onPresentImportError(
+                        String(
+                            format: String(localized: "图纸导入失败：%@"),
+                            error.localizedDescription
+                        )
+                    )
                 }
             }
             .fileImporter(
@@ -54,8 +64,18 @@ private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
                         defaultSettings: ProjectDocumentImportLedgerSettings(category: .constructionRecord)
                     )
                 case .failure(let error):
-                    StorageIssueLog.record("项目资料导入失败：\(error.localizedDescription)")
-                    onPresentImportError("资料导入失败：\(error.localizedDescription)")
+                    StorageIssueLog.recordEvent(
+                        "project.document.import_failed",
+                        category: .fileStorage,
+                        details: ["source": "ProjectDetailImportFlowCoordinator.fileImporter.document"],
+                        error: error
+                    )
+                    onPresentImportError(
+                        String(
+                            format: String(localized: "资料导入失败：%@"),
+                            error.localizedDescription
+                        )
+                    )
                 }
             }
             .sheet(item: $pendingDocumentImportRequest) { request in
@@ -128,7 +148,7 @@ extension View {
         onPresentImportError: @escaping (String) -> Void,
         showImportError: Binding<Bool>,
         importErrorMessage: Binding<String>,
-        importErrorTitle: String = "操作失败"
+        importErrorTitle: String = String(localized: "操作失败")
     ) -> some View {
         modifier(
             ProjectDetailImportFlowCoordinatorModifier(

@@ -119,7 +119,6 @@ struct ExportDateFilterTests {
         // QuickNote - updatedAt
         let note = QuickNote(title: "test", content: "", projectId: nil, createdAt: "2025-04-12 09:00", updatedAt: "2025-04-12 09:00", attachments: [])
         #expect(Formatters.dateTime.date(from: note.updatedAt) != nil)
-
     }
 
     // 项目筛选不串项目（日期筛选后仍按项目隔离）

@@ -80,6 +80,48 @@ enum BackupImportCoordinator {
         sanitizeMaterialProjectReferences(in: store)
     }
 
+    @MainActor
+    static func commitAndPersistImport(
+        restoreTransaction: BackupArchiveService.EmbeddedFileRestoreTransaction,
+        importedSnapshot: BackupSnapshot,
+        previousSnapshot: BackupSnapshot,
+        importMode: ImportMode,
+        store: DataStore,
+        sourceFileName: String,
+        onPersistingMetadata: @MainActor () -> Void = {}
+    ) async throws -> BackupEmbeddedRestoreCounts {
+        applyImportMetadata(snapshot: importedSnapshot, mode: importMode, store: store)
+
+        var failedStage = "commit_files"
+        do {
+            let restoredCounts = try await Task.detached(priority: .userInitiated) {
+                try restoreTransaction.commit()
+            }.value
+            failedStage = "persist_metadata"
+            onPersistingMetadata()
+            try await store.flushSaveOrThrow()
+            restoreTransaction.finalize()
+            return restoredCounts
+        } catch {
+            restoreTransaction.rollback()
+            applyImportMetadata(snapshot: previousSnapshot, mode: .overwrite, store: store)
+            do {
+                try await store.flushSaveOrThrow()
+            } catch {
+                StorageIssueLog.recordEvent(
+                    "backup.import.rollback_persist_failed",
+                    category: .dataStore,
+                    details: [
+                        "file": sourceFileName,
+                        "stage": failedStage
+                    ],
+                    error: error
+                )
+            }
+            throw error
+        }
+    }
+
     static func overwrittenLocalFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
         let oldPhotoNames = photoFileNames(in: previous)
         let newPhotoNames = photoFileNames(in: imported)
@@ -139,8 +181,17 @@ enum BackupImportCoordinator {
         }
 
         if !cleanupErrors.isEmpty {
-            StorageIssueLog.record(
-                "覆盖导入清理旧文件失败：\(cleanupErrors.joined(separator: "；"))"
+            StorageIssueLog.recordEvent(
+                "backup.import.cleanup_overwritten_files_failed",
+                category: .fileStorage,
+                details: [
+                    "source": "BackupImportCoordinator.cleanupOverwrittenFiles",
+                    "photo_count": "\(impact.photoFileNames.count)",
+                    "drawing_count": "\(impact.drawingFileNames.count)",
+                    "document_count": "\(impact.documentFileNames.count)",
+                    "quick_note_attachment_count": "\(impact.quickNoteAttachmentFileNames.count)",
+                    "errors": cleanupErrors.joined(separator: " | ")
+                ]
             )
         }
         return impact

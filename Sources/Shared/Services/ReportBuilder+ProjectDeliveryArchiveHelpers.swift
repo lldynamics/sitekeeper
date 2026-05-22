@@ -296,7 +296,15 @@ extension ReportBuilder {
         do {
             try zip.addFile(path: path, data: data)
         } catch {
-            StorageIssueLog.record(locFormat("项目交付包写入生成文件失败：%@，%@", path, error.localizedDescription))
+            StorageIssueLog.recordEvent(
+                "project_package.write_generated_file_failed",
+                category: .zipArchive,
+                details: [
+                    "source": "ReportBuilder.addGeneratedFileToProjectPackageZip",
+                    "path": path
+                ],
+                error: error
+            )
             throw error
         }
         stagedRawBytes += data.count
@@ -313,7 +321,16 @@ extension ReportBuilder {
         do {
             try zip.addFile(path: path, sourceFileURL: sourceFileURL)
         } catch {
-            StorageIssueLog.record(locFormat("项目交付包写入原件失败：%@ -> %@，%@", sourceFileURL.lastPathComponent, path, error.localizedDescription))
+            StorageIssueLog.recordEvent(
+                "project_package.write_stored_file_failed",
+                category: .zipArchive,
+                details: [
+                    "source": "ReportBuilder.addStoredFileToProjectPackageZip",
+                    "source_file": sourceFileURL.lastPathComponent,
+                    "path": path
+                ],
+                error: error
+            )
             throw error
         }
         stagedRawBytes += resolvedFileBytes

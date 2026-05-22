@@ -1,4 +1,5 @@
 import Foundation
+import Observation
 import SwiftUI
 #if canImport(WidgetKit)
 import WidgetKit
@@ -49,6 +50,11 @@ enum UserPreferenceKeys {
     static let dashboardIgnoredMissingReceiptRiskDay = "dashboard.risk.ignore.missingReceipt.day"
     static let dashboardIgnoredPriceSpikeRiskDay = "dashboard.risk.ignore.priceSpike.day"
     static let dashboardIgnoredNegativeStockRiskDay = "dashboard.risk.ignore.negativeStock.day"
+    static let quickNoteDraftAttachments = "quickNoteDraftAttachments"
+    static let transferLimitProfile = "sitekeeper.limit.profile"
+    static let operationAuditLogEntries = "operationAuditLogEntries"
+    static let constructionMethodEditDraftPrefix = "constructionMethod.editDraft."
+    static let laborRatePrefix = "labor.rates."
 
     enum Calculator {
         static let breakerCurrent = "calc.breaker.current"
@@ -95,6 +101,129 @@ enum UserPreferenceKeys {
         static let wallL3 = "calc.wall.l3"
         static let wallL4 = "calc.wall.l4"
         static let wallWindows = "calc.wall.windows"
+    }
+}
+
+@Observable
+final class UserPreferencesStore {
+    static let shared = UserPreferencesStore()
+
+    @ObservationIgnored
+    private let defaults: UserDefaults
+
+    init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+    }
+
+    func contains(_ key: String) -> Bool {
+        defaults.object(forKey: key) != nil
+    }
+
+    func bool(_ key: String, default defaultValue: Bool) -> Bool {
+        guard contains(key) else { return defaultValue }
+        return defaults.bool(forKey: key)
+    }
+
+    func int(_ key: String, default defaultValue: Int) -> Int {
+        guard contains(key) else { return defaultValue }
+        return defaults.integer(forKey: key)
+    }
+
+    func optionalInt(_ key: String) -> Int? {
+        defaults.object(forKey: key) as? Int
+    }
+
+    func string(_ key: String, default defaultValue: String = "", trimWhitespace: Bool = true) -> String {
+        let raw = defaults.string(forKey: key) ?? ""
+        let normalized = trimWhitespace ? raw.trimmingCharacters(in: .whitespacesAndNewlines) : raw
+        return normalized.isEmpty ? defaultValue : normalized
+    }
+
+    func double(_ key: String, default defaultValue: Double) -> Double {
+        guard contains(key) else { return defaultValue }
+        return defaults.double(forKey: key)
+    }
+
+    func optionalDouble(_ key: String) -> Double? {
+        guard contains(key) else { return nil }
+        return defaults.double(forKey: key)
+    }
+
+    func object(for key: String) -> Any? {
+        defaults.object(forKey: key)
+    }
+
+    func data(_ key: String) -> Data? {
+        defaults.data(forKey: key)
+    }
+
+    func stringArray(_ key: String, default defaultValue: [String] = []) -> [String] {
+        defaults.stringArray(forKey: key) ?? defaultValue
+    }
+
+    func set(_ value: Bool, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func set(_ value: Int, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func set(_ value: Double, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func set(_ value: String, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func set(_ value: [String], for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func set(_ value: Data, for key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    func removeObject(for key: String) {
+        defaults.removeObject(forKey: key)
+    }
+
+    func removePersistentDomain(forName name: String) {
+        defaults.removePersistentDomain(forName: name)
+    }
+
+    func synchronize() {
+        defaults.synchronize()
+    }
+
+    func unixDate(for key: String) -> Date? {
+        guard let raw = optionalDouble(key), raw > 0 else { return nil }
+        return Date(timeIntervalSince1970: raw)
+    }
+
+    func setUnixDate(_ date: Date, for key: String) {
+        set(date.timeIntervalSince1970, for: key)
+    }
+
+    var backupReminderDays: Int {
+        let raw = int(UserPreferenceKeys.backupHealthReminderDays, default: 7)
+        return max(1, raw == 0 ? 7 : raw)
+    }
+
+    var latestSuccessfulBackupDate: Date? {
+        let localDate = unixDate(for: UserPreferenceKeys.localBackupLastSuccessAt)
+        let cloudDate = unixDate(for: UserPreferenceKeys.cloudBackupLastSuccessAt)
+        switch (localDate, cloudDate) {
+        case let (lhs?, rhs?):
+            return max(lhs, rhs)
+        case let (lhs?, nil):
+            return lhs
+        case let (nil, rhs?):
+            return rhs
+        case (nil, nil):
+            return nil
+        }
     }
 }
 
@@ -147,28 +276,36 @@ enum AppLanguage: String, CaseIterable {
     }
 
     static var current: AppLanguage {
-        let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
+        let stored = UserPreferencesStore.shared.string(
+            UserPreferenceKeys.languageCode,
+            default: "",
+            trimWhitespace: false
+        )
         return StringEnumFallback.value(stored, default: .chinese)
     }
 
     static func apply(_ language: AppLanguage) {
         if let appleLanguageCodes = language.appleLanguageCodes {
-            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+            UserPreferencesStore.shared.set(appleLanguageCodes, for: "AppleLanguages")
         } else {
-            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            UserPreferencesStore.shared.removeObject(for: "AppleLanguages")
         }
-        UserDefaults.standard.set(language.rawValue, forKey: UserPreferenceKeys.languageCode)
+        UserPreferencesStore.shared.set(language.rawValue, for: UserPreferenceKeys.languageCode)
         syncWidgetLanguage(language)
         reloadWidgetLanguage()
     }
 
     static func restoreFromStorage() {
-        let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.languageCode) ?? ""
+        let stored = UserPreferencesStore.shared.string(
+            UserPreferenceKeys.languageCode,
+            default: "",
+            trimWhitespace: false
+        )
         let lang = StringEnumFallback.value(stored, default: AppLanguage.chinese)
         if let appleLanguageCodes = lang.appleLanguageCodes {
-            UserDefaults.standard.set(appleLanguageCodes, forKey: "AppleLanguages")
+            UserPreferencesStore.shared.set(appleLanguageCodes, for: "AppleLanguages")
         } else {
-            UserDefaults.standard.removeObject(forKey: "AppleLanguages")
+            UserPreferencesStore.shared.removeObject(for: "AppleLanguages")
         }
         syncWidgetLanguage(lang)
         reloadWidgetLanguage()
@@ -234,12 +371,16 @@ enum AppTheme: String, CaseIterable {
     }
 
     static var current: AppTheme {
-        let stored = UserDefaults.standard.string(forKey: UserPreferenceKeys.appTheme) ?? ""
+        let stored = UserPreferencesStore.shared.string(
+            UserPreferenceKeys.appTheme,
+            default: "",
+            trimWhitespace: false
+        )
         return StringEnumFallback.value(stored, default: .jiangnanSpring)
     }
 
     func apply() {
-        UserDefaults.standard.set(rawValue, forKey: UserPreferenceKeys.appTheme)
+        UserPreferencesStore.shared.set(rawValue, for: UserPreferenceKeys.appTheme)
     }
 
     var palette: ThemePalette {
@@ -427,25 +568,43 @@ enum AppFeatureFlags {
         return false
 #endif
     }
-
 }
 
 enum UserPreferences {
     static func bool(_ key: String, default defaultValue: Bool) -> Bool {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: key) != nil else { return defaultValue }
-        return defaults.bool(forKey: key)
+        UserPreferencesStore.shared.bool(key, default: defaultValue)
     }
 
     static func string(_ key: String, default defaultValue: String = "") -> String {
-        let value = UserDefaults.standard.string(forKey: key)?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return value.isEmpty ? defaultValue : value
+        UserPreferencesStore.shared.string(key, default: defaultValue)
     }
 
     static func int(_ key: String, default defaultValue: Int) -> Int {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: key) != nil else { return defaultValue }
-        return defaults.integer(forKey: key)
+        UserPreferencesStore.shared.int(key, default: defaultValue)
+    }
+
+    static func double(_ key: String, default defaultValue: Double) -> Double {
+        UserPreferencesStore.shared.double(key, default: defaultValue)
+    }
+
+    static func optionalDouble(_ key: String) -> Double? {
+        UserPreferencesStore.shared.optionalDouble(key)
+    }
+
+    static func set(_ value: Bool, for key: String) {
+        UserPreferencesStore.shared.set(value, for: key)
+    }
+
+    static func set(_ value: Int, for key: String) {
+        UserPreferencesStore.shared.set(value, for: key)
+    }
+
+    static func set(_ value: Double, for key: String) {
+        UserPreferencesStore.shared.set(value, for: key)
+    }
+
+    static func set(_ value: String, for key: String) {
+        UserPreferencesStore.shared.set(value, for: key)
     }
 }
 

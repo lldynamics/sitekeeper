@@ -57,11 +57,16 @@ struct ProjectDetailContent: View {
     let onLinkDocumentToFinancialRecord: (UUID, UUID) -> Void
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let onResetFinanceJumpFilter: () -> Void
+    @State private var inlineFocusedMode: ProjectDetailMode?
 
     var body: some View {
         ProjectDetailContentView(
             isWide: prefersInlineSections,
             scrollRequest: anchorRequest,
+            onVisibleAnchorChange: { anchor in
+                guard prefersInlineSections, showsAllSections else { return }
+                inlineFocusedMode = mode(for: anchor)
+            },
             jumpBar: {
                 EmptyView()
             },
@@ -75,12 +80,33 @@ struct ProjectDetailContent: View {
                 detailModeSections
             }
         )
+        .onChange(of: mode) { _, newMode in
+            guard prefersInlineSections, showsAllSections else { return }
+            inlineFocusedMode = newMode
+        }
+        .onChange(of: showsAllSections) { _, isAllSections in
+            if !isAllSections {
+                inlineFocusedMode = nil
+            } else {
+                inlineFocusedMode = mode
+            }
+        }
     }
 
     private var modePickerSection: some View {
         let modeBinding = Binding<ProjectDetailMode>(
-            get: { mode },
-            set: { onSelectMode($0) }
+            get: {
+                if prefersInlineSections, showsAllSections {
+                    return inlineFocusedMode ?? mode
+                }
+                return mode
+            },
+            set: { newMode in
+                if prefersInlineSections, showsAllSections {
+                    inlineFocusedMode = newMode
+                }
+                onSelectMode(newMode)
+            }
         )
         return Group {
             if prefersInlineSections {
@@ -296,5 +322,20 @@ struct ProjectDetailContent: View {
             linkedDocuments: linkedDocuments,
             onResetFinanceJumpFilter: onResetFinanceJumpFilter
         )
+    }
+
+    private func mode(for anchor: ProjectDetailAnchor) -> ProjectDetailMode {
+        switch anchor {
+        case .overview:
+            return .overview
+        case .records:
+            return .records
+        case .assets:
+            return .assets
+        case .finance:
+            return .finance
+        case .timeline:
+            return .timeline
+        }
     }
 }

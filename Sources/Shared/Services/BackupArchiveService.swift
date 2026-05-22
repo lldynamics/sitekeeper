@@ -397,7 +397,14 @@ enum BackupArchiveService {
             shouldCancel: shouldCancel
         )
         progress?(BackupImportProgress(completedBytes: 1, totalBytes: 1, currentItem: loc("提交原文件")))
-        let counts = try transaction.commit()
+        let counts: BackupEmbeddedRestoreCounts
+        do {
+            counts = try transaction.commit()
+            transaction.finalize()
+        } catch {
+            transaction.rollback()
+            throw error
+        }
         progress?(BackupImportProgress(completedBytes: 1, totalBytes: 1, currentItem: loc("恢复完成")))
         return counts
     }

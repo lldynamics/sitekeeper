@@ -274,9 +274,12 @@ struct LaborRecordView: View {
                         Button(String(localized: "取消")) { showAdd = false }
                     }
                 ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "保存")) { save(); showAdd = false }
-                            .disabled(!canSave)
+                    Button(String(localized: "保存")) {
+                        save()
+                        showAdd = false
                     }
+                    .disabled(!canSave)
+                }
                     KeyboardNavigationToolbar(
                         focusedField: $laborFormFocusedField,
                         fields: [.workers, .hours, .unitRate]
@@ -378,12 +381,16 @@ struct LaborRecordView: View {
 
     /// 存储 "工种:工价" 的映射，格式: "电工:130,木工:120"
     private var rateStorageKey: String {
-        if let pid = newProjectId { return "labor.rates.\(pid.uuidString)" }
-        return "labor.rates._global"
+        if let pid = newProjectId { return "\(UserPreferenceKeys.laborRatePrefix)\(pid.uuidString)" }
+        return "\(UserPreferenceKeys.laborRatePrefix)_global"
     }
 
     private func savedRatePairs() -> [String: String] {
-        let raw = UserDefaults.standard.string(forKey: rateStorageKey) ?? ""
+        let raw = UserPreferencesStore.shared.string(
+            rateStorageKey,
+            default: "",
+            trimWhitespace: false
+        )
         var result = [String: String]()
         for pair in raw.split(separator: ",") {
             let parts = pair.split(separator: ":", maxSplits: 1)
@@ -403,7 +410,7 @@ struct LaborRecordView: View {
         var pairs = savedRatePairs()
         pairs[cleanedType] = cleanedRate
         let raw = pairs.map { "\($0):\($1)" }.joined(separator: ",")
-        UserDefaults.standard.set(raw, forKey: rateStorageKey)
+        UserPreferencesStore.shared.set(raw, for: rateStorageKey)
     }
 
     private func saveTeamName(_ name: String) {

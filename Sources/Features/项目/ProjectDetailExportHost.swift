@@ -25,7 +25,7 @@ struct ProjectDetailExportHost: ViewModifier {
                 isPresented: showDataExporter,
                 document: ExportDocument(data: exportPayload?.data ?? Data()),
                 contentType: exportPayload?.contentType ?? .pdf,
-                defaultFilename: exportPayload?.defaultFilename ?? "项目资料包.pdf"
+                defaultFilename: exportPayload?.defaultFilename ?? String(localized: "项目资料包.pdf")
             ) { result in
                 switch result {
                 case .success:
