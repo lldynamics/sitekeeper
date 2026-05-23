@@ -69,7 +69,8 @@ struct WidgetDataBuilderTests {
             "Sources/Features/我的/DataHealthView.swift",
             "Sources/Features/我的/DataHealthViewActions.swift",
             "Sources/Features/我的/DataHealthViewIssues.swift",
-            "Sources/Features/我的/DataHealthSupport.swift"
+            "Sources/Features/我的/DataHealthSupport.swift",
+            "Sources/Shared/Services/DataHealthScanner.swift"
         ]
         .map { try Self.sourceText(root, $0) }
         .joined(separator: "\n")
