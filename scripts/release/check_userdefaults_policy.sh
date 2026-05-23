@@ -20,4 +20,13 @@ if [[ -n "$MATCHES" ]]; then
   exit 1
 fi
 
-echo "[userdefaults-policy] PASS: no direct UserDefaults.standard usage in Sources/Widget."
+APP_STORAGE_LITERAL_MATCHES="$(rg -n --color=never --glob '*.swift' '@AppStorage\(\s*"[^"]+"' Sources Widget || true)"
+if [[ -n "$APP_STORAGE_LITERAL_MATCHES" ]]; then
+  echo "[userdefaults-policy] FAIL: detected @AppStorage literal keys in production targets:" >&2
+  echo "$APP_STORAGE_LITERAL_MATCHES" >&2
+  echo >&2
+  echo "Use UserPreferenceKeys.* constants for @AppStorage keys instead of string literals." >&2
+  exit 1
+fi
+
+echo "[userdefaults-policy] PASS: no direct UserDefaults.standard usage or @AppStorage literal keys in Sources/Widget."

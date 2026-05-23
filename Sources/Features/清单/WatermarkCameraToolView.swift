@@ -7,114 +7,57 @@ struct WatermarkCameraToolView: View {
     @Environment(\.openURL) private var openURL
     let initialProjectId: UUID?
     let autoOpenCameraOnAppear: Bool
-    @State private var selectedProjectId: UUID?
-    @AppStorage("watermarkCameraSelectedProjectId") private var selectedProjectIdRaw = ""
-    @AppStorage("watermarkCameraProjectName") private var projectName = ""
-    @AppStorage("watermarkCameraPhotographer") private var photographer = ""
-    @AppStorage("watermarkCameraLocationText") private var locationText = ""
-    @AppStorage("watermarkCameraTemplateRaw") private var templateRaw = CameraWatermarkTemplate.constructionLog.rawValue
-    @AppStorage("watermarkCameraTag") private var tag = String(localized: "wm_camera_default_tag")
-    @AppStorage("watermarkCameraAutoSaveToAlbum") private var autoSaveToAlbum = true
-    @AppStorage("watermarkCameraAutoOpenLogDraft") private var autoOpenLogDraft = false
-    @AppStorage("watermarkCameraExportQualityRaw") private var exportQualityRaw = WatermarkExportQuality.standard.rawValue
-    @AppStorage("watermarkCameraShowGrid") private var showGrid = true
-    @AppStorage("watermarkCameraFlashEnabled") private var flashEnabled = false
-    @AppStorage("watermarkCameraBurstCount") private var burstCount = 1
+    @State private var settings = WatermarkCameraSettingsStore()
+    @State private var captures = WatermarkCameraCaptureStore()
+    @State private var exportCoordinator = WatermarkCameraExportCoordinator()
     @State private var showCamera = false
-    @State private var capturedPhotos: [WatermarkCapturedPhoto] = []
-    @State private var selectedCapturedPhotoID: UUID?
-    @State private var exportData = Data()
-    @State private var showExporter = false
-    @State private var alertTitle = String(localized: "wm_camera_alert_cannot_continue_title")
-    @State private var alertMessage = ""
-    @State private var alertSettingsURL: URL?
-    @State private var showAlert = false
-    @State private var savingToAlbum = false
+    @State var alertTitle = String(localized: "wm_camera_alert_cannot_continue_title")
+    @State var alertMessage = ""
+    @State var alertSettingsURL: URL?
+    @State var showAlert = false
     @State private var didAutoOpenCamera = false
     @State private var showLogDraft = false
     @State private var showClearPhotosConfirm = false
-    @State private var toast: WatermarkToast?
+    @State var toast: WatermarkToast?
     @StateObject private var locationManager = WatermarkCameraLocationManager()
 
     init(initialProjectId: UUID? = nil, autoOpenCameraOnAppear: Bool = false) {
         self.initialProjectId = initialProjectId
         self.autoOpenCameraOnAppear = autoOpenCameraOnAppear
-        _selectedProjectId = State(initialValue: initialProjectId)
-    }
-
-    private var template: CameraWatermarkTemplate {
-        get { StringEnumFallback.value(templateRaw, default: CameraWatermarkTemplate.constructionLog) }
-        set { templateRaw = newValue.rawValue }
-    }
-
-    private var exportQuality: WatermarkExportQuality {
-        get { StringEnumFallback.value(exportQualityRaw, default: WatermarkExportQuality.standard) }
-        set { exportQualityRaw = newValue.rawValue }
-    }
-
-    private var exportQualityBinding: Binding<WatermarkExportQuality> {
-        Binding(
-            get: { exportQuality },
-            set: { exportQualityRaw = $0.rawValue }
-        )
-    }
-
-    private var boundedBurstCount: Int {
-        min(5, max(1, burstCount))
-    }
-
-    private var capturedPhoto: WatermarkCapturedPhoto? {
-        if let selectedCapturedPhotoID,
-           let selected = capturedPhotos.first(where: { $0.id == selectedCapturedPhotoID }) {
-            return selected
-        }
-        return capturedPhotos.first
-    }
-
-    private var hasMultipleCapturedPhotos: Bool {
-        capturedPhotos.count > 1
-    }
-
-    private var selectedCapturedPhotoNumber: Int {
-        guard let id = capturedPhoto?.id,
-              let index = capturedPhotos.firstIndex(where: { $0.id == id }) else {
-            return 1
-        }
-        return index + 1
     }
 
     var body: some View {
         Form {
             projectSection
-            WatermarkTemplateSection(templateRaw: $templateRaw)
+            WatermarkTemplateSection(templateRaw: binding(for: \.templateRaw))
             WatermarkCaptureSection(openCamera: openCamera)
             WatermarkInfoSection(
-                tag: $tag,
-                photographer: $photographer,
-                locationText: $locationText,
+                tag: binding(for: \.tag),
+                photographer: binding(for: \.photographer),
+                locationText: binding(for: \.locationText),
                 locationStatusText: locationStatusText,
                 requestLocation: locationManager.requestLocation
             )
             WatermarkCameraSettingsSection(
                 exportQuality: exportQualityBinding,
-                showGrid: $showGrid,
-                flashEnabled: $flashEnabled,
-                burstCount: $burstCount,
-                boundedBurstCount: boundedBurstCount
+                showGrid: binding(for: \.showGrid),
+                flashEnabled: binding(for: \.flashEnabled),
+                burstCount: binding(for: \.burstCount),
+                boundedBurstCount: settings.boundedBurstCount
             )
             WatermarkAutoSaveSection(
-                autoSaveToAlbum: $autoSaveToAlbum,
-                autoOpenLogDraft: $autoOpenLogDraft
+                autoSaveToAlbum: binding(for: \.autoSaveToAlbum),
+                autoOpenLogDraft: binding(for: \.autoOpenLogDraft)
             )
-            WatermarkRecentCaptureSection(
+            WatermarkCapturePreviewSection(
                 capturedPhoto: capturedPhoto,
-                capturedPhotos: capturedPhotos,
-                selectedCapturedPhotoID: $selectedCapturedPhotoID,
-                hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
-                selectedCapturedPhotoNumber: selectedCapturedPhotoNumber,
+                capturedPhotos: captures.photos,
+                selectedCapturedPhotoID: selectedCapturedPhotoIDBinding,
+                hasMultipleCapturedPhotos: captures.hasMultiplePhotos,
+                selectedCapturedPhotoNumber: captures.selectedPhotoNumber,
                 projectAssociationText: projectAssociationText,
                 capturedPhotoMetaText: capturedPhotoMetaText(capturedAt:),
-                savingToAlbum: savingToAlbum,
+                savingToAlbum: exportCoordinator.savingToAlbum,
                 selectedProjectId: selectedProjectId,
                 logSeedPhoto: logSeedPhoto,
                 logDraftContent: logDraftContent,
@@ -131,8 +74,8 @@ struct WatermarkCameraToolView: View {
         .toolbar {
             WatermarkCameraToolbarContent(
                 hasCapturedPhoto: capturedPhoto != nil,
-                hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
-                savingToAlbum: savingToAlbum,
+                hasMultipleCapturedPhotos: captures.hasMultiplePhotos,
+                savingToAlbum: exportCoordinator.savingToAlbum,
                 selectedProjectId: selectedProjectId,
                 logSeedPhoto: logSeedPhoto,
                 logDraftContent: logDraftContent,
@@ -147,16 +90,16 @@ struct WatermarkCameraToolView: View {
         .sheet(isPresented: $showCamera) {
             WatermarkCameraCaptureView(
                 watermarkContext: currentContext,
-                showGrid: showGrid,
-                flashEnabled: flashEnabled,
-                burstCount: boundedBurstCount
+                showGrid: settings.showGrid,
+                flashEnabled: settings.flashEnabled,
+                burstCount: settings.boundedBurstCount
             ) { images, capturedAt in
                 handleCapturedImages(images, capturedAt: capturedAt)
             }
         }
         .fileExporter(
-            isPresented: $showExporter,
-            document: ExportDocument(data: exportData),
+            isPresented: showExporterBinding,
+            document: ExportDocument(data: exportCoordinator.exportData),
             contentType: .jpeg,
             defaultFilename: exportFileName
         ) { result in
@@ -213,27 +156,18 @@ struct WatermarkCameraToolView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .onChange(of: selectedProjectId) { _, newValue in
-            selectedProjectIdRaw = newValue?.uuidString ?? ""
-            guard let project = newValue.flatMap({ id in store.projects.first { $0.id == id } }) else { return }
-            projectName = project.name
-        }
-        .onChange(of: burstCount) { _, newValue in
-            burstCount = min(5, max(1, newValue))
+        .onChange(of: settings.burstCount) { _, _ in
+            settings.normalizeBurstCount()
         }
         .onReceive(locationManager.$locationText) { newValue in
             let trimmed = newValue.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
-            locationText = trimmed
+            settings.locationText = trimmed
         }
         .animation(.easeInOut(duration: 0.2), value: toast?.id)
         .onAppear {
-            if let initialProjectId {
-                selectedProjectId = initialProjectId
-            } else if selectedProjectId == nil, let restored = UUID(uuidString: selectedProjectIdRaw) {
-                selectedProjectId = restored
-            }
-            burstCount = min(5, max(1, burstCount))
+            restoreInitialProjectIfNeeded()
+            settings.normalizeBurstCount()
             guard autoOpenCameraOnAppear, !didAutoOpenCamera else { return }
             didAutoOpenCamera = true
             openCamera()
@@ -245,19 +179,27 @@ struct WatermarkCameraToolView: View {
             ProjectContextStrip(
                 title: String(localized: "wm_camera_current_project_title"),
                 projects: store.projects,
-                selectedProjectId: $selectedProjectId,
+                selectedProjectId: selectedProjectIdBinding,
                 emptyText: String(localized: "wm_camera_unlinked_project_text")
             )
         }
     }
 
+    private var selectedProjectId: UUID? {
+        settings.selectedProjectId
+    }
+
+    private var capturedPhoto: WatermarkCapturedPhoto? {
+        captures.selectedPhoto
+    }
+
     private var currentContext: CameraWatermarkContext {
         CameraWatermarkContext(
             projectName: effectiveProjectName,
-            template: template,
-            tag: tag,
-            photographer: photographer,
-            locationText: locationText
+            template: settings.template,
+            tag: settings.tag,
+            photographer: settings.photographer,
+            locationText: settings.locationText
         )
     }
 
@@ -266,7 +208,7 @@ struct WatermarkCameraToolView: View {
            let project = store.projects.first(where: { $0.id == selectedProjectId }) {
             return project.name
         }
-        let trimmed = projectName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmed = settings.projectName.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
     }
 
@@ -279,14 +221,6 @@ struct WatermarkCameraToolView: View {
         return String(format: String(localized: "wm_camera_project_association_format"), name)
     }
 
-    private func capturedPhotoMetaText(capturedAt: Date) -> String {
-        WatermarkCameraTextBuilder.capturedPhotoMetaText(
-            capturedAt: capturedAt,
-            template: template,
-            tag: tag
-        )
-    }
-
     private var exportFileName: String {
         WatermarkCameraTextBuilder.exportFileName(
             projectName: effectiveProjectName,
@@ -294,51 +228,108 @@ struct WatermarkCameraToolView: View {
         )
     }
 
-    private var logSeedPhoto: DailyLogSeedPhoto? {
-        guard let capturedPhoto,
-              let data = todoSeedData else { return nil }
-        return DailyLogSeedPhoto(
-            data: data,
-            note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
-            tag: PhotoTag(rawValue: tag.trimmingCharacters(in: .whitespacesAndNewlines)) ?? .general,
-            capturedAt: capturedPhoto.capturedAt
+    private var logDraftCoordinator: WatermarkCameraLogDraftCoordinator {
+        WatermarkCameraLogDraftCoordinator(
+            tag: settings.tag,
+            photographer: settings.photographer,
+            locationText: settings.locationText,
+            exportQuality: settings.exportQuality
         )
+    }
+
+    private var logSeedPhoto: DailyLogSeedPhoto? {
+        logDraftCoordinator.logSeedPhoto(for: capturedPhoto)
     }
 
     private var todoSeedData: Data? {
-        capturedPhoto?.image.jpegData(compressionQuality: max(0.82, exportQuality.compression - 0.06))
+        logDraftCoordinator.todoSeedData(for: capturedPhoto)
     }
 
     private var logDraftContent: String {
-        WatermarkCameraTextBuilder.logDraftContent(tag: tag)
+        logDraftCoordinator.logDraftContent
+    }
+
+    private var exportQualityBinding: Binding<WatermarkExportQuality> {
+        Binding(
+            get: { settings.exportQuality },
+            set: { settings.exportQuality = $0 }
+        )
+    }
+
+    private var selectedProjectIdBinding: Binding<UUID?> {
+        Binding(
+            get: { settings.selectedProjectId },
+            set: { newValue in
+                settings.selectedProjectId = newValue
+                syncProjectName(with: newValue)
+            }
+        )
+    }
+
+    private var selectedCapturedPhotoIDBinding: Binding<UUID?> {
+        Binding(
+            get: { captures.selectedPhotoID },
+            set: { captures.selectedPhotoID = $0 }
+        )
+    }
+
+    private var showExporterBinding: Binding<Bool> {
+        Binding(
+            get: { exportCoordinator.showExporter },
+            set: { exportCoordinator.showExporter = $0 }
+        )
+    }
+
+    private func binding<Value>(
+        for keyPath: ReferenceWritableKeyPath<WatermarkCameraSettingsStore, Value>
+    ) -> Binding<Value> {
+        Binding(
+            get: { settings[keyPath: keyPath] },
+            set: { settings[keyPath: keyPath] = $0 }
+        )
+    }
+
+    private func capturedPhotoMetaText(capturedAt: Date) -> String {
+        WatermarkCameraTextBuilder.capturedPhotoMetaText(
+            capturedAt: capturedAt,
+            template: settings.template,
+            tag: settings.tag
+        )
+    }
+
+    private func restoreInitialProjectIfNeeded() {
+        if let initialProjectId {
+            settings.selectedProjectId = initialProjectId
+            syncProjectName(with: initialProjectId)
+        } else {
+            syncProjectName(with: settings.selectedProjectId)
+        }
+    }
+
+    private func syncProjectName(with projectId: UUID?) {
+        guard let project = projectId.flatMap({ id in store.projects.first { $0.id == id } }) else { return }
+        settings.projectName = project.name
     }
 
     private func handleCapturedImages(_ images: [UIImage], capturedAt: Date) {
-        let outputs = images.map {
-            WatermarkCapturedPhoto(
-                image: $0.applyingCameraWatermark(context: currentContext, capturedAt: capturedAt),
-                capturedAt: capturedAt
-            )
-        }
-        guard !outputs.isEmpty else {
+        let count = captures.replace(with: images, capturedAt: capturedAt, context: currentContext)
+        guard count > 0 else {
             presentError(String(localized: "wm_camera_capture_empty_result_error"))
             return
         }
-        capturedPhotos = outputs
-        selectedCapturedPhotoID = outputs.first?.id
         UINotificationFeedbackGenerator().notificationOccurred(.success)
         presentToast(
-            String(format: String(localized: "wm_camera_capture_success_toast_format"), outputs.count),
+            String(format: String(localized: "wm_camera_capture_success_toast_format"), count),
             style: .success
         )
-        if autoSaveToAlbum {
-            if outputs.count > 1 {
+        if settings.autoSaveToAlbum {
+            if count > 1 {
                 saveAllImagesToAlbum()
             } else {
                 saveCurrentImageToAlbum()
             }
         }
-        if autoOpenLogDraft, selectedProjectId != nil, logSeedPhoto != nil {
+        if settings.autoOpenLogDraft, selectedProjectId != nil, logSeedPhoto != nil {
             showLogDraft = true
         }
     }
@@ -362,13 +353,10 @@ struct WatermarkCameraToolView: View {
     }
 
     private func exportCurrentImage() {
-        guard let image = capturedPhoto?.image,
-              let data = image.jpegData(compressionQuality: exportQuality.compression) else {
+        guard exportCoordinator.prepareExport(photo: capturedPhoto, quality: settings.exportQuality) else {
             presentError(String(localized: "wm_camera_export_photo_failed"))
             return
         }
-        exportData = data
-        showExporter = true
     }
 
     private func saveCurrentImageToAlbum() {
@@ -381,7 +369,7 @@ struct WatermarkCameraToolView: View {
     }
 
     private func saveAllImagesToAlbum() {
-        let images = capturedPhotos.map(\.image)
+        let images = captures.photos.map(\.image)
         guard !images.isEmpty else {
             presentError(String(localized: "wm_camera_capture_photo_first_message"))
             return
@@ -391,55 +379,23 @@ struct WatermarkCameraToolView: View {
 
     private func saveImagesToAlbum(_ images: [UIImage]) {
         Task { @MainActor in
-            let access = await WatermarkCameraAccess.requestPhotoLibraryAddAccessIfNeeded()
-            switch access {
-            case .granted:
-                break
-            case .rejectedRequest:
-                presentBlockingError(
-                    String(localized: "wm_camera_album_permission_missing_error"),
-                    settingsURL: WatermarkCameraAccess.appSettingsURL
-                )
-                return
-            case .denied:
-                presentBlockingError(
-                    String(localized: "wm_camera_album_permission_settings_error"),
-                    settingsURL: WatermarkCameraAccess.appSettingsURL
-                )
-                return
-            case .unknown:
-                presentError(String(localized: "wm_camera_album_permission_unknown_error"))
-                return
-            }
-
-            savingToAlbum = true
-            do {
-                try await WatermarkPhotoAlbumWriter.write(images)
-                savingToAlbum = false
-                if images.count > 1 {
-                    presentInfo(String(format: String(localized: "wm_camera_save_album_multi_success_format"), images.count))
-                } else {
-                    presentInfo(String(localized: "wm_camera_save_album_single_success"))
-                }
-            } catch {
-                savingToAlbum = false
-                presentError(
-                    String(
-                        format: String(localized: "wm_camera_save_album_failed_format"),
-                        error.localizedDescription
-                    )
-                )
-            }
+            handleAlbumSaveResult(await exportCoordinator.saveImagesToAlbum(images))
         }
     }
 
-    private func watermarkPhotoNote(capturedAt: Date) -> String {
-        WatermarkCameraTextBuilder.photoNote(
-            capturedAt: capturedAt,
-            photographer: photographer,
-            locationText: locationText,
-            tag: tag
-        )
+    private func handleAlbumSaveResult(_ result: WatermarkCameraAlbumSaveResult) {
+        switch result {
+        case .success(let count):
+            if count > 1 {
+                presentInfo(String(format: String(localized: "wm_camera_save_album_multi_success_format"), count))
+            } else {
+                presentInfo(String(localized: "wm_camera_save_album_single_success"))
+            }
+        case .blockingError(let message, let settingsURL):
+            presentBlockingError(message, settingsURL: settingsURL)
+        case .error(let message):
+            presentError(message)
+        }
     }
 
     @MainActor
@@ -455,7 +411,7 @@ struct WatermarkCameraToolView: View {
         let error = WatermarkCameraProjectDocumentWriter.attach(
             photo: capturedPhoto,
             projectId: selectedProjectId,
-            note: watermarkPhotoNote(capturedAt: capturedPhoto.capturedAt),
+            note: logDraftCoordinator.photoNote(capturedAt: capturedPhoto.capturedAt),
             store: store
         )
         if let error {
@@ -466,36 +422,6 @@ struct WatermarkCameraToolView: View {
     }
 
     private func clearCapturedPhotos() {
-        capturedPhotos.removeAll()
-        selectedCapturedPhotoID = nil
-    }
-
-    private func presentInfo(_ message: String) {
-        presentToast(message, style: .success)
-    }
-
-    private func presentError(_ message: String) {
-        presentToast(message, style: .error)
-    }
-
-    private func presentBlockingError(_ message: String, settingsURL: URL? = nil) {
-        alertTitle = String(localized: "wm_camera_alert_cannot_continue_title")
-        alertMessage = message
-        alertSettingsURL = settingsURL
-        showAlert = true
-    }
-
-    private func presentToast(_ message: String, style: WatermarkToastStyle) {
-        let toast = WatermarkToast(message: message, style: style)
-        withAnimation {
-            self.toast = toast
-        }
-        Task { @MainActor in
-            guard await DebouncedTask.wait(for: .seconds(2)) else { return }
-            guard self.toast?.id == toast.id else { return }
-            withAnimation {
-                self.toast = nil
-            }
-        }
+        captures.clear()
     }
 }

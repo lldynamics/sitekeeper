@@ -116,7 +116,7 @@ struct WatermarkAutoSaveSection: View {
     }
 }
 
-struct WatermarkRecentCaptureSection: View {
+struct WatermarkCapturePreviewSection: View {
     let capturedPhoto: WatermarkCapturedPhoto?
     let capturedPhotos: [WatermarkCapturedPhoto]
     @Binding var selectedCapturedPhotoID: UUID?
@@ -138,10 +138,34 @@ struct WatermarkRecentCaptureSection: View {
     var body: some View {
         if let capturedPhoto {
             Section(String(localized: "wm_camera_recent_capture_section_title")) {
-                capturedPhotoPreview(capturedPhoto)
-                capturedPhotoStrip(selected: capturedPhoto)
-                captureMeta(capturedPhoto)
-                recentCaptureActions
+                WatermarkCapturedPhotoPreview(photo: capturedPhoto)
+                WatermarkCapturedPhotoList(
+                    capturedPhotos: capturedPhotos,
+                    selectedPhoto: capturedPhoto,
+                    selectedCapturedPhotoID: $selectedCapturedPhotoID,
+                    hasMultipleCapturedPhotos: hasMultipleCapturedPhotos
+                )
+                WatermarkCapturedPhotoMeta(
+                    photo: capturedPhoto,
+                    capturedPhotosCount: capturedPhotos.count,
+                    hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
+                    selectedCapturedPhotoNumber: selectedCapturedPhotoNumber,
+                    projectAssociationText: projectAssociationText,
+                    capturedPhotoMetaText: capturedPhotoMetaText
+                )
+                WatermarkRecentCaptureActions(
+                    hasMultipleCapturedPhotos: hasMultipleCapturedPhotos,
+                    savingToAlbum: savingToAlbum,
+                    selectedProjectId: selectedProjectId,
+                    logSeedPhoto: logSeedPhoto,
+                    logDraftContent: logDraftContent,
+                    todoSeedData: todoSeedData,
+                    saveCurrentImageToAlbum: saveCurrentImageToAlbum,
+                    exportCurrentImage: exportCurrentImage,
+                    saveAllImagesToAlbum: saveAllImagesToAlbum,
+                    saveCurrentImageAsProjectDocument: saveCurrentImageAsProjectDocument,
+                    requestClearPhotos: requestClearPhotos
+                )
             }
         } else {
             Section(String(localized: "wm_camera_recent_capture_section_title")) {
@@ -153,17 +177,28 @@ struct WatermarkRecentCaptureSection: View {
             }
         }
     }
+}
 
-    private func capturedPhotoPreview(_ photo: WatermarkCapturedPhoto) -> some View {
+struct WatermarkCapturedPhotoPreview: View {
+    let photo: WatermarkCapturedPhoto
+
+    var body: some View {
         Image(uiImage: photo.image)
             .resizable()
             .scaledToFit()
             .frame(maxWidth: .infinity, maxHeight: 280)
             .clipShape(RoundedRectangle(cornerRadius: 12))
     }
+}
+
+struct WatermarkCapturedPhotoList: View {
+    let capturedPhotos: [WatermarkCapturedPhoto]
+    let selectedPhoto: WatermarkCapturedPhoto
+    @Binding var selectedCapturedPhotoID: UUID?
+    let hasMultipleCapturedPhotos: Bool
 
     @ViewBuilder
-    private func capturedPhotoStrip(selected: WatermarkCapturedPhoto) -> some View {
+    var body: some View {
         if hasMultipleCapturedPhotos {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
@@ -174,7 +209,7 @@ struct WatermarkRecentCaptureSection: View {
                             WatermarkCaptureThumbnail(
                                 photo: photo,
                                 index: index,
-                                isSelected: photo.id == selected.id
+                                isSelected: photo.id == selectedPhoto.id
                             )
                         }
                         .buttonStyle(.plain)
@@ -184,8 +219,17 @@ struct WatermarkRecentCaptureSection: View {
             }
         }
     }
+}
 
-    private func captureMeta(_ photo: WatermarkCapturedPhoto) -> some View {
+struct WatermarkCapturedPhotoMeta: View {
+    let photo: WatermarkCapturedPhoto
+    let capturedPhotosCount: Int
+    let hasMultipleCapturedPhotos: Bool
+    let selectedCapturedPhotoNumber: Int
+    let projectAssociationText: String
+    let capturedPhotoMetaText: (Date) -> String
+
+    var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(capturedPhotoMetaText(photo.capturedAt))
             Text(projectAssociationText)
@@ -193,7 +237,7 @@ struct WatermarkRecentCaptureSection: View {
                 Text(
                     String(
                         format: String(localized: "wm_camera_burst_progress_text_format"),
-                        capturedPhotos.count,
+                        capturedPhotosCount,
                         selectedCapturedPhotoNumber
                     )
                 )
@@ -202,8 +246,22 @@ struct WatermarkRecentCaptureSection: View {
         .font(.caption2)
         .foregroundStyle(.secondary)
     }
+}
 
-    private var recentCaptureActions: some View {
+struct WatermarkRecentCaptureActions: View {
+    let hasMultipleCapturedPhotos: Bool
+    let savingToAlbum: Bool
+    let selectedProjectId: UUID?
+    let logSeedPhoto: DailyLogSeedPhoto?
+    let logDraftContent: String
+    let todoSeedData: Data?
+    let saveCurrentImageToAlbum: () -> Void
+    let exportCurrentImage: () -> Void
+    let saveAllImagesToAlbum: () -> Void
+    let saveCurrentImageAsProjectDocument: () -> Void
+    let requestClearPhotos: () -> Void
+
+    var body: some View {
         HStack(spacing: 12) {
             Button(action: saveCurrentImageToAlbum) {
                 Label(String(localized: "wm_camera_save_album_button"), systemImage: "photo.on.rectangle.angled")
