@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ProjectDocumentsView: View {
-    @Environment(DataStore.self) private var store
+    @Environment(DataStore.self) var store
     let project: Project
     let documents: [ProjectDocument]
     let requiredCategories: [ProjectDocumentCategory]
@@ -19,9 +19,9 @@ struct ProjectDocumentsView: View {
     @State private var endDate = Date()
     @State private var minAmount = ""
     @State private var maxAmount = ""
-    @State private var operationNotice: OperationToastNotice?
-    @State private var showSaveTemplatePrompt = false
-    @State private var templateName = ""
+    @State var operationNotice: OperationToastNotice?
+    @State var showSaveTemplatePrompt = false
+    @State var templateName = ""
 
     private var filteredDocuments: [ProjectDocument] {
         documents.filter { document in
@@ -51,14 +51,14 @@ struct ProjectDocumentsView: View {
         }
     }
 
-    private var checklistSnapshot: DocumentArchiveChecklistSnapshot {
+    var checklistSnapshot: DocumentArchiveChecklistSnapshot {
         DocumentArchiveChecklistSnapshot(
             documents: documents,
             requiredCategories: requiredCategories
         )
     }
 
-    private var recommendedStage: ProjectDocumentRecommendationStage {
+    var recommendedStage: ProjectDocumentRecommendationStage {
         ProjectDocumentCategory.recommendedStage(for: project, progressTasks: progressTasks)
     }
 
@@ -391,45 +391,6 @@ struct ProjectDocumentsView: View {
         .buttonStyle(.bordered)
     }
 
-    private func applyChecklistTemplate(_ template: ProjectDocumentChecklistTemplate) {
-        guard let index = store.projects.firstIndex(where: { $0.id == project.id }) else { return }
-        var updatedProject = store.projects[index]
-        updatedProject.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(
-            template.categories
-        )
-        guard store.updateProject(updatedProject) else { return }
-        store.scheduleSave()
-        operationNotice = .info(String(format: String(localized: "已套用%@模板"), template.name))
-    }
-
-    private func beginSaveCurrentChecklistTemplate() {
-        let normalizedProjectName = project.name.trimmingCharacters(in: .whitespacesAndNewlines)
-        let baseName = normalizedProjectName.isEmpty ? String(localized: "项目") : normalizedProjectName
-        templateName = String(format: String(localized: "%@资料清单"), baseName)
-        showSaveTemplatePrompt = true
-    }
-
-    private func saveCurrentChecklistTemplate() {
-        let normalizedName = templateName.trimmingCharacters(in: .whitespacesAndNewlines)
-        let resolvedName = normalizedName.isEmpty ? String(localized: "资料清单模板") : normalizedName
-        let template = ProjectTemplate.documentChecklistTemplate(
-            name: resolvedName,
-            categories: checklistSnapshot.requiredCategories
-        )
-        if let existing = store.templates.first(where: {
-            $0.category == .projectDocumentChecklist &&
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines) == resolvedName
-        }) {
-            var updatedTemplate = template
-            updatedTemplate.id = existing.id
-            store.upsertTemplate(updatedTemplate, insertAtTopWhenNew: true)
-        } else {
-            store.insertTemplateAtTop(template)
-        }
-        store.scheduleSave()
-        operationNotice = .info(String(localized: "已保存资料清单模板"))
-    }
-
     private var hasActiveFilters: Bool {
         categoryFilter != .all || relationFilter != .all || useDateRange || !minAmount.isEmpty || !maxAmount.isEmpty
     }
@@ -500,93 +461,5 @@ struct ProjectDocumentsView: View {
         let trade = method.trade.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayTitle = title.isEmpty ? String(localized: "未命名工艺") : title
         return trade.isEmpty ? displayTitle : "\(trade) · \(displayTitle)"
-    }
-
-    private func missingChecklistItemsWithoutOpenTodo(_ items: [DocumentArchiveChecklistItem]) -> [DocumentArchiveChecklistItem] {
-        items.filter { item in
-            item.isMissing && !hasOpenArchiveTodo(for: item.category)
-        }
-    }
-
-    private func hasOpenArchiveTodo(for category: ProjectDocumentCategory) -> Bool {
-        hasOpenTodo(title: archiveTodoTitle(for: category))
-    }
-
-    private func hasOpenTodo(title: String) -> Bool {
-        return store.siteTodos.contains { todo in
-            todo.projectId == project.id &&
-            !todo.isDone &&
-            todo.title == title
-        }
-    }
-
-    private func createMissingDocumentTodos(from items: [DocumentArchiveChecklistItem]) {
-        let missingItems = missingChecklistItemsWithoutOpenTodo(items)
-        guard !missingItems.isEmpty else {
-            operationNotice = .info(String(localized: "缺项待办已存在"))
-            return
-        }
-        let dueDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-        for item in missingItems {
-            store.insertSiteTodoAtTop(SiteTodo(
-                title: archiveTodoTitle(for: item.category),
-                owner: project.managerName,
-                dueDate: Formatters.date.string(from: dueDate),
-                priority: .medium,
-                issueType: .general,
-                note: String(format: String(localized: "施工资料清单缺项：%@。补录后到项目资料页更新报验状态和归档信息。"), item.category.displayName),
-                projectId: project.id
-            ))
-        }
-        store.scheduleSave()
-        operationNotice = .info(String(format: String(localized: "已生成 %lld 条缺项待办"), Int64(missingItems.count)))
-    }
-
-    private func remediationTodoDraftsWithoutOpenTodo(
-        _ drafts: [ProjectDocumentDeliveryInspectionTodoDraft]
-    ) -> [ProjectDocumentDeliveryInspectionTodoDraft] {
-        var seenTitles = Set<String>()
-        return drafts.filter { draft in
-            seenTitles.insert(draft.title).inserted && !hasOpenTodo(title: draft.title)
-        }
-    }
-
-    private func createDeliveryInspectionTodos(from inspection: ProjectDocumentDeliveryInspection) {
-        let drafts = remediationTodoDraftsWithoutOpenTodo(inspection.remediationTodoDrafts)
-        guard !drafts.isEmpty else {
-            operationNotice = .info(String(localized: "体检整改待办已存在"))
-            return
-        }
-
-        let dueDate = Calendar.current.date(byAdding: .day, value: 7, to: Date()) ?? Date()
-        for draft in drafts {
-            store.insertSiteTodoAtTop(SiteTodo(
-                title: draft.title,
-                owner: project.managerName,
-                dueDate: Formatters.date.string(from: dueDate),
-                priority: draft.priority,
-                issueType: draft.issueType,
-                note: draft.note,
-                projectId: project.id
-            ))
-        }
-
-        store.scheduleSave()
-        operationNotice = .info(String(format: String(localized: "已生成 %lld 条体检整改待办"), Int64(drafts.count)))
-    }
-
-    private func applyStageRecommendation(_ missingCategories: [ProjectDocumentCategory]) {
-        guard !missingCategories.isEmpty else { return }
-        guard let index = store.projects.firstIndex(where: { $0.id == project.id }) else { return }
-        var updatedProject = store.projects[index]
-        let merged = updatedProject.requiredDocumentCategories + missingCategories
-        updatedProject.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(merged)
-        guard store.updateProject(updatedProject) else { return }
-        store.scheduleSave()
-        operationNotice = .info(String(format: String(localized: "已启用%@推荐"), recommendedStage.displayName))
-    }
-
-    private func archiveTodoTitle(for category: ProjectDocumentCategory) -> String {
-        String(format: String(localized: "补齐施工资料：%@"), category.displayName)
     }
 }

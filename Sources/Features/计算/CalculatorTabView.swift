@@ -74,7 +74,7 @@ enum CalculatorDestination: CaseIterable {
 }
 
 struct CalculatorTabView: View {
-    @AppStorage("favoriteCalculators") private var favData = ""
+    @AppStorage(UserPreferenceKeys.favoriteCalculators) private var favData = ""
 
     private var favSet: Set<String> {
         Set(favData.split(separator: ",").map(String.init))

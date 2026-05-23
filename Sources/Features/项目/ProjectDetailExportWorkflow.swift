@@ -82,11 +82,20 @@ enum ProjectDetailExportWorkflow {
         onCompletion: @escaping @MainActor (ProjectDetailPackageExportTaskResult) -> Void
     ) -> Task<Void, Never> {
         let relatedTodos = todos.filter { $0.projectId == projectId }
-        let relay = TaskCancellationRelay()
 
         return Task {
-            let result = await withTaskCancellationHandler {
-                await Task.detached(priority: .userInitiated) {
+            do {
+                let result = try await FileIOTaskRunner.runWithRelay(
+                    priority: .userInitiated,
+                    logContext: .init(
+                        event: "project.package_export",
+                        source: "ProjectDetailExportWorkflow.makeProjectPackageExportTask",
+                        category: .zipArchive,
+                        details: [
+                            "project_id": projectId.uuidString
+                        ]
+                    )
+                ) { relay in
                     ProjectDetailImportExportActions.makeProjectPackageExport(
                         project: project,
                         materials: materials,
@@ -108,21 +117,21 @@ enum ProjectDetailExportWorkflow {
                         },
                         shouldCancel: { relay.isCancelled() || Task.isCancelled }
                     )
-                }.value
-            } onCancel: {
-                relay.cancel()
-            }
+                }
 
-            guard !Task.isCancelled else {
+                guard !Task.isCancelled else {
+                    await onCancelled()
+                    return
+                }
+
+                switch result {
+                case .success(let payload):
+                    await onCompletion(.success(payload))
+                case .failure(let message):
+                    await onCompletion(.failure(message))
+                }
+            } catch {
                 await onCancelled()
-                return
-            }
-
-            switch result {
-            case .success(let payload):
-                await onCompletion(.success(payload))
-            case .failure(let message):
-                await onCompletion(.failure(message))
             }
         }
     }

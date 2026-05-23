@@ -15,9 +15,9 @@ struct QuickNoteView: View {
     @State private var undoableDeletion = UndoableDeletionCoordinator()
     @State private var didOpenFocusedNote = false
     @State private var didRestoreDraft = false
-    @AppStorage("quickNoteDraftContent") private var storedDraftContent = ""
-    @AppStorage("quickNoteDraftProjectId") private var storedDraftProjectId = ""
-    @AppStorage("quickNoteDraftAttachments") private var storedDraftAttachments = ""
+    @AppStorage(UserPreferenceKeys.quickNoteDraftContent) private var storedDraftContent = ""
+    @AppStorage(UserPreferenceKeys.quickNoteDraftProjectId) private var storedDraftProjectId = ""
+    @AppStorage(UserPreferenceKeys.quickNoteDraftAttachments) private var storedDraftAttachments = ""
 
     init(focusedNoteId: UUID? = nil, embedsNavigationStack: Bool = true) {
         self.focusedNoteId = focusedNoteId

@@ -192,6 +192,7 @@ struct ProjectDetailModeSectionsView: View {
         Group {
             logSections
             progressSections
+            constructionMethodLoopSections
             photoSections
         }
     }
@@ -261,6 +262,15 @@ struct ProjectDetailModeSectionsView: View {
 
     private var progressSections: some View {
         ProjectProgressSectionView(tasks: relatedProgress, onEdit: onEditProgress)
+    }
+
+    private var constructionMethodLoopSections: some View {
+        ProjectConstructionMethodLoopSectionView(
+            project: project,
+            progressTasks: relatedProgress,
+            methods: constructionMethods,
+            openTodoCount: relatedTodos.filter { !$0.isDone }.count
+        )
     }
 
     private var photoSections: some View {

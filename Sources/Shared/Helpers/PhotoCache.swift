@@ -17,9 +17,21 @@ final class PhotoCache {
 
     func thumbnailAsync(for fileName: String) async -> UIImage? {
         if let img = cachedThumbnail(for: fileName) { return img }
-        return await Task.detached(priority: .utility) { [self] in
-            loadThumbnailFromDisk(for: fileName)
-        }.value
+        do {
+            return try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "photo_cache.thumbnail_read",
+                    source: "PhotoCache.thumbnailAsync",
+                    category: .fileStorage,
+                    details: ["file_name": fileName]
+                )
+            ) { [self] in
+                loadThumbnailFromDisk(for: fileName)
+            }
+        } catch {
+            return nil
+        }
     }
 
     private func loadThumbnailFromDisk(for fileName: String) -> UIImage? {

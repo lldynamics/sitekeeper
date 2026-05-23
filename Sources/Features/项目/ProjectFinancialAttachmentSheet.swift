@@ -354,14 +354,27 @@ private struct ProjectDocumentPDFThumbnail: View {
         thumbnail = nil
         guard let data = await ProjectDocumentStorage.dataAsync(for: document.fileName) else { return }
         let fileType = document.fileType.lowercased()
-        let loaded = await Task.detached(priority: .utility) { () -> UIImage? in
-            if fileType != "pdf", let image = UIImage(data: data) {
-                return image
+        let loaded: UIImage?
+        do {
+            loaded = try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "project.document.thumbnail_decode",
+                    source: "ProjectDocumentPDFThumbnail.loadThumbnail",
+                    category: .fileStorage,
+                    details: ["file_name": document.fileName]
+                )
+            ) {
+                if fileType != "pdf", let image = UIImage(data: data) {
+                    return image
+                }
+                guard let pdf = PDFDocument(data: data),
+                      let page = pdf.page(at: 0) else { return nil }
+                return page.thumbnail(of: CGSize(width: 88, height: 108), for: .cropBox)
             }
-            guard let pdf = PDFDocument(data: data),
-                  let page = pdf.page(at: 0) else { return nil }
-            return page.thumbnail(of: CGSize(width: 88, height: 108), for: .cropBox)
-        }.value
+        } catch {
+            return
+        }
         guard !Task.isCancelled else { return }
         thumbnail = loaded
     }
