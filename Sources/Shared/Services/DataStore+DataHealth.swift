@@ -40,6 +40,7 @@ extension DataStore {
         reason: DataHealthScanReason = .manual,
         includeSupplementalMetrics: Bool = true
     ) -> DataHealthScanSummary {
+        let previousSnapshot = latestDataHealthSnapshot
         let scanned = DataHealthScanner.scan(
             input: DataHealthScanInput(store: self),
             reason: reason,
@@ -48,6 +49,11 @@ extension DataStore {
         let summary = includeSupplementalMetrics
             ? scanned
             : scanned.fillingSupplementalMetrics(from: latestDataHealthScan)
+        latestDataHealthSnapshot = DataHealthScanSnapshot(
+            summary: summary,
+            fallbackStorageUsage: previousSnapshot?.storageUsage,
+            fallbackWidgetHealth: previousSnapshot?.widgetHealth
+        )
         latestDataHealthScan = summary
         return summary
     }
