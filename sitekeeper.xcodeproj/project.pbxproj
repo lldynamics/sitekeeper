@@ -162,6 +162,7 @@
 		4D50274C4C1A17D63FF8D6C3 /* CurrentCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EA991DC7933B7FA635EAB84B /* CurrentCalcView.swift */; };
 		4E522BF7BC0CE9F1B4DBA6E5 /* ProjectDetailContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439DF61136E3AC8C5FEA1E39 /* ProjectDetailContent.swift */; };
 		4EA6D53412DFA77EF0899815 /* ProjectDetailDrawingHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDDB2E1BB40FB83D3E3918A5 /* ProjectDetailDrawingHelper.swift */; };
+		4EE473246032ED9DA31DF907 /* ProjectDetailDrawingSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D2099C33F2874A14313F8F /* ProjectDetailDrawingSection.swift */; };
 		4FCF7B9E0233D41E3617CB3B /* ProjectFinancialRecordEditSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B19C07AF8EED00C5EF0BEB43 /* ProjectFinancialRecordEditSheet.swift */; };
 		50406C00346AA64450A6961F /* VoltageDropView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D8177485D327812FA329566 /* VoltageDropView.swift */; };
 		5064A8C793DF6B83CA9BFA4D /* CalculatorFormControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = A06DD7D8DADBEBD8F12F9A11 /* CalculatorFormControls.swift */; };
@@ -935,6 +936,7 @@
 		E45D47596F516D493455DB07 /* DataStore+DailyLogOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+DailyLogOps.swift"; sourceTree = "<group>"; };
 		E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaborRecordSupportViews.swift; sourceTree = "<group>"; };
 		E5D17B49192EBED1413B1D98 /* ProjectDetailContainer+PackageExportActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+PackageExportActions.swift"; sourceTree = "<group>"; };
+		E5D2099C33F2874A14313F8F /* ProjectDetailDrawingSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailDrawingSection.swift; sourceTree = "<group>"; };
 		E69F4516D056CF55286C9790 /* UnitDisplayAndValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnitDisplayAndValidation.swift; sourceTree = "<group>"; };
 		E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraTests.swift; sourceTree = "<group>"; };
 		E7FB62C1DACB443758414709 /* DataStoreProjectDeletionModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStoreProjectDeletionModels.swift; sourceTree = "<group>"; };
@@ -1514,6 +1516,7 @@
 				379D3CD092D3D2F34757B323 /* ProjectDetailDrawingEditSupport.swift */,
 				CDDB2E1BB40FB83D3E3918A5 /* ProjectDetailDrawingHelper.swift */,
 				32D114AD4A721FE28C90217E /* ProjectDetailDrawingIssueSupport.swift */,
+				E5D2099C33F2874A14313F8F /* ProjectDetailDrawingSection.swift */,
 				FE906D0FEAB2AF6C4840A79D /* ProjectDetailEditSheets.swift */,
 				93507910F0E442C999BA94B2 /* ProjectDetailExportHost.swift */,
 				BD1656F9D9CCD32B2FD4B2DB /* ProjectDetailExportOverlayView.swift */,
@@ -2081,6 +2084,7 @@
 				D0360AD4356CF5BEB52FBA85 /* ProjectDetailDrawingEditSupport.swift in Sources */,
 				4EA6D53412DFA77EF0899815 /* ProjectDetailDrawingHelper.swift in Sources */,
 				4A27A272B4D8658914A82961 /* ProjectDetailDrawingIssueSupport.swift in Sources */,
+				4EE473246032ED9DA31DF907 /* ProjectDetailDrawingSection.swift in Sources */,
 				C4E8012B92C4E19792B66256 /* ProjectDetailEditSheets.swift in Sources */,
 				2E09C1466D07276A74C1DD2C /* ProjectDetailExportHost.swift in Sources */,
 				D1824C9DE089985A222B48CC /* ProjectDetailExportOverlayView.swift in Sources */,
