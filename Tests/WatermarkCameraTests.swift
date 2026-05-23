@@ -38,4 +38,43 @@ struct WatermarkCameraTests {
         #expect(draft.tag == .rectificationBefore)
         #expect(seed.capturedAt == capturedAt)
     }
+
+    @Test func settingsStorePersistsWatermarkCameraChoices() throws {
+        let suiteName = "WatermarkCameraTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let preferences = UserPreferencesStore(defaults: defaults)
+        let settings = WatermarkCameraSettingsStore(preferences: preferences)
+        let projectId = UUID()
+
+        settings.selectedProjectId = projectId
+        settings.projectName = "测试工地"
+        settings.photographer = "张工"
+        settings.locationText = "1.00000, 2.00000"
+        settings.template = .rectification
+        settings.tag = "整改前"
+        settings.autoSaveToAlbum = false
+        settings.autoOpenLogDraft = true
+        settings.exportQuality = .high
+        settings.showGrid = false
+        settings.flashEnabled = true
+        settings.burstCount = 9
+        settings.normalizeBurstCount()
+
+        let restored = WatermarkCameraSettingsStore(preferences: preferences)
+        #expect(restored.selectedProjectId == projectId)
+        #expect(restored.projectName == "测试工地")
+        #expect(restored.photographer == "张工")
+        #expect(restored.locationText == "1.00000, 2.00000")
+        #expect(restored.template == .rectification)
+        #expect(restored.tag == "整改前")
+        #expect(restored.autoSaveToAlbum == false)
+        #expect(restored.autoOpenLogDraft == true)
+        #expect(restored.exportQuality == .high)
+        #expect(restored.showGrid == false)
+        #expect(restored.flashEnabled == true)
+        #expect(restored.burstCount == 5)
+    }
 }
