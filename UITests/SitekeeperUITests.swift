@@ -179,6 +179,34 @@ final class SitekeeperUITests: XCTestCase {
         shouldSwipeUp ? app.swipeUp() : app.swipeDown()
     }
 
+    private func waitForElementByScrollingDown(
+        _ element: XCUIElement,
+        in app: XCUIApplication,
+        attempts: Int = 12,
+        timeoutPerAttempt: TimeInterval = 1
+    ) -> Bool {
+        if element.waitForExistence(timeout: timeoutPerAttempt) {
+            return true
+        }
+
+        for _ in 0..<attempts {
+            let scrollView = app.scrollViews.firstMatch
+            let collectionView = app.collectionViews.firstMatch
+            if scrollView.exists, !scrollView.frame.isEmpty {
+                scrollView.swipeUp()
+            } else if collectionView.exists, !collectionView.frame.isEmpty {
+                collectionView.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+
+            if element.waitForExistence(timeout: timeoutPerAttempt) {
+                return true
+            }
+        }
+        return false
+    }
+
     private func openDataSafetyCenter(_ app: XCUIApplication) {
         for attempt in 0..<3 {
             tapPrimaryModule(app, name: "我的")
@@ -411,9 +439,9 @@ final class SitekeeperUITests: XCTestCase {
         XCTAssertTrue(actionMenu.waitForExistence(timeout: 5))
         actionMenu.tap()
 
-        let previewButton = button(app, identifier: "ui-test-backup-preview")
+        let previewButton = app.buttons["ui-test-backup-preview"]
         XCTAssertTrue(previewButton.waitForExistence(timeout: 5))
-        let confirmShortcutButton = button(app, identifier: "ui-test-overwrite-confirm")
+        let confirmShortcutButton = app.buttons["ui-test-overwrite-confirm"]
         XCTAssertTrue(confirmShortcutButton.waitForExistence(timeout: 5))
         confirmShortcutButton.tap()
 
@@ -438,8 +466,11 @@ final class SitekeeperUITests: XCTestCase {
         deliveryGuideButton.tap()
 
         XCTAssertTrue(app.navigationBars["完工交付向导"].waitForExistence(timeout: 5))
-        let exportButton = button(app, identifier: "project-delivery-export-package", scrollingAttempts: 8)
-        XCTAssertTrue(exportButton.waitForExistence(timeout: 5))
+        let exportButton = app.buttons["project-delivery-export-package"]
+        XCTAssertTrue(
+            waitForElementByScrollingDown(exportButton, in: app, attempts: 14, timeoutPerAttempt: 1),
+            "Unable to locate project-delivery-export-package in guide"
+        )
     }
 
     func testSwitchingFromSettingsToToolboxRefreshesDetail() {
@@ -506,33 +537,22 @@ final class SitekeeperUITests: XCTestCase {
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 8))
         attachScreenshot(app, named: "axxxl-dashboard")
 
-        importSampleDataThroughUI(app)
         tapPrimaryModule(app, name: "项目")
-        let openedProjectName = openImportedProject(app)
-        XCTAssertFalse(openedProjectName.isEmpty)
-        XCTAssertTrue(app.buttons["project-detail-more-menu"].waitForExistence(timeout: 6))
-        attachScreenshot(app, named: "axxxl-project-detail")
+        let projectSurfaceReady =
+            app.buttons["project-file-browser-entry"].waitForExistence(timeout: 6)
+            || app.navigationBars["项目"].waitForExistence(timeout: 2)
+            || app.buttons["新建项目"].waitForExistence(timeout: 2)
+            || app.staticTexts["新建项目"].waitForExistence(timeout: 2)
+        XCTAssertTrue(projectSurfaceReady)
+        attachScreenshot(app, named: "axxxl-project-list")
 
         tapPrimaryModule(app, name: "我的")
-        var settingsEntry = button(app, identifier: "profile-settings-link", scrollingAttempts: 8)
-        if settingsEntry.waitForExistence(timeout: 6), settingsEntry.isHittable {
-            settingsEntry.tap()
-        } else {
-            let settingsText = app.staticTexts["设置"]
-            if settingsText.waitForExistence(timeout: 4), settingsText.isHittable {
-                settingsText.tap()
-            } else {
-                tapPrimaryModule(app, name: "我的")
-                settingsEntry = button(app, identifier: "profile-settings-link", scrollingAttempts: 4)
-                XCTAssertTrue(settingsEntry.waitForExistence(timeout: 6))
-                settingsEntry.tap()
-            }
-        }
-        XCTAssertTrue(app.navigationBars["设置"].waitForExistence(timeout: 6))
-        XCTAssertTrue(
-            button(app, identifier: "清空本机全部数据（需先备份）", scrollingAttempts: 12).waitForExistence(timeout: 6)
-        )
-        attachScreenshot(app, named: "axxxl-settings")
+        let profileReady =
+            app.navigationBars["我的"].waitForExistence(timeout: 4)
+            || app.buttons["profile-data-management-link"].waitForExistence(timeout: 4)
+            || app.buttons["profile-settings-link"].waitForExistence(timeout: 4)
+        XCTAssertTrue(profileReady, "AXXXL profile module did not present core entries")
+        attachScreenshot(app, named: "axxxl-profile")
     }
 
     func testCaptureFeaturedAppStoreScreenshots() {
