@@ -13,6 +13,7 @@ SIM_BOOT_TIMEOUT_SECONDS="${SIM_BOOT_TIMEOUT_SECONDS:-120}"
 RESOLVED_SIM_ID=""
 TEMP_SIM_ID=""
 DEVELOPER_DIR_PATH="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/sitekeeper_preflight_derived_data_${PPID}_$(date +%s)}"
 
 for arg in "$@"; do
   case "$arg" in
@@ -33,7 +34,15 @@ if find "$ROOT_DIR" -name ".DS_Store" -print -quit | grep -q .; then
 fi
 
 echo "==> Checking untracked Swift sources"
-UNTRACKED_SWIFT_FILES="$(git -c core.quotePath=false ls-files --others --exclude-standard -- '*.swift')"
+collect_untracked_swift_files() {
+  git -c core.quotePath=false ls-files --others --exclude-standard -- '*.swift'
+}
+
+UNTRACKED_SWIFT_FILES="$(collect_untracked_swift_files)"
+if [[ -n "$UNTRACKED_SWIFT_FILES" ]]; then
+  sleep 1
+  UNTRACKED_SWIFT_FILES="$(collect_untracked_swift_files)"
+fi
 if [[ -n "$UNTRACKED_SWIFT_FILES" ]]; then
   echo "ERROR: Found untracked Swift source files. Add, remove, or ignore them before release preflight." >&2
   printf '%s\n' "$UNTRACKED_SWIFT_FILES" | sed -n '1,80p' | sed 's/^/  /' >&2
@@ -98,9 +107,11 @@ python3 scripts/legal/export_privacy_policy.py --check
 
 BUILD_CMD=(
   xcodebuild
+  -quiet
   -project sitekeeper.xcodeproj
   -scheme sitekeeper-iOS
   -destination "generic/platform=iOS"
+  -derivedDataPath "$DERIVED_DATA_PATH"
   CODE_SIGNING_ALLOWED=NO
 )
 
@@ -245,10 +256,10 @@ resolve_simulator_id() {
 }
 
 echo "==> Debug build"
-DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${BUILD_CMD[@]}" -configuration Debug build >/dev/null
+DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${BUILD_CMD[@]}" -configuration Debug build
 
 echo "==> Release build"
-DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${BUILD_CMD[@]}" -configuration Release build >/dev/null
+DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${BUILD_CMD[@]}" -configuration Release build
 
 if [[ "$SKIP_TESTS" -ne 1 ]]; then
   resolve_simulator_id || {
@@ -260,20 +271,24 @@ if [[ "$SKIP_TESTS" -ne 1 ]]; then
   echo "==> Unit tests"
   DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
   xcodebuild \
+    -quiet \
     -project sitekeeper.xcodeproj \
     -scheme sitekeeper-iOS \
     -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
     CODE_SIGNING_ALLOWED=NO \
-    test >/dev/null
+    test
 
   echo "==> UI tests"
   DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
   xcodebuild \
+    -quiet \
     -project sitekeeper.xcodeproj \
     -scheme sitekeeper-iOS-UITests \
     -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}" \
+    -derivedDataPath "$DERIVED_DATA_PATH" \
     CODE_SIGNING_ALLOWED=NO \
-    test >/dev/null
+    test
 fi
 
 echo "==> Release preflight passed"
