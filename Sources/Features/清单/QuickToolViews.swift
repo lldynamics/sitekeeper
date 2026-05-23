@@ -2,8 +2,8 @@ import SwiftUI
 
 struct QuickToolCategoryListView: View {
     private let sectionOrder = ["电气", "土建", "通用"]
-    @AppStorage("favoriteCalculators") private var favoriteRaw = ""
-    @AppStorage("recentQuickTools") private var recentRaw = ""
+    @AppStorage(UserPreferenceKeys.favoriteCalculators) private var favoriteRaw = ""
+    @AppStorage(UserPreferenceKeys.recentQuickTools) private var recentRaw = ""
 
     private var allTools: [QuickToolItem] {
         CalculatorDestination.allCases.map(QuickToolItem.init) + [watermarkCameraTool]
@@ -119,8 +119,8 @@ struct QuickToolSectionView: View {
 private struct QuickToolNavigationRow: View {
     let tool: QuickToolItem
     let color: Color
-    @AppStorage("favoriteCalculators") private var favoriteRaw = ""
-    @AppStorage("recentQuickTools") private var recentRaw = ""
+    @AppStorage(UserPreferenceKeys.favoriteCalculators) private var favoriteRaw = ""
+    @AppStorage(UserPreferenceKeys.recentQuickTools) private var recentRaw = ""
 
     private var isFavorite: Bool {
         favoriteTitles.contains(tool.title)

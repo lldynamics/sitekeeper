@@ -5,8 +5,8 @@ import SwiftUI
 struct ChecklistTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     let embedsNavigationStack: Bool
-    @AppStorage("checklistQuickToolOrder") private var quickToolOrderRaw = ""
-    @AppStorage("checklistQuickToolCustomized") private var quickToolCustomized = false
+    @AppStorage(UserPreferenceKeys.checklistQuickToolOrder) private var quickToolOrderRaw = ""
+    @AppStorage(UserPreferenceKeys.checklistQuickToolCustomized) private var quickToolCustomized = false
     @State private var showQuickToolEditor = false
     @State private var mobileSelectedItem: ToolboxItem?
 

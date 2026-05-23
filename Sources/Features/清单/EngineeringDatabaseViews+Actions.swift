@@ -63,6 +63,24 @@ extension ConstructionMethodLibraryView {
         deleteMethods([target])
     }
 
+    func importMethodPacks(_ methods: [ConstructionMethod], newCount: Int, updateCount: Int) {
+        guard !methods.isEmpty else { return }
+        for method in methods.reversed() {
+            store.upsertConstructionMethod(method, insertAtTopWhenNew: true)
+        }
+        selectedMethodID = methods.first?.id
+        store.scheduleSave()
+        AppHaptics.success()
+        operationNotice = .info(
+            String(
+                format: String(localized: "已导入 %lld 条工艺，新增 %lld 条，更新 %lld 条"),
+                Int64(methods.count),
+                Int64(newCount),
+                Int64(updateCount)
+            )
+        )
+    }
+
     func queueMethodDeletion(
         _ deletion: DataStoreRemovalResult<ConstructionMethod>,
         deletedIDs: Set<UUID>,

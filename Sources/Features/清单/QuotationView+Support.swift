@@ -1,0 +1,121 @@
+import SwiftUI
+import Foundation
+
+extension QuotationView {
+    var filtered: [QuoteItem] {
+        var result = store.quoteItems
+        if let projectFilter {
+            result = result.filter { $0.projectId == projectFilter }
+        }
+        result = SearchMatcher.filter(result, keyword: searchText)
+        if let statusFilter {
+            result = result.filter { $0.status == statusFilter }
+        }
+        return result
+    }
+
+    var subtotalBeforeValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteLineTotalValue(item)
+        }
+    }
+
+    var totalTaxValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteTaxValue(item)
+        }
+    }
+
+    var totalDiscountValue: MoneyValue {
+        filtered.reduce(MoneyValue.zero) { total, item in
+            total + ReportBuilder.quoteDiscountValue(item)
+        }
+    }
+
+    var grandTotalValue: MoneyValue {
+        subtotalBeforeValue + totalTaxValue - totalDiscountValue
+    }
+
+    var grandTotal: Double { grandTotalValue.doubleValue }
+
+    var statusChipBinding: Binding<QuoteStatusChip> {
+        Binding(
+            get: { QuoteStatusChip(status: statusFilter) },
+            set: { statusFilter = $0.status }
+        )
+    }
+
+    var projectQuoteSummaries: [(name: String, total: Double)] {
+        var rows: [(name: String, total: Double)] = []
+        for project in store.projects {
+            let total = store.quoteItems
+                .filter { $0.projectId == project.id }
+                .reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
+            if total > 0 { rows.append((project.name, total)) }
+        }
+        let unassigned = store.quoteItems
+            .filter { $0.projectId == nil }
+            .reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
+        if unassigned > 0 { rows.append((String(localized: "未归属"), unassigned)) }
+        return rows
+    }
+
+    var canSaveQuoteForm: Bool {
+        !formName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        InputValidator.validate(formPrice, kind: .amount, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formQty, kind: .quantity, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(formContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
+    }
+
+    var quoteFormValidationMessages: [String] {
+        var messages: [String] = []
+        if formName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messages.append(String(localized: "请填写报价名称"))
+        }
+        if formUnit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            messages.append(String(localized: "请填写报价单位"))
+        }
+        return messages
+    }
+
+    var canGenerateQuoteForm: Bool {
+        InputValidator.validate(defaultMaterialPrice, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        InputValidator.validate(defaultLaborRate, kind: .laborRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(generateTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
+        InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid
+    }
+
+    func statusColor(_ status: QuoteStatus) -> Color {
+        switch status {
+        case .draft: return .secondary
+        case .sent: return .appWarning
+        case .confirmed: return .appSuccess
+        }
+    }
+
+    var isCompanyProfileComplete: Bool {
+        !companyName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !companyPhone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        !companyAddress.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    func singleProjectInFiltered() -> Project? {
+        let ids = Set(filtered.compactMap(\.projectId))
+        guard ids.count == 1, let id = ids.first else { return nil }
+        return store.projects.first(where: { $0.id == id })
+    }
+
+    func firstNumber(in text: String) -> Double {
+        DataValueParser.double(from: text)
+    }
+
+    func trim(_ v: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: v)) ?? "\(v)"
+    }
+}

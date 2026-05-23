@@ -2,34 +2,34 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct ProjectContactDatabaseView: View {
-    @Environment(DataStore.self) private var store
-    @Environment(ProjectStore.self) private var projectStore
+    @Environment(DataStore.self) var store
+    @Environment(ProjectStore.self) var projectStore
     let focusedContactId: UUID?
-    @State private var searchText = ""
-    @State private var selectedProjectId: UUID?
-    @State private var roleFilter: ProjectContactRole?
-    @State private var showAdd = false
-    @State private var editingContact: ProjectContact?
-    @State private var didOpenFocusedContact = false
-    @State private var exportPayload: ExportPayload?
-    @State private var showExporter = false
-    @State private var showSystemContactPicker = false
-    @State private var importFeedbackMessage = ""
-    @State private var showImportFeedbackAlert = false
-    @State private var mergeConfirmPhone: String?
-    @State private var showMergeConfirm = false
-    @State private var operationNotice: OperationToastNotice?
-    @State private var undoableDeletion = UndoableDeletionCoordinator()
+    @State var searchText = ""
+    @State var selectedProjectId: UUID?
+    @State var roleFilter: ProjectContactRole?
+    @State var showAdd = false
+    @State var editingContact: ProjectContact?
+    @State var didOpenFocusedContact = false
+    @State var exportPayload: ExportPayload?
+    @State var showExporter = false
+    @State var showSystemContactPicker = false
+    @State var importFeedbackMessage = ""
+    @State var showImportFeedbackAlert = false
+    @State var mergeConfirmPhone: String?
+    @State var showMergeConfirm = false
+    @State var operationNotice: OperationToastNotice?
+    @State var undoableDeletion = UndoableDeletionCoordinator()
 
     init(focusedContactId: UUID? = nil) {
         self.focusedContactId = focusedContactId
     }
 
-    private var projects: [Project] {
+    var projects: [Project] {
         projectStore.projects
     }
 
-    private var projectContacts: [ProjectContact] {
+    var projectContacts: [ProjectContact] {
         projectStore.projectContacts
     }
 
@@ -44,7 +44,7 @@ struct ProjectContactDatabaseView: View {
         }
     }
 
-    private var filteredContacts: [ProjectContact] {
+    var filteredContacts: [ProjectContact] {
         return SearchMatcher.filter(
             scopedContacts,
             keyword: searchText,
@@ -295,298 +295,5 @@ struct ProjectContactDatabaseView: View {
                 .clipShape(Capsule())
         }
         .buttonStyle(.plain)
-    }
-
-    private func openFocusedContactIfNeeded() {
-        guard let focusedContactId, !didOpenFocusedContact,
-              let contact = projectContacts.first(where: { $0.id == focusedContactId }) else { return }
-        didOpenFocusedContact = true
-        searchText = ""
-        selectedProjectId = contact.projectId
-        Task { @MainActor in
-            editingContact = contact
-        }
-    }
-
-    private func deleteContact(_ contact: ProjectContact) {
-        deleteContacts(Set([contact.id]), source: "ProjectContactDatabaseView")
-    }
-
-    private func deleteContacts(_ ids: Set<UUID>, source: String = "ProjectContactDatabaseView") {
-        guard !ids.isEmpty else { return }
-        let targets = projectContacts.filter { ids.contains($0.id) }
-        guard !targets.isEmpty else { return }
-
-        let deletion = store.removeProjectContacts(
-            ids: ids,
-            audit: DataStoreDeletionAuditContext(
-                summary: String(format: String(localized: "删除联系人 %lld 位"), Int64(targets.count)),
-                detail: contactAuditDetail(targets),
-                source: source
-            )
-        )
-        queueContactDeletion(
-            deletion,
-            message: String(format: String(localized: "已删除 %lld 位联系人"), Int64(deletion.deletedCount))
-        )
-    }
-
-    private func deleteContacts(_ items: [ProjectContact]) {
-        deleteContacts(Set(items.map(\.id)))
-    }
-
-    private func queueContactDeletion(
-        _ deletion: DataStoreRemovalResult<ProjectContact>,
-        message: String
-    ) {
-        guard !deletion.isEmpty else { return }
-        undoableDeletion.queue(
-            notice: $operationNotice,
-            message: message,
-            commit: {
-                store.scheduleSave()
-            },
-            undo: {
-                store.restoreProjectContacts(from: deletion)
-                store.scheduleSave()
-            },
-            audit: deletion.audit.map(UndoableDeletionAuditContext.init)
-        )
-    }
-
-    private func contactAuditDetail(_ contacts: [ProjectContact]) -> String {
-        ListFormatter.localizedString(
-            byJoining: contacts.map { contact in
-                [contact.name, contact.phone, projectName(contact.projectId)]
-                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { !$0.isEmpty }
-                    .joined(separator: " · ")
-            }
-        )
-    }
-
-    /// 同一手机号关联的项目名列表
-    private func linkedProjectNames(for contact: ProjectContact) -> [String] {
-        let phoneKey = normalizedPhone(contact.phone)
-        var projectIDs = Set(contact.relatedProjectIds)
-        if !phoneKey.isEmpty {
-            let all = projectContacts.filter { normalizedPhone($0.phone) == phoneKey && $0.id != contact.id }
-            projectIDs.formUnion(all.map(\.projectId))
-            projectIDs.formUnion(all.flatMap(\.relatedProjectIds))
-        }
-        projectIDs.remove(contact.projectId)
-        return projectNames(for: Array(projectIDs))
-    }
-
-    /// 合并同一手机号的重复联系人（每个项目仅保留一条最完整的记录）
-    private func mergeDuplicateContacts(phone: String) {
-        let phoneKey = normalizedPhone(phone)
-        let all = projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
-        guard all.count > 1 else { return }
-        // 按项目分组，每个项目只保留一条
-        var toKeep = Set<UUID>()
-        let grouped = Dictionary(grouping: all, by: \.projectId)
-        for (_, contacts) in grouped {
-            let best = contacts.max { a, b in
-                let scoreA = [a.name, a.company, a.phone, a.note].filter { !$0.isEmpty }.count
-                let scoreB = [b.name, b.company, b.phone, b.note].filter { !$0.isEmpty }.count
-                return scoreA < scoreB
-            }
-            if let best {
-                toKeep.insert(best.id)
-            }
-        }
-        let idsToDelete = Set(all.map(\.id)).subtracting(toKeep)
-        let targets = projectContacts.filter { idsToDelete.contains($0.id) }
-        guard !targets.isEmpty else { return }
-
-        let deletion = store.removeProjectContacts(
-            ids: idsToDelete,
-            audit: DataStoreDeletionAuditContext(
-                summary: String(format: String(localized: "合并重复联系人，删除 %lld 位"), Int64(targets.count)),
-                detail: "\(phoneKey) · \(contactAuditDetail(targets))",
-                source: "ProjectContactDatabaseView"
-            )
-        )
-        queueContactDeletion(
-            deletion,
-            message: String(format: String(localized: "已合并联系人，删除 %lld 个重复项"), Int64(deletion.deletedCount))
-        )
-    }
-
-    /// 导出 vCard
-    private func exportContactsVCard() {
-        var lines: [String] = []
-        for contact in filteredContacts {
-            lines.append("BEGIN:VCARD")
-            lines.append("VERSION:3.0")
-            lines.append("FN:\(contact.name)")
-            let cleaned = normalizedPhone(contact.phone)
-            if !cleaned.isEmpty {
-                lines.append("TEL;TYPE=CELL:\(cleaned)")
-            }
-            if !contact.company.isEmpty {
-                lines.append("ORG:\(contact.company)")
-            }
-            if !contact.note.isEmpty {
-                lines.append("NOTE:\(contact.note)")
-            }
-            let projectRef = projectName(contact.projectId)
-            if !projectRef.isEmpty {
-                lines.append("NOTE:项目:\(projectRef)")
-            }
-            let relatedNames = projectNames(for: contact.relatedProjectIds)
-            if !relatedNames.isEmpty {
-                lines.append("NOTE:历史项目:\(relatedNames.joined(separator: "、"))")
-            }
-            lines.append("END:VCARD")
-        }
-        let data = lines.joined(separator: "\r\n").data(using: .utf8) ?? Data()
-        exportPayload = ExportPayload(
-            data: data,
-            contentType: .vCard,
-            defaultFilename: String(localized: "项目联系人.vcf")
-        )
-        showExporter = true
-    }
-
-    private func projectName(_ id: UUID) -> String {
-        projects.first(where: { $0.id == id })?.name ?? String(localized: "未知项目")
-    }
-
-    private func projectNames(for ids: [UUID]) -> [String] {
-        ids.compactMap { id in
-            projects.first(where: { $0.id == id })?.name
-        }
-    }
-
-    private func normalizedPhone(_ raw: String) -> String {
-        raw.filter(\.isNumber)
-    }
-
-    private func contactCRMSummary(for contact: ProjectContact) -> String? {
-        let cluster = contactCluster(for: contact)
-        let projectIds = Array(Set(cluster.map(\.projectId)))
-        guard !projectIds.isEmpty else { return nil }
-
-        let sortedProjects = projectIds.sorted { lhs, rhs in
-            recentActivityDate(for: lhs) > recentActivityDate(for: rhs)
-        }
-        let projectNames = sortedProjects
-            .prefix(2)
-            .map { projectName($0) }
-            .filter { !$0.isEmpty && $0 != String(localized: "未知项目") }
-        let projectPreview = projectNames.isEmpty ? String(localized: "暂无项目") : projectNames.joined(separator: "、")
-        let unpaid = sortedProjects.reduce(0.0) { total, projectId in
-            total + unpaidAmount(for: projectId)
-        }
-
-        if unpaid > 0 {
-            return String(format: String(localized: "最近合作：%@ · 待收 %@"), projectPreview, ReportBuilder.money(unpaid))
-        }
-        return String(format: String(localized: "最近合作：%@"), projectPreview)
-    }
-
-    private func contactCluster(for contact: ProjectContact) -> [ProjectContact] {
-        let phoneKey = normalizedPhone(contact.phone)
-        if !phoneKey.isEmpty {
-            return projectContacts.filter { normalizedPhone($0.phone) == phoneKey }
-        }
-        let nameKey = contact.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !nameKey.isEmpty else { return [contact] }
-        return projectContacts.filter {
-            $0.name.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == nameKey
-        }
-    }
-
-    private func recentActivityDate(for projectId: UUID) -> Date {
-        let summaryDate = projectStore.projectActivitySummary(for: projectId).latestActivityDate
-        let startDate = projects.first(where: { $0.id == projectId })
-            .flatMap { Formatters.parseDateOrDateTime($0.startDate) }
-            ?? .distantPast
-        return max(summaryDate ?? .distantPast, startDate)
-    }
-
-    private func unpaidAmount(for projectId: UUID) -> Double {
-        guard let project = projects.first(where: { $0.id == projectId }) else { return 0 }
-        let contract = project.contractAmountValue.doubleValue
-        let paidFromSummary = projectStore.projectActivitySummary(for: projectId).collectedIncomeAmount
-        let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
-        return max(contract - paid, 0)
-    }
-
-    private func beginSystemContactImport() {
-        guard !projects.isEmpty else {
-            showImportFeedback(String(localized: "请先创建项目，再导入联系人。"))
-            return
-        }
-        guard targetProjectIdForImport() != nil else {
-            showImportFeedback(String(localized: "请先在顶部筛选中选择一个项目，再导入联系人。"))
-            return
-        }
-        showSystemContactPicker = true
-    }
-
-    private func targetProjectIdForImport() -> UUID? {
-        if let selectedProjectId {
-            return selectedProjectId
-        }
-        if projects.count == 1 {
-            return projects[0].id
-        }
-        return nil
-    }
-
-    private func importSystemContact(_ imported: ImportedSystemContact) {
-        showSystemContactPicker = false
-        guard let projectId = targetProjectIdForImport() else {
-            showImportFeedback(String(localized: "请先选择项目，再导入联系人。"))
-            return
-        }
-
-        let resolvedName = imported.fullName.isEmpty
-            ? (imported.organizationName.isEmpty ? String(localized: "未命名联系人") : imported.organizationName)
-            : imported.fullName
-
-        let normalizedPrimary = normalizedPhone(imported.primaryPhone)
-        if !normalizedPrimary.isEmpty,
-           let existing = projectContacts.first(where: {
-               normalizedPhone($0.phone) == normalizedPrimary && $0.isLinked(to: projectId)
-           }) {
-            selectedProjectId = projectId
-            editingContact = existing
-            showImportFeedback(String(localized: "该号码已存在，已定位到现有联系人。"))
-            return
-        }
-
-        var noteLines: [String] = []
-        if imported.phoneNumbers.count > 1 {
-            noteLines.append(
-                String(
-                    format: String(localized: "备用号码：%@"),
-                    imported.phoneNumbers.dropFirst().joined(separator: "、")
-                )
-            )
-        }
-
-        let contact = ProjectContact(
-            projectId: projectId,
-            relatedProjectIds: [],
-            name: resolvedName,
-            role: .other,
-            company: imported.organizationName,
-            phone: imported.primaryPhone,
-            note: noteLines.joined(separator: "\n")
-        )
-        store.upsertProjectContact(contact, insertAtTopWhenNew: true)
-        store.scheduleSave()
-        selectedProjectId = projectId
-        AppHaptics.success()
-        showImportFeedback(String(format: String(localized: "已导入联系人：%@"), resolvedName))
-    }
-
-    private func showImportFeedback(_ message: String) {
-        importFeedbackMessage = message
-        showImportFeedbackAlert = true
     }
 }

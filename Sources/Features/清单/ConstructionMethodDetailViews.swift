@@ -189,10 +189,17 @@ struct ConstructionMethodDetailContent: View {
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                    if let sourceURL = URL(string: method.sourceURL), !method.sourceID.isEmpty {
+                        Link(destination: sourceURL) {
+                            Label(String(localized: "查看工程知识网站原文"), systemImage: "globe.asia.australia")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
                     Toggle(String(localized: "仅看未完成"), isOn: $showOnlyPendingItems)
                         .toggleStyle(.switch)
                         .font(.callout)
                 }
+                ConstructionMethodKnowledgeReferencesBlock(method: method)
                 ConstructionMethodReferenceBlock { action in
                     referenceAction = action
                 }
@@ -284,5 +291,134 @@ struct ConstructionMethodDetailContent: View {
         }
         store.scheduleSave()
         AppHaptics.success()
+    }
+}
+
+private struct ConstructionMethodKnowledgeReferencesBlock: View {
+    let method: ConstructionMethod
+
+    private var hasContent: Bool {
+        let sourceURL = method.sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !sourceURL.isEmpty
+            || !method.sourceVersion.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !method.sourceUpdatedAt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            || !method.relatedStandards.isEmpty
+            || !method.relatedTemplates.isEmpty
+            || !method.relatedArticles.isEmpty
+    }
+
+    var body: some View {
+        if hasContent {
+            VStack(alignment: .leading, spacing: 8) {
+                Label(String(localized: "来源与关联资料"), systemImage: "link")
+                    .font(.headline)
+
+                if let sourceURL = normalizedURL(method.sourceURL) {
+                    Link(destination: sourceURL) {
+                        Label(String(localized: "来源网站原文"), systemImage: "globe.asia.australia")
+                            .font(.callout.weight(.semibold))
+                    }
+                }
+
+                let sourceVersion = method.sourceVersion.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sourceVersion.isEmpty {
+                    Text(String(format: String(localized: "来源版本：%@"), sourceVersion))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                let sourceUpdatedAt = method.sourceUpdatedAt.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !sourceUpdatedAt.isEmpty {
+                    Text(String(format: String(localized: "网站更新时间：%@"), sourceUpdatedAt))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                let standards = normalizedStandards(method.relatedStandards)
+                if !standards.isEmpty {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(String(localized: "相关规范"))
+                            .font(.subheadline.weight(.semibold))
+                        ForEach(standards, id: \.self) { value in
+                            if let url = normalizedURL(value) {
+                                Link(destination: url) {
+                                    Label(value, systemImage: "doc.text")
+                                        .font(.callout)
+                                }
+                            } else {
+                                Label(value, systemImage: "doc.text")
+                                    .font(.callout)
+                            }
+                        }
+                    }
+                }
+
+                relatedLinksSection(
+                    title: String(localized: "相关模板"),
+                    links: method.relatedTemplates,
+                    icon: "doc.on.doc"
+                )
+
+                relatedLinksSection(
+                    title: String(localized: "相关文章"),
+                    links: method.relatedArticles,
+                    icon: "newspaper"
+                )
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    @ViewBuilder
+    private func relatedLinksSection(
+        title: String,
+        links: [ConstructionMethodKnowledgeLink],
+        icon: String
+    ) -> some View {
+        if !links.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                ForEach(links) { link in
+                    let fallbackTitle = link.href.trimmingCharacters(in: .whitespacesAndNewlines)
+                    let displayTitle = link.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? fallbackTitle
+                        : link.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if let url = normalizedURL(link.href) {
+                        Link(destination: url) {
+                            Label(displayTitle, systemImage: icon)
+                                .font(.callout)
+                        }
+                    } else {
+                        Label(displayTitle, systemImage: icon)
+                            .font(.callout)
+                    }
+                }
+            }
+        }
+    }
+
+    private func normalizedURL(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        return url
+    }
+
+    private func normalizedStandards(_ standards: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for standard in standards {
+            let value = standard.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty else { continue }
+            guard seen.insert(value).inserted else { continue }
+            result.append(value)
+        }
+        return result
     }
 }

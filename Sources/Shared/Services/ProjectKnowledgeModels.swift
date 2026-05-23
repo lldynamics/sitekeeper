@@ -195,6 +195,22 @@ struct SupplierProfile: Identifiable, Codable, Sendable {
     }
 }
 
+struct ConstructionMethodKnowledgeLink: Identifiable, Codable, Hashable, Sendable {
+    var title: String
+    var href: String
+
+    var id: String {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedHref = href.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "\(normalizedTitle)|\(normalizedHref)"
+    }
+
+    init(title: String = "", href: String = "") {
+        self.title = title
+        self.href = href
+    }
+}
+
 struct ConstructionMethod: Identifiable, Codable, Sendable {
     enum PublishStatus: String, CaseIterable, Codable, Sendable {
         case draft = "草稿"
@@ -251,6 +267,13 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
     var qualityChecklist: [String]
     var safetyChecklist: [String]
     var attachments: [QuickNoteAttachment]
+    var sourceID: String
+    var sourceURL: String
+    var sourceVersion: String
+    var sourceUpdatedAt: String
+    var relatedStandards: [String]
+    var relatedTemplates: [ConstructionMethodKnowledgeLink]
+    var relatedArticles: [ConstructionMethodKnowledgeLink]
     var updatedAt: String
 
     init(
@@ -269,6 +292,13 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         qualityChecklist: [String] = [],
         safetyChecklist: [String] = [],
         attachments: [QuickNoteAttachment] = [],
+        sourceID: String = "",
+        sourceURL: String = "",
+        sourceVersion: String = "",
+        sourceUpdatedAt: String = "",
+        relatedStandards: [String] = [],
+        relatedTemplates: [ConstructionMethodKnowledgeLink] = [],
+        relatedArticles: [ConstructionMethodKnowledgeLink] = [],
         updatedAt: String = Formatters.now()
     ) {
         self.id = id
@@ -283,6 +313,13 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         self.qualityChecklist = qualityChecklist.isEmpty ? Self.parseLines(qualityStandard) : Self.normalizeList(qualityChecklist)
         self.safetyChecklist = safetyChecklist.isEmpty ? Self.parseLines(safetyNotes) : Self.normalizeList(safetyChecklist)
         self.attachments = attachments
+        self.sourceID = sourceID
+        self.sourceURL = sourceURL
+        self.sourceVersion = sourceVersion
+        self.sourceUpdatedAt = sourceUpdatedAt
+        self.relatedStandards = Self.normalizeList(relatedStandards)
+        self.relatedTemplates = Self.normalizeLinks(relatedTemplates)
+        self.relatedArticles = Self.normalizeLinks(relatedArticles)
         self.updatedAt = updatedAt
     }
 
@@ -305,7 +342,9 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         case id, title, trade, versionName, publishStatus, tutorialBody, tutorialTextSize, tutorialAttachments
         case steps, qualityStandard, safetyNotes
         case procedureSteps, qualityChecklist, safetyChecklist
-        case attachments, updatedAt
+        case attachments, sourceID, sourceURL, sourceVersion, sourceUpdatedAt
+        case relatedStandards, relatedTemplates, relatedArticles
+        case updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -325,6 +364,19 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         qualityChecklist = Self.normalizeList(try container.decodeIfPresent([String].self, forKey: .qualityChecklist) ?? Self.parseLines(legacyQuality))
         safetyChecklist = Self.normalizeList(try container.decodeIfPresent([String].self, forKey: .safetyChecklist) ?? Self.parseLines(legacySafety))
         attachments = try container.decodeIfPresent([QuickNoteAttachment].self, forKey: .attachments) ?? []
+        sourceID = try container.decodeIfPresent(String.self, forKey: .sourceID) ?? ""
+        sourceURL = try container.decodeIfPresent(String.self, forKey: .sourceURL) ?? ""
+        sourceVersion = try container.decodeIfPresent(String.self, forKey: .sourceVersion) ?? ""
+        sourceUpdatedAt = try container.decodeIfPresent(String.self, forKey: .sourceUpdatedAt) ?? ""
+        relatedStandards = Self.normalizeList(
+            try container.decodeIfPresent([String].self, forKey: .relatedStandards) ?? []
+        )
+        relatedTemplates = Self.normalizeLinks(
+            try container.decodeIfPresent([ConstructionMethodKnowledgeLink].self, forKey: .relatedTemplates) ?? []
+        )
+        relatedArticles = Self.normalizeLinks(
+            try container.decodeIfPresent([ConstructionMethodKnowledgeLink].self, forKey: .relatedArticles) ?? []
+        )
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt) ?? Formatters.now()
     }
 
@@ -342,6 +394,13 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         try container.encode(qualityChecklist, forKey: .qualityChecklist)
         try container.encode(safetyChecklist, forKey: .safetyChecklist)
         try container.encode(attachments, forKey: .attachments)
+        try container.encode(sourceID, forKey: .sourceID)
+        try container.encode(sourceURL, forKey: .sourceURL)
+        try container.encode(sourceVersion, forKey: .sourceVersion)
+        try container.encode(sourceUpdatedAt, forKey: .sourceUpdatedAt)
+        try container.encode(relatedStandards, forKey: .relatedStandards)
+        try container.encode(relatedTemplates, forKey: .relatedTemplates)
+        try container.encode(relatedArticles, forKey: .relatedArticles)
         try container.encode(updatedAt, forKey: .updatedAt)
     }
 
@@ -359,6 +418,21 @@ struct ConstructionMethod: Identifiable, Codable, Sendable {
         list
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    private static func normalizeLinks(_ links: [ConstructionMethodKnowledgeLink]) -> [ConstructionMethodKnowledgeLink] {
+        var seen = Set<String>()
+        var normalized: [ConstructionMethodKnowledgeLink] = []
+        for link in links {
+            let title = link.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let href = link.href.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !href.isEmpty else { continue }
+            let displayTitle = title.isEmpty ? href : title
+            let dedupeKey = "\(displayTitle)|\(href)"
+            guard seen.insert(dedupeKey).inserted else { continue }
+            normalized.append(ConstructionMethodKnowledgeLink(title: displayTitle, href: href))
+        }
+        return normalized
     }
 }
 

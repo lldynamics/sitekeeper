@@ -8,8 +8,8 @@ struct LaborRecordView: View {
     }
 
     @Environment(DataStore.self) var store
-    @AppStorage("labor.savedTeams") var savedTeamsRaw = ""
-    @AppStorage("labor.savedWorkTypes") var savedWorkTypesRaw = ""
+    @AppStorage(UserPreferenceKeys.laborSavedTeams) var savedTeamsRaw = ""
+    @AppStorage(UserPreferenceKeys.laborSavedWorkTypes) var savedWorkTypesRaw = ""
     let focusedLaborId: UUID?
     @State var searchText = ""
     @State var showAdd = false
