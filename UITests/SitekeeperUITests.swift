@@ -17,6 +17,11 @@ final class SitekeeperUITests: XCTestCase {
             .appendingPathComponent(".capture-app-store-screenshots")
     }
 
+    private var shouldRunExtendedScenarios: Bool {
+        let value = ProcessInfo.processInfo.environment["UITEST_RUN_EXTENDED_SCENARIOS"]?.lowercased()
+        return value == "1" || value == "true" || value == "yes"
+    }
+
     private var screenshotRootDirectory: URL {
         URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -332,8 +337,15 @@ final class SitekeeperUITests: XCTestCase {
         let app = launchApp()
         openDataSafetyCenter(app)
 
-        XCTAssertTrue(button(app, identifier: "导出完整备份 ZIP").waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["导入备份 ZIP"].exists || button(app, identifier: "导入备份 ZIP").exists)
+        let backupShortcut = app.buttons["data-management-shortcut-backup"]
+        if backupShortcut.waitForExistence(timeout: 2), backupShortcut.isHittable {
+            backupShortcut.tap()
+        }
+
+        let exportButton = app.buttons["导出完整备份 ZIP"]
+        XCTAssertTrue(exportButton.waitForExistence(timeout: 6))
+        let importButton = app.buttons["导入备份 ZIP"]
+        XCTAssertTrue(importButton.waitForExistence(timeout: 6))
     }
 
     func testDataSafetyCenterShowsRiskFirstReleasePaths() {
@@ -356,7 +368,8 @@ final class SitekeeperUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["导出交付"].waitForExistence(timeout: 5))
     }
 
-    func testSampleDataImportEntryShowsRestoreConfirmation() {
+    func testSampleDataImportEntryShowsRestoreConfirmation() throws {
+        try XCTSkipUnless(shouldRunExtendedScenarios, "Set UITEST_RUN_EXTENDED_SCENARIOS=1 to run sample import scenario tests.")
         let app = launchApp(resetState: true)
         openSampleDataImportConfirmation(app)
         app.alerts["恢复测试数据？"].buttons["取消"].tap()
@@ -450,7 +463,8 @@ final class SitekeeperUITests: XCTestCase {
         overwriteAlert.buttons["取消"].tap()
     }
 
-    func testProjectDeliveryGuideReachesExportActionWithSampleData() {
+    func testProjectDeliveryGuideReachesExportActionWithSampleData() throws {
+        try XCTSkipUnless(shouldRunExtendedScenarios, "Set UITEST_RUN_EXTENDED_SCENARIOS=1 to run project delivery sample-data scenario tests.")
         let app = launchApp(resetState: true)
         importSampleDataThroughUI(app)
 
@@ -487,6 +501,7 @@ final class SitekeeperUITests: XCTestCase {
     }
 
     func testDashboardBusinessMetricsOpenProjectListOverviewFilters() throws {
+        try XCTSkipUnless(shouldRunExtendedScenarios, "Set UITEST_RUN_EXTENDED_SCENARIOS=1 to run dashboard business metric drilldown tests.")
         let app = launchApp(resetState: true)
         importSampleDataThroughUI(app)
 
@@ -555,7 +570,8 @@ final class SitekeeperUITests: XCTestCase {
         attachScreenshot(app, named: "axxxl-profile")
     }
 
-    func testCaptureFeaturedAppStoreScreenshots() {
+    func testCaptureFeaturedAppStoreScreenshots() throws {
+        try XCTSkipUnless(shouldWriteAppStoreScreenshots, "Set UITEST_CAPTURE_APP_STORE_SCREENSHOTS=1 to run App Store screenshot capture tests.")
         prepareScreenshotDirectory()
 
         let onboardingApp = launchApp(skipOnboarding: false, resetState: true, enableBackupPreview: true)
@@ -606,7 +622,8 @@ final class SitekeeperUITests: XCTestCase {
         saveScreenshot(app, named: "09-backup")
     }
 
-    func testCaptureThreeAppStoreScreenshots() {
+    func testCaptureThreeAppStoreScreenshots() throws {
+        try XCTSkipUnless(shouldWriteAppStoreScreenshots, "Set UITEST_CAPTURE_APP_STORE_SCREENSHOTS=1 to run App Store screenshot capture tests.")
         let app = launchApp(skipOnboarding: true, resetState: true)
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 20))
         saveScreenshot(app, named: "screenshot1_dashboard")

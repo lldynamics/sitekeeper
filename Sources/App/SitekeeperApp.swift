@@ -39,6 +39,7 @@ struct SitekeeperApp: App {
             scenePhaseTask = Task {
                 switch newPhase {
                 case .active:
+                    guard !UITestLaunchConfig.isUITestSession else { return }
                     await CloudAutoBackupScheduler.shared.triggerIfNeeded(store: store)
                 case .background, .inactive:
                     await store.flushSave()
@@ -53,6 +54,21 @@ struct SitekeeperApp: App {
 private enum UITestLaunchConfig {
     private static let resetArguments = ["-uitest-reset-state"]
     private static let dynamicTypeSizeArgument = "-uitest-dynamic-type-size"
+    private static let knownUITestArguments = [
+        "-uitest-skip-onboarding",
+        "-uitest-reset-state",
+        "-uitest-backup-preview",
+        "-uitest-allow-clear-without-backup",
+        "-uitest-dynamic-type-size"
+    ]
+
+    static var isUITestSession: Bool {
+        let processInfo = ProcessInfo.processInfo
+        if processInfo.environment.keys.contains(where: { $0.hasPrefix("UITEST_") }) {
+            return true
+        }
+        return knownUITestArguments.contains { processInfo.arguments.contains($0) }
+    }
 
     static var shouldResetLocalState: Bool {
         let processInfo = ProcessInfo.processInfo
@@ -107,30 +123,61 @@ private enum UITestLaunchConfig {
                     )
                 }
             }
+
+            // UI tests 需要可重复、可预期的冷启动；这里直接清空目录，避免大批量隔离迁移导致启动超时。
+            let storageDirectories = [
+                "Photos",
+                "PhotoThumbnails",
+                "Drawings",
+                "ProjectDocuments",
+                "QuickNoteAttachments"
+            ]
+            for directoryName in storageDirectories {
+                let directoryURL = documentsDirectory.appendingPathComponent(directoryName, isDirectory: true)
+                do {
+                    _ = try FileOps.removeIfExists(
+                        at: directoryURL,
+                        context: .init(
+                            event: "ui_test.reset_local_state.remove_storage_directory",
+                            category: .fileStorage,
+                            source: "SitekeeperApp.resetLocalState"
+                        )
+                    )
+                } catch {
+                    StorageIssueLog.recordEvent(
+                        "ui_test.reset_local_state_remove_storage_directory_failed",
+                        category: .fileStorage,
+                        details: [
+                            "source": "SitekeeperApp.resetLocalState",
+                            "directory": directoryName
+                        ],
+                        error: error
+                    )
+                }
+            }
         }
 
-        DataStoreDeferredFileCleanup.combined(
-            summary: "uiTest.resetLocalState",
-            cleanups: [
-                DataStoreDeferredFileCleanup.photoFiles(
-                    PhotoStorage.allStoredFileNames(),
-                    summary: "uiTest.reset.photos"
-                ),
-                DataStoreDeferredFileCleanup.drawingFiles(
-                    DrawingStorage.allStoredFileNames(),
-                    summary: "uiTest.reset.drawings"
-                ),
-                DataStoreDeferredFileCleanup.projectDocumentFiles(
-                    ProjectDocumentStorage.allStoredFileNames(),
-                    summary: "uiTest.reset.projectDocuments"
-                ),
-                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
-                    QuickNoteAttachmentStorage.allStoredFileNames(),
-                    summary: "uiTest.reset.quickNoteAttachments"
+        if let applicationSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+            let quarantineURL = applicationSupportDirectory.appendingPathComponent("FileQuarantine", isDirectory: true)
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: quarantineURL,
+                    context: .init(
+                        event: "ui_test.reset_local_state.remove_quarantine_directory",
+                        category: .fileStorage,
+                        source: "SitekeeperApp.resetLocalState"
+                    )
                 )
-            ]
-        )
-        .perform()
+            } catch {
+                StorageIssueLog.recordEvent(
+                    "ui_test.reset_local_state_remove_quarantine_directory_failed",
+                    category: .fileStorage,
+                    details: ["source": "SitekeeperApp.resetLocalState"],
+                    error: error
+                )
+            }
+        }
+
         StorageIssueLog.clear()
         preferenceStore.synchronize()
     }

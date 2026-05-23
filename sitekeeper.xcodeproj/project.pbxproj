@@ -39,9 +39,11 @@
 		0B73F827A70A23037D182519 /* ConstructionMethodTutorialRichTextEditor.swift in Sources */ = {isa = PBXBuildFile; fileRef = F2CECBCA8F2E8D5BFEC8D5CB /* ConstructionMethodTutorialRichTextEditor.swift */; };
 		0B9F188F5968AF2FA1CBD0B5 /* ProjectListSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79EC3EC13D6B6B521EA88AF6 /* ProjectListSupportViews.swift */; };
 		0C53053F878486E8716D30AA /* ProjectDomainTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B04854C94BFC585E694DA280 /* ProjectDomainTypes.swift */; };
+		0D2AFF65C2B97DFB0C42A3DC /* ProjectDomainWarehouseTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 587C3C788C71CE3ED75F3D27 /* ProjectDomainWarehouseTypes.swift */; };
 		0D3080D8AB5557432133EE9F /* ProjectListFiltersSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD693574BC8E03DFDB4744DE /* ProjectListFiltersSection.swift */; };
 		0D3DFE06DA4D814895F732BB /* BackupContractCompatibilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1E1C0CC499AAA4AEDA09934 /* BackupContractCompatibilityTests.swift */; };
 		0D8E74717A7C557FAD5C8844 /* ProjectDetailContainer+Presentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E73224296428B439ADF6A82 /* ProjectDetailContainer+Presentation.swift */; };
+		0E33F84095ECB8C1BFD413F1 /* ExportView+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 88BEEB5DF797DC9B34177256 /* ExportView+Layout.swift */; };
 		0E35BCC0FB7FEC2BF1E8D860 /* ProjectDetailContainer+DeliveryRoutingActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83790E0B9C201BB853B203BD /* ProjectDetailContainer+DeliveryRoutingActions.swift */; };
 		0E62B274696A6A0FB200BBA8 /* DashboardSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = BD27E55A07E5EFA317299CC5 /* DashboardSupportViews.swift */; };
 		0E94F2304EEF918C83B1B08A /* OperationAuditLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A42DF17B4F1FD1ACB9C3F060 /* OperationAuditLogView.swift */; };
@@ -159,6 +161,7 @@
 		489D118002402A5763A16C06 /* StorageCleanupSectionCopyMessagingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 114EB941D44172DAC9A6703F /* StorageCleanupSectionCopyMessagingTests.swift */; };
 		48C2C306091D086468F0CB9E /* privacy-policy.json in Resources */ = {isa = PBXBuildFile; fileRef = 12E42FAF3FD384E0F34D52DD /* privacy-policy.json */; };
 		48E90ECF68D12E1227B9C5EB /* ProjectDetailContainer+PackageExportActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5D17B49192EBED1413B1D98 /* ProjectDetailContainer+PackageExportActions.swift */; };
+		4914A4C18C10524425C3D7F9 /* ReportBuilderProjectDeliveryArchiveHelperSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D47F6DED00B9DF52435952 /* ReportBuilderProjectDeliveryArchiveHelperSupport.swift */; };
 		49AD50B37777298DB78BE3E1 /* DataStore+LibraryOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 444525ED2002797DDEEBB215 /* DataStore+LibraryOps.swift */; };
 		4A27A272B4D8658914A82961 /* ProjectDetailDrawingIssueSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32D114AD4A721FE28C90217E /* ProjectDetailDrawingIssueSupport.swift */; };
 		4A525010ADE2477075E14427 /* QuotationTemplateLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81C9B271A85C9023F79D67CC /* QuotationTemplateLibraryView.swift */; };
@@ -214,6 +217,7 @@
 		66D940B36ADF60B814A7B404 /* QuickNoteImportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9B07A6B567A6E10060B8B0F /* QuickNoteImportTests.swift */; };
 		67249F2E77B93CF444AB2A4C /* SearchableFilter.swift in Sources */ = {isa = PBXBuildFile; fileRef = F3AD084787DBF24842A6B094 /* SearchableFilter.swift */; };
 		6761AF114F59B12DFEA2C89E /* DataStore+MaterialLibraryState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1909F961EAFB3BDF02496B1 /* DataStore+MaterialLibraryState.swift */; };
+		692ED5E918869DD37D0C1CB4 /* ExportView+Execution.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C991399DC4CA7478C895D81 /* ExportView+Execution.swift */; };
 		695D570AD81443234CF3F7CE /* DataStore+HistoryOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 536042BAA7F2CC77123F9085 /* DataStore+HistoryOps.swift */; };
 		6A09B230CFB09DA173220659 /* ConstructionMethodChecklistEditorSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02F4CEA32C1600A243FE9827 /* ConstructionMethodChecklistEditorSections.swift */; };
 		6A3BF1156110EB62575A1B3A /* LaborRecordSupportViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */; };
@@ -259,6 +263,7 @@
 		7A6851380ECDF2857D934565 /* ProjectDeliveryGuideModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6932A277608FDBF2E88A32AA /* ProjectDeliveryGuideModels.swift */; };
 		7A9BB2987CA5C3C5E1940ADD /* DailyLogView+Helpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 905094CD3E83F946DADD8CAC /* DailyLogView+Helpers.swift */; };
 		7BB5E721CF0D04B9784D9644 /* DataStore+LibraryTemplateOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = C4E311ED76EB9E923F15ECFC /* DataStore+LibraryTemplateOps.swift */; };
+		7BC932FCA65B71BE0BD65181 /* CalculatorResultCard+Layout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 43201F924A985BB3DFE7C694 /* CalculatorResultCard+Layout.swift */; };
 		7C25D97C0A6016F456C5FFB9 /* BackupCloudSectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 36090225AFC1274CF3728D0F /* BackupCloudSectionView.swift */; };
 		7C8D99CFB63FC92BC4251AD6 /* ReportBuilder+PDFLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2425390E373A36E15990D2EE /* ReportBuilder+PDFLayout.swift */; };
 		7CD1530837576F14721C6138 /* QuickNoteEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D359CB72F12979CF60C2F23 /* QuickNoteEditorView.swift */; };
@@ -369,6 +374,7 @@
 		BA69751EBAFECC7D75D91E80 /* ChecklistToolboxComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = D9C014D4D4B4A893B9BFD661 /* ChecklistToolboxComponents.swift */; };
 		BA91D1176B1DA23B8D740524 /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3928B4B987F1D88C346E951 /* ProjectDetailView.swift */; };
 		BA9633F885A19F4F03D3725D /* StorageCleanupCenterView+Messaging.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F6F5FD3320A6A81F128B12 /* StorageCleanupCenterView+Messaging.swift */; };
+		BA9A5D34CD9CE2789F33D585 /* ProjectDomainDrawingTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 37F64889AB6C67937CA294AA /* ProjectDomainDrawingTypes.swift */; };
 		BBABB76B1D2919E385E8D29B /* MaterialPriceDatabaseViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3020960542BFA06A00C6DD55 /* MaterialPriceDatabaseViews.swift */; };
 		BBCFD1A6039E188A93AFF174 /* ProjectDetailRouteState.swift in Sources */ = {isa = PBXBuildFile; fileRef = ADA11807C95A0DCE22B092AF /* ProjectDetailRouteState.swift */; };
 		BCF179337A85F91A8F7FBF55 /* LaborRecordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4352DA57CB946000FEB04D19 /* LaborRecordView.swift */; };
@@ -393,6 +399,7 @@
 		C78CE99FB9C756FE6335FABA /* QuotationSheetViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = D2F1DC0961B377D646A9C05C /* QuotationSheetViews.swift */; };
 		C7A720FAE38A0D445517F898 /* EngineeringCalculations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6CC2D88EC5B97307308301E7 /* EngineeringCalculations.swift */; };
 		C7CF257F01F79E42EC18EBB7 /* ProjectDetailMetrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 076F9419A1D48EC057AA6CE7 /* ProjectDetailMetrics.swift */; };
+		C816BFA7C350ADF68EB0A0CA /* CalculatorResultCard+Actions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89E43D36A6442B835CAAB2E0 /* CalculatorResultCard+Actions.swift */; };
 		C84F2349EC274810C90AD9F1 /* UnitDisplayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B12FF8822A30A05B12994A2 /* UnitDisplayTests.swift */; };
 		CA3ADC0DA41E8279408CABA1 /* WatermarkCameraTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */; };
 		CA90D6A44D653E30F9F86B33 /* DataStore+ProjectRecordOpsShared.swift in Sources */ = {isa = PBXBuildFile; fileRef = 255544AD5ECB041CBCD9532A /* DataStore+ProjectRecordOpsShared.swift */; };
@@ -418,6 +425,7 @@
 		D44C4731261F3C60BC677F12 /* ToolRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FD78F7D40405DC8511A91F6 /* ToolRow.swift */; };
 		D497762B7DC1845AE5ECD4CF /* DataHealthViewActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB1F5B28051AD58074106C30 /* DataHealthViewActions.swift */; };
 		D4F79037708EAEBB897A76A1 /* WidgetData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C300676B36A45E7D4575BECF /* WidgetData.swift */; };
+		D6FE99BB7576E0784C4B1843 /* ReportBuilder+CSVSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20D25070DA1B3DDF2A70E68 /* ReportBuilder+CSVSections.swift */; };
 		D724C0A80A918429DFCE7879 /* DataStore+ProjectDrawingOps.swift in Sources */ = {isa = PBXBuildFile; fileRef = 19FAAD7C4873792AFFA0F44F /* DataStore+ProjectDrawingOps.swift */; };
 		D73E8D41DAA3F96486FFBD08 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 923AE3B0FFF61161AE20DB05 /* PrivacyInfo.xcprivacy */; };
 		D7DA1BA2B0D407BA45C2C755 /* TrayFillView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB26E09C695868B0D9F5D4F0 /* TrayFillView.swift */; };
@@ -447,6 +455,7 @@
 		E873CB9016CCE438CD51DB9C /* ConcreteCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 729B93E3CE7951F8D0371388 /* ConcreteCalcView.swift */; };
 		E8A1EDE25A86E059E0562F8D /* ProjectDetailFinanceDocumentHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8D862C746AA4A9AA0DDE0B82 /* ProjectDetailFinanceDocumentHelper.swift */; };
 		E9582CE64603B78FA8EAE7D0 /* DataHealthScanTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A8B745C3E4F1767AA0146E47 /* DataHealthScanTypes.swift */; };
+		EB06B5083D02A1912FD07DC4 /* ProjectDomainContactTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EDE8D7F78C1F62D8F60240B /* ProjectDomainContactTypes.swift */; };
 		EC3E4972486D45F7A7E43EA5 /* ReportBuilder+HTML.swift in Sources */ = {isa = PBXBuildFile; fileRef = 807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */; };
 		EC4CE64B120E5B9C163F9198 /* ProjectDocumentDeliveryInspectionModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0099E88B8E78D22713AE5EF8 /* ProjectDocumentDeliveryInspectionModels.swift */; };
 		EC63F776CD86994C3292BED3 /* ProjectFileGuidePrimitives.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07B42464636F7C2FCED61CB7 /* ProjectFileGuidePrimitives.swift */; };
@@ -472,6 +481,7 @@
 		F3FFB22B290AB0EF272E97B0 /* DataHealthView+IssueRepairApplier.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEC8E6EFC3E2D2F5D2663E52 /* DataHealthView+IssueRepairApplier.swift */; };
 		F4249E0028EAFCD0CAC2E119 /* DashboardCardViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0E4BDFEDAF2A0AB171A2E5AD /* DashboardCardViews.swift */; };
 		F43A361428BCBEBD5D28AFF3 /* ConstructionMethodEditSheet+Drafting.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4DFB46E7944F417E20CF5DDC /* ConstructionMethodEditSheet+Drafting.swift */; };
+		F557E7159D4E2D8E35F98867 /* ReportBuilder+CSVExportKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 07880B4C69DC885659325C49 /* ReportBuilder+CSVExportKeys.swift */; };
 		F5E4016D961DF9458939352C /* ImageDownsampleServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A87B7EA9986E64A86B15EF1 /* ImageDownsampleServiceTests.swift */; };
 		F6B60B3FDAF9A31996575662 /* RebarCalcView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0C3C185DA16C0F501CECB44 /* RebarCalcView.swift */; };
 		F6EDA10FA9D2D7D7C0EA6948 /* ProjectDetailContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1668EB3DBA273DCF117FD7D0 /* ProjectDetailContainer.swift */; };
@@ -541,6 +551,7 @@
 		0726CEC515F8DB286C75970E /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		076F9419A1D48EC057AA6CE7 /* ProjectDetailMetrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailMetrics.swift; sourceTree = "<group>"; };
 		0782B9051652E28A84E3DFC7 /* ConstructionMethodDetailViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConstructionMethodDetailViews.swift; sourceTree = "<group>"; };
+		07880B4C69DC885659325C49 /* ReportBuilder+CSVExportKeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+CSVExportKeys.swift"; sourceTree = "<group>"; };
 		07B42464636F7C2FCED61CB7 /* ProjectFileGuidePrimitives.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileGuidePrimitives.swift; sourceTree = "<group>"; };
 		083AD06C66EE1140B64674BA /* SitekeeperWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperWidget.swift; sourceTree = "<group>"; };
 		0864A5DD73BA12D426688A6D /* ProjectFileThumbnailToken+Loading.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectFileThumbnailToken+Loading.swift"; sourceTree = "<group>"; };
@@ -554,6 +565,7 @@
 		0E465FF46056A384C52DB306 /* DataManagementView+Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataManagementView+Overview.swift"; sourceTree = "<group>"; };
 		0E4BDFEDAF2A0AB171A2E5AD /* DashboardCardViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardCardViews.swift; sourceTree = "<group>"; };
 		0EBC41F02E3B982E3E7160F5 /* ProjectFileDataPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileDataPresentation.swift; sourceTree = "<group>"; };
+		0EDE8D7F78C1F62D8F60240B /* ProjectDomainContactTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDomainContactTypes.swift; sourceTree = "<group>"; };
 		0F11CDA6D5FB30C3DD2100E2 /* BackupSnapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupSnapshot.swift; sourceTree = "<group>"; };
 		0F36829A6395A169B04CA8C6 /* FinanceStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceStore.swift; sourceTree = "<group>"; };
 		0FC01EF51EBB7E6DB01ED607 /* FinanceModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FinanceModels.swift; sourceTree = "<group>"; };
@@ -615,6 +627,7 @@
 		2AA03893B09F833F0C885365 /* DashboardPanelViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardPanelViews.swift; sourceTree = "<group>"; };
 		2BDC16950382E52EADD62F97 /* ProjectFileBrowserView+Search.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectFileBrowserView+Search.swift"; sourceTree = "<group>"; };
 		2C3226D841448E7C5FE59FBC /* TransferLimitPolicyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransferLimitPolicyTests.swift; sourceTree = "<group>"; };
+		2C991399DC4CA7478C895D81 /* ExportView+Execution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExportView+Execution.swift"; sourceTree = "<group>"; };
 		2CFEBE187A5D4C6B3530CED6 /* TaskProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskProgressView.swift; sourceTree = "<group>"; };
 		2D01229C310BF30CD7D5BC49 /* StorageCleanupCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCleanupCenterView.swift; sourceTree = "<group>"; };
 		2D9F1E7265C56A1656197B14 /* ProjectDetailSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailSections.swift; sourceTree = "<group>"; };
@@ -638,6 +651,7 @@
 		36FD6EFC1E995721EA311E06 /* CommonMaterialCatalogTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommonMaterialCatalogTests.swift; sourceTree = "<group>"; };
 		378512787117E253BCF6AAA8 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/Localizable.strings"; sourceTree = "<group>"; };
 		379D3CD092D3D2F34757B323 /* ProjectDetailDrawingEditSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailDrawingEditSupport.swift; sourceTree = "<group>"; };
+		37F64889AB6C67937CA294AA /* ProjectDomainDrawingTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDomainDrawingTypes.swift; sourceTree = "<group>"; };
 		39551CE6172AA1A7E24AD1C1 /* ReportBuilder+CSV.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+CSV.swift"; sourceTree = "<group>"; };
 		397862358E7289CE8C92EC28 /* StorageCleanupScanner+CleanupPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StorageCleanupScanner+CleanupPreview.swift"; sourceTree = "<group>"; };
 		39FC4DCED667DC4C39D6A265 /* UserPreferencesStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserPreferencesStore.swift; sourceTree = "<group>"; };
@@ -654,6 +668,7 @@
 		40CAC7B297EA2A7E933E48E0 /* DocumentStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DocumentStorage.swift; sourceTree = "<group>"; };
 		411BA3A20FB966EF6233DF40 /* SitekeeperApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SitekeeperApp.swift; sourceTree = "<group>"; };
 		41CDC35200800F6CAF3BC51F /* StorageCleanupCenterSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCleanupCenterSections.swift; sourceTree = "<group>"; };
+		43201F924A985BB3DFE7C694 /* CalculatorResultCard+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CalculatorResultCard+Layout.swift"; sourceTree = "<group>"; };
 		4352DA57CB946000FEB04D19 /* LaborRecordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaborRecordView.swift; sourceTree = "<group>"; };
 		435EE44941C892699A1B9B73 /* DataHealthView+IssueBuildersProjects.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataHealthView+IssueBuildersProjects.swift"; sourceTree = "<group>"; };
 		4375B290638ABD2A0465A94B /* DataStore+HistoryRetention.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+HistoryRetention.swift"; sourceTree = "<group>"; };
@@ -698,6 +713,7 @@
 		5549418913D20062BA15055C /* WatermarkCameraToolModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraToolModels.swift; sourceTree = "<group>"; };
 		55E45AB8FA412A550DC31C66 /* StorageCleanupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StorageCleanupSupport.swift; sourceTree = "<group>"; };
 		577CF970D5F1E364293AC60E /* ProjectDetailFinanceDocumentActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailFinanceDocumentActions.swift; sourceTree = "<group>"; };
+		587C3C788C71CE3ED75F3D27 /* ProjectDomainWarehouseTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDomainWarehouseTypes.swift; sourceTree = "<group>"; };
 		5898C7E398DD42FF34A27F65 /* BackupOverviewSectionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupOverviewSectionsView.swift; sourceTree = "<group>"; };
 		589C1AD37500B03DE5CA0937 /* BackupViewImportExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupViewImportExport.swift; sourceTree = "<group>"; };
 		595E3C770FB063819A790CD3 /* DrawingImportCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DrawingImportCoordinatorTests.swift; sourceTree = "<group>"; };
@@ -781,10 +797,12 @@
 		85133EBFECA9D509D9FA6C1D /* TaskCancellationRelay.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TaskCancellationRelay.swift; sourceTree = "<group>"; };
 		867AD32193961DF9A8334A94 /* ProjectDocumentsFilterFormSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDocumentsFilterFormSection.swift; sourceTree = "<group>"; };
 		87352DF4A2BF1CDF99D4F38E /* ProjectFinancialRecordSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFinancialRecordSheets.swift; sourceTree = "<group>"; };
+		88BEEB5DF797DC9B34177256 /* ExportView+Layout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ExportView+Layout.swift"; sourceTree = "<group>"; };
 		88D3C43C55803D6EDF6808DF /* MaterialLibraryView+BatchSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MaterialLibraryView+BatchSelection.swift"; sourceTree = "<group>"; };
 		88F3421F9D32D6A25A1ABBD2 /* DataStore+WidgetPublishing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+WidgetPublishing.swift"; sourceTree = "<group>"; };
 		892033EDC769982221FBA3D3 /* DataStoreDeferredFileCleanup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataStoreDeferredFileCleanup.swift; sourceTree = "<group>"; };
 		8929512A6B81BA48A276C2F9 /* AppUIComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUIComponents.swift; sourceTree = "<group>"; };
+		89E43D36A6442B835CAAB2E0 /* CalculatorResultCard+Actions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CalculatorResultCard+Actions.swift"; sourceTree = "<group>"; };
 		8A56BC311800F1172644CE39 /* DataStore+ProgressTaskOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+ProgressTaskOps.swift"; sourceTree = "<group>"; };
 		8AF1FCBA4D601788018518A4 /* ProjectDetailImportFlowCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailImportFlowCoordinator.swift; sourceTree = "<group>"; };
 		8B9F7788398E08A1D467F256 /* DataStore+Snapshot.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+Snapshot.swift"; sourceTree = "<group>"; };
@@ -854,6 +872,7 @@
 		A70D18F2C906CF6C37130714 /* privacy-policy.v2026-05-15.en.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = "privacy-policy.v2026-05-15.en.txt"; sourceTree = "<group>"; };
 		A78A415D64629CA4BC8E6F7D /* WatermarkCameraInfrastructure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraInfrastructure.swift; sourceTree = "<group>"; };
 		A78F8D83F01AA4AC5B99F9B5 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A7D47F6DED00B9DF52435952 /* ReportBuilderProjectDeliveryArchiveHelperSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportBuilderProjectDeliveryArchiveHelperSupport.swift; sourceTree = "<group>"; };
 		A81645B3CFDFF5F90FBC3DB6 /* MaterialSheetLogicHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialSheetLogicHelpers.swift; sourceTree = "<group>"; };
 		A82E8D2252CA8115E3CFB084 /* NumericInputSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NumericInputSupport.swift; sourceTree = "<group>"; };
 		A8B745C3E4F1767AA0146E47 /* DataHealthScanTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataHealthScanTypes.swift; sourceTree = "<group>"; };
@@ -873,6 +892,7 @@
 		B19C07AF8EED00C5EF0BEB43 /* ProjectFinancialRecordEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFinancialRecordEditSheet.swift; sourceTree = "<group>"; };
 		B1BF25006B43E6C24F5BE689 /* ProjectFileBrowserRows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectFileBrowserRows.swift; sourceTree = "<group>"; };
 		B1E7309A73434892E581769C /* ProjectDetailContainer+ImportActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+ImportActions.swift"; sourceTree = "<group>"; };
+		B20D25070DA1B3DDF2A70E68 /* ReportBuilder+CSVSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+CSVSections.swift"; sourceTree = "<group>"; };
 		B2C1A722BF7205C827592F36 /* DataStore+FinanceLaborRecordOps.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DataStore+FinanceLaborRecordOps.swift"; sourceTree = "<group>"; };
 		B36098099B708466E50D615D /* CalculatorInputParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalculatorInputParserTests.swift; sourceTree = "<group>"; };
 		B3928B4B987F1D88C346E951 /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailView.swift; sourceTree = "<group>"; };
@@ -1280,7 +1300,10 @@
 				940B38FFDFCBE98EB586BC39 /* PhotoStorage.swift */,
 				6A33CFE7740F24539BC8589B /* ProjectDocumentArchiveTypes.swift */,
 				8E7BBC2044E441C721F10361 /* ProjectDocumentStorage.swift */,
+				0EDE8D7F78C1F62D8F60240B /* ProjectDomainContactTypes.swift */,
+				37F64889AB6C67937CA294AA /* ProjectDomainDrawingTypes.swift */,
 				B04854C94BFC585E694DA280 /* ProjectDomainTypes.swift */,
+				587C3C788C71CE3ED75F3D27 /* ProjectDomainWarehouseTypes.swift */,
 				5CAC034F3D98696894294EDA /* ProjectFinancialDocumentMatcher.swift */,
 				CC69B939A08709BFEF306083 /* ProjectFinancialMetrics.swift */,
 				A6B99E2911692CE88F880276 /* ProjectKnowledgeModels.swift */,
@@ -1290,6 +1313,8 @@
 				825145B4C09AEF7ED185BC66 /* ReceiptOCRService.swift */,
 				2160350B1ECABF4523316109 /* ReportBuilder.swift */,
 				39551CE6172AA1A7E24AD1C1 /* ReportBuilder+CSV.swift */,
+				07880B4C69DC885659325C49 /* ReportBuilder+CSVExportKeys.swift */,
+				B20D25070DA1B3DDF2A70E68 /* ReportBuilder+CSVSections.swift */,
 				807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */,
 				CA674B8F80078BF6FDFB6E86 /* ReportBuilder+OperationAudit.swift */,
 				04E44847F055E52B9B8E9D5D /* ReportBuilder+PDF.swift */,
@@ -1300,6 +1325,7 @@
 				91E5706A8099AB045D58EA05 /* ReportBuilder+ProjectDeliveryArchiveHelpers.swift */,
 				5008999A777F2C3F47F58FEE /* ReportBuilder+ProjectDeliverySupport.swift */,
 				4E6B7697ECB30029D6A569FD /* ReportBuilderPDFSections.swift */,
+				A7D47F6DED00B9DF52435952 /* ReportBuilderProjectDeliveryArchiveHelperSupport.swift */,
 				121682DA41D443B8F5798D21 /* ReportBuilderTypes.swift */,
 				36B250670BE71DEBCCF19F4D /* SampleDataFixture.swift */,
 				6A66AB89ECEC918F84D3A2F7 /* StorageIssueLog.swift */,
@@ -1375,6 +1401,8 @@
 				0E465FF46056A384C52DB306 /* DataManagementView+Overview.swift */,
 				9CCCE95369FD5F469167B091 /* DataManagementViewTypes.swift */,
 				0726CEC515F8DB286C75970E /* ExportView.swift */,
+				2C991399DC4CA7478C895D81 /* ExportView+Execution.swift */,
+				88BEEB5DF797DC9B34177256 /* ExportView+Layout.swift */,
 				7298CD0AF72D95D616E86553 /* FeedbackView.swift */,
 				A42DF17B4F1FD1ACB9C3F060 /* OperationAuditLogView.swift */,
 				2FA8472380C1DE4F76CBE5BF /* PrivacyPolicyView.swift */,
@@ -1656,6 +1684,8 @@
 				40363A1D60941501A5E5D271 /* CalculatorFormatting.swift */,
 				A06DD7D8DADBEBD8F12F9A11 /* CalculatorFormControls.swift */,
 				0C366B29D9319301B25AF90C /* CalculatorResultCard.swift */,
+				89E43D36A6442B835CAAB2E0 /* CalculatorResultCard+Actions.swift */,
+				43201F924A985BB3DFE7C694 /* CalculatorResultCard+Layout.swift */,
 				6EA9C71AA55008F5E9FE24F0 /* CalculatorTabView.swift */,
 				729B93E3CE7951F8D0371388 /* ConcreteCalcView.swift */,
 				EFBCA4A5A1F8490B7C3E8EF5 /* ConduitFillView.swift */,
@@ -1928,6 +1958,8 @@
 				3B39FB28BF756A264AA45365 /* CalculatorCopy.swift in Sources */,
 				5064A8C793DF6B83CA9BFA4D /* CalculatorFormControls.swift in Sources */,
 				8798BD42E9DF2CCBECE1BBB1 /* CalculatorFormatting.swift in Sources */,
+				C816BFA7C350ADF68EB0A0CA /* CalculatorResultCard+Actions.swift in Sources */,
+				7BC932FCA65B71BE0BD65181 /* CalculatorResultCard+Layout.swift in Sources */,
 				0491BCA40B1265D2CF38DEA8 /* CalculatorResultCard.swift in Sources */,
 				021C67C19338BF8D610C3C1A /* CalculatorTabView.swift in Sources */,
 				9321EB5D7EB47352804D3F13 /* ChecklistTabView.swift in Sources */,
@@ -2057,6 +2089,8 @@
 				C03558E9C9901EA8BB1AB22F /* EngineeringDatabaseViews+List.swift in Sources */,
 				6D85A1221047C85E60D91984 /* EngineeringDatabaseViews.swift in Sources */,
 				E3070FB52101FBFB2B0B24DF /* ExportFileURLPreparer.swift in Sources */,
+				692ED5E918869DD37D0C1CB4 /* ExportView+Execution.swift in Sources */,
+				0E33F84095ECB8C1BFD413F1 /* ExportView+Layout.swift in Sources */,
 				8C717E73018F00B89A528987 /* ExportView.swift in Sources */,
 				6CCED7A06978C253EC4D214D /* FeedbackView.swift in Sources */,
 				57FF7DAA14F32C35C0E81907 /* FileQuarantineStore.swift in Sources */,
@@ -2192,7 +2226,10 @@
 				B6632CC2AEF767BD4573221A /* ProjectDocumentStorage.swift in Sources */,
 				6DA95CFDE21CC7EE1F36520E /* ProjectDocumentsFilterFormSection.swift in Sources */,
 				B9C090D81521C668E785560C /* ProjectDocumentsSectionComponents.swift in Sources */,
+				EB06B5083D02A1912FD07DC4 /* ProjectDomainContactTypes.swift in Sources */,
+				BA9A5D34CD9CE2789F33D585 /* ProjectDomainDrawingTypes.swift in Sources */,
 				0C53053F878486E8716D30AA /* ProjectDomainTypes.swift in Sources */,
+				0D2AFF65C2B97DFB0C42A3DC /* ProjectDomainWarehouseTypes.swift in Sources */,
 				9FA50F30FF2FAE0E90589A96 /* ProjectEditSheet.swift in Sources */,
 				F17C7B40DC8135C2E5905A72 /* ProjectFileBrowserRows.swift in Sources */,
 				44AA48F784B40D66EF648ABB /* ProjectFileBrowserSections.swift in Sources */,
@@ -2255,6 +2292,8 @@
 				F6B60B3FDAF9A31996575662 /* RebarCalcView.swift in Sources */,
 				86F79B165E2E1E76200B1CDB /* ReceiptOCRService.swift in Sources */,
 				D0EF7C59332FFACEE25A95EA /* ReportBuilder+CSV.swift in Sources */,
+				F557E7159D4E2D8E35F98867 /* ReportBuilder+CSVExportKeys.swift in Sources */,
+				D6FE99BB7576E0784C4B1843 /* ReportBuilder+CSVSections.swift in Sources */,
 				EC3E4972486D45F7A7E43EA5 /* ReportBuilder+HTML.swift in Sources */,
 				CBCB00E4AE81FEC17D0CC0C9 /* ReportBuilder+OperationAudit.swift in Sources */,
 				8F63F969441220D42622E6EF /* ReportBuilder+PDF.swift in Sources */,
@@ -2266,6 +2305,7 @@
 				5E2FBB7D767D87D8EA973AEF /* ReportBuilder+ProjectDeliverySupport.swift in Sources */,
 				9AE1984582D1B9FDE8D21FE9 /* ReportBuilder.swift in Sources */,
 				E16BB697A3C6EF7A475AFA23 /* ReportBuilderPDFSections.swift in Sources */,
+				4914A4C18C10524425C3D7F9 /* ReportBuilderProjectDeliveryArchiveHelperSupport.swift in Sources */,
 				553FF60A3F81EE9BFDAA1A28 /* ReportBuilderTypes.swift in Sources */,
 				919BD1083ED7A1F4C37084E7 /* RootView.swift in Sources */,
 				70087F2ADDB605A0A156BD13 /* SampleDataFixture.swift in Sources */,

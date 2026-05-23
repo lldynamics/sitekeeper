@@ -65,8 +65,8 @@ if [[ -n "$FORBIDDEN_MATCHES" ]]; then
   exit 1
 fi
 
-require_pattern "ProjectDrawing domain model" "Sources/Shared/Services/ProjectDomainTypes.swift" "struct ProjectDrawing"
-require_pattern "ProjectDrawing allowed import contract" "Sources/Shared/Services/ProjectDomainTypes.swift" "allowedFileExtensions"
+require_pattern "ProjectDrawing domain model" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "struct ProjectDrawing"
+require_pattern "ProjectDrawing allowed import contract" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "allowedFileExtensions"
 require_pattern "drawing file storage" "Sources/Shared/Services/DrawingStorage.swift" "enum DrawingStorage"
 require_pattern "DataStore drawing write port" "Sources/Shared/Services/DataStore+ProjectDrawingOps.swift" "appendProjectDrawing"
 require_pattern "DataStore drawing write port" "Sources/Shared/Services/DataStore+ProjectDrawingOps.swift" "removeProjectDrawings"
@@ -76,7 +76,7 @@ require_pattern "backup drawing metadata contract" "Sources/Shared/Services/Back
 require_pattern "backup drawing file contract" "Sources/Shared/Services/BackupSnapshot.swift" "drawingFiles: [DrawingBackupFile]"
 require_pattern "backup archive drawing files" "Sources/Shared/Services/BackupArchiveService.swift" "DrawingStorage.fileURL"
 require_pattern "export option preserves drawing index" "Sources/Shared/Services/ReportBuilderTypes.swift" "includeProjectDrawings"
-require_pattern "CSV export preserves drawing index" "Sources/Shared/Services/ReportBuilder+CSV.swift" "project_drawings"
+require_pattern "CSV export preserves drawing index" "Sources/Shared/Services/ReportBuilder+CSVSections.swift" "project_drawings"
 require_pattern "user export flow exposes drawing index" "Sources/Features/我的/ExportView.swift" "includeProjectDrawings"
 
 echo "[drawing-release-boundary] PASS: removed CAD kernel symbols are absent and drawing ledger/export contracts remain present."
