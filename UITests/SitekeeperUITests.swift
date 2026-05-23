@@ -133,16 +133,8 @@ final class SitekeeperUITests: XCTestCase {
             return button
         }
 
-        for _ in 0..<scrollingAttempts {
-            let scrollView = app.scrollViews.firstMatch
-            let collectionView = app.collectionViews.firstMatch
-            if scrollView.exists, !scrollView.frame.isEmpty {
-                scrollView.swipeUp()
-            } else if collectionView.exists, !collectionView.frame.isEmpty {
-                collectionView.swipeUp()
-            } else {
-                app.swipeUp()
-            }
+        for attempt in 0..<scrollingAttempts {
+            performSearchScroll(app, attempt: attempt)
 
             if button.waitForExistence(timeout: 1), button.isHittable {
                 break
@@ -161,22 +153,30 @@ final class SitekeeperUITests: XCTestCase {
             return match
         }
 
-        for _ in 0..<scrollingAttempts {
-            let scrollView = app.scrollViews.firstMatch
-            let collectionView = app.collectionViews.firstMatch
-            if scrollView.exists, !scrollView.frame.isEmpty {
-                scrollView.swipeUp()
-            } else if collectionView.exists, !collectionView.frame.isEmpty {
-                collectionView.swipeUp()
-            } else {
-                app.swipeUp()
-            }
+        for attempt in 0..<scrollingAttempts {
+            performSearchScroll(app, attempt: attempt)
 
             if match.waitForExistence(timeout: 1), match.isHittable {
                 break
             }
         }
         return match
+    }
+
+    private func performSearchScroll(_ app: XCUIApplication, attempt: Int) {
+        let shouldSwipeUp = attempt % 2 == 0
+        let scrollView = app.scrollViews.firstMatch
+        let collectionView = app.collectionViews.firstMatch
+
+        if scrollView.exists, !scrollView.frame.isEmpty {
+            shouldSwipeUp ? scrollView.swipeUp() : scrollView.swipeDown()
+            return
+        }
+        if collectionView.exists, !collectionView.frame.isEmpty {
+            shouldSwipeUp ? collectionView.swipeUp() : collectionView.swipeDown()
+            return
+        }
+        shouldSwipeUp ? app.swipeUp() : app.swipeDown()
     }
 
     private func openDataSafetyCenter(_ app: XCUIApplication) {
