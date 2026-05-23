@@ -94,7 +94,7 @@ extension DataHealthView {
     }
 
     var photoStorageBytes: Int {
-        latestSnapshot?.storageUsage.photoBytes ?? 0
+        latestSnapshot?.storageUsage.photoStorageBytes ?? 0
     }
 
     var projectDocumentBytes: Int {
@@ -122,7 +122,7 @@ extension DataHealthView {
     }
 
     var totalStorageBytes: Int {
-        latestSnapshot?.storageUsage.totalBytes ?? 0
+        latestSnapshot?.storageUsage.totalStorageBytes ?? 0
     }
 
     var missingPhotoFileIssues: [DataHealthIssue] {

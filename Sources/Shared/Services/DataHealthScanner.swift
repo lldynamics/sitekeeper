@@ -42,10 +42,6 @@ struct DataHealthStorageUsageSnapshot: Codable, Equatable, Sendable {
             + cloudBackupBytes
             + historyRecordBytes
     }
-
-    // Backward-compatible aliases used by data health views.
-    var photoBytes: Int { photoStorageBytes }
-    var totalBytes: Int { totalStorageBytes }
 }
 
 struct DataHealthScanSnapshot: Codable, Equatable, Sendable {
