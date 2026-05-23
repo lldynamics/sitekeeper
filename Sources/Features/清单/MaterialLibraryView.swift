@@ -18,7 +18,7 @@ struct MaterialLibraryView: View {
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var batchState = MaterialLibraryBatchSelectionState()
     @FocusState private var appendMaterialFocusedField: AppendMaterialField?
-    @AppStorage("recentMaterialSearches") private var recentSearchKeywordsRaw = ""
+    @AppStorage(UserPreferenceKeys.recentMaterialSearches) private var recentSearchKeywordsRaw = ""
     @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) var promptAfterAdd = true
     @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
     @AppStorage(UserPreferenceKeys.materialLibraryLastDraftID) var lastAppendDraftIDRaw = ""

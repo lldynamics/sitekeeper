@@ -16,6 +16,7 @@ struct ConstructionMethodLibraryView: View {
     @State var selectedMethodID: UUID?
     @State var operationNotice: OperationToastNotice?
     @State var undoableDeletion = UndoableDeletionCoordinator()
+    @State var showMethodPackImport = false
 
     init(focusedMethodId: UUID? = nil) {
         self.focusedMethodId = focusedMethodId
@@ -117,6 +118,12 @@ struct ConstructionMethodLibraryView: View {
                     updateMethod(updated)
                     viewingMethod = updated
                 }
+            )
+        }
+        .sheet(isPresented: $showMethodPackImport) {
+            ConstructionMethodPackImportSheet(
+                existingMethods: constructionMethods,
+                onImport: importMethodPacks(_:newCount:updateCount:)
             )
         }
         .operationToast(notice: $operationNotice)

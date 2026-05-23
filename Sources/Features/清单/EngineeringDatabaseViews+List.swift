@@ -56,6 +56,11 @@ extension ConstructionMethodLibraryView {
                         Text(method.publishStatus.displayName)
                             .font(.caption2.weight(.semibold))
                             .foregroundStyle(method.publishStatus == .published ? .appSuccess : method.publishStatus == .deprecated ? .appRisk : .appWarning)
+                        if !method.sourceID.isEmpty {
+                            Label(String(localized: "工程知识"), systemImage: "globe.asia.australia")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
                         if !method.qualityStandard.isEmpty {
                             Label(String(localized: "有质检要点"), systemImage: "checkmark.seal")
                                 .font(.caption2)
@@ -98,11 +103,31 @@ extension ConstructionMethodLibraryView {
                 .listRowInsets(.init(top: 8, leading: 16, bottom: 2, trailing: 16))
             },
             footerContent: {
-                EmptyView()
+                Section {
+                    Button {
+                        showMethodPackImport = true
+                    } label: {
+                        Label(String(localized: "工艺包同步中心"), systemImage: "arrow.triangle.2.circlepath.circle.fill")
+                    }
+                }
             },
             toolbarContent: {
-                Button { showAdd = true } label: { Image(systemName: "plus").visibleIconStyle() }
-                    .accessibilityLabel(String(localized: "添加工艺"))
+                Menu {
+                    Button {
+                        showAdd = true
+                    } label: {
+                        Label(String(localized: "新建施工工艺"), systemImage: "plus")
+                    }
+                    Button {
+                        showMethodPackImport = true
+                    } label: {
+                        Label(String(localized: "工艺包同步中心"), systemImage: "arrow.triangle.2.circlepath.circle.fill")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .visibleIconStyle()
+                }
+                .accessibilityLabel(String(localized: "施工工艺操作"))
             }
         )
     }
