@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		0030F1D155B81AE8CF23A5C4 /* ToolboxCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6FD40D1821A736A7A616FEC2 /* ToolboxCatalog.swift */; };
+		00C667AB1291BD52D0ABBFB2 /* LaborRecordView+EntryActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFC1CD1BA64D1F3A50F7FFA1 /* LaborRecordView+EntryActions.swift */; };
 		00FA9E90092F1F99A163F255 /* BackupImportCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B9862922699CFE73B88A937 /* BackupImportCoordinator.swift */; };
 		01920EC7F94278313094B4EF /* ProjectFileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65803C9CBB3B7136F2B9FF08 /* ProjectFileListView.swift */; };
 		019E0CBF4FFBAFA2A5E5FEF7 /* ProjectDetailDocumentsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E6CD5BCA1F1814F6825506C /* ProjectDetailDocumentsSection.swift */; };
@@ -145,6 +146,7 @@
 		41B47EDEF097CD267ED3B372 /* MaterialLibraryView+Append.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EC628577CA6A9CB0A519591 /* MaterialLibraryView+Append.swift */; };
 		41CE071954EC4674766B39D2 /* ProjectListView+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = BC92EDA4E568A62F645AB19C /* ProjectListView+Rows.swift */; };
 		425FB3C886726ABE6D00B8B9 /* ProjectDetailSharedTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = C737B93F9A3DDBEFF7A3D0B0 /* ProjectDetailSharedTypes.swift */; };
+		428A3C52C25D75D94CDB1062 /* LaborRecordView+Export.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAFF3C69C10A10FEEB16C512 /* LaborRecordView+Export.swift */; };
 		44AA48F784B40D66EF648ABB /* ProjectFileBrowserSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FF8D57F3476DF3731A4B411 /* ProjectFileBrowserSections.swift */; };
 		44D8828FCE6948413DA3A6A9 /* DataStore+Snapshot.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8B9F7788398E08A1D467F256 /* DataStore+Snapshot.swift */; };
 		4739B7239E8750BD7A10671F /* ProjectDetailQuickAddSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC681EB7096FD8E2A50F9417 /* ProjectDetailQuickAddSheet.swift */; };
@@ -321,6 +323,7 @@
 		A2E901DDE7F71007A2BAC9BF /* privacy-policy.v2026-05-15.zh-Hans.txt in Resources */ = {isa = PBXBuildFile; fileRef = 7DF27E49B1D6214EAE18B651 /* privacy-policy.v2026-05-15.zh-Hans.txt */; };
 		A3CF6C820457B67EC78B8389 /* DataStoreDeletionAuditContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4747E12792DF32BAA82F7BC6 /* DataStoreDeletionAuditContext.swift */; };
 		A42D0781162605FF95D7CAD8 /* FileStorageError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B1D605B64067E8EB75BD803 /* FileStorageError.swift */; };
+		A449D4197CE0514703B8D989 /* LaborRecordView+Overview.swift in Sources */ = {isa = PBXBuildFile; fileRef = 810B4829220CEEEB72764D0A /* LaborRecordView+Overview.swift */; };
 		A592E1BC7627A7FD1029E86A /* DailyLogListAndPhotoWallSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = EC0A8CAA3EA5D43B733C484B /* DailyLogListAndPhotoWallSections.swift */; };
 		A59772CAD0ADF4F249E988D8 /* DataStore+Maintenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = 645B4B02F654DD2D7BB4CD51 /* DataStore+Maintenance.swift */; };
 		A623E01EBA9A8522BCC4A4E6 /* UserPreferenceKeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F054D857177D97D58236F47 /* UserPreferenceKeys.swift */; };
@@ -759,6 +762,7 @@
 		7FE0F2A36DA219F6DA3DB6AA /* ProjectDetailOnAppearRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailOnAppearRouter.swift; sourceTree = "<group>"; };
 		801AE252F7D32756DDE4F87D /* MaterialSheetView+Drafts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MaterialSheetView+Drafts.swift"; sourceTree = "<group>"; };
 		807210C04D3BCE85486B353E /* ReportBuilder+HTML.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ReportBuilder+HTML.swift"; sourceTree = "<group>"; };
+		810B4829220CEEEB72764D0A /* LaborRecordView+Overview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LaborRecordView+Overview.swift"; sourceTree = "<group>"; };
 		8166E93656DD9D0549D0D3EB /* ProjectDetailContainer+AssetActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailContainer+AssetActions.swift"; sourceTree = "<group>"; };
 		81C9B271A85C9023F79D67CC /* QuotationTemplateLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuotationTemplateLibraryView.swift; sourceTree = "<group>"; };
 		825145B4C09AEF7ED185BC66 /* ReceiptOCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReceiptOCRService.swift; sourceTree = "<group>"; };
@@ -997,10 +1001,12 @@
 		F71FEDCF6A1C5B25B19D143C /* MaterialSheetView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "MaterialSheetView+Export.swift"; sourceTree = "<group>"; };
 		F751A3B1DB72A3E46620E102 /* MaterialCategoryManagementView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MaterialCategoryManagementView.swift; sourceTree = "<group>"; };
 		FA7EABF30271CAD35D6648C8 /* QuickNoteFileAttachmentImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickNoteFileAttachmentImport.swift; sourceTree = "<group>"; };
+		FAFF3C69C10A10FEEB16C512 /* LaborRecordView+Export.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LaborRecordView+Export.swift"; sourceTree = "<group>"; };
 		FD10D014E234A70F1095117A /* ProjectContactDatabaseEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectContactDatabaseEditSheet.swift; sourceTree = "<group>"; };
 		FE54CA0626405FEBEC7ED4AD /* ProfileTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileTabView.swift; sourceTree = "<group>"; };
 		FE906D0FEAB2AF6C4840A79D /* ProjectDetailEditSheets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectDetailEditSheets.swift; sourceTree = "<group>"; };
 		FEF888CD3BE72CF9F5C4733F /* ProjectEditSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProjectEditSheet.swift; sourceTree = "<group>"; };
+		FFC1CD1BA64D1F3A50F7FFA1 /* LaborRecordView+EntryActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LaborRecordView+EntryActions.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -1405,6 +1411,9 @@
 				C7537405186E03BEEA0F8DDF /* EngineeringDatabaseViews+List.swift */,
 				E49F5E489DD674E4AEC1D402 /* LaborRecordSupportViews.swift */,
 				4352DA57CB946000FEB04D19 /* LaborRecordView.swift */,
+				FFC1CD1BA64D1F3A50F7FFA1 /* LaborRecordView+EntryActions.swift */,
+				FAFF3C69C10A10FEEB16C512 /* LaborRecordView+Export.swift */,
+				810B4829220CEEEB72764D0A /* LaborRecordView+Overview.swift */,
 				F751A3B1DB72A3E46620E102 /* MaterialCategoryManagementView.swift */,
 				451BEF8A91226A73956E9A05 /* MaterialCenterView.swift */,
 				CEBA566249FB7C220D47D7B5 /* MaterialLibraryAppendForms.swift */,
@@ -2040,6 +2049,9 @@
 				61724807267CA9F9D05EFCB5 /* ImageDownsampleService.swift in Sources */,
 				CEC5B6DFCA12B2B145DA2D54 /* ImportLimitPolicy.swift in Sources */,
 				6A3BF1156110EB62575A1B3A /* LaborRecordSupportViews.swift in Sources */,
+				00C667AB1291BD52D0ABBFB2 /* LaborRecordView+EntryActions.swift in Sources */,
+				428A3C52C25D75D94CDB1062 /* LaborRecordView+Export.swift in Sources */,
+				A449D4197CE0514703B8D989 /* LaborRecordView+Overview.swift in Sources */,
 				BCF179337A85F91A8F7FBF55 /* LaborRecordView.swift in Sources */,
 				7A17788A6AA90BE810976C34 /* LegalPolicyDocument.swift in Sources */,
 				CED810E4219414097B98A87B /* MaterialCategoryManagementView.swift in Sources */,
