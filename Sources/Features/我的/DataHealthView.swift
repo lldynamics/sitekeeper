@@ -119,7 +119,11 @@ struct DataHealthView: View {
             title: l("数据健康检查")
         ))
         .task {
-            store.runDataHealthScanNow(reason: .manual)
+            if store.latestDataHealthSnapshot == nil {
+                store.runDataHealthScanNow(reason: .manual)
+            } else {
+                store.scheduleDataHealthScanIfStale(reason: .scheduled, maxAge: 15 * 60)
+            }
         }
         .alert(l("修复引用与关联？"), isPresented: $showReferenceFixConfirm) {
             Button(l("取消"), role: .cancel) {}
