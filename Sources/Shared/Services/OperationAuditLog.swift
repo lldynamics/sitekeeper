@@ -1,7 +1,7 @@
 import Foundation
 
-struct OperationAuditEntry: Codable, Identifiable {
-    enum Action: String, Codable {
+struct OperationAuditEntry: Codable, Identifiable, Sendable {
+    enum Action: String, Codable, Sendable {
         case `import`
         case restore
         case cleanup
@@ -9,7 +9,7 @@ struct OperationAuditEntry: Codable, Identifiable {
         case delete
     }
 
-    enum Outcome: String, Codable {
+    enum Outcome: String, Codable, Sendable {
         case started
         case succeeded
         case failed

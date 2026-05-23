@@ -12,22 +12,21 @@ struct StorageCleanupTrashPolicySection: View {
                         .tag(option.days)
                 }
             } label: {
-                Label(String(localized: "回收站保留时间"), systemImage: "clock.arrow.circlepath")
+                Label(StorageCleanupSectionCopy.trashRetentionLabel, systemImage: "clock.arrow.circlepath")
                     .foregroundStyle(.secondary)
             }
 
             Text(
-                String(
-                    format: String(localized: "之后新清理的文件可恢复至 %@。"),
-                    cleanupTrashRecoveryDeadlineText
+                StorageCleanupSectionCopy.trashPolicyRecoveryHint(
+                    deadlineText: cleanupTrashRecoveryDeadlineText
                 )
             )
             .font(.caption2)
             .foregroundStyle(.secondary)
         } header: {
-            Text(String(localized: "回收站策略"))
+            Text(StorageCleanupSectionCopy.trashPolicyHeader)
         } footer: {
-            Text(String(localized: "只影响之后新清理的批次；已有回收站批次仍按原到期时间处理。"))
+            Text(StorageCleanupSectionCopy.trashPolicyFooter)
         }
     }
 }
@@ -44,7 +43,7 @@ struct StorageCleanupTrashSection: View {
     var body: some View {
         Section {
             if cleanupTrashBatches.isEmpty && quarantinedFiles.isEmpty {
-                Text(String(localized: "暂无可恢复的回收站项目。"))
+                Text(StorageCleanupSectionCopy.emptyTrashMessage)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(cleanupTrashBatches) { batch in
@@ -56,14 +55,9 @@ struct StorageCleanupTrashSection: View {
                 }
             }
         } header: {
-            Text(String(localized: "全局回收站"))
+            Text(StorageCleanupSectionCopy.globalTrashHeader)
         } footer: {
-            Text(
-                String(
-                    format: String(localized: "照片、图纸、票据、附件删除和项目文件清理都会先进入回收站，当前保留 %lld 天。过期项目会在进入本页时自动永久删除。"),
-                    Int64(normalizedCleanupTrashRetentionDays)
-                )
-            )
+            Text(StorageCleanupSectionCopy.globalTrashFooter(retentionDays: normalizedCleanupTrashRetentionDays))
         }
     }
 
@@ -73,19 +67,14 @@ struct StorageCleanupTrashSection: View {
                 Text(batch.summary)
                     .font(.callout.weight(.semibold))
                 Spacer()
-                Text(String(format: String(localized: "%lld 个文件"), Int64(batch.fileCount)))
+                Text(StorageCleanupSectionCopy.cleanupBatchFileCount(batch.fileCount))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.appWarning)
             }
-            Text(String(localized: "清理批次"))
+            Text(StorageCleanupSectionCopy.cleanupBatchLabel)
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
-            Text(
-                String(
-                    format: String(localized: "可恢复至 %@"),
-                    Formatters.date.string(from: batch.expiresAt)
-                )
-            )
+            Text(StorageCleanupSectionCopy.recoverableUntil(Formatters.date.string(from: batch.expiresAt)))
             .font(.caption2)
             .foregroundStyle(.secondary)
 
@@ -93,14 +82,14 @@ struct StorageCleanupTrashSection: View {
                 Button {
                     onRestoreCleanupTrash(batch)
                 } label: {
-                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                    Label(StorageCleanupSectionCopy.restoreActionTitle, systemImage: "arrow.uturn.backward")
                 }
                 .buttonStyle(.bordered)
 
                 Button(role: .destructive) {
                     onPermanentlyDeleteCleanupTrash(batch)
                 } label: {
-                    Label(String(localized: "永久删除"), systemImage: "trash")
+                    Label(StorageCleanupSectionCopy.permanentDeleteActionTitle, systemImage: "trash")
                 }
                 .buttonStyle(.bordered)
             }
@@ -115,19 +104,14 @@ struct StorageCleanupTrashSection: View {
                 Text(entry.originalFileName)
                     .font(.callout.weight(.semibold))
                 Spacer()
-                Text(String(localized: "隔离文件"))
+                Text(StorageCleanupSectionCopy.quarantinedFileLabel)
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.appWarning)
             }
             Text(fileQuarantineCategoryTitle(entry.category))
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
-            Text(
-                String(
-                    format: String(localized: "可恢复至 %@"),
-                    Formatters.date.string(from: entry.expiresAt)
-                )
-            )
+            Text(StorageCleanupSectionCopy.recoverableUntil(Formatters.date.string(from: entry.expiresAt)))
             .font(.caption2)
             .foregroundStyle(.secondary)
 
@@ -135,14 +119,14 @@ struct StorageCleanupTrashSection: View {
                 Button {
                     onRestoreQuarantinedFile(entry)
                 } label: {
-                    Label(String(localized: "恢复"), systemImage: "arrow.uturn.backward")
+                    Label(StorageCleanupSectionCopy.restoreActionTitle, systemImage: "arrow.uturn.backward")
                 }
                 .buttonStyle(.bordered)
 
                 Button(role: .destructive) {
                     onPermanentlyDeleteQuarantinedFile(entry)
                 } label: {
-                    Label(String(localized: "永久删除"), systemImage: "trash")
+                    Label(StorageCleanupSectionCopy.permanentDeleteActionTitle, systemImage: "trash")
                 }
                 .buttonStyle(.bordered)
             }
@@ -152,20 +136,7 @@ struct StorageCleanupTrashSection: View {
     }
 
     private func fileQuarantineCategoryTitle(_ category: FileQuarantineCategory) -> String {
-        switch category {
-        case .photoOriginal:
-            return String(localized: "照片原文件")
-        case .photoThumbnail:
-            return String(localized: "照片缩略图")
-        case .drawing:
-            return String(localized: "图纸原件文件")
-        case .drawingSidecar:
-            return String(localized: "图纸附属文件")
-        case .projectDocument:
-            return String(localized: "项目资料文件")
-        case .quickNoteAttachment:
-            return String(localized: "随手记附件")
-        }
+        StorageCleanupSectionCopy.quarantineCategoryTitle(category)
     }
 }
 
@@ -173,7 +144,7 @@ struct StorageCleanupSummarySection: View {
     let categorySummaries: [StorageCategorySummary]
 
     var body: some View {
-        Section(String(localized: "空间汇总")) {
+        Section(StorageCleanupSectionCopy.storageSummaryHeader) {
             ForEach(categorySummaries) { summary in
                 HStack(spacing: AppSpacing.tight) {
                     Image(systemName: summary.icon)
@@ -181,7 +152,7 @@ struct StorageCleanupSummarySection: View {
                         .frame(width: 18, height: 18)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(summary.title)
-                        Text(String(format: String(localized: "%lld 项"), Int64(summary.count)))
+                        Text(StorageCleanupSectionCopy.summaryItemCount(summary.count))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }
@@ -207,24 +178,24 @@ struct StorageCleanupLargeFileSections: View {
                         .tag(option.megabytes)
                 }
             } label: {
-                Label(String(localized: "大文件阈值"), systemImage: "externaldrive.fill.badge.exclamationmark")
+                Label(StorageCleanupSectionCopy.largeFileThresholdLabel, systemImage: "externaldrive.fill.badge.exclamationmark")
                     .foregroundStyle(.secondary)
             }
             Text(largeFileRuleSuggestionText)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         } header: {
-            Text(String(format: String(localized: "大文件列表（%lld）"), Int64(largeFileItems.count)))
+            Text(StorageCleanupSectionCopy.largeFileHeader(largeFileItems.count))
         } footer: {
-            Text(String(localized: "展示照片、视频、图纸原件、备份和历史计算中的高占用项。"))
+            Text(StorageCleanupSectionCopy.largeFileFooter)
         }
 
         if largeFileItems.isEmpty {
             Section {
                 ContentUnavailableView(
-                    String(localized: "暂无大文件"),
+                    StorageCleanupSectionCopy.noLargeFilesTitle,
                     systemImage: "checkmark.seal",
-                    description: Text(String(localized: "当前各类文件都低于阈值。"))
+                    description: Text(StorageCleanupSectionCopy.noLargeFilesDescription)
                 )
             }
         } else {
@@ -264,9 +235,9 @@ struct StorageCleanupProjectSection: View {
     let onRequestCleanup: (ProjectStorageUsage, ProjectStorageCleanupCategory) -> Void
 
     var body: some View {
-        Section(String(localized: "按项目清理")) {
+        Section(StorageCleanupSectionCopy.projectCleanupHeader) {
             if projectUsages.isEmpty {
-                Text(String(localized: "暂无可清理项目文件。"))
+                Text(StorageCleanupSectionCopy.noProjectCleanupMessage)
                     .foregroundStyle(.secondary)
             } else {
                 ForEach(projectUsages) { usage in
@@ -285,14 +256,14 @@ struct StorageCleanupProjectSection: View {
                                     .foregroundStyle(.appWarning)
                             }
                             HStack(spacing: AppSpacing.tight) {
-                                Text(String(format: String(localized: "照片 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes)))
-                                Text(String(format: String(localized: "视频 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes)))
-                                Text(String(format: String(localized: "图纸 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.drawingBytes)))
-                                Text(String(format: String(localized: "票据 %@"), QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes)))
+                                Text(StorageCleanupSectionCopy.projectUsage(StorageCleanupSectionCopy.usagePhotoTitle, sizeText: QuickNoteAttachmentStorage.formattedFileSize(usage.photoBytes)))
+                                Text(StorageCleanupSectionCopy.projectUsage(StorageCleanupSectionCopy.usageVideoTitle, sizeText: QuickNoteAttachmentStorage.formattedFileSize(usage.videoBytes)))
+                                Text(StorageCleanupSectionCopy.projectUsage(StorageCleanupSectionCopy.usageDrawingTitle, sizeText: QuickNoteAttachmentStorage.formattedFileSize(usage.drawingBytes)))
+                                Text(StorageCleanupSectionCopy.projectUsage(StorageCleanupSectionCopy.usageTicketTitle, sizeText: QuickNoteAttachmentStorage.formattedFileSize(usage.ticketBytes)))
                             }
                             .font(.caption2)
                             .foregroundStyle(.secondary)
-                            Text(String(format: String(localized: "备份估算 %@"), usage.formattedBackupEstimatedBytes))
+                            Text(StorageCleanupSectionCopy.projectBackupEstimate(usage.formattedBackupEstimatedBytes))
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
@@ -300,6 +271,108 @@ struct StorageCleanupProjectSection: View {
                     }
                 }
             }
+        }
+    }
+}
+
+struct ProjectStorageCleanupDetailView: View {
+    let usage: ProjectStorageUsage
+    let onCleanup: (ProjectStorageCleanupCategory) -> Void
+
+    var body: some View {
+        List {
+            Section(StorageCleanupSectionCopy.usageSummaryHeader) {
+                usageRow(title: StorageCleanupSectionCopy.usagePhotoTitle, icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
+                usageRow(title: StorageCleanupSectionCopy.usageVideoTitle, icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
+                usageRow(title: StorageCleanupSectionCopy.usageDrawingOriginalTitle, icon: "doc.viewfinder", tint: .appDoc, bytes: usage.drawingBytes)
+                usageRow(title: StorageCleanupSectionCopy.usageTicketDocumentTitle, icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
+                usageRow(title: StorageCleanupSectionCopy.usageBackupEstimateTitle, icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
+            }
+
+            Section {
+                HStack {
+                    Text(StorageCleanupSectionCopy.projectTotalUsageTitle)
+                    Spacer()
+                    Text(usage.formattedTotalBytes)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+
+            Section {
+                cleanupButton(.photos, bytes: usage.photoBytes)
+                cleanupButton(.videos, bytes: usage.videoBytes)
+                cleanupButton(.drawings, bytes: usage.drawingBytes)
+                cleanupButton(.tickets, bytes: usage.ticketBytes)
+            } header: {
+                Text(StorageCleanupSectionCopy.cleanupByTypeHeader)
+            } footer: {
+                Text(StorageCleanupSectionCopy.cleanupByTypeFooter)
+            }
+
+            Section {
+                Button(role: .destructive) {
+                    onCleanup(.all)
+                } label: {
+                    Label(StorageCleanupSectionCopy.cleanupAllProjectFilesTitle, systemImage: "trash")
+                }
+                .disabled(usage.totalBytes == 0)
+            } footer: {
+                Text(StorageCleanupSectionCopy.backupSpaceNote)
+            }
+        }
+        .navigationTitle(usage.projectName)
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    @ViewBuilder
+    private func cleanupButton(_ category: ProjectStorageCleanupCategory, bytes: Int) -> some View {
+        Button(role: .destructive) {
+            onCleanup(category)
+        } label: {
+            HStack(spacing: AppSpacing.tight) {
+                Image(systemName: category.icon)
+                    .foregroundStyle(category.tint)
+                    .frame(width: 18, height: 18)
+                Text(StorageCleanupSectionCopy.cleanupCategoryTitle(category.displayName))
+                Spacer()
+                Text(QuickNoteAttachmentStorage.formattedFileSize(bytes))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .disabled(bytes == 0)
+    }
+
+    @ViewBuilder
+    private func usageRow(title: String, icon: String, tint: Color, bytes: Int) -> some View {
+        usageRow(title: title, icon: icon, tint: tint, bytesText: QuickNoteAttachmentStorage.formattedFileSize(bytes))
+    }
+
+    @ViewBuilder
+    private func usageRow(title: String, icon: String, tint: Color, bytesText: String) -> some View {
+        HStack(spacing: AppSpacing.tight) {
+            Image(systemName: icon)
+                .foregroundStyle(tint)
+                .frame(width: 18, height: 18)
+            Text(title)
+            Spacer()
+            Text(bytesText)
+                .font(.caption.weight(.semibold))
+        }
+    }
+}
+
+struct StorageOptionalInlineTitleModifier: ViewModifier {
+    let isEnabled: Bool
+    let title: String
+
+    func body(content: Content) -> some View {
+        if isEnabled {
+            content
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+        } else {
+            content
         }
     }
 }

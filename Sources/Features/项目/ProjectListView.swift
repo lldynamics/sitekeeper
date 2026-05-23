@@ -67,6 +67,14 @@ struct ProjectListView: View {
                     return missingTodayLog(for: project)
                 case .priceSpike:
                     return materialPriceSpikeCount(for: project) > 0
+                case .receivableAging:
+                    return hasReceivableAging(for: project)
+                case .recentCollection:
+                    return hasRecentCollection(for: project)
+                case .costAnomaly:
+                    return hasCostAnomaly(for: project)
+                case .lowMarginRisk:
+                    return hasLowMarginRisk(for: project)
                 }
             }
         }

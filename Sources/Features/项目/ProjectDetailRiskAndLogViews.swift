@@ -1,6 +1,12 @@
 import SwiftUI
 
 struct ProjectDetailRiskStripView: View {
+    private struct RiskChipItem: Identifiable {
+        let id: String
+        let text: String
+        let tone: StatusChipTone
+    }
+
     let overdueCount: Int
     let unpaidAmount: Double
     let unpricedQuoteCount: Int
@@ -22,28 +28,70 @@ struct ProjectDetailRiskStripView: View {
         return .appSuccess
     }
 
-    private var riskItems: [(text: String, tone: StatusChipTone)] {
-        var items: [(String, StatusChipTone)] = []
+    private var riskItems: [RiskChipItem] {
+        var items: [RiskChipItem] = []
         if overdueCount > 0 {
-            items.append((String(format: String(localized: "延期 %lld"), Int64(overdueCount)), .risk))
+            items.append(
+                RiskChipItem(
+                    id: "overdue-count",
+                    text: String(format: String(localized: "延期 %lld"), Int64(overdueCount)),
+                    tone: .risk
+                )
+            )
         }
         if unpaidAmount > 0 {
-            items.append((String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)), .primary))
+            items.append(
+                RiskChipItem(
+                    id: "unpaid-amount",
+                    text: String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)),
+                    tone: .primary
+                )
+            )
         }
         if unpricedQuoteCount > 0 {
-            items.append((String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)), .primary))
+            items.append(
+                RiskChipItem(
+                    id: "unpriced-quote-count",
+                    text: String(format: String(localized: "待补报价 %lld"), Int64(unpricedQuoteCount)),
+                    tone: .primary
+                )
+            )
         }
         if missingDocumentCategoryCount > 0 {
-            items.append((String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)), .warning))
+            items.append(
+                RiskChipItem(
+                    id: "missing-document-category-count",
+                    text: String(format: String(localized: "资料缺项 %lld 类"), Int64(missingDocumentCategoryCount)),
+                    tone: .warning
+                )
+            )
         }
         if documentActionCount > 0 {
-            items.append((String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)), .primary))
+            items.append(
+                RiskChipItem(
+                    id: "document-action-count",
+                    text: String(format: String(localized: "资料待处理 %lld"), Int64(documentActionCount)),
+                    tone: .primary
+                )
+            )
         }
         if legacyDocumentCount > 0 {
-            items.append((String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)), .warning))
+            items.append(
+                RiskChipItem(
+                    id: "legacy-document-count",
+                    text: String(format: String(localized: "旧资料待细分 %lld"), Int64(legacyDocumentCount)),
+                    tone: .warning
+                )
+            )
         }
         if !hasTodayLog {
-            items.append((String(localized: "今日日志未写"), .risk))
+            items.append(
+                RiskChipItem(
+                    id: "missing-today-log",
+                    text: String(localized: "今日日志未写"),
+                    tone: .risk
+                )
+            )
         }
         return items
     }
@@ -63,8 +111,7 @@ struct ProjectDetailRiskStripView: View {
                 }
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.tight) {
-                        ForEach(riskItems.indices, id: \.self) { index in
-                            let item = riskItems[index]
+                        ForEach(riskItems) { item in
                             ProjectDetailRiskChipView(
                                 text: item.text,
                                 tone: item.tone

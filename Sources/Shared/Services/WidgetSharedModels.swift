@@ -50,7 +50,7 @@ enum WidgetSharedStorageIssueLog {
     }
 }
 
-struct WidgetProjectSummary: Codable {
+struct WidgetProjectSummary: Codable, Sendable {
     let id: UUID
     let name: String
     let status: String
@@ -58,7 +58,7 @@ struct WidgetProjectSummary: Codable {
     let todoCount: Int
 }
 
-struct WidgetExportData: Codable {
+struct WidgetExportData: Codable, Sendable {
     let projects: [WidgetProjectSummary]
     let pendingTodos: Int
     let materialStockCount: Int
@@ -117,7 +117,7 @@ struct WidgetExportData: Codable {
     }
 }
 
-struct WidgetDataHealthSnapshot {
+struct WidgetDataHealthSnapshot: Codable, Equatable, Sendable {
     let appGroupReadable: Bool
     let lastUpdatedAt: Date?
     let projectCount: Int

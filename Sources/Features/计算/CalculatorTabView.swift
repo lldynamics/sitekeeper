@@ -108,8 +108,7 @@ struct CalculatorTabView: View {
                 ForEach(order, id: \.self) { section in
                     if let items = grouped[section], !items.isEmpty {
                         Section(section) {
-                            ForEach(items.indices, id: \.self) { i in
-                                let item = items[i]
+                            ForEach(items, id: \.self) { item in
                                 NavigationLink { item.destination } label: {
                                     ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: .appPrimaryAction)
                                 }

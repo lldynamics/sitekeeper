@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProjectDocumentRecommendationStage: String, CaseIterable, Codable {
+enum ProjectDocumentRecommendationStage: String, CaseIterable, Codable, Sendable {
     case preConstruction
     case construction
     case acceptance
@@ -43,7 +43,7 @@ enum ProjectDocumentRecommendationStage: String, CaseIterable, Codable {
     }
 }
 
-enum ProjectDocumentChecklistTemplatePreset: String, CaseIterable, Codable, Identifiable {
+enum ProjectDocumentChecklistTemplatePreset: String, CaseIterable, Codable, Identifiable, Sendable {
     case civil = "土建"
     case decoration = "装饰"
     case mechanicalElectrical = "机电"
@@ -125,8 +125,8 @@ enum ProjectDocumentChecklistTemplatePreset: String, CaseIterable, Codable, Iden
     }
 }
 
-struct ProjectDocumentChecklistTemplate: Identifiable, Equatable {
-    enum Source: Equatable {
+struct ProjectDocumentChecklistTemplate: Identifiable, Equatable, Sendable {
+    enum Source: Equatable, Sendable {
         case preset
         case custom(UUID)
     }
@@ -159,7 +159,7 @@ struct ProjectDocumentChecklistTemplate: Identifiable, Equatable {
     }
 }
 
-enum ProjectDocumentCategory: String, CaseIterable, Codable {
+enum ProjectDocumentCategory: String, CaseIterable, Codable, Sendable {
     case paymentRequest = "请款资料"
     case construction = "施工资料"
     case constructionTechnical = "施工技术"
@@ -305,7 +305,7 @@ enum ProjectDocumentCategory: String, CaseIterable, Codable {
     }
 }
 
-struct DocumentArchiveChecklistSnapshot {
+struct DocumentArchiveChecklistSnapshot: Sendable {
     let requiredCategories: [ProjectDocumentCategory]
     let items: [DocumentArchiveChecklistItem]
     let legacyDocumentCount: Int
@@ -351,7 +351,7 @@ struct DocumentArchiveChecklistSnapshot {
     }
 }
 
-struct DocumentArchiveChecklistItem: Identifiable {
+struct DocumentArchiveChecklistItem: Identifiable, Sendable {
     let category: ProjectDocumentCategory
     let documentCount: Int
     let actionCount: Int

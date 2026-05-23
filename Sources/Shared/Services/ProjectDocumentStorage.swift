@@ -1,6 +1,6 @@
 import Foundation
 
-struct ProjectDocumentBackupFile: Identifiable, Codable {
+struct ProjectDocumentBackupFile: Identifiable, Codable, Sendable {
     var id: String { fileName }
     var fileName: String
     var data: Data

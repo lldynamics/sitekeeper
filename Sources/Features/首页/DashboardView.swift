@@ -7,6 +7,7 @@ struct DashboardView: View {
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var dashboardSearchText = ""
     @State private var selectedDashboardSuggestion: RealtimeSearchSuggestion?
+    @State private var selectedDashboardDestination: DashboardDestinationSelection?
     @State var showDashboardProjectPicker = false
     @State var quickActionToastMessage: String?
     @AppStorage("dashboardCurrentProjectId") var selectedProjectIdRaw = ""
@@ -52,6 +53,9 @@ struct DashboardView: View {
             }
             .navigationDestination(item: $selectedDashboardSuggestion) { suggestion in
                 dashboardDestinationView(dashboardDestination(for: suggestion))
+            }
+            .navigationDestination(item: $selectedDashboardDestination) { selection in
+                dashboardDestinationView(selection.destination)
             }
             .onAppear(perform: cleanupSelectedProject)
             .task(id: quickActionToastMessage) {
@@ -429,11 +433,30 @@ struct DashboardView: View {
             systemImage: "chart.xyaxis.line",
             destination: .projectList()
         ) {
-            ProjectBusinessCardsView(summary: dashboardBusinessSummary)
+            ProjectBusinessCardsView(
+                summary: dashboardBusinessSummary,
+                onOpenReceivableAging: {
+                    openDashboardDestination(.projectList(initialOverviewFilter: .receivableAging))
+                },
+                onOpenRecentCollection: {
+                    openDashboardDestination(.projectList(initialOverviewFilter: .recentCollection))
+                },
+                onOpenCostAnomaly: {
+                    openDashboardDestination(.projectList(initialOverviewFilter: .costAnomaly))
+                },
+                onOpenProfitRisk: {
+                    openDashboardDestination(.projectList(initialOverviewFilter: .lowMarginRisk))
+                }
+            )
             Text(String(format: String(localized: "已关注 %lld 个工程"), Int64(activeProjects.count)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func openDashboardDestination(_ destination: DashboardDestination) {
+        AppHaptics.impact(.light)
+        selectedDashboardDestination = DashboardDestinationSelection(destination: destination)
     }
 
     private var todayTodoPanel: some View {

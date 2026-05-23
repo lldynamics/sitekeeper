@@ -1,6 +1,6 @@
 import Foundation
 
-struct ProjectDrawing: Identifiable, Codable {
+struct ProjectDrawing: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var name: String
@@ -123,7 +123,7 @@ struct ProjectDrawing: Identifiable, Codable {
     static let allowedFileExtensions: Set<String> = ["pdf", "dwg", "dxf"]
 }
 
-struct ProjectContact: Identifiable, Codable {
+struct ProjectContact: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var relatedProjectIds: [UUID]
@@ -202,7 +202,7 @@ struct ProjectContact: Identifiable, Codable {
     }
 }
 
-struct ProjectDocumentStatusHistoryEntry: Identifiable, Codable, Equatable {
+struct ProjectDocumentStatusHistoryEntry: Identifiable, Codable, Equatable, Sendable {
     var id = UUID()
     var fromStatus: ProjectDocumentSubmissionStatus
     var toStatus: ProjectDocumentSubmissionStatus
@@ -249,7 +249,7 @@ struct ProjectDocumentStatusHistoryEntry: Identifiable, Codable, Equatable {
     }
 }
 
-enum ProjectDocumentVersionState: String, CaseIterable, Codable {
+enum ProjectDocumentVersionState: String, CaseIterable, Codable, Sendable {
     case current = "当前版"
     case superseded = "已替换"
     case voided = "已作废"
@@ -257,7 +257,7 @@ enum ProjectDocumentVersionState: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-struct ProjectDocument: Identifiable, Codable {
+struct ProjectDocument: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var title: String
@@ -397,7 +397,7 @@ extension ProjectDocument {
     }
 }
 
-enum ProjectDocumentSubmissionStatus: String, CaseIterable, Codable {
+enum ProjectDocumentSubmissionStatus: String, CaseIterable, Codable, Sendable {
     case notSubmitted = "未报验"
     case pending = "待报验"
     case submitted = "已报验"
@@ -419,7 +419,7 @@ extension ProjectDocumentSubmissionStatus {
     }
 }
 
-enum WarehouseMovementType: String, CaseIterable, Codable {
+enum WarehouseMovementType: String, CaseIterable, Codable, Sendable {
     case inbound = "入库"
     case outbound = "出库"
 
@@ -447,7 +447,7 @@ enum WarehouseMovementType: String, CaseIterable, Codable {
     }
 }
 
-struct ProjectWarehouseMovement: Identifiable, Codable {
+struct ProjectWarehouseMovement: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var date: String
@@ -522,7 +522,7 @@ struct ProjectWarehouseMovement: Identifiable, Codable {
     }
 }
 
-struct ProgressTask: Identifiable, Codable {
+struct ProgressTask: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var title: String
@@ -536,7 +536,7 @@ struct ProgressTask: Identifiable, Codable {
     }
 }
 
-enum TemplateCategory: String, CaseIterable, Codable {
+enum TemplateCategory: String, CaseIterable, Codable, Sendable {
     case quotation = "报价模板"
     case dailyLog = "日志模板"
     case material = "材料模板"
@@ -556,7 +556,7 @@ enum TemplateCategory: String, CaseIterable, Codable {
     }
 }
 
-enum DrawingIssueStatus: String, CaseIterable, Codable {
+enum DrawingIssueStatus: String, CaseIterable, Codable, Sendable {
     case none = "无问题"
     case open = "待整改"
     case inProgress = "整改中"
@@ -565,7 +565,7 @@ enum DrawingIssueStatus: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum ProjectDrawingFileAvailabilityStatus: String, CaseIterable, Codable {
+enum ProjectDrawingFileAvailabilityStatus: String, CaseIterable, Codable, Sendable {
     case unknown
     case available
     case missing
@@ -582,7 +582,7 @@ enum ProjectDrawingFileAvailabilityStatus: String, CaseIterable, Codable {
     }
 }
 
-enum TodoPriority: String, CaseIterable, Codable {
+enum TodoPriority: String, CaseIterable, Codable, Sendable {
     case high = "高"
     case medium = "中"
     case low = "低"
@@ -590,7 +590,7 @@ enum TodoPriority: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum TodoIssueType: String, CaseIterable, Codable {
+enum TodoIssueType: String, CaseIterable, Codable, Sendable {
     case safety = "安全"
     case quality = "质量"
     case material = "材料"
@@ -600,7 +600,7 @@ enum TodoIssueType: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum ProjectContactRole: String, CaseIterable, Codable {
+enum ProjectContactRole: String, CaseIterable, Codable, Sendable {
     case owner = "业主"
     case customer = "客户"
     case supervisor = "监理"
@@ -611,7 +611,7 @@ enum ProjectContactRole: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum PhotoTag: String, CaseIterable, Codable {
+enum PhotoTag: String, CaseIterable, Codable, Sendable {
     case general = "现场"
     case rectificationBefore = "整改前"
     case rectificationAfter = "整改后"

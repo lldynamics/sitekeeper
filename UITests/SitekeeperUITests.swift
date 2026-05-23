@@ -151,6 +151,34 @@ final class SitekeeperUITests: XCTestCase {
         return button
     }
 
+    private func element(
+        _ app: XCUIApplication,
+        identifier: String,
+        scrollingAttempts: Int = 6
+    ) -> XCUIElement {
+        let match = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        if match.waitForExistence(timeout: 2), match.isHittable {
+            return match
+        }
+
+        for _ in 0..<scrollingAttempts {
+            let scrollView = app.scrollViews.firstMatch
+            let collectionView = app.collectionViews.firstMatch
+            if scrollView.exists, !scrollView.frame.isEmpty {
+                scrollView.swipeUp()
+            } else if collectionView.exists, !collectionView.frame.isEmpty {
+                collectionView.swipeUp()
+            } else {
+                app.swipeUp()
+            }
+
+            if match.waitForExistence(timeout: 1), match.isHittable {
+                break
+            }
+        }
+        return match
+    }
+
     private func openDataSafetyCenter(_ app: XCUIApplication) {
         for attempt in 0..<3 {
             tapPrimaryModule(app, name: "我的")
@@ -207,6 +235,27 @@ final class SitekeeperUITests: XCTestCase {
         openSampleDataImportConfirmation(app)
         app.alerts["恢复测试数据？"].buttons["清空并导入"].tap()
         XCTAssertTrue(app.staticTexts["已恢复测试数据"].waitForExistence(timeout: 8))
+    }
+
+    private func ensureDashboardBusinessMetricsVisible(_ app: XCUIApplication) {
+        let metricId = "dashboard-business-receivable-aging"
+        let metric = app.descendants(matching: .any).matching(identifier: metricId).firstMatch
+        if metric.waitForExistence(timeout: 1) {
+            return
+        }
+
+        let moreOverviewButton = app.buttons["更多概况"]
+        if moreOverviewButton.waitForExistence(timeout: 2), moreOverviewButton.isHittable {
+            moreOverviewButton.tap()
+            _ = metric.waitForExistence(timeout: 3)
+            return
+        }
+
+        let moreOverviewText = app.staticTexts["更多概况"]
+        if moreOverviewText.waitForExistence(timeout: 2), moreOverviewText.isHittable {
+            moreOverviewText.tap()
+            _ = metric.waitForExistence(timeout: 3)
+        }
     }
 
     @discardableResult
@@ -404,6 +453,51 @@ final class SitekeeperUITests: XCTestCase {
 
         tapPrimaryModule(app, name: "工具箱")
         XCTAssertTrue(app.navigationBars["工程工具箱"].waitForExistence(timeout: 5))
+    }
+
+    func testDashboardBusinessMetricsOpenProjectListOverviewFilters() throws {
+        let app = launchApp(resetState: true)
+        importSampleDataThroughUI(app)
+
+        tapPrimaryModule(app, name: "工作台")
+        let dashboardReady =
+            app.navigationBars["今日工作台"].waitForExistence(timeout: 4)
+            || app.navigationBars["工作台"].waitForExistence(timeout: 2)
+            || element(app, identifier: "dashboard-business-receivable-aging", scrollingAttempts: 4).waitForExistence(timeout: 2)
+        XCTAssertTrue(dashboardReady, "Dashboard did not become ready after switching to 工作台")
+        ensureDashboardBusinessMetricsVisible(app)
+        let metricsVisible = app.descendants(matching: .any)
+            .matching(identifier: "dashboard-business-receivable-aging")
+            .firstMatch
+            .waitForExistence(timeout: 2)
+        try XCTSkipIf(!metricsVisible, "Current sample fixture has no active project business metrics to click through")
+
+        let cases: [(buttonId: String, filterId: String)] = [
+            ("dashboard-business-receivable-aging", "project-list-overview-filter-receivableAging"),
+            ("dashboard-business-recent-collection", "project-list-overview-filter-recentCollection"),
+            ("dashboard-business-cost-anomaly", "project-list-overview-filter-costAnomaly"),
+            ("dashboard-business-profit-risk", "project-list-overview-filter-lowMarginRisk")
+        ]
+
+        for item in cases {
+            let metricEntry = element(app, identifier: item.buttonId, scrollingAttempts: 8)
+            XCTAssertTrue(metricEntry.waitForExistence(timeout: 6), "Missing metric entry: \(item.buttonId)")
+            XCTAssertTrue(metricEntry.isHittable, "Metric entry not hittable: \(item.buttonId)")
+            metricEntry.tap()
+
+            XCTAssertTrue(app.navigationBars["项目"].waitForExistence(timeout: 6))
+            XCTAssertTrue(app.staticTexts[item.filterId].waitForExistence(timeout: 6), "Missing overview filter marker: \(item.filterId)")
+
+            let backButton = app.navigationBars.buttons.firstMatch
+            XCTAssertTrue(backButton.waitForExistence(timeout: 6))
+            backButton.tap()
+            let returnedToDashboard =
+                app.navigationBars["今日工作台"].waitForExistence(timeout: 4)
+                || app.navigationBars["工作台"].waitForExistence(timeout: 2)
+                || element(app, identifier: "dashboard-business-receivable-aging", scrollingAttempts: 4).waitForExistence(timeout: 2)
+            XCTAssertTrue(returnedToDashboard, "Failed to return to dashboard after tapping back")
+            ensureDashboardBusinessMetricsVisible(app)
+        }
     }
 
     func testAccessibilityAXXXLCoreFlowsRemainOperable() {

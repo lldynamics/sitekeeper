@@ -180,14 +180,14 @@ extension DailyLogView {
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                         }
-                        ForEach(Array(calendarDays.enumerated()), id: \.offset) { _, date in
+                        ForEach(calendarDaySlots) { slot in
                             CalendarDayCell(
-                                date: date,
-                                isSelected: date.map { Calendar.current.isDate($0, inSameDayAs: selectedCalendarDate) } ?? false,
-                                isToday: date.map { Calendar.current.isDateInToday($0) } ?? false,
-                                logs: date.map { logs(on: $0) } ?? []
+                                date: slot.date,
+                                isSelected: slot.date.map { Calendar.current.isDate($0, inSameDayAs: selectedCalendarDate) } ?? false,
+                                isToday: slot.date.map { Calendar.current.isDateInToday($0) } ?? false,
+                                logs: slot.date.map { logs(on: $0) } ?? []
                             ) {
-                                if let date {
+                                if let date = slot.date {
                                     selectedCalendarDate = date
                                 }
                             }

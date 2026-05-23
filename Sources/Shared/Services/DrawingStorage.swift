@@ -1,7 +1,7 @@
 import Foundation
 import UniformTypeIdentifiers
 
-struct DrawingBackupFile: Identifiable, Codable {
+struct DrawingBackupFile: Identifiable, Codable, Sendable {
     var id: String { fileName }
     var fileName: String
     var data: Data

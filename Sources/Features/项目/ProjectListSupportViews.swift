@@ -8,6 +8,10 @@ enum ProjectOverviewFilter: String {
     case financialDue
     case missingTodayLog
     case priceSpike
+    case receivableAging
+    case recentCollection
+    case costAnomaly
+    case lowMarginRisk
 
     var displayName: String {
         switch self {
@@ -25,6 +29,14 @@ enum ProjectOverviewFilter: String {
             return String(localized: "未写日志")
         case .priceSpike:
             return String(localized: "价格异动")
+        case .receivableAging:
+            return String(localized: "project.business.receivableAge")
+        case .recentCollection:
+            return String(localized: "project.business.recentCollection")
+        case .costAnomaly:
+            return String(localized: "project.business.costException")
+        case .lowMarginRisk:
+            return String(localized: "project.business.profitRisk")
         }
     }
 }
@@ -53,6 +65,12 @@ struct ProjectRiskBadge {
 }
 
 struct ProjectRowContent: View {
+    private struct DetailPart: Identifiable {
+        let id: String
+        let text: String
+        let emphasizesPrimaryColor: Bool
+    }
+
     let project: Project
     let isSelected: Bool
     let unpaidAmount: Double
@@ -64,19 +82,43 @@ struct ProjectRowContent: View {
         return isSelected ? .appPrimaryAction : .clear
     }
 
-    private var detailParts: [String] {
-        var parts: [String] = []
+    private var detailParts: [DetailPart] {
+        var parts: [DetailPart] = []
         if unpaidAmount > 0 {
-            parts.append(String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)))
+            parts.append(
+                DetailPart(
+                    id: "unpaid-amount",
+                    text: String(format: String(localized: "未收 %@"), ReportBuilder.money(unpaidAmount)),
+                    emphasizesPrimaryColor: true
+                )
+            )
         }
         if !project.expectedEndDate.isEmpty {
-            parts.append(String(format: String(localized: "完工 %@"), project.expectedEndDate))
+            parts.append(
+                DetailPart(
+                    id: "expected-end-date",
+                    text: String(format: String(localized: "完工 %@"), project.expectedEndDate),
+                    emphasizesPrimaryColor: false
+                )
+            )
         }
         if !project.managerName.isEmpty {
-            parts.append(String(format: String(localized: "负责人 %@"), project.managerName))
+            parts.append(
+                DetailPart(
+                    id: "manager-name",
+                    text: String(format: String(localized: "负责人 %@"), project.managerName),
+                    emphasizesPrimaryColor: false
+                )
+            )
         }
         if parts.isEmpty, !project.location.isEmpty {
-            parts.append(project.location)
+            parts.append(
+                DetailPart(
+                    id: "project-location",
+                    text: project.location,
+                    emphasizesPrimaryColor: false
+                )
+            )
         }
         return parts
     }
@@ -98,13 +140,13 @@ struct ProjectRowContent: View {
 
                 if !detailParts.isEmpty {
                     HStack(spacing: AppSpacing.tight) {
-                        ForEach(Array(detailParts.enumerated()), id: \.offset) { index, part in
+                        ForEach(Array(detailParts.enumerated()), id: \.element.id) { index, part in
                             if index > 0 {
                                 Text("·")
                                     .foregroundStyle(.tertiary)
                             }
-                            Text(part)
-                                .foregroundStyle(index == 0 && unpaidAmount > 0 ? Color.appPrimaryAction : .secondary)
+                            Text(part.text)
+                                .foregroundStyle(part.emphasizesPrimaryColor ? Color.appPrimaryAction : .secondary)
                         }
                         Spacer(minLength: 0)
                     }

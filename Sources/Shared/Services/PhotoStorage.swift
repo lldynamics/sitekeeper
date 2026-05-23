@@ -196,16 +196,24 @@ enum PhotoStorage {
 
     static func dataAsync(for fileName: String) async -> Data? {
         let url = fileURL(for: fileName)
-        return await Task.detached(priority: .utility) {
+        let readTask = Task.detached(priority: .utility) { () async -> Data? in
+            guard !Task.isCancelled else { return Optional<Data>.none }
             do {
-                return try Data(contentsOf: url, options: .mappedIfSafe)
+                let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                guard !Task.isCancelled else { return Optional<Data>.none }
+                return data
             } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
-                return nil
+                return Optional<Data>.none
             } catch {
                 logIssue("read_failed", fileName: fileName, error: error)
-                return nil
+                return Optional<Data>.none
             }
-        }.value
+        }
+        return await withTaskCancellationHandler {
+            await readTask.value
+        } onCancel: {
+            readTask.cancel()
+        }
     }
 
     static func exists(fileName: String) -> Bool {
@@ -394,7 +402,7 @@ enum PhotoStorage {
     }
 }
 
-struct PhotoBackupFile: Identifiable, Codable {
+struct PhotoBackupFile: Identifiable, Codable, Sendable {
     var id: String { fileName }
     var fileName: String
     var data: Data

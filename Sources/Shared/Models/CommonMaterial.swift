@@ -1,7 +1,7 @@
 import Foundation
 
 /// 常用材料库条目
-struct CommonMaterial: Identifiable, Codable {
+struct CommonMaterial: Identifiable, Codable, Sendable {
     let name: String
     let specification: String
     let unit: String
@@ -12,7 +12,7 @@ struct CommonMaterial: Identifiable, Codable {
     }
 }
 
-enum MaterialCategory: String, CaseIterable, Identifiable, Codable {
+enum MaterialCategory: String, CaseIterable, Identifiable, Codable, Sendable {
     case wire = "电线"
     case cable = "电缆"
     case conduit = "线管"

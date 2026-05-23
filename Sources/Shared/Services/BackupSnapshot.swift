@@ -1,6 +1,6 @@
 import Foundation
 
-struct BackupArchiveManifest: Codable, Equatable {
+struct BackupArchiveManifest: Codable, Equatable, Sendable {
     var schemaVersion: Int
     var appVersion: String
     var appBuild: String
@@ -29,7 +29,7 @@ struct BackupSchemaHeader: Decodable {
     let schemaVersion: Int
 }
 
-struct BackupSnapshot: Codable {
+struct BackupSnapshot: Codable, Sendable {
     static let currentSchemaVersion = 2
 
     var schemaVersion: Int

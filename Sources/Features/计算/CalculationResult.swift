@@ -6,11 +6,13 @@ struct CalculationResult {
     let sections: [ResultSection]
 
     struct ResultSection {
+        let id = UUID()
         let title: String
         let items: [ResultItem]
     }
 
     struct ResultItem {
+        let id = UUID()
         let label: String
         let value: String
         let status: ResultStatus

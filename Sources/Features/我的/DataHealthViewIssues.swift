@@ -2,53 +2,44 @@ import SwiftUI
 import Foundation
 
 extension DataHealthView {
+    private var latestScan: DataHealthScanSummary? {
+        store.latestDataHealthScan
+    }
+
+    private var latestSnapshot: DataHealthScanSnapshot? {
+        store.latestDataHealthSnapshot
+    }
+
     var projectIdSet: Set<UUID> {
         Set(store.projects.map(\.id))
     }
 
     var missingPhotoFiles: [String] {
-        let logPhotoNames = store.dailyLogs.flatMap(\.allPhotoFileNames)
-        let todoPhotoNames = store.siteTodos
-            .flatMap { [$0.rectificationBeforePhotoFileName, $0.rectificationAfterPhotoFileName] }
-            .compactMap { $0 }
-        let names = Set(logPhotoNames + todoPhotoNames)
-        return names.filter { !PhotoStorage.exists(fileName: $0) }.sorted()
+        latestSnapshot?.missingPhotoFileNames ?? []
     }
 
     var missingDocumentFiles: [String] {
-        store.projectDocuments
-            .filter { !ProjectDocumentStorage.exists(fileName: $0.fileName) }
-            .map(\.fileName)
-            .sorted()
+        latestSnapshot?.missingDocumentFileNames ?? []
     }
 
     var missingQuickNoteAttachmentFiles: [String] {
-        let allAttachments = store.quickNotes.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.tutorialAttachments)
-        return allAttachments
-            .filter { !QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
-            .map(\.fileName)
-            .sorted()
+        latestSnapshot?.missingQuickNoteAttachmentFileNames ?? []
     }
 
     var orphanQuickNoteAttachmentFiles: [String] {
-        QuickNoteAttachmentStorage.orphanFileNames(
-            for: store.quickNotes,
-            extraAttachments: store.constructionMethods.flatMap(\.attachments) + store.constructionMethods.flatMap(\.tutorialAttachments)
-        )
+        latestSnapshot?.orphanQuickNoteAttachmentFileNames ?? []
     }
 
     var orphanPhotoFiles: [String] {
-        PhotoStorage.orphanFileNames(logs: store.dailyLogs, todos: store.siteTodos)
+        latestSnapshot?.orphanPhotoFileNames ?? []
     }
 
     var orphanDrawingFiles: [String] {
-        DrawingStorage.orphanFileNames(for: store.projectDrawings)
+        latestSnapshot?.orphanDrawingFileNames ?? []
     }
 
     var orphanDocumentFiles: [String] {
-        ProjectDocumentStorage.orphanFileNames(for: store.projectDocuments)
+        latestSnapshot?.orphanDocumentFileNames ?? []
     }
 
     var orphanAttachmentMappings: [String] {
@@ -76,81 +67,46 @@ extension DataHealthView {
     }
 
     var storageIssues: [String] {
-        _ = storageIssuesVersion
-        return StorageIssueLog.entries()
+        latestSnapshot?.storageIssues ?? []
     }
 
     var widgetHealth: WidgetDataHealthSnapshot {
-        guard let defaults = UserDefaults(suiteName: WidgetSharedDefaults.suiteName) else {
-            return WidgetDataHealthSnapshot(
+        latestSnapshot?.widgetHealth
+            ?? latestScan?.widgetHealth
+            ?? WidgetDataHealthSnapshot(
                 appGroupReadable: false,
                 lastUpdatedAt: nil,
                 projectCount: 0,
                 pendingTodos: 0
             )
-        }
-        let data: WidgetExportData
-        if let raw = defaults.data(forKey: WidgetSharedDefaults.dataKey),
-           let decoded = try? JSONDecoder().decode(WidgetExportData.self, from: raw) {
-            data = decoded
-        } else {
-            data = WidgetExportData(projects: [], pendingTodos: 0, materialStockCount: 0, lowStockCount: 0)
-        }
-        let timestamp = defaults.double(forKey: WidgetSharedDefaults.updatedAtKey)
-        return WidgetDataHealthSnapshot(
-            appGroupReadable: true,
-            lastUpdatedAt: timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : nil,
-            projectCount: data.projects.count,
-            pendingTodos: data.pendingTodos
-        )
     }
 
     var photoThumbnailCacheBytes: Int {
-        PhotoStorage.thumbnailCacheUsageBytes()
+        latestSnapshot?.storageUsage.photoThumbnailCacheBytes ?? 0
     }
 
     var quickNoteThumbnailCacheBytes: Int {
-        QuickNoteAttachmentStorage.thumbnailCacheUsageBytes()
+        latestSnapshot?.storageUsage.quickNoteThumbnailCacheBytes ?? 0
     }
 
     var mediaThumbnailCacheBytes: Int {
         photoThumbnailCacheBytes + quickNoteThumbnailCacheBytes
     }
 
-    var referencedPhotoFileNames: Set<String> {
-        let logNames = store.dailyLogs.flatMap(\.allPhotoFileNames)
-        let todoNames = store.siteTodos
-            .flatMap { [$0.rectificationBeforePhotoFileName, $0.rectificationAfterPhotoFileName] }
-            .compactMap { $0 }
-        return Set(logNames + todoNames)
-    }
-
     var photoStorageBytes: Int {
-        referencedPhotoFileNames.reduce(0) { total, fileName in
-            total + PhotoStorage.fileSize(for: fileName)
-        }
+        latestSnapshot?.storageUsage.photoBytes ?? 0
     }
 
     var projectDocumentBytes: Int {
-        Set(store.projectDocuments.map(\.fileName)).reduce(0) { total, fileName in
-            total + ProjectDocumentStorage.fileSize(for: fileName)
-        }
+        latestSnapshot?.storageUsage.projectDocumentBytes ?? 0
     }
 
     var projectDrawingBytes: Int {
-        Set(store.projectDrawings.map(\.fileName)).reduce(0) { total, fileName in
-            total + DrawingStorage.fileSize(for: fileName)
-        }
+        latestSnapshot?.storageUsage.projectDrawingBytes ?? 0
     }
 
     var quickNoteAttachmentBytes: Int {
-        let attachments = store.quickNotes.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.attachments)
-            + store.constructionMethods.flatMap(\.tutorialAttachments)
-        let names = Set(attachments.map(\.fileName))
-        return names.reduce(0) { total, fileName in
-            total + QuickNoteAttachmentStorage.fileSize(for: fileName)
-        }
+        latestSnapshot?.storageUsage.quickNoteAttachmentBytes ?? 0
     }
 
     var projectAssetBytes: Int {
@@ -158,26 +114,23 @@ extension DataHealthView {
     }
 
     var cloudBackupBytes: Int {
-        (try? CloudBackupService.listBackups().reduce(0) { $0 + $1.byteSize }) ?? 0
+        latestSnapshot?.storageUsage.cloudBackupBytes ?? 0
     }
 
     var historyRecordBytes: Int {
-        (try? JSONEncoder().encode(store.historyRecords).count) ?? 0
+        latestSnapshot?.storageUsage.historyRecordBytes ?? 0
     }
 
     var totalStorageBytes: Int {
-        photoStorageBytes
-            + projectAssetBytes
-            + mediaThumbnailCacheBytes
-            + cloudBackupBytes
-            + historyRecordBytes
+        latestSnapshot?.storageUsage.totalBytes ?? 0
     }
 
     var missingPhotoFileIssues: [DataHealthIssue] {
+        let missingPhotoSet = Set(missingPhotoFiles)
         var issues: [DataHealthIssue] = []
         for log in store.dailyLogs {
             if let fileName = log.photoFileName,
-               !PhotoStorage.exists(fileName: fileName) {
+               missingPhotoSet.contains(fileName) {
                 let route = DataHealthIssueRoute.dailyLog(projectId: log.projectId, logId: log.id)
                 issues.append(
                     DataHealthIssue(
@@ -198,7 +151,7 @@ extension DataHealthView {
                     )
                 )
             }
-            for photo in log.photos where !PhotoStorage.exists(fileName: photo.fileName) {
+            for photo in log.photos where missingPhotoSet.contains(photo.fileName) {
                 let route = DataHealthIssueRoute.dailyLog(projectId: log.projectId, logId: log.id)
                 issues.append(
                     DataHealthIssue(
@@ -222,7 +175,7 @@ extension DataHealthView {
         }
         for todo in store.siteTodos {
             if let fileName = todo.rectificationBeforePhotoFileName,
-               !PhotoStorage.exists(fileName: fileName) {
+               missingPhotoSet.contains(fileName) {
                 let route = DataHealthIssueRoute.siteTodo(projectId: todo.projectId, todoId: todo.id)
                 issues.append(
                     DataHealthIssue(
@@ -244,7 +197,7 @@ extension DataHealthView {
                 )
             }
             if let fileName = todo.rectificationAfterPhotoFileName,
-               !PhotoStorage.exists(fileName: fileName) {
+               missingPhotoSet.contains(fileName) {
                 let route = DataHealthIssueRoute.siteTodo(projectId: todo.projectId, todoId: todo.id)
                 issues.append(
                     DataHealthIssue(
@@ -270,8 +223,9 @@ extension DataHealthView {
     }
 
     var missingDocumentFileIssues: [DataHealthIssue] {
-        store.projectDocuments
-            .filter { !ProjectDocumentStorage.exists(fileName: $0.fileName) }
+        let missingDocumentSet = Set(missingDocumentFiles)
+        return store.projectDocuments
+            .filter { missingDocumentSet.contains($0.fileName) }
             .sorted { $0.createdAt > $1.createdAt }
             .map { document in
                 let route = DataHealthIssueRoute.document(projectId: document.projectId, documentId: document.id)
@@ -295,9 +249,10 @@ extension DataHealthView {
     }
 
     var missingQuickNoteAttachmentIssues: [DataHealthIssue] {
-        store.quickNotes.flatMap { note in
+        let missingAttachmentSet = Set(missingQuickNoteAttachmentFiles)
+        let issues: [DataHealthIssue] = store.quickNotes.flatMap { note in
             note.attachments
-                .filter { !QuickNoteAttachmentStorage.exists(fileName: $0.fileName) }
+                .filter { missingAttachmentSet.contains($0.fileName) }
                 .map { attachment in
                     let route = DataHealthIssueRoute.quickNote(noteId: note.id)
                     return DataHealthIssue(
@@ -307,6 +262,7 @@ extension DataHealthView {
                         systemImage: "paperclip.badge.ellipsis",
                         color: .appRisk,
                         actionTitle: l("打开随手记"),
+                        projectId: note.projectId,
                         route: route,
                         actions: [
                             .navigate(title: l("打开随手记补附件"), route: route),
@@ -318,7 +274,9 @@ extension DataHealthView {
                     )
                 }
         }
-        .sorted { $0.detail.localizedStandardCompare($1.detail) == .orderedAscending }
+        return issues.sorted { lhs, rhs in
+            lhs.detail.localizedStandardCompare(rhs.detail) == .orderedAscending
+        }
     }
 
     var orphanPhotoFileIssues: [DataHealthIssue] {
@@ -418,6 +376,7 @@ extension DataHealthView {
                 title: l("材料项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "shippingbox",
+                projectId: id,
                 route: .material(materialId: item.id),
                 repair: .clearMaterialProject(itemId: item.id)
             )
@@ -429,6 +388,7 @@ extension DataHealthView {
                 title: l("报价项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(id))]),
                 systemImage: "doc.text",
+                projectId: id,
                 route: .quote(quoteId: item.id),
                 repair: .clearQuoteProject(itemId: item.id)
             )
@@ -440,6 +400,7 @@ extension DataHealthView {
                 title: l("人工项目关联无效"),
                 detail: issueDetail([item.date, item.workType, lf("原项目ID %@", shortId(id))]),
                 systemImage: "person.2",
+                projectId: id,
                 route: .labor(laborId: item.id),
                 repair: .clearLaborProject(recordId: item.id)
             )
@@ -451,6 +412,7 @@ extension DataHealthView {
                 title: l("日志项目关联无效"),
                 detail: issueDetail([item.date, lf("原项目ID %@", shortId(id))]),
                 systemImage: "book.pages",
+                projectId: id,
                 route: .dailyLog(projectId: nil, logId: item.id),
                 repair: .clearDailyLogProject(logId: item.id)
             )
@@ -462,6 +424,7 @@ extension DataHealthView {
                 title: l("待办项目关联无效"),
                 detail: issueDetail([item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "checklist",
+                projectId: id,
                 route: .siteTodo(projectId: nil, todoId: item.id),
                 repair: .clearSiteTodoProject(todoId: item.id)
             )
@@ -473,6 +436,7 @@ extension DataHealthView {
                 title: l("随手记项目关联无效"),
                 detail: issueDetail([item.title.isEmpty ? item.createdAt : item.title, lf("原项目ID %@", shortId(id))]),
                 systemImage: "square.and.pencil",
+                projectId: id,
                 route: .quickNote(noteId: item.id),
                 repair: .clearQuickNoteProject(noteId: item.id)
             )
@@ -488,7 +452,8 @@ extension DataHealthView {
                 id: "invalid-progress-project-\(item.id.uuidString)",
                 title: l("进度项目关联无效"),
                 detail: issueDetail([item.title, lf("原项目ID %@", shortId(item.projectId))]),
-                systemImage: "calendar.badge.exclamationmark"
+                systemImage: "calendar.badge.exclamationmark",
+                projectId: item.projectId
             )
         }
         issues += store.projectDrawings.compactMap { item in
@@ -497,7 +462,8 @@ extension DataHealthView {
                 id: "invalid-drawing-project-\(item.id.uuidString)",
                 title: l("图纸项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(item.projectId))]),
-                systemImage: "doc.viewfinder"
+                systemImage: "doc.viewfinder",
+                projectId: item.projectId
             )
         }
         issues += store.projectContacts.compactMap { item in
@@ -507,6 +473,7 @@ extension DataHealthView {
                 title: l("联系人项目关联无效"),
                 detail: issueDetail([item.name, lf("原项目ID %@", shortId(item.projectId))]),
                 systemImage: "person.crop.rectangle.stack",
+                projectId: item.projectId,
                 route: .contact(contactId: item.id)
             )
         }
@@ -516,7 +483,8 @@ extension DataHealthView {
                 id: "invalid-financial-project-\(item.id.uuidString)",
                 title: l("财务项目关联无效"),
                 detail: issueDetail([item.date, item.category.displayName, lf("原项目ID %@", shortId(item.projectId))]),
-                systemImage: "receipt"
+                systemImage: "receipt",
+                projectId: item.projectId
             )
         }
         issues += store.projectDocuments.compactMap { item in
@@ -525,7 +493,8 @@ extension DataHealthView {
                 id: "invalid-document-project-\(item.id.uuidString)",
                 title: l("资料项目关联无效"),
                 detail: issueDetail([item.title, lf("原项目ID %@", shortId(item.projectId))]),
-                systemImage: "doc.richtext"
+                systemImage: "doc.richtext",
+                projectId: item.projectId
             )
         }
         issues += store.projectWarehouseMovements.compactMap { item in
@@ -534,7 +503,8 @@ extension DataHealthView {
                 id: "invalid-warehouse-project-\(item.id.uuidString)",
                 title: l("仓库项目关联无效"),
                 detail: issueDetail([item.date, item.materialName, lf("原项目ID %@", shortId(item.projectId))]),
-                systemImage: "shippingbox"
+                systemImage: "shippingbox",
+                projectId: item.projectId
             )
         }
         return issues
@@ -555,35 +525,28 @@ extension DataHealthView {
     }
 
     var totalIssues: Int {
-        missingPhotoFiles.count
-            + missingDocumentFiles.count
-            + missingQuickNoteAttachmentFiles.count
-            + orphanQuickNoteAttachmentFiles.count
-            + orphanPhotoFiles.count
-            + orphanDrawingFiles.count
-            + orphanDocumentFiles.count
-            + orphanAttachmentMappings.count
-            + orphanWarehouseAttachmentMappings.count
-            + danglingDocumentLinks.count
-            + invalidProjectRefs.count
-            + storageIssues.count
+        latestScan?.totalIssues ?? 0
     }
 
     var referenceIssueCount: Int {
-        missingPhotoFiles.count
-            + missingDocumentFiles.count
-            + missingQuickNoteAttachmentFiles.count
-            + orphanAttachmentMappings.count
-            + orphanWarehouseAttachmentMappings.count
-            + danglingDocumentLinks.count
-            + autoFixableInvalidProjectRefs.count
+        latestScan.map { summary in
+            summary.missingPhotoFiles
+                + summary.missingDocumentFiles
+                + summary.missingQuickNoteAttachmentFiles
+                + summary.orphanAttachmentMappings
+                + summary.orphanWarehouseAttachmentMappings
+                + summary.danglingDocumentLinks
+                + autoFixableInvalidProjectRefs.count
+        } ?? 0
     }
 
     var orphanFileIssueCount: Int {
-        orphanPhotoFiles.count
-            + orphanDrawingFiles.count
-            + orphanDocumentFiles.count
-            + orphanQuickNoteAttachmentFiles.count
+        latestScan.map { summary in
+            summary.orphanPhotoFiles
+                + summary.orphanDrawingFiles
+                + summary.orphanDocumentFiles
+                + summary.orphanQuickNoteAttachmentFiles
+        } ?? 0
     }
 
     private func fileOnlyIssues(
@@ -617,6 +580,7 @@ extension DataHealthView {
         title: String,
         detail: String,
         systemImage: String,
+        projectId: UUID? = nil,
         route: DataHealthIssueRoute? = nil,
         repair: DataHealthIssueRepair
     ) -> DataHealthIssue {
@@ -627,6 +591,7 @@ extension DataHealthView {
             systemImage: systemImage,
             color: .appWarning,
             actionTitle: l("打开记录"),
+            projectId: projectId,
             route: route,
             actions: [
                 .repair(title: l("修复该项"), repair: repair)
@@ -639,6 +604,7 @@ extension DataHealthView {
         title: String,
         detail: String,
         systemImage: String,
+        projectId: UUID? = nil,
         route: DataHealthIssueRoute? = nil
     ) -> DataHealthIssue {
         DataHealthIssue(
@@ -648,6 +614,7 @@ extension DataHealthView {
             systemImage: systemImage,
             color: .appWarning,
             actionTitle: route == nil ? l("需手动处理") : l("打开记录"),
+            projectId: projectId,
             route: route
         )
     }

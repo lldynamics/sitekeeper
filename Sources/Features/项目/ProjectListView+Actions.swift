@@ -204,6 +204,63 @@ extension ProjectListView {
         projectStore.projectActivitySummary(for: project.id).hasUnsettledFinancial
     }
 
+    func hasReceivableAging(for project: Project) -> Bool {
+        unpaidAmount(for: project) > 0
+    }
+
+    func hasRecentCollection(for project: Project, withinDays: Int = 30) -> Bool {
+        let records = projectStore.projectFinancialRecordsByProjectID[project.id] ?? []
+        guard let latest = ProjectFinancialMetrics.latestCollection(records: records, projectName: { _ in project.name }),
+              let collectionDate = DataValueParser.parseDate(latest.date) else {
+            return false
+        }
+        let startOfCollectionDay = Calendar.current.startOfDay(for: collectionDate)
+        let today = Calendar.current.startOfDay(for: Date())
+        let dayDiff = Calendar.current.dateComponents([.day], from: startOfCollectionDay, to: today).day ?? .max
+        return dayDiff >= 0 && dayDiff <= max(withinDays, 1)
+    }
+
+    func hasCostAnomaly(for project: Project) -> Bool {
+        let contract = project.contractAmountValue.doubleValue
+        let materialItems = financeStore.materialItems.filter { $0.projectId == project.id }
+        let quoteItems = financeStore.quoteItems.filter { $0.projectId == project.id }
+        let laborRecords = financeStore.laborRecords.filter { $0.projectId == project.id }
+
+        let materialCost = materialItems.isEmpty
+            ? project.materialCostValue.doubleValue
+            : materialItems.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
+        let laborCost = laborRecords.isEmpty
+            ? project.laborCostValue.doubleValue
+            : laborRecords.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
+        let pendingCount = materialItems.filter { $0.quantityValue.doubleValue == 0 }.count
+            + quoteItems.filter { $0.unitPriceValue.doubleValue == 0 }.count
+
+        let totalCost = materialCost + laborCost
+        guard contract > 0 else { return true }
+        guard totalCost > 0 else { return pendingCount > 0 }
+
+        let ratio = totalCost / contract
+        return ratio >= 0.85 || pendingCount > 0
+    }
+
+    func hasLowMarginRisk(for project: Project) -> Bool {
+        let contract = project.contractAmountValue.doubleValue
+        guard contract > 0 else { return false }
+
+        let materialItems = financeStore.materialItems.filter { $0.projectId == project.id }
+        let laborRecords = financeStore.laborRecords.filter { $0.projectId == project.id }
+        let materialCost = materialItems.isEmpty
+            ? project.materialCostValue.doubleValue
+            : materialItems.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
+        let laborCost = laborRecords.isEmpty
+            ? project.laborCostValue.doubleValue
+            : laborRecords.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
+
+        let profit = contract - materialCost - laborCost
+        let margin = profit / contract
+        return profit < 0 || margin < 0.10
+    }
+
     func materialPriceSpikeCount(for project: Project) -> Int {
         financeStore.materialPriceSpikeCount(for: project.id)
     }

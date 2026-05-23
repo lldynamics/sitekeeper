@@ -1,6 +1,6 @@
 import Foundation
 
-struct MaterialItem: Identifiable, Codable {
+struct MaterialItem: Identifiable, Codable, Sendable {
     var id = UUID()
     var name: String
     @NonNegativeNumberText var quantity: String
@@ -63,7 +63,7 @@ struct MaterialItem: Identifiable, Codable {
     }
 }
 
-struct MaterialSheetDraftItem: Identifiable, Codable {
+struct MaterialSheetDraftItem: Identifiable, Codable, Sendable {
     var id: UUID
     var name: String
     var specification: String
@@ -128,7 +128,7 @@ struct MaterialSheetDraftItem: Identifiable, Codable {
     }
 }
 
-struct MaterialSheetDraft: Identifiable, Codable {
+struct MaterialSheetDraft: Identifiable, Codable, Sendable {
     var id: UUID
     var title: String
     var projectId: UUID?
@@ -185,7 +185,7 @@ struct MaterialSheetDraft: Identifiable, Codable {
     }
 }
 
-struct QuoteItem: Identifiable, Codable {
+struct QuoteItem: Identifiable, Codable, Sendable {
     var id = UUID()
     var name: String
     @NonNegativeNumberText var unitPrice: String
@@ -253,7 +253,7 @@ struct QuoteItem: Identifiable, Codable {
     }
 }
 
-struct LaborRecord: Identifiable, Codable {
+struct LaborRecord: Identifiable, Codable, Sendable {
     var id = UUID()
     var date: String
     @NonNegativeNumberText var workers: String
@@ -311,7 +311,7 @@ struct LaborRecord: Identifiable, Codable {
     }
 }
 
-struct ProjectFinancialRecord: Identifiable, Codable {
+struct ProjectFinancialRecord: Identifiable, Codable, Sendable {
     var id = UUID()
     var projectId: UUID
     var date: String
@@ -415,7 +415,7 @@ struct ProjectFinancialRecord: Identifiable, Codable {
     }
 }
 
-enum MaterialPurchaseStatus: String, CaseIterable, Codable {
+enum MaterialPurchaseStatus: String, CaseIterable, Codable, Sendable {
     case notPurchased = "未采购"
     case purchased = "已采购"
     case arrived = "已进场"
@@ -424,7 +424,7 @@ enum MaterialPurchaseStatus: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum QuoteStatus: String, CaseIterable, Codable {
+enum QuoteStatus: String, CaseIterable, Codable, Sendable {
     case draft = "草稿"
     case sent = "已发送"
     case confirmed = "已确认"
@@ -432,7 +432,7 @@ enum QuoteStatus: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum PaymentStatus: String, CaseIterable, Codable {
+enum PaymentStatus: String, CaseIterable, Codable, Sendable {
     case unpaid = "未收款"
     case partial = "部分收款"
     case paid = "已收款"
@@ -440,7 +440,7 @@ enum PaymentStatus: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum ProjectFinancialDirection: String, CaseIterable, Codable {
+enum ProjectFinancialDirection: String, CaseIterable, Codable, Sendable {
     case income = "收入"
     case expense = "支出"
 
@@ -464,7 +464,7 @@ enum ProjectFinancialDirection: String, CaseIterable, Codable {
     }
 }
 
-enum ProjectFinancialCategory: String, CaseIterable, Codable {
+enum ProjectFinancialCategory: String, CaseIterable, Codable, Sendable {
     case collection = "收款"
     case refund = "退款"
     case reimbursement = "报销"
@@ -499,7 +499,7 @@ enum ProjectFinancialCategory: String, CaseIterable, Codable {
     }
 }
 
-enum ProjectFinancialStatus: String, CaseIterable, Codable {
+enum ProjectFinancialStatus: String, CaseIterable, Codable, Sendable {
     case active = "正式"
     case draft = "草稿"
     case archived = "已归档"
@@ -507,7 +507,7 @@ enum ProjectFinancialStatus: String, CaseIterable, Codable {
     var displayName: String { rawValue }
 }
 
-enum ProjectFinancialReminderStatus: String, CaseIterable, Codable {
+enum ProjectFinancialReminderStatus: String, CaseIterable, Codable, Sendable {
     case none = "不提醒"
     case pending = "待提醒"
     case reminded = "已提醒"

@@ -101,6 +101,12 @@ private struct ConstructionMethodAttachmentCarousel: View {
 }
 
 struct ConstructionMethodDetailBlock: View {
+    private struct NumberedLine: Identifiable {
+        let id: String
+        let number: Int
+        let text: String
+    }
+
     let title: String
     let systemImage: String
     let lines: [String]
@@ -124,6 +130,19 @@ struct ConstructionMethodDetailBlock: View {
 
     private var completedIndexes: [Int] {
         sanitizedLines.indices.filter { checkedIndexes.contains($0) }
+    }
+
+    private var numberedLines: [NumberedLine] {
+        var occurrenceByLine: [String: Int] = [:]
+        return sanitizedLines.enumerated().map { index, line in
+            let nextOccurrence = occurrenceByLine[line, default: 0] + 1
+            occurrenceByLine[line] = nextOccurrence
+            return NumberedLine(
+                id: "\(line)#\(nextOccurrence)",
+                number: index + 1,
+                text: line
+            )
+        }
     }
 
     var body: some View {
@@ -174,11 +193,11 @@ struct ConstructionMethodDetailBlock: View {
                     }
                 } else {
                     VStack(alignment: .leading, spacing: 6) {
-                        ForEach(Array(sanitizedLines.enumerated()), id: \.offset) { index, line in
+                        ForEach(numberedLines) { line in
                             HStack(alignment: .top, spacing: 8) {
-                                Text("\(index + 1).")
+                                Text("\(line.number).")
                                     .foregroundStyle(.secondary)
-                                Text(line)
+                                Text(line.text)
                                     .frame(maxWidth: .infinity, alignment: .leading)
                             }
                             .font(.callout)

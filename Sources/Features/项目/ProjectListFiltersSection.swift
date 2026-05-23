@@ -36,6 +36,7 @@ struct ProjectListFiltersSection: View {
                         )
                             .font(.caption)
                             .foregroundStyle(.secondary)
+                            .accessibilityIdentifier("project-list-overview-filter-\(overviewFilter.rawValue)")
                     }
                     Spacer(minLength: 0)
                     Button {
@@ -44,6 +45,7 @@ struct ProjectListFiltersSection: View {
                         Label(String(localized: "清除概况筛选"), systemImage: "xmark.circle")
                             .font(.caption.weight(.semibold))
                     }
+                    .accessibilityIdentifier("project-list-overview-filter-clear")
                 }
             }
         } header: {

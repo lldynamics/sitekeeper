@@ -23,7 +23,8 @@ struct SmallWidgetView: View {
             Link(destination: WidgetDeepLinkURL.todos) {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("\(data.pendingTodos)")
-                        .font(.system(size: 32, weight: .bold, design: .rounded))
+                        .font(.largeTitle.weight(.bold))
+                        .fontDesign(.rounded)
                         .foregroundStyle(.primary)
                         .monospacedDigit()
                         .lineLimit(1)
@@ -78,7 +79,8 @@ struct MediumWidgetView: View {
                 Link(destination: WidgetDeepLinkURL.todos) {
                     VStack(alignment: .leading, spacing: 0) {
                         Text("\(data.pendingTodos)")
-                            .font(.system(size: 34, weight: .bold, design: .rounded))
+                            .font(.largeTitle.weight(.bold))
+                            .fontDesign(.rounded)
                             .foregroundStyle(.primary)
                             .monospacedDigit()
                             .lineLimit(1)
@@ -299,7 +301,8 @@ private struct WidgetSummaryTile: View {
 
             VStack(alignment: .leading, spacing: 0) {
                 Text(value)
-                    .font(.system(size: 19, weight: .bold, design: .rounded))
+                    .font(.title3.weight(.bold))
+                    .fontDesign(.rounded)
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)

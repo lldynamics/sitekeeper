@@ -3,6 +3,7 @@ import SwiftUI
 struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
+    @AppStorage(UserPreferenceKeys.storageCleanupTrashRetentionDays) private var cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.defaultDays
     @State private var showClearLocalDataBackupGate = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
@@ -20,6 +21,15 @@ struct SettingsView: View {
                     )
                 }
                 Text(String(localized: "超过该天数未成功备份时，工作台会显示“备份超期”提醒。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Picker(String(localized: "回收站保留时间"), selection: $cleanupTrashRetentionDays) {
+                    ForEach(StorageCleanupTrashRetentionOption.allCases) { option in
+                        Text(option.displayName)
+                            .tag(option.days)
+                    }
+                }
+                Text(String(localized: "该设置会影响文件清理后的可恢复窗口，到期后将进入永久删除队列。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 Button(String(localized: "清空本机全部数据（需先备份）"), role: .destructive) {
@@ -104,6 +114,7 @@ struct SettingsView: View {
         }
         .onAppear {
             backupHealthReminderDays = min(max(backupHealthReminderDays, 1), 30)
+            cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
         }
     }
 
