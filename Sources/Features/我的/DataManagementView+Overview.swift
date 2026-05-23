@@ -298,6 +298,9 @@ extension DataManagementView {
         case .health:
             selectedTab = .healthAndCleanup
             healthCleanupSection = .health
+            if dataHealthIssueCount > 0 {
+                pendingHealthRepairRequestID = UUID()
+            }
         case .storage:
             selectedTab = .healthAndCleanup
             healthCleanupSection = .storage

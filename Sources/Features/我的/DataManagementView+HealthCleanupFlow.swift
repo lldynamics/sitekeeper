@@ -33,15 +33,27 @@ extension DataManagementView {
             Group {
                 switch healthCleanupSection {
                 case .health:
-                    DataHealthView(showsNavigationTitle: false)
+                    DataHealthView(
+                        showsNavigationTitle: false,
+                        bottomContentInset: embeddedScrollBottomInset,
+                        repairRequestID: pendingHealthRepairRequestID,
+                        onRepairRequestConsumed: {
+                            pendingHealthRepairRequestID = nil
+                        }
+                    )
                 case .storage:
-                    StorageCleanupCenterView(showsNavigationTitle: false)
+                    StorageCleanupCenterView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
                 case .audit:
-                    OperationAuditLogView(showsNavigationTitle: false)
+                    OperationAuditLogView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
                 }
             }
             .id(healthCleanupSection)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
+    }
+
+    var embeddedScrollBottomInset: CGFloat {
+        usesWideLayout ? AppSpacing.relaxed : 72
     }
 }

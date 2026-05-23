@@ -12,6 +12,8 @@ struct DataManagementView: View {
     @State var operationNotice: OperationToastNotice?
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var cleanupTrashBatchCount = 0
+    @State var isCompactSafetyHeader = false
+    @State var pendingHealthRepairRequestID: UUID?
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) var cloudBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) var backupHealthReminderDays = 7
@@ -24,39 +26,17 @@ struct DataManagementView: View {
 
     var body: some View {
         VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
-            DataManagementSafetyHeaderSection(
-                backupStatusValue: backupStatusValue,
-                backupStatusTone: backupStatusTone,
-                healthStatusValue: healthStatusValue,
-                healthStatusTone: healthStatusTone,
-                cleanupStatusValue: cleanupStatusValue,
-                cleanupStatusTone: cleanupStatusTone,
-                action: primarySafetyAction,
-                onPrimaryAction: {
-                    performPrimarySafetyAction(primarySafetyAction)
-                },
-                onOpenBackupImport: {
-                    selectedTab = .backupAndRestore
-                    shouldAutoOpenBackupImporter = true
-                },
-                onOpenExport: {
-                    selectedTab = .export
-                },
-                onOpenStorageCleanup: {
-                    selectedTab = .healthAndCleanup
-                    healthCleanupSection = .storage
-                },
-                onOpenAudit: {
-                    selectedTab = .healthAndCleanup
-                    healthCleanupSection = .audit
-                }
-            )
+            if usesWideLayout {
+                safetyHeaderSection
 
-            DataManagementSecondaryFlowShortcutGrid(
-                usesWideLayout: usesWideLayout,
-                cards: secondaryShortcutCards,
-                onSelect: selectSecondaryTarget(_:)
-            )
+                DataManagementSecondaryFlowShortcutGrid(
+                    usesWideLayout: true,
+                    cards: secondaryShortcutCards,
+                    onSelect: selectSecondaryTarget(_:)
+                )
+            } else {
+                mobileSafetyHeader
+            }
 
             if usesWideLayout {
                 selectedTabSummary
@@ -78,11 +58,12 @@ struct DataManagementView: View {
             Group {
                 switch selectedTab {
                 case .export:
-                    ExportView(showsNavigationTitle: false)
+                    ExportView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
                 case .backupAndRestore:
                     BackupView(
                         autoOpenImporter: shouldAutoOpenBackupImporter,
                         showsNavigationTitle: false,
+                        bottomContentInset: embeddedScrollBottomInset,
                         onAutoOpenImporterConsumed: {
                             shouldAutoOpenBackupImporter = false
                         }
@@ -93,6 +74,7 @@ struct DataManagementView: View {
             }
             .id(selectedTab)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
         }
         .navigationTitle(String(localized: "数据安全中心"))
         .navigationBarTitleDisplayMode(.inline)
@@ -142,6 +124,89 @@ struct DataManagementView: View {
         }
         .onChange(of: selectedTab) { _, _ in
             refreshRiskSnapshot()
+        }
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 24)
+                .onEnded(collapseMobileSafetyHeaderIfNeeded(_:))
+        )
+    }
+
+    var safetyHeaderSection: some View {
+        DataManagementSafetyHeaderSection(
+            backupStatusValue: backupStatusValue,
+            backupStatusTone: backupStatusTone,
+            healthStatusValue: healthStatusValue,
+            healthStatusTone: healthStatusTone,
+            cleanupStatusValue: cleanupStatusValue,
+            cleanupStatusTone: cleanupStatusTone,
+            action: primarySafetyAction,
+            onPrimaryAction: {
+                performPrimarySafetyAction(primarySafetyAction)
+            },
+            onOpenBackupImport: {
+                selectedTab = .backupAndRestore
+                shouldAutoOpenBackupImporter = true
+            },
+            onOpenExport: {
+                selectedTab = .export
+            },
+            onOpenStorageCleanup: {
+                selectedTab = .healthAndCleanup
+                healthCleanupSection = .storage
+            },
+            onOpenAudit: {
+                selectedTab = .healthAndCleanup
+                healthCleanupSection = .audit
+            }
+        )
+    }
+
+    @ViewBuilder
+    var mobileSafetyHeader: some View {
+        if isCompactSafetyHeader {
+            DataManagementSecondaryFlowShortcutGrid(
+                usesWideLayout: false,
+                cards: secondaryShortcutCards,
+                onSelect: selectSecondaryTarget(_:)
+            )
+            .padding(.vertical, 4)
+            .background(.bar)
+            .transition(.move(edge: .top).combined(with: .opacity))
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onEnded(expandMobileSafetyHeaderIfNeeded(_:))
+            )
+        } else {
+            VStack(spacing: AppSpacing.tight) {
+                safetyHeaderSection
+
+                DataManagementSecondaryFlowShortcutGrid(
+                    usesWideLayout: false,
+                    cards: secondaryShortcutCards,
+                    onSelect: selectSecondaryTarget(_:),
+                    usesCompactRow: false
+                )
+            }
+            .contentShape(Rectangle())
+            .transition(.opacity)
+            .gesture(
+                DragGesture(minimumDistance: 18)
+                    .onEnded(collapseMobileSafetyHeaderIfNeeded(_:))
+            )
+        }
+    }
+
+    func collapseMobileSafetyHeaderIfNeeded(_ value: DragGesture.Value) {
+        guard !usesWideLayout, !isCompactSafetyHeader, value.translation.height < -36 else { return }
+        withAnimation(.snappy) {
+            isCompactSafetyHeader = true
+        }
+    }
+
+    func expandMobileSafetyHeaderIfNeeded(_ value: DragGesture.Value) {
+        guard !usesWideLayout, isCompactSafetyHeader, value.translation.height > 48 else { return }
+        withAnimation(.snappy) {
+            isCompactSafetyHeader = false
         }
     }
 }

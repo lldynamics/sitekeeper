@@ -34,9 +34,11 @@ struct ExportView: View {
     @State var exportErrorMessage = ""
     @AppStorage(UserPreferenceKeys.exportCurrencyDisplayMode) var currencyDisplayModeRaw = ExportCurrencyDisplayMode.defaultMode.rawValue
     let showsNavigationTitle: Bool
+    let bottomContentInset: CGFloat
 
-    init(showsNavigationTitle: Bool = true) {
+    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
         self.showsNavigationTitle = showsNavigationTitle
+        self.bottomContentInset = bottomContentInset
     }
 }
 
