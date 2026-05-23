@@ -2,9 +2,16 @@ import Foundation
 
 enum BackupCloudTaskCoordinator {
     static func refreshBackups() async throws -> [CloudBackupFile] {
-        try await Task.detached(priority: .utility) {
+        try await FileIOTaskRunner.run(
+            priority: .utility,
+            logContext: .init(
+                event: "backup.cloud.refresh",
+                source: "BackupCloudTaskCoordinator.refreshBackups",
+                category: .cloudBackup
+            )
+        ) {
             try CloudBackupService.listBackups()
-        }.value
+        }
     }
 
     static func uploadBackup(
@@ -18,8 +25,16 @@ enum BackupCloudTaskCoordinator {
     }
 
     static func copyCloudBackupToTemporaryFile(_ file: CloudBackupFile) async throws -> URL {
-        try await Task.detached(priority: .userInitiated) {
+        try await FileIOTaskRunner.run(
+            priority: .userInitiated,
+            logContext: .init(
+                event: "backup.cloud.copy_to_temp",
+                source: "BackupCloudTaskCoordinator.copyCloudBackupToTemporaryFile",
+                category: .cloudBackup,
+                details: ["file_name": file.fileName]
+            )
+        ) {
             try CloudBackupService.copyBackupToTemporaryFile(file)
-        }.value
+        }
     }
 }

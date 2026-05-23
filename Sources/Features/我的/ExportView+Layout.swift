@@ -101,6 +101,7 @@ extension ExportView {
                 }
             } else {
                 Form {
+                    DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
                     exportFormatSection
                     exportContentSection
                     exportScopeSection

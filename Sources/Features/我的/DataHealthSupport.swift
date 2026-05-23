@@ -1,12 +1,56 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum DataHealthIssueSeverity: Int, CaseIterable {
+    case critical = 3
+    case high = 2
+    case medium = 1
+    case low = 0
+
+    var title: String {
+        switch self {
+        case .critical: return "严重"
+        case .high: return "高"
+        case .medium: return "中"
+        case .low: return "低"
+        }
+    }
+
+    var tintColor: Color {
+        switch self {
+        case .critical: return .appRisk
+        case .high: return .appWarning
+        case .medium: return .orange
+        case .low: return .secondary
+        }
+    }
+}
+
+enum DataHealthIssueSortOption: String, CaseIterable, Identifiable {
+    case severityDescending
+    case severityAscending
+    case titleAscending
+    case titleDescending
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .severityDescending: return "严重程度（高到低）"
+        case .severityAscending: return "严重程度（低到高）"
+        case .titleAscending: return "标题（A-Z）"
+        case .titleDescending: return "标题（Z-A）"
+        }
+    }
+}
+
 struct DataHealthIssue: Identifiable {
     let id: String
     let title: String
     let detail: String
     let systemImage: String
     let color: Color
+    var severity: DataHealthIssueSeverity = .medium
     let actionTitle: String?
     var projectId: UUID? = nil
     let route: DataHealthIssueRoute?
@@ -18,6 +62,10 @@ struct DataHealthIssue: Identifiable {
 
     var effectiveProjectId: UUID? {
         projectId ?? route?.projectId
+    }
+
+    var searchableText: String {
+        [title, detail, exportText].joined(separator: " ")
     }
 
     var isAutoFixable: Bool {

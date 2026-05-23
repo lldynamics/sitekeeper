@@ -47,29 +47,23 @@ extension StorageCleanupCenterView {
         isRefreshingCloudBackups = true
         defer { isRefreshingCloudBackups = false }
 
-        let task = Task.detached(priority: .utility) { () -> ([CloudBackupFile], String?) in
-            do {
-                return (try CloudBackupService.listBackups(), nil)
-            } catch {
-                return ([], error.localizedDescription)
+        do {
+            let backups = try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "storage_cleanup.cloud_backup_list",
+                    source: "StorageCleanupCenterView.refreshCloudBackups",
+                    category: .cloudBackup
+                )
+            ) {
+                try CloudBackupService.listBackups()
             }
-        }
-        let (backups, errorMessage) = await task.value
-
-        if let errorMessage, !errorMessage.isEmpty {
-            cloudBackups = []
-            cloudBackupError = errorMessage
-            StorageIssueLog.recordEvent(
-                "storage_cleanup.cloud_backup_list_failed",
-                category: .cloudBackup,
-                details: [
-                    "source": "StorageCleanupCenterView.refreshCloudBackups",
-                    "error_message": errorMessage
-                ]
-            )
-        } else {
             cloudBackups = backups
             cloudBackupError = nil
+        } catch {
+            let errorMessage = error.localizedDescription
+            cloudBackups = []
+            cloudBackupError = errorMessage
         }
     }
 
@@ -91,17 +85,19 @@ extension StorageCleanupCenterView {
 
         let baseSnapshot = store.makeSnapshot(includePhotoFiles: false)
         let projectIDs = store.projects.map(\.id)
-        let estimateTask = Task.detached(priority: .utility) { () -> [UUID: Int] in
-            var estimates: [UUID: Int] = [:]
-            estimates.reserveCapacity(projectIDs.count)
+        do {
+            projectBackupEstimateByID = try await FileIOTaskRunner.run(priority: .utility) {
+                var estimates: [UUID: Int] = [:]
+                estimates.reserveCapacity(projectIDs.count)
 
-            for projectId in projectIDs {
-                let scopedSnapshot = StorageCleanupScanner.makeProjectScopedSnapshot(from: baseSnapshot, projectId: projectId)
-                estimates[projectId] = StorageCleanupScanner.estimateBackupBytes(for: scopedSnapshot)
+                for projectId in projectIDs {
+                    let scopedSnapshot = StorageCleanupScanner.makeProjectScopedSnapshot(from: baseSnapshot, projectId: projectId)
+                    estimates[projectId] = StorageCleanupScanner.estimateBackupBytes(for: scopedSnapshot)
+                }
+                return estimates
             }
-            return estimates
+        } catch {
+            projectBackupEstimateByID = [:]
         }
-
-        projectBackupEstimateByID = await estimateTask.value
     }
 }

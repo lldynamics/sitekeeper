@@ -97,10 +97,16 @@ struct OperationAuditLogView: View {
 
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
+    private let onMobileScrollOffsetChange: ((CGFloat) -> Void)?
 
-    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
+    init(
+        showsNavigationTitle: Bool = true,
+        bottomContentInset: CGFloat = 0,
+        onMobileScrollOffsetChange: ((CGFloat) -> Void)? = nil
+    ) {
         self.showsNavigationTitle = showsNavigationTitle
         self.bottomContentInset = bottomContentInset
+        self.onMobileScrollOffsetChange = onMobileScrollOffsetChange
     }
 
     private var entries: [OperationAuditEntry] {
@@ -134,6 +140,10 @@ struct OperationAuditLogView: View {
 
     var body: some View {
         List {
+            if onMobileScrollOffsetChange != nil {
+                DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
+            }
+
             Section {
                 LabeledContent(String(localized: "记录数"), value: "\(entries.count)")
                 LabeledContent(String(localized: "当前筛选"), value: "\(filteredEntries.count)")

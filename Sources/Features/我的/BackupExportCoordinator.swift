@@ -12,19 +12,21 @@ enum BackupExportCoordinator {
         progress: @escaping (BackupArchiveProgress) -> Void,
         shouldCancel: @escaping () -> Bool
     ) async throws -> BackupExportOutcome {
-        let relay = TaskCancellationRelay()
-        let archive = try await withTaskCancellationHandler {
-            try await Task.detached(priority: .userInitiated) {
-                try BackupArchiveService.makeArchive(
-                    from: snapshot,
-                    progress: progress,
-                    shouldCancel: {
-                        shouldCancel() || relay.isCancelled()
-                    }
-                )
-            }.value
-        } onCancel: {
-            relay.cancel()
+        let archive = try await FileIOTaskRunner.runWithRelay(
+            priority: .userInitiated,
+            logContext: .init(
+                event: "backup.export.archive",
+                source: "BackupExportCoordinator.exportBackup",
+                category: .zipArchive
+            )
+        ) { relay in
+            try BackupArchiveService.makeArchive(
+                from: snapshot,
+                progress: progress,
+                shouldCancel: {
+                    shouldCancel() || relay.isCancelled() || Task.isCancelled
+                }
+            )
         }
 
         let archiveTotalBytes = archive.totalBytes

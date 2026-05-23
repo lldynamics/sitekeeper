@@ -28,6 +28,7 @@ extension BackupView {
                 }
             } else {
                 Form {
+                    DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
                     backupQuickStartSection
                     backupLocalSection
                     cloudBackupSection

@@ -5,18 +5,22 @@ struct DataHealthView: View {
     @Environment(DataStore.self) var store
     @State private var showReferenceFixConfirm = false
     @State private var showOrphanFileCleanupConfirm = false
+    @State private var showRepairGuidanceDialog = false
     @State var exportPayload: ExportPayload?
     @State var showExporter = false
     @State var operationNotice: OperationToastNotice?
-    @State private var selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
-    @State private var showsOnlyAutoFixableIssues = false
-    @State private var expandedIssueSectionIDs: Set<String> = []
+    @State var selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
+    @State var showsOnlyAutoFixableIssues = false
+    @State var issueSearchText = ""
+    @State var selectedIssueSort: DataHealthIssueSortOption = .severityDescending
+    @State var expandedIssueSectionIDs: Set<String> = []
     @State private var handledRepairRequestID: UUID?
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
     private let repairRequestID: UUID?
     private let onRepairRequestConsumed: (() -> Void)?
-    private let issuePreviewLimit = 50
+    let issuePreviewLimit = 50
+    let impactRecordPreviewLimit = 8
 
     init(
         showsNavigationTitle: Bool = true,
@@ -40,12 +44,18 @@ struct DataHealthView: View {
             return
         }
 
+        if orphanFileIssueCount > 0 {
+            showOrphanFileCleanupConfirm = true
+            return
+        }
+
         AppHaptics.warning()
         if totalIssues > 0 {
-            operationNotice = .info(l("当前异常没有可一键修复的引用问题，请查看列表逐项处理，或生成健康整改待办。"))
-        } else {
-            operationNotice = .info(l("当前没有待修复的数据健康异常。"))
+            showRepairGuidanceDialog = true
+            return
         }
+
+        operationNotice = .info(l("当前没有待修复的数据健康异常。"))
     }
 
     func l(_ key: String) -> String {
@@ -138,9 +148,13 @@ struct DataHealthView: View {
                 }
             }
 
+            issueRepairImpactPreviewSection
+
+            issueRepairRecordPreviewSection
+
             issueFilterSection
 
-            ForEach(issueSections) { section in
+            ForEach(displayedIssueSections) { section in
                 issueSection(section)
             }
         }
@@ -151,6 +165,7 @@ struct DataHealthView: View {
             isEnabled: showsNavigationTitle,
             title: l("数据健康检查")
         ))
+        .searchable(text: $issueSearchText, prompt: Text(l("搜索问题标题、详情、项目")))
         .task {
             if store.latestDataHealthSnapshot == nil {
                 store.runDataHealthScanNow(reason: .manual)
@@ -170,7 +185,7 @@ struct DataHealthView: View {
                 repairReferenceIssues()
             }
         } message: {
-            Text(l("将修复缺失引用、财务/仓库悬空附件映射、资料悬空关联和可置空的无效项目关联，不会删除任何照片、图纸、票据或随手记原文件。无法自动修复的项目关联会保留在“需手动处理项目关联”列表。"))
+            Text(referenceRepairConfirmMessage)
         }
         .alert(l("清理孤立原文件？"), isPresented: $showOrphanFileCleanupConfirm) {
             Button(l("取消"), role: .cancel) {}
@@ -178,7 +193,24 @@ struct DataHealthView: View {
                 cleanupOrphanFiles()
             }
         } message: {
-            Text(l("将删除未被任何记录引用的照片、图纸、票据和随手记附件。请先确认这些原件无需保留。"))
+            Text(orphanCleanupConfirmMessage)
+        }
+        .confirmationDialog(l("当前异常需要逐项处理"), isPresented: $showRepairGuidanceDialog) {
+            Button(l("生成健康整改待办")) {
+                createDataHealthRepairTodo()
+            }
+            Button(l("展开异常列表")) {
+                expandedIssueSectionIDs = Set(issueSections.map(\.id))
+                operationNotice = .info(l("已展开异常列表，请按分组逐项处理。"))
+            }
+            Button(l("取消"), role: .cancel) {}
+        } message: {
+            Text(
+                String(
+                    format: l("检测到 %lld 项异常，但当前没有可一键执行的引用修复。可先生成整改待办，或直接展开异常列表处理。"),
+                    Int64(totalIssues)
+                )
+            )
         }
         .fileExporter(
             isPresented: $showExporter,
@@ -187,271 +219,5 @@ struct DataHealthView: View {
             defaultFilename: exportPayload?.defaultFilename ?? l("数据健康报告.txt")
         ) { _ in }
         .operationToast(notice: $operationNotice)
-    }
-
-    @ViewBuilder
-    private var issueFilterSection: some View {
-        Section(l("问题筛选")) {
-            Picker(l("按项目过滤"), selection: $selectedIssueProjectFilter) {
-                Text(l("全部问题")).tag(DataHealthIssueProjectFilter.all)
-                Text(l("无项目线索")).tag(DataHealthIssueProjectFilter.noProject)
-                Text(l("无效项目关联")).tag(DataHealthIssueProjectFilter.invalidProject)
-                ForEach(store.projects.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { project in
-                    Text(project.name.isEmpty ? l("未命名项目") : project.name)
-                        .tag(DataHealthIssueProjectFilter.project(project.id))
-                }
-            }
-            .pickerStyle(.menu)
-
-            Toggle(isOn: $showsOnlyAutoFixableIssues) {
-                Label(l("只看可自动修复"), systemImage: "wrench.and.screwdriver")
-            }
-
-            LabeledContent(l("当前筛选结果"), value: "\(filteredIssueCount)")
-
-            if hasActiveIssueFilters {
-                Button {
-                    resetIssueFilters()
-                } label: {
-                    Label(l("重置筛选"), systemImage: "arrow.counterclockwise")
-                }
-            }
-        }
-    }
-
-    @ViewBuilder
-    private func issueSection(_ section: DataHealthIssueSection) -> some View {
-        let filteredItems = filteredIssueItems(section.items)
-        let isExpanded = expandedIssueSectionIDs.contains(section.id)
-        let visibleItems = isExpanded ? filteredItems : Array(filteredItems.prefix(issuePreviewLimit))
-        Section(issueSectionTitle(section.title, filteredCount: filteredItems.count, totalCount: section.items.count)) {
-            if section.items.isEmpty {
-                Text(l("未发现问题"))
-                    .foregroundStyle(.secondary)
-            } else if filteredItems.isEmpty {
-                Text(l("当前筛选无结果"))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(visibleItems) { item in
-                    issueRow(item)
-                }
-                if filteredItems.count > issuePreviewLimit {
-                    Button {
-                        toggleIssueSectionExpansion(section.id)
-                    } label: {
-                        Label(
-                            isExpanded
-                            ? l("收起到前 50 条")
-                            : lf("查看全部 %lld 条", Int64(filteredItems.count)),
-                            systemImage: isExpanded ? "chevron.up.circle" : "list.bullet.rectangle"
-                        )
-                    }
-                    .font(.caption.weight(.semibold))
-                }
-            }
-        }
-    }
-
-    private var issueSections: [DataHealthIssueSection] {
-        [
-            DataHealthIssueSection(id: "missingPhotoFiles", title: l("缺失照片文件"), items: missingPhotoFileIssues),
-            DataHealthIssueSection(id: "missingDocumentFiles", title: l("缺失票据文件"), items: missingDocumentFileIssues),
-            DataHealthIssueSection(id: "missingQuickNoteAttachmentFiles", title: l("缺失随手记附件"), items: missingQuickNoteAttachmentIssues),
-            DataHealthIssueSection(id: "orphanPhotoFiles", title: l("孤立照片文件"), items: orphanPhotoFileIssues),
-            DataHealthIssueSection(id: "orphanDrawingFiles", title: l("孤立图纸文件"), items: orphanDrawingFileIssues),
-            DataHealthIssueSection(id: "orphanDocumentFiles", title: l("孤立票据文件"), items: orphanDocumentFileIssues),
-            DataHealthIssueSection(id: "orphanQuickNoteAttachmentFiles", title: l("孤立随手记附件"), items: orphanQuickNoteAttachmentIssues),
-            DataHealthIssueSection(id: "orphanAttachmentMappings", title: l("孤立附件映射"), items: orphanAttachmentMappingIssues),
-            DataHealthIssueSection(id: "orphanWarehouseAttachmentMappings", title: l("仓库悬空附件映射"), items: orphanWarehouseAttachmentMappingIssues),
-            DataHealthIssueSection(id: "danglingDocumentLinks", title: l("资料悬空关联"), items: danglingDocumentLinkIssues),
-            DataHealthIssueSection(id: "autoFixableInvalidProjectRefs", title: l("无效项目关联（可自动修复）"), items: autoFixableInvalidProjectRefIssues),
-            DataHealthIssueSection(id: "manualInvalidProjectRefs", title: l("无效项目关联（需手动处理）"), items: manualInvalidProjectRefIssues),
-            DataHealthIssueSection(id: "storageIssueRows", title: l("存储错误记录"), items: storageIssueRows)
-        ]
-    }
-
-    private var filteredIssueCount: Int {
-        issueSections.reduce(0) { total, section in
-            total + filteredIssueItems(section.items).count
-        }
-    }
-
-    private var hasActiveIssueFilters: Bool {
-        selectedIssueProjectFilter != DataHealthIssueProjectFilter.all || showsOnlyAutoFixableIssues
-    }
-
-    private func filteredIssueItems(_ items: [DataHealthIssue]) -> [DataHealthIssue] {
-        items.filter { issue in
-            matchesAutoFixableFilter(issue) && matchesProjectFilter(issue)
-        }
-    }
-
-    private func matchesAutoFixableFilter(_ issue: DataHealthIssue) -> Bool {
-        !showsOnlyAutoFixableIssues || issue.isAutoFixable
-    }
-
-    private func matchesProjectFilter(_ issue: DataHealthIssue) -> Bool {
-        switch selectedIssueProjectFilter {
-        case DataHealthIssueProjectFilter.all:
-            return true
-        case DataHealthIssueProjectFilter.noProject:
-            return issue.effectiveProjectId == nil
-        case DataHealthIssueProjectFilter.invalidProject:
-            guard let projectId = issue.effectiveProjectId else { return false }
-            return !projectIdSet.contains(projectId)
-        default:
-            guard let projectId = issue.effectiveProjectId else { return false }
-            return selectedIssueProjectFilter == DataHealthIssueProjectFilter.project(projectId)
-        }
-    }
-
-    private func issueSectionTitle(_ title: String, filteredCount: Int, totalCount: Int) -> String {
-        if filteredCount == totalCount {
-            return "\(title) (\(totalCount))"
-        }
-        return "\(title) (\(filteredCount)/\(totalCount))"
-    }
-
-    private func toggleIssueSectionExpansion(_ sectionID: String) {
-        withAnimation(.snappy(duration: 0.18)) {
-            if expandedIssueSectionIDs.contains(sectionID) {
-                expandedIssueSectionIDs.remove(sectionID)
-            } else {
-                expandedIssueSectionIDs.insert(sectionID)
-            }
-        }
-    }
-
-    private func resetIssueFilters() {
-        selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
-        showsOnlyAutoFixableIssues = false
-        expandedIssueSectionIDs.removeAll()
-    }
-
-    @ViewBuilder
-    private func issueRow(_ item: DataHealthIssue) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            issueLabel(item)
-            issueActionBar(item)
-        }
-        .padding(.vertical, 2)
-    }
-
-    private func issueLabel(_ item: DataHealthIssue) -> some View {
-        HStack(alignment: .top, spacing: 10) {
-            Image(systemName: item.systemImage)
-                .font(.body.weight(.semibold))
-                .foregroundStyle(item.color)
-                .frame(width: 24)
-                .padding(.top, 1)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.title)
-                    .font(.callout.weight(.medium))
-                Text(item.detail)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(item.exportText)
-    }
-
-    @ViewBuilder
-    private func issueActionBar(_ item: DataHealthIssue) -> some View {
-        let actions = issueActions(for: item)
-        if !actions.isEmpty {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: AppSpacing.tight) {
-                    ForEach(actions) { action in
-                        issueActionControl(action, for: item)
-                    }
-                }
-            }
-            .padding(.leading, 34)
-        }
-    }
-
-    private func issueActions(for item: DataHealthIssue) -> [DataHealthIssueAction] {
-        var actions = item.actions
-        if let route = item.route,
-           !actions.contains(where: { action in
-               if case .navigate = action.kind { return true }
-               return false
-           }) {
-            actions.insert(
-                .navigate(
-                    title: item.actionTitle ?? l("打开记录"),
-                    route: route
-                ),
-                at: 0
-            )
-        }
-        if !actions.contains(where: { action in
-            if case .createTodo = action.kind { return true }
-            return false
-        }) {
-            actions.append(.createTodo(title: l("生成专项待办")))
-        }
-        return actions
-    }
-
-    @ViewBuilder
-    private func issueActionControl(_ action: DataHealthIssueAction, for item: DataHealthIssue) -> some View {
-        switch action.kind {
-        case .navigate(let route):
-            NavigationLink {
-                issueDestination(route)
-            } label: {
-                issueActionLabel(action)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-        case .repair, .moveOrphanFileToTrash, .createTodo:
-            Button(role: action.role) {
-                performIssueAction(action, for: item)
-            } label: {
-                issueActionLabel(action)
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.mini)
-        }
-    }
-
-    private func issueActionLabel(_ action: DataHealthIssueAction) -> some View {
-        Label(action.title, systemImage: action.systemImage)
-            .font(.caption2.weight(.semibold))
-    }
-
-    @ViewBuilder
-    private func issueDestination(_ route: DataHealthIssueRoute) -> some View {
-        switch route {
-        case .project(let projectId, let mode):
-            ProjectDetailView(projectId: projectId, initialMode: mode)
-        case .financialRecord(let projectId, let recordId):
-            ProjectDetailView(projectId: projectId, initialMode: .finance, focus: .financialRecord(recordId))
-        case .document(let projectId, let documentId):
-            ProjectDetailView(projectId: projectId, initialMode: .records, focus: .document(documentId))
-        case .dailyLog(let projectId, let logId):
-            DailyLogView(initialProjectId: projectId, focusedLogId: logId)
-        case .siteTodo(let projectId, let todoId):
-            SiteTodoView(initialProjectId: projectId, focusedTodoId: todoId)
-        case .material(let materialId):
-            MaterialListView(focusedMaterialId: materialId)
-        case .quote(let quoteId):
-            QuotationView(focusedQuoteId: quoteId)
-        case .labor(let laborId):
-            LaborRecordView(focusedLaborId: laborId)
-        case .quickNote(let noteId):
-            QuickNoteView(focusedNoteId: noteId)
-        case .contact(let contactId):
-            ProjectContactDatabaseView(focusedContactId: contactId)
-        case .warehouseProject(let projectId):
-            if let project = store.projects.first(where: { $0.id == projectId }) {
-                ProjectWarehouseView(project: project)
-            } else {
-                ContentUnavailableView(l("项目不存在"), systemImage: "questionmark.folder")
-            }
-        }
     }
 }

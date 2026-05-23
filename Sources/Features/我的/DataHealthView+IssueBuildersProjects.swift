@@ -152,6 +152,7 @@ extension DataHealthView {
                 detail: text,
                 systemImage: "externaldrive.badge.exclamationmark",
                 color: .appRisk,
+                severity: .critical,
                 actionTitle: nil,
                 route: nil
             )
@@ -173,6 +174,7 @@ extension DataHealthView {
             detail: detail,
             systemImage: systemImage,
             color: .appWarning,
+            severity: .high,
             actionTitle: l("打开记录"),
             projectId: projectId,
             route: route,
@@ -196,6 +198,7 @@ extension DataHealthView {
             detail: detail,
             systemImage: systemImage,
             color: .appWarning,
+            severity: .high,
             actionTitle: route == nil ? l("需手动处理") : l("打开记录"),
             projectId: projectId,
             route: route

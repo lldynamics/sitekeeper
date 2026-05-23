@@ -94,9 +94,20 @@ enum BackupImportCoordinator {
 
         var failedStage = "commit_files"
         do {
-            let restoredCounts = try await Task.detached(priority: .userInitiated) {
+            let restoredCounts = try await FileIOTaskRunner.run(
+                priority: .userInitiated,
+                logContext: .init(
+                    event: "backup.import.commit_restore_files",
+                    source: "BackupImportCoordinator.commitAndPersistImport",
+                    category: .zipArchive,
+                    details: [
+                        "file": sourceFileName,
+                        "mode": importMode.rawValue
+                    ]
+                )
+            ) {
                 try restoreTransaction.commit()
-            }.value
+            }
             failedStage = "persist_metadata"
             onPersistingMetadata()
             try await store.flushSaveOrThrow()
