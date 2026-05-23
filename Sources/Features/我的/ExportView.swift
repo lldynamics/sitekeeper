@@ -35,10 +35,16 @@ struct ExportView: View {
     @AppStorage(UserPreferenceKeys.exportCurrencyDisplayMode) var currencyDisplayModeRaw = ExportCurrencyDisplayMode.defaultMode.rawValue
     let showsNavigationTitle: Bool
     let bottomContentInset: CGFloat
+    let onMobileScrollOffsetChange: ((CGFloat) -> Void)?
 
-    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
+    init(
+        showsNavigationTitle: Bool = true,
+        bottomContentInset: CGFloat = 0,
+        onMobileScrollOffsetChange: ((CGFloat) -> Void)? = nil
+    ) {
         self.showsNavigationTitle = showsNavigationTitle
         self.bottomContentInset = bottomContentInset
+        self.onMobileScrollOffsetChange = onMobileScrollOffsetChange
     }
 }
 

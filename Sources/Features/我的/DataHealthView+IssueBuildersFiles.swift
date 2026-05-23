@@ -15,6 +15,7 @@ extension DataHealthView {
                         detail: issueDetail([projectName(log.projectId), log.date, fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
+                        severity: .critical,
                         actionTitle: l("打开日志"),
                         route: route,
                         actions: [
@@ -36,6 +37,7 @@ extension DataHealthView {
                         detail: issueDetail([projectName(log.projectId), log.date, photo.tag.displayName, photo.fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
+                        severity: .critical,
                         actionTitle: l("打开日志"),
                         route: route,
                         actions: [
@@ -60,6 +62,7 @@ extension DataHealthView {
                         detail: issueDetail([projectName(todo.projectId), todo.title, l("整改前"), fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
+                        severity: .critical,
                         actionTitle: l("打开待办"),
                         route: route,
                         actions: [
@@ -82,6 +85,7 @@ extension DataHealthView {
                         detail: issueDetail([projectName(todo.projectId), todo.title, l("整改后"), fileName]),
                         systemImage: "photo.badge.exclamationmark",
                         color: .appRisk,
+                        severity: .critical,
                         actionTitle: l("打开待办"),
                         route: route,
                         actions: [
@@ -111,6 +115,7 @@ extension DataHealthView {
                     detail: issueDetail([projectName(document.projectId), document.title, document.fileName]),
                     systemImage: "doc.badge.exclamationmark",
                     color: .appRisk,
+                    severity: .critical,
                     actionTitle: l("打开资料"),
                     route: route,
                     actions: [
@@ -137,6 +142,7 @@ extension DataHealthView {
                         detail: issueDetail([note.title.isEmpty ? note.createdAt : note.title, attachment.displayName]),
                         systemImage: "paperclip.badge.ellipsis",
                         color: .appRisk,
+                        severity: .critical,
                         actionTitle: l("打开随手记"),
                         projectId: note.projectId,
                         route: route,
@@ -156,19 +162,19 @@ extension DataHealthView {
     }
 
     var orphanPhotoFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanPhotoFiles, title: l("孤立照片文件"), systemImage: "photo.stack", color: .appWarning, kind: .photo)
+        fileOnlyIssues(orphanPhotoFiles, title: l("孤立照片文件"), systemImage: "photo.stack", color: .appWarning, severity: .medium, kind: .photo)
     }
 
     var orphanDrawingFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDrawingFiles, title: l("孤立图纸文件"), systemImage: "doc.viewfinder", color: .appWarning, kind: .drawing)
+        fileOnlyIssues(orphanDrawingFiles, title: l("孤立图纸文件"), systemImage: "doc.viewfinder", color: .appWarning, severity: .medium, kind: .drawing)
     }
 
     var orphanDocumentFileIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanDocumentFiles, title: l("孤立票据文件"), systemImage: "doc.richtext", color: .appWarning, kind: .projectDocument)
+        fileOnlyIssues(orphanDocumentFiles, title: l("孤立票据文件"), systemImage: "doc.richtext", color: .appWarning, severity: .medium, kind: .projectDocument)
     }
 
     var orphanQuickNoteAttachmentIssues: [DataHealthIssue] {
-        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: l("孤立随手记附件"), systemImage: "paperclip", color: .appWarning, kind: .quickNoteAttachment)
+        fileOnlyIssues(orphanQuickNoteAttachmentFiles, title: l("孤立随手记附件"), systemImage: "paperclip", color: .appWarning, severity: .medium, kind: .quickNoteAttachment)
     }
 
     var orphanAttachmentMappingIssues: [DataHealthIssue] {
@@ -182,6 +188,7 @@ extension DataHealthView {
                     detail: issueDetail([projectName(record.projectId), record.date, record.category.displayName, lf("缺失票据ID %@", shortId(docId))]),
                     systemImage: "receipt.badge.exclamationmark",
                     color: .appWarning,
+                    severity: .high,
                     actionTitle: l("打开账目"),
                     route: .financialRecord(projectId: record.projectId, recordId: record.id),
                     actions: [
@@ -207,6 +214,7 @@ extension DataHealthView {
                     detail: issueDetail([projectName(movement.projectId), movement.date, material, lf("缺失附件ID %@", shortId(docId))]),
                     systemImage: "shippingbox.and.arrow.backward",
                     color: .appWarning,
+                    severity: .high,
                     actionTitle: l("打开仓库"),
                     route: .warehouseProject(projectId: movement.projectId),
                     actions: [
@@ -231,6 +239,7 @@ extension DataHealthView {
                 detail: issueDetail([projectName(document.projectId), document.title, lf("缺失账目ID %@", shortId(linkedId))]),
                 systemImage: "link.badge.plus",
                 color: .appWarning,
+                severity: .high,
                 actionTitle: l("打开资料"),
                 route: .document(projectId: document.projectId, documentId: document.id),
                 actions: [
@@ -248,6 +257,7 @@ extension DataHealthView {
         title: String,
         systemImage: String,
         color: Color,
+        severity: DataHealthIssueSeverity,
         kind: DataHealthOrphanFileKind
     ) -> [DataHealthIssue] {
         fileNames.map { fileName in
@@ -257,6 +267,7 @@ extension DataHealthView {
                 detail: fileName,
                 systemImage: systemImage,
                 color: color,
+                severity: severity,
                 actionTitle: nil,
                 route: nil,
                 actions: [

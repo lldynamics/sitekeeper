@@ -21,16 +21,26 @@ struct StorageCleanupCenterView: View {
 
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
+    private let onMobileScrollOffsetChange: ((CGFloat) -> Void)?
     let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
     let drawingSourceFileExtensions: Set<String> = ["dwg", "dxf"]
 
-    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
+    init(
+        showsNavigationTitle: Bool = true,
+        bottomContentInset: CGFloat = 0,
+        onMobileScrollOffsetChange: ((CGFloat) -> Void)? = nil
+    ) {
         self.showsNavigationTitle = showsNavigationTitle
         self.bottomContentInset = bottomContentInset
+        self.onMobileScrollOffsetChange = onMobileScrollOffsetChange
     }
 
     var body: some View {
         List {
+            if onMobileScrollOffsetChange != nil {
+                DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
+            }
+
             if !cleanupStatusMessage.isEmpty {
                 Section {
                     Text(cleanupStatusMessage)

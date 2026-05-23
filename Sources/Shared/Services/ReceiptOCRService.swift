@@ -61,9 +61,17 @@ enum ReceiptOCRService {
             }
         }
 
-        let recognizedText = try await Task.detached(priority: .userInitiated) {
+        let recognizedText = try await FileIOTaskRunner.run(
+            priority: .userInitiated,
+            logContext: .init(
+                event: "receipt_ocr.recognize",
+                source: "ReceiptOCRService.recognize",
+                category: .fileStorage,
+                details: ["file_name": url.lastPathComponent]
+            )
+        ) {
             try recognizeTextSynchronously(from: url)
-        }.value
+        }
         let result = parseStructuredResult(from: recognizedText)
         guard result.hasStructuredValue else {
             throw ReceiptOCRServiceError.noStructuredResult

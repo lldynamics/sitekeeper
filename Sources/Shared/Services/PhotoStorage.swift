@@ -196,23 +196,26 @@ enum PhotoStorage {
 
     static func dataAsync(for fileName: String) async -> Data? {
         let url = fileURL(for: fileName)
-        let readTask = Task.detached(priority: .utility) { () async -> Data? in
-            guard !Task.isCancelled else { return Optional<Data>.none }
-            do {
-                let data = try Data(contentsOf: url, options: .mappedIfSafe)
-                guard !Task.isCancelled else { return Optional<Data>.none }
-                return data
-            } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
-                return Optional<Data>.none
-            } catch {
-                logIssue("read_failed", fileName: fileName, error: error)
-                return Optional<Data>.none
+        do {
+            return try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "photo.read",
+                    source: "PhotoStorage.dataAsync",
+                    category: .fileStorage,
+                    details: ["file": fileName]
+                )
+            ) {
+                do {
+                    let data = try Data(contentsOf: url, options: .mappedIfSafe)
+                    guard !Task.isCancelled else { return nil }
+                    return data
+                } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+                    return nil
+                }
             }
-        }
-        return await withTaskCancellationHandler {
-            await readTask.value
-        } onCancel: {
-            readTask.cancel()
+        } catch {
+            return nil
         }
     }
 

@@ -13,6 +13,7 @@ struct DataManagementView: View {
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var cleanupTrashBatchCount = 0
     @State var isCompactSafetyHeader = false
+    @State private var lastMobileContentOffset: CGFloat = 0
     @State var pendingHealthRepairRequestID: UUID?
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) var cloudBackupLastSuccessAt = 0.0
@@ -58,12 +59,17 @@ struct DataManagementView: View {
             Group {
                 switch selectedTab {
                 case .export:
-                    ExportView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
+                    ExportView(
+                        showsNavigationTitle: false,
+                        bottomContentInset: embeddedScrollBottomInset,
+                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
+                    )
                 case .backupAndRestore:
                     BackupView(
                         autoOpenImporter: shouldAutoOpenBackupImporter,
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
+                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:),
                         onAutoOpenImporterConsumed: {
                             shouldAutoOpenBackupImporter = false
                         }
@@ -121,14 +127,20 @@ struct DataManagementView: View {
         }
         .onAppear {
             refreshRiskSnapshot()
+            if !usesWideLayout {
+                isCompactSafetyHeader = false
+                lastMobileContentOffset = 0
+            }
         }
         .onChange(of: selectedTab) { _, _ in
             refreshRiskSnapshot()
+            if !usesWideLayout {
+                withAnimation(.snappy) {
+                    isCompactSafetyHeader = false
+                }
+                lastMobileContentOffset = 0
+            }
         }
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 24)
-                .onEnded(collapseMobileSafetyHeaderIfNeeded(_:))
-        )
     }
 
     var safetyHeaderSection: some View {
@@ -172,10 +184,6 @@ struct DataManagementView: View {
             .padding(.vertical, 4)
             .background(.bar)
             .transition(.move(edge: .top).combined(with: .opacity))
-            .gesture(
-                DragGesture(minimumDistance: 18)
-                    .onEnded(expandMobileSafetyHeaderIfNeeded(_:))
-            )
         } else {
             VStack(spacing: AppSpacing.tight) {
                 safetyHeaderSection
@@ -189,24 +197,25 @@ struct DataManagementView: View {
             }
             .contentShape(Rectangle())
             .transition(.opacity)
-            .gesture(
-                DragGesture(minimumDistance: 18)
-                    .onEnded(collapseMobileSafetyHeaderIfNeeded(_:))
-            )
         }
     }
 
-    func collapseMobileSafetyHeaderIfNeeded(_ value: DragGesture.Value) {
-        guard !usesWideLayout, !isCompactSafetyHeader, value.translation.height < -36 else { return }
-        withAnimation(.snappy) {
-            isCompactSafetyHeader = true
-        }
-    }
+    func handleMobileContentScrollOffsetChange(_ offset: CGFloat) {
+        guard !usesWideLayout else { return }
+        guard abs(offset - lastMobileContentOffset) > 1 else { return }
+        lastMobileContentOffset = offset
 
-    func expandMobileSafetyHeaderIfNeeded(_ value: DragGesture.Value) {
-        guard !usesWideLayout, isCompactSafetyHeader, value.translation.height > 48 else { return }
-        withAnimation(.snappy) {
-            isCompactSafetyHeader = false
+        let shouldCompact = offset < -56
+        let shouldExpand = offset > -12
+
+        if shouldCompact, !isCompactSafetyHeader {
+            withAnimation(.snappy) {
+                isCompactSafetyHeader = true
+            }
+        } else if shouldExpand, isCompactSafetyHeader {
+            withAnimation(.snappy) {
+                isCompactSafetyHeader = false
+            }
         }
     }
 }

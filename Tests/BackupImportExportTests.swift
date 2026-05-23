@@ -618,6 +618,140 @@ struct BackupImportExportTests {
         )
     }
 
+    @Test func backupArchiveCancelCleansPartialTemporaryZip() throws {
+        let archivePrefix = "backup-archive-cancel-\(UUID().uuidString)"
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(name: "取消导出测试项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: []
+        )
+        var shouldCancel = false
+
+        do {
+            _ = try BackupArchiveService.makeArchive(
+                from: snapshot,
+                progress: { progress in
+                    if progress.completedSteps >= 1 {
+                        shouldCancel = true
+                    }
+                },
+                shouldCancel: { shouldCancel },
+                temporaryFilePrefix: archivePrefix
+            )
+            Issue.record("预期应抛出取消错误")
+        } catch BackupArchiveError.cancelled {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+
+        #expect(Self.temporaryFiles(withPrefix: archivePrefix).isEmpty)
+    }
+
+    @Test func backupExportCancelAfterPrepareCleansTemporaryExportFile() async throws {
+        let suggestedFileName = "backup-export-cancel-\(UUID().uuidString).zip"
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(name: "导出取消清理项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: []
+        )
+
+        do {
+            let outcome = try await BackupExportCoordinator.exportBackup(
+                snapshot: snapshot,
+                suggestedFileName: suggestedFileName,
+                progress: { _ in },
+                shouldCancel: {
+                    !Self.temporaryFiles(
+                        named: suggestedFileName,
+                        containingPathFragment: "sitekeeper-export-"
+                    ).isEmpty
+                }
+            )
+            ExportFileURLPreparer.cleanup(fileURL: outcome.preparedFileURL)
+            Issue.record("预期应抛出取消错误")
+        } catch BackupArchiveError.cancelled {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+
+        #expect(
+            Self.temporaryFiles(
+                named: suggestedFileName,
+                containingPathFragment: "sitekeeper-export-"
+            ).isEmpty
+        )
+    }
+
+    @Test func backupImportCancelDoesNotKeepStagedTempFileOrHalfWriteExistingData() throws {
+        let projectId = UUID()
+        let quickNoteFile = "backup-import-cancel-\(UUID().uuidString).bin"
+        let newData = Data(repeating: 0xA6, count: 2 * 256 * 1024 + 1024)
+        let oldData = Data([0x11, 0x22, 0x33, 0x44])
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(newData, fileName: quickNoteFile)
+
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "导入取消回滚项目", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
+            templates: []
+        )
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+            try? FileManager.default.removeItem(at: archive.fileURL)
+        }
+
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(oldData, fileName: quickNoteFile)
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+
+        var didRequestCancel = false
+        do {
+            _ = try BackupArchiveService.prepareEmbeddedFileRestore(
+                from: archive.fileURL,
+                shouldCancel: {
+                    if didRequestCancel { return true }
+                    for stageURL in Self.temporaryFiles(
+                        named: quickNoteFile,
+                        containingPathFragment: "backup-restore-"
+                    ) {
+                        if let size = Self.fileSize(at: stageURL),
+                           size > 0,
+                           size < newData.count {
+                            didRequestCancel = true
+                            return true
+                        }
+                    }
+                    return false
+                }
+            )
+            Issue.record("预期应抛出取消错误")
+        } catch BackupArchiveError.cancelled {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+
+        #expect(didRequestCancel)
+        #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+        #expect(
+            Self.temporaryFiles(
+                named: quickNoteFile,
+                containingPathFragment: "backup-restore-"
+            ).isEmpty
+        )
+    }
+
     @Test func backupRestoreEmbeddedFilesCancelKeepsStorageUnchanged() throws {
         let projectId = UUID()
         let quickNoteFile = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x3A, 0x3B, 0x3C]), fileName: "backup-cancel-\(UUID().uuidString).bin")
@@ -872,6 +1006,46 @@ struct BackupImportExportTests {
         #expect(restored.quickNoteAttachmentFileCount == 1)
         #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile))
         #expect(QuickNoteAttachmentStorage.fileSize(for: quickNoteFile) == targetSize)
+    }
+
+    private static func temporaryFiles(withPrefix prefix: String) -> [URL] {
+        let root = FileManager.default.temporaryDirectory
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+        var result: [URL] = []
+        for case let url as URL in enumerator where url.lastPathComponent.hasPrefix(prefix) {
+            result.append(url)
+        }
+        return result
+    }
+
+    private static func temporaryFiles(
+        named fileName: String,
+        containingPathFragment pathFragment: String
+    ) -> [URL] {
+        let root = FileManager.default.temporaryDirectory
+        guard let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles, .skipsPackageDescendants]
+        ) else {
+            return []
+        }
+        var result: [URL] = []
+        for case let url as URL in enumerator
+        where url.lastPathComponent == fileName && url.path.contains(pathFragment) {
+            result.append(url)
+        }
+        return result
+    }
+
+    private static func fileSize(at url: URL) -> Int? {
+        (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
     }
 
     private static func makeJPEGData() throws -> Data {

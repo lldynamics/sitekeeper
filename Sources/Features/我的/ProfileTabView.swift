@@ -353,9 +353,21 @@ struct ProfileTabView: View {
         isRefreshingStorageUsage = true
         defer { isRefreshingStorageUsage = false }
 
-        let snapshot = await Task.detached(priority: .utility) {
-            Self.calculateLocalStorageUsage()
-        }.value
+        let snapshot: (totalBytes: Int64, fileCount: Int)?
+        do {
+            snapshot = try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "profile.storage_usage_scan",
+                    source: "ProfileTabView.refreshLocalStorageUsage",
+                    category: .fileStorage
+                )
+            ) {
+                Self.calculateLocalStorageUsage()
+            }
+        } catch {
+            snapshot = nil
+        }
 
         guard let snapshot else {
             localStorageUsageText = String(localized: "读取失败")

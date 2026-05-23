@@ -69,6 +69,7 @@ struct BackupView: View {
     let autoOpenImporter: Bool
     let showsNavigationTitle: Bool
     let bottomContentInset: CGFloat
+    let onMobileScrollOffsetChange: ((CGFloat) -> Void)?
     let onAutoOpenImporterConsumed: (() -> Void)?
     private let cloudBackupScopeHint = String(localized: "可按业务模块选择备份范围。关闭“原文件附件”可显著减小体积。")
     private let cloudCellularTrafficHint = String(localized: "提示：在蜂窝网络下手动或自动备份 iCloud 会消耗移动数据流量，建议大包资料优先在 Wi‑Fi 下操作。")
@@ -77,11 +78,13 @@ struct BackupView: View {
         autoOpenImporter: Bool = false,
         showsNavigationTitle: Bool = true,
         bottomContentInset: CGFloat = 0,
+        onMobileScrollOffsetChange: ((CGFloat) -> Void)? = nil,
         onAutoOpenImporterConsumed: (() -> Void)? = nil
     ) {
         self.autoOpenImporter = autoOpenImporter
         self.showsNavigationTitle = showsNavigationTitle
         self.bottomContentInset = bottomContentInset
+        self.onMobileScrollOffsetChange = onMobileScrollOffsetChange
         self.onAutoOpenImporterConsumed = onAutoOpenImporterConsumed
     }
 

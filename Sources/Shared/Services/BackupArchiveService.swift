@@ -25,12 +25,13 @@ enum BackupArchiveService {
     static func makeArchive(
         from snapshot: BackupSnapshot,
         progress: ((BackupArchiveProgress) -> Void)?,
-        shouldCancel: (() -> Bool)?
+        shouldCancel: (() -> Bool)?,
+        temporaryFilePrefix: String = "backup-archive"
     ) throws -> BackupArchive {
         let metadataSnapshot = snapshot.withoutEmbeddedFiles()
         let metadata = try encodeMetadata(metadataSnapshot)
         let manifest = try encodeManifest(from: metadataSnapshot)
-        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: "backup-archive")
+        let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: temporaryFilePrefix)
         var zip = try StreamingZipArchiveWriter(fileURL: archiveURL)
         var writerFinished = false
         defer {

@@ -39,21 +39,24 @@ extension BackupView {
                 if let metadataSnapshot {
                     snapshot = metadataSnapshot
                 } else {
-                    let relay = TaskCancellationRelay()
-                    let preview = try await withTaskCancellationHandler {
-                        try await Task.detached(priority: .userInitiated) {
-                            try BackupArchiveService.previewBackup(
-                                from: pendingImportFileURL,
-                                progress: { progress in
-                                    Task { @MainActor in
-                                        importProgress = progress
-                                    }
-                                },
-                                shouldCancel: { relay.isCancelled() || Task.isCancelled }
-                            )
-                        }.value
-                    } onCancel: {
-                        relay.cancel()
+                    let preview = try await FileIOTaskRunner.runWithRelay(
+                        priority: .userInitiated,
+                        logContext: .init(
+                            event: "backup.import.preview_fallback",
+                            source: "BackupView.startApplyingImport",
+                            category: .zipArchive,
+                            details: ["file_name": pendingImportFileURL.lastPathComponent]
+                        )
+                    ) { relay in
+                        try BackupArchiveService.previewBackup(
+                            from: pendingImportFileURL,
+                            progress: { progress in
+                                Task { @MainActor in
+                                    importProgress = progress
+                                }
+                            },
+                            shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                        )
                     }
                     snapshot = preview.snapshot
                 }
@@ -96,21 +99,24 @@ extension BackupView {
                     )
                 }
 
-                let relay = TaskCancellationRelay()
-                let restoreTransaction = try await withTaskCancellationHandler {
-                    try await Task.detached(priority: .userInitiated) {
-                        try BackupArchiveService.prepareEmbeddedFileRestore(
-                            from: pendingImportFileURL,
-                            progress: { progress in
-                                Task { @MainActor in
-                                    importProgress = progress
-                                }
-                            },
-                            shouldCancel: { relay.isCancelled() || Task.isCancelled }
-                        )
-                    }.value
-                } onCancel: {
-                    relay.cancel()
+                let restoreTransaction = try await FileIOTaskRunner.runWithRelay(
+                    priority: .userInitiated,
+                    logContext: .init(
+                        event: "backup.import.prepare_restore",
+                        source: "BackupView.startApplyingImport",
+                        category: .zipArchive,
+                        details: ["file_name": pendingImportFileURL.lastPathComponent]
+                    )
+                ) { relay in
+                    try BackupArchiveService.prepareEmbeddedFileRestore(
+                        from: pendingImportFileURL,
+                        progress: { progress in
+                            Task { @MainActor in
+                                importProgress = progress
+                            }
+                        },
+                        shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                    )
                 }
                 guard !Task.isCancelled else {
                     restoreTransaction.cancel()

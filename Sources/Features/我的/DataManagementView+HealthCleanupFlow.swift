@@ -42,9 +42,17 @@ extension DataManagementView {
                         }
                     )
                 case .storage:
-                    StorageCleanupCenterView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
+                    StorageCleanupCenterView(
+                        showsNavigationTitle: false,
+                        bottomContentInset: embeddedScrollBottomInset,
+                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
+                    )
                 case .audit:
-                    OperationAuditLogView(showsNavigationTitle: false, bottomContentInset: embeddedScrollBottomInset)
+                    OperationAuditLogView(
+                        showsNavigationTitle: false,
+                        bottomContentInset: embeddedScrollBottomInset,
+                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
+                    )
                 }
             }
             .id(healthCleanupSection)

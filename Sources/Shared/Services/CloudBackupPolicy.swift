@@ -386,45 +386,51 @@ actor CloudBackupCoordinator {
         progress: ((BackupArchiveProgress) -> Void)? = nil
     ) async throws -> CloudBackupExecutionResult {
         var archiveFileURL: URL?
-        let relay = TaskCancellationRelay()
         let retentionCount = CloudBackupSettingsStore.loadRetentionCount()
         do {
-            let archiveTask = Task.detached(priority: .userInitiated) {
+            let archive = try await FileIOTaskRunner.runWithRelay(
+                priority: .userInitiated,
+                logContext: .init(
+                    event: "cloud_backup.make_archive",
+                    source: "CloudBackupCoordinator.backupToCloud",
+                    category: .zipArchive,
+                    details: ["retention_count": "\(retentionCount)"]
+                )
+            ) { relay in
                 try BackupArchiveService.makeArchive(
                     from: snapshot,
                     progress: progress,
                     shouldCancel: { relay.isCancelled() || Task.isCancelled }
                 )
             }
-            let archive = try await withTaskCancellationHandler {
-                try await archiveTask.value
-            } onCancel: {
-                relay.cancel()
-                archiveTask.cancel()
-            }
             archiveFileURL = archive.fileURL
 
-            let saveTask = Task.detached(priority: .utility) {
+            let savedFile = try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "cloud_backup.save_archive",
+                    source: "CloudBackupCoordinator.backupToCloud",
+                    category: .cloudBackup,
+                    details: ["retention_count": "\(retentionCount)"]
+                )
+            ) {
                 try Task.checkCancellation()
                 return try CloudBackupService.saveArchiveToCloud(
                     archiveFileURL: archive.fileURL,
                     keepMostRecent: retentionCount
                 )
             }
-            let savedFile = try await withTaskCancellationHandler {
-                try await saveTask.value
-            } onCancel: {
-                saveTask.cancel()
-            }
 
-            let listTask = Task.detached(priority: .utility) {
+            let files = try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "cloud_backup.list_after_upload",
+                    source: "CloudBackupCoordinator.backupToCloud",
+                    category: .cloudBackup
+                )
+            ) {
                 try Task.checkCancellation()
                 return try CloudBackupService.listBackups()
-            }
-            let files = try await withTaskCancellationHandler {
-                try await listTask.value
-            } onCancel: {
-                listTask.cancel()
             }
             do {
                 _ = try FileOps.removeIfExists(
