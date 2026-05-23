@@ -93,106 +93,47 @@ struct QuotationView: View {
 
     var body: some View {
         List {
-            Section(String(localized: "范围")) {
-                ProjectContextStrip(
-                    title: String(localized: "当前工程"),
-                    projects: store.projects,
-                    selectedProjectId: $projectFilter,
-                    emptyText: String(localized: "全部项目")
-                )
-                FilterChipBar(
-                    options: QuoteStatusChip.allCases,
-                    selection: statusChipBinding,
-                    title: { $0.title }
-                )
-                if projectFilter == nil {
-                    ForEach(projectQuoteSummaries, id: \.name) { summary in
-                        LabeledContent(summary.name, value: ReportBuilder.money(summary.total))
-                    }
-                }
-            }
+            QuotationScopeSection(
+                projects: store.projects,
+                projectFilter: $projectFilter,
+                statusChipBinding: statusChipBinding,
+                projectQuoteSummaries: projectQuoteSummaries
+            )
 
-            ForEach(filtered) { item in
-                let total = ReportBuilder.quoteGrandTotal(item)
-                let projectText = item.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
-                let statusText = "\(item.versionName) · \(item.status.displayName)"
-                let amountText = String(
-                    format: String(localized: "单价 ¥%@ × %@%@"),
-                    item.unitPrice,
-                    item.quantity,
-                    item.unit
-                )
-                let extraText = item.customerConfirmedDate.isEmpty ? "" : String(format: String(localized: "确认 %@"), item.customerConfirmedDate)
-                Button {
-                    openEdit(item)
-                } label: {
-                    BusinessRecordRow(
-                        icon: "doc.text.fill",
-                        iconColor: statusColor(item.status),
-                        title: item.name,
-                        meta: [amountText, projectText, statusText].joined(separator: " · "),
-                        note: [extraText, item.notes].filter { !$0.isEmpty }.joined(separator: " · "),
-                        trailing: ReportBuilder.money(total),
-                        trailingColor: Color.appPrimaryAction
-                    )
+            QuotationItemsSection(
+                items: filtered,
+                projects: store.projects,
+                statusColor: statusColor(_:),
+                onEdit: openEdit(_:),
+                onDelete: { idx in
+                    let ids = idx.map { filtered[$0].id }
+                    deleteQuotesWithUndo(ids: ids)
                 }
-            }
-            .onDelete { idx in
-                let ids = idx.map { filtered[$0].id }
-                deleteQuotesWithUndo(ids: ids)
-            }
+            )
 
-            Section {
-                VStack(spacing: 4) {
-                    HStack { Text(String(localized: "小计")).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(ReportBuilder.money(subtotalBeforeValue.doubleValue)) }
-                    if totalTaxValue.isPositive { HStack { Text(String(localized: "税额")).foregroundStyle(.appRisk)
-                    Spacer()
-                    Text(ReportBuilder.money(totalTaxValue.doubleValue)).foregroundStyle(.appRisk) } }
-                    if totalDiscountValue.isPositive { HStack { Text(String(localized: "折扣")).foregroundStyle(.appSuccess)
-                    Spacer()
-                    Text("-\(ReportBuilder.money(totalDiscountValue.doubleValue))").foregroundStyle(.appSuccess) } }
-                    Divider()
-                    HStack {
-                        Text(String(localized: "合计")).font(.title3.weight(.bold))
-                        Spacer()
-                        Text(ReportBuilder.money(grandTotalValue.doubleValue)).font(.title3.weight(.bold)).foregroundStyle(.appWarning)
-                    }
-                }
-            }
+            QuotationTotalsSection(
+                subtotalBeforeValue: subtotalBeforeValue,
+                totalTaxValue: totalTaxValue,
+                totalDiscountValue: totalDiscountValue,
+                grandTotalValue: grandTotalValue
+            )
         }
         .searchable(text: $searchText, prompt: String(localized: "搜索报价名称"))
         .navigationTitle(String(localized: "预结算信息"))
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Button {
+                QuotationToolbarMenu(
+                    materialItems: store.materialItems,
+                    onOpenGenerate: {
                         activeSheet = .generate
-                    } label: {
-                        Label(String(localized: "从材料/人工生成报价"), systemImage: "wand.and.stars")
-                    }
-                    Button {
+                    },
+                    onOpenExport: {
                         openQuotationExportSheet()
-                    } label: {
-                        Label(String(localized: "导出当前报价"), systemImage: "doc.richtext")
+                    },
+                    onAppendFromMaterial: { material in
+                        appendQuote(from: material)
                     }
-                    Divider()
-                    ForEach(store.materialItems) { m in
-                        Button {
-                            store.appendQuoteItem(QuoteItem(
-                                name: m.name, unitPrice: "", quantity: m.quantity, unit: m.unit,
-                                notes: "", taxRate: "0", discountRate: "0", projectId: m.projectId
-                            ))
-                            store.scheduleSave()
-                        } label: { Text("\(m.name) (\(m.quantity) \(m.unit))") }
-                    }
-                    if store.materialItems.isEmpty { Text(String(localized: "材料清单为空")).foregroundStyle(.secondary) }
-                } label: {
-                    Image(systemName: "ellipsis.circle").visibleIconStyle()
-                }
-                .accessibilityLabel(String(localized: "更多操作"))
-                .buttonStyle(.appIcon())
+                )
                 Button { openAdd() } label: { Image(systemName: "plus").visibleIconStyle() }
                     .accessibilityLabel(String(localized: "新建报价"))
             }
@@ -240,81 +181,92 @@ struct QuotationView: View {
     // MARK: - Form
 
     private var quoteForm: some View {
-        AppBusinessEditForm(
-            title: editingId == nil ? String(localized: "添加报价") : String(localized: "编辑报价"),
-            isPrimaryActionDisabled: !canSaveQuoteForm,
+        QuotationEditSheetView(
+            isEditing: editingId != nil,
+            canSaveQuoteForm: canSaveQuoteForm,
+            validationMessages: quoteFormValidationMessages,
+            templates: store.templates,
+            projects: store.projects,
+            formName: $formName,
+            formUnit: $formUnit,
+            formPrice: $formPrice,
+            formQty: $formQty,
+            formNotes: $formNotes,
+            formTax: $formTax,
+            formDiscount: $formDiscount,
+            formVersionName: $formVersionName,
+            formStatus: $formStatus,
+            formCustomerConfirmedDate: $formCustomerConfirmedDate,
+            formContractAmount: $formContractAmount,
+            formProjectId: $formProjectId,
+            focusedField: $quoteFormFocusedField,
+            showQuoteDeleteConfirm: $showQuoteDeleteConfirm,
+            onApplyTemplate: applyQuotationTemplate(_:),
             onCancel: { activeSheet = nil },
-            onPrimaryAction: {
+            onSave: {
                 saveItem()
                 activeSheet = nil
-            }
-        ) {
-            QuotationEditFormSections(
-                templates: store.templates,
-                projects: store.projects,
-                isEditing: editingId != nil,
-                validationMessages: quoteFormValidationMessages,
-                formName: $formName,
-                formUnit: $formUnit,
-                formPrice: $formPrice,
-                formQty: $formQty,
-                formNotes: $formNotes,
-                formTax: $formTax,
-                formDiscount: $formDiscount,
-                formVersionName: $formVersionName,
-                formStatus: $formStatus,
-                formCustomerConfirmedDate: $formCustomerConfirmedDate,
-                formContractAmount: $formContractAmount,
-                formProjectId: $formProjectId,
-                focusedField: $quoteFormFocusedField,
-                onApplyTemplate: { template in
-                    applyQuotationTemplate(template)
-                },
-                onRequestDelete: {
-                    showQuoteDeleteConfirm = true
-                }
-            )
-        }
-        .alert(String(localized: "删除这条报价？"), isPresented: $showQuoteDeleteConfirm) {
-            Button(String(localized: "取消"), role: .cancel) {}
-            Button(String(localized: "删除"), role: .destructive) {
+            },
+            onDelete: {
                 if let editingId {
                     deleteQuotesWithUndo(ids: [editingId])
                     activeSheet = nil
                 }
             }
-        } message: {
-            Text(String(localized: "删除后可在短时间内撤销。"))
-        }
+        )
     }
 
     private var generateQuoteForm: some View {
-        AppBusinessEditForm(
-            title: String(localized: "生成报价"),
-            primaryActionTitle: String(localized: "生成报价"),
-            isPrimaryActionDisabled: !canGenerateQuoteForm,
+        QuotationGenerateSheetView(
+            projects: store.projects,
+            generateProjectId: $generateProjectId,
+            defaultMaterialPrice: $defaultMaterialPrice,
+            defaultLaborRate: $defaultLaborRate,
+            generateTax: $generateTax,
+            generateDiscount: $generateDiscount,
+            focusedField: $generateQuoteFocusedField,
+            canGenerateQuoteForm: canGenerateQuoteForm,
             onCancel: { activeSheet = nil },
-            onPrimaryAction: {
+            onGenerate: {
                 generateQuoteItems()
                 activeSheet = nil
             }
-        ) {
-            QuotationGenerateFormSections(
-                projects: store.projects,
-                generateProjectId: $generateProjectId,
-                defaultMaterialPrice: $defaultMaterialPrice,
-                defaultLaborRate: $defaultLaborRate,
-                generateTax: $generateTax,
-                generateDiscount: $generateDiscount,
-                focusedField: $generateQuoteFocusedField
-            )
-            .toolbar {
-                KeyboardNavigationToolbar(
-                    focusedField: $generateQuoteFocusedField,
-                    fields: [.materialPrice, .laborRate, .taxRate, .discountRate]
-                )
+        )
+    }
+
+    private var quotationExportForm: some View {
+        QuotationExportSheetView(
+            quoteCustomerName: $quoteCustomerName,
+            quoteProjectAddress: $quoteProjectAddress,
+            quoteSignerName: $quoteSignerName,
+            companyName: $companyName,
+            companyPhone: $companyPhone,
+            companyAddress: $companyAddress,
+            quoteValidityDays: quoteValidityDays,
+            isCompanyProfileComplete: isCompanyProfileComplete,
+            isPrimaryActionDisabled: filtered.isEmpty || !isCompanyProfileComplete,
+            onCancel: { activeSheet = nil },
+            onExport: {
+                activeSheet = nil
+                exportQuotationPDF()
             }
-        }
+        )
+    }
+
+    private func appendQuote(from material: MaterialItem) {
+        store.appendQuoteItem(
+            QuoteItem(
+                name: material.name,
+                unitPrice: "",
+                quantity: material.quantity,
+                unit: material.unit,
+                notes: "",
+                taxRate: "0",
+                discountRate: "0",
+                projectId: material.projectId
+            )
+        )
+        store.scheduleSave()
     }
 
     private func openAdd() {
@@ -471,30 +423,6 @@ struct QuotationView: View {
         )
     }
 
-    private var quotationExportForm: some View {
-        AppBusinessEditForm(
-            title: String(localized: "导出报价单"),
-            primaryActionTitle: String(localized: "导出 PDF"),
-            isPrimaryActionDisabled: filtered.isEmpty || !isCompanyProfileComplete,
-            onCancel: { activeSheet = nil },
-            onPrimaryAction: {
-                activeSheet = nil
-                exportQuotationPDF()
-            }
-        ) {
-            QuotationExportFormSections(
-                quoteCustomerName: $quoteCustomerName,
-                quoteProjectAddress: $quoteProjectAddress,
-                quoteSignerName: $quoteSignerName,
-                companyName: $companyName,
-                companyPhone: $companyPhone,
-                companyAddress: $companyAddress,
-                quoteValidityDays: quoteValidityDays,
-                isCompanyProfileComplete: isCompanyProfileComplete
-            )
-        }
-    }
-
     private func openQuotationExportSheet() {
         if let project = singleProjectInFiltered() {
             quoteProjectAddress = project.location
@@ -621,46 +549,4 @@ struct QuotationView: View {
     private func flushPendingQuoteDeletionIfNeeded() {
         undoableDeletion.flushPendingCommit()
     }
-}
-
-private enum QuoteStatusChip: CaseIterable, Hashable {
-    case all
-    case draft
-    case sent
-    case confirmed
-
-    init(status: QuoteStatus?) {
-        switch status {
-        case .draft: self = .draft
-        case .sent: self = .sent
-        case .confirmed: self = .confirmed
-        case nil: self = .all
-        }
-    }
-
-    var status: QuoteStatus? {
-        switch self {
-        case .all: return nil
-        case .draft: return .draft
-        case .sent: return .sent
-        case .confirmed: return .confirmed
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .all: return String(localized: "全部")
-        case .draft: return String(localized: "草稿")
-        case .sent: return String(localized: "已发送")
-        case .confirmed: return String(localized: "已确认")
-        }
-    }
-}
-
-private enum QuotationSheetRoute: String, Identifiable {
-    case edit
-    case generate
-    case export
-
-    var id: String { rawValue }
 }
