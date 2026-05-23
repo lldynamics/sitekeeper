@@ -11,11 +11,41 @@ struct DataHealthView: View {
     @State private var selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
     @State private var showsOnlyAutoFixableIssues = false
     @State private var expandedIssueSectionIDs: Set<String> = []
+    @State private var handledRepairRequestID: UUID?
     private let showsNavigationTitle: Bool
+    private let bottomContentInset: CGFloat
+    private let repairRequestID: UUID?
+    private let onRepairRequestConsumed: (() -> Void)?
     private let issuePreviewLimit = 50
 
-    init(showsNavigationTitle: Bool = true) {
+    init(
+        showsNavigationTitle: Bool = true,
+        bottomContentInset: CGFloat = 0,
+        repairRequestID: UUID? = nil,
+        onRepairRequestConsumed: (() -> Void)? = nil
+    ) {
         self.showsNavigationTitle = showsNavigationTitle
+        self.bottomContentInset = bottomContentInset
+        self.repairRequestID = repairRequestID
+        self.onRepairRequestConsumed = onRepairRequestConsumed
+    }
+
+    func handleRepairRequestIfNeeded(_ requestID: UUID?) {
+        guard let requestID, handledRepairRequestID != requestID else { return }
+        handledRepairRequestID = requestID
+        onRepairRequestConsumed?()
+
+        if referenceIssueCount > 0 {
+            showReferenceFixConfirm = true
+            return
+        }
+
+        AppHaptics.warning()
+        if totalIssues > 0 {
+            operationNotice = .info(l("当前异常没有可一键修复的引用问题，请查看列表逐项处理，或生成健康整改待办。"))
+        } else {
+            operationNotice = .info(l("当前没有待修复的数据健康异常。"))
+        }
     }
 
     func l(_ key: String) -> String {
@@ -114,6 +144,9 @@ struct DataHealthView: View {
                 issueSection(section)
             }
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
+        }
         .modifier(OptionalInlineTitleModifier(
             isEnabled: showsNavigationTitle,
             title: l("数据健康检查")
@@ -124,6 +157,12 @@ struct DataHealthView: View {
             } else {
                 store.scheduleDataHealthScanIfStale(reason: .scheduled, maxAge: 15 * 60)
             }
+        }
+        .onAppear {
+            handleRepairRequestIfNeeded(repairRequestID)
+        }
+        .onChange(of: repairRequestID) { _, newValue in
+            handleRepairRequestIfNeeded(newValue)
         }
         .alert(l("修复引用与关联？"), isPresented: $showReferenceFixConfirm) {
             Button(l("取消"), role: .cancel) {}

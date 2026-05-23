@@ -20,11 +20,13 @@ struct StorageCleanupCenterView: View {
     @State var quarantinedFiles: [FileQuarantineEntry] = []
 
     private let showsNavigationTitle: Bool
+    private let bottomContentInset: CGFloat
     let videoFileExtensions: Set<String> = ["mp4", "mov", "m4v", "avi", "hevc"]
     let drawingSourceFileExtensions: Set<String> = ["dwg", "dxf"]
 
-    init(showsNavigationTitle: Bool = true) {
+    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
         self.showsNavigationTitle = showsNavigationTitle
+        self.bottomContentInset = bottomContentInset
     }
 
     var body: some View {
@@ -73,6 +75,9 @@ struct StorageCleanupCenterView: View {
                 pendingCleanupCategory = category
                 showCleanupProjectAlert = true
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
         }
         .modifier(StorageOptionalInlineTitleModifier(isEnabled: showsNavigationTitle, title: StorageCleanupSectionCopy.centerNavigationTitle))
         .onAppear {

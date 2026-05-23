@@ -96,9 +96,11 @@ struct OperationAuditLogView: View {
     @State private var showClearConfirm = false
 
     private let showsNavigationTitle: Bool
+    private let bottomContentInset: CGFloat
 
-    init(showsNavigationTitle: Bool = true) {
+    init(showsNavigationTitle: Bool = true, bottomContentInset: CGFloat = 0) {
         self.showsNavigationTitle = showsNavigationTitle
+        self.bottomContentInset = bottomContentInset
     }
 
     private var entries: [OperationAuditEntry] {
@@ -189,6 +191,9 @@ struct OperationAuditLogView: View {
                     }
                 }
             }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
         }
         .searchable(text: $searchText, prompt: String(localized: "搜索审计日志"))
         .modifier(OperationAuditInlineTitleModifier(

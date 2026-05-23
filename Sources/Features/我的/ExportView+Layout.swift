@@ -107,6 +107,9 @@ extension ExportView {
                     exportPreviewSection
                     exportButtonSection
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: bottomContentInset)
+                }
             }
         }
         .fileExporter(
@@ -165,6 +168,9 @@ extension ExportView {
             }
             .padding(.vertical, 2)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
+        }
     }
 
     var exportDetail: some View {
@@ -176,6 +182,9 @@ extension ExportView {
                 exportButtonSection
             }
             .padding(4)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
         }
         .background(Color(uiColor: .systemGroupedBackground))
     }

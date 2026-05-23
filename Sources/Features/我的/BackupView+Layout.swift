@@ -35,6 +35,9 @@ extension BackupView {
                     backupEstimateSection
                     backupStatusSection
                 }
+                .safeAreaInset(edge: .bottom, spacing: 0) {
+                    Color.clear.frame(height: bottomContentInset)
+                }
             }
             if isExportingArchive || cloudState.isUploadingCloudBackup {
                 ZStack {
@@ -220,6 +223,9 @@ extension BackupView {
             }
             .padding(.vertical, 2)
         }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
+        }
     }
 
     var backupDetailContent: some View {
@@ -240,6 +246,9 @@ extension BackupView {
                 backupStatusSection
             }
             .padding(4)
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear.frame(height: bottomContentInset)
         }
         .background(Color(uiColor: .systemGroupedBackground))
     }
