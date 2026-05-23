@@ -25,15 +25,21 @@ extension ProjectFileThumbnailToken {
     }
 
     private func loadDetachedThumbnail(_ work: @escaping @Sendable () -> UIImage?) async -> UIImage? {
-        let task = Task.detached(priority: .utility) { () -> UIImage? in
-            let image = work()
-            guard !Task.isCancelled else { return nil }
-            return image
-        }
-        return await withTaskCancellationHandler {
-            await task.value
-        } onCancel: {
-            task.cancel()
+        do {
+            return try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: "project.thumbnail.load",
+                    source: "ProjectFileThumbnailToken.loadDetachedThumbnail",
+                    category: .fileStorage
+                )
+            ) {
+                let image = work()
+                guard !Task.isCancelled else { return nil }
+                return image
+            }
+        } catch {
+            return nil
         }
     }
 }

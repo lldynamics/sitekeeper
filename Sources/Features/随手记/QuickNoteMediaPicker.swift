@@ -290,9 +290,17 @@ struct QuickNoteAttachmentPickerBar: View {
                         )
                     }
                     do {
-                        let attachment = try await Task.detached(priority: .utility) {
+                        let attachment = try await FileIOTaskRunner.run(
+                            priority: .utility,
+                            logContext: .init(
+                                event: "quick_note.file_import",
+                                source: "QuickNoteMediaPicker.handleFileImportResult",
+                                category: .fileStorage,
+                                details: ["source_file": url.lastPathComponent]
+                            )
+                        ) {
                             try QuickNoteFileAttachmentImport.copyFile(from: url)
-                        }.value
+                        }
                         await MainActor.run {
                             onAppend(attachment)
                         }

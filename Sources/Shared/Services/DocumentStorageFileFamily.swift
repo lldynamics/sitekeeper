@@ -50,16 +50,25 @@ struct DocumentStorageFileFamily {
     }
 
     func dataAsync(for fileName: String, failureEvent: String) async -> Data? {
-        await Task.detached(priority: .utility) {
-            do {
-                return try Data(contentsOf: fileURL(for: fileName), options: .mappedIfSafe)
-            } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
-                return nil
-            } catch {
-                DocumentStorageIssueLogger.record(failureEvent, fileName: fileName, error: error)
-                return nil
+        do {
+            return try await FileIOTaskRunner.run(
+                priority: .utility,
+                logContext: .init(
+                    event: failureEvent,
+                    source: "DocumentStorageFileFamily.dataAsync",
+                    category: .fileStorage,
+                    details: ["file": fileName]
+                )
+            ) {
+                do {
+                    return try Data(contentsOf: fileURL(for: fileName), options: .mappedIfSafe)
+                } catch let cocoaError as CocoaError where cocoaError.code == .fileReadNoSuchFile {
+                    return nil
+                }
             }
-        }.value
+        } catch {
+            return nil
+        }
     }
 
     func deleteOrThrow(

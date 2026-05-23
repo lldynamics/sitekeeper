@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import UIKit
 @testable import sitekeeper
 
 struct WidgetDataBuilderTests {
@@ -115,6 +116,62 @@ struct WidgetDataBuilderTests {
         #expect(projectYAML.contains("INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜Widget") == false)
     }
 
+    @Test func widgetViewsAreSplitByFamilyAndLayoutLayers() throws {
+        let root = try Self.repositoryRoot()
+        let familyViews = try Self.sourceText(root, "Widget/WidgetViews.swift")
+        let layoutViews = try Self.sourceText(root, "Widget/WidgetLayoutComponents.swift")
+        let supportViews = try Self.sourceText(root, "Widget/WidgetViewSupport.swift")
+
+        #expect(Self.lineCount(of: familyViews) < 320)
+        #expect(Self.lineCount(of: layoutViews) < 320)
+        #expect(Self.lineCount(of: supportViews) < 360)
+
+        #expect(familyViews.contains("struct SmallWidgetView"))
+        #expect(familyViews.contains("struct MediumWidgetView"))
+        #expect(familyViews.contains("struct LargeWidgetView"))
+        #expect(familyViews.contains("WidgetLocalizedText") == false)
+
+        #expect(layoutViews.contains("struct WidgetSectionHeader"))
+        #expect(layoutViews.contains("struct WidgetCompactSignalRow"))
+        #expect(layoutViews.contains("struct WidgetProjectProgressRow"))
+        #expect(layoutViews.contains("widgetRiskLinkItems") == false)
+
+        #expect(supportViews.contains("enum WidgetDeepLinkURL"))
+        #expect(supportViews.contains("enum WidgetLocalizedText"))
+        #expect(supportViews.contains("func widgetPrimarySignal"))
+    }
+
+    @Test func widgetTextFitsMinimumPixelBudgets() {
+        let compactFont = UIFont.systemFont(ofSize: 11, weight: .semibold)
+        let metaFont = UIFont.systemFont(ofSize: 11, weight: .regular)
+
+        let compactCases: [WidgetTextPixelBudget] = [
+            .init(id: "compact-risk-en-missing-receipt", text: "Missing Receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
+            .init(id: "compact-risk-en-backup-overdue", text: "Backup Overdue 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
+            .init(id: "compact-risk-zh-price-spike", text: "价格异动 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108)
+        ]
+        for item in compactCases {
+            Self.expectFitsSingleLine(item)
+        }
+
+        let pillCases: [WidgetTextPixelBudget] = [
+            .init(id: "pill-en-backup-overdue", text: "Backup Overdue 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
+            .init(id: "pill-en-missing-receipt", text: "Missing Receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
+            .init(id: "pill-zh-backup-overdue", text: "备份超期 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104)
+        ]
+        for item in pillCases {
+            Self.expectFitsSingleLine(item)
+        }
+
+        let metadataCases: [WidgetTextPixelBudget] = [
+            .init(id: "updated-time-en", text: "Updated 12:30", font: metaFont, minimumScaleFactor: 1, leadingChrome: 0, availableWidth: 108),
+            .init(id: "updated-time-zh", text: "更新 12:30", font: metaFont, minimumScaleFactor: 1, leadingChrome: 0, availableWidth: 108)
+        ]
+        for item in metadataCases {
+            Self.expectFitsSingleLine(item)
+        }
+    }
+
     private static func repositoryRoot() throws -> URL {
         var url = URL(fileURLWithPath: #filePath)
         while url.path != "/" {
@@ -130,4 +187,24 @@ struct WidgetDataBuilderTests {
     private static func sourceText(_ root: URL, _ relativePath: String) throws -> String {
         try String(contentsOf: root.appendingPathComponent(relativePath), encoding: .utf8)
     }
+
+    private static func lineCount(of source: String) -> Int {
+        source.split(separator: "\n", omittingEmptySubsequences: false).count
+    }
+
+    private static func expectFitsSingleLine(_ item: WidgetTextPixelBudget) {
+        let naturalWidth = ceil((item.text as NSString).size(withAttributes: [.font: item.font]).width)
+        let scaledWidth = naturalWidth * item.minimumScaleFactor
+        let requiredWidth = scaledWidth + item.leadingChrome
+        #expect(requiredWidth <= item.availableWidth, "\(item.id): requires \(requiredWidth), budget \(item.availableWidth)")
+    }
+}
+
+private struct WidgetTextPixelBudget {
+    let id: String
+    let text: String
+    let font: UIFont
+    let minimumScaleFactor: CGFloat
+    let leadingChrome: CGFloat
+    let availableWidth: CGFloat
 }
