@@ -1,6 +1,6 @@
 import Foundation
 
-struct ConstructionMethodEditDraft: Codable {
+struct ConstructionMethodEditDraft: Codable, Sendable {
     var title: String
     var trade: String
     var versionName: String

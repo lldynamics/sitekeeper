@@ -601,39 +601,21 @@ struct BackupImportExportTests {
         #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
     }
 
-    @Test func backupRestoreEmbeddedFilesHandlesLargeZipEntry() throws {
-        let projectId = UUID()
-        let quickNoteFile = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x5A]), fileName: "backup-large-stream-\(UUID().uuidString).bin")
-        let targetSize = 32 * 1024 * 1024
-        let sourceURL = QuickNoteAttachmentStorage.fileURL(for: quickNoteFile)
-        let handle = try FileHandle(forWritingTo: sourceURL)
-        try handle.truncate(atOffset: UInt64(targetSize))
-        try handle.close()
-
-        let snapshot = BackupSnapshot(
-            materialItems: [],
-            quoteItems: [],
-            laborRecords: [],
-            projects: [Project(id: projectId, name: "大附件流式恢复", location: "现场", status: .active)],
-            dailyLogs: [],
-            historyRecords: [],
-            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
-            templates: []
+    // 日常单测只保留小样本链路验证，避免大 ZIP 压测拖慢本地与 PR 验证。
+    @Test func backupRestoreEmbeddedFilesHandlesSampleZipEntry() throws {
+        try Self.assertEmbeddedRestoreRoundtrip(
+            targetSize: 2 * 1024 * 1024,
+            filePrefix: "backup-stream-sample"
         )
+    }
 
-        let archive = try BackupArchiveService.makeArchive(from: snapshot)
-        defer {
-            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
-            try? FileManager.default.removeItem(at: archive.fileURL)
-        }
-
-        QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
-        #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile) == false)
-
-        let restored = try BackupArchiveService.restoreEmbeddedFiles(from: archive.fileURL)
-        #expect(restored.quickNoteAttachmentFileCount == 1)
-        #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile))
-        #expect(QuickNoteAttachmentStorage.fileSize(for: quickNoteFile) == targetSize)
+    // 大 ZIP 压力测试仅在 nightly/perf 任务开启环境变量时运行。
+    @Test func backupRestoreEmbeddedFilesHandlesLargeZipEntry() throws {
+        guard Self.shouldRunLargeBackupStressTests else { return }
+        try Self.assertEmbeddedRestoreRoundtrip(
+            targetSize: 32 * 1024 * 1024,
+            filePrefix: "backup-large-stream"
+        )
     }
 
     @Test func backupRestoreEmbeddedFilesCancelKeepsStorageUnchanged() throws {
@@ -842,6 +824,54 @@ struct BackupImportExportTests {
             centralSize: 128,
             centralOffset: UInt64(estimate.rawFilesBytes)
         ))
+    }
+
+    private static var shouldRunLargeBackupStressTests: Bool {
+        guard let rawValue = ProcessInfo.processInfo.environment["SITEKEEPER_NIGHTLY_BACKUP_STRESS"] else {
+            return false
+        }
+        let value = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value == "1" || value == "true" || value == "yes"
+    }
+
+    private static func assertEmbeddedRestoreRoundtrip(
+        targetSize: Int,
+        filePrefix: String
+    ) throws {
+        let projectId = UUID()
+        let quickNoteFile = try QuickNoteAttachmentStorage.saveDataOrThrow(
+            Data([0x5A]),
+            fileName: "\(filePrefix)-\(UUID().uuidString).bin"
+        )
+        let sourceURL = QuickNoteAttachmentStorage.fileURL(for: quickNoteFile)
+        let handle = try FileHandle(forWritingTo: sourceURL)
+        try handle.truncate(atOffset: UInt64(targetSize))
+        try handle.close()
+
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectId, name: "大附件流式恢复", location: "现场", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: quickNoteFile)])],
+            templates: []
+        )
+
+        let archive = try BackupArchiveService.makeArchive(from: snapshot)
+        defer {
+            QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+            try? FileManager.default.removeItem(at: archive.fileURL)
+        }
+
+        QuickNoteAttachmentStorage.delete(fileName: quickNoteFile)
+        #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile) == false)
+
+        let restored = try BackupArchiveService.restoreEmbeddedFiles(from: archive.fileURL)
+        #expect(restored.quickNoteAttachmentFileCount == 1)
+        #expect(QuickNoteAttachmentStorage.exists(fileName: quickNoteFile))
+        #expect(QuickNoteAttachmentStorage.fileSize(for: quickNoteFile) == targetSize)
     }
 
     private static func makeJPEGData() throws -> Data {

@@ -1,6 +1,11 @@
 import SwiftUI
 
 extension DailyLogView {
+    struct CalendarDaySlot: Identifiable {
+        let id: String
+        let date: Date?
+    }
+
     var filtered: [DailyLog] {
         var result = store.dailyLogs
         if let filterProjectId {
@@ -42,6 +47,24 @@ extension DailyLogView {
         }
         let trailing = (7 - ((leading + days.count) % 7)) % 7
         return Array(repeating: nil, count: leading) + days + Array(repeating: nil, count: trailing)
+    }
+
+    var calendarDaySlots: [CalendarDaySlot] {
+        let dateFormatter = Formatters.date
+        var placeholderIndex = 0
+        return calendarDays.map { day in
+            if let day {
+                return CalendarDaySlot(
+                    id: "day-\(dateFormatter.string(from: day))",
+                    date: day
+                )
+            }
+            defer { placeholderIndex += 1 }
+            return CalendarDaySlot(
+                id: "placeholder-\(placeholderIndex)",
+                date: nil
+            )
+        }
     }
 
     var isCalendarOnCurrentMonth: Bool {

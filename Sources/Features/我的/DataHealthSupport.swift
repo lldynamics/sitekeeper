@@ -8,11 +8,43 @@ struct DataHealthIssue: Identifiable {
     let systemImage: String
     let color: Color
     let actionTitle: String?
+    var projectId: UUID? = nil
     let route: DataHealthIssueRoute?
     var actions: [DataHealthIssueAction] = []
 
     var exportText: String {
         detail.isEmpty ? title : "\(title): \(detail)"
+    }
+
+    var effectiveProjectId: UUID? {
+        projectId ?? route?.projectId
+    }
+
+    var isAutoFixable: Bool {
+        actions.contains { action in
+            switch action.kind {
+            case .repair, .moveOrphanFileToTrash:
+                return true
+            case .navigate, .createTodo:
+                return false
+            }
+        }
+    }
+}
+
+struct DataHealthIssueSection: Identifiable {
+    let id: String
+    let title: String
+    let items: [DataHealthIssue]
+}
+
+enum DataHealthIssueProjectFilter {
+    static let all = "all"
+    static let noProject = "no-project"
+    static let invalidProject = "invalid-project"
+
+    static func project(_ id: UUID) -> String {
+        "project-\(id.uuidString)"
     }
 }
 
@@ -120,6 +152,21 @@ enum DataHealthIssueRoute {
     case quickNote(noteId: UUID)
     case contact(contactId: UUID)
     case warehouseProject(projectId: UUID)
+
+    var projectId: UUID? {
+        switch self {
+        case .project(let projectId, _),
+             .financialRecord(let projectId, _),
+             .document(let projectId, _),
+             .warehouseProject(let projectId):
+            return projectId
+        case .dailyLog(let projectId, _),
+             .siteTodo(let projectId, _):
+            return projectId
+        case .material, .quote, .labor, .quickNote, .contact:
+            return nil
+        }
+    }
 }
 
 struct OptionalInlineTitleModifier: ViewModifier {

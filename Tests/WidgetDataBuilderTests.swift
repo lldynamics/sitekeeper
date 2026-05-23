@@ -106,10 +106,10 @@ struct WidgetDataBuilderTests {
         #expect(widgetChineseStrings.contains("\"widget_configuration_description\" = \"今日待办、项目进度、材料库存一目了然\";"))
         #expect(widgetEnglishStrings.contains("\"widget_configuration_display_name\" = \"Sitekeeper\";"))
         #expect(widgetEnglishStrings.contains("\"widget_configuration_description\" = \"Today's to-dos, project progress, and material stock at a glance\";"))
-        #expect(widgetChineseInfoStrings.contains("\"CFBundleDisplayName\" = \"工地掌柜 Widget\";"))
+        #expect(widgetChineseInfoStrings.contains("\"CFBundleDisplayName\" = \"工地掌柜小组件\";"))
         #expect(widgetEnglishInfoStrings.contains("\"CFBundleDisplayName\" = \"Sitekeeper Widget\";"))
         #expect(projectYAML.contains("PRODUCT_NAME: SitekeeperWidget"))
-        #expect(projectYAML.contains("INFOPLIST_KEY_CFBundleDisplayName: Sitekeeper Widget"))
+        #expect(projectYAML.contains("INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜小组件"))
         #expect(projectYAML.contains("PRODUCT_NAME: 工地掌柜Widget") == false)
         #expect(projectYAML.contains("INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜Widget") == false)
     }

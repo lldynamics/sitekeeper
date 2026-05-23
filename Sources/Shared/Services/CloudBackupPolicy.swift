@@ -130,32 +130,139 @@ enum CloudBackupSettingsStore {
 
 enum CloudNetworkPolicyChecker {
     static func isUsingWiFi(timeout: TimeInterval = 1.2) async -> Bool? {
-        guard let path = await currentPath(timeout: timeout) else { return nil }
+        guard let path = await CloudNetworkPathMonitor.shared.currentPath(timeout: timeout) else { return nil }
         guard path.status == .satisfied else { return false }
         return path.usesInterfaceType(.wifi)
     }
+}
 
-    private static func currentPath(timeout: TimeInterval) async -> NWPath? {
-        await withCheckedContinuation { continuation in
-            let monitor = NWPathMonitor()
-            let queue = DispatchQueue(label: "com.chengjinfang.sitekeeper.cloudbackup.network")
-            var didResume = false
+private final class CloudNetworkPathMonitor: @unchecked Sendable {
+    static let shared = CloudNetworkPathMonitor()
 
-            let resume: (NWPath?) -> Void = { path in
-                guard !didResume else { return }
-                didResume = true
-                monitor.cancel()
-                continuation.resume(returning: path)
-            }
+    private let monitor = NWPathMonitor()
+    private let queue = DispatchQueue(label: "com.chengjinfang.sitekeeper.cloudbackup.network")
+    private let lock = NSLock()
+    private var latestPath: NWPath?
+    private var waiters: [UUID: CloudNetworkPathWaiter] = [:]
 
-            monitor.pathUpdateHandler = { path in
-                resume(path)
-            }
-            monitor.start(queue: queue)
-            queue.asyncAfter(deadline: .now() + timeout) {
-                resume(nil)
-            }
+    private init() {
+        monitor.pathUpdateHandler = { [weak self] path in
+            self?.handle(path)
         }
+        monitor.start(queue: queue)
+    }
+
+    deinit {
+        monitor.cancel()
+    }
+
+    func currentPath(timeout: TimeInterval) async -> NWPath? {
+        let id = UUID()
+        let waiter = CloudNetworkPathWaiter()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                guard !Task.isCancelled else {
+                    continuation.resume(returning: nil)
+                    return
+                }
+
+                switch registerWaiter(id: id, waiter: waiter, continuation: continuation) {
+                case .resolved(let path):
+                    continuation.resume(returning: path)
+                    return
+                case .waiting:
+                    break
+                }
+
+                queue.asyncAfter(deadline: .now() + timeout) {
+                    self.resumeWaiter(id: id, path: nil)
+                }
+            }
+        } onCancel: {
+            removeWaiter(id: id)
+            waiter.resume(returning: nil)
+        }
+    }
+
+    private func handle(_ path: NWPath) {
+        let pending: [CloudNetworkPathWaiter]
+        lock.lock()
+        latestPath = path
+        pending = Array(waiters.values)
+        waiters.removeAll()
+        lock.unlock()
+
+        for waiter in pending {
+            waiter.resume(returning: path)
+        }
+    }
+
+    private enum WaiterRegistration {
+        case resolved(NWPath?)
+        case waiting
+    }
+
+    private func registerWaiter(
+        id: UUID,
+        waiter: CloudNetworkPathWaiter,
+        continuation: CheckedContinuation<NWPath?, Never>
+    ) -> WaiterRegistration {
+        lock.lock()
+        defer { lock.unlock() }
+
+        if let latestPath {
+            return .resolved(latestPath)
+        }
+        guard waiter.install(continuation) else {
+            return .resolved(nil)
+        }
+        waiters[id] = waiter
+        return .waiting
+    }
+
+    private func resumeWaiter(id: UUID, path: NWPath?) {
+        let waiter: CloudNetworkPathWaiter?
+        lock.lock()
+        waiter = waiters.removeValue(forKey: id)
+        lock.unlock()
+
+        waiter?.resume(returning: path)
+    }
+
+    private func removeWaiter(id: UUID) {
+        lock.lock()
+        waiters.removeValue(forKey: id)
+        lock.unlock()
+    }
+}
+
+private final class CloudNetworkPathWaiter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<NWPath?, Never>?
+    private var isResolved = false
+
+    func install(_ continuation: CheckedContinuation<NWPath?, Never>) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard !isResolved else { return false }
+        self.continuation = continuation
+        return true
+    }
+
+    func resume(returning path: NWPath?) {
+        let continuation: CheckedContinuation<NWPath?, Never>?
+        lock.lock()
+        if isResolved {
+            lock.unlock()
+            return
+        }
+        isResolved = true
+        continuation = self.continuation
+        self.continuation = nil
+        lock.unlock()
+
+        continuation?.resume(returning: path)
     }
 }
 
@@ -282,28 +389,43 @@ actor CloudBackupCoordinator {
         let relay = TaskCancellationRelay()
         let retentionCount = CloudBackupSettingsStore.loadRetentionCount()
         do {
+            let archiveTask = Task.detached(priority: .userInitiated) {
+                try BackupArchiveService.makeArchive(
+                    from: snapshot,
+                    progress: progress,
+                    shouldCancel: { relay.isCancelled() || Task.isCancelled }
+                )
+            }
             let archive = try await withTaskCancellationHandler {
-                try await Task.detached(priority: .userInitiated) {
-                    try BackupArchiveService.makeArchive(
-                        from: snapshot,
-                        progress: progress,
-                        shouldCancel: { relay.isCancelled() || Task.isCancelled }
-                    )
-                }.value
+                try await archiveTask.value
             } onCancel: {
                 relay.cancel()
+                archiveTask.cancel()
             }
             archiveFileURL = archive.fileURL
 
-            let savedFile = try await Task.detached(priority: .utility) {
-                try CloudBackupService.saveArchiveToCloud(
+            let saveTask = Task.detached(priority: .utility) {
+                try Task.checkCancellation()
+                return try CloudBackupService.saveArchiveToCloud(
                     archiveFileURL: archive.fileURL,
                     keepMostRecent: retentionCount
                 )
-            }.value
-            let files = try await Task.detached(priority: .utility) {
-                try CloudBackupService.listBackups()
-            }.value
+            }
+            let savedFile = try await withTaskCancellationHandler {
+                try await saveTask.value
+            } onCancel: {
+                saveTask.cancel()
+            }
+
+            let listTask = Task.detached(priority: .utility) {
+                try Task.checkCancellation()
+                return try CloudBackupService.listBackups()
+            }
+            let files = try await withTaskCancellationHandler {
+                try await listTask.value
+            } onCancel: {
+                listTask.cancel()
+            }
             do {
                 _ = try FileOps.removeIfExists(
                     at: archive.fileURL,

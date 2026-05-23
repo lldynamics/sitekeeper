@@ -31,9 +31,9 @@ enum ConstructionMethodMediaImportSupport {
         case .authorized:
             return true
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
+            return await PermissionRequestTimeoutSupport.resolve(fallback: false) { resume in
                 AVCaptureDevice.requestAccess(for: .video) { granted in
-                    continuation.resume(returning: granted)
+                    resume(granted)
                 }
             }
         case .denied, .restricted:

@@ -35,10 +35,31 @@ extension DataStore {
         scheduleDataHealthScan(reason: reason, delay: .zero)
     }
 
-    private func performDataHealthScan(reason: DataHealthScanReason) {
-        latestDataHealthScan = DataHealthScanner.scan(
+    @discardableResult
+    func scanDataHealthNow(
+        reason: DataHealthScanReason = .manual,
+        includeSupplementalMetrics: Bool = true
+    ) -> DataHealthScanSummary {
+        let scanned = DataHealthScanner.scan(
             input: DataHealthScanInput(store: self),
-            reason: reason
+            reason: reason,
+            includeSupplementalMetrics: includeSupplementalMetrics
         )
+        let summary = includeSupplementalMetrics
+            ? scanned
+            : scanned.fillingSupplementalMetrics(from: latestDataHealthScan)
+        latestDataHealthScan = summary
+        return summary
+    }
+
+    private func performDataHealthScan(reason: DataHealthScanReason) {
+        let includeSupplementalMetrics: Bool
+        switch reason {
+        case .dataChanged:
+            includeSupplementalMetrics = false
+        case .startup, .scheduled, .manual:
+            includeSupplementalMetrics = true
+        }
+        _ = scanDataHealthNow(reason: reason, includeSupplementalMetrics: includeSupplementalMetrics)
     }
 }

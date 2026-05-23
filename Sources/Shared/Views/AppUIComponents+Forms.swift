@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct AppBusinessEditForm<Content: View>: View {
     let title: String
@@ -84,5 +85,121 @@ extension View {
     func appListSecondaryTextLayout(lines: Int = 2) -> some View {
         lineLimit(lines)
             .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: View {
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    var forceSplit: Bool? = nil
+    var visibility: NavigationSplitViewVisibility = .all
+    @ViewBuilder let compact: () -> Compact
+    @ViewBuilder let sidebar: () -> Sidebar
+    @ViewBuilder let detail: () -> Detail
+
+    init(
+        forceSplit: Bool? = nil,
+        visibility: NavigationSplitViewVisibility = .all,
+        @ViewBuilder compact: @escaping () -> Compact,
+        @ViewBuilder sidebar: @escaping () -> Sidebar,
+        @ViewBuilder detail: @escaping () -> Detail
+    ) {
+        self.forceSplit = forceSplit
+        self.visibility = visibility
+        self.compact = compact
+        self.sidebar = sidebar
+        self.detail = detail
+    }
+
+    private var usesSplitLayout: Bool {
+        if let forceSplit {
+            return forceSplit
+        }
+        return UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    var body: some View {
+        Group {
+            if usesSplitLayout {
+                NavigationSplitView(columnVisibility: .constant(visibility)) {
+                    sidebar()
+                } detail: {
+                    detail()
+                }
+                .navigationSplitViewStyle(.balanced)
+            } else {
+                compact()
+            }
+        }
+    }
+}
+
+struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
+    let focusedField: FocusState<Field?>.Binding
+    let fields: [Field]
+
+    private var currentIndex: Int? {
+        guard let value = focusedField.wrappedValue else { return nil }
+        return fields.firstIndex(of: value)
+    }
+
+    private var canMovePrevious: Bool {
+        guard let currentIndex else { return false }
+        return currentIndex > 0
+    }
+
+    private var canMoveNext: Bool {
+        guard let currentIndex else { return false }
+        return currentIndex < fields.count - 1
+    }
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .keyboard) {
+            Button(String(localized: "上一个")) {
+                move(delta: -1)
+            }
+            .disabled(!canMovePrevious)
+
+            Button(String(localized: "下一个")) {
+                move(delta: 1)
+            }
+            .disabled(!canMoveNext)
+
+            Spacer()
+
+            Button(String(localized: "完成")) {
+                focusedField.wrappedValue = nil
+            }
+        }
+    }
+
+    private func move(delta: Int) {
+        guard let currentIndex else { return }
+        let next = currentIndex + delta
+        guard fields.indices.contains(next) else { return }
+        focusedField.wrappedValue = fields[next]
+    }
+}
+
+struct KeyboardDismissToolbar: ToolbarContent {
+    let onDone: () -> Void
+
+    var body: some ToolbarContent {
+        ToolbarItemGroup(placement: .keyboard) {
+            Spacer()
+            Button(String(localized: "完成"), action: onDone)
+        }
+    }
+}
+
+@MainActor
+enum AppKeyboard {
+    static func dismiss() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
     }
 }

@@ -88,7 +88,7 @@ struct FilterChipBar<Option: Hashable>: View {
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(Array(options.enumerated()), id: \.offset) { _, option in
+                ForEach(options, id: \.self) { option in
                     Button {
                         selection = option
                     } label: {
@@ -105,6 +105,125 @@ struct FilterChipBar<Option: Hashable>: View {
                 }
             }
             .padding(.vertical, 2)
+        }
+    }
+}
+
+enum InlineNoticeTone {
+    case info
+    case success
+    case warning
+    case error
+
+    var icon: String {
+        switch self {
+        case .info:
+            "info.circle.fill"
+        case .success:
+            "checkmark.circle.fill"
+        case .warning:
+            "exclamationmark.triangle.fill"
+        case .error:
+            "xmark.octagon.fill"
+        }
+    }
+
+    var tint: Color {
+        switch self {
+        case .info:
+            .appPrimaryAction
+        case .success:
+            .appSuccess
+        case .warning:
+            .appWarning
+        case .error:
+            .appRisk
+        }
+    }
+
+    var background: Color {
+        switch self {
+        case .info:
+            .appPrimarySurfaceSubtle
+        case .success:
+            .appSuccessSurfaceSubtle
+        case .warning:
+            .appDynamicTint(AppTheme.current.palette.warningUIColor, lightOpacity: 0.12, darkOpacity: 0.24)
+        case .error:
+            .appRiskSurface
+        }
+    }
+}
+
+struct InlineNotice: View {
+    let title: String
+    var message: String? = nil
+    var tone: InlineNoticeTone = .info
+
+    var body: some View {
+        AppPanel(
+            tone: .tinted(tone.background),
+            cornerRadius: 10,
+            padding: AppSpacing.normal,
+            stroke: tone.tint.opacity(0.18)
+        ) {
+            HStack(alignment: .top, spacing: AppSpacing.tight) {
+                Image(systemName: tone.icon)
+                    .font(.callout.weight(.semibold))
+                    .foregroundStyle(tone.tint)
+                    .frame(width: 18, height: 18)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    if let message, !message.isEmpty {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+}
+
+struct DataSafetyStatusItem: Identifiable {
+    let id = UUID()
+    let title: String
+    let value: String
+    var tone: StatusChipTone = .neutral
+}
+
+struct DataSafetyStatusStrip: View {
+    let items: [DataSafetyStatusItem]
+
+    var body: some View {
+        AppPanel(
+            tone: .grouped,
+            cornerRadius: 12,
+            padding: AppSpacing.normal,
+            stroke: Color.appStrokeSecondary.opacity(0.45)
+        ) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 132), alignment: .topLeading)],
+                alignment: .leading,
+                spacing: AppSpacing.normal
+            ) {
+                ForEach(items) { item in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(item.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Text(item.value)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.primary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        StatusChip(text: item.title, tone: item.tone, compact: true)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 }

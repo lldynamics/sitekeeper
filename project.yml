@@ -22,6 +22,8 @@ targets:
           "${SRCROOT}/scripts/release/check_drawing_release_boundary.sh"
           "${SRCROOT}/scripts/release/check_dynamic_type_policy.sh"
           "${SRCROOT}/scripts/release/check_userdefaults_policy.sh"
+          "${SRCROOT}/scripts/release/check_swiftui_identity_policy.sh"
+          "${SRCROOT}/scripts/release/check_unchecked_sendable_policy.sh"
         inputFiles:
           - "$(SRCROOT)/scripts/release/check_file_deletion_policy.sh"
           - "$(SRCROOT)/scripts/release/check_datastore_write_policy.sh"
@@ -29,6 +31,8 @@ targets:
           - "$(SRCROOT)/scripts/release/check_drawing_release_boundary.sh"
           - "$(SRCROOT)/scripts/release/check_dynamic_type_policy.sh"
           - "$(SRCROOT)/scripts/release/check_userdefaults_policy.sh"
+          - "$(SRCROOT)/scripts/release/check_swiftui_identity_policy.sh"
+          - "$(SRCROOT)/scripts/release/check_unchecked_sendable_policy.sh"
           - "$(SRCROOT)/project.yml"
           - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
           - "$(SRCROOT)/Sources"
@@ -80,7 +84,7 @@ targets:
         CURRENT_PROJECT_VERSION: "1"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: Widget/Info.plist
-        INFOPLIST_KEY_CFBundleDisplayName: Sitekeeper Widget
+        INFOPLIST_KEY_CFBundleDisplayName: 工地掌柜小组件
         ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME: widgetBackground
         INFOPLIST_KEY_WKCompanionAppBundleIdentifier: com.chengjinfang.sitekeeper
 

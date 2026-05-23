@@ -37,6 +37,7 @@ extension DataStore {
         onProgress: (@MainActor (String) -> Void)? = nil
     ) async {
         cancelScheduledSave()
+        guard !Task.isCancelled else { return }
         if deleteStoredFiles {
             let photoNames = PhotoStorage.allStoredFileNames()
             let drawingNames = DrawingStorage.allStoredFileNames()
@@ -44,36 +45,46 @@ extension DataStore {
             let attachmentNames = QuickNoteAttachmentStorage.allStoredFileNames()
 
             onProgress?(String(localized: "正在并行删除照片/图纸/资料/附件"))
-            async let deletePhotos: Void = Task.detached(priority: .userInitiated) {
-                DataStoreDeferredFileCleanup.photoFiles(
-                    photoNames,
-                    summary: "dataStore.clearAllAsync.photos"
-                )?.perform()
-            }.value
-            async let deleteDrawings: Void = Task.detached(priority: .userInitiated) {
-                DataStoreDeferredFileCleanup.drawingFiles(
-                    drawingNames,
-                    summary: "dataStore.clearAllAsync.drawings"
-                )?.perform()
-            }.value
-            async let deleteDocuments: Void = Task.detached(priority: .userInitiated) {
-                DataStoreDeferredFileCleanup.projectDocumentFiles(
-                    documentNames,
-                    summary: "dataStore.clearAllAsync.projectDocuments"
-                )?.perform()
-            }.value
-            async let deleteAttachments: Void = Task.detached(priority: .userInitiated) {
-                DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
-                    attachmentNames,
-                    summary: "dataStore.clearAllAsync.quickNoteAttachments"
-                )?.perform()
-            }.value
-            _ = await (deletePhotos, deleteDrawings, deleteDocuments, deleteAttachments)
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask(priority: .userInitiated) {
+                    guard !Task.isCancelled else { return }
+                    DataStoreDeferredFileCleanup.photoFiles(
+                        photoNames,
+                        summary: "dataStore.clearAllAsync.photos"
+                    )?.perform()
+                }
+                group.addTask(priority: .userInitiated) {
+                    guard !Task.isCancelled else { return }
+                    DataStoreDeferredFileCleanup.drawingFiles(
+                        drawingNames,
+                        summary: "dataStore.clearAllAsync.drawings"
+                    )?.perform()
+                }
+                group.addTask(priority: .userInitiated) {
+                    guard !Task.isCancelled else { return }
+                    DataStoreDeferredFileCleanup.projectDocumentFiles(
+                        documentNames,
+                        summary: "dataStore.clearAllAsync.projectDocuments"
+                    )?.perform()
+                }
+                group.addTask(priority: .userInitiated) {
+                    guard !Task.isCancelled else { return }
+                    DataStoreDeferredFileCleanup.quickNoteAttachmentFiles(
+                        attachmentNames,
+                        summary: "dataStore.clearAllAsync.quickNoteAttachments"
+                    )?.perform()
+                }
+                await group.waitForAll()
+            }
 
             onProgress?(String(localized: "正在清理日志"))
-            await Task.detached(priority: .utility) {
-                StorageIssueLog.clear()
-            }.value
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask(priority: .utility) {
+                    guard !Task.isCancelled else { return }
+                    StorageIssueLog.clear()
+                }
+                await group.waitForAll()
+            }
         }
 
         onProgress?(String(localized: "正在写入空数据"))

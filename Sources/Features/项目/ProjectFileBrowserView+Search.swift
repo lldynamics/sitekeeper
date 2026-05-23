@@ -1,5 +1,9 @@
 import SwiftUI
 
+private enum ProjectFileSearchContinuationTimeout {
+    static let interval: DispatchTimeInterval = .seconds(8)
+}
+
 extension ProjectFileBrowserView {
     var normalizedQuery: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -182,17 +186,23 @@ extension ProjectFileBrowserView {
     }
 
     func refreshSearchIndexIfNeeded() async {
-        await withCheckedContinuation { continuation in
+        await withTimeoutContinuation(
+            timeout: ProjectFileSearchContinuationTimeout.interval,
+            fallback: ()
+        ) { resume in
             refreshSearchIndexIfNeeded {
-                continuation.resume()
+                resume(())
             }
         }
     }
 
     func searchIndexedFileIDs(keyword: String) async -> [String] {
-        await withCheckedContinuation { continuation in
+        await withTimeoutContinuation(
+            timeout: ProjectFileSearchContinuationTimeout.interval,
+            fallback: []
+        ) { resume in
             fileSearchService.search(keyword: keyword) { ids in
-                continuation.resume(returning: ids)
+                resume(ids)
             }
         }
     }
@@ -230,6 +240,33 @@ extension ProjectFileBrowserView {
                 ],
                 score: 100
             )
+        }
+    }
+
+    private func withTimeoutContinuation<T>(
+        timeout: DispatchTimeInterval,
+        fallback: T,
+        operation: (@escaping (T) -> Void) -> Void
+    ) async -> T {
+        await withCheckedContinuation { continuation in
+            let resumeQueue = DispatchQueue(label: "project-file-browser.continuation-resume")
+            var didResume = false
+
+            let resume: (T) -> Void = { value in
+                resumeQueue.async {
+                    guard !didResume else { return }
+                    didResume = true
+                    continuation.resume(returning: value)
+                }
+            }
+
+            operation { value in
+                resume(value)
+            }
+
+            resumeQueue.asyncAfter(deadline: .now() + timeout) {
+                resume(fallback)
+            }
         }
     }
 }

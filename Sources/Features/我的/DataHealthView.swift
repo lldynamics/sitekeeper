@@ -7,9 +7,12 @@ struct DataHealthView: View {
     @State private var showOrphanFileCleanupConfirm = false
     @State var exportPayload: ExportPayload?
     @State var showExporter = false
-    @State var storageIssuesVersion = UUID()
     @State var operationNotice: OperationToastNotice?
+    @State private var selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
+    @State private var showsOnlyAutoFixableIssues = false
+    @State private var expandedIssueSectionIDs: Set<String> = []
     private let showsNavigationTitle: Bool
+    private let issuePreviewLimit = 50
 
     init(showsNavigationTitle: Bool = true) {
         self.showsNavigationTitle = showsNavigationTitle
@@ -98,26 +101,18 @@ struct DataHealthView: View {
                 if !storageIssues.isEmpty {
                     Button(role: .destructive) {
                         StorageIssueLog.clear()
-                        storageIssuesVersion = UUID()
+                        _ = store.scanDataHealthNow(reason: .manual)
                     } label: {
                         Label(l("清空存储错误记录"), systemImage: "trash")
                     }
                 }
             }
 
-            issueSection(title: l("缺失照片文件"), items: missingPhotoFileIssues)
-            issueSection(title: l("缺失票据文件"), items: missingDocumentFileIssues)
-            issueSection(title: l("缺失随手记附件"), items: missingQuickNoteAttachmentIssues)
-            issueSection(title: l("孤立照片文件"), items: orphanPhotoFileIssues)
-            issueSection(title: l("孤立图纸文件"), items: orphanDrawingFileIssues)
-            issueSection(title: l("孤立票据文件"), items: orphanDocumentFileIssues)
-            issueSection(title: l("孤立随手记附件"), items: orphanQuickNoteAttachmentIssues)
-            issueSection(title: l("孤立附件映射"), items: orphanAttachmentMappingIssues)
-            issueSection(title: l("仓库悬空附件映射"), items: orphanWarehouseAttachmentMappingIssues)
-            issueSection(title: l("资料悬空关联"), items: danglingDocumentLinkIssues)
-            issueSection(title: l("无效项目关联（可自动修复）"), items: autoFixableInvalidProjectRefIssues)
-            issueSection(title: l("无效项目关联（需手动处理）"), items: manualInvalidProjectRefIssues)
-            issueSection(title: l("存储错误记录"), items: storageIssueRows)
+            issueFilterSection
+
+            ForEach(issueSections) { section in
+                issueSection(section)
+            }
         }
         .modifier(OptionalInlineTitleModifier(
             isEnabled: showsNavigationTitle,
@@ -152,22 +147,142 @@ struct DataHealthView: View {
     }
 
     @ViewBuilder
-    private func issueSection(title: String, items: [DataHealthIssue]) -> some View {
-        Section("\(title) (\(items.count))") {
-            if items.isEmpty {
-                Text(l("未发现问题"))
-                    .foregroundStyle(.secondary)
-            } else {
-                ForEach(Array(items.prefix(50))) { item in
-                    issueRow(item)
+    private var issueFilterSection: some View {
+        Section(l("问题筛选")) {
+            Picker(l("按项目过滤"), selection: $selectedIssueProjectFilter) {
+                Text(l("全部问题")).tag(DataHealthIssueProjectFilter.all)
+                Text(l("无项目线索")).tag(DataHealthIssueProjectFilter.noProject)
+                Text(l("无效项目关联")).tag(DataHealthIssueProjectFilter.invalidProject)
+                ForEach(store.projects.sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }) { project in
+                    Text(project.name.isEmpty ? l("未命名项目") : project.name)
+                        .tag(DataHealthIssueProjectFilter.project(project.id))
                 }
-                if items.count > 50 {
-                    Text(l("仅显示前 50 条"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            }
+            .pickerStyle(.menu)
+
+            Toggle(isOn: $showsOnlyAutoFixableIssues) {
+                Label(l("只看可自动修复"), systemImage: "wrench.and.screwdriver")
+            }
+
+            LabeledContent(l("当前筛选结果"), value: "\(filteredIssueCount)")
+
+            if hasActiveIssueFilters {
+                Button {
+                    resetIssueFilters()
+                } label: {
+                    Label(l("重置筛选"), systemImage: "arrow.counterclockwise")
                 }
             }
         }
+    }
+
+    @ViewBuilder
+    private func issueSection(_ section: DataHealthIssueSection) -> some View {
+        let filteredItems = filteredIssueItems(section.items)
+        let isExpanded = expandedIssueSectionIDs.contains(section.id)
+        let visibleItems = isExpanded ? filteredItems : Array(filteredItems.prefix(issuePreviewLimit))
+        Section(issueSectionTitle(section.title, filteredCount: filteredItems.count, totalCount: section.items.count)) {
+            if section.items.isEmpty {
+                Text(l("未发现问题"))
+                    .foregroundStyle(.secondary)
+            } else if filteredItems.isEmpty {
+                Text(l("当前筛选无结果"))
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(visibleItems) { item in
+                    issueRow(item)
+                }
+                if filteredItems.count > issuePreviewLimit {
+                    Button {
+                        toggleIssueSectionExpansion(section.id)
+                    } label: {
+                        Label(
+                            isExpanded
+                            ? l("收起到前 50 条")
+                            : lf("查看全部 %lld 条", Int64(filteredItems.count)),
+                            systemImage: isExpanded ? "chevron.up.circle" : "list.bullet.rectangle"
+                        )
+                    }
+                    .font(.caption.weight(.semibold))
+                }
+            }
+        }
+    }
+
+    private var issueSections: [DataHealthIssueSection] {
+        [
+            DataHealthIssueSection(id: "missingPhotoFiles", title: l("缺失照片文件"), items: missingPhotoFileIssues),
+            DataHealthIssueSection(id: "missingDocumentFiles", title: l("缺失票据文件"), items: missingDocumentFileIssues),
+            DataHealthIssueSection(id: "missingQuickNoteAttachmentFiles", title: l("缺失随手记附件"), items: missingQuickNoteAttachmentIssues),
+            DataHealthIssueSection(id: "orphanPhotoFiles", title: l("孤立照片文件"), items: orphanPhotoFileIssues),
+            DataHealthIssueSection(id: "orphanDrawingFiles", title: l("孤立图纸文件"), items: orphanDrawingFileIssues),
+            DataHealthIssueSection(id: "orphanDocumentFiles", title: l("孤立票据文件"), items: orphanDocumentFileIssues),
+            DataHealthIssueSection(id: "orphanQuickNoteAttachmentFiles", title: l("孤立随手记附件"), items: orphanQuickNoteAttachmentIssues),
+            DataHealthIssueSection(id: "orphanAttachmentMappings", title: l("孤立附件映射"), items: orphanAttachmentMappingIssues),
+            DataHealthIssueSection(id: "orphanWarehouseAttachmentMappings", title: l("仓库悬空附件映射"), items: orphanWarehouseAttachmentMappingIssues),
+            DataHealthIssueSection(id: "danglingDocumentLinks", title: l("资料悬空关联"), items: danglingDocumentLinkIssues),
+            DataHealthIssueSection(id: "autoFixableInvalidProjectRefs", title: l("无效项目关联（可自动修复）"), items: autoFixableInvalidProjectRefIssues),
+            DataHealthIssueSection(id: "manualInvalidProjectRefs", title: l("无效项目关联（需手动处理）"), items: manualInvalidProjectRefIssues),
+            DataHealthIssueSection(id: "storageIssueRows", title: l("存储错误记录"), items: storageIssueRows)
+        ]
+    }
+
+    private var filteredIssueCount: Int {
+        issueSections.reduce(0) { total, section in
+            total + filteredIssueItems(section.items).count
+        }
+    }
+
+    private var hasActiveIssueFilters: Bool {
+        selectedIssueProjectFilter != DataHealthIssueProjectFilter.all || showsOnlyAutoFixableIssues
+    }
+
+    private func filteredIssueItems(_ items: [DataHealthIssue]) -> [DataHealthIssue] {
+        items.filter { issue in
+            matchesAutoFixableFilter(issue) && matchesProjectFilter(issue)
+        }
+    }
+
+    private func matchesAutoFixableFilter(_ issue: DataHealthIssue) -> Bool {
+        !showsOnlyAutoFixableIssues || issue.isAutoFixable
+    }
+
+    private func matchesProjectFilter(_ issue: DataHealthIssue) -> Bool {
+        switch selectedIssueProjectFilter {
+        case DataHealthIssueProjectFilter.all:
+            return true
+        case DataHealthIssueProjectFilter.noProject:
+            return issue.effectiveProjectId == nil
+        case DataHealthIssueProjectFilter.invalidProject:
+            guard let projectId = issue.effectiveProjectId else { return false }
+            return !projectIdSet.contains(projectId)
+        default:
+            guard let projectId = issue.effectiveProjectId else { return false }
+            return selectedIssueProjectFilter == DataHealthIssueProjectFilter.project(projectId)
+        }
+    }
+
+    private func issueSectionTitle(_ title: String, filteredCount: Int, totalCount: Int) -> String {
+        if filteredCount == totalCount {
+            return "\(title) (\(totalCount))"
+        }
+        return "\(title) (\(filteredCount)/\(totalCount))"
+    }
+
+    private func toggleIssueSectionExpansion(_ sectionID: String) {
+        withAnimation(.snappy(duration: 0.18)) {
+            if expandedIssueSectionIDs.contains(sectionID) {
+                expandedIssueSectionIDs.remove(sectionID)
+            } else {
+                expandedIssueSectionIDs.insert(sectionID)
+            }
+        }
+    }
+
+    private func resetIssueFilters() {
+        selectedIssueProjectFilter = DataHealthIssueProjectFilter.all
+        showsOnlyAutoFixableIssues = false
+        expandedIssueSectionIDs.removeAll()
     }
 
     @ViewBuilder

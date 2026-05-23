@@ -29,6 +29,10 @@ struct ProjectBusinessCardsView: View {
     let summary: ProjectBusinessSummary
     var onOpenCore: (() -> Void)? = nil
     var onOpenInsight: (() -> Void)? = nil
+    var onOpenReceivableAging: (() -> Void)? = nil
+    var onOpenRecentCollection: (() -> Void)? = nil
+    var onOpenCostAnomaly: (() -> Void)? = nil
+    var onOpenProfitRisk: (() -> Void)? = nil
 
     var body: some View {
         LazyVGrid(
@@ -57,10 +61,34 @@ struct ProjectBusinessCardsView: View {
                 systemImage: "waveform.path.ecg",
                 tint: .appPrimaryAction,
                 metrics: [
-                    .init(title: String(localized: "project.business.receivableAge"), value: receivableAgeText(summary), color: receivableAgeColor(summary)),
-                    .init(title: String(localized: "project.business.recentCollection"), value: recentCollectionText(summary), color: recentCollectionColor(summary)),
-                    .init(title: String(localized: "project.business.costException"), value: costAnomalyText(summary), color: costAnomalyColor(summary)),
-                    .init(title: String(localized: "project.business.profitRisk"), value: profitRiskText(summary), color: profitRiskColor(summary))
+                    .init(
+                        title: String(localized: "project.business.receivableAge"),
+                        value: receivableAgeText(summary),
+                        color: receivableAgeColor(summary),
+                        action: onOpenReceivableAging,
+                        accessibilityIdentifier: "dashboard-business-receivable-aging"
+                    ),
+                    .init(
+                        title: String(localized: "project.business.recentCollection"),
+                        value: recentCollectionText(summary),
+                        color: recentCollectionColor(summary),
+                        action: onOpenRecentCollection,
+                        accessibilityIdentifier: "dashboard-business-recent-collection"
+                    ),
+                    .init(
+                        title: String(localized: "project.business.costException"),
+                        value: costAnomalyText(summary),
+                        color: costAnomalyColor(summary),
+                        action: onOpenCostAnomaly,
+                        accessibilityIdentifier: "dashboard-business-cost-anomaly"
+                    ),
+                    .init(
+                        title: String(localized: "project.business.profitRisk"),
+                        value: profitRiskText(summary),
+                        color: profitRiskColor(summary),
+                        action: onOpenProfitRisk,
+                        accessibilityIdentifier: "dashboard-business-profit-risk"
+                    )
                 ],
                 action: onOpenInsight
             )
@@ -177,10 +205,12 @@ struct ProjectBusinessCardsView: View {
 }
 
 private struct ProjectBusinessCardMetric: Identifiable {
-    let id = UUID()
     let title: String
     let value: String
     var color: Color = .primary
+    var action: (() -> Void)? = nil
+    var accessibilityIdentifier: String? = nil
+    var id: String { title }
 }
 
 private struct ProjectBusinessMetricCard: View {
@@ -190,9 +220,13 @@ private struct ProjectBusinessMetricCard: View {
     let metrics: [ProjectBusinessCardMetric]
     var action: (() -> Void)? = nil
 
+    private var hasMetricActions: Bool {
+        metrics.contains(where: { $0.action != nil })
+    }
+
     var body: some View {
         Group {
-            if let action {
+            if let action, !hasMetricActions {
                 Button(action: action) {
                     cardContent
                 }
@@ -206,30 +240,68 @@ private struct ProjectBusinessMetricCard: View {
     private var cardContent: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             HStack(spacing: AppSpacing.tight * 0.75) {
-                Image(systemName: systemImage)
-                    .foregroundStyle(tint)
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                Spacer(minLength: 0)
-                if action != nil {
+                if let action, hasMetricActions {
+                    Button(action: action) {
+                        HStack(spacing: AppSpacing.tight * 0.75) {
+                            Image(systemName: systemImage)
+                                .foregroundStyle(tint)
+                            Text(title)
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    Spacer(minLength: 0)
                     Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(.secondary)
+                } else {
+                    Image(systemName: systemImage)
+                        .foregroundStyle(tint)
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                    Spacer(minLength: 0)
+                    if action != nil {
+                        Image(systemName: "chevron.right")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
 
             ForEach(metrics) { metric in
-                HStack(alignment: .firstTextBaseline) {
-                    Text(metric.title)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                    Spacer(minLength: AppSpacing.tight)
-                    Text(metric.value)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(metric.color)
-                        .multilineTextAlignment(.trailing)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.75)
+                if let metricAction = metric.action {
+                    Button(action: metricAction) {
+                        HStack(alignment: .firstTextBaseline) {
+                            Text(metric.title)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            Spacer(minLength: AppSpacing.tight)
+                            Text(metric.value)
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(metric.color)
+                                .multilineTextAlignment(.trailing)
+                                .lineLimit(2)
+                                .minimumScaleFactor(0.75)
+                            Image(systemName: "chevron.right")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier(metric.accessibilityIdentifier ?? "")
+                } else {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(metric.title)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        Spacer(minLength: AppSpacing.tight)
+                        Text(metric.value)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(metric.color)
+                            .multilineTextAlignment(.trailing)
+                            .lineLimit(2)
+                            .minimumScaleFactor(0.75)
+                    }
                 }
             }
         }

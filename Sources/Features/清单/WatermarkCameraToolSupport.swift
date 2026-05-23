@@ -25,9 +25,9 @@ enum WatermarkCameraAccess {
         case .authorized:
             return true
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
+            return await PermissionRequestTimeoutSupport.resolve(fallback: false) { resume in
                 AVCaptureDevice.requestAccess(for: .video) { granted in
-                    continuation.resume(returning: granted)
+                    resume(granted)
                 }
             }
         case .denied, .restricted:
@@ -43,17 +43,17 @@ enum WatermarkCameraAccess {
         case .authorized, .limited:
             return .granted
         case .notDetermined:
-            return await withCheckedContinuation { continuation in
+            return await PermissionRequestTimeoutSupport.resolve(fallback: .unknown) { resume in
                 PHPhotoLibrary.requestAuthorization(for: .addOnly) { newStatus in
                     switch newStatus {
                     case .authorized, .limited:
-                        continuation.resume(returning: .granted)
+                        resume(.granted)
                     case .denied, .restricted:
-                        continuation.resume(returning: .rejectedRequest)
+                        resume(.rejectedRequest)
                     case .notDetermined:
-                        continuation.resume(returning: .unknown)
+                        resume(.unknown)
                     @unknown default:
-                        continuation.resume(returning: .unknown)
+                        resume(.unknown)
                     }
                 }
             }

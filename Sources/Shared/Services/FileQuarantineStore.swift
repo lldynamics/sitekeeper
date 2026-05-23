@@ -1,6 +1,6 @@
 import Foundation
 
-enum FileQuarantineCategory: String, Codable {
+enum FileQuarantineCategory: String, Codable, Sendable {
     case photoOriginal = "photo-original"
     case photoThumbnail = "photo-thumbnail"
     case drawing = "drawing"
@@ -9,7 +9,7 @@ enum FileQuarantineCategory: String, Codable {
     case quickNoteAttachment = "quick-note-attachment"
 }
 
-struct FileQuarantineEntry: Identifiable, Codable {
+struct FileQuarantineEntry: Identifiable, Codable, Sendable {
     let id: UUID
     let category: FileQuarantineCategory
     let originalPath: String

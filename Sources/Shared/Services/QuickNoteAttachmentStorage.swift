@@ -2,7 +2,7 @@ import AVFoundation
 import Foundation
 import UIKit
 
-struct QuickNoteAttachmentBackupFile: Identifiable, Codable {
+struct QuickNoteAttachmentBackupFile: Identifiable, Codable, Sendable {
     var id: String { fileName }
     var fileName: String
     var data: Data

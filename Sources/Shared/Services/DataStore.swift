@@ -16,6 +16,7 @@ final class DataStore {
     var searchIndexVersion = 0
     var dataVersion = UUID()
     var latestDataHealthScan: DataHealthScanSummary?
+    var latestDataHealthSnapshot: DataHealthScanSnapshot?
 
     let storeURL: URL
     let persistenceActor: DataStorePersistenceActor

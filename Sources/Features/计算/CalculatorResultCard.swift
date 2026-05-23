@@ -525,7 +525,7 @@ private struct CalculatorResultSectionsView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.normal) {
-            ForEach(Array(sections.enumerated()), id: \.offset) { _, section in
+            ForEach(sections, id: \.id) { section in
                 CalculatorResultSectionView(section: section)
             }
         }
@@ -544,7 +544,7 @@ private struct CalculatorResultSectionView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                ForEach(Array(section.items.enumerated()), id: \.offset) { _, item in
+                ForEach(section.items, id: \.id) { item in
                     CalculatorResultItemRow(item: item)
                 }
             }

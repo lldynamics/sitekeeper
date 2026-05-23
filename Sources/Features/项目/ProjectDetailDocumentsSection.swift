@@ -143,36 +143,9 @@ struct ProjectDocumentsView: View {
                     }
                 } else {
                     if !suggestedMatches.isEmpty {
-                        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                            Label(String(localized: "缺票自动匹配建议"), systemImage: "wand.and.stars")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Color.appWarning)
-                            ForEach(suggestedMatches) { match in
-                                HStack(alignment: .top, spacing: AppSpacing.tight) {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(match.document.title)
-                                            .font(.caption.weight(.semibold))
-                                            .lineLimit(1)
-                                        Text("\(match.record.date) · \(match.record.counterparty.isEmpty ? String(localized: "未填写单位") : match.record.counterparty)")
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                        Text(String(format: String(localized: "建议关联 %@"), ReportBuilder.money(match.record.amountValue.doubleValue)))
-                                            .font(.caption2)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    Spacer()
-                                    Button(String(localized: "关联")) {
-                                        onLink(match.document.id, match.record.id)
-                                    }
-                                    .buttonStyle(.appProminent())
-                                    .font(.caption2.weight(.semibold))
-                                }
-                            }
-                        }
-                        .padding(AppSpacing.tight)
-                        .background(
-                            RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                                .fill(Color.appPeachSurfaceSubtle)
+                        ProjectDocumentMatchSuggestionsView(
+                            matches: suggestedMatches,
+                            onLink: onLink
                         )
                     }
                     ForEach(filteredDocuments) { document in
@@ -225,7 +198,15 @@ struct ProjectDocumentsView: View {
         .sheet(isPresented: $showFilterSheet) {
             NavigationStack {
                 Form {
-                    filterForm
+                    ProjectDocumentsFilterFormSection(
+                        categoryFilter: $categoryFilter,
+                        relationFilter: $relationFilter,
+                        useDateRange: $useDateRange,
+                        startDate: $startDate,
+                        endDate: $endDate,
+                        minAmount: $minAmount,
+                        maxAmount: $maxAmount
+                    )
                 }
                 .navigationTitle(String(localized: "资料筛选"))
                 .navigationBarTitleDisplayMode(.inline)
@@ -307,7 +288,12 @@ struct ProjectDocumentsView: View {
                 }
                 .font(.caption.weight(.semibold))
                 if !missingRecommendedCategories.isEmpty {
-                    stageRecommendationCard(missingRecommendedCategories)
+                    ProjectDocumentStageRecommendationCard(
+                        stageDisplayName: recommendedStage.displayName,
+                        missingCategories: missingRecommendedCategories
+                    ) {
+                        applyStageRecommendation(missingRecommendedCategories)
+                    }
                 }
                 if !missingChecklistItemsWithoutOpenTodo(snapshot.items).isEmpty {
                     Button {
@@ -334,7 +320,7 @@ struct ProjectDocumentsView: View {
                     Button {
                         categoryFilter = DocumentCategoryFilter(category: item.category)
                     } label: {
-                        checklistRow(item)
+                        ProjectDocumentChecklistRowView(item: item)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
@@ -368,7 +354,7 @@ struct ProjectDocumentsView: View {
                     Button {
                         categoryFilter = DocumentCategoryFilter(category: item.category)
                     } label: {
-                        checklistRow(item)
+                        ProjectDocumentChecklistRowView(item: item)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
                     .buttonStyle(.plain)
@@ -442,90 +428,6 @@ struct ProjectDocumentsView: View {
         }
         store.scheduleSave()
         operationNotice = .info(String(localized: "已保存资料清单模板"))
-    }
-
-    private func stageRecommendationCard(_ missingCategories: [ProjectDocumentCategory]) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            Label(
-                String(format: String(localized: "%@建议补开 %lld 类"), recommendedStage.displayName, Int64(missingCategories.count)),
-                systemImage: "wand.and.stars"
-            )
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(Color.appPrimaryAction)
-
-            Text(missingCategories.map(\.displayName).joined(separator: "、"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Button {
-                applyStageRecommendation(missingCategories)
-            } label: {
-                Label(String(localized: "启用阶段推荐"), systemImage: "checklist.checked")
-            }
-            .buttonStyle(.bordered)
-            .font(.caption.weight(.semibold))
-        }
-        .padding(AppSpacing.tight)
-        .background(
-            RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                .fill(Color.appPeachSurfaceSubtle)
-        )
-    }
-
-    private func checklistRow(_ item: DocumentArchiveChecklistItem) -> some View {
-        HStack(alignment: .top, spacing: AppSpacing.normal) {
-            Image(systemName: item.systemImage)
-                .font(.callout)
-                .foregroundStyle(item.tint)
-                .frame(width: 20)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(item.category.displayName)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(.primary)
-                Text(item.detailText)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-            Spacer()
-            Text(item.statusText)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(item.tint)
-        }
-    }
-
-    @ViewBuilder
-    private var filterForm: some View {
-        Section(String(localized: "类型")) {
-            Picker(String(localized: "资料类型"), selection: $categoryFilter) {
-                ForEach(DocumentCategoryFilter.allCases, id: \.self) { item in
-                    Text(item.displayName).tag(item)
-                }
-            }
-            Picker(String(localized: "关联状态"), selection: $relationFilter) {
-                ForEach(DocumentRelationFilter.allCases, id: \.self) { item in
-                    Text(item.displayName).tag(item)
-                }
-            }
-        }
-        Section(String(localized: "日期")) {
-            Toggle(String(localized: "限定日期范围"), isOn: $useDateRange)
-            if useDateRange {
-                DatePicker(String(localized: "开始"), selection: $startDate, displayedComponents: .date)
-                DatePicker(String(localized: "结束"), selection: $endDate, displayedComponents: .date)
-            }
-        }
-        Section(String(localized: "金额")) {
-            LabeledContent(String(localized: "最小金额")) {
-                TextField("0", text: $minAmount)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-            }
-            LabeledContent(String(localized: "最大金额")) {
-                TextField(String(localized: "不限"), text: $maxAmount)
-                    .keyboardType(.decimalPad)
-                    .multilineTextAlignment(.trailing)
-            }
-        }
     }
 
     private var hasActiveFilters: Bool {
@@ -688,179 +590,3 @@ struct ProjectDocumentsView: View {
         String(format: String(localized: "补齐施工资料：%@"), category.displayName)
     }
 }
-
-extension DocumentArchiveChecklistItem {
-    var tint: Color {
-        if isMissing || returnedCount > 0 { return .appWarning }
-        if actionCount > 0 { return .appPrimaryAction }
-        return .appSuccess
-    }
-}
-
-private enum DocumentCategoryFilter: String, CaseIterable {
-    case all
-    case constructionArchive
-    case constructionTechnical
-    case constructionMaterial
-    case constructionSurvey
-    case constructionRecord
-    case constructionTest
-    case constructionManagement
-    case processAcceptance
-    case completionAcceptance
-    case businessArchive
-    case paymentRequest
-    case contract
-    case invoice
-    case receipt
-    case legacyConstruction
-    case acceptance
-    case other
-
-    var displayName: String {
-        switch self {
-        case .all:
-            return String(localized: "全部")
-        case .constructionArchive:
-            return String(localized: "全部施工资料")
-        case .constructionTechnical:
-            return String(localized: "施工技术")
-        case .constructionMaterial:
-            return String(localized: "施工物资")
-        case .constructionSurvey:
-            return String(localized: "施工测量")
-        case .constructionRecord:
-            return String(localized: "施工记录")
-        case .constructionTest:
-            return String(localized: "施工试验")
-        case .constructionManagement:
-            return String(localized: "施工管理")
-        case .processAcceptance:
-            return String(localized: "过程验收")
-        case .completionAcceptance:
-            return String(localized: "竣工验收")
-        case .businessArchive:
-            return String(localized: "商务/财务")
-        case .paymentRequest:
-            return String(localized: "请款资料")
-        case .contract:
-            return String(localized: "合同")
-        case .invoice:
-            return String(localized: "发票")
-        case .receipt:
-            return String(localized: "收据")
-        case .legacyConstruction:
-            return String(localized: "施工资料")
-        case .acceptance:
-            return String(localized: "验收资料")
-        case .other:
-            return String(localized: "其他资料")
-        }
-    }
-
-    init(category: ProjectDocumentCategory) {
-        switch category {
-        case .constructionTechnical:
-            self = .constructionTechnical
-        case .constructionMaterial:
-            self = .constructionMaterial
-        case .constructionSurvey:
-            self = .constructionSurvey
-        case .constructionRecord:
-            self = .constructionRecord
-        case .constructionTest:
-            self = .constructionTest
-        case .constructionManagement:
-            self = .constructionManagement
-        case .processAcceptance:
-            self = .processAcceptance
-        case .completionAcceptance:
-            self = .completionAcceptance
-        case .invoice:
-            self = .invoice
-        case .receipt:
-            self = .receipt
-        case .paymentRequest:
-            self = .paymentRequest
-        case .contract:
-            self = .contract
-        case .acceptance:
-            self = .acceptance
-        case .other:
-            self = .other
-        case .construction:
-            self = .legacyConstruction
-        }
-    }
-
-    func matches(_ document: ProjectDocument) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .constructionArchive:
-            return document.category.isConstructionArchive
-        case .constructionTechnical:
-            return document.category == .constructionTechnical
-        case .constructionMaterial:
-            return document.category == .constructionMaterial
-        case .constructionSurvey:
-            return document.category == .constructionSurvey
-        case .constructionRecord:
-            return document.category == .constructionRecord
-        case .constructionTest:
-            return document.category == .constructionTest
-        case .constructionManagement:
-            return document.category == .constructionManagement
-        case .processAcceptance:
-            return document.category == .processAcceptance
-        case .completionAcceptance:
-            return document.category == .completionAcceptance
-        case .businessArchive:
-            return document.category.isBusinessArchive
-        case .paymentRequest:
-            return document.category == .paymentRequest
-        case .contract:
-            return document.category == .contract
-        case .invoice:
-            return document.category == .invoice
-        case .receipt:
-            return document.category == .receipt
-        case .legacyConstruction:
-            return document.category == .construction
-        case .acceptance:
-            return document.category == .acceptance
-        case .other:
-            return document.category == .other
-        }
-    }
-}
-
-private enum DocumentRelationFilter: String, CaseIterable {
-    case all
-    case linked
-    case unlinked
-
-    var displayName: String {
-        switch self {
-        case .all:
-            return String(localized: "全部")
-        case .linked:
-            return String(localized: "已关联账目")
-        case .unlinked:
-            return String(localized: "未关联账目")
-        }
-    }
-
-    func matches(_ document: ProjectDocument) -> Bool {
-        switch self {
-        case .all:
-            return true
-        case .linked:
-            return document.linkedFinancialRecordId != nil
-        case .unlinked:
-            return document.linkedFinancialRecordId == nil
-        }
-    }
-}
-
-private typealias DocumentFinancialMatch = ProjectDocumentMatchSuggestion

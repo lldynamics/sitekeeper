@@ -164,9 +164,9 @@ private struct SystemQuickNoteAudioSessionController: QuickNoteAudioSessionContr
     }
 
     func requestRecordPermission() async -> Bool {
-        await withCheckedContinuation { continuation in
+        await PermissionRequestTimeoutSupport.resolve(fallback: false) { resume in
             AVAudioApplication.requestRecordPermission { allowed in
-                continuation.resume(returning: allowed)
+                resume(allowed)
             }
         }
     }

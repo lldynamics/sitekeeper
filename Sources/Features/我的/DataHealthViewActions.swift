@@ -113,6 +113,7 @@ extension DataHealthView {
         store.replaceQuickNotes(quickNotes)
 
         store.scheduleSave()
+        _ = store.scanDataHealthNow(reason: .manual)
         let afterCount = referenceIssueCount
         let fixedCount = max(beforeCount - afterCount, 0)
         OperationAuditLog.record(
@@ -122,7 +123,6 @@ extension DataHealthView {
             detail: "\(String(format: l("%d 项"), fixedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
-        store.runDataHealthScanNow(reason: .manual)
         AppHaptics.success()
         operationNotice = .info(
             String(
@@ -136,7 +136,7 @@ extension DataHealthView {
     func clearMediaThumbnailCaches() {
         PhotoStorage.clearThumbnailCache()
         QuickNoteAttachmentStorage.clearThumbnailCache()
-        storageIssuesVersion = UUID()
+        _ = store.scanDataHealthNow(reason: .manual)
         AppHaptics.success()
         operationNotice = .info(l("已清理缩略图缓存"))
     }
@@ -173,6 +173,7 @@ extension DataHealthView {
         )
         .perform()
         store.scheduleSave()
+        _ = store.scanDataHealthNow(reason: .manual)
         let afterCount = orphanFileIssueCount
         let cleanedCount = max(beforeCount - afterCount, 0)
         OperationAuditLog.record(
@@ -182,7 +183,6 @@ extension DataHealthView {
             detail: "\(String(format: l("%d 项"), cleanedCount)) → \(String(format: l("%d 项"), afterCount))",
             source: "DataHealthView"
         )
-        store.runDataHealthScanNow(reason: .manual)
         AppHaptics.success()
         operationNotice = .info(
             String(
@@ -258,12 +258,12 @@ extension DataHealthView {
             )
             AppHaptics.warning()
             operationNotice = .info(l("该项已不存在或无需修复"))
-            store.runDataHealthScanNow(reason: .manual)
+            _ = store.scanDataHealthNow(reason: .manual)
             return
         }
 
         store.scheduleSave()
-        store.runDataHealthScanNow(reason: .manual)
+        _ = store.scanDataHealthNow(reason: .manual)
         OperationAuditLog.record(
             action: .repair,
             outcome: .succeeded,
@@ -280,7 +280,7 @@ extension DataHealthView {
         guard let cleanup else {
             AppHaptics.warning()
             operationNotice = .info(l("该文件已不存在或无法处理"))
-            store.runDataHealthScanNow(reason: .manual)
+            _ = store.scanDataHealthNow(reason: .manual)
             return
         }
 
@@ -292,7 +292,7 @@ extension DataHealthView {
             source: "DataHealthView.issueAction"
         )
         cleanup.perform()
-        store.runDataHealthScanNow(reason: .manual)
+        _ = store.scanDataHealthNow(reason: .manual)
         OperationAuditLog.record(
             action: .cleanup,
             outcome: .succeeded,

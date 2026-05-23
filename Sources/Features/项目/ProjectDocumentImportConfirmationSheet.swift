@@ -77,16 +77,16 @@ struct ProjectDocumentImportConfirmationSheet: View {
                         String(localized: "文件数量"),
                         value: String(format: String(localized: "%lld 个"), Int64(urls.count))
                     )
-                    ForEach(Array(urls.enumerated()), id: \.offset) { item in
+                    ForEach(urls, id: \.self) { url in
                         HStack(spacing: AppSpacing.tight) {
-                            Image(systemName: iconName(for: item.element))
+                            Image(systemName: iconName(for: url))
                                 .foregroundStyle(Color.appDoc)
                                 .frame(width: 24)
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(item.element.lastPathComponent)
+                                Text(url.lastPathComponent)
                                     .font(.callout)
                                     .lineLimit(1)
-                                Text(fileTypeText(for: item.element))
+                                Text(fileTypeText(for: url))
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                             }

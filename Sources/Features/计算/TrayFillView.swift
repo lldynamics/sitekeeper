@@ -66,12 +66,12 @@ struct TrayFillView: View {
                 CalculatorPresetChips(title: CalculatorCopy.trayCommonHeight, options: ["50", "75", "100", "150", "200"], selection: $trayH)
             }
             Section(CalculatorCopy.trayCableSection) {
-                ForEach(cables.indices, id: \.self) { i in
+                ForEach(cables) { cable in
                     HStack {
-                        Text(CalculatorFormatting.cableSpec(diameter: cables[i].odia, count: cables[i].count))
+                        Text(CalculatorFormatting.cableSpec(diameter: cable.odia, count: cable.count))
                         Spacer()
                         Button {
-                            cables.remove(at: i)
+                            removeCable(id: cable.id)
                             persistCableDraft()
                         } label: { Image(systemName: "trash").foregroundStyle(.appRisk) }
                         .accessibilityLabel(CalculatorCopy.trayDeleteCable)
@@ -246,7 +246,33 @@ struct TrayFillView: View {
             )
         }
     }
+
+    private func removeCable(id: UUID) {
+        cables.removeAll { $0.id == id }
+    }
 }
 
-struct CableEntry: Codable { var odia: Double
-var count: Int }
+struct CableEntry: Codable, Identifiable, Sendable {
+    var id: UUID
+    var odia: Double
+    var count: Int
+
+    init(id: UUID = UUID(), odia: Double, count: Int) {
+        self.id = id
+        self.odia = odia
+        self.count = count
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case odia
+        case count
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        odia = try container.decode(Double.self, forKey: .odia)
+        count = try container.decode(Int.self, forKey: .count)
+    }
+}

@@ -1,6 +1,6 @@
-import SwiftUI
+import Foundation
 
-struct StorageCleanupUndoSnapshot: Codable {
+struct StorageCleanupUndoSnapshot: Codable, Sendable {
     let dailyLogs: [DailyLog]
     let siteTodos: [SiteTodo]
     let quickNotes: [QuickNote]
@@ -34,7 +34,7 @@ struct StorageCleanupUndoSnapshot: Codable {
     }
 }
 
-struct DeferredProjectFileCleanupPlan: Codable {
+struct DeferredProjectFileCleanupPlan: Codable, Sendable {
     var photoFileNames: Set<String> = []
     var quickNoteAttachmentFileNames: Set<String> = []
     var projectDocumentFileNames: Set<String> = []
@@ -76,7 +76,7 @@ struct DeferredProjectFileCleanupPlan: Codable {
     }
 }
 
-struct StorageCleanupTrashBatch: Identifiable, Codable {
+struct StorageCleanupTrashBatch: Identifiable, Codable, Sendable {
     let id: UUID
     let summary: String
     let createdAt: Date
@@ -87,14 +87,14 @@ struct StorageCleanupTrashBatch: Identifiable, Codable {
     var fileCount: Int { files.count }
 }
 
-struct StorageCleanupTrashFile: Identifiable, Codable {
+struct StorageCleanupTrashFile: Identifiable, Codable, Sendable {
     let id: UUID
     let kind: StorageCleanupTrashFileKind
     let originalFileName: String
     let trashedFileName: String
 }
 
-enum StorageCleanupTrashFileKind: String, Codable {
+enum StorageCleanupTrashFileKind: String, Codable, Sendable {
     case photoOriginal
     case photoThumbnail
     case drawing
@@ -479,388 +479,6 @@ enum StorageCleanupLargeFileRuleSuggestion {
             return 50 * 1024 * 1024
         case .ticket:
             return 20 * 1024 * 1024
-        }
-    }
-}
-
-struct StorageCategorySummary: Identifiable {
-    let id = UUID()
-    let title: String
-    let icon: String
-    let tint: Color
-    let bytes: Int
-    let count: Int
-
-    var formattedBytes: String {
-        QuickNoteAttachmentStorage.formattedFileSize(bytes)
-    }
-}
-
-struct StorageLargeFileItem: Identifiable {
-    let id: String
-    let category: StorageFileCategory
-    let title: String
-    let detail: String
-    let projectId: UUID?
-    let projectName: String?
-    let bytes: Int
-
-    init(
-        id: String,
-        category: StorageFileCategory,
-        title: String,
-        detail: String,
-        projectId: UUID? = nil,
-        projectName: String? = nil,
-        bytes: Int
-    ) {
-        self.id = id
-        self.category = category
-        self.title = title
-        self.detail = detail
-        self.projectId = projectId
-        self.projectName = projectName
-        self.bytes = bytes
-    }
-
-    var formattedBytes: String {
-        QuickNoteAttachmentStorage.formattedFileSize(bytes)
-    }
-}
-
-enum StorageFileCategory {
-    case photo
-    case video
-    case drawing
-    case ticket
-    case backup
-    case history
-
-    var displayName: String {
-        switch self {
-        case .photo:
-            return String(localized: "照片")
-        case .video:
-            return String(localized: "视频")
-        case .drawing:
-            return String(localized: "图纸原件")
-        case .ticket:
-            return String(localized: "票据")
-        case .backup:
-            return String(localized: "备份")
-        case .history:
-            return String(localized: "历史计算")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .photo:
-            return "photo.fill"
-        case .video:
-            return "video.fill"
-        case .drawing:
-            return "doc.viewfinder"
-        case .ticket:
-            return "doc.text.fill"
-        case .backup:
-            return "externaldrive.fill"
-        case .history:
-            return "clock.arrow.circlepath"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .photo:
-            return .appWarning
-        case .video:
-            return .appPhoto
-        case .drawing:
-            return .appDoc
-        case .ticket:
-            return .appRisk
-        case .backup:
-            return .appPrimaryAction
-        case .history:
-            return .appSuccess
-        }
-    }
-}
-
-struct ProjectStorageUsage: Identifiable {
-    let projectId: UUID
-    let projectName: String
-    let photoBytes: Int
-    let videoBytes: Int
-    let drawingBytes: Int
-    let ticketBytes: Int
-    let backupEstimatedBytes: Int?
-
-    var id: UUID { projectId }
-    var totalBytes: Int { photoBytes + videoBytes + drawingBytes + ticketBytes }
-    var formattedTotalBytes: String { QuickNoteAttachmentStorage.formattedFileSize(totalBytes) }
-    var formattedBackupEstimatedBytes: String {
-        guard let backupEstimatedBytes else { return String(localized: "计算中…") }
-        return QuickNoteAttachmentStorage.formattedFileSize(backupEstimatedBytes)
-    }
-}
-
-struct CleanupImpactSummary {
-    struct Item {
-        let title: String
-        let count: Int
-    }
-
-    private var fileCountMap: [String: Int] = [:]
-    private var recordCountMap: [String: Int] = [:]
-    private var sampleFileNameSet: Set<String> = []
-
-    mutating func addFile(title: String, count: Int) {
-        guard count > 0 else { return }
-        fileCountMap[title, default: 0] += count
-    }
-
-    mutating func addRecord(title: String, count: Int) {
-        guard count > 0 else { return }
-        recordCountMap[title, default: 0] += count
-    }
-
-    mutating func addSampleFileNames<S: Sequence>(_ names: S) where S.Element == String {
-        for name in names where !name.isEmpty {
-            sampleFileNameSet.insert(name)
-        }
-    }
-
-    mutating func merge(_ other: CleanupImpactSummary) {
-        for (title, count) in other.fileCountMap {
-            fileCountMap[title, default: 0] += count
-        }
-        for (title, count) in other.recordCountMap {
-            recordCountMap[title, default: 0] += count
-        }
-        sampleFileNameSet.formUnion(other.sampleFileNameSet)
-    }
-
-    var totalFileCount: Int {
-        fileCountMap.values.reduce(0, +)
-    }
-
-    var fileItems: [Item] {
-        fileCountMap.map { Item(title: $0.key, count: $0.value) }
-            .sorted { lhs, rhs in
-                if lhs.count != rhs.count { return lhs.count > rhs.count }
-                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-            }
-    }
-
-    var recordItems: [Item] {
-        recordCountMap.map { Item(title: $0.key, count: $0.value) }
-            .sorted { lhs, rhs in
-                if lhs.count != rhs.count { return lhs.count > rhs.count }
-                return lhs.title.localizedStandardCompare(rhs.title) == .orderedAscending
-            }
-    }
-
-    var sampleFileNames: [String] {
-        sampleFileNameSet.sorted { lhs, rhs in
-            lhs.localizedStandardCompare(rhs) == .orderedAscending
-        }
-    }
-}
-
-enum ProjectStorageCleanupCategory: String, Identifiable {
-    case photos
-    case videos
-    case drawings
-    case tickets
-    case all
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .photos:
-            return String(localized: "照片")
-        case .videos:
-            return String(localized: "视频")
-        case .drawings:
-            return String(localized: "图纸原件")
-        case .tickets:
-            return String(localized: "票据资料")
-        case .all:
-            return String(localized: "全部可清理文件")
-        }
-    }
-
-    var resultTitle: String {
-        switch self {
-        case .photos:
-            return String(localized: "照片")
-        case .videos:
-            return String(localized: "视频")
-        case .drawings:
-            return String(localized: "图纸原件")
-        case .tickets:
-            return String(localized: "票据资料")
-        case .all:
-            return String(localized: "项目文件")
-        }
-    }
-
-    var icon: String {
-        switch self {
-        case .photos:
-            return "photo.fill"
-        case .videos:
-            return "video.fill"
-        case .drawings:
-            return "doc.viewfinder"
-        case .tickets:
-            return "doc.text.fill"
-        case .all:
-            return "trash"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .photos:
-            return .appWarning
-        case .videos:
-            return .appPhoto
-        case .drawings:
-            return .appDoc
-        case .tickets:
-            return .appRisk
-        case .all:
-            return .red
-        }
-    }
-
-    var confirmationButtonTitle: String {
-        switch self {
-        case .all:
-            return String(localized: "清理全部")
-        default:
-            return String(format: String(localized: "清理%@"), displayName)
-        }
-    }
-
-    func confirmationMessage(projectName: String) -> String {
-        switch self {
-        case .photos:
-            return String(format: String(localized: "将清理 %@ 日志和待办整改中的照片原文件，并断开照片关联。文本记录会保留。"), projectName)
-        case .videos:
-            return String(format: String(localized: "将清理 %@ 随手记视频和资料中的视频原文件，并断开视频关联。"), projectName)
-        case .drawings:
-            return String(format: String(localized: "将清理 %@ 的图纸原件和图纸索引。"), projectName)
-        case .tickets:
-            return String(format: String(localized: "将清理 %@ 的发票、收据和付款申请资料原文件，并断开财务/仓库关联。"), projectName)
-        case .all:
-            return String(format: String(localized: "将清理 %@ 的照片、视频、图纸原件和票据资料原文件，保留其他文本记录。"), projectName)
-        }
-    }
-}
-
-struct ProjectStorageCleanupDetailView: View {
-    let usage: ProjectStorageUsage
-    let onCleanup: (ProjectStorageCleanupCategory) -> Void
-
-    var body: some View {
-        List {
-            Section(String(localized: "占用汇总")) {
-                usageRow(title: String(localized: "照片"), icon: "photo.fill", tint: .appWarning, bytes: usage.photoBytes)
-                usageRow(title: String(localized: "视频"), icon: "video.fill", tint: .appPhoto, bytes: usage.videoBytes)
-                usageRow(title: String(localized: "图纸原件"), icon: "doc.viewfinder", tint: .appDoc, bytes: usage.drawingBytes)
-                usageRow(title: String(localized: "票据资料"), icon: "doc.text.fill", tint: .appRisk, bytes: usage.ticketBytes)
-                usageRow(title: String(localized: "备份估算"), icon: "externaldrive.fill", tint: .appPrimaryAction, bytesText: usage.formattedBackupEstimatedBytes)
-            }
-
-            Section {
-                HStack {
-                    Text(String(localized: "项目总占用"))
-                    Spacer()
-                    Text(usage.formattedTotalBytes)
-                        .font(.subheadline.weight(.semibold))
-                }
-            }
-
-            Section {
-                cleanupButton(.photos, bytes: usage.photoBytes)
-                cleanupButton(.videos, bytes: usage.videoBytes)
-                cleanupButton(.drawings, bytes: usage.drawingBytes)
-                cleanupButton(.tickets, bytes: usage.ticketBytes)
-            } header: {
-                Text(String(localized: "按类型清理"))
-            } footer: {
-                Text(String(localized: "分项清理只处理对应文件类型，项目文本、金额、日志正文不会删除。"))
-            }
-
-            Section {
-                Button(role: .destructive) {
-                    onCleanup(.all)
-                } label: {
-                    Label(String(localized: "清理该项目全部可清理文件"), systemImage: "trash")
-                }
-                .disabled(usage.totalBytes == 0)
-            } footer: {
-                Text(String(localized: "备份是全局快照，不会按单个项目直接删除；如需释放备份空间，请回到“数据管理 → 备份”处理。"))
-            }
-        }
-        .navigationTitle(usage.projectName)
-        .navigationBarTitleDisplayMode(.inline)
-    }
-
-    @ViewBuilder
-    private func cleanupButton(_ category: ProjectStorageCleanupCategory, bytes: Int) -> some View {
-        Button(role: .destructive) {
-            onCleanup(category)
-        } label: {
-            HStack(spacing: AppSpacing.tight) {
-                Image(systemName: category.icon)
-                    .foregroundStyle(category.tint)
-                    .frame(width: 18, height: 18)
-                Text(String(format: String(localized: "清理%@"), category.displayName))
-                Spacer()
-                Text(QuickNoteAttachmentStorage.formattedFileSize(bytes))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .disabled(bytes == 0)
-    }
-
-    @ViewBuilder
-    private func usageRow(title: String, icon: String, tint: Color, bytes: Int) -> some View {
-        usageRow(title: title, icon: icon, tint: tint, bytesText: QuickNoteAttachmentStorage.formattedFileSize(bytes))
-    }
-
-    @ViewBuilder
-    private func usageRow(title: String, icon: String, tint: Color, bytesText: String) -> some View {
-        HStack(spacing: AppSpacing.tight) {
-            Image(systemName: icon)
-                .foregroundStyle(tint)
-                .frame(width: 18, height: 18)
-            Text(title)
-            Spacer()
-            Text(bytesText)
-                .font(.caption.weight(.semibold))
-        }
-    }
-}
-
-struct StorageOptionalInlineTitleModifier: ViewModifier {
-    let isEnabled: Bool
-    let title: String
-
-    func body(content: Content) -> some View {
-        if isEnabled {
-            content
-                .navigationTitle(title)
-                .navigationBarTitleDisplayMode(.inline)
-        } else {
-            content
         }
     }
 }
