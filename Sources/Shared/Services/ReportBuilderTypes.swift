@@ -99,6 +99,10 @@ extension UTType {
         UTType.zip
     }
 
+    static var tabSeparatedText: UTType {
+        UTType(filenameExtension: "tsv", conformingTo: .text) ?? .plainText
+    }
+
     static var vCard: UTType {
         UTType(filenameExtension: "vcf", conformingTo: .data) ?? .data
     }

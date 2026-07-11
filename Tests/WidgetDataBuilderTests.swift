@@ -64,6 +64,34 @@ struct WidgetDataBuilderTests {
         #expect(result.lastUpdatedAt > 0)
     }
 
+    @Test func backupRiskRefreshesWhenTheWidgetTimelineAdvances() {
+        let lastBackup = Formatters.date.date(from: "2026-05-01")!.timeIntervalSince1970
+        let data = WidgetExportData(
+            projects: [],
+            pendingTodos: 0,
+            materialStockCount: 0,
+            lowStockCount: 0,
+            backupOverdueCount: 0,
+            backupLastSuccessAt: lastBackup,
+            backupReminderDays: 7,
+            lastUpdatedAt: lastBackup
+        )
+
+        #expect(data.refreshingTimeSensitiveRisks(at: Formatters.date.date(from: "2026-05-07")!).backupOverdueCount == 0)
+        #expect(data.refreshingTimeSensitiveRisks(at: Formatters.date.date(from: "2026-05-08")!).backupOverdueCount == 1)
+    }
+
+    @Test func widgetTimelineUsesCurrentDateButDisplaysStoredUpdateDate() throws {
+        let root = try Self.repositoryRoot()
+        let source = try Self.sourceText(root, "Widget/SitekeeperWidget.swift")
+        let views = try Self.sourceText(root, "Widget/WidgetViews.swift")
+
+        #expect(source.contains("let entry = WidgetEntry(date: now, data: data)"))
+        #expect(source.contains("data.lastUpdatedDate ?? date"))
+        #expect(views.contains("entry.lastUpdatedDate"))
+        #expect(views.contains("string(from: entry.date)") == false)
+    }
+
     @Test func dataHealthUsesSharedWidgetDefaultsKeys() throws {
         let root = try Self.repositoryRoot()
         let source = try [
@@ -146,8 +174,8 @@ struct WidgetDataBuilderTests {
         let metaFont = UIFont.systemFont(ofSize: 11, weight: .regular)
 
         let compactCases: [WidgetTextPixelBudget] = [
-            .init(id: "compact-risk-en-missing-receipt", text: "Missing Receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
-            .init(id: "compact-risk-en-backup-overdue", text: "Backup Overdue 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
+            .init(id: "compact-risk-en-missing-receipt", text: "No receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
+            .init(id: "compact-risk-en-backup-overdue", text: "Backup 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108),
             .init(id: "compact-risk-zh-price-spike", text: "价格异动 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 18, availableWidth: 108)
         ]
         for item in compactCases {
@@ -155,8 +183,8 @@ struct WidgetDataBuilderTests {
         }
 
         let pillCases: [WidgetTextPixelBudget] = [
-            .init(id: "pill-en-backup-overdue", text: "Backup Overdue 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
-            .init(id: "pill-en-missing-receipt", text: "Missing Receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
+            .init(id: "pill-en-backup-overdue", text: "Backup 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
+            .init(id: "pill-en-missing-receipt", text: "No receipt 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104),
             .init(id: "pill-zh-backup-overdue", text: "备份超期 99", font: compactFont, minimumScaleFactor: 0.78, leadingChrome: 29, availableWidth: 104)
         ]
         for item in pillCases {

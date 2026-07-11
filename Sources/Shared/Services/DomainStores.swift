@@ -280,7 +280,7 @@ final class ProjectStore {
             if let financialAt = Formatters.parseDateOrDateTime(record.date) {
                 summary.latestFinancialDate = Self.maxDate(summary.latestFinancialDate, financialAt)
             }
-            if record.isCollectionIncome {
+            if record.countsInBusinessMetrics, record.isCollectionIncome {
                 summary.collectedIncomeAmount += record.amountValue.doubleValue
             }
             if record.requiresAttachment {

@@ -6,30 +6,75 @@ struct CollectionSnapshot {
     let projectName: String?
 }
 
+struct ProjectFinancialSummary: Equatable {
+    let income: Double
+    let expense: Double
+    let collectionAmount: Double
+
+    var balance: Double { income - expense }
+}
+
 enum ProjectFinancialMetrics {
     static func businessRecords(_ records: [ProjectFinancialRecord]) -> [ProjectFinancialRecord] {
         records.filter(\.countsInBusinessMetrics)
     }
 
     static func income(_ records: [ProjectFinancialRecord]) -> Double {
-        let total = businessRecords(records)
-            .filter { $0.normalizedDirection == .income }
-            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
-        return total.doubleValue
+        summary(records).income
     }
 
     static func expense(_ records: [ProjectFinancialRecord]) -> Double {
-        let total = businessRecords(records)
-            .filter { $0.normalizedDirection == .expense }
-            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
-        return total.doubleValue
+        summary(records).expense
     }
 
     static func collectionAmount(_ records: [ProjectFinancialRecord]) -> Double {
-        let total = businessRecords(records)
-            .filter(\.isCollectionIncome)
-            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
-        return total.doubleValue
+        summary(records).collectionAmount
+    }
+
+    static func summary(_ records: [ProjectFinancialRecord]) -> ProjectFinancialSummary {
+        var income = MoneyValue.zero
+        var expense = MoneyValue.zero
+        var collection = MoneyValue.zero
+        for record in records where record.countsInBusinessMetrics {
+            switch record.normalizedDirection {
+            case .income:
+                income = income + record.amountValue
+            case .expense:
+                expense = expense + record.amountValue
+            }
+            if record.isCollectionIncome {
+                collection = collection + record.amountValue
+            }
+        }
+        return ProjectFinancialSummary(
+            income: income.doubleValue,
+            expense: expense.doubleValue,
+            collectionAmount: collection.doubleValue
+        )
+    }
+
+    static func effectivePaidAmount(
+        recordedCollectionAmount: Double,
+        manualPaidAmount: Double
+    ) -> Double {
+        recordedCollectionAmount > 0 ? recordedCollectionAmount : max(manualPaidAmount, 0)
+    }
+
+    static func paidAmount(
+        project: Project,
+        records: [ProjectFinancialRecord]
+    ) -> Double {
+        effectivePaidAmount(
+            recordedCollectionAmount: collectionAmount(records),
+            manualPaidAmount: project.paidAmountValue.doubleValue
+        )
+    }
+
+    static func unpaidAmount(
+        project: Project,
+        records: [ProjectFinancialRecord]
+    ) -> Double {
+        max(project.contractAmountValue.doubleValue - paidAmount(project: project, records: records), 0)
     }
 
     static func latestCollection(

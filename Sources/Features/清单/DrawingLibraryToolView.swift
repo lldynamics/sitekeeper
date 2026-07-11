@@ -67,18 +67,6 @@ struct DrawingLibraryToolView: View {
         }
     }
 
-    private var shareSheetPresented: Binding<Bool> {
-        Binding(
-            get: { shareURL != nil },
-            set: { isPresented in
-                if !isPresented {
-                    shareURL = nil
-                    shareDrawingID = nil
-                }
-            }
-        )
-    }
-
     var body: some View {
         List {
             Section(String(localized: "项目筛选")) {
@@ -152,10 +140,10 @@ struct DrawingLibraryToolView: View {
 
             Section(selectedProjectID == nil ? String(localized: "图纸台账") : String(localized: "项目图纸")) {
                 if listModel.filteredDrawings.isEmpty {
-                    ContentUnavailableView(
-                        String(localized: "暂无图纸"),
-                        systemImage: "doc.viewfinder",
-                        description: Text(String(localized: "先导入 DWG / DXF / PDF 图纸原件，App 负责台账、版本、当前版和交付导出；DWG/DXF 通过外部专业看图软件打开。"))
+                    DrawingLibraryEmptyState(
+                        isFiltered: hasActiveListFilter,
+                        onClearFilters: clearDrawingFilters,
+                        onImport: beginImportDrawings
                     )
                 } else {
                     ForEach(listModel.currentFilteredDrawings) { drawing in
@@ -194,14 +182,7 @@ struct DrawingLibraryToolView: View {
         .navigationTitle(String(localized: "图纸台账"))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    beginImportDrawings()
-                } label: {
-                    Image(systemName: "plus").visibleIconStyle()
-                }
-                .accessibilityLabel(String(localized: "导入图纸"))
-            }
+            DrawingLibraryToolbar(onImport: beginImportDrawings)
         }
         .fileImporter(
             isPresented: $showDrawingImporter,
@@ -248,20 +229,12 @@ struct DrawingLibraryToolView: View {
             Text(importStrategyMessage)
         }
         .quickLookPreview($quickLookURL)
-        .sheet(isPresented: shareSheetPresented) {
-            if let shareURL {
-                ActivityShareSheet(activityItems: [shareURL], onComplete: { completed in
-                    ProjectDetailAssetActions.recordDrawingExternalOpenResult(
-                        completed: completed,
-                        drawingID: shareDrawingID,
-                        store: store
-                    )
-                    self.shareURL = nil
-                    self.shareDrawingID = nil
-                })
-            }
-        }
+        .drawingLibrarySharePresenter(shareURL: $shareURL, shareDrawingID: $shareDrawingID, store: store)
         .operationToast(message: $operationMessage)
+    }
+
+    private var hasActiveListFilter: Bool {
+        !listModel.normalizedSearchText.isEmpty || availabilityFilter != .all
     }
 
     private func drawingRow(_ drawing: ProjectDrawing, showsProject: Bool) -> some View {
@@ -304,6 +277,11 @@ struct DrawingLibraryToolView: View {
             return
         }
         showDrawingImporter = true
+    }
+
+    private func clearDrawingFilters() {
+        searchText = ""
+        availabilityFilter = .all
     }
 
     private func handleImportedDrawings(_ urls: [URL]) {
@@ -416,37 +394,5 @@ struct DrawingLibraryToolView: View {
 
     private func recordRecentDrawing(_ drawingID: UUID) {
         recentDrawingIDsRaw = DrawingListViewModel.rawRecentDrawingIDs(recording: drawingID, in: recentDrawingIDsRaw)
-    }
-}
-
-private struct DrawingAvailabilityFilterChip: View {
-    let filter: DrawingAvailabilityFilter
-    let count: Int
-    let isSelected: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                Image(systemName: filter.icon)
-                Text(filter.title)
-                Text("\(count)")
-                    .monospacedDigit()
-                    .foregroundStyle(isSelected ? .white.opacity(0.85) : .secondary)
-            }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(isSelected ? .white : .primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .background(isSelected ? Color.appDoc : Color(uiColor: .secondarySystemGroupedBackground), in: Capsule())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(
-            String(
-                format: String(localized: "%@，%lld 张图纸"),
-                filter.title,
-                Int64(count)
-            )
-        )
     }
 }

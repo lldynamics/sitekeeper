@@ -67,6 +67,7 @@ extension QuotationView {
         InputValidator.validate(formQty, kind: .quantity, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(formTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(formDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
+        discountRateIsWithinBounds(formDiscount) &&
         InputValidator.validate(formContractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
     }
 
@@ -85,7 +86,8 @@ extension QuotationView {
         InputValidator.validate(defaultMaterialPrice, kind: .amount, requirement: .optionalNonNegative).isValid &&
         InputValidator.validate(defaultLaborRate, kind: .laborRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(generateTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
-        InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid
+        InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
+        discountRateIsWithinBounds(generateDiscount)
     }
 
     func statusColor(_ status: QuoteStatus) -> Color {
@@ -94,6 +96,13 @@ extension QuotationView {
         case .sent: return .appWarning
         case .confirmed: return .appSuccess
         }
+    }
+
+    private func discountRateIsWithinBounds(_ rawValue: String) -> Bool {
+        guard let value = DataValueParser.decimalValueIfPresent(from: rawValue, requiresEntireString: true) else {
+            return false
+        }
+        return value >= .zero && value <= 100
     }
 
     var isCompanyProfileComplete: Bool {

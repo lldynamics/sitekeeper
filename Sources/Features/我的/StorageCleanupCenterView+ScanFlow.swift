@@ -1,21 +1,6 @@
 import SwiftUI
 
 extension StorageCleanupCenterView {
-    var largeFileThresholdBytes: Int {
-        StorageCleanupLargeFileThresholdOption.bytes(for: largeFileThresholdMB)
-    }
-
-    var scanResult: StorageCleanupScanResult {
-        StorageCleanupScanner.scan(
-            store: store,
-            cloudBackups: cloudBackups,
-            projectBackupEstimateByID: projectBackupEstimateByID,
-            largeFileThresholdBytes: largeFileThresholdBytes,
-            videoFileExtensions: videoFileExtensions,
-            drawingSourceFileExtensions: drawingSourceFileExtensions
-        )
-    }
-
     var categorySummaries: [StorageCategorySummary] {
         scanResult.categorySummaries
     }
@@ -42,7 +27,18 @@ extension StorageCleanupCenterView {
         }
     }
 
-    func refreshCloudBackups() async {
+    func refreshScanResult() {
+        scanResult = StorageCleanupScanService.scanResult(
+            store: store,
+            cloudBackups: cloudBackups,
+            projectBackupEstimateByID: projectBackupEstimateByID,
+            largeFileThresholdMegabytes: largeFileThresholdMB,
+            videoFileExtensions: videoFileExtensions,
+            drawingSourceFileExtensions: drawingSourceFileExtensions
+        )
+    }
+
+    func refreshCloudBackups(refreshScan: Bool = true) async {
         guard !isRefreshingCloudBackups else { return }
         isRefreshingCloudBackups = true
         defer { isRefreshingCloudBackups = false }
@@ -65,10 +61,13 @@ extension StorageCleanupCenterView {
             cloudBackups = []
             cloudBackupError = errorMessage
         }
+        if refreshScan {
+            refreshScanResult()
+        }
     }
 
     func cleanupPreview(for projectId: UUID, category: ProjectStorageCleanupCategory) -> CleanupImpactSummary {
-        StorageCleanupScanner.cleanupPreview(
+        StorageCleanupScanService.cleanupPreview(
             store: store,
             projectId: projectId,
             category: category,
@@ -78,7 +77,7 @@ extension StorageCleanupCenterView {
     }
 
     @MainActor
-    func refreshProjectBackupEstimates() async {
+    func refreshProjectBackupEstimates(refreshScan: Bool = true) async {
         guard !isRefreshingProjectBackupEstimates else { return }
         isRefreshingProjectBackupEstimates = true
         defer { isRefreshingProjectBackupEstimates = false }
@@ -87,17 +86,24 @@ extension StorageCleanupCenterView {
         let projectIDs = store.projects.map(\.id)
         do {
             projectBackupEstimateByID = try await FileIOTaskRunner.run(priority: .utility) {
-                var estimates: [UUID: Int] = [:]
-                estimates.reserveCapacity(projectIDs.count)
-
-                for projectId in projectIDs {
-                    let scopedSnapshot = StorageCleanupScanner.makeProjectScopedSnapshot(from: baseSnapshot, projectId: projectId)
-                    estimates[projectId] = StorageCleanupScanner.estimateBackupBytes(for: scopedSnapshot)
-                }
-                return estimates
+                StorageCleanupScanService.projectBackupEstimates(
+                    baseSnapshot: baseSnapshot,
+                    projectIDs: projectIDs
+                )
             }
         } catch {
             projectBackupEstimateByID = [:]
         }
+        if refreshScan {
+            refreshScanResult()
+        }
+    }
+
+    @MainActor
+    func refreshInitialStorageData() async {
+        await refreshCloudBackups(refreshScan: false)
+        await refreshProjectBackupEstimates(refreshScan: false)
+        refreshScanResult()
+        hasCompletedInitialStorageLoad = true
     }
 }

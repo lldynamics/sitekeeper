@@ -53,6 +53,80 @@ struct ProjectFinancialMetricsTests {
         #expect(ProjectFinancialMetrics.collectionAmount(records) == 100)
     }
 
+    @Test func financialSummaryAndPaidFallbackUseOneSharedRule() {
+        let projectId = UUID()
+        let project = Project(
+            id: projectId,
+            name: "统一财务规则",
+            location: "",
+            status: .active,
+            contractAmount: "1000",
+            paidAmount: "600"
+        )
+        let records = [
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .income,
+                category: .collection,
+                amount: "200",
+                status: .active
+            ),
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .income,
+                category: .receipt,
+                amount: "300",
+                status: .draft
+            ),
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .expense,
+                category: .material,
+                amount: "50",
+                status: .active
+            )
+        ]
+
+        let summary = ProjectFinancialMetrics.summary(records)
+        #expect(summary.income == 200)
+        #expect(summary.expense == 50)
+        #expect(summary.collectionAmount == 200)
+        #expect(summary.balance == 150)
+        #expect(ProjectFinancialMetrics.paidAmount(project: project, records: records) == 200)
+        #expect(ProjectFinancialMetrics.unpaidAmount(project: project, records: records) == 800)
+        #expect(ProjectFinancialMetrics.paidAmount(project: project, records: []) == 600)
+    }
+
+    @Test @MainActor func projectActivitySummaryExcludesDraftAndArchivedCollections() {
+        let projectId = UUID()
+        let store = ProjectStore()
+        store.setProjectFinancialRecords([
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .income,
+                category: .collection,
+                amount: "125",
+                status: .active
+            ),
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .income,
+                category: .collection,
+                amount: "400",
+                status: .draft
+            ),
+            ProjectFinancialRecord(
+                projectId: projectId,
+                direction: .income,
+                category: .collection,
+                amount: "500",
+                status: .archived
+            )
+        ])
+
+        #expect(store.projectActivitySummary(for: projectId).collectedIncomeAmount == 125)
+    }
+
     @Test func metricsParserUsesNormalizedNonNegativeAmounts() {
         let projectId = UUID()
         let records = [

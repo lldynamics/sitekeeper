@@ -162,7 +162,7 @@ struct ProjectDrawingIssueSheet: View {
                     TextField(String(localized: "图层/页码"), text: $layerOrPage)
                     TextField(String(localized: "测量结果"), text: $measurementResult, axis: .vertical)
                         .lineLimit(1...4)
-                    Text(String(localized: "可填写轴线、房间、坐标、构件编号、PDF 页码、CAD 图层或现场测量结果。"))
+                    Text(String(localized: "drawing_issue_location_hint"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }

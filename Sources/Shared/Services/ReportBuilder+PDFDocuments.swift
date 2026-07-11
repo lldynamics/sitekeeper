@@ -128,7 +128,7 @@ extension ReportBuilder {
         let laborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
         let income = ProjectFinancialMetrics.income(financialRecords)
         let expense = ProjectFinancialMetrics.expense(financialRecords)
-        let paid = paidAmountOverride ?? ProjectFinancialMetrics.collectionAmount(financialRecords)
+        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: financialRecords)
         let openTodos = todos.filter { !$0.isDone }
         let overdueTodos = todos.filter(\.isOverdue)
         let overdueTasks = tasks.filter { task in

@@ -1,6 +1,60 @@
 import SwiftUI
 import UIKit
 
+struct AppBusinessFormSheet<Content: View>: View {
+    let title: String
+    var cancelTitle: String? = String(localized: "取消")
+    var primaryActionTitle: String? = String(localized: "保存")
+    var primaryActionRole: ButtonRole?
+    var isPrimaryActionDisabled = false
+    let onCancel: (() -> Void)?
+    let onPrimaryAction: (() -> Void)?
+    @ViewBuilder let content: Content
+
+    init(
+        title: String,
+        cancelTitle: String? = String(localized: "取消"),
+        primaryActionTitle: String? = String(localized: "保存"),
+        primaryActionRole: ButtonRole? = nil,
+        isPrimaryActionDisabled: Bool = false,
+        onCancel: (() -> Void)? = nil,
+        onPrimaryAction: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.cancelTitle = cancelTitle
+        self.primaryActionTitle = primaryActionTitle
+        self.primaryActionRole = primaryActionRole
+        self.isPrimaryActionDisabled = isPrimaryActionDisabled
+        self.onCancel = onCancel
+        self.onPrimaryAction = onPrimaryAction
+        self.content = content()
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                content
+            }
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if let cancelTitle, let onCancel {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button(cancelTitle, action: onCancel)
+                    }
+                }
+                if let primaryActionTitle, let onPrimaryAction {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(primaryActionTitle, role: primaryActionRole, action: onPrimaryAction)
+                            .disabled(isPrimaryActionDisabled)
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct AppBusinessEditForm<Content: View>: View {
     let title: String
     var cancelTitle: String = String(localized: "取消")
@@ -42,6 +96,21 @@ struct AppBusinessEditForm<Content: View>: View {
                             .disabled(isPrimaryActionDisabled)
                     }
                 }
+        }
+    }
+}
+
+struct AppPreparedFileExporterSheet: View {
+    let fileURL: URL?
+    var preparingMessage: String = String(localized: "正在准备导出文件...")
+    let onCompletion: (Result<URL, Error>) -> Void
+
+    var body: some View {
+        if let fileURL {
+            FileURLDocumentExporter(fileURL: fileURL, onCompletion: onCompletion)
+        } else {
+            ProgressView(preparingMessage)
+                .padding()
         }
     }
 }

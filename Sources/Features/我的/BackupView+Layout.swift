@@ -36,9 +36,8 @@ extension BackupView {
                     backupEstimateSection
                     backupStatusSection
                 }
-                .safeAreaInset(edge: .bottom, spacing: 0) {
-                    Color.clear.frame(height: bottomContentInset)
-                }
+                .accessibilityIdentifier("backup-local-form")
+                .contentMargins(.bottom, bottomContentInset, for: .scrollContent)
             }
             if isExportingArchive || cloudState.isUploadingCloudBackup {
                 ZStack {
@@ -54,21 +53,16 @@ extension BackupView {
             }
         }
         .sheet(isPresented: $showExporter) {
-            if let exportFileURL {
-                FileURLDocumentExporter(fileURL: exportFileURL) { result in
-                    if case .success = result {
-                        setStatus(exportSummary.isEmpty ? String(localized: "导出成功") : exportSummary)
-                        localBackupLastSuccessAt = Date().timeIntervalSince1970
-                        hasCompletedBackupExportTask = true
-                        lastExportSucceeded = true
-                        lastImportSucceeded = false
-                    }
-                    showExporter = false
-                    cleanupExportArchiveIfNeeded()
+            AppPreparedFileExporterSheet(fileURL: exportFileURL) { result in
+                if case .success = result {
+                    setStatus(exportSummary.isEmpty ? String(localized: "导出成功") : exportSummary)
+                    localBackupLastSuccessAt = Date().timeIntervalSince1970
+                    hasCompletedBackupExportTask = true
+                    lastExportSucceeded = true
+                    lastImportSucceeded = false
                 }
-            } else {
-                ProgressView(String(localized: "正在准备导出文件..."))
-                    .padding()
+                showExporter = false
+                cleanupExportArchiveIfNeeded()
             }
         }
         .fileImporter(isPresented: $showImporter, allowedContentTypes: [.zipArchive]) { result in
@@ -89,9 +83,14 @@ extension BackupView {
             if let preview = pendingImportPreview {
                 importPreview(preview: preview)
             } else {
-                NavigationStack {
+                AppBusinessFormSheet(
+                    title: String(localized: "导入预览"),
+                    cancelTitle: nil,
+                    primaryActionTitle: nil
+                ) {
                     ProgressView(String(localized: "正在加载预览..."))
-                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 24)
                 }
             }
         }

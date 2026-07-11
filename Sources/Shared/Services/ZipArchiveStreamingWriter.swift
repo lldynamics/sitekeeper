@@ -2,6 +2,7 @@ import Foundation
 
 enum StreamingZipArchiveWriterError: LocalizedError {
     case invalidPath(String)
+    case duplicatePath(String)
     case writerClosed
     case sourceFileMissing(String)
     case writeSizeMismatch(expected: Int, actual: Int)
@@ -10,6 +11,8 @@ enum StreamingZipArchiveWriterError: LocalizedError {
         switch self {
         case .invalidPath(let path):
             return String(format: String(localized: "ZIP 路径无效：%@"), path)
+        case .duplicatePath(let path):
+            return String(format: String(localized: "ZIP 路径重复：%@"), path)
         case .writerClosed:
             return String(localized: "ZIP 写入器已关闭。")
         case .sourceFileMissing(let name):
@@ -35,6 +38,7 @@ struct StreamingZipArchiveWriter {
 
     let fileURL: URL
     private var entries: [Entry] = []
+    private var entryPaths = Set<String>()
     private var offset: UInt64 = 0
     private var outputHandle: FileHandle?
 
@@ -72,7 +76,11 @@ struct StreamingZipArchiveWriter {
     }
 
     mutating func addFile(path: String, data: Data) throws {
-        let pathData = try normalizedPathData(path)
+        let normalizedPath = try normalizedPath(path)
+        guard entryPaths.insert(normalizedPath).inserted else {
+            throw StreamingZipArchiveWriterError.duplicatePath(normalizedPath)
+        }
+        let pathData = Data(normalizedPath.utf8)
         let size = UInt64(data.count)
         let localOffset = offset
         let dos = StreamingDOSDateTime.now()
@@ -84,11 +92,15 @@ struct StreamingZipArchiveWriter {
         try write(localExtra)
         try write(data)
 
-        entries.append(Entry(path: path, size: size, crc32: crc32, offset: localOffset, dos: dos))
+        entries.append(Entry(path: normalizedPath, size: size, crc32: crc32, offset: localOffset, dos: dos))
     }
 
     mutating func addFile(path: String, sourceFileURL: URL) throws {
-        let pathData = try normalizedPathData(path)
+        let normalizedPath = try normalizedPath(path)
+        guard entryPaths.insert(normalizedPath).inserted else {
+            throw StreamingZipArchiveWriterError.duplicatePath(normalizedPath)
+        }
+        let pathData = Data(normalizedPath.utf8)
         guard FileManager.default.fileExists(atPath: sourceFileURL.path) else {
             throw StreamingZipArchiveWriterError.sourceFileMissing(sourceFileURL.lastPathComponent)
         }
@@ -107,13 +119,13 @@ struct StreamingZipArchiveWriter {
         }
         try patchLocalHeaderCRC32(crc32, localOffset: localOffset)
 
-        entries.append(Entry(path: path, size: size, crc32: crc32, offset: localOffset, dos: dos))
+        entries.append(Entry(path: normalizedPath, size: size, crc32: crc32, offset: localOffset, dos: dos))
     }
 
     mutating func finish() throws -> URL {
         let centralStart = offset
         for entry in entries {
-            let pathData = try normalizedPathData(entry.path)
+            let pathData = Data(entry.path.utf8)
             let centralExtra = zip64CentralExtra(size: entry.size, offset: entry.offset)
             try write(
                 centralHeader(
@@ -207,11 +219,33 @@ struct StreamingZipArchiveWriter {
         offset += UInt64(data.count)
     }
 
-    private func normalizedPathData(_ path: String) throws -> Data {
-        guard !path.isEmpty, let pathData = path.data(using: .utf8), pathData.count <= Int(UInt16.max) else {
+    private func normalizedPath(_ path: String) throws -> String {
+        guard !path.isEmpty else {
             throw StreamingZipArchiveWriterError.invalidPath(path)
         }
-        return pathData
+        guard path.utf8.count <= Int(UInt16.max) else {
+            throw StreamingZipArchiveWriterError.invalidPath(path)
+        }
+        guard !path.hasPrefix("/") else {
+            throw StreamingZipArchiveWriterError.invalidPath(path)
+        }
+        guard !path.hasPrefix("\\") else {
+            throw StreamingZipArchiveWriterError.invalidPath(path)
+        }
+        guard !path.contains("\\") else {
+            throw StreamingZipArchiveWriterError.invalidPath(path)
+        }
+        let parts = path.split(separator: "/", omittingEmptySubsequences: false)
+        guard !parts.isEmpty else {
+            throw StreamingZipArchiveWriterError.invalidPath(path)
+        }
+        for part in parts {
+            let piece = String(part)
+            if piece.isEmpty || piece == "." || piece == ".." {
+                throw StreamingZipArchiveWriterError.invalidPath(path)
+            }
+        }
+        return path
     }
 
     private func localHeader(pathLength: Int, extraLength: Int, crc32: UInt32, size: UInt64, dos: StreamingDOSDateTime) -> Data {

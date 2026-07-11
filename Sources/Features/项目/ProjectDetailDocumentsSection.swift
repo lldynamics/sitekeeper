@@ -196,34 +196,26 @@ struct ProjectDocumentsView: View {
             }
         }
         .sheet(isPresented: $showFilterSheet) {
-            NavigationStack {
-                Form {
-                    ProjectDocumentsFilterFormSection(
-                        categoryFilter: $categoryFilter,
-                        relationFilter: $relationFilter,
-                        useDateRange: $useDateRange,
-                        startDate: $startDate,
-                        endDate: $endDate,
-                        minAmount: $minAmount,
-                        maxAmount: $maxAmount
-                    )
-                }
-                .navigationTitle(String(localized: "资料筛选"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "重置")) {
-                            resetFilters()
-                        }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "完成")) {
-                            showFilterSheet = false
-                        }
-                    }
-                    KeyboardDismissToolbar {
-                        AppKeyboard.dismiss()
-                    }
+            AppBusinessFormSheet(
+                title: String(localized: "资料筛选"),
+                cancelTitle: String(localized: "重置"),
+                primaryActionTitle: String(localized: "完成"),
+                onCancel: { resetFilters() },
+                onPrimaryAction: { showFilterSheet = false }
+            ) {
+                ProjectDocumentsFilterFormSection(
+                    categoryFilter: $categoryFilter,
+                    relationFilter: $relationFilter,
+                    useDateRange: $useDateRange,
+                    startDate: $startDate,
+                    endDate: $endDate,
+                    minAmount: $minAmount,
+                    maxAmount: $maxAmount
+                )
+            }
+            .toolbar {
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
                 }
             }
         }

@@ -77,17 +77,11 @@ struct ProjectDetailSnapshot {
     }
 
     var projectBookIncome: Double {
-        relatedFinancialRecords
-            .filter(\.isIncomeDirection)
-            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
-            .doubleValue
+        ProjectFinancialMetrics.income(relatedFinancialRecords)
     }
 
     var projectBookExpense: Double {
-        relatedFinancialRecords
-            .filter(\.isExpenseDirection)
-            .reduce(MoneyValue.zero) { $0 + $1.amountValue }
-            .doubleValue
+        ProjectFinancialMetrics.expense(relatedFinancialRecords)
     }
 
     var overdueProgressCount: Int {

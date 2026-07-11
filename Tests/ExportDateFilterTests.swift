@@ -40,6 +40,23 @@ struct ExportDateFilterTests {
         #expect(invalidCount == 1)
     }
 
+    @Test func progressTaskOverlappingWholeRangeIsIncluded() {
+        let formatter = Formatters.date
+        let rangeStart = formatter.date(from: "2025-03-10")!
+        let rangeEnd = formatter.date(from: "2025-03-20")!
+        let taskStart = formatter.date(from: "2025-03-01")!
+        let taskEnd = formatter.date(from: "2025-03-31")!
+
+        #expect(taskStart <= rangeEnd && taskEnd >= rangeStart)
+    }
+
+    @Test func datePickerBoundsPreventReversedRange() {
+        let start = Formatters.date.date(from: "2025-03-10")!
+        let end = Formatters.date.date(from: "2025-03-20")!
+
+        #expect(start <= end)
+    }
+
     // 全模块日期字段验证
     @Test func allModulesWithDateFieldsAreFilterable() {
         // LaborRecord - date

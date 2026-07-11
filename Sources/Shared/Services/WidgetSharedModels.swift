@@ -66,6 +66,8 @@ struct WidgetExportData: Codable, Sendable {
     let missingReceiptCount: Int
     let priceSpikeCount: Int
     let backupOverdueCount: Int
+    let backupLastSuccessAt: TimeInterval
+    let backupReminderDays: Int
     let lastUpdatedAt: TimeInterval
 
     init(
@@ -76,6 +78,8 @@ struct WidgetExportData: Codable, Sendable {
         missingReceiptCount: Int = 0,
         priceSpikeCount: Int = 0,
         backupOverdueCount: Int = 0,
+        backupLastSuccessAt: TimeInterval = 0,
+        backupReminderDays: Int = 0,
         lastUpdatedAt: TimeInterval = Date().timeIntervalSince1970
     ) {
         self.projects = projects
@@ -85,6 +89,8 @@ struct WidgetExportData: Codable, Sendable {
         self.missingReceiptCount = missingReceiptCount
         self.priceSpikeCount = priceSpikeCount
         self.backupOverdueCount = backupOverdueCount
+        self.backupLastSuccessAt = backupLastSuccessAt
+        self.backupReminderDays = backupReminderDays
         self.lastUpdatedAt = lastUpdatedAt
     }
 
@@ -96,6 +102,8 @@ struct WidgetExportData: Codable, Sendable {
         case missingReceiptCount
         case priceSpikeCount
         case backupOverdueCount
+        case backupLastSuccessAt
+        case backupReminderDays
         case lastUpdatedAt
     }
 
@@ -108,12 +116,40 @@ struct WidgetExportData: Codable, Sendable {
         missingReceiptCount = try container.decodeIfPresent(Int.self, forKey: .missingReceiptCount) ?? 0
         priceSpikeCount = try container.decodeIfPresent(Int.self, forKey: .priceSpikeCount) ?? 0
         backupOverdueCount = try container.decodeIfPresent(Int.self, forKey: .backupOverdueCount) ?? 0
+        backupLastSuccessAt = try container.decodeIfPresent(TimeInterval.self, forKey: .backupLastSuccessAt) ?? 0
+        backupReminderDays = try container.decodeIfPresent(Int.self, forKey: .backupReminderDays) ?? 0
         lastUpdatedAt = try container.decodeIfPresent(TimeInterval.self, forKey: .lastUpdatedAt) ?? 0
     }
 
     var lastUpdatedDate: Date? {
         guard lastUpdatedAt > 0 else { return nil }
         return Date(timeIntervalSince1970: lastUpdatedAt)
+    }
+
+    func refreshingTimeSensitiveRisks(at date: Date) -> Self {
+        guard backupReminderDays > 0 else { return self }
+        let overdue: Int
+        if backupLastSuccessAt <= 0 {
+            overdue = 1
+        } else {
+            let calendar = Calendar.current
+            let start = calendar.startOfDay(for: Date(timeIntervalSince1970: backupLastSuccessAt))
+            let today = calendar.startOfDay(for: date)
+            let days = max(calendar.dateComponents([.day], from: start, to: today).day ?? 0, 0)
+            overdue = days >= backupReminderDays ? 1 : 0
+        }
+        return Self(
+            projects: projects,
+            pendingTodos: pendingTodos,
+            materialStockCount: materialStockCount,
+            lowStockCount: lowStockCount,
+            missingReceiptCount: missingReceiptCount,
+            priceSpikeCount: priceSpikeCount,
+            backupOverdueCount: overdue,
+            backupLastSuccessAt: backupLastSuccessAt,
+            backupReminderDays: backupReminderDays,
+            lastUpdatedAt: lastUpdatedAt
+        )
     }
 }
 
@@ -203,6 +239,8 @@ enum WidgetDataBuilder {
         missingReceiptCount: Int = 0,
         priceSpikeCount: Int = 0,
         backupOverdueCount: Int = 0,
+        backupLastSuccessAt: TimeInterval = 0,
+        backupReminderDays: Int = 0,
         now: Date = Date()
     ) -> WidgetExportData {
         let activeProjects = projects.filter(\.isActive)
@@ -262,6 +300,8 @@ enum WidgetDataBuilder {
             missingReceiptCount: max(missingReceiptCount, 0),
             priceSpikeCount: max(priceSpikeCount, 0),
             backupOverdueCount: max(backupOverdueCount, 0),
+            backupLastSuccessAt: backupLastSuccessAt,
+            backupReminderDays: max(backupReminderDays, 0),
             lastUpdatedAt: now.timeIntervalSince1970
         )
     }

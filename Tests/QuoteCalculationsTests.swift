@@ -29,6 +29,13 @@ struct QuoteCalculationsTests {
         #expect(discount.doubleValue == 40)
     }
 
+    @Test func discountIsClampedToPreventNegativeQuoteTotal() {
+        let item = QuoteItem(name: "测试", unitPrice: "100", quantity: "1", unit: "个", notes: "", taxRate: "0", discountRate: "150", projectId: nil)
+
+        #expect(ReportBuilder.quoteDiscountValue(item).doubleValue == 100)
+        #expect(ReportBuilder.quoteGrandTotal(item) == 0)
+    }
+
     // 含税含折扣合计
     @Test func grandTotal() {
         let item = QuoteItem(name: "测试", unitPrice: "1000", quantity: "1", unit: "个", notes: "", taxRate: "13", discountRate: "5", projectId: nil)

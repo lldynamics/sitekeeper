@@ -5,11 +5,7 @@ enum ProjectDetailMetrics {
         project: Project,
         relatedFinancialRecords: [ProjectFinancialRecord]
     ) -> Double {
-        let paidByFinancialFlow = ProjectFinancialMetrics.collectionAmount(relatedFinancialRecords)
-        if paidByFinancialFlow > 0 {
-            return paidByFinancialFlow
-        }
-        return project.paidAmountValue.doubleValue
+        ProjectFinancialMetrics.paidAmount(project: project, records: relatedFinancialRecords)
     }
 
     static func unpaidAmount(project: Project, paidAmount: Double) -> Double {

@@ -3,6 +3,7 @@ import Foundation
 @MainActor
 extension DataStore {
     func loadSampleFixtureSnapshot() -> BackupSnapshot? {
+#if DEBUG
         guard let snapshot = SampleDataFixtureLoader.loadSnapshot() else {
             StorageIssueLog.recordEvent(
                 "sample_data.fixture_missing",
@@ -12,6 +13,9 @@ extension DataStore {
             return nil
         }
         return snapshot
+#else
+        return nil
+#endif
     }
 
     func applySampleFixtureSnapshot(_ snapshot: BackupSnapshot) {
@@ -27,6 +31,7 @@ extension DataStore {
     }
 }
 
+#if DEBUG
 private enum SampleDataFixtureLoader {
     static func loadSnapshot() -> BackupSnapshot? {
         guard let data = loadFixtureData() else { return nil }
@@ -44,9 +49,10 @@ private enum SampleDataFixtureLoader {
     }
 
     private static func loadFixtureData() -> Data? {
-        if let sourceURL = sourceFixtureURL,
-           let data = try? Data(contentsOf: sourceURL) {
-            return data
+        for sourceURL in sourceFixtureURLs {
+            if let data = try? Data(contentsOf: sourceURL) {
+                return data
+            }
         }
         for bundle in candidateBundles {
             if let url = bundledFixtureURL(in: bundle) {
@@ -69,23 +75,31 @@ private enum SampleDataFixtureLoader {
 
     private static var candidateBundles: [Bundle] {
         var bundles: [Bundle] = [Bundle.main, Bundle(for: BundleToken.self)]
+        bundles.append(contentsOf: Bundle.allBundles)
         if let allFrameworks = Bundle.allFrameworks as [Bundle]? {
             bundles.append(contentsOf: allFrameworks)
         }
         return bundles
     }
 
-    private static var sourceFixtureURL: URL? {
+    private static var sourceFixtureURLs: [URL] {
         let sourceDirectory = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-        let url = sourceDirectory
-            .appendingPathComponent("Resources", isDirectory: true)
-            .appendingPathComponent("Fixtures", isDirectory: true)
-            .appendingPathComponent("SampleDataFixture.json", isDirectory: false)
-        return FileManager.default.fileExists(atPath: url.path) ? url : nil
+        let repositoryDirectory = sourceDirectory.deletingLastPathComponent()
+        return [
+            repositoryDirectory
+                .appendingPathComponent("Tests", isDirectory: true)
+                .appendingPathComponent("Fixtures", isDirectory: true)
+                .appendingPathComponent("SampleDataFixture.json", isDirectory: false),
+            sourceDirectory
+                .appendingPathComponent("Resources", isDirectory: true)
+                .appendingPathComponent("Fixtures", isDirectory: true)
+                .appendingPathComponent("SampleDataFixture.json", isDirectory: false)
+        ].filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
     private final class BundleToken {}
 }
+#endif

@@ -43,7 +43,29 @@ struct ProjectWarehouseMovementSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: movementType.displayName,
+            isPrimaryActionDisabled: !canSave,
+            onCancel: {
+                dismiss()
+            },
+            onPrimaryAction: {
+                guard let projectId else { return }
+                onSave(ProjectWarehouseMovement(
+                    projectId: projectId,
+                    date: Formatters.date.string(from: date),
+                    movementType: movementType,
+                    materialName: materialName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    specification: specification.trimmingCharacters(in: .whitespacesAndNewlines),
+                    unit: unit.trimmingCharacters(in: .whitespacesAndNewlines),
+                    quantity: quantity.trimmingCharacters(in: .whitespacesAndNewlines),
+                    counterparty: counterparty.trimmingCharacters(in: .whitespacesAndNewlines),
+                    handler: handler.trimmingCharacters(in: .whitespacesAndNewlines),
+                    note: note.trimmingCharacters(in: .whitespacesAndNewlines)
+                ), attachments)
+                dismiss()
+            }
+        ) {
             Form {
                 Section(String(localized: "出入库")) {
                     if fixedProjectId == nil {
@@ -142,31 +164,7 @@ struct ProjectWarehouseMovementSheet: View {
                     }
                 }
             }
-            .navigationTitle(movementType.displayName)
-            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        guard let projectId else { return }
-                        onSave(ProjectWarehouseMovement(
-                            projectId: projectId,
-                            date: Formatters.date.string(from: date),
-                            movementType: movementType,
-                            materialName: materialName.trimmingCharacters(in: .whitespacesAndNewlines),
-                            specification: specification.trimmingCharacters(in: .whitespacesAndNewlines),
-                            unit: unit.trimmingCharacters(in: .whitespacesAndNewlines),
-                            quantity: quantity.trimmingCharacters(in: .whitespacesAndNewlines),
-                            counterparty: counterparty.trimmingCharacters(in: .whitespacesAndNewlines),
-                            handler: handler.trimmingCharacters(in: .whitespacesAndNewlines),
-                            note: note.trimmingCharacters(in: .whitespacesAndNewlines)
-                        ), attachments)
-                        dismiss()
-                    }
-                    .disabled(!canSave)
-                }
                 KeyboardNavigationToolbar(
                     focusedField: $movementFocusedField,
                     fields: [.quantity]

@@ -1,7 +1,12 @@
 import UIKit
 import Foundation
 
-/// 照片独立文件存储，模型只存文件名
+/// 照片独立文件存储，模型只存文件名。
+///
+/// 存储边界约定：
+/// - 原图 (`Photos/`) 是业务源文件，缩略图 (`PhotoThumbnails/`) 是可重建缓存。
+/// - 写入采用“原图 + 缩略图”成对事务：任一环节失败都回滚，不留半成品。
+/// - 删除采用“原图 + 缩略图”成对隔离：若中途失败，已隔离项会尽量恢复。
 enum PhotoStorage {
     private static func logIssue(
         _ event: String,
@@ -66,39 +71,17 @@ enum PhotoStorage {
         let thumb = resize(image, maxSide: 800)
         guard let thumbData = thumb.jpegData(compressionQuality: 0.7) else { throw FileStorageError.imageEncodingFailed }
         try ensureDirectoryExists()
+        let originalURL = fileURL(for: fileName)
+        let thumbnailURL = thumbnailFileURL(for: fileName)
         do {
-            try original.write(to: fileURL(for: fileName), options: .atomic)
-            try thumbData.write(to: thumbnailFileURL(for: fileName), options: .atomic)
+            try original.write(to: originalURL, options: .atomic)
+            try thumbData.write(to: thumbnailURL, options: .atomic)
         } catch {
-            let fm = FileManager.default
-            if fm.fileExists(atPath: fileURL(for: fileName).path) {
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: fileURL(for: fileName),
-                        context: .init(
-                            event: "photo.save_rollback_cleanup",
-                            category: .fileStorage,
-                            source: "PhotoStorage.saveOrThrow.originalRollback"
-                        )
-                    )
-                } catch {
-                    logIssue("rollback_original_delete_failed", fileName: fileName, error: error)
-                }
-            }
-            if fm.fileExists(atPath: thumbnailFileURL(for: fileName).path) {
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: thumbnailFileURL(for: fileName),
-                        context: .init(
-                            event: "photo.save_rollback_cleanup",
-                            category: .fileStorage,
-                            source: "PhotoStorage.saveOrThrow.thumbnailRollback"
-                        )
-                    )
-                } catch {
-                    logIssue("rollback_thumbnail_delete_failed", fileName: fileName, error: error)
-                }
-            }
+            rollbackWrittenPhotoPair(
+                originalURL: originalURL,
+                thumbnailURL: thumbnailURL,
+                fileName: fileName
+            )
             throw FileStorageError.writeFailed(fileName)
         }
 
@@ -165,15 +148,39 @@ enum PhotoStorage {
             (thumbnailFileURL(for: fileName), .photoThumbnail)
         ]
         var quarantinedAnyFile = false
-        for target in targets {
-            guard manager.fileExists(atPath: target.url.path) else { continue }
-            let quarantined = try FileQuarantineStore.quarantine(
-                fileAt: target.url,
-                category: target.category,
-                originalFileName: fileName
-            )
-            quarantinedAnyFile = quarantinedAnyFile || quarantined
+        var quarantinedEntries: [FileQuarantineEntry] = []
+
+        do {
+            for target in targets {
+                guard manager.fileExists(atPath: target.url.path) else { continue }
+                let quarantined = try FileQuarantineStore.quarantine(
+                    fileAt: target.url,
+                    category: target.category,
+                    originalFileName: fileName
+                )
+                guard quarantined else { continue }
+                quarantinedAnyFile = true
+                if let entry = latestQuarantineEntry(
+                    for: target.url,
+                    category: target.category,
+                    originalFileName: fileName
+                ) {
+                    quarantinedEntries.append(entry)
+                } else {
+                    logIssue(
+                        "delete_rollback_entry_missing",
+                        fileName: fileName,
+                        details: [
+                            "category": target.category.rawValue
+                        ]
+                    )
+                }
+            }
+        } catch {
+            rollbackQuarantinedPhotoPair(quarantinedEntries, fileName: fileName)
+            throw FileStorageError.deleteFailed(fileName)
         }
+
         guard quarantinedAnyFile else { throw FileStorageError.deleteFailed(fileName) }
     }
 
@@ -402,6 +409,74 @@ enum PhotoStorage {
 
     private static func thumbnailFileURL(for fileName: String) -> URL {
         thumbnailDir.appendingPathComponent(fileName)
+    }
+
+    private static func rollbackWrittenPhotoPair(
+        originalURL: URL,
+        thumbnailURL: URL,
+        fileName: String
+    ) {
+        let manager = FileManager.default
+        if manager.fileExists(atPath: originalURL.path) {
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: originalURL,
+                    context: .init(
+                        event: "photo.save_rollback_cleanup",
+                        category: .fileStorage,
+                        source: "PhotoStorage.saveOrThrow.originalRollback"
+                    )
+                )
+            } catch {
+                logIssue("rollback_original_delete_failed", fileName: fileName, error: error)
+            }
+        }
+        if manager.fileExists(atPath: thumbnailURL.path) {
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: thumbnailURL,
+                    context: .init(
+                        event: "photo.save_rollback_cleanup",
+                        category: .fileStorage,
+                        source: "PhotoStorage.saveOrThrow.thumbnailRollback"
+                    )
+                )
+            } catch {
+                logIssue("rollback_thumbnail_delete_failed", fileName: fileName, error: error)
+            }
+        }
+    }
+
+    private static func latestQuarantineEntry(
+        for originalURL: URL,
+        category: FileQuarantineCategory,
+        originalFileName: String
+    ) -> FileQuarantineEntry? {
+        FileQuarantineStore.loadEntries().first { entry in
+            entry.category == category &&
+                entry.originalPath == originalURL.path &&
+                entry.originalFileName == originalFileName
+        }
+    }
+
+    private static func rollbackQuarantinedPhotoPair(
+        _ entries: [FileQuarantineEntry],
+        fileName: String
+    ) {
+        for entry in entries.reversed() {
+            do {
+                try FileQuarantineStore.restore(entry)
+            } catch {
+                logIssue(
+                    "delete_rollback_restore_failed",
+                    fileName: fileName,
+                    error: error,
+                    details: [
+                        "category": entry.category.rawValue
+                    ]
+                )
+            }
+        }
     }
 }
 

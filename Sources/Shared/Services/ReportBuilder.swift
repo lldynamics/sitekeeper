@@ -51,7 +51,7 @@ enum ReportBuilder {
 
     static func quoteDiscountValue(_ item: QuoteItem) -> MoneyValue {
         let line = quoteLineTotalValue(item)
-        let discountRate = item.discountRateValue.ratioFromPercent
+        let discountRate = min(max(item.discountRateValue.ratioFromPercent, .zero), 1)
         return line * discountRate
     }
 

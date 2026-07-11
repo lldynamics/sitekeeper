@@ -33,6 +33,25 @@ require_pattern() {
   fi
 }
 
+require_pattern_in_any() {
+  local description="$1"
+  local pattern="$2"
+  shift 2
+
+  local existing_paths=()
+  local path
+  for path in "$@"; do
+    if [[ -f "$path" ]]; then
+      existing_paths+=("$path")
+    fi
+  done
+
+  [[ "${#existing_paths[@]}" -gt 0 ]] || fail "$description has no files to scan"
+  if ! rg -q --fixed-strings "$pattern" "${existing_paths[@]}"; then
+    fail "$description is missing expected marker '$pattern' in ${existing_paths[*]}"
+  fi
+}
+
 FORBIDDEN_PRODUCTION_SYMBOLS=(
   LibreDWG
   CADMetalRenderer
@@ -74,7 +93,12 @@ require_pattern "drawing library tool entry" "Sources/Features/清单/ToolboxCat
 require_pattern "drawing library screen" "Sources/Features/清单/DrawingLibraryToolView.swift" "DrawingLibraryToolView"
 require_pattern "backup drawing metadata contract" "Sources/Shared/Services/BackupSnapshot.swift" "projectDrawings: [ProjectDrawing]"
 require_pattern "backup drawing file contract" "Sources/Shared/Services/BackupSnapshot.swift" "drawingFiles: [DrawingBackupFile]"
-require_pattern "backup archive drawing files" "Sources/Shared/Services/BackupArchiveService.swift" "DrawingStorage.fileURL"
+require_pattern_in_any \
+  "backup archive drawing files" \
+  "DrawingStorage.fileURL" \
+  "Sources/Shared/Services/BackupArchiveService.swift" \
+  "Sources/Shared/Services/BackupArchiveService+Write.swift" \
+  "Sources/Shared/Services/BackupArchiveRestoreSupport.swift"
 require_pattern "export option preserves drawing index" "Sources/Shared/Services/ReportBuilderTypes.swift" "includeProjectDrawings"
 require_pattern "CSV export preserves drawing index" "Sources/Shared/Services/ReportBuilder+CSVSections.swift" "project_drawings"
 require_pattern "user export flow exposes drawing index" "Sources/Features/我的/ExportView.swift" "includeProjectDrawings"

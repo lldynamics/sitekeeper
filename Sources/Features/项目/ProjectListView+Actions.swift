@@ -127,10 +127,10 @@ extension ProjectListView {
     func paidAmount(for project: Project) -> Double {
         let projectId = project.id
         let summary = projectStore.projectActivitySummary(for: projectId)
-        if summary.collectedIncomeAmount > 0 {
-            return summary.collectedIncomeAmount
-        }
-        return project.paidAmountValue.doubleValue
+        return ProjectFinancialMetrics.effectivePaidAmount(
+            recordedCollectionAmount: summary.collectedIncomeAmount,
+            manualPaidAmount: project.paidAmountValue.doubleValue
+        )
     }
 
     func customerPhoneURL(for project: Project) -> URL? {

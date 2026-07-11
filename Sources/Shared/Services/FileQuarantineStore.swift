@@ -31,12 +31,26 @@ enum FileQuarantineStore {
     private static let allowedRetentionDays = [3, 7, 14, 30]
 
     private static var rootURL: URL? {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
-            .appendingPathComponent(rootDirectoryName, isDirectory: true)
+        RecoverableDeletionStorage.rootURL(named: rootDirectoryName)
     }
 
     private static var manifestURL: URL? {
-        rootURL?.appendingPathComponent(manifestFileName)
+        RecoverableDeletionStorage.manifestURL(
+            rootDirectoryName: rootDirectoryName,
+            manifestFileName: manifestFileName
+        )
+    }
+
+    static func withRootURLForTesting<T>(_ rootURL: URL, perform body: () throws -> T) rethrows -> T {
+        try RecoverableDeletionStorage.withRootURLForTesting(
+            rootURL,
+            rootDirectoryName: rootDirectoryName,
+            perform: body
+        )
+    }
+
+    static func rootURLForTesting() throws -> URL {
+        try RecoverableDeletionStorage.createRootDirectory(named: rootDirectoryName)
     }
 
     @discardableResult
@@ -191,64 +205,6 @@ enum FileQuarantineStore {
         try removeEntry(entry.id)
     }
 
-    @discardableResult
-    static func purgeExpiredEntries(now: Date = Date()) -> Int {
-        guard let rootURL else { return 0 }
-        let manager = FileManager.default
-        let manifest: FileQuarantineManifest
-        do {
-            manifest = try loadManifest()
-        } catch {
-            StorageIssueLog.recordEvent(
-                "quarantine.manifest_read_failed",
-                category: .fileStorage,
-                error: error
-            )
-            return 0
-        }
-
-        let expired = manifest.entries.filter { $0.expiresAt <= now }
-        guard !expired.isEmpty else { return 0 }
-
-        for entry in expired {
-            let quarantinedURL = rootURL.appendingPathComponent(entry.quarantinedRelativePath)
-            guard manager.fileExists(atPath: quarantinedURL.path) else { continue }
-            do {
-                _ = try FileOps.removeIfExists(
-                    at: quarantinedURL,
-                    context: .init(
-                        event: "quarantine.expired_delete",
-                        category: .fileStorage,
-                        source: "FileQuarantineStore.purgeExpiredEntries"
-                    )
-                )
-            } catch {
-                StorageIssueLog.recordEvent(
-                    "quarantine.expired_delete_failed",
-                    category: .fileStorage,
-                    details: [
-                        "category": entry.category.rawValue,
-                        "file": entry.originalFileName
-                    ],
-                    error: error
-                )
-            }
-        }
-
-        var nextManifest = manifest
-        nextManifest.entries.removeAll { $0.expiresAt <= now }
-        do {
-            try saveManifest(nextManifest)
-        } catch {
-            StorageIssueLog.recordEvent(
-                "quarantine.manifest_update_failed",
-                category: .fileStorage,
-                error: error
-            )
-        }
-        return expired.count
-    }
-
     private static func configuredRetentionDays() -> Int {
         guard let raw = UserPreferencesStore.shared.optionalInt(UserPreferenceKeys.storageCleanupTrashRetentionDays) else {
             return defaultRetentionDays
@@ -282,28 +238,96 @@ enum FileQuarantineStore {
     }
 
     private static func loadManifest() throws -> FileQuarantineManifest {
-        guard let manifestURL else {
-            throw FileStorageError.directoryCreationFailed(rootDirectoryName)
-        }
-        guard FileManager.default.fileExists(atPath: manifestURL.path) else {
-            return FileQuarantineManifest()
-        }
-        let data = try Data(contentsOf: manifestURL)
-        return try JSONDecoder().decode(FileQuarantineManifest.self, from: data)
+        try RecoverableDeletionStorage.loadManifest(
+            rootDirectoryName: rootDirectoryName,
+            manifestFileName: manifestFileName,
+            default: FileQuarantineManifest()
+        )
     }
 
     private static func saveManifest(_ manifest: FileQuarantineManifest) throws {
-        guard let rootURL, let manifestURL else {
-            throw FileStorageError.directoryCreationFailed(rootDirectoryName)
-        }
-        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         let sorted = FileQuarantineManifest(
             schemaVersion: manifest.schemaVersion,
             entries: manifest.entries.sorted { lhs, rhs in
                 lhs.createdAt > rhs.createdAt
             }
         )
-        let data = try JSONEncoder().encode(sorted)
-        try data.write(to: manifestURL, options: .atomic)
+        do {
+            try RecoverableDeletionStorage.saveManifest(
+                sorted,
+                rootDirectoryName: rootDirectoryName,
+                manifestFileName: manifestFileName
+            )
+        } catch RecoverableDeletionStorageError.rootUnavailable {
+            throw FileStorageError.directoryCreationFailed(rootDirectoryName)
+        }
+    }
+}
+
+extension FileQuarantineStore {
+    @discardableResult
+    static func purgeExpiredEntries(now: Date = Date()) -> Int {
+        guard let rootURL else { return 0 }
+        let manifest: FileQuarantineManifest
+        do {
+            manifest = try loadManifest()
+        } catch {
+            StorageIssueLog.recordEvent(
+                "quarantine.manifest_read_failed",
+                category: .fileStorage,
+                error: error
+            )
+            return 0
+        }
+
+        let purge = RecoverableDeletionStorage.purgeExpiredItems(
+            manifest.entries,
+            now: now,
+            expiresAt: \.expiresAt,
+            removeAfterFailure: true
+        ) { entry in
+            try deleteExpiredEntry(entry, rootURL: rootURL)
+        } onDeleteFailure: { entry, error in
+            recordExpiredDeleteFailure(entry: entry, error: error)
+        }
+        guard purge.purgedCount > 0 else { return 0 }
+
+        var nextManifest = manifest
+        nextManifest.entries = purge.remaining
+        do {
+            try saveManifest(nextManifest)
+        } catch {
+            StorageIssueLog.recordEvent(
+                "quarantine.manifest_update_failed",
+                category: .fileStorage,
+                error: error
+            )
+        }
+        return purge.purgedCount
+    }
+
+    private static func deleteExpiredEntry(_ entry: FileQuarantineEntry, rootURL: URL) throws {
+        let quarantinedURL = rootURL.appendingPathComponent(entry.quarantinedRelativePath)
+        guard FileManager.default.fileExists(atPath: quarantinedURL.path) else { return }
+        _ = try FileOps.removeIfExists(
+            at: quarantinedURL,
+            context: .init(
+                event: "quarantine.expired_delete",
+                category: .fileStorage,
+                source: "FileQuarantineStore.purgeExpiredEntries"
+            )
+        )
+    }
+
+    private static func recordExpiredDeleteFailure(entry: FileQuarantineEntry, error: Error) {
+        StorageIssueLog.recordEvent(
+            "quarantine.expired_delete_failed",
+            category: .fileStorage,
+            details: [
+                "category": entry.category.rawValue,
+                "file": entry.originalFileName
+            ],
+            error: error
+        )
     }
 }

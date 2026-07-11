@@ -1,5 +1,63 @@
 import Foundation
 
+struct BackupEmbeddedFileRestorePolicy: Sendable {
+    let photoFileDestinations: [String: String]?
+    let drawingFileDestinations: [String: String]?
+    let documentFileDestinations: [String: String]?
+    let quickNoteAttachmentFileDestinations: [String: String]?
+    let overwritesExistingFiles: Bool
+
+    static let restoreAll = Self(
+        photoFileDestinations: nil,
+        drawingFileDestinations: nil,
+        documentFileDestinations: nil,
+        quickNoteAttachmentFileDestinations: nil,
+        overwritesExistingFiles: true
+    )
+
+    static func referencedBy(
+        _ snapshot: BackupSnapshot,
+        overwritesExistingFiles: Bool
+    ) -> Self {
+        Self(
+            photoFileDestinations: identityDestinations(
+                BackupArchiveService.photoFileNames(from: snapshot)
+            ),
+            drawingFileDestinations: identityDestinations(
+                snapshot.projectDrawings.map(\.fileName)
+            ),
+            documentFileDestinations: identityDestinations(
+                snapshot.projectDocuments.map(\.fileName)
+            ),
+            quickNoteAttachmentFileDestinations: identityDestinations(
+                BackupArchiveService.quickNoteAttachmentNames(from: snapshot)
+            ),
+            overwritesExistingFiles: overwritesExistingFiles
+        )
+    }
+
+    static func mapped(
+        photoFileDestinations: [String: String],
+        drawingFileDestinations: [String: String],
+        documentFileDestinations: [String: String],
+        quickNoteAttachmentFileDestinations: [String: String]
+    ) -> Self {
+        Self(
+            photoFileDestinations: photoFileDestinations,
+            drawingFileDestinations: drawingFileDestinations,
+            documentFileDestinations: documentFileDestinations,
+            quickNoteAttachmentFileDestinations: quickNoteAttachmentFileDestinations,
+            overwritesExistingFiles: false
+        )
+    }
+
+    private static func identityDestinations(_ fileNames: [String]) -> [String: String] {
+        Dictionary(
+            uniqueKeysWithValues: Set(fileNames.filter { !$0.isEmpty }).map { ($0, $0) }
+        )
+    }
+}
+
 extension BackupArchiveService {
     final class EmbeddedFileRestoreTransaction: @unchecked Sendable {
         let counts: BackupEmbeddedRestoreCounts
@@ -75,7 +133,7 @@ extension BackupArchiveService {
         }
 
         @discardableResult
-        func commit() throws -> BackupEmbeddedRestoreCounts {
+        func commit(policy: BackupEmbeddedFileRestorePolicy = .restoreAll) throws -> BackupEmbeddedRestoreCounts {
             guard state == .pending else { return counts }
 
             let rollbackRoot = stageRoot.appendingPathComponent("rollback", isDirectory: true)
@@ -86,30 +144,43 @@ extension BackupArchiveService {
                     from: photoStage,
                     destinationURL: PhotoStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles
+                    committedFiles: &currentCommittedFiles,
+                    fileDestinations: policy.photoFileDestinations,
+                    overwritesExistingFiles: policy.overwritesExistingFiles
                 )
                 PhotoStorage.regenerateThumbnails(for: restoredPhotoFileNames)
-                try BackupArchiveService.commitStagedFiles(
+                let restoredDrawingFileNames = try BackupArchiveService.commitStagedFiles(
                     from: drawingStage,
                     destinationURL: DrawingStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles
+                    committedFiles: &currentCommittedFiles,
+                    fileDestinations: policy.drawingFileDestinations,
+                    overwritesExistingFiles: policy.overwritesExistingFiles
                 )
-                try BackupArchiveService.commitStagedFiles(
+                let restoredDocumentFileNames = try BackupArchiveService.commitStagedFiles(
                     from: documentStage,
                     destinationURL: ProjectDocumentStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles
+                    committedFiles: &currentCommittedFiles,
+                    fileDestinations: policy.documentFileDestinations,
+                    overwritesExistingFiles: policy.overwritesExistingFiles
                 )
-                try BackupArchiveService.commitStagedFiles(
+                let restoredQuickNoteAttachmentFileNames = try BackupArchiveService.commitStagedFiles(
                     from: quickNoteStage,
                     destinationURL: QuickNoteAttachmentStorage.fileURL(for:),
                     rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles
+                    committedFiles: &currentCommittedFiles,
+                    fileDestinations: policy.quickNoteAttachmentFileDestinations,
+                    overwritesExistingFiles: policy.overwritesExistingFiles
                 )
                 committedFiles = currentCommittedFiles
                 state = .committed
-                return counts
+                return BackupEmbeddedRestoreCounts(
+                    photoFileCount: restoredPhotoFileNames.count,
+                    drawingFileCount: restoredDrawingFileNames.count,
+                    documentFileCount: restoredDocumentFileNames.count,
+                    quickNoteAttachmentFileCount: restoredQuickNoteAttachmentFileNames.count
+                )
             } catch {
                 BackupArchiveService.rollbackCommittedFiles(currentCommittedFiles)
                 state = .finished
@@ -152,7 +223,9 @@ extension BackupArchiveService {
         from stageDirectory: URL,
         destinationURL: (String) -> URL,
         rollbackRoot: URL,
-        committedFiles: inout [CommittedBackupFile]
+        committedFiles: inout [CommittedBackupFile],
+        fileDestinations: [String: String]?,
+        overwritesExistingFiles: Bool
     ) throws -> [String] {
         let manager = FileManager.default
         let files: [URL]
@@ -169,13 +242,17 @@ extension BackupArchiveService {
         var committedFileNames: [String] = []
         for sourceURL in files where !sourceURL.hasDirectoryPath {
             let fileName = sourceURL.lastPathComponent
-            let targetURL = destinationURL(fileName)
+            guard let destinationFileName = fileDestinations?[fileName] ?? (fileDestinations == nil ? fileName : nil) else {
+                continue
+            }
+            let targetURL = destinationURL(destinationFileName)
             let rollbackURL = rollbackRoot
                 .appendingPathComponent(UUID().uuidString, isDirectory: false)
                 .appendingPathExtension("bak")
             do {
                 try manager.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
                 let targetExists = manager.fileExists(atPath: targetURL.path)
+                guard !targetExists || overwritesExistingFiles else { continue }
                 let rollbackURLForRecord: URL?
                 if targetExists {
                     try manager.copyItem(at: targetURL, to: rollbackURL)
@@ -185,7 +262,7 @@ extension BackupArchiveService {
                 }
                 committedFiles.append(
                     CommittedBackupFile(
-                        fileName: fileName,
+                        fileName: destinationFileName,
                         targetURL: targetURL,
                         rollbackURL: rollbackURLForRecord
                     )
@@ -199,7 +276,7 @@ extension BackupArchiveService {
                     )
                 )
                 try manager.copyItem(at: sourceURL, to: targetURL)
-                committedFileNames.append(fileName)
+                committedFileNames.append(destinationFileName)
             } catch {
                 recordBackupArchiveIssue(
                     "backup.restore.commit_file_failed",

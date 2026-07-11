@@ -4,46 +4,39 @@ extension LaborRecordView {
     // MARK: - 导出配置
 
     var laborExportSheet: some View {
-        NavigationStack {
-            Form {
-                Section(String(localized: "筛选范围")) {
-                    Picker(String(localized: "项目"), selection: $exportProjectFilter) {
-                        Text(String(localized: "全部项目")).tag(nil as UUID?)
-                        ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
-                    }
-                    Picker(String(localized: "班组"), selection: $exportTeamFilter) {
-                        Text(String(localized: "全部班组")).tag("")
-                        ForEach(savedTeams, id: \.self) { t in Text(t).tag(t) }
-                    }
-                    Picker(String(localized: "工种"), selection: $exportWorkTypeFilter) {
-                        Text(String(localized: "全部工种")).tag("")
-                        ForEach(savedWorkTypes, id: \.self) { t in Text(t).tag(t) }
-                    }
-                    DatePicker(String(localized: "从"), selection: $exportStartDate, displayedComponents: .date)
-                    DatePicker(String(localized: "至"), selection: $exportEndDate, displayedComponents: .date)
+        AppBusinessFormSheet(
+            title: String(localized: "导出人工记录"),
+            primaryActionTitle: String(format: String(localized: "导出 %@"), exportFormat.displayName),
+            onCancel: { showExportConfig = false },
+            onPrimaryAction: {
+                switch exportFormat {
+                case .csv: performCSVExport()
+                case .html: performHTMLExport()
                 }
-                Section {
-                    Picker(String(localized: "格式"), selection: $exportFormat) {
-                        ForEach(LaborExportFormat.allCases, id: \.self) { f in
-                            Text(f.displayName).tag(f)
-                        }
-                    }
-                    Button {
-                        switch exportFormat {
-                        case .csv: performCSVExport()
-                        case .html: performHTMLExport()
-                        }
-                        showExportConfig = false
-                    } label: {
-                        Label(String(format: String(localized: "导出 %@"), exportFormat.displayName), systemImage: "square.and.arrow.up")
-                    }
-                }
+                showExportConfig = false
             }
-            .navigationTitle(String(localized: "导出人工记录"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { showExportConfig = false }
+        ) {
+            Section(String(localized: "筛选范围")) {
+                Picker(String(localized: "项目"), selection: $exportProjectFilter) {
+                    Text(String(localized: "全部项目")).tag(nil as UUID?)
+                    ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
+                }
+                Picker(String(localized: "班组"), selection: $exportTeamFilter) {
+                    Text(String(localized: "全部班组")).tag("")
+                    ForEach(savedTeams, id: \.self) { t in Text(t).tag(t) }
+                }
+                Picker(String(localized: "工种"), selection: $exportWorkTypeFilter) {
+                    Text(String(localized: "全部工种")).tag("")
+                    ForEach(savedWorkTypes, id: \.self) { t in Text(t).tag(t) }
+                }
+                DatePicker(String(localized: "从"), selection: $exportStartDate, displayedComponents: .date)
+                DatePicker(String(localized: "至"), selection: $exportEndDate, displayedComponents: .date)
+            }
+            Section {
+                Picker(String(localized: "格式"), selection: $exportFormat) {
+                    ForEach(LaborExportFormat.allCases, id: \.self) { f in
+                        Text(f.displayName).tag(f)
+                    }
                 }
             }
         }

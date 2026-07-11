@@ -57,6 +57,7 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
     let onOpenModeFromDeliveryGuide: (ProjectDetailMode) -> Void
     let onRepairFromDeliveryGuide: (ProjectDeliveryRepairAction) -> Void
     let onStartDeliveryExport: () -> Void
+    let onExportDeliveryInspection: () -> Void
     let onUpdateProject: (Project) -> Void
     let onCreateContact: (ProjectContact) -> Void
     let onCreateFinancialRecord: (ProjectFinancialRecord, Bool) -> Void
@@ -86,6 +87,13 @@ private struct ProjectDetailEntrySheetCoordinatorModifier: ViewModifier {
                         onStartExport: {
                             self.presentation = nil
                             onStartDeliveryExport()
+                        },
+                        onExportInspection: {
+                            self.presentation = nil
+                            Task { @MainActor in
+                                await Task.yield()
+                                onExportDeliveryInspection()
+                            }
                         },
                         onOpenMode: { mode in
                             self.presentation = nil
@@ -303,6 +311,7 @@ extension View {
         onOpenModeFromDeliveryGuide: @escaping (ProjectDetailMode) -> Void,
         onRepairFromDeliveryGuide: @escaping (ProjectDeliveryRepairAction) -> Void,
         onStartDeliveryExport: @escaping () -> Void,
+        onExportDeliveryInspection: @escaping () -> Void,
         onUpdateProject: @escaping (Project) -> Void,
         onCreateContact: @escaping (ProjectContact) -> Void,
         onCreateFinancialRecord: @escaping (ProjectFinancialRecord, Bool) -> Void,
@@ -324,6 +333,7 @@ extension View {
                 onOpenModeFromDeliveryGuide: onOpenModeFromDeliveryGuide,
                 onRepairFromDeliveryGuide: onRepairFromDeliveryGuide,
                 onStartDeliveryExport: onStartDeliveryExport,
+                onExportDeliveryInspection: onExportDeliveryInspection,
                 onUpdateProject: onUpdateProject,
                 onCreateContact: onCreateContact,
                 onCreateFinancialRecord: onCreateFinancialRecord,

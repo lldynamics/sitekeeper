@@ -88,7 +88,7 @@ extension DashboardView {
 
     func dashboardTimelineRow(_ activity: TimelineActivity) -> some View {
         NavigationLink {
-            dashboardDestinationView(dashboardTimelineDestination(for: activity))
+            LazyDashboardDestinationView(destination: dashboardTimelineDestination(for: activity))
         } label: {
             TimelineActivityRow(
                 activity: activity,

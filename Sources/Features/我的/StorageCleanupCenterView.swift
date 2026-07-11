@@ -12,12 +12,14 @@ struct StorageCleanupCenterView: View {
     @State var isRefreshingCloudBackups = false
     @State var projectBackupEstimateByID: [UUID: Int] = [:]
     @State var isRefreshingProjectBackupEstimates = false
+    @State var hasCompletedInitialStorageLoad = false
     @State var pendingCleanupProject: ProjectStorageUsage?
     @State private var pendingCleanupCategory: ProjectStorageCleanupCategory = .all
     @State private var showCleanupProjectAlert = false
     @State var cleanupStatusMessage = ""
     @State var cleanupTrashBatches: [StorageCleanupTrashBatch] = []
     @State var quarantinedFiles: [FileQuarantineEntry] = []
+    @State var scanResult: StorageCleanupScanResult = .empty
 
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
@@ -96,11 +98,15 @@ struct StorageCleanupCenterView: View {
             refreshCleanupTrash()
         }
         .task {
-            await refreshCloudBackups()
-            await refreshProjectBackupEstimates()
+            await refreshInitialStorageData()
         }
         .task(id: store.dataVersion) {
+            guard hasCompletedInitialStorageLoad else { return }
             await refreshProjectBackupEstimates()
+        }
+        .onChange(of: largeFileThresholdMB) { _, _ in
+            normalizeLargeFileThresholdPreference()
+            refreshScanResult()
         }
         .alert(
             StorageCleanupSectionCopy.cleanupProjectFilesAlertTitle,

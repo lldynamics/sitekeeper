@@ -4,8 +4,18 @@ import UIKit
 
 extension DailyLogView {
     var addLogForm: some View {
-        NavigationStack {
-            Form {
+        AppBusinessFormSheet(
+            title: String(localized: "写日志"),
+            isPrimaryActionDisabled: !canSaveLog,
+            onCancel: {
+                showAdd = false
+                clearDraft()
+            },
+            onPrimaryAction: {
+                save()
+                showAdd = false
+            }
+        ) {
                 Section(String(localized: "基础信息")) {
                     DatePicker(String(localized: "日期"), selection: $composer.date, displayedComponents: .date)
                     Picker(String(localized: "天气"), selection: $composer.weather) {
@@ -70,24 +80,6 @@ extension DailyLogView {
                     photoDrafts: $composer.photoDrafts,
                     onOpenCamera: { composer.showLogCamera = true }
                 )
-            }
-            .navigationTitle(String(localized: "写日志"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) {
-                        showAdd = false
-                        clearDraft()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        save()
-                        showAdd = false
-                    }
-                    .disabled(!canSaveLog)
-                }
-            }
         }
         .onChange(of: composer.selectedPhotos) { _, newItems in
             let remainingSlots = max(6 - composer.photoDrafts.count, 0)
@@ -135,8 +127,17 @@ extension DailyLogView {
     }
 
     var editLogForm: some View {
-        NavigationStack {
-            Form {
+        AppBusinessFormSheet(
+            title: String(localized: "编辑日志"),
+            isPrimaryActionDisabled: editor.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            onCancel: {
+                showEdit = false
+            },
+            onPrimaryAction: {
+                saveEditedLog()
+                showEdit = false
+            }
+        ) {
                 Section(String(localized: "基础信息")) {
                     DatePicker(String(localized: "日期"), selection: $editor.date, displayedComponents: .date)
                     Picker(String(localized: "天气"), selection: $editor.weather) {
@@ -173,21 +174,6 @@ extension DailyLogView {
                     TextField(String(localized: "现场确认人"), text: $editor.confirmer)
                 }
                 constructionMethodLinkSection(selection: $editor.linkedMethodIDs)
-            }
-            .navigationTitle(String(localized: "编辑日志"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消")) { showEdit = false }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "保存")) {
-                        saveEditedLog()
-                        showEdit = false
-                    }
-                    .disabled(editor.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
         }
     }
 

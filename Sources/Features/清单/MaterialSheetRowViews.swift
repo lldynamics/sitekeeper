@@ -278,24 +278,22 @@ struct MaterialSheetCreateDraftSheet: View {
     }
 
     var body: some View {
-        AppBusinessEditForm(
+        AppBusinessFormSheet(
             title: String(localized: "新建材料单"),
             primaryActionTitle: String(localized: "创建"),
             isPrimaryActionDisabled: titleIsEmpty,
             onCancel: onCancel,
             onPrimaryAction: onCreate
         ) {
-            Form {
-                AppBusinessFormValidationSection(
-                    messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
-                )
-                Section(String(localized: "基本信息")) {
-                    TextField(String(localized: "材料单名称"), text: $titleInput)
-                    Picker(String(localized: "归属项目"), selection: $projectIdInput) {
-                        Text(String(localized: "无归属")).tag(nil as UUID?)
-                        ForEach(projects) { project in
-                            Text(project.name).tag(project.id as UUID?)
-                        }
+            AppBusinessFormValidationSection(
+                messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
+            )
+            Section(String(localized: "基本信息")) {
+                TextField(String(localized: "材料单名称"), text: $titleInput)
+                Picker(String(localized: "归属项目"), selection: $projectIdInput) {
+                    Text(String(localized: "无归属")).tag(nil as UUID?)
+                    ForEach(projects) { project in
+                        Text(project.name).tag(project.id as UUID?)
                     }
                 }
             }
@@ -313,19 +311,17 @@ struct MaterialSheetRenameDraftSheet: View {
     }
 
     var body: some View {
-        AppBusinessEditForm(
+        AppBusinessFormSheet(
             title: String(localized: "重命名材料单"),
             isPrimaryActionDisabled: titleIsEmpty,
             onCancel: onCancel,
             onPrimaryAction: onSave
         ) {
-            Form {
-                AppBusinessFormValidationSection(
-                    messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
-                )
-                Section(String(localized: "材料单名称")) {
-                    TextField(String(localized: "材料单名称"), text: $renameTitleInput)
-                }
+            AppBusinessFormValidationSection(
+                messages: titleIsEmpty ? [String(localized: "请填写材料单名称")] : []
+            )
+            Section(String(localized: "材料单名称")) {
+                TextField(String(localized: "材料单名称"), text: $renameTitleInput)
             }
         }
     }

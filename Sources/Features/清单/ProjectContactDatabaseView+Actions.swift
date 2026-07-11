@@ -212,7 +212,10 @@ extension ProjectContactDatabaseView {
         guard let project = projects.first(where: { $0.id == projectId }) else { return 0 }
         let contract = project.contractAmountValue.doubleValue
         let paidFromSummary = projectStore.projectActivitySummary(for: projectId).collectedIncomeAmount
-        let paid = max(paidFromSummary, project.paidAmountValue.doubleValue)
+        let paid = ProjectFinancialMetrics.effectivePaidAmount(
+            recordedCollectionAmount: paidFromSummary,
+            manualPaidAmount: project.paidAmountValue.doubleValue
+        )
         return max(contract - paid, 0)
     }
 

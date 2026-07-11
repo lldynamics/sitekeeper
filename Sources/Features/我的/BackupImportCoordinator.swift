@@ -90,7 +90,21 @@ enum BackupImportCoordinator {
         sourceFileName: String,
         onPersistingMetadata: @MainActor () -> Void = {}
     ) async throws -> BackupEmbeddedRestoreCounts {
-        applyImportMetadata(snapshot: importedSnapshot, mode: importMode, store: store)
+        let snapshotToApply: BackupSnapshot
+        let restorePolicy: BackupEmbeddedFileRestorePolicy
+        switch importMode {
+        case .merge:
+            let preparation = prepareMergeImport(
+                importedSnapshot: importedSnapshot,
+                previousSnapshot: previousSnapshot
+            )
+            snapshotToApply = preparation.snapshot
+            restorePolicy = preparation.restorePolicy
+        case .overwrite:
+            snapshotToApply = importedSnapshot
+            restorePolicy = .referencedBy(importedSnapshot, overwritesExistingFiles: true)
+        }
+        applyImportMetadata(snapshot: snapshotToApply, mode: importMode, store: store)
 
         var failedStage = "commit_files"
         do {
@@ -106,7 +120,7 @@ enum BackupImportCoordinator {
                     ]
                 )
             ) {
-                try restoreTransaction.commit()
+                try restoreTransaction.commit(policy: restorePolicy)
             }
             failedStage = "persist_metadata"
             onPersistingMetadata()
@@ -252,6 +266,127 @@ enum BackupImportCoordinator {
                     + snapshot.constructionMethods.flatMap(\.attachments).map(\.fileName)
                     + snapshot.constructionMethods.flatMap(\.tutorialAttachments).map(\.fileName)
             ).filter { !$0.isEmpty }
+        )
+    }
+
+    private struct MergeImportPreparation {
+        var snapshot: BackupSnapshot
+        var restorePolicy: BackupEmbeddedFileRestorePolicy
+    }
+
+    private struct MergeFileNameResolver {
+        private(set) var destinations: [String: String] = [:]
+        private var reservedDestinations = Set<String>()
+        let exists: (String) -> Bool
+
+        init(exists: @escaping (String) -> Bool) {
+            self.exists = exists
+        }
+
+        mutating func resolve(_ sourceFileName: String) -> String {
+            guard !sourceFileName.isEmpty else { return sourceFileName }
+            if let destination = destinations[sourceFileName] {
+                return destination
+            }
+
+            let destination: String
+            if !exists(sourceFileName), !reservedDestinations.contains(sourceFileName) {
+                destination = sourceFileName
+            } else {
+                destination = makeAvailableFileName(basedOn: sourceFileName)
+            }
+            destinations[sourceFileName] = destination
+            reservedDestinations.insert(destination)
+            return destination
+        }
+
+        private mutating func makeAvailableFileName(basedOn sourceFileName: String) -> String {
+            let fileExtension = URL(fileURLWithPath: sourceFileName).pathExtension
+            while true {
+                var candidate = "backup-merge-\(UUID().uuidString)"
+                if !fileExtension.isEmpty {
+                    candidate += ".\(fileExtension)"
+                }
+                if !exists(candidate), !reservedDestinations.contains(candidate) {
+                    return candidate
+                }
+            }
+        }
+    }
+
+    private static func prepareMergeImport(
+        importedSnapshot: BackupSnapshot,
+        previousSnapshot: BackupSnapshot
+    ) -> MergeImportPreparation {
+        var snapshot = importedSnapshot
+        var photoResolver = MergeFileNameResolver(exists: PhotoStorage.exists(fileName:))
+        var drawingResolver = MergeFileNameResolver(exists: DrawingStorage.exists(fileName:))
+        var documentResolver = MergeFileNameResolver(exists: ProjectDocumentStorage.exists(fileName:))
+        var attachmentResolver = MergeFileNameResolver(exists: QuickNoteAttachmentStorage.exists(fileName:))
+
+        let existingDailyLogIDs = Set(previousSnapshot.dailyLogs.map(\.id))
+        for index in snapshot.dailyLogs.indices where !existingDailyLogIDs.contains(snapshot.dailyLogs[index].id) {
+            if let fileName = snapshot.dailyLogs[index].photoFileName {
+                snapshot.dailyLogs[index].photoFileName = photoResolver.resolve(fileName)
+            }
+            for photoIndex in snapshot.dailyLogs[index].photos.indices {
+                snapshot.dailyLogs[index].photos[photoIndex].fileName = photoResolver.resolve(
+                    snapshot.dailyLogs[index].photos[photoIndex].fileName
+                )
+            }
+        }
+
+        let existingTodoIDs = Set(previousSnapshot.siteTodos.map(\.id))
+        for index in snapshot.siteTodos.indices where !existingTodoIDs.contains(snapshot.siteTodos[index].id) {
+            if let fileName = snapshot.siteTodos[index].rectificationBeforePhotoFileName {
+                snapshot.siteTodos[index].rectificationBeforePhotoFileName = photoResolver.resolve(fileName)
+            }
+            if let fileName = snapshot.siteTodos[index].rectificationAfterPhotoFileName {
+                snapshot.siteTodos[index].rectificationAfterPhotoFileName = photoResolver.resolve(fileName)
+            }
+        }
+
+        let existingDrawingIDs = Set(previousSnapshot.projectDrawings.map(\.id))
+        for index in snapshot.projectDrawings.indices where !existingDrawingIDs.contains(snapshot.projectDrawings[index].id) {
+            snapshot.projectDrawings[index].fileName = drawingResolver.resolve(snapshot.projectDrawings[index].fileName)
+        }
+
+        let existingDocumentIDs = Set(previousSnapshot.projectDocuments.map(\.id))
+        for index in snapshot.projectDocuments.indices where !existingDocumentIDs.contains(snapshot.projectDocuments[index].id) {
+            snapshot.projectDocuments[index].fileName = documentResolver.resolve(snapshot.projectDocuments[index].fileName)
+        }
+
+        let existingQuickNoteIDs = Set(previousSnapshot.quickNotes.map(\.id))
+        for index in snapshot.quickNotes.indices where !existingQuickNoteIDs.contains(snapshot.quickNotes[index].id) {
+            for attachmentIndex in snapshot.quickNotes[index].attachments.indices {
+                snapshot.quickNotes[index].attachments[attachmentIndex].fileName = attachmentResolver.resolve(
+                    snapshot.quickNotes[index].attachments[attachmentIndex].fileName
+                )
+            }
+        }
+
+        let existingMethodIDs = Set(previousSnapshot.constructionMethods.map(\.id))
+        for index in snapshot.constructionMethods.indices where !existingMethodIDs.contains(snapshot.constructionMethods[index].id) {
+            for attachmentIndex in snapshot.constructionMethods[index].attachments.indices {
+                snapshot.constructionMethods[index].attachments[attachmentIndex].fileName = attachmentResolver.resolve(
+                    snapshot.constructionMethods[index].attachments[attachmentIndex].fileName
+                )
+            }
+            for attachmentIndex in snapshot.constructionMethods[index].tutorialAttachments.indices {
+                snapshot.constructionMethods[index].tutorialAttachments[attachmentIndex].fileName = attachmentResolver.resolve(
+                    snapshot.constructionMethods[index].tutorialAttachments[attachmentIndex].fileName
+                )
+            }
+        }
+
+        return MergeImportPreparation(
+            snapshot: snapshot,
+            restorePolicy: .mapped(
+                photoFileDestinations: photoResolver.destinations,
+                drawingFileDestinations: drawingResolver.destinations,
+                documentFileDestinations: documentResolver.destinations,
+                quickNoteAttachmentFileDestinations: attachmentResolver.destinations
+            )
         )
     }
 }

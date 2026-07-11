@@ -59,7 +59,8 @@ extension DashboardView {
     }
 
     var dashboardBusinessSummary: ProjectBusinessSummary {
-        guard !activeProjects.isEmpty else {
+        let projects = activeProjects
+        guard !projects.isEmpty else {
             return ProjectBusinessSummary(
                 quoteTotal: 0,
                 contractAmount: 0,
@@ -74,37 +75,55 @@ extension DashboardView {
             )
         }
 
-        let projectIDs = activeProjectIDs
-        let quotes = financeStore.quoteItems.filter { item in
-            guard let projectId = item.projectId else { return false }
-            return projectIDs.contains(projectId)
+        // FinanceStore and ProjectStore maintain per-project indexes.  The dashboard
+        // renders this summary several times while its panels are composed, so avoid
+        // repeatedly filtering every record collection once per active project.
+        let quotes = projects.flatMap { financeStore.quoteItems(for: $0.id) }
+        let materials = projects.flatMap { financeStore.materialItems(for: $0.id) }
+        let laborRecords = projects.flatMap { financeStore.laborRecords(for: $0.id) }
+        let financialRecords = projects.flatMap { projectStore.projectFinancialRecords(for: $0.id) }
+
+        var materialCostByProjectID: [UUID: Double] = [:]
+        for item in materials {
+            guard let projectId = item.projectId else { continue }
+            materialCostByProjectID[projectId, default: 0] += ReportBuilder.materialLineTotal(item)
         }
-        let materials = financeStore.materialItems.filter { item in
-            guard let projectId = item.projectId else { return false }
-            return projectIDs.contains(projectId)
+        var laborCostByProjectID: [UUID: Double] = [:]
+        for item in laborRecords {
+            guard let projectId = item.projectId else { continue }
+            laborCostByProjectID[projectId, default: 0] += ReportBuilder.laborLineTotal(item)
         }
-        let laborRecords = financeStore.laborRecords.filter { item in
-            guard let projectId = item.projectId else { return false }
-            return projectIDs.contains(projectId)
+        var collectionByProjectID: [UUID: MoneyValue] = [:]
+        for record in financialRecords where record.countsInBusinessMetrics && record.isCollectionIncome {
+            collectionByProjectID[record.projectId] =
+                (collectionByProjectID[record.projectId] ?? MoneyValue.zero) + record.amountValue
         }
 
         let quoteTotal = quotes.reduce(0) { $0 + ReportBuilder.quoteGrandTotal($1) }
-        let contractAmount = activeProjects.reduce(0) { $0 + $1.contractAmountValue.doubleValue }
-        let paidByRecords = activeProjects.reduce(0) { $0 + dashboardCollectedAmount(for: $1.id) }
-        let paidAmountFallback = activeProjects.reduce(0) { $0 + $1.paidAmountValue.doubleValue }
-        let paidAmount = paidByRecords > 0 ? paidByRecords : paidAmountFallback
-
-        let materialAutoCost = materials.reduce(0) { $0 + ReportBuilder.materialLineTotal($1) }
-        let laborAutoCost = laborRecords.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
-        let materialFallback = activeProjects.reduce(0) { $0 + $1.materialCostValue.doubleValue }
-        let laborFallback = activeProjects.reduce(0) { $0 + $1.laborCostValue.doubleValue }
-        let materialCost = materialAutoCost > 0 ? materialAutoCost : materialFallback
-        let laborCostAmount = laborAutoCost > 0 ? laborAutoCost : laborFallback
+        let contractAmount = projects.reduce(0) { $0 + $1.contractAmountValue.doubleValue }
+        let paidAmount = projects.reduce(0) { total, project in
+            let recorded = (collectionByProjectID[project.id] ?? MoneyValue.zero).doubleValue
+            return total + ProjectFinancialMetrics.effectivePaidAmount(
+                recordedCollectionAmount: recorded,
+                manualPaidAmount: project.paidAmountValue.doubleValue
+            )
+        }
+        let materialCost = projects.reduce(0) { total, project in
+            let recorded = materialCostByProjectID[project.id] ?? 0
+            return total + (recorded > 0 ? recorded : project.materialCostValue.doubleValue)
+        }
+        let laborCostAmount = projects.reduce(0) { total, project in
+            let recorded = laborCostByProjectID[project.id] ?? 0
+            return total + (recorded > 0 ? recorded : project.laborCostValue.doubleValue)
+        }
 
         let receivableAmount = max(contractAmount - paidAmount, 0)
-        let receivableAgeDays = activeProjects.compactMap { project -> Int? in
-            let projectPaid = dashboardCollectedAmount(for: project.id)
-            let paid = projectPaid > 0 ? projectPaid : project.paidAmountValue.doubleValue
+        let receivableAgeDays = projects.compactMap { project -> Int? in
+            let projectPaid = (collectionByProjectID[project.id] ?? MoneyValue.zero).doubleValue
+            let paid = ProjectFinancialMetrics.effectivePaidAmount(
+                recordedCollectionAmount: projectPaid,
+                manualPaidAmount: project.paidAmountValue.doubleValue
+            )
             let receivable = max(project.contractAmountValue.doubleValue - paid, 0)
             return dashboardReceivableAgeDays(for: project, receivableAmount: receivable)
         }.max()
@@ -115,7 +134,10 @@ extension DashboardView {
             paidAmount: paidAmount,
             receivableAmount: receivableAmount,
             receivableAgeDays: receivableAgeDays,
-            recentCollection: dashboardLatestCollection(),
+            recentCollection: ProjectFinancialMetrics.latestCollection(
+                records: financialRecords,
+                projectName: { projectName($0) }
+            ),
             materialCost: materialCost,
             laborCostAmount: laborCostAmount,
             pendingMaterialCount: materials.filter { $0.quantityValue.doubleValue == 0 }.count,
@@ -129,7 +151,10 @@ extension DashboardView {
 
     var warehouseStockLines: [WarehouseStockLine] {
         activeProjects.flatMap { project in
-            WarehouseStockCalculator.stockLines(for: project.id, movements: warehouseMovementsForActiveProjects)
+            WarehouseStockCalculator.stockLines(
+                for: project.id,
+                movements: projectStore.projectWarehouseMovements(for: project.id)
+            )
         }
     }
 

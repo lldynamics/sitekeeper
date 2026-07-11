@@ -154,8 +154,12 @@ extension ExportView {
             isWithinDateRange($0.date, format: Formatters.date, invalidDateCount: &invalidDateCount)
         }
         snapshot.progressTasks = snapshot.progressTasks.filter {
-            isWithinDateRange($0.startDate, format: Formatters.date, invalidDateCount: &invalidDateCount)
-            || isWithinDateRange($0.dueDate, format: Formatters.date, invalidDateCount: &invalidDateCount)
+            isOverlappingDateRange(
+                startDate: $0.startDate,
+                endDate: $0.dueDate,
+                format: Formatters.date,
+                invalidDateCount: &invalidDateCount
+            )
         }
         snapshot.historyRecords = snapshot.historyRecords.filter {
             isWithinDateRange($0.date, format: Formatters.dateTime, invalidDateCount: &invalidDateCount)
@@ -193,5 +197,21 @@ extension ExportView {
         let endStart = Calendar.current.startOfDay(for: max(filterStart, filterEnd))
         let end = Calendar.current.date(byAdding: .day, value: 1, to: endStart) ?? endStart
         return date >= start && date < end
+    }
+
+    func isOverlappingDateRange(
+        startDate: String,
+        endDate: String,
+        format: DateFormatter,
+        invalidDateCount: inout Int
+    ) -> Bool {
+        guard let itemStart = DataValueParser.parseDate(startDate, preferredFormatter: format),
+              let itemEnd = DataValueParser.parseDate(endDate, preferredFormatter: format) else {
+            invalidDateCount += 1
+            return false
+        }
+        let rangeStart = Calendar.current.startOfDay(for: min(filterStart, filterEnd))
+        let rangeEnd = Calendar.current.startOfDay(for: max(filterStart, filterEnd))
+        return itemStart <= rangeEnd && itemEnd >= rangeStart
     }
 }

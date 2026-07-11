@@ -13,6 +13,8 @@ struct RemoteConstructionMethodPackLink: Codable, Hashable {
 }
 
 struct RemoteConstructionMethodPack: Identifiable, Codable {
+    private static let knowledgeBaseOrigin = "https://gongdizhishi.com"
+
     let id: String
     let sourceSlug: String
     let sourceURL: String
@@ -60,13 +62,13 @@ struct RemoteConstructionMethodPack: Identifiable, Codable {
     private func absoluteURLString(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("/") else { return trimmed }
-        return "https://gongchengzhishi.chengjinfang.com\(trimmed)"
+        return "\(Self.knowledgeBaseOrigin)\(trimmed)"
     }
 
     private func absolutizedMarkdownLinks(_ value: String) -> String {
         value.replacingOccurrences(
             of: #"\]\((/[^)]+)\)"#,
-            with: "](https://gongchengzhishi.chengjinfang.com$1)",
+            with: "](\(Self.knowledgeBaseOrigin)$1)",
             options: .regularExpression
         )
     }
@@ -170,15 +172,25 @@ struct ConstructionMethodPackFetchResult: Sendable {
 }
 
 enum ConstructionMethodPackImportConfiguration {
-    private static let productionEndpointRaw = "https://gongchengzhishi.chengjinfang.com/sitekeeper/method-packs.json"
+    private static let productionHost = "gongdizhishi.com"
+    private static let productionEndpointRaw = "https://gongdizhishi.com/sitekeeper/method-packs.json"
     private static let localDebugEndpointRaw = "http://127.0.0.1:4321/sitekeeper/method-packs.json"
+    private static let fallbackProductionEndpoint = makeFallbackProductionEndpoint()
 
     static var productionEndpoint: URL {
-        requiredURL(productionEndpointRaw)
+        staticEndpoint(
+            raw: productionEndpointRaw,
+            label: "production",
+            fallback: fallbackProductionEndpoint
+        )
     }
 
     static var localDebugEndpoint: URL {
-        requiredURL(localDebugEndpointRaw)
+        staticEndpoint(
+            raw: localDebugEndpointRaw,
+            label: "local-debug",
+            fallback: productionEndpoint
+        )
     }
 
     static var configuredPrimaryEndpoint: URL {
@@ -194,8 +206,9 @@ enum ConstructionMethodPackImportConfiguration {
     }
 
     static var configuredEndpointSource: String {
-        let configured = configuredPrimaryEndpoint.absoluteString
-        if configuredPrimaryEndpoint == productionEndpoint {
+        let configuredEndpoint = configuredPrimaryEndpoint
+        let configured = configuredEndpoint.absoluteString
+        if configuredEndpoint == productionEndpoint {
             return String(localized: "默认端点")
         }
         return String(format: String(localized: "自定义端点：%@"), configured)
@@ -210,11 +223,49 @@ enum ConstructionMethodPackImportConfiguration {
         return url
     }
 
-    private static func requiredURL(_ raw: String) -> URL {
-        guard let url = URL(string: raw) else {
-            preconditionFailure("Invalid URL configuration: \(raw)")
+    static func staticEndpoint(raw: String, label: String, fallback: URL) -> URL {
+        guard let url = validStaticEndpoint(raw) else {
+            StorageIssueLog.recordEvent(
+                "construction_method_pack.invalid_static_endpoint",
+                category: .dataStore,
+                details: [
+                    "label": label,
+                    "raw": raw,
+                    "fallback": fallback.absoluteString
+                ]
+            )
+            return fallback
         }
         return url
+    }
+
+    private static func validStaticEndpoint(_ raw: String) -> URL? {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, let url = URL(string: trimmed) else { return nil }
+        guard let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else {
+            return nil
+        }
+        guard let host = url.host, !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return nil
+        }
+        return url
+    }
+
+    private static func makeFallbackProductionEndpoint() -> URL {
+        var components = URLComponents()
+        components.scheme = "https"
+        components.host = productionHost
+        components.path = "/sitekeeper/method-packs.json"
+        if let url = components.url {
+            return url
+        }
+
+        StorageIssueLog.recordEvent(
+            "construction_method_pack.fallback_endpoint_unavailable",
+            category: .dataStore,
+            details: ["path": components.path]
+        )
+        return URL(fileURLWithPath: "/sitekeeper/method-packs.json")
     }
 }
 

@@ -2,6 +2,8 @@ import Foundation
 import UIKit
 
 extension ReportBuilder {
+    // A single renderer transaction keeps page state and UIGraphicsPDFRenderer lifetime coherent.
+    // swiftlint:disable:next function_body_length cyclomatic_complexity
     static func makeProjectPackagePDF(
         project: Project,
         materials: [MaterialItem],
@@ -19,9 +21,11 @@ extension ReportBuilder {
     ) -> Data {
         let quoteTotal = quotes.reduce(0) { $0 + quoteGrandTotal($1) }
         let contract = project.contractAmountValue.doubleValue
-        let paid = paidAmountOverride ?? project.paidAmountValue.doubleValue
-        let materialCost = materials.reduce(0) { $0 + materialLineTotal($1) }
-        let laborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
+        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: financialRecords)
+        let recordedMaterialCost = materials.reduce(0) { $0 + materialLineTotal($1) }
+        let recordedLaborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
+        let materialCost = recordedMaterialCost > 0 ? recordedMaterialCost : project.materialCostValue.doubleValue
+        let laborCost = recordedLaborCost > 0 ? recordedLaborCost : project.laborCostValue.doubleValue
         let totalLaborHours = labor.reduce(0) { $0 + laborHours($1) }
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
         let deliveryHealth = projectDeliveryHealthReport(

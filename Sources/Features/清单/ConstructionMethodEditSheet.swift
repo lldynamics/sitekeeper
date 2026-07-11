@@ -54,26 +54,24 @@ struct ConstructionMethodEditSheet: View {
     }
 
     var body: some View {
-        AppBusinessEditForm(
+        AppBusinessFormSheet(
             title: method == nil ? String(localized: "新增施工工艺") : String(localized: "编辑施工工艺"),
             isPrimaryActionDisabled: title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             onCancel: { cancelEditingAndDismiss() },
             onPrimaryAction: { saveAndDismiss() }
         ) {
-            Form {
-                basicInfoSection
-                ConstructionMethodProcessEditorSections(
-                    procedureSteps: $procedureSteps,
-                    newProcedureStep: $newProcedureStep
-                )
-                tutorialSections
-                ConstructionMethodQualityChecklistEditorSections(
-                    qualityChecklist: $qualityChecklist,
-                    safetyChecklist: $safetyChecklist,
-                    newQualityItem: $newQualityItem,
-                    newSafetyItem: $newSafetyItem
-                )
-            }
+            basicInfoSection
+            ConstructionMethodProcessEditorSections(
+                procedureSteps: $procedureSteps,
+                newProcedureStep: $newProcedureStep
+            )
+            tutorialSections
+            ConstructionMethodQualityChecklistEditorSections(
+                qualityChecklist: $qualityChecklist,
+                safetyChecklist: $safetyChecklist,
+                newQualityItem: $newQualityItem,
+                newSafetyItem: $newSafetyItem
+            )
         }
         .onAppear {
             restoreDraftIfNeeded()

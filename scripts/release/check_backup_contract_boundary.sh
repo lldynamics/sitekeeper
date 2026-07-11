@@ -22,6 +22,13 @@ require_file() {
   [[ -f "$path" ]] || fail "$description is missing: $path"
 }
 
+reject_file() {
+  local description="$1"
+  local path="$2"
+
+  [[ ! -e "$path" ]] || fail "$description must not be present: $path"
+}
+
 require_pattern() {
   local description="$1"
   local path="$2"
@@ -32,6 +39,9 @@ require_pattern() {
     fail "$description is missing expected marker '$pattern' in $path"
   fi
 }
+
+reject_file "Sample data fixture in production resources" "Sources/Resources/Fixtures/SampleDataFixture.json"
+require_file "Sample data test fixture" "Tests/Fixtures/SampleDataFixture.json"
 
 require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/BackupSnapshot.swift" "static let currentSchemaVersion = 2"
 require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/BackupSnapshot.swift" "guard schemaVersion == BackupSnapshot.currentSchemaVersion"
@@ -56,8 +66,15 @@ require_pattern "Project package drawing status" "Sources/Shared/Services/Report
 require_pattern "Project package external failure" "Sources/Shared/Services/ReportBuilder+ProjectDeliverySupport.swift" "external_open_failure_reason"
 
 require_pattern "Backup contract rejects schema-less legacy backup" "Tests/BackupContractCompatibilityTests.swift" "legacyBackupWithoutSchemaVersionIsRejected"
+require_pattern "Backup manifest and metadata schema alignment test" "Tests/BackupContractCompatibilityTests.swift" "backupManifestAndMetadataRoundTripShareCurrentSchema"
+require_pattern "Backup manifest metadata path contract test" "Tests/BackupContractCompatibilityTests.swift" "backupManifestRejectsUnexpectedMetadataPath"
 require_pattern "Backup contract ignores unknown future fields" "Tests/BackupContractCompatibilityTests.swift" "backupImportIgnoresFutureFieldsAndPreservesKnownDrawingFields"
 require_pattern "Backup contract preserves drawing availability defaults" "Tests/BackupContractCompatibilityTests.swift" "fileAvailabilityStatus == .unknown"
+require_pattern "Backup metadata persistence fault injection test" "Tests/BackupErrorRecoveryTests.swift" "backupImportTransactionRollsBackFilesWhenMetadataPersistFails"
+require_pattern "Backup ZIP path traversal test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsZipSlipEntryAndCleansTempStage"
+require_pattern "Backup ZIP duplicate entry test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsDuplicateEntryAndCleansTempStage"
+require_pattern "Backup ZIP checksum test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsCorruptedEntryChecksumAndCleansTempStage"
+require_pattern "Backup ZIP uncompressed size limit test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsForgedOversizedUncompressedEntry"
 require_pattern "Drawing availability default test" "Tests/DrawingFileAvailabilityTests.swift" "projectDrawingDecodesLegacyAvailabilityDefaults"
 require_pattern "ReportBuilder drawing status export test" "Tests/ReportBuilderTests.swift" "file_availability_status_key"
 

@@ -1451,6 +1451,23 @@
 "把这条工艺直接变成待办、日志或整改依据。" = "把这条工艺直接变成待办、日志或整改依据。";
 "按《%@》复核现场执行情况" = "按《%@》复核现场执行情况";
 "按工艺检查：%@" = "按工艺检查：%@";
+"construction_method_loop_document_generated_at_format" = "生成时间：%@";
+"construction_method_loop_document_procedure_steps_label" = "施工步骤：";
+"construction_method_loop_document_project_format" = "项目：%@";
+"construction_method_loop_document_quality_points_label" = "质量要点：";
+"construction_method_loop_document_safety_notes_label" = "安全注意：";
+"construction_method_loop_document_source_format" = "来源：%@";
+"construction_method_loop_document_stage_format" = "阶段：%@";
+"construction_method_loop_document_trade_format" = "专业：%@";
+"construction_method_loop_document_tutorial_format" = "教程说明：%@";
+"construction_method_loop_document_version_format" = "版本：%@";
+"construction_method_loop_handover_document_title_format" = "%@-%@-工艺交底-%@";
+"construction_method_loop_handover_heading" = "工艺交底资料";
+"construction_method_loop_handover_note" = "由工艺闭环自动生成：交底资料";
+"construction_method_loop_quality_checklist_default_item" = "现场核对关键工序执行情况";
+"construction_method_loop_quality_checklist_document_title_format" = "%@-%@-质检清单-%@";
+"construction_method_loop_quality_checklist_heading" = "工艺质检清单";
+"construction_method_loop_quality_checklist_note" = "由工艺闭环自动生成：质检清单";
 "放线定位" = "放线定位";
 "教程图片保存失败：%@" = "教程图片保存失败：%@";
 "整改依据：\n%@" = "整改依据：\n%@";
@@ -2305,6 +2322,7 @@
 "quick_note_media_file_import_failed_error" = "附件导入失败。";
 "quick_note_timeline_today" = "今天";
 "quick_note_timeline_yesterday" = "昨天";
+"quick_note_timeline_unknown_date" = "日期未知";
 "quick_note_timeline_empty_title" = "还没有消息";
 "quick_note_timeline_empty_message" = "从底部输入框发送现场记录。";
 "quick_note_timeline_convert_label" = "转为";
@@ -2344,6 +2362,15 @@
 "quick_note_drawing_clear_button" = "清空";
 "quick_note_drawing_color_picker_label" = "颜色";
 "quick_note_drawing_line_width_label" = "粗细";
+"quick_note_drawing_clear_confirmation_title" = "清空手绘内容？";
+"quick_note_drawing_clear_confirmation_message" = "画布和照片底图都会被清空。";
+"quick_note_drawing_discard_confirmation_title" = "放弃未保存的手绘？";
+"quick_note_drawing_discard_confirmation_message" = "退出后，当前画布和照片标注不会保存。";
+"quick_note_drawing_discard_button" = "放弃手绘";
+"quick_note_drawing_keep_editing_button" = "继续编辑";
+"quick_note_drawing_canvas_accessibility_label" = "手绘画布";
+"quick_note_drawing_canvas_accessibility_hint" = "在画布上拖动以绘制标注";
+"%@更多操作" = "%@更多操作";
 
 "%@ · %lld 条" = "%@ · %lld 条";
 "从通讯录导入" = "从通讯录导入";
@@ -2622,7 +2649,7 @@
 "测量结果" = "测量结果";
 "关闭证据" = "关闭证据";
 "关闭证据（验收人/复测/照片说明）" = "关闭证据（验收人/复测/照片说明）";
-"可填写轴线、房间、坐标、构件编号、PDF 页码、CAD 图层或现场测量结果。" = "可填写轴线、房间、坐标、构件编号、PDF 页码、CAD 图层或现场测量结果。";
+"drawing_issue_location_hint" = "可填写轴线、房间、坐标、构件编号、PDF 页码、图纸图层、原件标注或现场测量结果。";
 "后续可在现场待办里补整改后照片，并用完成状态关闭问题。" = "后续可在现场待办里补整改后照片，并用完成状态关闭问题。";
 "图纸问题闭环" = "图纸问题闭环";
 "整改后照片和关闭证据会进入交付包的图纸问题清单。" = "整改后照片和关闭证据会进入交付包的图纸问题清单。";
@@ -2761,6 +2788,30 @@
 "project.deliveryInspection.export.issue.passed" = "体检通过";
 "project.deliveryInspection.export.status.passed" = "通过";
 "project.deliveryInspection.export.detail.passed" = "暂未发现缺类别、文件丢失、退回、未归档、缺责任人或缺形成日期。";
+"project.preDeliveryInspection.export.section" = "交付前体检清单";
+"project.preDeliveryInspection.export.button" = "导出体检清单 TSV";
+"project.preDeliveryInspection.export.hint" = "生成独立核对清单，用于导出交付包前给甲方、监理或内部负责人逐项确认。";
+"project.preDeliveryInspection.export.filename.format" = "%@-交付体检清单-%@.tsv";
+"project.preDeliveryInspection.export.meta.project" = "项目";
+"project.preDeliveryInspection.export.meta.exportedAt" = "导出时间";
+"project.preDeliveryInspection.export.column.check" = "检查项";
+"project.preDeliveryInspection.export.column.status" = "状态";
+"project.preDeliveryInspection.export.column.severity" = "严重程度";
+"project.preDeliveryInspection.export.column.objectType" = "对象类型";
+"project.preDeliveryInspection.export.column.object" = "对象";
+"project.preDeliveryInspection.export.column.owner" = "负责人";
+"project.preDeliveryInspection.export.column.dueDate" = "截止日期";
+"project.preDeliveryInspection.export.column.fileName" = "文件";
+"project.preDeliveryInspection.export.column.detail" = "说明";
+"project.preDeliveryInspection.export.column.action" = "建议动作";
+"project.preDeliveryInspection.export.severity.blocker" = "阻断";
+"project.preDeliveryInspection.export.severity.warning" = "提醒";
+"project.preDeliveryInspection.export.severity.ok" = "通过";
+"project.preDeliveryInspection.export.object.project" = "项目";
+"project.preDeliveryInspection.export.object.drawing" = "图纸";
+"project.preDeliveryInspection.export.object.todo" = "待办";
+"project.preDeliveryInspection.export.object.financialRecord" = "账目";
+"project.preDeliveryInspection.export.object.drawingGroup" = "图纸组";
 
 /* Material library */
 "common.cancel" = "取消";

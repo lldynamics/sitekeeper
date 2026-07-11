@@ -329,8 +329,8 @@ extension ExportView {
             }
             Toggle(String(localized: "启用日期范围"), isOn: $enableDateFilter)
             if enableDateFilter {
-                DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
-                DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
+                DatePicker(String(localized: "开始"), selection: $filterStart, in: ...filterEnd, displayedComponents: .date)
+                DatePicker(String(localized: "结束"), selection: $filterEnd, in: filterStart..., displayedComponents: .date)
             }
         }
     }

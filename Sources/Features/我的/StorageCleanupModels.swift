@@ -5,6 +5,12 @@ struct StorageCleanupScanResult {
     let categorySummaries: [StorageCategorySummary]
     let largeFileItems: [StorageLargeFileItem]
     let projectUsages: [ProjectStorageUsage]
+
+    static let empty = StorageCleanupScanResult(
+        categorySummaries: [],
+        largeFileItems: [],
+        projectUsages: []
+    )
 }
 
 struct StorageCategorySummary: Identifiable {

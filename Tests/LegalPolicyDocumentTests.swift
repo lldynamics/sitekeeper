@@ -6,9 +6,9 @@ struct LegalPolicyDocumentTests {
         let document = AppPolicy.privacyPolicyDocument(preferredLanguages: ["zh-Hans"])
 
         #expect(document.policyId == "sitekeeper.privacy")
-        #expect(document.version == "2026-05-15")
+        #expect(document.version == "2026-05-24")
         #expect(document.localeIdentifier == "zh-Hans")
-        #expect(document.lastUpdatedDisplay == "2026年5月15日")
+        #expect(document.lastUpdatedDisplay == "2026年5月24日")
         #expect(document.body.contains(AppBrand.displayName))
         #expect(document.body.contains(AppContact.supportEmail))
         #expect(!document.body.contains("{APP_NAME}"))
@@ -19,7 +19,7 @@ struct LegalPolicyDocumentTests {
         let document = AppPolicy.privacyPolicyDocument(preferredLanguages: ["en-US"])
 
         #expect(document.localeIdentifier == "en")
-        #expect(document.lastUpdatedDisplay == "May 15, 2026")
+        #expect(document.lastUpdatedDisplay == "May 24, 2026")
         #expect(document.body.contains(AppContact.supportEmail))
         #expect(document.body.contains("Drawing Originals"))
     }
