@@ -66,6 +66,7 @@ struct BackupFileDocument: FileDocument {
 
 struct BackupQuickStartCard: View {
     let onExport: () -> Void
+    let onShowImporter: () -> Void
     let onDismiss: () -> Void
 
     var body: some View {
@@ -84,13 +85,14 @@ struct BackupQuickStartCard: View {
                 .foregroundStyle(.secondary)
 
             Button(action: onExport) {
-                Label(String(localized: "立即导出首份备份 ZIP"), systemImage: "square.and.arrow.up")
+                Label(String(localized: "导出完整备份 ZIP"), systemImage: "square.and.arrow.up")
             }
             .buttonStyle(.appProminent(tint: .appWarning))
 
-            Text(String(localized: "导入备份请在下方“本地备份”中选择当前版本 ZIP。"))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
+            Button(action: onShowImporter) {
+                Label(String(localized: "导入备份 ZIP"), systemImage: "square.and.arrow.down")
+            }
+            .buttonStyle(.bordered)
         }
         .padding(.vertical, 2)
     }
@@ -164,8 +166,11 @@ struct BackupImportPreviewView: View {
 
     var body: some View {
         let snapshot = preview.snapshot
-        NavigationStack {
-            Form {
+        AppBusinessFormSheet(
+            title: String(localized: "确认导入"),
+            primaryActionTitle: nil,
+            onCancel: onCancel
+        ) {
                 Section(String(localized: "导入预览")) {
                     LabeledContent(String(localized: "材料"), value: "\(snapshot.materialItems.count) 条")
                     LabeledContent(String(localized: "报价"), value: "\(snapshot.quoteItems.count) 条")
@@ -229,18 +234,10 @@ struct BackupImportPreviewView: View {
                         .fontWeight(.semibold)
                     }
                 }
-            }
-            .navigationTitle(String(localized: "确认导入"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "取消"), action: onCancel)
-                }
-            }
-            .onChange(of: importMode) { _, mode in
-                if mode != .overwrite {
-                    isOverwriteImportArmed = false
-                }
+        }
+        .onChange(of: importMode) { _, mode in
+            if mode != .overwrite {
+                isOverwriteImportArmed = false
             }
         }
     }

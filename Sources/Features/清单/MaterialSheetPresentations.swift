@@ -45,14 +45,9 @@ private struct MaterialSheetPresentationsModifier: ViewModifier {
                 Text(String(localized: "选择保存位置或分享给其他人"))
             }
             .sheet(isPresented: $showExporter) {
-                if let exportFileURL {
-                    FileURLDocumentExporter(fileURL: exportFileURL) { _ in
-                        showExporter = false
-                        onCleanupExportFile()
-                    }
-                } else {
-                    ProgressView(String(localized: "正在准备导出文件..."))
-                        .padding()
+                AppPreparedFileExporterSheet(fileURL: exportFileURL) { _ in
+                    showExporter = false
+                    onCleanupExportFile()
                 }
             }
             .sheet(isPresented: $showCreateDraftSheet) {

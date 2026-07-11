@@ -134,7 +134,17 @@ struct MaterialLibraryAppendToSheetModal: View {
     let onEnsureExistingDraftSelection: () -> Void
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "materials.library.appendSheet.title"),
+            cancelTitle: String(localized: "common.cancel"),
+            primaryActionTitle: String(localized: "common.add"),
+            isPrimaryActionDisabled: !canAppendMaterialToSheet,
+            onCancel: onCancel,
+            onPrimaryAction: {
+                guard onConfirm() else { return }
+                onCancel()
+            }
+        ) {
             MaterialLibraryAppendToSheetForm(
                 context: context,
                 activeMaterialSheetDrafts: activeMaterialSheetDrafts,
@@ -149,24 +159,12 @@ struct MaterialLibraryAppendToSheetModal: View {
                 projectId: $projectId,
                 focusedField: focusedField
             )
-            .navigationTitle(String(localized: "materials.library.appendSheet.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel"), action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.add")) {
-                        guard onConfirm() else { return }
-                        onCancel()
-                    }
-                    .disabled(!canAppendMaterialToSheet)
-                }
-                KeyboardNavigationToolbar(
-                    focusedField: focusedField,
-                    fields: [.quantity, .unitPrice, .note]
-                )
-            }
+        }
+        .toolbar {
+            KeyboardNavigationToolbar(
+                focusedField: focusedField,
+                fields: [.quantity, .unitPrice, .note]
+            )
         }
         .onChange(of: targetMode) { _, mode in
             guard mode == .existing else { return }
@@ -297,7 +295,17 @@ struct MaterialLibraryBatchAppendSheet: View {
     let onEnsureExistingDraftSelection: () -> Void
 
     var body: some View {
-        NavigationStack {
+        AppBusinessEditForm(
+            title: String(localized: "materials.library.batchAppendSheet.title"),
+            cancelTitle: String(localized: "common.cancel"),
+            primaryActionTitle: String(localized: "common.add"),
+            isPrimaryActionDisabled: !canAppendMaterialToSheet,
+            onCancel: onCancel,
+            onPrimaryAction: {
+                guard onConfirm() else { return }
+                onCancel()
+            }
+        ) {
             MaterialLibraryBatchAppendForm(
                 context: context,
                 activeMaterialSheetDrafts: activeMaterialSheetDrafts,
@@ -309,27 +317,15 @@ struct MaterialLibraryBatchAppendSheet: View {
                 draftTitle: $draftTitle,
                 projectId: $projectId
             )
-            .navigationTitle(String(localized: "materials.library.batchAppendSheet.title"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "common.cancel"), action: onCancel)
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "common.add")) {
-                        guard onConfirm() else { return }
-                        onCancel()
-                    }
-                    .disabled(!canAppendMaterialToSheet)
-                }
-                KeyboardDismissToolbar {
-                    AppKeyboard.dismiss()
-                }
+        }
+        .toolbar {
+            KeyboardDismissToolbar {
+                AppKeyboard.dismiss()
             }
-            .onChange(of: targetMode) { _, mode in
-                guard mode == .existing else { return }
-                onEnsureExistingDraftSelection()
-            }
+        }
+        .onChange(of: targetMode) { _, mode in
+            guard mode == .existing else { return }
+            onEnsureExistingDraftSelection()
         }
         .operationToast(message: $operationMessage)
     }

@@ -68,11 +68,32 @@ struct CalculationCoreTests {
     }
 
     @Test func breakerAtLargeCurrent() {
-        #expect(EngineeringCalculations.recommendedBreaker(current: 250) == 250)
+        #expect(EngineeringCalculations.recommendedBreaker(current: 250) == nil)
     }
 
     @Test func breakerAtZero() {
-        #expect(EngineeringCalculations.recommendedBreaker(current: 0) >= 6)
+        #expect(EngineeringCalculations.recommendedBreaker(current: 0) == nil)
+    }
+
+    @Test func recommendationRulesRejectInvalidInputsInsteadOfReturningSmallestSize() {
+        for current in [Double.nan, -Double.infinity, -1, 0] {
+            #expect(EngineeringCalculations.recommendedBreaker(current: current) == nil)
+            #expect(EngineeringCalculations.recommendedWireSectionByAmpacity(current: current, isCopper: true) == nil)
+            #expect(
+                EngineeringCalculations.recommendedWireSection(
+                    current: current,
+                    length: 10,
+                    voltage: 220,
+                    isLoopLength: false,
+                    isCopper: true
+                ) == nil
+            )
+        }
+        #expect(EngineeringCalculations.recommendedConduitDiameter(wireDiameter: 3.5, wireCount: 0) == nil)
+        #expect(EngineeringCalculations.recommendedConduitDiameter(wireDiameter: .nan, wireCount: 5) == nil)
+        #expect(EngineeringCalculations.recommendedTraySize(cableArea: 0) == nil)
+        #expect(EngineeringCalculations.recommendedTraySize(cableArea: -Double.infinity) == nil)
+        #expect(EngineeringCalculations.recommendedTraySize(cableArea: 100, maxFill: 0) == nil)
     }
 
     // MARK: - ampacity
@@ -88,7 +109,7 @@ struct CalculationCoreTests {
     }
 
     @Test func ampacityUnknownSection() {
-        #expect(EngineeringCalculations.ampacity(for: 999, isCopper: true) == .greatestFiniteMagnitude)
+        #expect(EngineeringCalculations.ampacity(for: 999, isCopper: true) == 0)
     }
 
     // MARK: - voltageDrop

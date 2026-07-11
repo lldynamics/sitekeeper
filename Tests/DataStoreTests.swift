@@ -438,7 +438,7 @@ struct DataStoreTests {
         #expect(result.photoFileNames == Set(["legacy.jpg", "target.jpg", "before.jpg", "after.jpg"]))
     }
 
-    @Test func updateDailyLogPhotoPromotesLegacyPhotoIntoStructuredPhotos() {
+    @Test func updateDailyLogPhotoPromotesLegacyPhotoIntoStructuredPhotos() throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let log = DailyLog(
             date: "2026-05-16",
@@ -458,7 +458,7 @@ struct DataStoreTests {
         )
 
         #expect(updated)
-        let stored = try! #require(testStore.dailyLogs.first)
+        let stored = try #require(testStore.dailyLogs.first)
         #expect(stored.photoFileName == "legacy.jpg")
         #expect(stored.photos.count == 1)
         #expect(stored.photos.first?.fileName == "legacy.jpg")
@@ -466,7 +466,7 @@ struct DataStoreTests {
         #expect(stored.photos.first?.tag == .hiddenWork)
     }
 
-    @Test func removeDailyLogPhotoRepairsPrimaryPhotoReference() {
+    @Test func removeDailyLogPhotoRepairsPrimaryPhotoReference() throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let firstPhoto = LogPhoto(fileName: "first.jpg")
         let secondPhoto = LogPhoto(fileName: "second.jpg")
@@ -487,7 +487,7 @@ struct DataStoreTests {
         )
 
         #expect(deletedFileName == "first.jpg")
-        let stored = try! #require(testStore.dailyLogs.first)
+        let stored = try #require(testStore.dailyLogs.first)
         #expect(stored.photoFileName == "second.jpg")
         #expect(stored.photos.map(\.fileName) == ["second.jpg"])
     }

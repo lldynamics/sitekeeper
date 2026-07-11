@@ -10,15 +10,28 @@ SIM_ID="${SIM_ID:-}"
 SIM_DEVICE_TYPE="${SIM_DEVICE_TYPE:-}"
 SIM_RUNTIME="${SIM_RUNTIME:-}"
 SIM_BOOT_TIMEOUT_SECONDS="${SIM_BOOT_TIMEOUT_SECONDS:-120}"
+SIMULATOR_NAME="${SIMULATOR_NAME:-sitekeeper-preflight}"
+RESET_SIMULATOR_BEFORE_TESTS="${RESET_SIMULATOR_BEFORE_TESTS:-}"
+SIMULATOR_BUILD_TIMEOUT_SECONDS="${SIMULATOR_BUILD_TIMEOUT_SECONDS:-1800}"
+UNIT_TEST_TIMEOUT_SECONDS="${UNIT_TEST_TIMEOUT_SECONDS:-2400}"
+UI_TEST_TIMEOUT_SECONDS="${UI_TEST_TIMEOUT_SECONDS:-3000}"
+PRE_CLEAN_DERIVED_DATA="${PRE_CLEAN_DERIVED_DATA:-1}"
 RESOLVED_SIM_ID=""
 TEMP_SIM_ID=""
 DEVELOPER_DIR_PATH="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/tmp/sitekeeper_preflight_derived_data_${PPID}_$(date +%s)}"
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$ROOT_DIR/.DerivedDataRelease_preflight_${PPID}_$(date +%s)}"
+
+if [[ -z "$RESET_SIMULATOR_BEFORE_TESTS" ]]; then
+  RESET_SIMULATOR_BEFORE_TESTS=1
+  [[ -n "$SIM_ID" ]] && RESET_SIMULATOR_BEFORE_TESTS=0
+fi
 
 for arg in "$@"; do
   case "$arg" in
     --allow-dirty) ALLOW_DIRTY=1 ;;
     --skip-tests) SKIP_TESTS=1 ;;
+    --keep-derived-data) PRE_CLEAN_DERIVED_DATA=0 ;;
+    --no-reset-simulator) RESET_SIMULATOR_BEFORE_TESTS=0 ;;
     *) echo "Unknown argument: $arg" >&2; exit 1 ;;
   esac
 done
@@ -26,10 +39,41 @@ done
 echo "==> Release preflight started"
 echo "Project root: $ROOT_DIR"
 
+remove_generated_project_metadata() {
+  # sitekeeper.xcodeproj is regenerated from project.yml. On external volumes,
+  # Xcode can add Finder sidecars while reading this disposable bundle; remove
+  # only those generated sidecars, never source-tree metadata.
+  find sitekeeper.xcodeproj -type f \( -name '.DS_Store' -o -name '._*' \) -delete
+  find . -maxdepth 1 -type f -name '._sitekeeper.xcodeproj' -delete
+}
+
+remove_generated_project_metadata
+
 echo "==> Checking junk files"
-if find "$ROOT_DIR" -name ".DS_Store" -print -quit | grep -q .; then
-  echo "ERROR: Found .DS_Store in repository. Remove junk files before release." >&2
-  find "$ROOT_DIR" -name ".DS_Store" -print >&2
+collect_junk_files() {
+  {
+    # Derived data and build directories can legitimately contain Finder
+    # metadata on external volumes; they are not release inputs. Keep checking
+    # the repository source and project files themselves.
+    find . \
+      -path './.git' -prune -o \
+      -path './build' -prune -o \
+      -path './.DerivedData*' -prune -o \
+      -path './._.DerivedData*' -prune -o \
+      -type f \( -name '.DS_Store' -o -name '._*' \) -print
+    find .git -type f -name '._*' -print
+    git -c core.quotePath=false ls-files --cached -- \
+      ".DS_Store" \
+      ":(glob)**/.DS_Store" \
+      "._*" \
+      ":(glob)**/._*"
+  } | sort -u
+}
+
+JUNK_FILES="$(collect_junk_files)"
+if [[ -n "$JUNK_FILES" ]]; then
+  echo "ERROR: Found AppleDouble or .DS_Store files. Remove junk files before release." >&2
+  printf '%s\n' "$JUNK_FILES" | sed 's/^/  /' >&2
   exit 6
 fi
 
@@ -67,13 +111,14 @@ if ! command -v xcodegen >/dev/null 2>&1; then
 fi
 
 echo "==> Running xcodegen generate"
+# In an explicitly allowed dirty worktree, preserve the caller's existing
+# project-file status and only fail if this invocation of XcodeGen changes it.
+before_project_status="$(git -c core.quotePath=false status --porcelain -- project.yml sitekeeper.xcodeproj)"
 xcodegen generate
-if ! git diff --quiet -- sitekeeper.xcodeproj project.yml; then
-  sleep 5
-fi
-
-if ! git diff --quiet -- sitekeeper.xcodeproj project.yml; then
-  echo "ERROR: xcodegen produced uncommitted project changes. Commit regenerated files before release." >&2
+remove_generated_project_metadata
+after_project_status="$(git -c core.quotePath=false status --porcelain -- project.yml sitekeeper.xcodeproj)"
+if [[ "$before_project_status" != "$after_project_status" ]]; then
+  echo "ERROR: xcodegen changed project files. Commit regenerated project before release." >&2
   git status --short -- project.yml sitekeeper.xcodeproj >&2
   exit 4
 fi
@@ -119,15 +164,63 @@ simctl() {
   DEVELOPER_DIR="$DEVELOPER_DIR_PATH" xcrun simctl "$@"
 }
 
+prepare_derived_data() {
+  local resolved_path resolved_root
+  resolved_path="$(python3 -c 'import os, sys; print(os.path.realpath(os.path.expanduser(sys.argv[1])))' "$DERIVED_DATA_PATH")"
+  resolved_root="$(python3 -c 'import os, sys; print(os.path.realpath(os.path.expanduser(sys.argv[1])))' "$ROOT_DIR")"
+  case "$resolved_path" in
+    /tmp/*|/private/tmp/*|"$resolved_root"/.DerivedData*) ;;
+    *)
+      echo "ERROR: Refusing unsafe DerivedData path: $DERIVED_DATA_PATH. Use /tmp or $ROOT_DIR/.DerivedData*." >&2
+      exit 2
+      ;;
+  esac
+  if [[ "$PRE_CLEAN_DERIVED_DATA" -eq 1 ]]; then
+    echo "==> Cleaning DerivedData path: $resolved_path"
+    rm -rf "$resolved_path"
+  fi
+  DERIVED_DATA_PATH="$resolved_path"
+  mkdir -p "$DERIVED_DATA_PATH"
+}
+
+remove_derived_data_metadata() {
+  # External volumes can create AppleDouble sidecars for build products. A
+  # simulator treats an .appex sidecar as a real extension and rejects install.
+  find "$DERIVED_DATA_PATH" -type f \( -name '.DS_Store' -o -name '._*' \) -delete
+}
+
+terminate_process_tree() {
+  local pid="$1"
+  local signal="${2:-TERM}"
+  local child_pid
+
+  while IFS= read -r child_pid; do
+    [[ -n "$child_pid" ]] || continue
+    terminate_process_tree "$child_pid" "$signal"
+  done < <(pgrep -P "$pid" 2>/dev/null || true)
+
+  kill "-$signal" "$pid" >/dev/null 2>&1 || true
+}
+
 run_with_timeout() {
   local timeout_seconds="$1"
-  shift
+  local label="$2"
+  shift 2
+
+  local timeout_marker
+  timeout_marker="$(mktemp "/tmp/sitekeeper-preflight-timeout.XXXXXX")"
 
   "$@" &
   local command_pid=$!
   (
     sleep "$timeout_seconds"
-    kill "$command_pid" >/dev/null 2>&1 || true
+    if kill -0 "$command_pid" >/dev/null 2>&1; then
+      echo "timed_out" >"$timeout_marker"
+      echo "ERROR: ${label} timed out after ${timeout_seconds}s." >&2
+      terminate_process_tree "$command_pid" TERM
+      sleep 5
+      terminate_process_tree "$command_pid" KILL
+    fi
   ) &
   local timeout_pid=$!
 
@@ -138,6 +231,16 @@ run_with_timeout() {
 
   kill "$timeout_pid" >/dev/null 2>&1 || true
   wait "$timeout_pid" >/dev/null 2>&1 || true
+
+  local did_timeout=0
+  if [[ -s "$timeout_marker" ]]; then
+    did_timeout=1
+  fi
+  rm -f "$timeout_marker"
+
+  if [[ "$did_timeout" -eq 1 ]]; then
+    return 124
+  fi
   return "$status"
 }
 
@@ -149,16 +252,26 @@ cleanup_temp_simulator() {
 }
 trap cleanup_temp_simulator EXIT
 
-list_candidate_simulator_ids() {
-  {
-    simctl list devices booted available 2>/dev/null | awk -F '[()]' '/iPhone/ && $2 ~ /^[0-9A-Fa-f-]+$/ {print $2}'
-    simctl list devices available 2>/dev/null | awk -F '[()]' '/iPhone/ && $2 ~ /^[0-9A-Fa-f-]+$/ {print $2}'
-  } | awk '!seen[$0]++'
+find_existing_named_simulator_id() {
+  local simulator_name="$1"
+  simctl list devices available 2>/dev/null | awk -F '[()]' -v wanted_name="$simulator_name" '
+    $1 ~ /^[[:space:]]/ {
+      name = $1
+      gsub(/^[[:space:]]+|[[:space:]]+$/, "", name)
+      if (name == wanted_name && $2 ~ /^[0-9A-Fa-f-]+$/) {
+        print $2
+        exit
+      }
+    }
+  '
 }
 
 simulator_bootstatus_ok() {
   local simulator_id="$1"
-  run_with_timeout "$SIM_BOOT_TIMEOUT_SECONDS" simctl bootstatus "$simulator_id" -b >/dev/null 2>&1
+  run_with_timeout \
+    "$SIM_BOOT_TIMEOUT_SECONDS" \
+    "simulator bootstatus (${simulator_id})" \
+    simctl bootstatus "$simulator_id" -b >/dev/null 2>&1
 }
 
 validate_simulator_id() {
@@ -211,7 +324,7 @@ create_temp_simulator() {
   local created_id
   while IFS= read -r device_type; do
     [[ -n "$device_type" ]] || continue
-    local simulator_name="sitekeeper-preflight-$(date +%Y%m%d%H%M%S)"
+    local simulator_name="$SIMULATOR_NAME"
     if ! created_id="$(simctl create "$simulator_name" "$device_type" "$runtime" 2>/dev/null)"; then
       echo "WARN: Failed to create temporary simulator with $device_type on $runtime." >&2
       continue
@@ -242,18 +355,51 @@ resolve_simulator_id() {
     return 1
   fi
 
-  local candidate_id
-  while IFS= read -r candidate_id; do
-    [[ -n "$candidate_id" ]] || continue
-    if validate_simulator_id "$candidate_id"; then
-      RESOLVED_SIM_ID="$candidate_id"
+  local named_simulator_id=""
+  named_simulator_id="$(find_existing_named_simulator_id "$SIMULATOR_NAME" || true)"
+  if [[ -n "$named_simulator_id" ]]; then
+    if validate_simulator_id "$named_simulator_id"; then
+      RESOLVED_SIM_ID="$named_simulator_id"
       return 0
     fi
-    echo "WARN: Skipping unusable simulator: $candidate_id" >&2
-  done < <(list_candidate_simulator_ids)
+    echo "WARN: Existing named simulator is unusable, recreating: $SIMULATOR_NAME ($named_simulator_id)" >&2
+    simctl shutdown "$named_simulator_id" >/dev/null 2>&1 || true
+    simctl delete "$named_simulator_id" >/dev/null 2>&1 || true
+  fi
 
   create_temp_simulator
 }
+
+reset_simulator_state() {
+  local simulator_id="$1"
+  if [[ "$RESET_SIMULATOR_BEFORE_TESTS" -ne 1 ]]; then
+    return 0
+  fi
+
+  echo "==> Resetting simulator: $simulator_id"
+  simctl shutdown "$simulator_id" >/dev/null 2>&1 || true
+  simctl erase "$simulator_id" >/dev/null 2>&1 || true
+  simctl boot "$simulator_id" >/dev/null 2>&1 || true
+  simulator_bootstatus_ok "$simulator_id"
+}
+
+run_xcodebuild_with_timeout() {
+  local timeout_seconds="$1"
+  local label="$2"
+  shift 2
+
+  set +e
+  run_with_timeout "$timeout_seconds" "$label" "$@"
+  local status=$?
+  set -e
+
+  if [[ "$status" -eq 124 ]]; then
+    echo "ERROR: ${label} timed out." >&2
+  fi
+  return "$status"
+}
+
+prepare_derived_data
 
 echo "==> Debug build"
 DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${BUILD_CMD[@]}" -configuration Debug build
@@ -266,29 +412,59 @@ if [[ "$SKIP_TESTS" -ne 1 ]]; then
     echo "ERROR: No bootable iPhone simulator found. Set SIM_ID manually or install an iOS simulator runtime." >&2
     exit 5
   }
-  echo "==> Using simulator: $RESOLVED_SIM_ID"
+  echo "==> Using simulator: $RESOLVED_SIM_ID (name: $SIMULATOR_NAME)"
+  reset_simulator_state "$RESOLVED_SIM_ID" || {
+    echo "ERROR: Failed to reset simulator state for $RESOLVED_SIM_ID." >&2
+    exit 5
+  }
+
+  SIMULATOR_UNIT_CMD=(
+    xcodebuild
+    -quiet
+    -project sitekeeper.xcodeproj
+    -scheme sitekeeper-iOS
+    -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}"
+    -derivedDataPath "$DERIVED_DATA_PATH"
+    CODE_SIGNING_ALLOWED=NO
+  )
+
+  SIMULATOR_UI_CMD=(
+    xcodebuild
+    -quiet
+    -project sitekeeper.xcodeproj
+    -scheme sitekeeper-iOS-UITests
+    -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}"
+    -derivedDataPath "$DERIVED_DATA_PATH"
+    CODE_SIGNING_ALLOWED=NO
+  )
+
+  echo "==> Simulator build-for-testing (unit test scheme gate)"
+  run_xcodebuild_with_timeout \
+    "$SIMULATOR_BUILD_TIMEOUT_SECONDS" \
+    "simulator build-for-testing (sitekeeper-iOS)" \
+    env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_UNIT_CMD[@]}" build-for-testing
+  remove_derived_data_metadata
 
   echo "==> Unit tests"
-  DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
-  xcodebuild \
-    -quiet \
-    -project sitekeeper.xcodeproj \
-    -scheme sitekeeper-iOS \
-    -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    CODE_SIGNING_ALLOWED=NO \
-    test
+  run_xcodebuild_with_timeout \
+    "$UNIT_TEST_TIMEOUT_SECONDS" \
+    "unit tests (sitekeeper-iOS)" \
+    env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_UNIT_CMD[@]}" test-without-building
+
+  echo "==> Simulator build-for-testing (UI test scheme gate)"
+  run_xcodebuild_with_timeout \
+    "$SIMULATOR_BUILD_TIMEOUT_SECONDS" \
+    "simulator build-for-testing (sitekeeper-iOS-UITests)" \
+    env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_UI_CMD[@]}" build-for-testing
+  remove_derived_data_metadata
 
   echo "==> UI tests"
-  DEVELOPER_DIR="$DEVELOPER_DIR_PATH" \
-  xcodebuild \
-    -quiet \
-    -project sitekeeper.xcodeproj \
-    -scheme sitekeeper-iOS-UITests \
-    -destination "platform=iOS Simulator,id=${RESOLVED_SIM_ID}" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    CODE_SIGNING_ALLOWED=NO \
-    test
+  run_xcodebuild_with_timeout \
+    "$UI_TEST_TIMEOUT_SECONDS" \
+    "ui tests (sitekeeper-iOS-UITests)" \
+    env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" "${SIMULATOR_UI_CMD[@]}" test-without-building
 fi
+
+remove_generated_project_metadata
 
 echo "==> Release preflight passed"

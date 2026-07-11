@@ -43,14 +43,15 @@ struct SitekeeperProvider: TimelineProvider {
 
     func getSnapshot(in context: Context, completion: @escaping (WidgetEntry) -> Void) {
         let data = WidgetDataStore.shared
-        let entry = WidgetEntry(date: data.lastUpdatedDate ?? Date(), data: data)
+        let entry = WidgetEntry(date: Date(), data: data)
         completion(entry)
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<WidgetEntry>) -> Void) {
+        let now = Date()
         let data = WidgetDataStore.shared
-        let entry = WidgetEntry(date: data.lastUpdatedDate ?? Date(), data: data)
-        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: Date()) ?? Date().addingTimeInterval(900)
+        let entry = WidgetEntry(date: now, data: data)
+        let nextUpdate = Calendar.current.date(byAdding: .minute, value: 15, to: now) ?? now.addingTimeInterval(900)
         let timeline = Timeline(entries: [entry], policy: .after(nextUpdate))
         completion(timeline)
     }
@@ -59,6 +60,15 @@ struct SitekeeperProvider: TimelineProvider {
 struct WidgetEntry: TimelineEntry {
     let date: Date
     let data: WidgetExportData
+
+    init(date: Date, data: WidgetExportData) {
+        self.date = date
+        self.data = data.refreshingTimeSensitiveRisks(at: date)
+    }
+
+    var lastUpdatedDate: Date {
+        data.lastUpdatedDate ?? date
+    }
 }
 
 struct SitekeeperWidgetEntryView: View {

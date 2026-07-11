@@ -108,6 +108,13 @@ struct QuickNoteAttachmentPickerBar: View {
                     : String(localized: "quick_note_media_start_recording_accessibility_hint")
                 )
 
+                Button { showDrawing = true } label: {
+                    compactToolIcon("pencil.and.outline")
+                }
+                .accessibilityIdentifier("quick-note-add-drawing")
+                .accessibilityLabel(String(localized: "quick_note_media_add_drawing_accessibility_label"))
+                .accessibilityHint(String(localized: "quick_note_media_add_drawing_accessibility_hint"))
+
                 Button { showFileImporter = true } label: {
                     compactToolIcon("paperclip")
                 }
@@ -180,7 +187,9 @@ struct QuickNoteAttachmentPickerBar: View {
         Label(title, systemImage: systemImage)
             .font(.caption.weight(.semibold))
     }
+}
 
+extension QuickNoteAttachmentPickerBar {
     private func openCamera() {
         guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
             showError(String(localized: "quick_note_media_camera_unavailable_error"))

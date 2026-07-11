@@ -8,9 +8,11 @@ struct SitekeeperApp: App {
 
     init() {
         AppLanguage.restoreFromStorage()
+#if DEBUG
         if UITestLaunchConfig.shouldResetLocalState {
             UITestLaunchConfig.resetLocalState()
         }
+#endif
         _store = State(initialValue: DataStore())
     }
 
@@ -23,11 +25,15 @@ struct SitekeeperApp: App {
             .environment(store.materialLibraryStore)
             .environment(store.userPreferenceStore)
 
+ #if DEBUG
         if let size = UITestLaunchConfig.dynamicTypeSizeOverride {
             rootView.dynamicTypeSize(size)
         } else {
             rootView
         }
+ #else
+        rootView
+ #endif
     }
 
     var body: some Scene {
@@ -39,7 +45,9 @@ struct SitekeeperApp: App {
             scenePhaseTask = Task {
                 switch newPhase {
                 case .active:
+#if DEBUG
                     guard !UITestLaunchConfig.isUITestSession else { return }
+#endif
                     await CloudAutoBackupScheduler.shared.triggerIfNeeded(store: store)
                 case .background, .inactive:
                     await store.flushSave()
@@ -51,6 +59,7 @@ struct SitekeeperApp: App {
     }
 }
 
+#if DEBUG
 private enum UITestLaunchConfig {
     private static let resetArguments = ["-uitest-reset-state"]
     private static let dynamicTypeSizeArgument = "-uitest-dynamic-type-size"
@@ -182,6 +191,7 @@ private enum UITestLaunchConfig {
         preferenceStore.synchronize()
     }
 }
+#endif
 
 private extension DynamicTypeSize {
     static func uiTestValue(_ rawValue: String) -> DynamicTypeSize? {

@@ -40,12 +40,7 @@ struct WatermarkCameraTests {
     }
 
     @Test func settingsStorePersistsWatermarkCameraChoices() throws {
-        let suiteName = "WatermarkCameraTests.\(UUID().uuidString)"
-        let defaults = try #require(UserDefaults(suiteName: suiteName))
-        defaults.removePersistentDomain(forName: suiteName)
-        defer { defaults.removePersistentDomain(forName: suiteName) }
-
-        let preferences = UserPreferencesStore(defaults: defaults)
+        let (defaults, preferences) = try makeIsolatedPreferences()
         let settings = WatermarkCameraSettingsStore(preferences: preferences)
         let projectId = UUID()
 
@@ -76,5 +71,95 @@ struct WatermarkCameraTests {
         #expect(restored.showGrid == false)
         #expect(restored.flashEnabled == true)
         #expect(restored.burstCount == 5)
+
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraSelectedProjectId) == projectId.uuidString)
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraProjectName) == "测试工地")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraPhotographer) == "张工")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraLocationText) == "1.00000, 2.00000")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraTemplateRaw) == CameraWatermarkTemplate.rectification.rawValue)
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraTag) == "整改前")
+        #expect(defaults.bool(forKey: UserPreferenceKeys.watermarkCameraAutoSaveToAlbum) == false)
+        #expect(defaults.bool(forKey: UserPreferenceKeys.watermarkCameraAutoOpenLogDraft) == true)
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraExportQualityRaw) == WatermarkExportQuality.high.rawValue)
+        #expect(defaults.bool(forKey: UserPreferenceKeys.watermarkCameraShowGrid) == false)
+        #expect(defaults.bool(forKey: UserPreferenceKeys.watermarkCameraFlashEnabled) == true)
+        #expect(defaults.integer(forKey: UserPreferenceKeys.watermarkCameraBurstCount) == 5)
+    }
+
+    @Test func settingsStoreLoadsDefaultValuesWhenNoPersistedData() throws {
+        let (defaults, preferences) = try makeIsolatedPreferences()
+        let settings = WatermarkCameraSettingsStore(preferences: preferences)
+
+        #expect(settings.selectedProjectId == nil)
+        #expect(settings.selectedProjectIdRaw.isEmpty)
+        #expect(settings.projectName.isEmpty)
+        #expect(settings.photographer.isEmpty)
+        #expect(settings.locationText.isEmpty)
+        #expect(settings.template == .constructionLog)
+        #expect(settings.tag == String(localized: "wm_camera_default_tag"))
+        #expect(settings.autoSaveToAlbum == true)
+        #expect(settings.autoOpenLogDraft == false)
+        #expect(settings.exportQuality == .standard)
+        #expect(settings.showGrid == true)
+        #expect(settings.flashEnabled == false)
+        #expect(settings.burstCount == 1)
+        #expect(settings.boundedBurstCount == 1)
+
+        #expect(Set(WatermarkCameraSettingsStore.managedPreferenceKeys).count == WatermarkCameraSettingsStore.managedPreferenceKeys.count)
+        for key in WatermarkCameraSettingsStore.managedPreferenceKeys {
+            #expect(defaults.object(forKey: key) != nil)
+        }
+    }
+
+    @Test func settingsStoreMigratesLegacyValuesAndNormalizesInvalidFields() throws {
+        let (defaults, preferences) = try makeIsolatedPreferences()
+
+        defaults.set("not-a-uuid", forKey: UserPreferenceKeys.watermarkCameraSelectedProjectId)
+        defaults.set("  现场工程  ", forKey: UserPreferenceKeys.watermarkCameraProjectName)
+        defaults.set("  李工  ", forKey: UserPreferenceKeys.watermarkCameraPhotographer)
+        defaults.set("  ", forKey: UserPreferenceKeys.watermarkCameraLocationText)
+        defaults.set("legacy-template", forKey: UserPreferenceKeys.watermarkCameraTemplateRaw)
+        defaults.set("   ", forKey: UserPreferenceKeys.watermarkCameraTag)
+        defaults.set(false, forKey: UserPreferenceKeys.watermarkCameraAutoSaveToAlbum)
+        defaults.set(true, forKey: UserPreferenceKeys.watermarkCameraAutoOpenLogDraft)
+        defaults.set("legacy-quality", forKey: UserPreferenceKeys.watermarkCameraExportQualityRaw)
+        defaults.set(false, forKey: UserPreferenceKeys.watermarkCameraShowGrid)
+        defaults.set(true, forKey: UserPreferenceKeys.watermarkCameraFlashEnabled)
+        defaults.set(99, forKey: UserPreferenceKeys.watermarkCameraBurstCount)
+
+        let settings = WatermarkCameraSettingsStore(preferences: preferences)
+
+        #expect(settings.selectedProjectId == nil)
+        #expect(settings.selectedProjectIdRaw.isEmpty)
+        #expect(settings.projectName == "现场工程")
+        #expect(settings.photographer == "李工")
+        #expect(settings.locationText.isEmpty)
+        #expect(settings.template == .constructionLog)
+        #expect(settings.templateRaw == CameraWatermarkTemplate.constructionLog.rawValue)
+        #expect(settings.tag == String(localized: "wm_camera_default_tag"))
+        #expect(settings.autoSaveToAlbum == false)
+        #expect(settings.autoOpenLogDraft == true)
+        #expect(settings.exportQuality == .standard)
+        #expect(settings.exportQualityRaw == WatermarkExportQuality.standard.rawValue)
+        #expect(settings.showGrid == false)
+        #expect(settings.flashEnabled == true)
+        #expect(settings.burstCount == 5)
+
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraSelectedProjectId) == "")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraProjectName) == "现场工程")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraPhotographer) == "李工")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraLocationText) == "")
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraTemplateRaw) == CameraWatermarkTemplate.constructionLog.rawValue)
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraTag) == String(localized: "wm_camera_default_tag"))
+        #expect(defaults.string(forKey: UserPreferenceKeys.watermarkCameraExportQualityRaw) == WatermarkExportQuality.standard.rawValue)
+        #expect(defaults.integer(forKey: UserPreferenceKeys.watermarkCameraBurstCount) == 5)
+    }
+
+    private func makeIsolatedPreferences() throws -> (defaults: UserDefaults, preferences: UserPreferencesStore) {
+        let suiteName = "WatermarkCameraTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        let preferences = UserPreferencesStore(defaults: defaults)
+        return (defaults, preferences)
     }
 }

@@ -1,0 +1,67 @@
+name: Release Gate
+
+on:
+  pull_request:
+    paths:
+      - "project.yml"
+      - "Sources/**"
+      - "Widget/**"
+      - "Tests/**"
+      - "UITests/**"
+      - "scripts/release/**"
+      - "scripts/dev/**"
+      - "scripts/localization/**"
+      - "scripts/legal/**"
+      - ".github/workflows/release-gate.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "project.yml"
+      - "Sources/**"
+      - "Widget/**"
+      - "Tests/**"
+      - "UITests/**"
+      - "scripts/release/**"
+      - "scripts/dev/**"
+      - "scripts/localization/**"
+      - "scripts/legal/**"
+      - ".github/workflows/release-gate.yml"
+
+jobs:
+  release-boundaries:
+    name: Release boundary policies
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Run release boundary policies
+        run: |
+          bash scripts/release/check_file_deletion_policy.sh
+          bash scripts/release/check_datastore_write_policy.sh
+          bash scripts/release/check_backup_contract_boundary.sh
+          bash scripts/release/check_drawing_release_boundary.sh
+          bash scripts/release/check_dynamic_type_policy.sh
+          bash scripts/release/check_userdefaults_policy.sh
+          bash scripts/release/check_swiftui_identity_policy.sh
+          bash scripts/release/check_unchecked_sendable_policy.sh
+          python3 scripts/legal/export_privacy_policy.py --check
+
+  iOS-release-gate:
+    name: iOS build, unit tests and release preflight
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install release tools
+        run: brew install xcodegen swiftformat swiftlint
+
+      - name: Run one-click release gate
+        env:
+          DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-release-derived-data
+          SIMULATOR_NAME: sitekeeper-ci-release
+        run: scripts/release/one_click_release_check.sh

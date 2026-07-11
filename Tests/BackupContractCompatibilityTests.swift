@@ -4,6 +4,52 @@ import Foundation
 
 @MainActor
 struct BackupContractCompatibilityTests {
+    @Test func backupManifestAndMetadataRoundTripShareCurrentSchema() throws {
+        let snapshot = BackupSnapshot(
+            appVersion: "1.2.3",
+            appBuild: "456",
+            backupCreatedAt: "2026-07-11 01:45",
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(name: "契约对齐项目", location: "", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            templates: []
+        )
+
+        let manifest = try BackupArchiveService.decodeManifest(
+            from: BackupArchiveService.encodeManifest(from: snapshot)
+        )
+        let decodedSnapshot = try BackupArchiveService.decodeJSONSnapshot(
+            from: BackupArchiveService.encodeMetadata(snapshot)
+        )
+
+        #expect(manifest.schemaVersion == BackupSnapshot.currentSchemaVersion)
+        #expect(decodedSnapshot.schemaVersion == manifest.schemaVersion)
+        #expect(manifest.metadataPath == BackupArchiveService.metadataPath)
+        #expect(manifest.appVersion == decodedSnapshot.appVersion)
+        #expect(manifest.appBuild == decodedSnapshot.appBuild)
+        #expect(manifest.exportedAt == decodedSnapshot.backupCreatedAt)
+    }
+
+    @Test func backupManifestRejectsUnexpectedMetadataPath() throws {
+        let data = try JSONEncoder().encode(
+            BackupArchiveManifest(
+                schemaVersion: BackupSnapshot.currentSchemaVersion,
+                metadataPath: "data/other.json"
+            )
+        )
+
+        do {
+            _ = try BackupArchiveService.decodeManifest(from: data)
+            Issue.record("预期应拒绝 metadataPath 偏离合同的 manifest")
+        } catch BackupArchiveError.invalidBackup {
+        } catch {
+            Issue.record("收到意外错误：\(error.localizedDescription)")
+        }
+    }
+
     @Test func legacyBackupWithoutSchemaVersionIsRejected() throws {
         let legacyJSON = """
         {

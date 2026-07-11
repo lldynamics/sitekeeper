@@ -32,7 +32,7 @@ enum AppBrand {
 }
 
 enum AppPolicy {
-    static let privacyPolicyFallbackLastUpdated = "2026-05-15"
+    static let privacyPolicyFallbackLastUpdated = "2026-05-24"
 
     static var privacyPolicyLastUpdated: String {
         privacyPolicyDocument().lastUpdatedDisplay
@@ -51,9 +51,6 @@ enum AppPolicy {
 
 enum AppFeatureFlags {
     static var allowsSampleDataImport: Bool {
-        if TransferLimitPolicy.allowsSampleDataImport {
-            return true
-        }
 #if DEBUG
         return true
 #else

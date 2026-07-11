@@ -2,7 +2,11 @@ import Foundation
 
 extension DataStore {
     private var allowsSampleDataImportInCurrentProcess: Bool {
+#if DEBUG
         AppFeatureFlags.allowsSampleDataImport || ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+#else
+        false
+#endif
     }
 
     func applyLoadedSnapshot(_ snapshot: BackupSnapshot) {
@@ -42,6 +46,7 @@ extension DataStore {
             persistenceErrorMessage = String(localized: "当前发布环境已关闭示例数据导入。")
             return false
         }
+#if DEBUG
         guard let snapshot = loadSampleFixtureSnapshot() else {
             persistenceErrorMessage = String(localized: "无法加载测试数据，请检查 SampleDataFixture.json。")
             return false
@@ -52,5 +57,8 @@ extension DataStore {
         applySampleFixtureSnapshot(snapshot)
         save(includePhotoFiles: false)
         return true
+#else
+        return false
+#endif
     }
 }

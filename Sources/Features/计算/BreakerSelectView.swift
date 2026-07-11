@@ -78,8 +78,18 @@ struct BreakerSelectView: View {
             return
         }
         let rated = i * loadType.factor
-        let standardBreakers = EngineeringCalculations.standardBreakerSizes
-        let breaker = standardBreakers.first { Double($0) >= rated } ?? 250
+        guard let breaker = EngineeringCalculations.recommendedBreaker(
+            current: i,
+            safetyFactor: loadType.factor
+        ) else {
+            presentError(
+                calculatorLocFormat(
+                    "计算整定值 %@ 已超出 250A 标准表，请按设计选用更高规格并校核保护配合。",
+                    CalculatorFormatting.amperes(rated, digits: 1)
+                )
+            )
+            return
+        }
         let rcdRecommended = loadType == .socket
         let warning = rated > 100
         resultModel = .singleSection(

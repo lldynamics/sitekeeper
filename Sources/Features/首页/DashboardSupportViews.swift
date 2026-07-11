@@ -90,6 +90,14 @@ func dashboardDestinationView(_ destination: DashboardDestination) -> some View 
     }
 }
 
+struct LazyDashboardDestinationView: View {
+    let destination: DashboardDestination
+
+    var body: some View {
+        dashboardDestinationView(destination)
+    }
+}
+
 struct TodayPrimaryQuickAction: Identifiable {
     let id = UUID()
     let title: String
@@ -132,7 +140,7 @@ struct TodayMiniAction: View {
 
     var body: some View {
         NavigationLink {
-            dashboardDestinationView(destination)
+            LazyDashboardDestinationView(destination: destination)
         } label: {
             HStack(spacing: AppSpacing.tight) {
                 Image(systemName: systemImage)
@@ -162,7 +170,7 @@ struct TodayMiniAction: View {
         .contextMenu {
             ForEach(quickActions) { action in
                 NavigationLink {
-                    dashboardDestinationView(action.destination)
+                    LazyDashboardDestinationView(destination: action.destination)
                 } label: {
                     Label(action.title, systemImage: action.systemImage)
                 }
@@ -236,7 +244,19 @@ struct BookkeepingProjectPickerView: View {
     var body: some View {
         List {
             if projects.isEmpty {
-                ContentUnavailableView(String(localized: "暂无进行中工程"), systemImage: "building.2")
+                AppActionableEmptyState(
+                    title: String(localized: "暂无进行中工程"),
+                    systemImage: "building.2",
+                    message: String(localized: "先创建或启用一个工程，再记录收支。")
+                ) {
+                    NavigationLink {
+                        ProjectListView()
+                    } label: {
+                        Label(String(localized: "前往工程管理"), systemImage: "arrow.right.circle")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("bookkeeping-empty-open-projects")
+                }
             } else {
                 Section(String(localized: "选择工程后直接进入项目记账")) {
                     ForEach(projects) { project in

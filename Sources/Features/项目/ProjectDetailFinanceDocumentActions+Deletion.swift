@@ -63,10 +63,15 @@ extension ProjectDetailFinanceDocumentActions {
 
         let recordsToDelete = store.projectFinancialRecords.filter { ids.contains($0.id) }
         guard !recordsToDelete.isEmpty else { return nil }
-        let linkedDocumentIds = Set(recordsToDelete.flatMap(\.linkedDocumentIds))
+        let documentProjectIDs = Dictionary(uniqueKeysWithValues: store.projectDocuments.map { ($0.id, $0.projectId) })
+        let recordProjectIDs = Dictionary(uniqueKeysWithValues: recordsToDelete.map { ($0.id, $0.projectId) })
+        let linkedDocumentIds = Set(recordsToDelete.flatMap { record in
+            record.linkedDocumentIds.filter { documentProjectIDs[$0] == record.projectId }
+        })
         let linkedByRecordFieldIds: Set<UUID> = Set(
             store.projectDocuments.compactMap { document in
-                guard let linkedId = document.linkedFinancialRecordId, ids.contains(linkedId) else { return nil }
+                guard let linkedId = document.linkedFinancialRecordId,
+                      recordProjectIDs[linkedId] == document.projectId else { return nil }
                 return document.id
             }
         )

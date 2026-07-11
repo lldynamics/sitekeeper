@@ -1,5 +1,4 @@
 import Foundation
-import Network
 
 struct CloudBackupContentOptions: Equatable {
     var includeBusinessRecords = true
@@ -128,144 +127,6 @@ enum CloudBackupSettingsStore {
     }
 }
 
-enum CloudNetworkPolicyChecker {
-    static func isUsingWiFi(timeout: TimeInterval = 1.2) async -> Bool? {
-        guard let path = await CloudNetworkPathMonitor.shared.currentPath(timeout: timeout) else { return nil }
-        guard path.status == .satisfied else { return false }
-        return path.usesInterfaceType(.wifi)
-    }
-}
-
-private final class CloudNetworkPathMonitor: @unchecked Sendable {
-    static let shared = CloudNetworkPathMonitor()
-
-    private let monitor = NWPathMonitor()
-    private let queue = DispatchQueue(label: "com.chengjinfang.sitekeeper.cloudbackup.network")
-    private let lock = NSLock()
-    private var latestPath: NWPath?
-    private var waiters: [UUID: CloudNetworkPathWaiter] = [:]
-
-    private init() {
-        monitor.pathUpdateHandler = { [weak self] path in
-            self?.handle(path)
-        }
-        monitor.start(queue: queue)
-    }
-
-    deinit {
-        monitor.cancel()
-    }
-
-    func currentPath(timeout: TimeInterval) async -> NWPath? {
-        let id = UUID()
-        let waiter = CloudNetworkPathWaiter()
-        return await withTaskCancellationHandler {
-            await withCheckedContinuation { continuation in
-                guard !Task.isCancelled else {
-                    continuation.resume(returning: nil)
-                    return
-                }
-
-                switch registerWaiter(id: id, waiter: waiter, continuation: continuation) {
-                case .resolved(let path):
-                    continuation.resume(returning: path)
-                    return
-                case .waiting:
-                    break
-                }
-
-                queue.asyncAfter(deadline: .now() + timeout) {
-                    self.resumeWaiter(id: id, path: nil)
-                }
-            }
-        } onCancel: {
-            removeWaiter(id: id)
-            waiter.resume(returning: nil)
-        }
-    }
-
-    private func handle(_ path: NWPath) {
-        let pending: [CloudNetworkPathWaiter]
-        lock.lock()
-        latestPath = path
-        pending = Array(waiters.values)
-        waiters.removeAll()
-        lock.unlock()
-
-        for waiter in pending {
-            waiter.resume(returning: path)
-        }
-    }
-
-    private enum WaiterRegistration {
-        case resolved(NWPath?)
-        case waiting
-    }
-
-    private func registerWaiter(
-        id: UUID,
-        waiter: CloudNetworkPathWaiter,
-        continuation: CheckedContinuation<NWPath?, Never>
-    ) -> WaiterRegistration {
-        lock.lock()
-        defer { lock.unlock() }
-
-        if let latestPath {
-            return .resolved(latestPath)
-        }
-        guard waiter.install(continuation) else {
-            return .resolved(nil)
-        }
-        waiters[id] = waiter
-        return .waiting
-    }
-
-    private func resumeWaiter(id: UUID, path: NWPath?) {
-        let waiter: CloudNetworkPathWaiter?
-        lock.lock()
-        waiter = waiters.removeValue(forKey: id)
-        lock.unlock()
-
-        waiter?.resume(returning: path)
-    }
-
-    private func removeWaiter(id: UUID) {
-        lock.lock()
-        waiters.removeValue(forKey: id)
-        lock.unlock()
-    }
-}
-
-private final class CloudNetworkPathWaiter: @unchecked Sendable {
-    private let lock = NSLock()
-    private var continuation: CheckedContinuation<NWPath?, Never>?
-    private var isResolved = false
-
-    func install(_ continuation: CheckedContinuation<NWPath?, Never>) -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-
-        guard !isResolved else { return false }
-        self.continuation = continuation
-        return true
-    }
-
-    func resume(returning path: NWPath?) {
-        let continuation: CheckedContinuation<NWPath?, Never>?
-        lock.lock()
-        if isResolved {
-            lock.unlock()
-            return
-        }
-        isResolved = true
-        continuation = self.continuation
-        self.continuation = nil
-        lock.unlock()
-
-        continuation?.resume(returning: path)
-    }
-}
-
 enum CloudBackupContentError: LocalizedError {
     case noSelection
 
@@ -327,6 +188,8 @@ extension BackupSnapshot {
             snapshot.recentMaterialKeys = []
         }
 
+        snapshot.removeExcludedReferenceLinks()
+
         if !normalizedOptions.includeAttachments {
             snapshot.dailyLogs = snapshot.dailyLogs.map { log in
                 var value = log
@@ -349,6 +212,18 @@ extension BackupSnapshot {
                 var value = method
                 value.attachments = []
                 value.tutorialAttachments = []
+                return value
+            }
+            // 图纸与项目资料的 fileName 会被归档写入器用来读取原件。关闭附件时，
+            // 不能只清空 BackupFile 数组，否则仍会把这些原件上传到云端。
+            snapshot.projectDrawings = snapshot.projectDrawings.map { drawing in
+                var value = drawing
+                value.fileName = ""
+                return value
+            }
+            snapshot.projectDocuments = snapshot.projectDocuments.map { document in
+                var value = document
+                value.fileName = ""
                 return value
             }
             snapshot.photoFiles = []
@@ -375,6 +250,91 @@ extension BackupSnapshot {
         snapshot.documentFiles = snapshot.documentFiles.filter { documentNames.contains($0.fileName) }
         snapshot.quickNoteAttachmentFiles = snapshot.quickNoteAttachmentFiles.filter { attachmentNames.contains($0.fileName) }
         return snapshot
+    }
+
+    private mutating func removeExcludedReferenceLinks() {
+        let projectIDs = Set(projects.map(\.id))
+        let constructionMethodIDs = Set(constructionMethods.map(\.id))
+        let documentProjectIDs = Dictionary(uniqueKeysWithValues: projectDocuments.map { ($0.id, $0.projectId) })
+        let financialRecordProjectIDs = Dictionary(uniqueKeysWithValues: projectFinancialRecords.map { ($0.id, $0.projectId) })
+
+        func validProject(_ id: UUID?) -> UUID? {
+            guard let id, projectIDs.contains(id) else { return nil }
+            return id
+        }
+
+        materialItems = materialItems.map { item in
+            var value = item
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        quoteItems = quoteItems.map { item in
+            var value = item
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        laborRecords = laborRecords.map { item in
+            var value = item
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        historyRecords = historyRecords.map { record in
+            var value = record
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        quickNotes = quickNotes.map { note in
+            var value = note
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        materialSheetDrafts = materialSheetDrafts.map { draft in
+            var value = draft
+            value.projectId = validProject(value.projectId)
+            return value
+        }
+        dailyLogs = dailyLogs.map { log in
+            var value = log
+            value.projectId = validProject(value.projectId)
+            value.linkedConstructionMethodIDs = value.linkedConstructionMethodIDs.filter(constructionMethodIDs.contains)
+            return value
+        }
+        siteTodos = siteTodos.map { todo in
+            var value = todo
+            value.projectId = validProject(value.projectId)
+            value.linkedConstructionMethodIDs = value.linkedConstructionMethodIDs.filter(constructionMethodIDs.contains)
+            return value
+        }
+        projectContacts = projectContacts.map { contact in
+            var value = contact
+            value.relatedProjectIds = value.relatedProjectIds.filter(projectIDs.contains)
+            return value
+        }
+        projectFinancialRecords = projectFinancialRecords.map { record in
+            var value = record
+            value.linkedDocumentIds = value.linkedDocumentIds.filter { documentProjectIDs[$0] == value.projectId }
+            return value
+        }
+        projectWarehouseMovements = projectWarehouseMovements.map { movement in
+            var value = movement
+            value.linkedDocumentIds = value.linkedDocumentIds.filter { documentProjectIDs[$0] == value.projectId }
+            return value
+        }
+        projectDocuments = projectDocuments.map { document in
+            var value = document
+            if let linkedFinancialRecordId = value.linkedFinancialRecordId,
+               financialRecordProjectIDs[linkedFinancialRecordId] != value.projectId {
+                value.linkedFinancialRecordId = nil
+            }
+            value.linkedConstructionMethodIDs = value.linkedConstructionMethodIDs.filter(constructionMethodIDs.contains)
+            value.replacesDocumentId = value.replacesDocumentId.flatMap {
+                documentProjectIDs[$0] == value.projectId ? $0 : nil
+            }
+            value.replacedByDocumentId = value.replacedByDocumentId.flatMap {
+                documentProjectIDs[$0] == value.projectId ? $0 : nil
+            }
+            return value
+        }
     }
 }
 
@@ -474,30 +434,36 @@ actor CloudAutoBackupScheduler {
     func triggerIfNeeded(store: DataStore) async {
         guard !isRunning else { return }
         let hasData = await MainActor.run { store.hasAnyBusinessData }
-        guard hasData else { return }
         let interval = CloudBackupSettingsStore.loadAutoInterval()
-        guard let minimumInterval = interval.minimumInterval else { return }
-
         let now = Date()
-        if let lastSuccess = CloudBackupSettingsStore.loadLastSuccessDate(),
-           now.timeIntervalSince(lastSuccess) < minimumInterval {
-            return
-        }
-        if let lastAttempt = CloudBackupSettingsStore.loadAutoLastAttemptDate(),
-           now.timeIntervalSince(lastAttempt) < retryCooldown {
-            return
-        }
-
         let options = CloudBackupSettingsStore.loadContentOptions()
-        guard options.hasSelectedContent else { return }
+        switch CloudBackupExecutionGate.evaluateSchedule(
+            hasData: hasData,
+            interval: interval,
+            now: now,
+            lastSuccess: CloudBackupSettingsStore.loadLastSuccessDate(),
+            lastAttempt: CloudBackupSettingsStore.loadAutoLastAttemptDate(),
+            retryCooldown: retryCooldown,
+            options: options
+        ) {
+        case .allow:
+            break
+        case .skip(let statusMessage):
+            if let statusMessage, !statusMessage.isEmpty {
+                CloudBackupSettingsStore.saveAutoLastStatus(statusMessage)
+            }
+            return
+        }
 
         let requiresWiFi = CloudBackupSettingsStore.loadAutoBackupRequiresWiFi()
-        if requiresWiFi {
-            let isWiFi = await CloudNetworkPolicyChecker.isUsingWiFi()
-            guard isWiFi == true else {
-                CloudBackupSettingsStore.saveAutoLastStatus("自动备份已跳过：当前不是 Wi‑Fi 网络。")
-                return
+        switch await CloudBackupExecutionGate.evaluateEnvironment(requiresWiFi: requiresWiFi) {
+        case .allow:
+            break
+        case .skip(let statusMessage):
+            if let statusMessage, !statusMessage.isEmpty {
+                CloudBackupSettingsStore.saveAutoLastStatus(statusMessage)
             }
+            return
         }
 
         isRunning = true
@@ -508,8 +474,13 @@ actor CloudAutoBackupScheduler {
             let snapshot = await MainActor.run {
                 store.makeCloudBackupSnapshot(options: options)
             }
-            guard snapshot.hasAnyBackupContent else {
-                CloudBackupSettingsStore.saveAutoLastStatus("自动备份已跳过：当前所选范围暂无可备份数据。")
+            switch CloudBackupExecutionGate.evaluateSnapshot(snapshot) {
+            case .allow:
+                break
+            case .skip(let statusMessage):
+                if let statusMessage, !statusMessage.isEmpty {
+                    CloudBackupSettingsStore.saveAutoLastStatus(statusMessage)
+                }
                 return
             }
             let _ = try await CloudBackupCoordinator.shared.backupToCloud(snapshot: snapshot)
@@ -523,7 +494,7 @@ actor CloudAutoBackupScheduler {
     }
 }
 
-private extension BackupSnapshot {
+extension BackupSnapshot {
     var hasAnyBackupContent: Bool {
         !materialItems.isEmpty ||
         !quoteItems.isEmpty ||

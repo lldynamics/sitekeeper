@@ -90,57 +90,42 @@ struct MaterialCategoryManagementView: View {
             }
         }
         .sheet(isPresented: $state.showRenameSheet) {
-            NavigationStack {
-                Form {
-                    Section(String(localized: "重命名分类")) {
-                        LabeledContent(String(localized: "原分类"), value: state.renameSource)
-                        TextField(String(localized: "新分类名称"), text: $state.renameTarget)
-                    }
+            AppBusinessFormSheet(
+                title: String(localized: "重命名"),
+                isPrimaryActionDisabled: normalizedCategory(state.renameTarget).isEmpty ||
+                    normalizedCategory(state.renameTarget) == normalizedCategory(state.renameSource),
+                onCancel: { state.showRenameSheet = false },
+                onPrimaryAction: {
+                    renameCategory(from: state.renameSource, to: state.renameTarget)
+                    state.showRenameSheet = false
                 }
-                .navigationTitle(String(localized: "重命名"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "取消")) { state.showRenameSheet = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "保存")) {
-                            renameCategory(from: state.renameSource, to: state.renameTarget)
-                            state.showRenameSheet = false
-                        }
-                        .disabled(
-                            normalizedCategory(state.renameTarget).isEmpty ||
-                            normalizedCategory(state.renameTarget) == normalizedCategory(state.renameSource)
-                        )
-                    }
+            ) {
+                Section(String(localized: "重命名分类")) {
+                    LabeledContent(String(localized: "原分类"), value: state.renameSource)
+                    TextField(String(localized: "新分类名称"), text: $state.renameTarget)
                 }
             }
         }
         .sheet(isPresented: $state.showDeleteSheet) {
-            NavigationStack {
-                Form {
-                    Section(String(localized: "删除分类并迁移")) {
-                        Text(String(format: String(localized: "分类“%@”将被移除。"), state.deleteSource))
-                            .font(.subheadline)
-                        Picker(String(localized: "迁移到"), selection: $state.deleteTarget) {
-                            ForEach(migrationTargets.filter { $0 != state.deleteSource }, id: \.self) { name in
-                                Text(name).tag(name)
-                            }
-                        }
-                    }
+            AppBusinessFormSheet(
+                title: String(localized: "删除分类"),
+                primaryActionTitle: String(localized: "删除并迁移"),
+                primaryActionRole: .destructive,
+                isPrimaryActionDisabled: state.deleteTarget == state.deleteSource ||
+                    normalizedCategory(state.deleteTarget).isEmpty,
+                onCancel: { state.showDeleteSheet = false },
+                onPrimaryAction: {
+                    migrateCategory(from: state.deleteSource, to: state.deleteTarget)
+                    state.showDeleteSheet = false
                 }
-                .navigationTitle(String(localized: "删除分类"))
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "取消")) { state.showDeleteSheet = false }
-                    }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "删除并迁移"), role: .destructive) {
-                            migrateCategory(from: state.deleteSource, to: state.deleteTarget)
-                            state.showDeleteSheet = false
+            ) {
+                Section(String(localized: "删除分类并迁移")) {
+                    Text(String(format: String(localized: "分类“%@”将被移除。"), state.deleteSource))
+                        .font(.subheadline)
+                    Picker(String(localized: "迁移到"), selection: $state.deleteTarget) {
+                        ForEach(migrationTargets.filter { $0 != state.deleteSource }, id: \.self) { name in
+                            Text(name).tag(name)
                         }
-                        .disabled(state.deleteTarget == state.deleteSource || normalizedCategory(state.deleteTarget).isEmpty)
                     }
                 }
             }

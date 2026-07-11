@@ -19,8 +19,12 @@ struct RootView: View {
     private let currentOnboardingVersion = 1
 
     private var skipOnboardingForUITests: Bool {
+#if DEBUG
         ProcessInfo.processInfo.arguments.contains("-uitest-skip-onboarding")
             || ProcessInfo.processInfo.environment["UITEST_SKIP_ONBOARDING"] == "1"
+#else
+        false
+#endif
     }
 
     private var preferredAppearance: ColorScheme? {
@@ -53,16 +57,15 @@ struct RootView: View {
             if showOnboarding {
                 FirstLaunchOnboardingView(
                     onCreateProject: {
-                        finishOnboarding()
                         selectedTab = .records
                         projectComposerOpenToken += 1
                     },
                     onImportBackup: {
-                        finishOnboarding()
                         Task { @MainActor in
                             showOnboardingBackupImport = true
                         }
-                    }
+                    },
+                    onSkip: finishOnboarding
                 )
                 .background(Color(.systemBackground))
                 .ignoresSafeArea()
@@ -78,7 +81,11 @@ struct RootView: View {
         } message: {
             Text(store.persistenceErrorMessage ?? "")
         }
-        .sheet(isPresented: $showOnboardingBackupImport) {
+        .sheet(isPresented: $showOnboardingBackupImport, onDismiss: {
+            if store.hasAnyBusinessData {
+                finishOnboarding()
+            }
+        }) {
             NavigationStack {
                 DataManagementView(initialRoute: .restore)
             }
@@ -99,7 +106,10 @@ struct RootView: View {
             migrateOnboardingVersionIfNeeded()
             refreshOnboardingState()
         }
-        .onChange(of: store.hasAnyBusinessData) { _, _ in
+        .onChange(of: store.hasAnyBusinessData) { _, hasBusinessData in
+            if hasBusinessData, showOnboarding {
+                finishOnboarding()
+            }
             refreshOnboardingState()
         }
         .onOpenURL(perform: handleIncomingURL)
@@ -379,6 +389,7 @@ enum Tab: Hashable, CaseIterable, Identifiable {
 private struct FirstLaunchOnboardingView: View {
     let onCreateProject: () -> Void
     let onImportBackup: () -> Void
+    let onSkip: () -> Void
 
     var body: some View {
         NavigationStack {
@@ -410,6 +421,10 @@ private struct FirstLaunchOnboardingView: View {
                         )
                     }
                     .buttonStyle(.bordered)
+                    Button(String(localized: "稍后设置"), action: onSkip)
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("onboarding-skip")
                 }
                 .buttonBorderShape(.roundedRectangle)
                 Spacer()

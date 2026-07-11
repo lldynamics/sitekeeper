@@ -6,8 +6,12 @@ extension DataManagementView {
     }
 
     var showsUITestBackupPreviewShortcut: Bool {
+#if DEBUG
         ProcessInfo.processInfo.arguments.contains("-uitest-backup-preview")
             || ProcessInfo.processInfo.environment["UITEST_BACKUP_PREVIEW"] == "1"
+#else
+        false
+#endif
     }
 
     var historyTrimCount: Int {

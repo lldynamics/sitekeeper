@@ -210,11 +210,11 @@ enum WidgetLocalizedText {
         case "widget_label_low_stock":
             return isChinese ? "库存不足" : "Low Stock"
         case "widget_label_missing_receipt":
-            return isChinese ? "缺票" : "Missing Receipt"
+            return isChinese ? "缺票" : "No receipt"
         case "widget_label_price_spike":
             return isChinese ? "价格异动" : "Price Spike"
         case "widget_label_backup_overdue":
-            return isChinese ? "备份超期" : "Backup Overdue"
+            return isChinese ? "备份超期" : "Backup"
         case "widget_pending_items_text":
             return isChinese ? "项待处理" : "pending"
         case "widget_no_active_projects":

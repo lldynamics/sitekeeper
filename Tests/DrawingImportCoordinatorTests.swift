@@ -82,7 +82,7 @@ struct ConstructionMethodPackImportMappingTests {
             relatedTemplates: [
                 RemoteConstructionMethodPackLink(title: "施工交底记录", href: "/templates/disclosure"),
                 RemoteConstructionMethodPackLink(title: "施工交底记录", href: "/templates/disclosure"),
-                RemoteConstructionMethodPackLink(title: "", href: "https://gongchengzhishi.chengjinfang.com/templates/checklist")
+                RemoteConstructionMethodPackLink(title: "", href: "https://gongdizhishi.com/templates/checklist")
             ],
             relatedArticles: [
                 RemoteConstructionMethodPackLink(title: "穿线质检要点", href: "/articles/wireing/quality"),
@@ -98,13 +98,13 @@ struct ConstructionMethodPackImportMappingTests {
         #expect(mapped.trade == "电气")
         #expect(mapped.versionName == "知识网站 V1")
         #expect(mapped.sourceID == "method-pack-1")
-        #expect(mapped.sourceURL == "https://gongchengzhishi.chengjinfang.com/articles/wireing/abc")
-        #expect(mapped.tutorialBody.contains("](https://gongchengzhishi.chengjinfang.com/articles/wireing/abc)"))
+        #expect(mapped.sourceURL == "https://gongdizhishi.com/articles/wireing/abc")
+        #expect(mapped.tutorialBody.contains("](https://gongdizhishi.com/articles/wireing/abc)"))
         #expect(mapped.relatedStandards == ["GB 50303-2015", "JGJ 46-2005"])
         #expect(mapped.relatedTemplates.count == 2)
-        #expect(mapped.relatedTemplates.first?.href == "https://gongchengzhishi.chengjinfang.com/templates/disclosure")
+        #expect(mapped.relatedTemplates.first?.href == "https://gongdizhishi.com/templates/disclosure")
         #expect(mapped.relatedArticles.count == 1)
-        #expect(mapped.relatedArticles.first?.href == "https://gongchengzhishi.chengjinfang.com/articles/wireing/quality")
+        #expect(mapped.relatedArticles.first?.href == "https://gongdizhishi.com/articles/wireing/quality")
     }
 
     @Test func mappingUpdateKeepsExistingIdentityAndOverwritesKnowledgeFields() {
@@ -131,7 +131,7 @@ struct ConstructionMethodPackImportMappingTests {
         let pack = RemoteConstructionMethodPack(
             id: "new-id",
             sourceSlug: "wireing",
-            sourceURL: "https://gongchengzhishi.chengjinfang.com/articles/new",
+            sourceURL: "https://gongdizhishi.com/articles/new",
             sourceVersion: "2026.06",
             title: "新版工艺",
             trade: "电气",
@@ -142,8 +142,8 @@ struct ConstructionMethodPackImportMappingTests {
             qualityChecklist: ["新质检"],
             safetyChecklist: ["新安全"],
             relatedStandards: ["新规范"],
-            relatedTemplates: [RemoteConstructionMethodPackLink(title: "新模板", href: "https://gongchengzhishi.chengjinfang.com/templates/new")],
-            relatedArticles: [RemoteConstructionMethodPackLink(title: "新文章", href: "https://gongchengzhishi.chengjinfang.com/articles/new-related")],
+            relatedTemplates: [RemoteConstructionMethodPackLink(title: "新模板", href: "https://gongdizhishi.com/templates/new")],
+            relatedArticles: [RemoteConstructionMethodPackLink(title: "新文章", href: "https://gongdizhishi.com/articles/new-related")],
             tags: [],
             updatedAt: "2026-05-23 11:00"
         )
@@ -157,5 +157,29 @@ struct ConstructionMethodPackImportMappingTests {
         #expect(mapped.relatedStandards == ["新规范"])
         #expect(mapped.relatedTemplates.map(\.title) == ["新模板"])
         #expect(mapped.relatedArticles.map(\.title) == ["新文章"])
+    }
+
+    @Test func staticPackEndpointFallsBackInsteadOfCrashing() throws {
+        let fallback = try #require(URL(string: "https://example.com/fallback-method-packs.json"))
+
+        let missingScheme = ConstructionMethodPackImportConfiguration.staticEndpoint(
+            raw: "gongdizhishi.com/sitekeeper/method-packs.json",
+            label: "test-missing-scheme",
+            fallback: fallback
+        )
+        let unsupportedScheme = ConstructionMethodPackImportConfiguration.staticEndpoint(
+            raw: "file:///tmp/method-packs.json",
+            label: "test-file-url",
+            fallback: fallback
+        )
+        let validEndpoint = ConstructionMethodPackImportConfiguration.staticEndpoint(
+            raw: "https://gongdizhishi.com/sitekeeper/method-packs.json",
+            label: "test-production",
+            fallback: fallback
+        )
+
+        #expect(missingScheme == fallback)
+        #expect(unsupportedScheme == fallback)
+        #expect(validEndpoint.absoluteString == "https://gongdizhishi.com/sitekeeper/method-packs.json")
     }
 }

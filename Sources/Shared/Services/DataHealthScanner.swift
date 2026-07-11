@@ -28,8 +28,6 @@ enum DataHealthScanner {
         storage: DataHealthScanStorage = DataHealthScanStorage()
     ) -> DataHealthScanSummary {
         let projectIds = Set(input.projects.map(\.id))
-        let documentIds = Set(input.projectDocuments.map(\.id))
-        let financialRecordIds = Set(input.projectFinancialRecords.map(\.id))
         let quickNoteAttachments = input.quickNotes.flatMap(\.attachments)
         let methodAttachments = input.constructionMethods.flatMap(\.attachments)
             + input.constructionMethods.flatMap(\.tutorialAttachments)
@@ -62,15 +60,17 @@ enum DataHealthScanner {
             orphanQuickNoteAttachmentFileNames: orphanQuickNoteAttachmentFileNames
         )
 
+        let documentProjectIDs = Dictionary(uniqueKeysWithValues: input.projectDocuments.map { ($0.id, $0.projectId) })
+        let financialRecordProjectIDs = Dictionary(uniqueKeysWithValues: input.projectFinancialRecords.map { ($0.id, $0.projectId) })
         let orphanAttachmentMappings = input.projectFinancialRecords.reduce(0) { count, record in
-            count + record.linkedDocumentIds.filter { !documentIds.contains($0) }.count
+            count + record.linkedDocumentIds.filter { documentProjectIDs[$0] != record.projectId }.count
         }
         let orphanWarehouseAttachmentMappings = input.projectWarehouseMovements.reduce(0) { count, movement in
-            count + movement.linkedDocumentIds.filter { !documentIds.contains($0) }.count
+            count + movement.linkedDocumentIds.filter { documentProjectIDs[$0] != movement.projectId }.count
         }
         let danglingDocumentLinks = input.projectDocuments.filter { document in
             guard let linkedId = document.linkedFinancialRecordId else { return false }
-            return !financialRecordIds.contains(linkedId)
+            return financialRecordProjectIDs[linkedId] != document.projectId
         }.count
         let invalidProjectRefs = invalidProjectReferenceCount(input: input, projectIds: projectIds)
         let storageIssueEntries = input.storageIssues.sorted()

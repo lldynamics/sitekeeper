@@ -21,4 +21,9 @@ struct UnitDisplayTests {
         let text = UnitDisplay.quantityWithUnit("1,234", unit: "m", useMetric: true)
         #expect(text == "1,234 m")
     }
+
+    @Test func displayedUnitPriceUsesTheSameConversionFactorAsQuantity() {
+        #expect(UnitDisplay.displayedUnitPrice(10, unit: "m", useMetric: true) == 10)
+        #expect(abs(UnitDisplay.displayedUnitPrice(10, unit: "m", useMetric: false) - 3.048) < 0.001)
+    }
 }

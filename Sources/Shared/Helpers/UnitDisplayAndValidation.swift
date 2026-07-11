@@ -19,6 +19,13 @@ enum UnitDisplay {
         return convert(value: 1, from: unit)?.unit ?? unit
     }
 
+    static func displayedUnitPrice(_ price: Double, unit: String, useMetric: Bool) -> Double {
+        guard !useMetric, let conversion = convert(value: 1, from: unit), conversion.value > 0 else {
+            return price
+        }
+        return price / conversion.value
+    }
+
     private static func convert(value: Double, from unit: String) -> (value: Double, unit: String)? {
         switch unit {
         case "米", "m":

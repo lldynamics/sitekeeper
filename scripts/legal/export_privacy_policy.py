@@ -37,17 +37,22 @@ def html_document(lang: str, title: str, last_updated_label: str, last_updated: 
         lines = [line.strip() for line in block.splitlines() if line.strip()]
         if not lines:
             continue
+        first_line_is_heading = not lines[0].startswith("- ") and not lines[0].endswith(("。", ".", ":", "："))
+        if first_line_is_heading:
+            flush_list()
+            chunks.append(f"<h2>{html.escape(lines[0])}</h2>")
+            lines = lines[1:]
+            if not lines:
+                continue
         if all(line.startswith("- ") for line in lines):
             list_items.extend(html.escape(line[2:]) for line in lines)
             flush_list()
             continue
         flush_list()
-        if len(lines) == 1 and not lines[0].endswith(("。", ".", ":", "：")):
-            chunks.append(f"<h2>{html.escape(lines[0])}</h2>")
-        else:
-            chunks.append(f"<p>{html.escape(' '.join(lines))}</p>")
+        chunks.append(f"<p>{html.escape(' '.join(lines))}</p>")
 
     flush_list()
+    rendered_body = "\n  ".join(chunks)
     return f"""<!doctype html>
 <html lang="{html.escape(lang)}">
 <head>
@@ -64,7 +69,7 @@ def html_document(lang: str, title: str, last_updated_label: str, last_updated: 
 <body>
   <h1>{html.escape(title)}</h1>
   <p class="updated">{html.escape(last_updated_label)}: {html.escape(last_updated)}</p>
-  {"".join(chunks)}
+  {rendered_body}
 </body>
 </html>
 """
@@ -78,6 +83,13 @@ def write_or_check(path: Path, content: str, check: bool, stale_paths: list[Path
 
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
+
+
+def display_path(path: Path) -> str:
+    try:
+        return str(path.relative_to(REPO_ROOT))
+    except ValueError:
+        return str(path)
 
 
 def main() -> None:
@@ -128,7 +140,7 @@ def main() -> None:
     if stale_paths:
         print("Privacy policy generated files are stale:", file=sys.stderr)
         for path in stale_paths:
-            print(f"  {path.relative_to(REPO_ROOT)}", file=sys.stderr)
+            print(f"  {display_path(path)}", file=sys.stderr)
         sys.exit(1)
 
 

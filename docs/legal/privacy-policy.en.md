@@ -1,6 +1,6 @@
 # Privacy Policy
 
-Last updated: May 15, 2026
+Last updated: May 24, 2026
 
 Sitekeeper does not automatically collect, transmit, sell, or share your project data, photos, receipts, drawings, contacts, quick notes, or attachment files.
 
@@ -8,7 +8,7 @@ Data Collection
 Feedback content and the contact email you enter leave the device only when you actively send feedback by email, and are sent to support@chengjinfang.com. For App Store privacy labels, the app may process Email Address and Other User Content, only for App Functionality such as replying to feedback and handling issues. This data is not used for tracking.
 
 Local Processing
-Projects, daily logs, to-dos, financial records, warehouse movements, and settings are stored locally by default. Photos, videos, sketches, PDFs, DWG, DXF, spreadsheets, documents, and other attachments are stored in the app's local sandbox by default. Drawing records store only the original-file index, version, current-version flag, file availability status, external open failure reason, issue status, and notes. Quotes, delivery packages, backup ZIP files, and data reports are manually exported by you to the location you choose. The app does not use third-party analytics or advertising tracking.
+Projects, daily logs, to-dos, financial records, warehouse movements, and settings are stored locally by default. Photos, videos, voice recordings, sketches, PDFs, DWG, DXF, spreadsheets, documents, and other attachments are stored in the app's local sandbox by default. Drawing records store only the original-file index, version, current-version flag, file availability status, external open failure reason, issue status, and notes. Quotes, delivery packages, backup ZIP files, and data reports are manually exported by you to the location you choose. The app does not use third-party analytics or advertising tracking.
 
 Drawing Originals
 PDF drawings open with the system preview. DWG / DXF drawings are managed as drawing originals and, when opened, are handed through the system share flow to the external professional viewer you choose. The app does not provide an entry point to upload DWG / DXF files to a server for processing, and it does not automatically send drawings to the developer's server for viewing.
@@ -18,12 +18,14 @@ When you actively use Back Up to iCloud Now, or when you enable Auto Backup in t
 
 Permission Use
 - Camera: used to scan receipts, take site photos, take quick-note photos, and use the watermark camera
-- Photos: used to select project photos, receipts, documents, and quick-note media
+- Photos: used to select project photos, receipts, documents, and quick-note media; also used to save watermark photos to your system photo library when you actively choose to save them
+- Microphone: used to record site voice notes, which are stored in the app's local sandbox or in backups you actively export
+- Contacts: used only when you actively choose to import from Contacts, to read the selected contact's name, phone number, and company for a project contact; the app does not bulk read Contacts or upload them to the developer
 - Location: used only when you actively use location in the watermark camera, to include the capture location on watermarked photos
 - File access and iCloud: used to import, export, or restore backup ZIP files, drawings, PDFs, spreadsheets, documents, and other attachments
 
 Backup and Export
-The app supports manual export of a complete ZIP backup. Backup files include the data index and original project files; iCloud backups also support backup and restore by selected content scope. Drawing originals and the drawing register are restored with backups. Backup files are saved to the location you choose, such as the Files app, iCloud Drive, or another local directory, or to this app's iCloud backup directory. You manage whether to keep, move, share, or delete backup files.
+The app supports manual export of a complete ZIP backup. Backup files include the data index and original project files; iCloud backups also support backup and restore by selected content scope. Drawing originals and the drawing register are restored with backups. Backup files are saved to the location you choose, such as the Files app, iCloud Drive, or another local directory, or to this app's iCloud backup directory. To avoid large backup write failures, the app may check available local disk space before automatic backup; this information is used only on device to decide whether to skip that automatic backup run and is not sent to the developer's server. You manage whether to keep, move, share, or delete backup files.
 
 Data Deletion
 - You can delete projects, logs, receipts, attachments, and other records in the app.

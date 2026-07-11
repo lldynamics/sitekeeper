@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 
 enum ProjectDetailPackageRequestDecision {
     case proceed
@@ -12,6 +13,72 @@ enum ProjectDetailPackageExportTaskResult {
 }
 
 enum ProjectDetailExportWorkflow {
+    static func makePreDeliveryInspectionPayload(
+        project: Project,
+        financialRecords: [ProjectFinancialRecord],
+        documents: [ProjectDocument],
+        drawings: [ProjectDrawing],
+        todos: [SiteTodo],
+        logs: [DailyLog],
+        quickNotes: [QuickNote],
+        backupState: ReportBuilder.ProjectDeliveryPackageBackupState = .current()
+    ) -> ExportPayload {
+        let rows = ReportBuilder.projectPreDeliveryInspectionRows(
+            project: project,
+            financialRecords: financialRecords,
+            documents: documents,
+            drawings: drawings,
+            todos: todos,
+            logs: logs,
+            quickNotes: quickNotes,
+            backupState: backupState
+        )
+        let header = [
+            String(localized: "project.preDeliveryInspection.export.column.check"),
+            String(localized: "project.preDeliveryInspection.export.column.status"),
+            String(localized: "project.preDeliveryInspection.export.column.severity"),
+            String(localized: "project.preDeliveryInspection.export.column.objectType"),
+            String(localized: "project.preDeliveryInspection.export.column.object"),
+            String(localized: "project.preDeliveryInspection.export.column.owner"),
+            String(localized: "project.preDeliveryInspection.export.column.dueDate"),
+            String(localized: "project.preDeliveryInspection.export.column.fileName"),
+            String(localized: "project.preDeliveryInspection.export.column.detail"),
+            String(localized: "project.preDeliveryInspection.export.column.action")
+        ]
+        let bodyLines = rows.map { row in
+            ReportBuilder.tsv([
+                row.checkDisplay,
+                row.statusDisplay,
+                preDeliveryInspectionSeverityDisplay(row.severity),
+                preDeliveryInspectionObjectTypeDisplay(row.objectType),
+                row.objectName,
+                row.owner,
+                row.dueDate,
+                row.fileName,
+                row.detail,
+                row.recommendedAction
+            ])
+        }
+        let summaryLines = [
+            ReportBuilder.tsv([String(localized: "project.preDeliveryInspection.export.meta.project"), project.name]),
+            ReportBuilder.tsv([String(localized: "project.preDeliveryInspection.export.meta.exportedAt"), Formatters.now()]),
+            ""
+        ]
+        let content = summaryLines + [ReportBuilder.tsv(header)] + bodyLines
+        let safeProjectName = ReportBuilder.safeZipName(project.name, fallback: "untitled_project")
+        let defaultFilename = String(
+            format: String(localized: "project.preDeliveryInspection.export.filename.format"),
+            safeProjectName,
+            Formatters.date.string(from: Date())
+        )
+
+        return ExportPayload(
+            data: Data(("\u{FEFF}" + content.joined(separator: "\n")).utf8),
+            contentType: .tabSeparatedText,
+            defaultFilename: defaultFilename
+        )
+    }
+
     static func packageRequestDecision(
         documents: [ProjectDocument],
         drawings: [ProjectDrawing],
@@ -59,6 +126,36 @@ enum ProjectDetailExportWorkflow {
                     ProjectDetailImportExportActions.formattedBytes(estimatedBytes)
                 )
             )
+        }
+    }
+
+    private static func preDeliveryInspectionSeverityDisplay(_ rawValue: String) -> String {
+        switch rawValue {
+        case "blocker":
+            return String(localized: "project.preDeliveryInspection.export.severity.blocker")
+        case "warning":
+            return String(localized: "project.preDeliveryInspection.export.severity.warning")
+        case "ok":
+            return String(localized: "project.preDeliveryInspection.export.severity.ok")
+        default:
+            return rawValue
+        }
+    }
+
+    private static func preDeliveryInspectionObjectTypeDisplay(_ rawValue: String) -> String {
+        switch rawValue {
+        case "project":
+            return String(localized: "project.preDeliveryInspection.export.object.project")
+        case "drawing":
+            return String(localized: "project.preDeliveryInspection.export.object.drawing")
+        case "todo":
+            return String(localized: "project.preDeliveryInspection.export.object.todo")
+        case "financial_record":
+            return String(localized: "project.preDeliveryInspection.export.object.financialRecord")
+        case "drawing_group":
+            return String(localized: "project.preDeliveryInspection.export.object.drawingGroup")
+        default:
+            return rawValue
         }
     }
 

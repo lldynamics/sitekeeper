@@ -50,7 +50,9 @@ extension DataStore {
             stockLines: stockLines.map { WidgetBuilderStockInput(quantity: $0.quantity) },
             missingReceiptCount: missingReceiptCount,
             priceSpikeCount: priceSpikeCount,
-            backupOverdueCount: backupOverdueCount
+            backupOverdueCount: backupOverdueCount,
+            backupLastSuccessAt: latestBackupDate?.timeIntervalSince1970 ?? 0,
+            backupReminderDays: reminderDays
         )
         let data: Data
         do {

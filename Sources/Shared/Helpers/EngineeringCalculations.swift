@@ -87,13 +87,19 @@ enum EngineeringCalculations {
         }
     }
 
-    static func recommendedBreaker(current: Double, safetyFactor: Double = 1.25) -> Int {
-        let rated = max(current * safetyFactor, 0)
-        return standardBreakerSizes.first { Double($0) >= rated } ?? (standardBreakerSizes.last ?? 250)
+    static func recommendedBreaker(current: Double, safetyFactor: Double = 1.25) -> Int? {
+        guard current.isFinite, current > 0,
+              safetyFactor.isFinite, safetyFactor > 0 else { return nil }
+        let rated = current * safetyFactor
+        guard rated.isFinite else { return nil }
+        return standardBreakerSizes.first { Double($0) >= rated }
     }
 
     static func recommendedWireSectionByAmpacity(current: Double, isCopper: Bool, safetyFactor: Double = 1.15) -> Double? {
-        let target = max(current * safetyFactor, 0)
+        guard current.isFinite, current > 0,
+              safetyFactor.isFinite, safetyFactor > 0 else { return nil }
+        let target = current * safetyFactor
+        guard target.isFinite else { return nil }
         return standardWireSections.first { section in
             ampacity(for: section, isCopper: isCopper) >= target
         }
@@ -155,16 +161,29 @@ enum EngineeringCalculations {
     }
 
     static func recommendedWireSection(current: Double, length: Double, voltage: Double, isLoopLength: Bool, isCopper: Bool, maxDropPercent: Double = 5) -> Double? {
+        guard current.isFinite, current > 0,
+              length.isFinite, length > 0,
+              voltage.isFinite, voltage > 0,
+              maxDropPercent.isFinite, maxDropPercent > 0, maxDropPercent <= 100 else {
+            return nil
+        }
         let resistivity = isCopper ? 0.0175 : 0.0283
         return standardWireSections.first { section in
-            let drop = voltageDrop(current: current, length: length, section: section, voltage: voltage, isLoopLength: isLoopLength, resistivity: resistivity)
+            guard case .success(let drop) = voltageDropValidated(
+                current: current,
+                length: length,
+                section: section,
+                voltage: voltage,
+                isLoopLength: isLoopLength,
+                resistivity: resistivity
+            ) else { return false }
             let ampacity = ampacity(for: section, isCopper: isCopper)
             return drop.dropPercent <= maxDropPercent && current <= ampacity
         }
     }
 
     static func ampacity(for section: Double, isCopper: Bool) -> Double {
-        let base = copperAmpacity[section] ?? .greatestFiniteMagnitude
+        guard let base = copperAmpacity[section] else { return 0 }
         return isCopper ? base : base * 0.78
     }
 
@@ -201,8 +220,18 @@ enum EngineeringCalculations {
     }
 
     static func recommendedConduitDiameter(wireDiameter: Double, wireCount: Int, maxFill: Double = 0.4) -> Double? {
-        commonConduitInnerDiameters.first {
-            conduitFillRate(conduitInnerDiameter: $0, wireDiameter: wireDiameter, wireCount: wireCount) <= maxFill
+        guard wireDiameter.isFinite, wireDiameter > 0,
+              wireCount > 0, wireCount <= Limits.countMax,
+              maxFill.isFinite, maxFill > 0, maxFill <= 1 else {
+            return nil
+        }
+        return commonConduitInnerDiameters.first {
+            guard case .success(let fillRate) = conduitFillRateValidated(
+                conduitInnerDiameter: $0,
+                wireDiameter: wireDiameter,
+                wireCount: wireCount
+            ) else { return false }
+            return fillRate <= maxFill
         }
     }
 
@@ -256,8 +285,17 @@ enum EngineeringCalculations {
     }
 
     static func recommendedTraySize(cableArea: Double, maxFill: Double = 0.4) -> (width: Double, height: Double)? {
-        commonTraySizes.first {
-            trayFillRate(width: $0.width, height: $0.height, cableArea: cableArea) <= maxFill
+        guard cableArea.isFinite, cableArea > 0, cableArea <= Limits.cableAreaMax,
+              maxFill.isFinite, maxFill > 0, maxFill <= 1 else {
+            return nil
+        }
+        return commonTraySizes.first {
+            guard case .success(let fillRate) = trayFillRateValidated(
+                width: $0.width,
+                height: $0.height,
+                cableArea: cableArea
+            ) else { return false }
+            return fillRate <= maxFill
         }
     }
 

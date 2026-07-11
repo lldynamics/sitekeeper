@@ -23,19 +23,19 @@ struct QuickNoteTimelineView: View {
 
         let grouped = Dictionary(grouping: notes) { note -> String in
             guard let date = Formatters.parseDateOrDateTime(note.createdAt) else {
-                return ""
+                return "invalid-\(note.id.uuidString)"
             }
             return Formatters.date.string(from: date)
         }
 
-        return grouped.compactMap { dateStr, items -> DayGroup? in
-            guard !dateStr.isEmpty else { return nil }
-
+        return grouped.map { dateStr, items -> DayGroup in
             let title: String
             if dateStr == Formatters.date.string(from: today) {
                 title = String(localized: "quick_note_timeline_today")
             } else if dateStr == Formatters.date.string(from: yesterday) {
                 title = String(localized: "quick_note_timeline_yesterday")
+            } else if dateStr.hasPrefix("invalid-") {
+                title = String(localized: "quick_note_timeline_unknown_date")
             } else {
                 title = dateStr
             }

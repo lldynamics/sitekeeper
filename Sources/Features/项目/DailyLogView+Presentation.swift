@@ -41,28 +41,22 @@ extension DailyLogView {
     }
 
     var dateFilterSheet: some View {
-        NavigationStack {
-            Form {
-                DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
-                DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
-                Toggle(String(localized: "启用日期筛选"), isOn: $isDateFilterActive)
+        AppBusinessFormSheet(
+            title: String(localized: "日期筛选"),
+            cancelTitle: String(localized: "清除"),
+            primaryActionTitle: String(localized: "确定"),
+            onCancel: {
+                isDateFilterActive = false
+                showDateFilter = false
+            },
+            onPrimaryAction: {
+                isDateFilterActive = true
+                showDateFilter = false
             }
-            .navigationTitle(String(localized: "日期筛选"))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button(String(localized: "清除")) {
-                        isDateFilterActive = false
-                        showDateFilter = false
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(String(localized: "确定")) {
-                        isDateFilterActive = true
-                        showDateFilter = false
-                    }
-                }
-            }
+        ) {
+            DatePicker(String(localized: "开始"), selection: $filterStart, displayedComponents: .date)
+            DatePicker(String(localized: "结束"), selection: $filterEnd, displayedComponents: .date)
+            Toggle(String(localized: "启用日期筛选"), isOn: $isDateFilterActive)
         }
         .presentationDetents([.medium])
     }

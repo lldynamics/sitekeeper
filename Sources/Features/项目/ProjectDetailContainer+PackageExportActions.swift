@@ -62,6 +62,19 @@ extension ProjectDetailContainer {
         )
     }
 
+    func exportPreDeliveryInspection(_ project: Project, snapshot: ProjectDetailSnapshot) {
+        exportState.exportPayload = ProjectDetailExportWorkflow.makePreDeliveryInspectionPayload(
+            project: project,
+            financialRecords: snapshot.relatedFinancialRecords,
+            documents: snapshot.relatedDocuments,
+            drawings: snapshot.relatedDrawings,
+            todos: snapshot.relatedTodos,
+            logs: snapshot.relatedLogs,
+            quickNotes: snapshot.relatedQuickNotes
+        )
+        exportState.showExporter = true
+    }
+
     func cancelProjectPackageExport() {
         exportState.projectPackageExportProgress = ProjectPackageExportProgress(
             completedSteps: exportState.projectPackageExportProgress.completedSteps,

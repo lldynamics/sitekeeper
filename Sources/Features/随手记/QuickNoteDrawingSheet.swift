@@ -11,7 +11,15 @@ struct QuickNoteDrawingSheet: View {
     @State private var selectedColor: Color = .black
     @State private var lineWidth: Double = 4
     @State private var isEraser = false
+    @State private var hasDrawing = false
+    @State private var showClearConfirmation = false
+    @State private var showDiscardConfirmation = false
+    @State private var backgroundLoadTask: Task<Void, Never>?
     let onSave: (UIImage) -> Void
+
+    private var hasContent: Bool {
+        hasDrawing || backgroundImage != nil
+    }
 
     var body: some View {
         NavigationStack {
@@ -25,26 +33,71 @@ struct QuickNoteDrawingSheet: View {
                             .scaledToFit()
                             .padding(8)
                     }
-                    PencilCanvasView(canvasView: canvasView)
+                    PencilCanvasView(canvasView: canvasView) { drawing in
+                        hasDrawing = !drawing.bounds.isEmpty
+                    }
                 }
             }
             .navigationTitle(backgroundImage == nil ? String(localized: "quick_note_drawing_title") : String(localized: "quick_note_drawing_photo_markup_title"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button(String(localized: "quick_note_drawing_cancel_button")) { dismiss() } }
-                ToolbarItem(placement: .topBarTrailing) { Button(String(localized: "quick_note_drawing_undo_button")) { canvasView.undoManager?.undo() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button(String(localized: "quick_note_drawing_cancel_button")) {
+                        if hasContent {
+                            showDiscardConfirmation = true
+                        } else {
+                            dismiss()
+                        }
+                    }
+                    .accessibilityIdentifier("quick-note-drawing-cancel")
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(String(localized: "quick_note_drawing_undo_button")) { canvasView.undoManager?.undo() }
+                        .accessibilityIdentifier("quick-note-drawing-undo")
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "quick_note_drawing_save_button")) { saveDrawing() }
-                        .disabled(canvasView.drawing.bounds.isEmpty && backgroundImage == nil)
+                        .disabled(!hasContent)
+                        .accessibilityIdentifier("quick-note-drawing-save")
                 }
             }
             .onChange(of: selectedColor) { _, _ in updateTool() }
             .onChange(of: lineWidth) { _, _ in updateTool() }
             .onChange(of: isEraser) { _, _ in updateTool() }
             .onChange(of: selectedBackgroundItem) { _, newItem in
-                Task { await loadBackgroundImage(newItem) }
+                backgroundLoadTask?.cancel()
+                guard let newItem else { return }
+                backgroundLoadTask = Task { await loadBackgroundImage(newItem) }
             }
             .onAppear(perform: updateTool)
+            .onDisappear {
+                backgroundLoadTask?.cancel()
+                backgroundLoadTask = nil
+            }
+            .confirmationDialog(
+                String(localized: "quick_note_drawing_clear_confirmation_title"),
+                isPresented: $showClearConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "quick_note_drawing_clear_button"), role: .destructive) {
+                    clearCanvas()
+                }
+                Button(String(localized: "quick_note_drawing_keep_editing_button"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "quick_note_drawing_clear_confirmation_message"))
+            }
+            .confirmationDialog(
+                String(localized: "quick_note_drawing_discard_confirmation_title"),
+                isPresented: $showDiscardConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button(String(localized: "quick_note_drawing_discard_button"), role: .destructive) {
+                    dismiss()
+                }
+                Button(String(localized: "quick_note_drawing_keep_editing_button"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "quick_note_drawing_discard_confirmation_message"))
+            }
         }
     }
 
@@ -60,9 +113,12 @@ struct QuickNoteDrawingSheet: View {
                     Button { isEraser = true } label: { Label(String(localized: "quick_note_drawing_eraser_tool"), systemImage: "eraser") }
                         .tint(isEraser ? .appWarning : .appMuted)
                     Button(role: .destructive) {
-                        canvasView.drawing = PKDrawing()
-                        backgroundImage = nil
+                        if hasContent {
+                            showClearConfirmation = true
+                        }
                     } label: { Label(String(localized: "quick_note_drawing_clear_button"), systemImage: "trash") }
+                        .disabled(!hasContent)
+                        .accessibilityIdentifier("quick-note-drawing-clear")
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
@@ -92,8 +148,18 @@ struct QuickNoteDrawingSheet: View {
     private func loadBackgroundImage(_ item: PhotosPickerItem?) async {
         guard let item,
               let data = try? await item.loadTransferable(type: Data.self),
+              !Task.isCancelled,
               let image = UIImage(data: data) else { return }
         await MainActor.run { backgroundImage = image }
+    }
+
+    private func clearCanvas() {
+        backgroundLoadTask?.cancel()
+        backgroundLoadTask = nil
+        canvasView.drawing = PKDrawing()
+        hasDrawing = false
+        backgroundImage = nil
+        selectedBackgroundItem = nil
     }
 
     private func saveDrawing() {
@@ -129,6 +195,11 @@ struct QuickNoteDrawingSheet: View {
 
 struct PencilCanvasView: UIViewRepresentable {
     let canvasView: PKCanvasView
+    let onDrawingChanged: (PKDrawing) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onDrawingChanged: onDrawingChanged)
+    }
 
     func makeUIView(context: Context) -> PKCanvasView {
         canvasView.backgroundColor = .clear
@@ -136,8 +207,23 @@ struct PencilCanvasView: UIViewRepresentable {
         canvasView.drawingPolicy = .anyInput
         canvasView.alwaysBounceVertical = false
         canvasView.alwaysBounceHorizontal = false
+        canvasView.delegate = context.coordinator
+        canvasView.accessibilityLabel = String(localized: "quick_note_drawing_canvas_accessibility_label")
+        canvasView.accessibilityHint = String(localized: "quick_note_drawing_canvas_accessibility_hint")
         return canvasView
     }
 
     func updateUIView(_ uiView: PKCanvasView, context: Context) {}
+
+    final class Coordinator: NSObject, PKCanvasViewDelegate {
+        let onDrawingChanged: (PKDrawing) -> Void
+
+        init(onDrawingChanged: @escaping (PKDrawing) -> Void) {
+            self.onDrawingChanged = onDrawingChanged
+        }
+
+        func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
+            onDrawingChanged(canvasView.drawing)
+        }
+    }
 }

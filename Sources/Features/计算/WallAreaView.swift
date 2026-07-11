@@ -74,15 +74,28 @@ struct WallAreaView: View {
     }
 
     private func calc() {
-        let walls = [l1, l2, l3, l4].compactMap { CalculatorInputParser.double($0) }.filter { $0 > 0 }
-        guard let h = CalculatorInputParser.double(height), h > 0, !walls.isEmpty else {
+        let rawWalls = [l1, l2, l3, l4]
+        let walls = rawWalls.compactMap { rawValue -> Double? in
+            let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            return wallLengthRule.validate(rawValue).doubleValue
+        }
+        guard rawWalls.allSatisfy({ rawValue in
+            rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || wallLengthRule.validate(rawValue).isValid
+        }), !walls.isEmpty else {
             presentError(CalculatorCopy.wallLengthRequired)
+            return
+        }
+        guard let h = heightRule.validate(height).doubleValue else {
+            presentError(CalculatorCopy.wallHeightRange)
+            return
+        }
+        guard let d = optionalOpeningArea(doors), let w = optionalOpeningArea(windows) else {
+            presentError(CalculatorCopy.wallOpeningRange)
             return
         }
         let perimeter = walls.reduce(0, +)
         let gross = perimeter * h
-        let d = CalculatorInputParser.double(doors) ?? 0
-        let w = CalculatorInputParser.double(windows) ?? 0
         let net = max(gross - d - w, 0)
         resultModel = .singleSection(
             headline: calculatorLocFormat("净面积 %@", CalculatorFormatting.squareMeters(net)),
@@ -103,6 +116,11 @@ struct WallAreaView: View {
                 value: net
             )
         )
+    }
+
+    private func optionalOpeningArea(_ rawValue: String) -> Double? {
+        guard !rawValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return 0 }
+        return openingAreaRule.validate(rawValue).doubleValue
     }
 
     private var wallLengthMessage: String? {

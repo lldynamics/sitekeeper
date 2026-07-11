@@ -17,6 +17,7 @@ struct BackupLocalSectionsView: View {
                 Section(String(localized: "备份建议")) {
                     BackupQuickStartCard(
                         onExport: onExport,
+                        onShowImporter: onShowImporter,
                         onDismiss: onDismissGuide
                     )
                 }

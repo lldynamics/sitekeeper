@@ -82,6 +82,43 @@ struct DrawingFileAvailabilityTests {
         #expect(updated.externalOpenFailedAt.isEmpty)
     }
 
+    @Test func externalOpenFailureReasonSurvivesStoreReload() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("DrawingFileAvailabilityTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        let drawing = ProjectDrawing(
+            projectId: UUID(),
+            name: "外部打开失败图纸",
+            fileName: "external-failed-\(UUID().uuidString).dwg",
+            fileType: "dwg"
+        )
+        store.replaceProjectDrawings([drawing])
+
+        ProjectDetailAssetActions.recordDrawingExternalOpenResult(
+            completed: false,
+            drawingID: drawing.id,
+            store: store
+        )
+
+        let failed = try #require(store.projectDrawings.first)
+        #expect(failed.fileAvailabilityStatus == .available)
+        #expect(!failed.externalOpenFailureReason.isEmpty)
+        #expect(!failed.externalOpenFailedAt.isEmpty)
+
+        try await store.flushSaveOrThrow()
+
+        let reloadedStore = DataStore(storageDirectory: directory)
+        await reloadedStore.awaitInitialLoad()
+        let persisted = try #require(reloadedStore.projectDrawings.first)
+        #expect(persisted.id == drawing.id)
+        #expect(persisted.fileAvailabilityStatus == .available)
+        #expect(persisted.externalOpenFailureReason == failed.externalOpenFailureReason)
+        #expect(persisted.externalOpenFailedAt == failed.externalOpenFailedAt)
+    }
+
     @Test func drawingAvailabilityFiltersRespectProjectAndSearchScope() throws {
         let projectID = UUID()
         let otherProjectID = UUID()

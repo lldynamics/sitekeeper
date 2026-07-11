@@ -35,6 +35,9 @@ extension ProjectDetailContainer {
                 onStartDeliveryExport: {
                     requestExportProjectPackage(project, snapshot: snapshot)
                 },
+                onExportDeliveryInspection: {
+                    exportPreDeliveryInspection(project, snapshot: snapshot)
+                },
                 onUpdateProject: updateProject(_:),
                 onCreateContact: { contact in
                     store.appendProjectContact(contact)

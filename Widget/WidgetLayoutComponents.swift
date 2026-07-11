@@ -65,7 +65,7 @@ struct WidgetSummaryTile: View {
             }
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .padding(.vertical, 6)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -100,16 +100,17 @@ struct WidgetProjectProgressRow: View {
     let project: WidgetProjectSummary
     let showsStatus: Bool
     let showsTodo: Bool
+    var compact: Bool = false
 
     var body: some View {
         let status = WidgetProjectStatus.parse(project.status)
         let tint = widgetProjectTint(for: status)
 
         Link(destination: WidgetDeepLinkURL.project(id: project.id)) {
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: compact ? 3 : 4) {
                 HStack(spacing: 6) {
                     Text(project.name)
-                        .font(.caption.weight(.medium))
+                        .font((compact ? Font.caption2 : Font.caption).weight(.medium))
                         .foregroundStyle(.primary)
                         .lineLimit(1)
                         .minimumScaleFactor(0.8)

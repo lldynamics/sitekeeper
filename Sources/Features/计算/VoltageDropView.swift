@@ -186,6 +186,10 @@ struct VoltageDropView: View {
             resultModel = nil
             return
         }
+        guard EngineeringCalculations.standardWireSections.contains(where: { abs($0 - s) < 0.000_1 }) else {
+            presentError(calculatorLoc("请输入标准电缆截面，或从常用截面中选择。"))
+            return
+        }
         let isCopper = material == .copper
         let rho = isCopper ? resistivityCopper : resistivityAluminum
         let effectiveLength = isLoopLength ? l : l * 2

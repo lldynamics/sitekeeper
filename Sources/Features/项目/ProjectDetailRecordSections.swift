@@ -58,7 +58,9 @@ struct ProjectMaterialSectionView: View {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 5) {
                                 Text(item.name).font(.callout.weight(.medium))
-                                Text("\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(item.unitPriceValue.doubleValue))")
+                                Text(
+                                    "\(UnitDisplay.quantityWithUnit(item.quantity, unit: item.unit, useMetric: useMetric)) × \(ReportBuilder.money(UnitDisplay.displayedUnitPrice(item.unitPriceValue.doubleValue, unit: item.unit, useMetric: useMetric)))/\(UnitDisplay.translatedUnit(item.unit, useMetric: useMetric))"
+                                )
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
                                 FlowTagLine(tags: materialTags(for: item))

@@ -3,6 +3,7 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
@@ -19,6 +20,7 @@ struct ProfileTabView: View {
     @State private var lastStorageSampleAt: Date?
     @State private var hasLoadedStorageUsage = false
     @State private var showUserNameEditor = false
+    @State private var manualSaveMessage = ""
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
@@ -105,6 +107,21 @@ struct ProfileTabView: View {
             Section(String(localized: "快捷设置")) {
                 Toggle(String(localized: "公制单位"), isOn: $useMetric)
                 Toggle(String(localized: "自动保存记录"), isOn: $autoSaveEnabled)
+                if !autoSaveEnabled {
+                    Button {
+                        Task {
+                            await store.flushSave()
+                            manualSaveMessage = store.persistenceErrorMessage ?? String(localized: "已保存当前记录")
+                        }
+                    } label: {
+                        Label(String(localized: "立即保存当前记录"), systemImage: "square.and.arrow.down")
+                    }
+                    if !manualSaveMessage.isEmpty {
+                        Text(manualSaveMessage)
+                            .font(.caption)
+                            .foregroundStyle(store.persistenceErrorMessage == nil ? .secondary : Color.appRisk)
+                    }
+                }
 
                 Picker(String(localized: "配色"), selection: $appTheme) {
                     ForEach(AppTheme.allCases, id: \.rawValue) { theme in

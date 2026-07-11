@@ -1,17 +1,17 @@
 {
   "policyId": "sitekeeper.privacy",
-  "version": "2026-05-15",
+  "version": "2026-05-24",
   "defaultLocale": "zh-Hans",
   "locales": {
     "zh-Hans": {
-      "resource": "privacy-policy.v2026-05-15.zh-Hans",
+      "resource": "privacy-policy.v2026-05-24.zh-Hans",
       "fileExtension": "txt",
-      "lastUpdatedDisplay": "2026年5月15日"
+      "lastUpdatedDisplay": "2026年5月24日"
     },
     "en": {
-      "resource": "privacy-policy.v2026-05-15.en",
+      "resource": "privacy-policy.v2026-05-24.en",
       "fileExtension": "txt",
-      "lastUpdatedDisplay": "May 15, 2026"
+      "lastUpdatedDisplay": "May 24, 2026"
     }
   }
 }

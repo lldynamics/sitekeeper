@@ -30,7 +30,7 @@ struct DashboardRiskPill: View {
     var body: some View {
         HStack(spacing: AppSpacing.tight * 0.5) {
             NavigationLink {
-                dashboardDestinationView(destination)
+                LazyDashboardDestinationView(destination: destination)
             } label: {
                 HStack(spacing: AppSpacing.tight * 0.75) {
                     Text(title)
@@ -52,6 +52,8 @@ struct DashboardRiskPill: View {
                 )
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("\(title)：\(value)")
+            .accessibilityHint(String(format: String(localized: "打开%@详情"), title))
 
             if !quickActions.isEmpty {
                 Menu {
@@ -71,14 +73,12 @@ struct DashboardRiskPill: View {
                         .background {
                             AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight * 0.75) {
                                 Color.clear
-                            }
                         }
+                    }
                 }
+                .accessibilityLabel(String(format: String(localized: "%@更多操作"), title))
             }
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(title)：\(value)")
-        .accessibilityHint(String(format: String(localized: "打开%@详情"), title))
     }
 }
 
@@ -107,7 +107,7 @@ struct DashboardInventoryPill: View {
 
         if let destination {
             NavigationLink {
-                dashboardDestinationView(destination)
+                LazyDashboardDestinationView(destination: destination)
             } label: {
                 content
             }
@@ -131,7 +131,7 @@ struct DashboardPanel<Content: View>: View {
         VStack(alignment: .leading, spacing: AppSpacing.tight + 2) {
             if let destination {
                 NavigationLink {
-                    dashboardDestinationView(destination)
+                    LazyDashboardDestinationView(destination: destination)
                 } label: {
                     HStack(spacing: AppSpacing.tight * 0.75) {
                         Label(title, systemImage: systemImage)

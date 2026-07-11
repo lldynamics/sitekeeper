@@ -46,12 +46,12 @@ struct SmallWidgetView: View {
             }
             .buttonStyle(.plain)
 
-            Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
+            Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.lastUpdatedDate)))
                 .font(.caption2)
                 .foregroundStyle(.tertiary)
                 .lineLimit(1)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -117,7 +117,7 @@ struct MediumWidgetView: View {
 
                 Spacer(minLength: 0)
 
-                Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
+                Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.lastUpdatedDate)))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -146,6 +146,7 @@ struct MediumWidgetView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -162,14 +163,16 @@ struct LargeWidgetView: View {
         let riskLinkItems = widgetRiskLinkItems(for: data)
         let riskTotal = widgetRiskTotal(for: data)
 
-        VStack(alignment: .leading, spacing: 9) {
+        let projectLimit = riskLinkItems.isEmpty ? 4 : 3
+
+        VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .center) {
                 WidgetSectionHeader(
                     icon: "square.grid.2x2",
                     title: widgetText("widget_label_overview")
                 )
                 Spacer(minLength: 8)
-                Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.date)))
+                Text(widgetLocalizedUpdate("widget_updated_time_format", WidgetDateFormatters.timeOnly.string(from: entry.lastUpdatedDate)))
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .lineLimit(1)
@@ -210,7 +213,7 @@ struct LargeWidgetView: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(height: 52)
+            .frame(height: 48)
 
             if !riskLinkItems.isEmpty {
                 HStack(spacing: 6) {
@@ -237,12 +240,12 @@ struct LargeWidgetView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(data.projects.prefix(4), id: \.id) { project in
-                        WidgetProjectProgressRow(project: project, showsStatus: true, showsTodo: true)
+                    ForEach(data.projects.prefix(projectLimit), id: \.id) { project in
+                        WidgetProjectProgressRow(project: project, showsStatus: true, showsTodo: true, compact: true)
                     }
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
