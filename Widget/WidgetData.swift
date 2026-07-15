@@ -117,11 +117,6 @@ private enum WidgetStorageIssueLog {
     private static let localFallbackKey = WidgetSharedDefaults.storageIssueLogKey
     private static let localFallbackSuiteName = Bundle.main.bundleIdentifier ?? "com.chengjinfang.sitekeeper.widget.local"
     private static let maxEntries = 120
-    private static let timestampFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 
     static func record(_ message: String) {
         let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -131,10 +126,16 @@ private enum WidgetStorageIssueLog {
         }
         guard let defaults = UserDefaults(suiteName: localFallbackSuiteName) else { return }
         var entries = defaults.stringArray(forKey: localFallbackKey) ?? []
-        entries.insert("[\(timestampFormatter.string(from: Date()))] \(trimmed)", at: 0)
+        entries.insert("[\(timestampString(for: Date()))] \(trimmed)", at: 0)
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
         defaults.set(entries, forKey: localFallbackKey)
+    }
+
+    private static func timestampString(for date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
     }
 }

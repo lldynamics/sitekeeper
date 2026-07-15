@@ -331,7 +331,7 @@ extension DashboardView {
             showDashboardActionFeedback(String(localized: "阈值已到上限"))
             return
         }
-        financeStore.setMaterialPriceSpikeThreshold(raised)
+        store.setMaterialPriceSpikeThreshold(raised)
         AppHaptics.success()
         showDashboardActionFeedback(
             String(

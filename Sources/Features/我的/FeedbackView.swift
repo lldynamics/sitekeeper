@@ -116,7 +116,8 @@ struct MailView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: MFMailComposeViewController, context: Context) {}
 
-    class Coordinator: NSObject, MFMailComposeViewControllerDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency MFMailComposeViewControllerDelegate {
         let onFinish: (MFMailComposeResult, Error?) -> Void
         init(onFinish: @escaping (MFMailComposeResult, Error?) -> Void) { self.onFinish = onFinish }
         func mailComposeController(_ controller: MFMailComposeViewController, didFinishWith result: MFMailComposeResult, error: Error?) {

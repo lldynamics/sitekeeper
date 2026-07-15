@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - "project.yml"
+      - "Config/**"
       - "Sources/**"
       - "Widget/**"
       - "Tests/**"
@@ -18,6 +19,7 @@ on:
       - main
     paths:
       - "project.yml"
+      - "Config/**"
       - "Sources/**"
       - "Widget/**"
       - "Tests/**"
@@ -48,6 +50,7 @@ jobs:
           bash scripts/release/check_userdefaults_policy.sh
           bash scripts/release/check_swiftui_identity_policy.sh
           bash scripts/release/check_unchecked_sendable_policy.sh
+          bash scripts/release/check_appstore_archive_config.sh
           python3 scripts/legal/export_privacy_policy.py --check
 
   iOS-release-gate:
@@ -65,3 +68,34 @@ jobs:
           DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-release-derived-data
           SIMULATOR_NAME: sitekeeper-ci-release
         run: scripts/release/one_click_release_check.sh
+
+  ui-smoke:
+    name: UI smoke (${{ matrix.device_family }})
+    needs: release-boundaries
+    runs-on: macos-15
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        device_family: [iphone, ipad]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Run adaptive UI smoke tests
+        env:
+          DEVICE_FAMILY: ${{ matrix.device_family }}
+          DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-derived-data
+          RESULT_BUNDLE_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
+        run: scripts/release/run_ui_smoke.sh
+
+      - name: Upload UI smoke result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-smoke-${{ matrix.device_family }}-xcresult
+          path: ${{ runner.temp }}/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
+          if-no-files-found: warn
+          retention-days: 14

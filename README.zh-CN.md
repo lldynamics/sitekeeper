@@ -78,6 +78,38 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -projec
 scripts/release/preflight.sh
 ```
 
+App Store 签名归档预检：
+
+```sh
+scripts/release/archive_appstore.sh --dry-run
+```
+
+正式归档会先执行完整预检，然后生成签名 `.xcarchive`、IPA、签名权限快照和 SHA-256 证据文件：
+
+```sh
+scripts/release/archive_appstore.sh --allow-provisioning-updates
+```
+
+仅在明确需要上传 TestFlight 且已配置 App Store Connect API 密钥时使用：
+
+```sh
+ASC_KEY_PATH=/path/to/AuthKey.p8 \
+ASC_KEY_ID=YOUR_KEY_ID \
+ASC_ISSUER_ID=YOUR_ISSUER_ID \
+scripts/release/archive_appstore.sh --allow-provisioning-updates --upload-testflight
+```
+
+归档产物默认位于 `build/AppStore/<版本-构建-时间>/`。脚本默认不会上传 TestFlight。
+
+iPhone 与 iPad 自适应布局的发布级 UI 冒烟测试：
+
+```sh
+scripts/release/run_ui_smoke.sh --device-family iphone
+scripts/release/run_ui_smoke.sh --device-family ipad
+```
+
+CI 会分别执行两种设备族，并保留对应的 `.xcresult` 作为失败证据。
+
 Swift 代码格式：
 
 ```sh

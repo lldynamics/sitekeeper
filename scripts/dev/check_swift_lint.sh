@@ -54,7 +54,7 @@ for path in "${paths[@]}"; do
     echo "[swiftlint] Skip missing path: $path"
     continue
   fi
-  if ! swiftlint lint --config "$ROOT_DIR/.swiftlint.yml" "$path"; then
+  if ! swiftlint lint --no-cache --config "$ROOT_DIR/.swiftlint.yml" "$path"; then
     status=1
   fi
 done

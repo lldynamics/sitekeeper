@@ -77,11 +77,29 @@ enum StorageCleanupTrashError: LocalizedError {
 }
 
 enum StorageCleanupTrashStore {
+    private final class RollbackFailureState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var fileNames = Set<String>()
+
+        func replace(with newValue: Set<String>) -> Set<String> {
+            lock.lock()
+            defer { lock.unlock() }
+            let previous = fileNames
+            fileNames = newValue
+            return previous
+        }
+
+        func contains(_ fileName: String) -> Bool {
+            lock.lock()
+            defer { lock.unlock() }
+            return fileNames.contains(fileName)
+        }
+    }
+
     private static let rootDirectoryName = "StorageCleanupTrash"
     private static let manifestFileName = "manifest.json"
     private static let recoveryFileName = "recovery.json"
-    private static let rollbackFailureLock = NSLock()
-    private static var rollbackFailureFileNamesForTesting = Set<String>()
+    private static let rollbackFailureState = RollbackFailureState()
 
     private static var rootURL: URL? {
         RecoverableDeletionStorage.rootURL(named: rootDirectoryName)
@@ -114,14 +132,9 @@ enum StorageCleanupTrashStore {
         fileNames: Set<String>,
         perform body: () throws -> T
     ) rethrows -> T {
-        rollbackFailureLock.lock()
-        let previous = rollbackFailureFileNamesForTesting
-        rollbackFailureFileNamesForTesting = fileNames
-        rollbackFailureLock.unlock()
+        let previous = rollbackFailureState.replace(with: fileNames)
         defer {
-            rollbackFailureLock.lock()
-            rollbackFailureFileNamesForTesting = previous
-            rollbackFailureLock.unlock()
+            _ = rollbackFailureState.replace(with: previous)
         }
         return try body()
     }
@@ -415,9 +428,7 @@ private extension StorageCleanupTrashStore {
     }
 
     static func shouldFailRollbackRestoreForTesting(_ fileName: String) -> Bool {
-        rollbackFailureLock.lock()
-        defer { rollbackFailureLock.unlock() }
-        return rollbackFailureFileNamesForTesting.contains(fileName)
+        rollbackFailureState.contains(fileName)
     }
 
     static func saveRecoveryBatch(_ batch: StorageCleanupTrashBatch) {

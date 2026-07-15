@@ -71,6 +71,7 @@ require_pattern "Backup manifest metadata path contract test" "Tests/BackupContr
 require_pattern "Backup contract ignores unknown future fields" "Tests/BackupContractCompatibilityTests.swift" "backupImportIgnoresFutureFieldsAndPreservesKnownDrawingFields"
 require_pattern "Backup contract preserves drawing availability defaults" "Tests/BackupContractCompatibilityTests.swift" "fileAvailabilityStatus == .unknown"
 require_pattern "Backup metadata persistence fault injection test" "Tests/BackupErrorRecoveryTests.swift" "backupImportTransactionRollsBackFilesWhenMetadataPersistFails"
+require_pattern "Backup export clear restore rehearsal" "Tests/BackupRecoveryRehearsalTests.swift" "backupExportClearRestoreRehearsalPersistsMetadataAndFiles"
 require_pattern "Backup ZIP path traversal test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsZipSlipEntryAndCleansTempStage"
 require_pattern "Backup ZIP duplicate entry test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsDuplicateEntryAndCleansTempStage"
 require_pattern "Backup ZIP checksum test" "Tests/BackupErrorRecoveryTests.swift" "backupPrepareRestoreRejectsCorruptedEntryChecksumAndCleansTempStage"

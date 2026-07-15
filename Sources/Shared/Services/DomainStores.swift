@@ -52,12 +52,14 @@ final class ProjectStore {
     private(set) var projects: [Project] = [] {
         didSet {
             refreshProjectStatusIndex()
+            refreshFileSearchVersion()
         }
     }
     private(set) var dailyLogs: [DailyLog] = [] {
         didSet {
             dailyLogsByProjectID = Self.groupedByProjectID(dailyLogs) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshFileSearchVersion()
         }
     }
     private(set) var historyRecords: [HistoryRecord] = []
@@ -71,12 +73,15 @@ final class ProjectStore {
         didSet {
             siteTodosByProjectID = Self.groupedByProjectID(siteTodos) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshFileSearchVersion()
+            refreshDueReminderVersion()
         }
     }
     private(set) var projectDrawings: [ProjectDrawing] = [] {
         didSet {
             projectDrawingsByProjectID = Self.groupedByProjectID(projectDrawings) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshFileSearchVersion()
         }
     }
     private(set) var projectContacts: [ProjectContact] = [] {
@@ -88,18 +93,21 @@ final class ProjectStore {
         didSet {
             projectFinancialRecordsByProjectID = Self.groupedByProjectID(projectFinancialRecords) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshDueReminderVersion()
         }
     }
     private(set) var projectDocuments: [ProjectDocument] = [] {
         didSet {
             projectDocumentsByProjectID = Self.groupedByProjectID(projectDocuments) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshFileSearchVersion()
         }
     }
     private(set) var quickNotes: [QuickNote] = [] {
         didSet {
             quickNotesByProjectID = Self.groupedByProjectID(quickNotes) { $0.projectId }
             rebuildProjectActivityIndex()
+            refreshFileSearchVersion()
         }
     }
     private(set) var projectWarehouseMovements: [ProjectWarehouseMovement] = [] {
@@ -121,6 +129,8 @@ final class ProjectStore {
     private(set) var activeOrPausedProjectIDs: Set<UUID> = []
     private(set) var activeOrPausedProjectCount = 0
     private(set) var missingTodayLogActiveProjectCount = 0
+    private(set) var fileSearchVersion = 0
+    private(set) var dueReminderVersion = 0
 
     private(set) var projectActivityIndexByID: [UUID: ProjectActivitySummary] = [:]
     private(set) var todayLogProjectIDs: Set<UUID> = []
@@ -138,6 +148,10 @@ final class ProjectStore {
 
     init() {
         rebuildProjectActivityIndex()
+    }
+
+    private func refreshDueReminderVersion() {
+        dueReminderVersion &+= 1
     }
 
     var totalOpenTodoCount: Int {
@@ -346,6 +360,10 @@ final class ProjectStore {
 
     private func refreshMissingTodayLogCount() {
         missingTodayLogActiveProjectCount = activeOrPausedProjectIDs.subtracting(todayLogProjectIDs).count
+    }
+
+    private func refreshFileSearchVersion() {
+        fileSearchVersion &+= 1
     }
 
     private static func maxDate(_ lhs: Date?, _ rhs: Date) -> Date {

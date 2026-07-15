@@ -346,11 +346,9 @@ private extension SitekeeperUITests {
 extension SitekeeperUITests {
     func testColdLaunchShowsPrimaryTabs() {
         let app = launchApp()
-        XCTAssertTrue(app.tabBars.buttons["工作台"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.tabBars.buttons["项目"].exists)
-        XCTAssertTrue(app.tabBars.buttons["工具箱"].exists)
-        XCTAssertTrue(app.tabBars.buttons["随手记"].exists)
-        XCTAssertTrue(app.tabBars.buttons["我的"].exists)
+        for module in ["工作台", "项目", "工具箱", "随手记", "我的"] {
+            XCTAssertTrue(waitForPrimaryModule(app, name: module), "Missing primary module: \(module)")
+        }
     }
 
     func testBackupScreenShowsImportAndExportActions() {

@@ -147,6 +147,9 @@ scripts/release/check_swiftui_identity_policy.sh
 echo "==> Checking @unchecked Sendable policy"
 scripts/release/check_unchecked_sendable_policy.sh
 
+echo "==> Checking App Store archive configuration"
+scripts/release/check_appstore_archive_config.sh
+
 echo "==> Checking legal policy generated copies"
 python3 scripts/legal/export_privacy_policy.py --check
 

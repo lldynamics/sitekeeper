@@ -41,6 +41,7 @@ enum CloudBackupService {
     private static let backupsDirectoryName = "Backups"
     private static let backupFilePrefix = "sitekeeper-cloud-backup"
     private static let backupFileExtension = "zip"
+    private static let digestFileExtension = "sha256"
 
     private static func recordIssue(
         _ event: String,
@@ -100,8 +101,22 @@ enum CloudBackupService {
         fileName: String = makeBackupFileName(),
         keepMostRecent retainedCount: Int = 5
     ) throws -> CloudBackupFile {
+        do {
+            try BackupArchiveSecurity.validateRemoteCopy(at: archiveFileURL, expectedSHA256: nil)
+        } catch {
+            recordIssue("cloud_backup.source_validation_failed", fileURL: archiveFileURL, error: error)
+            throw CloudBackupError.invalidBackupFile
+        }
+        let digest: String
+        do {
+            digest = try BackupArchiveSecurity.sha256Hex(of: archiveFileURL)
+        } catch {
+            recordIssue("cloud_backup.source_digest_failed", fileURL: archiveFileURL, error: error)
+            throw CloudBackupError.invalidBackupFile
+        }
         let directory = try backupsDirectoryURL(createIfNeeded: true)
         let targetURL = directory.appendingPathComponent(fileName)
+        let digestURL = integritySidecarURL(for: targetURL)
         try FileOps.replaceByCopyWithRollback(
             from: archiveFileURL,
             to: targetURL,
@@ -111,6 +126,17 @@ enum CloudBackupService {
                 source: "CloudBackupService.saveArchiveToCloud"
             )
         )
+        do {
+            try BackupArchiveSecurity.validateRemoteCopy(at: targetURL, expectedSHA256: digest)
+            try Data("\(digest)\n".utf8).write(to: digestURL, options: .atomic)
+            BackupArchiveSecurity.applyDataProtection(to: targetURL)
+            BackupArchiveSecurity.applyDataProtection(to: digestURL)
+        } catch {
+            try? FileManager.default.removeItem(at: targetURL)
+            try? FileManager.default.removeItem(at: digestURL)
+            recordIssue("cloud_backup.upload_validation_failed", fileURL: targetURL, error: error)
+            throw CloudBackupError.invalidBackupFile
+        }
         try pruneOldBackups(keepMostRecent: retainedCount)
         guard let file = cloudBackupFile(from: targetURL) else {
             throw CloudBackupError.invalidBackupFile
@@ -135,7 +161,16 @@ enum CloudBackupService {
                 source: "CloudBackupService.copyBackupToTemporaryFile"
             )
         )
-        return targetURL
+        do {
+            let expectedDigest = try readIntegrityDigest(for: file.fileURL)
+            try BackupArchiveSecurity.validateRemoteCopy(at: targetURL, expectedSHA256: expectedDigest)
+            BackupArchiveSecurity.applyDataProtection(to: targetURL)
+            return targetURL
+        } catch {
+            try? FileManager.default.removeItem(at: targetURL)
+            recordIssue("cloud_backup.restore_validation_failed", fileURL: file.fileURL, error: error)
+            throw CloudBackupError.invalidBackupFile
+        }
     }
 
     private static func backupsDirectoryURL(createIfNeeded: Bool) throws -> URL {
@@ -159,6 +194,14 @@ enum CloudBackupService {
                     at: file.fileURL,
                     context: .init(
                         event: "cloud_backup.retention_prune",
+                        category: .cloudBackup,
+                        source: "CloudBackupService.pruneOldBackups"
+                    )
+                )
+                _ = try FileOps.removeIfExists(
+                    at: integritySidecarURL(for: file.fileURL),
+                    context: .init(
+                        event: "cloud_backup.retention_prune_digest",
                         category: .cloudBackup,
                         source: "CloudBackupService.pruneOldBackups"
                     )
@@ -192,6 +235,17 @@ enum CloudBackupService {
             byteSize: values.fileSize ?? QuickNoteAttachmentStorage.fileSize(at: url),
             modifiedAt: values.contentModificationDate ?? Date.distantPast
         )
+    }
+
+    private static func integritySidecarURL(for archiveURL: URL) -> URL {
+        archiveURL.appendingPathExtension(digestFileExtension)
+    }
+
+    private static func readIntegrityDigest(for archiveURL: URL) throws -> String? {
+        let sidecarURL = integritySidecarURL(for: archiveURL)
+        guard FileManager.default.fileExists(atPath: sidecarURL.path) else { return nil }
+        let value = try String(contentsOf: sidecarURL, encoding: .utf8)
+        return try BackupArchiveSecurity.normalizedDigest(value)
     }
 
     private static func ensureCloudFileIsReady(_ url: URL) throws {

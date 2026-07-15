@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 @Observable
-final class UserPreferencesStore {
+final class UserPreferencesStore: @unchecked Sendable {
     static let shared = UserPreferencesStore()
 
     @ObservationIgnored

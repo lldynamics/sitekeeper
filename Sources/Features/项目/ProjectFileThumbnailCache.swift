@@ -1,13 +1,17 @@
 import UIKit
 
 enum ProjectFileThumbnailCache {
-    private static let cache = NSCache<NSString, UIImage>()
+    private final class Storage: @unchecked Sendable {
+        let cache = NSCache<NSString, UIImage>()
+    }
+
+    private static let storage = Storage()
 
     static func image(for key: String) -> UIImage? {
-        cache.object(forKey: key as NSString)
+        storage.cache.object(forKey: key as NSString)
     }
 
     static func store(_ image: UIImage, for key: String) {
-        cache.setObject(image, forKey: key as NSString)
+        storage.cache.setObject(image, forKey: key as NSString)
     }
 }

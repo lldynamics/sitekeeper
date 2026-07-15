@@ -7,7 +7,11 @@ extension DataManagementView {
     }
 
     var healthAndCleanupContent: some View {
-        VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
+        let mobileScrollHandler: ((CGFloat) -> Void)? = usesWideLayout
+            ? nil
+            : { offset in handleMobileContentScrollOffsetChange(offset) }
+
+        return VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
             Picker(String(localized: "体检与清理"), selection: $healthCleanupSection) {
                 ForEach(HealthCleanupSection.allCases, id: \.self) { tab in
                     Text(tab.displayName).tag(tab)
@@ -45,13 +49,13 @@ extension DataManagementView {
                     StorageCleanupCenterView(
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
+                        onMobileScrollOffsetChange: mobileScrollHandler
                     )
                 case .audit:
                     OperationAuditLogView(
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
+                        onMobileScrollOffsetChange: mobileScrollHandler
                     )
                 }
             }

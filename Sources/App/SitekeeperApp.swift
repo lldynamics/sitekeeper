@@ -4,6 +4,7 @@ import SwiftUI
 struct SitekeeperApp: App {
     @State private var store: DataStore
     @State private var scenePhaseTask: Task<Void, Never>?
+    @State private var dueReminderRefreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -49,11 +50,23 @@ struct SitekeeperApp: App {
                     guard !UITestLaunchConfig.isUITestSession else { return }
 #endif
                     await CloudAutoBackupScheduler.shared.triggerIfNeeded(store: store)
+                    await DueReminderNotificationScheduler.shared.refreshIfEnabled(
+                        snapshot: DueReminderSnapshot(store: store)
+                    )
                 case .background, .inactive:
                     await store.flushSave()
                 default:
                     break
                 }
+            }
+        }
+        .onChange(of: store.projectStore.dueReminderVersion) { _, _ in
+            dueReminderRefreshTask?.cancel()
+            dueReminderRefreshTask = Task { @MainActor in
+                guard await DebouncedTask.wait(for: .milliseconds(500)) else { return }
+                await DueReminderNotificationScheduler.shared.refreshIfEnabled(
+                    snapshot: DueReminderSnapshot(store: store)
+                )
             }
         }
     }

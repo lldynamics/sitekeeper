@@ -207,9 +207,9 @@ struct DashboardView: View {
     private var globalSearchInput: some View {
         InlineSearchPanel(
             text: $dashboardSearchText,
-            prompt: String(localized: "搜索项目、联系人、供应商、材料或命令"),
+            prompt: String(localized: "全局搜索项目、待办、日志、随手记或命令"),
             suggestions: dashboardSearchSuggestions,
-            emptyStateText: String(localized: "未找到匹配的项目、联系人、供应商、材料或命令"),
+            emptyStateText: String(localized: "未找到匹配的业务记录或命令"),
             materialTone: .materialThin,
             onSelectSuggestion: { suggestion in
                 dashboardSearchText = ""
@@ -341,8 +341,13 @@ struct DashboardView: View {
     }
 
     private var todayQuickActions: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: AppSpacing.tight) {
+        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+            Label(String(localized: "快速录入"), systemImage: "plus.circle.fill")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: AppSpacing.tight) {
                 TodayMiniAction(
                     title: String(localized: "写日志"),
                     systemImage: "book.pages.fill",
@@ -375,8 +380,9 @@ struct DashboardView: View {
                     quickActions: bookkeepingQuickActions,
                     onTrigger: { showQuickActionFeedback(title: String(localized: "记账")) }
                 )
+                }
+                .padding(.vertical, AppSpacing.tight * 0.25)
             }
-            .padding(.vertical, AppSpacing.tight * 0.25)
         }
     }
 

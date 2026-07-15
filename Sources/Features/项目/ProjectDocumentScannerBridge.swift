@@ -85,7 +85,8 @@ struct DocumentScannerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: VNDocumentCameraViewController, context: Context) {}
 
-    final class Coordinator: NSObject, VNDocumentCameraViewControllerDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency VNDocumentCameraViewControllerDelegate {
         let onSave: (Data, Int) -> Void
         let onError: (String) -> Void
 
@@ -164,6 +165,7 @@ struct ImagePickerView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
 
+    @MainActor
     final class Coordinator: NSObject, UINavigationControllerDelegate, UIImagePickerControllerDelegate {
         let sourceType: UIImagePickerController.SourceType
         let watermarkContext: CameraWatermarkContext?

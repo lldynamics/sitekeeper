@@ -24,6 +24,7 @@ enum UserPreferenceKeys {
     static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
+    static let dueNotificationsEnabled = "reminders.dueNotificationsEnabled"
     static let storageCleanupLargeFileThresholdMB = "storageCleanup.largeFileThresholdMB"
     static let storageCleanupTrashRetentionDays = "storageCleanup.trashRetentionDays"
     static let exportCurrencyDisplayMode = "export.currencyDisplayMode"

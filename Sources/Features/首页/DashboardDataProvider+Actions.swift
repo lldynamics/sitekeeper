@@ -97,11 +97,14 @@ extension DashboardView {
     var dashboardSearchSuggestions: [RealtimeSearchSuggestion] {
         RealtimeSearchSuggestionBuilder.suggestions(
             keyword: dashboardSearchText,
-            categories: [.command, .project, .contact, .supplier, .material],
+            categories: [.command, .project, .contact, .supplier, .material, .log, .todo, .note],
             projects: projectStore.projects,
             contacts: projectStore.projectContacts,
             suppliers: store.supplierProfiles,
             materials: store.materialPriceEntries,
+            logs: projectStore.dailyLogs,
+            todos: projectStore.siteTodos,
+            notes: projectStore.quickNotes,
             limit: 10
         )
     }

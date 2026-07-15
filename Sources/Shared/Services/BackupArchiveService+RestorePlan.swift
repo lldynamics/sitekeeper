@@ -33,6 +33,7 @@ extension BackupArchiveService {
             try FileManager.default.createDirectory(at: drawingStage, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: documentStage, withIntermediateDirectories: true)
             try FileManager.default.createDirectory(at: quickNoteStage, withIntermediateDirectories: true)
+            protectRestoreStage([stageRoot, photoStage, drawingStage, documentStage, quickNoteStage])
         } catch {
             recordBackupArchiveIssue(
                 "backup.restore.stage_create_failed",
@@ -161,6 +162,12 @@ extension BackupArchiveService {
         )
     }
 
+    private static func protectRestoreStage(_ directories: [URL]) {
+        for directory in directories {
+            BackupArchiveSecurity.applyDataProtection(to: directory)
+        }
+    }
+
     private static func stageEntry(
         _ writeEntryToFile: (URL) throws -> Void,
         fileName: String,
@@ -169,7 +176,9 @@ extension BackupArchiveService {
         stage: String
     ) throws {
         do {
-            try writeEntryToFile(directory.appendingPathComponent(fileName))
+            let stagedURL = directory.appendingPathComponent(fileName)
+            try writeEntryToFile(stagedURL)
+            BackupArchiveSecurity.applyDataProtection(to: stagedURL)
         } catch BackupArchiveError.cancelled {
             throw BackupArchiveError.cancelled
         } catch SimpleZipArchiveReader.ZipReadError.cancelled {

@@ -1,9 +1,5 @@
 import SwiftUI
 
-private enum ProjectFileSearchContinuationTimeout {
-    static let interval: DispatchTimeInterval = .seconds(8)
-}
-
 extension ProjectFileBrowserView {
     var normalizedQuery: String {
         searchText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -36,78 +32,7 @@ extension ProjectFileBrowserView {
     }
 
     var fileSearchDataSignature: Int {
-        var hasher = Hasher()
-
-        for project in projectStore.projects {
-            hasher.combine(project.id)
-            hasher.combine(project.name)
-            hasher.combine(project.location)
-        }
-
-        for log in projectStore.dailyLogs {
-            hasher.combine(log.id)
-            hasher.combine(log.projectId)
-            hasher.combine(log.date)
-            for photo in log.photoAttachments {
-                hasher.combine(photo.id)
-                hasher.combine(photo.fileName)
-                hasher.combine(photo.note)
-                hasher.combine(photo.tag)
-            }
-        }
-
-        for todo in projectStore.siteTodos {
-            hasher.combine(todo.id)
-            hasher.combine(todo.projectId)
-            hasher.combine(todo.title)
-            hasher.combine(todo.dueDate)
-            hasher.combine(todo.completedAt)
-            hasher.combine(todo.rectificationBeforePhotoFileName)
-            hasher.combine(todo.rectificationAfterPhotoFileName)
-        }
-
-        for drawing in projectStore.projectDrawings {
-            hasher.combine(drawing.id)
-            hasher.combine(drawing.projectId)
-            hasher.combine(drawing.name)
-            hasher.combine(drawing.fileName)
-            hasher.combine(drawing.fileType)
-            hasher.combine(drawing.importedAt)
-            hasher.combine(drawing.note)
-        }
-
-        for document in projectStore.projectDocuments {
-            hasher.combine(document.id)
-            hasher.combine(document.projectId)
-            hasher.combine(document.title)
-            hasher.combine(document.fileName)
-            hasher.combine(document.fileType)
-            hasher.combine(document.category)
-            hasher.combine(document.submissionStatus.rawValue)
-            hasher.combine(document.responsiblePerson)
-            hasher.combine(document.formedAt)
-            hasher.combine(document.createdAt)
-            hasher.combine(document.amount)
-            hasher.combine(document.note)
-            hasher.combine(document.linkedFinancialRecordId)
-        }
-
-        for note in projectStore.quickNotes {
-            hasher.combine(note.id)
-            hasher.combine(note.projectId)
-            hasher.combine(note.title)
-            hasher.combine(note.createdAt)
-            hasher.combine(note.updatedAt)
-            for attachment in note.attachments {
-                hasher.combine(attachment.id)
-                hasher.combine(attachment.kind)
-                hasher.combine(attachment.fileName)
-                hasher.combine(attachment.originalName)
-                hasher.combine(attachment.createdAt)
-            }
-        }
-
-        return hasher.finalize()
+        projectStore.fileSearchVersion
     }
 
     func collectAllFileSearchResults() -> [ProjectFileSearchResult] {
@@ -143,10 +68,10 @@ extension ProjectFileBrowserView {
         }
     }
 
-    func refreshSearchIndexIfNeeded(completion: @escaping () -> Void) {
+    @MainActor
+    func refreshSearchIndexIfNeeded() async {
         let signature = fileSearchDataSignature
         if signature == indexedDataSignature, !searchResultByID.isEmpty {
-            completion()
             return
         }
 
@@ -155,11 +80,9 @@ extension ProjectFileBrowserView {
         let rows = makeIndexRows(from: allResults)
 
         isBuildingFileIndex = true
-        fileSearchService.rebuild(signature: signature, rows: rows) {
-            indexedDataSignature = signature
-            isBuildingFileIndex = false
-            completion()
-        }
+        await fileSearchService.rebuild(signature: signature, rows: rows)
+        indexedDataSignature = signature
+        isBuildingFileIndex = false
     }
 
     @MainActor
@@ -185,26 +108,8 @@ extension ProjectFileBrowserView {
         isSearchingFiles = false
     }
 
-    func refreshSearchIndexIfNeeded() async {
-        await withTimeoutContinuation(
-            timeout: ProjectFileSearchContinuationTimeout.interval,
-            fallback: ()
-        ) { resume in
-            refreshSearchIndexIfNeeded {
-                resume(())
-            }
-        }
-    }
-
     func searchIndexedFileIDs(keyword: String) async -> [String] {
-        await withTimeoutContinuation(
-            timeout: ProjectFileSearchContinuationTimeout.interval,
-            fallback: []
-        ) { resume in
-            fileSearchService.search(keyword: keyword) { ids in
-                resume(ids)
-            }
-        }
+        await fileSearchService.search(keyword: keyword)
     }
 
     var missingResultCount: Int {
@@ -240,33 +145,6 @@ extension ProjectFileBrowserView {
                 ],
                 score: 100
             )
-        }
-    }
-
-    private func withTimeoutContinuation<T>(
-        timeout: DispatchTimeInterval,
-        fallback: T,
-        operation: (@escaping (T) -> Void) -> Void
-    ) async -> T {
-        await withCheckedContinuation { continuation in
-            let resumeQueue = DispatchQueue(label: "project-file-browser.continuation-resume")
-            var didResume = false
-
-            let resume: (T) -> Void = { value in
-                resumeQueue.async {
-                    guard !didResume else { return }
-                    didResume = true
-                    continuation.resume(returning: value)
-                }
-            }
-
-            operation { value in
-                resume(value)
-            }
-
-            resumeQueue.asyncAfter(deadline: .now() + timeout) {
-                resume(fallback)
-            }
         }
     }
 }

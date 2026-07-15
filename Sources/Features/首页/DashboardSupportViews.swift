@@ -3,6 +3,7 @@ import SwiftUI
 enum DashboardDestination {
     case dailyLog(initialProjectId: UUID? = nil, autoOpenComposer: Bool = false, focusedLogId: UUID? = nil)
     case siteTodo(initialProjectId: UUID? = nil, autoOpenComposer: Bool = false, focusedTodoId: UUID? = nil)
+    case quickNote(focusedNoteId: UUID? = nil)
     case watermarkCamera(initialProjectId: UUID? = nil, autoOpenCameraOnAppear: Bool = false)
     case projectDetail(
         projectId: UUID,
@@ -35,7 +36,7 @@ struct DashboardDestinationSelection: Identifiable, Hashable {
     }
 }
 
-@ViewBuilder
+@MainActor @ViewBuilder
 func dashboardDestinationView(_ destination: DashboardDestination) -> some View {
     switch destination {
     case .dailyLog(let initialProjectId, let autoOpenComposer, let focusedLogId):
@@ -50,6 +51,8 @@ func dashboardDestinationView(_ destination: DashboardDestination) -> some View 
             autoOpenComposer: autoOpenComposer,
             focusedTodoId: focusedTodoId
         )
+    case .quickNote(let focusedNoteId):
+        QuickNoteView(focusedNoteId: focusedNoteId, embedsNavigationStack: false)
     case .watermarkCamera(let initialProjectId, let autoOpenCameraOnAppear):
         WatermarkCameraToolView(
             initialProjectId: initialProjectId,
