@@ -22,7 +22,7 @@ enum ProjectDetailScrollTracking {
 }
 
 struct ProjectDetailAnchorOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: [ProjectDetailAnchor: CGFloat] = [:]
+    static let defaultValue: [ProjectDetailAnchor: CGFloat] = [:]
 
     static func reduce(value: inout [ProjectDetailAnchor: CGFloat], nextValue: () -> [ProjectDetailAnchor: CGFloat]) {
         value.merge(nextValue(), uniquingKeysWith: { _, new in new })

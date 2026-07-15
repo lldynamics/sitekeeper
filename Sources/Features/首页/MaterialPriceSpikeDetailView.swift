@@ -47,7 +47,7 @@ struct MaterialPriceSpikeDetailView: View {
     private var thresholdBinding: Binding<Double> {
         Binding(
             get: { financeStore.materialPriceSpikeThreshold },
-            set: { financeStore.setMaterialPriceSpikeThreshold($0) }
+            set: { store.setMaterialPriceSpikeThreshold($0) }
         )
     }
 
@@ -83,7 +83,7 @@ struct MaterialPriceSpikeDetailView: View {
                             .foregroundStyle(.secondary)
                         Spacer()
                         Button(String(localized: "恢复 10%")) {
-                            financeStore.setMaterialPriceSpikeThreshold(0.10)
+                            store.setMaterialPriceSpikeThreshold(0.10)
                         }
                         .font(.caption.weight(.semibold))
                     }
@@ -161,7 +161,7 @@ struct MaterialPriceSpikeDetailView: View {
     }
 
     private func setIgnored(_ ignored: Bool, for detail: MaterialPriceSpikeDetail) {
-        financeStore.setMaterialPriceSpikeIgnored(ignored, for: detail.id)
+        store.setMaterialPriceSpikeIgnored(ignored, for: detail.id)
         AppHaptics.impact(.light)
         actionFeedbackMessage = ignored
             ? String(format: String(localized: "material.priceSpike.ignored.message"), spikeMaterialTitle(detail))
@@ -183,7 +183,7 @@ struct MaterialPriceSpikeDetailView: View {
             actionFeedbackMessage = String(localized: "当前阈值已覆盖该异动，无需调整")
             return
         }
-        financeStore.setMaterialPriceSpikeThreshold(target)
+        store.setMaterialPriceSpikeThreshold(target)
         AppHaptics.success()
         actionFeedbackMessage = String(
             format: String(localized: "已将阈值调整为 %@"),

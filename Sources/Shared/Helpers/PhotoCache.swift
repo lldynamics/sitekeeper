@@ -2,7 +2,7 @@ import UIKit
 import Foundation
 
 /// 缩略图缓存，避免重复磁盘 I/O
-final class PhotoCache {
+final class PhotoCache: @unchecked Sendable {
     static let shared = PhotoCache()
     private let cache = NSCache<NSString, UIImage>()
 

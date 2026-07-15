@@ -27,7 +27,7 @@ struct FileIOTaskLogContext {
 }
 
 enum FileIOTaskRunner {
-    static func run<T>(
+    static func run<T: Sendable>(
         priority: TaskPriority = .utility,
         logContext: FileIOTaskLogContext? = nil,
         operation: @escaping @Sendable () async throws -> T
@@ -41,7 +41,7 @@ enum FileIOTaskRunner {
         }
     }
 
-    static func runWithRelay<T>(
+    static func runWithRelay<T: Sendable>(
         priority: TaskPriority = .utility,
         logContext: FileIOTaskLogContext? = nil,
         operation: @escaping @Sendable (TaskCancellationRelay) async throws -> T
@@ -57,7 +57,7 @@ enum FileIOTaskRunner {
         }
     }
 
-    private static func awaitTask<T>(
+    private static func awaitTask<T: Sendable>(
         _ task: Task<T, Error>,
         logContext: FileIOTaskLogContext?,
         onCancel: @escaping @Sendable () -> Void

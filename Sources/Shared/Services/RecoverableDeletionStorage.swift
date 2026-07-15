@@ -5,8 +5,32 @@ enum RecoverableDeletionStorageError: Error {
 }
 
 enum RecoverableDeletionStorage {
-    private static let rootOverrideLock = NSLock()
-    private static var rootOverrides: [String: URL] = [:]
+    private final class RootOverrideState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var values: [String: URL] = [:]
+
+        func value(for name: String) -> URL? {
+            lock.lock()
+            defer { lock.unlock() }
+            return values[name]
+        }
+
+        func set(_ url: URL, for name: String) -> URL? {
+            lock.lock()
+            defer { lock.unlock() }
+            let previous = values[name]
+            values[name] = url
+            return previous
+        }
+
+        func restore(_ url: URL?, for name: String) {
+            lock.lock()
+            defer { lock.unlock() }
+            values[name] = url
+        }
+    }
+
+    private static let rootOverrideState = RootOverrideState()
 
     static func rootURL(named rootDirectoryName: String) -> URL? {
         if let rootOverride = rootOverride(for: rootDirectoryName) {
@@ -104,23 +128,15 @@ enum RecoverableDeletionStorage {
     }
 
     private static func rootOverride(for rootDirectoryName: String) -> URL? {
-        rootOverrideLock.lock()
-        defer { rootOverrideLock.unlock() }
-        return rootOverrides[rootDirectoryName]
+        rootOverrideState.value(for: rootDirectoryName)
     }
 
     @discardableResult
     private static func setRootOverride(_ rootURL: URL, for rootDirectoryName: String) -> URL? {
-        rootOverrideLock.lock()
-        defer { rootOverrideLock.unlock() }
-        let previous = rootOverrides[rootDirectoryName]
-        rootOverrides[rootDirectoryName] = rootURL
-        return previous
+        rootOverrideState.set(rootURL, for: rootDirectoryName)
     }
 
     private static func restoreRootOverride(_ rootURL: URL?, for rootDirectoryName: String) {
-        rootOverrideLock.lock()
-        defer { rootOverrideLock.unlock() }
-        rootOverrides[rootDirectoryName] = rootURL
+        rootOverrideState.restore(rootURL, for: rootDirectoryName)
     }
 }

@@ -4,18 +4,6 @@ import Foundation
 enum Formatters {
     private static let posixLocale = Locale(identifier: "en_US_POSIX")
     private static let stableTimeZone = TimeZone(secondsFromGMT: 0)!
-    private static let iso8601WithFractionalSeconds: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.timeZone = stableTimeZone
-        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return formatter
-    }()
-    private static let iso8601: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.timeZone = stableTimeZone
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
     private static let fallbackDateFormatters: [DateFormatter] = [
         makeFormatter("yyyy-MM-dd HH:mm:ss"),
         makeFormatter("yyyy-M-d HH:mm:ss"),
@@ -43,7 +31,9 @@ enum Formatters {
         for formatter in fallbackDateFormatters {
             if let value = formatter.date(from: normalized) { return value }
         }
-        if let value = iso8601WithFractionalSeconds.date(from: normalized) { return value }
+        let fractionalISO8601 = makeISO8601Formatter(includeFractionalSeconds: true)
+        if let value = fractionalISO8601.date(from: normalized) { return value }
+        let iso8601 = makeISO8601Formatter(includeFractionalSeconds: false)
         if let value = iso8601.date(from: normalized) { return value }
         return nil
     }
@@ -79,6 +69,15 @@ enum Formatters {
         formatter.locale = posixLocale
         formatter.timeZone = stableTimeZone
         formatter.dateFormat = format
+        return formatter
+    }
+
+    private static func makeISO8601Formatter(includeFractionalSeconds: Bool) -> ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = stableTimeZone
+        formatter.formatOptions = includeFractionalSeconds
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
         return formatter
     }
 }

@@ -12,11 +12,6 @@ enum WidgetSharedDefaults {
 
 enum WidgetSharedStorageIssueLog {
     private static let maxEntries = 120
-    private static let timestampFormatter: ISO8601DateFormatter = {
-        let formatter = ISO8601DateFormatter()
-        formatter.formatOptions = [.withInternetDateTime]
-        return formatter
-    }()
 
     @discardableResult
     static func record(_ message: String, source: String? = nil) -> Bool {
@@ -40,13 +35,19 @@ enum WidgetSharedStorageIssueLog {
         guard !trimmed.isEmpty else { return }
         let normalizedSource = source?.trimmingCharacters(in: .whitespacesAndNewlines)
         let sourcePrefix = normalizedSource.map { $0.isEmpty ? "" : "[\($0)] " } ?? ""
-        let entry = "[\(timestampFormatter.string(from: Date()))] \(sourcePrefix)\(trimmed)"
+        let entry = "[\(timestampString(for: Date()))] \(sourcePrefix)\(trimmed)"
         var entries = defaults.stringArray(forKey: WidgetSharedDefaults.storageIssueLogKey) ?? []
         entries.insert(entry, at: 0)
         if entries.count > maxEntries {
             entries = Array(entries.prefix(maxEntries))
         }
         defaults.set(entries, forKey: WidgetSharedDefaults.storageIssueLogKey)
+    }
+
+    private static func timestampString(for date: Date) -> String {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.string(from: date)
     }
 }
 

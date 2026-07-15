@@ -25,6 +25,7 @@ extension DataStore {
                 let backupURL = storeURL.deletingLastPathComponent().appendingPathComponent(backupName)
                 do {
                     try decodeError.rawData.write(to: backupURL, options: .atomic)
+                    BackupArchiveSecurity.applyDataProtection(to: backupURL)
                 } catch {
                     Self.recordIssue(
                         "datastore.corrupt_backup_write_failed",

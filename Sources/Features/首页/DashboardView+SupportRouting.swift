@@ -188,6 +188,14 @@ extension DashboardView {
             return .materialPriceDatabase(focusedEntryId: suggestion.entityId)
         case .method:
             return .constructionMethodLibrary(focusedMethodId: suggestion.entityId)
+        case .log:
+            let projectID = projectStore.dailyLogs.first(where: { $0.id == suggestion.entityId })?.projectId
+            return .dailyLog(initialProjectId: projectID, focusedLogId: suggestion.entityId)
+        case .todo:
+            let projectID = projectStore.siteTodos.first(where: { $0.id == suggestion.entityId })?.projectId
+            return .siteTodo(initialProjectId: projectID, focusedTodoId: suggestion.entityId)
+        case .note:
+            return .quickNote(focusedNoteId: suggestion.entityId)
         default:
             return .projectList()
         }
@@ -197,6 +205,12 @@ extension DashboardView {
         switch command {
         case .newDailyLog:
             return .dailyLog(initialProjectId: currentProject?.id, autoOpenComposer: true)
+        case .newTodo:
+            return .siteTodo(initialProjectId: currentProject?.id, autoOpenComposer: true)
+        case .newQuickNote:
+            return .quickNote()
+        case .newBookkeeping:
+            return bookkeepingEntryDestination
         case .attachReceipt:
             if let project = currentProject {
                 return .projectDetail(

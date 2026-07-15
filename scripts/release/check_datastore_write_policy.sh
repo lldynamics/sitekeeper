@@ -56,4 +56,20 @@ if [[ -n "$MATCHES" ]]; then
   exit 1
 fi
 
-echo "[datastore-write-policy] PASS: no direct DataStore array writes detected."
+# Domain stores are implementation details of DataStore. Feature and app code
+# may read them for narrow indexed queries, but every mutation must cross an
+# explicit DataStore write port so save/audit behavior cannot be bypassed.
+DOMAIN_STORE_MUTATIONS="$(
+  rg -n --color=never --glob '*.swift' \
+    --regexp '\b(projectStore|financeStore|materialLibraryStore|userPreferenceStore)\.(set|replace|append|insert|remove|restore|toggle)[A-Z]' \
+    Sources/Features Sources/App || true
+)"
+if [[ -n "$DOMAIN_STORE_MUTATIONS" ]]; then
+  echo "[datastore-write-policy] FAIL: feature code bypasses DataStore domain write ports:" >&2
+  echo "$DOMAIN_STORE_MUTATIONS" >&2
+  echo >&2
+  echo "Add or use an explicit DataStore write method instead of mutating a domain store." >&2
+  exit 1
+fi
+
+echo "[datastore-write-policy] PASS: DataStore arrays and domain stores are mutated only through approved write ports."

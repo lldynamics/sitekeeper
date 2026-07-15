@@ -26,120 +26,157 @@ struct DataManagementView: View {
     }
 
     var body: some View {
+        lifecycleContent
+    }
+
+    private var lifecycleContent: some View {
+        dialogContent
+            .operationToast(notice: $operationNotice)
+            .onDisappear {
+                undoableDeletion.flushPendingCommit()
+            }
+            .onAppear {
+                refreshRiskSnapshot()
+                if !usesWideLayout {
+                    isCompactSafetyHeader = false
+                    lastMobileContentOffset = 0
+                }
+            }
+            .onChange(of: selectedTab) { _, _ in
+                refreshRiskSnapshot()
+                if !usesWideLayout {
+                    withAnimation(.snappy) {
+                        isCompactSafetyHeader = false
+                    }
+                    lastMobileContentOffset = 0
+                }
+            }
+    }
+
+    private var dialogContent: some View {
+        navigationContent
+            .confirmationDialog(String(localized: "清空所有计算历史？"), isPresented: $showClearHistoryConfirm) {
+                Button(String(localized: "清空"), role: .destructive) { clearCalculationHistoryWithUndo() }
+                Button(String(localized: "取消"), role: .cancel) {}
+            }
+            .alert(String(localized: "恢复测试数据？"), isPresented: $showSampleDataImportConfirm) {
+                Button(String(localized: "清空并导入"), role: .destructive) {
+                    importSampleDataWithNotice()
+                }
+                Button(String(localized: "取消"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "会清空当前本机业务数据，并恢复一套更完整的测试项目、报价、图纸、票据、照片和附件样例。"))
+            }
+            .alert(String(localized: "确认覆盖导入？"), isPresented: $showUITestOverwriteImportConfirm) {
+                Button(String(localized: "取消"), role: .cancel) {}
+            } message: {
+                Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
+            }
+    }
+
+    private var navigationContent: some View {
+        mainContent
+            .navigationTitle(String(localized: "数据安全中心"))
+            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(trailing: compactNavigationAction)
+    }
+
+    private var mainContent: some View {
         VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
-            if usesWideLayout {
-                safetyHeaderSection
-
-                DataManagementSecondaryFlowShortcutGrid(
-                    usesWideLayout: true,
-                    cards: secondaryShortcutCards,
-                    onSelect: selectSecondaryTarget(_:)
-                )
-            } else {
-                mobileSafetyHeader
-            }
-
-            if usesWideLayout {
-                selectedTabSummary
-
-                if selectedTab == .backupAndRestore, sampleDataImportEnabled {
-                    DataManagementSampleDataImportCard(
-                        hasAnyBusinessData: store.hasAnyBusinessData,
-                        onImport: {
-                            showSampleDataImportConfirm = true
-                        }
-                    )
-                }
-
-                if !store.historyRecords.isEmpty {
-                    calculationHistoryCard
-                }
-            }
-
-            Group {
-                switch selectedTab {
-                case .export:
-                    ExportView(
-                        showsNavigationTitle: false,
-                        bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:)
-                    )
-                case .backupAndRestore:
-                    BackupView(
-                        autoOpenImporter: shouldAutoOpenBackupImporter,
-                        showsNavigationTitle: false,
-                        bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: usesWideLayout ? nil : handleMobileContentScrollOffsetChange(_:),
-                        onAutoOpenImporterConsumed: {
-                            shouldAutoOpenBackupImporter = false
-                        }
-                    )
-                case .healthAndCleanup:
-                    healthAndCleanupContent
-                }
-            }
+            headerContent
+            wideSupplementaryContent
+            selectedFlowContent
             .id(selectedTab)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
         }
-        .navigationTitle(String(localized: "数据安全中心"))
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            if !usesWideLayout {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DataManagementCompactActionMenu(
-                        selectedTab: $selectedTab,
-                        healthCleanupSection: $healthCleanupSection,
-                        shouldAutoOpenBackupImporter: $shouldAutoOpenBackupImporter,
-                        showClearHistoryConfirm: $showClearHistoryConfirm,
-                        showSampleDataImportConfirm: $showSampleDataImportConfirm,
-                        showUITestOverwriteImportConfirm: $showUITestOverwriteImportConfirm,
-                        sampleDataImportEnabled: sampleDataImportEnabled,
-                        showsUITestBackupPreviewShortcut: showsUITestBackupPreviewShortcut,
-                        hasHistoryRecords: !store.historyRecords.isEmpty,
-                        hasAnyBusinessData: store.hasAnyBusinessData,
-                        historyTrimCount: historyTrimCount,
-                        onTrimHistory: trimCalculationHistoryWithUndo
-                    )
+    }
+
+    @ViewBuilder
+    private var headerContent: some View {
+        if usesWideLayout {
+            safetyHeaderSection
+
+            DataManagementSecondaryFlowShortcutGrid(
+                usesWideLayout: true,
+                cards: secondaryShortcutCards,
+                onSelect: selectSecondaryTarget(_:)
+            )
+        } else {
+            mobileSafetyHeader
+        }
+    }
+
+    @ViewBuilder
+    private var wideSupplementaryContent: some View {
+        if usesWideLayout {
+            selectedTabSummary
+
+            if selectedTab == .backupAndRestore, sampleDataImportEnabled {
+                DataManagementSampleDataImportCard(
+                    hasAnyBusinessData: store.hasAnyBusinessData,
+                    onImport: {
+                        showSampleDataImportConfirm = true
+                    }
+                )
+            }
+
+            if !store.historyRecords.isEmpty {
+                calculationHistoryCard
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var selectedFlowContent: some View {
+        switch selectedTab {
+        case .export:
+            ExportView(
+                showsNavigationTitle: false,
+                bottomContentInset: embeddedScrollBottomInset,
+                onMobileScrollOffsetChange: mobileScrollHandler
+            )
+        case .backupAndRestore:
+            BackupView(
+                autoOpenImporter: shouldAutoOpenBackupImporter,
+                showsNavigationTitle: false,
+                bottomContentInset: embeddedScrollBottomInset,
+                onMobileScrollOffsetChange: mobileScrollHandler,
+                onAutoOpenImporterConsumed: {
+                    shouldAutoOpenBackupImporter = false
                 }
-            }
+            )
+        case .healthAndCleanup:
+            healthAndCleanupContent
         }
-        .confirmationDialog(String(localized: "清空所有计算历史？"), isPresented: $showClearHistoryConfirm) {
-            Button(String(localized: "清空"), role: .destructive) { clearCalculationHistoryWithUndo() }
-            Button(String(localized: "取消"), role: .cancel) {}
-        }
-        .alert(String(localized: "恢复测试数据？"), isPresented: $showSampleDataImportConfirm) {
-            Button(String(localized: "清空并导入"), role: .destructive) {
-                importSampleDataWithNotice()
-            }
-            Button(String(localized: "取消"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "会清空当前本机业务数据，并恢复一套更完整的测试项目、报价、图纸、票据、照片和附件样例。"))
-        }
-        .alert(String(localized: "确认覆盖导入？"), isPresented: $showUITestOverwriteImportConfirm) {
-            Button(String(localized: "取消"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "覆盖会删除当前本机数据，请先导出备份。"))
-        }
-        .operationToast(notice: $operationNotice)
-        .onDisappear {
-            undoableDeletion.flushPendingCommit()
-        }
-        .onAppear {
-            refreshRiskSnapshot()
-            if !usesWideLayout {
-                isCompactSafetyHeader = false
-                lastMobileContentOffset = 0
-            }
-        }
-        .onChange(of: selectedTab) { _, _ in
-            refreshRiskSnapshot()
-            if !usesWideLayout {
-                withAnimation(.snappy) {
-                    isCompactSafetyHeader = false
-                }
-                lastMobileContentOffset = 0
-            }
+    }
+
+    private var mobileScrollHandler: ((CGFloat) -> Void)? {
+        guard !usesWideLayout else { return nil }
+        return { offset in handleMobileContentScrollOffsetChange(offset) }
+    }
+
+    private var compactActionMenu: some View {
+        DataManagementCompactActionMenu(
+            selectedTab: $selectedTab,
+            healthCleanupSection: $healthCleanupSection,
+            shouldAutoOpenBackupImporter: $shouldAutoOpenBackupImporter,
+            showClearHistoryConfirm: $showClearHistoryConfirm,
+            showSampleDataImportConfirm: $showSampleDataImportConfirm,
+            showUITestOverwriteImportConfirm: $showUITestOverwriteImportConfirm,
+            sampleDataImportEnabled: sampleDataImportEnabled,
+            showsUITestBackupPreviewShortcut: showsUITestBackupPreviewShortcut,
+            hasHistoryRecords: !store.historyRecords.isEmpty,
+            hasAnyBusinessData: store.hasAnyBusinessData,
+            historyTrimCount: historyTrimCount,
+            onTrimHistory: trimCalculationHistoryWithUndo
+        )
+    }
+
+    @ViewBuilder
+    private var compactNavigationAction: some View {
+        if !usesWideLayout {
+            compactActionMenu
         }
     }
 

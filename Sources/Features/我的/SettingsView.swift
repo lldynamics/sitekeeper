@@ -4,6 +4,9 @@ struct SettingsView: View {
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.backupHealthReminderDays) private var backupHealthReminderDays = 7
     @AppStorage(UserPreferenceKeys.storageCleanupTrashRetentionDays) private var cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.defaultDays
+    @AppStorage(UserPreferenceKeys.dueNotificationsEnabled) private var dueNotificationsEnabled = false
+    @State private var isUpdatingDueNotifications = false
+    @State private var dueNotificationStatusMessage = ""
     @State private var showClearLocalDataBackupGate = false
     @State private var showClearLocalDataSheet = false
     @State private var isClearingLocalData = false
@@ -23,6 +26,19 @@ struct SettingsView: View {
                 Text(String(localized: "超过该天数未成功备份时，工作台会显示“备份超期”提醒。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Toggle(String(localized: "到期系统通知"), isOn: $dueNotificationsEnabled)
+                .disabled(isUpdatingDueNotifications)
+                .onChange(of: dueNotificationsEnabled) { _, enabled in
+                    updateDueNotifications(enabled)
+                }
+                Text(String(localized: "为未完成待办和待提醒的应收/应付流水安排本地通知，最多保留最近 60 条。"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                if !dueNotificationStatusMessage.isEmpty {
+                    Text(dueNotificationStatusMessage)
+                        .font(.caption)
+                        .foregroundStyle(dueNotificationsEnabled ? Color.appSuccess : Color.appWarning)
+                }
                 Picker(String(localized: "回收站保留时间"), selection: $cleanupTrashRetentionDays) {
                     ForEach(StorageCleanupTrashRetentionOption.allCases) { option in
                         Text(option.displayName)
@@ -115,6 +131,28 @@ struct SettingsView: View {
         .onAppear {
             backupHealthReminderDays = min(max(backupHealthReminderDays, 1), 30)
             cleanupTrashRetentionDays = StorageCleanupTrashRetentionOption.normalizedDays(cleanupTrashRetentionDays)
+        }
+    }
+
+    private func updateDueNotifications(_ enabled: Bool) {
+        guard !isUpdatingDueNotifications else { return }
+        isUpdatingDueNotifications = true
+        dueNotificationStatusMessage = ""
+        let snapshot = DueReminderSnapshot(store: store)
+        Task { @MainActor in
+            if enabled {
+                let granted = await DueReminderNotificationScheduler.shared
+                    .requestAuthorizationAndRefresh(snapshot: snapshot)
+                dueNotificationsEnabled = granted
+                dueNotificationStatusMessage = granted
+                    ? String(localized: "到期通知已开启")
+                    : String(localized: "系统未授权通知，可在“设置—通知”中开启。")
+            } else {
+                dueNotificationsEnabled = false
+                await DueReminderNotificationScheduler.shared.clearPendingNotifications()
+                dueNotificationStatusMessage = String(localized: "到期通知已关闭")
+            }
+            isUpdatingDueNotifications = false
         }
     }
 

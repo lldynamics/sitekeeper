@@ -28,6 +28,7 @@ Package.resolved
 # macOS
 .DS_Store
 ._*
+*.textClipping
 .vscode/
 
 # Local CAD sample corpus (keep binaries local only)

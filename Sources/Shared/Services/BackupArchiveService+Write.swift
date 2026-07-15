@@ -135,6 +135,7 @@ extension BackupArchiveService {
         reportProgress(loc("写入说明文件"))
 
         let finishedURL = try zip.finish()
+        BackupArchiveSecurity.applyDataProtection(to: finishedURL)
         writerFinished = true
         return BackupArchive(
             fileURL: finishedURL,

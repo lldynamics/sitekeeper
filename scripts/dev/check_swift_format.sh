@@ -48,4 +48,4 @@ if ! command -v swiftformat >/dev/null 2>&1; then
 fi
 
 echo "[swiftformat] Checking ${#paths[@]} path(s)."
-swiftformat --config "$ROOT_DIR/.swiftformat" "${paths[@]}" --lint
+swiftformat --config "$ROOT_DIR/.swiftformat" "${paths[@]}" --lint --cache ignore

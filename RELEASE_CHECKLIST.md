@@ -14,9 +14,18 @@
 - [ ] Debug 构建通过：`xcodebuild -project sitekeeper.xcodeproj -scheme sitekeeper-iOS -configuration Debug -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
 - [ ] Release 构建通过：`xcodebuild -project sitekeeper.xcodeproj -scheme sitekeeper-iOS -configuration Release -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build`
 - [ ] Widget Extension 构建通过（由主 Target 联编）
+- [ ] 签名归档配置通过：`scripts/release/check_appstore_archive_config.sh`
+- [ ] App Store 归档 dry-run 通过：`scripts/release/archive_appstore.sh --dry-run`
+- [ ] 正式 `.xcarchive` 与 IPA 导出成功，`release-evidence.txt` 已留档
+- [ ] `release-evidence.txt` 中版本、构建号、Bundle ID、Git commit 与 IPA SHA-256 正确
+- [ ] 若上传 TestFlight，必须显式使用 `--upload-testflight` 并保存上传结果
 
 ## 2. 自动化测试
 - [ ] 单元测试通过：`xcodebuild test -project sitekeeper.xcodeproj -scheme sitekeeper-iOS -destination 'id=<SIMULATOR_ID>' CODE_SIGNING_ALLOWED=NO`
+- [ ] iPhone UI 冒烟通过：`scripts/release/run_ui_smoke.sh --device-family iphone`
+- [ ] iPad UI 冒烟通过：`scripts/release/run_ui_smoke.sh --device-family ipad`
+- [ ] CI 已留存两种设备族的 `.xcresult`
+- [ ] 备份导出—清空—恢复—重载演练通过：`BackupRecoveryRehearsalTests`
 - [ ] UI 测试通过：`xcodebuild test -project sitekeeper.xcodeproj -scheme sitekeeper-iOS-UITests -destination 'id=<SIMULATOR_ID>' CODE_SIGNING_ALLOWED=NO`
 - [ ] 若执行预检脚本，确认 `scripts/release/preflight.sh` 输出 `Release preflight passed`
 
