@@ -75,7 +75,7 @@ jobs:
 
       - name: Run one-click release gate
         env:
-          DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-release-derived-data
+          DERIVED_DATA_PATH: /tmp/sitekeeper-release-derived-data
           SIMULATOR_NAME: sitekeeper-ci-release
         run: |
           export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
@@ -106,8 +106,8 @@ jobs:
       - name: Run adaptive UI smoke tests
         env:
           DEVICE_FAMILY: ${{ matrix.device_family }}
-          DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-derived-data
-          RESULT_BUNDLE_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
+          DERIVED_DATA_PATH: /tmp/sitekeeper-ui-smoke-derived-data
+          RESULT_BUNDLE_PATH: /tmp/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
         run: |
           export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
           xcodegen --version
@@ -118,6 +118,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ui-smoke-${{ matrix.device_family }}-xcresult
-          path: ${{ runner.temp }}/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
+          path: /tmp/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
           if-no-files-found: warn
           retention-days: 14
