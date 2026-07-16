@@ -77,7 +77,10 @@ jobs:
         env:
           DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-release-derived-data
           SIMULATOR_NAME: sitekeeper-ci-release
-        run: scripts/release/one_click_release_check.sh
+        run: |
+          export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
+          xcodegen --version
+          scripts/release/one_click_release_check.sh
 
   ui-smoke:
     name: UI smoke (${{ matrix.device_family }})
@@ -105,7 +108,10 @@ jobs:
           DEVICE_FAMILY: ${{ matrix.device_family }}
           DERIVED_DATA_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-derived-data
           RESULT_BUNDLE_PATH: ${{ runner.temp }}/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
-        run: scripts/release/run_ui_smoke.sh
+        run: |
+          export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
+          xcodegen --version
+          scripts/release/run_ui_smoke.sh
 
       - name: Upload UI smoke result
         if: always()
