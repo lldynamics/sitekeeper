@@ -392,6 +392,7 @@ after_project_status="$(git -c core.quotePath=false status --porcelain -- projec
 if [[ "$before_project_status" != "$after_project_status" ]]; then
   echo "ERROR: xcodegen changed project files. Commit regenerated project before release." >&2
   git -c core.quotePath=false status --short -- project.yml sitekeeper.xcodeproj >&2
+  git -c core.quotePath=false --no-pager diff -- sitekeeper.xcodeproj/project.pbxproj >&2
   exit 4
 fi
 
