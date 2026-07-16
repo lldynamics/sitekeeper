@@ -188,7 +188,8 @@ extension LaborRecordView {
     var newLaborTotal: MoneyValue {
         let totalDays = QuantityValue(text: newDays)
         let workers = QuantityValue(text: newWorkers)
-        return workers * totalDays * MoneyValue(text: newUnitRate)
+        let totalWorkDays = workers * totalDays
+        return totalWorkDays * MoneyValue(text: newUnitRate)
     }
 
     func deleteLaborRecordsWithUndo(ids: [UUID]) {

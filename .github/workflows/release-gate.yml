@@ -14,6 +14,7 @@ on:
       - "scripts/localization/**"
       - "scripts/legal/**"
       - ".github/workflows/release-gate.yml"
+
   push:
     branches:
       - main
@@ -29,6 +30,9 @@ on:
       - "scripts/localization/**"
       - "scripts/legal/**"
       - ".github/workflows/release-gate.yml"
+
+env:
+  XCODEGEN_VERSION: 2.46.0
 
 jobs:
   release-boundaries:
@@ -61,7 +65,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install release tools
-        run: brew install ripgrep xcodegen swiftformat swiftlint
+        run: |
+          brew install ripgrep swiftformat swiftlint
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-release"
+          echo "$RUNNER_TEMP/xcodegen-release/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Run one-click release gate
         env:
@@ -82,7 +92,13 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Install UI test tools
-        run: brew install ripgrep xcodegen
+        run: |
+          brew install ripgrep
+          curl --fail --location --silent --show-error \
+            --output "$RUNNER_TEMP/xcodegen.zip" \
+            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-release"
+          echo "$RUNNER_TEMP/xcodegen-release/xcodegen/bin" >> "$GITHUB_PATH"
 
       - name: Run adaptive UI smoke tests
         env:
