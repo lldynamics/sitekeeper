@@ -2125,9 +2125,9 @@
 			projectRoot = "";
 			targets = (
 				976D7DF3C550B78F9AAAE5DD /* sitekeeper-iOS */,
+				1798D906DD4780E6FC846714 /* sitekeeperWidgetExtension */,
 				D669BF6AB76B665A448947A8 /* sitekeeperTests */,
 				742297A986618961BD9556D8 /* sitekeeperUITests */,
-				1798D906DD4780E6FC846714 /* sitekeeperWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
