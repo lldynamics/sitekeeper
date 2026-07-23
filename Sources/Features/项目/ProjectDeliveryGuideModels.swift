@@ -266,41 +266,6 @@ struct ProjectDeliveryHealth: Equatable {
     }
 }
 
-struct ProjectDeliveryHealthSummaryRow: View {
-    let health: ProjectDeliveryHealth
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(alignment: .center, spacing: AppSpacing.tight) {
-                Image(systemName: health.isDeliverable ? "checkmark.seal.fill" : "xmark.seal.fill")
-                    .foregroundStyle(health.isDeliverable ? Color.appSuccess : Color.appRisk)
-                    .font(.caption.weight(.semibold))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(String(format: String(localized: "交付健康分 %lld · %@"), Int64(health.score), health.verdictTitle))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(health.summary)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, AppSpacing.normal)
-            .padding(.vertical, 8)
-            .background(
-                health.isDeliverable ? Color.appSuccessSurfaceSubtle : Color.appRiskSurface,
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
 struct ProjectDeliveryGuideData {
     let projectName: String
     let logCount: Int

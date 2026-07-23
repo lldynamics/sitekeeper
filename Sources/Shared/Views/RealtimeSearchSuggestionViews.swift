@@ -157,26 +157,3 @@ struct RealtimeSearchSuggestionInlineList: View {
         }
     }
 }
-
-struct RealtimeSearchSuggestionMenuRow: View {
-    let suggestion: RealtimeSearchSuggestion
-
-    var body: some View {
-        HStack(spacing: AppSpacing.tight) {
-            Image(systemName: suggestion.category.systemImage)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(suggestion.category.tintColor)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(suggestion.title)
-                    .font(.subheadline.weight(.semibold))
-                if !suggestion.subtitle.isEmpty {
-                    Text(suggestion.subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-}

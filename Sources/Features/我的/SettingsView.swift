@@ -347,36 +347,6 @@ private struct ClearLocalDataBackupGateSheet: View {
     }
 }
 
-private struct FavoriteCalcEditor: View {
-    @AppStorage(UserPreferenceKeys.favoriteCalculators) private var data = ""
-    private let all = CalculatorDestination.allCases
-
-    private var favSet: Set<String> {
-        Set(data.split(separator: ",").map(String.init).filter { !$0.isEmpty })
-    }
-
-    var body: some View {
-        List {
-            ForEach(all, id: \.title) { def in
-                HStack {
-                    ToolRow(icon: def.icon, title: def.title, desc: def.desc, color: .appWarning)
-                    Spacer()
-                    let isFav = favSet.contains(def.title)
-                    Button {
-                        var set = favSet
-                        if isFav { set.remove(def.title) } else { set.insert(def.title) }
-                        data = set.sorted().joined(separator: ",")
-                    } label: {
-                        Image(systemName: isFav ? "star.fill" : "star")
-                            .foregroundStyle(isFav ? .appWarning : .appMuted)
-                    }
-                }
-            }
-        }
-        .navigationTitle(String(localized: "收藏计算器")).navigationBarTitleDisplayMode(.inline)
-    }
-}
-
 private struct ClearLocalDataConfirmationSheet: View {
     let preview: ClearLocalDataImpactPreview
     let onConfirm: () -> Void

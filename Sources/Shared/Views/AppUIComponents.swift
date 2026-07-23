@@ -97,7 +97,6 @@ extension Color {
     static var appPeachSurfaceSubtle: Color { appPrimarySurfaceSubtle }
 
     static let appStrokeWarning = Color("StrokeWarning")
-    static let appStrokeInfo = Color("StrokeInfo")
     static let appStrokeSuccess = Color("StrokeSuccess")
     static let appStrokeError = Color("StrokeError")
     static let appStrokeSecondary = Color("StrokeSecondary")
