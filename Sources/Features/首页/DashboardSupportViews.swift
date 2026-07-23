@@ -182,65 +182,6 @@ struct TodayMiniAction: View {
     }
 }
 
-struct TodayCommandAction: View {
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    let title: String
-    let systemImage: String
-    let color: Color
-    let action: () -> Void
-
-    private var usesPadStyle: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
-
-    private var iconFont: Font {
-        usesPadStyle ? .subheadline.weight(.semibold) : .caption.weight(.semibold)
-    }
-
-    private var titleFont: Font {
-        usesPadStyle ? .subheadline.weight(.semibold) : .caption.weight(.semibold)
-    }
-
-    private var horizontalPadding: CGFloat {
-        usesPadStyle ? AppSpacing.relaxed : AppSpacing.normal
-    }
-
-    private var verticalPadding: CGFloat {
-        usesPadStyle ? 10 : 7
-    }
-
-    private var minHeight: CGFloat {
-        usesPadStyle ? 44 : 0
-    }
-
-    var body: some View {
-        Button {
-            AppHaptics.impact(.light)
-            action()
-        } label: {
-            HStack(spacing: AppSpacing.tight) {
-                Image(systemName: systemImage)
-                    .font(iconFont)
-                    .foregroundStyle(color)
-                Text(title)
-                    .font(titleFont)
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .leading)
-            .padding(.horizontal, horizontalPadding)
-            .padding(.vertical, verticalPadding)
-            .background {
-                AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
-                    Color.clear
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(title)
-    }
-}
-
 struct BookkeepingProjectPickerView: View {
     let projects: [Project]
 
