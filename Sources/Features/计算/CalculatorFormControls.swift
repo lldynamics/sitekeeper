@@ -3,21 +3,6 @@ import SwiftUI
 import UIKit
 #endif
 
-struct CalculatorValidationHint: View {
-    let message: String?
-
-    var body: some View {
-        if let message, !message.isEmpty {
-            Label(message, systemImage: "exclamationmark.circle.fill")
-                .font(.caption2)
-                .foregroundStyle(.appRisk)
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(message)
-                .accessibilityHint(calculatorLoc("输入校验提示"))
-        }
-    }
-}
-
 struct CalculatorNumericFieldRule {
     let kind: NumericInputKind
     let requirement: NumericInputRequirement

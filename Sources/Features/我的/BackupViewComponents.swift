@@ -1,6 +1,5 @@
 import SwiftUI
 import Foundation
-import UniformTypeIdentifiers
 
 enum ImportMode: String, CaseIterable { case merge, overwrite }
 
@@ -37,30 +36,6 @@ struct CloudBackupListRow: View {
             .buttonStyle(.bordered)
         }
         .padding(.vertical, 2)
-    }
-}
-
-struct BackupFileDocument: FileDocument {
-    static var readableContentTypes: [UTType] { [.zipArchive] }
-    var data: Data
-    var sourceFileURL: URL?
-
-    init(data: Data, sourceFileURL: URL? = nil) {
-        self.data = data
-        self.sourceFileURL = sourceFileURL
-    }
-
-    init(configuration: ReadConfiguration) throws {
-        data = configuration.file.regularFileContents ?? Data()
-        sourceFileURL = nil
-    }
-
-    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
-        if let sourceFileURL,
-           FileManager.default.fileExists(atPath: sourceFileURL.path) {
-            return try FileWrapper(url: sourceFileURL, options: .immediate)
-        }
-        return FileWrapper(regularFileWithContents: data)
     }
 }
 

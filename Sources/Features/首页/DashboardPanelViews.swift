@@ -166,49 +166,6 @@ private struct DashboardPanelSurfaceModifier: ViewModifier {
     }
 }
 
-struct DashboardMustDoItem: Identifiable {
-    let id = UUID()
-    let title: String
-    let detail: String
-    let systemImage: String
-    let color: Color
-    let destination: DashboardDestination
-}
-
-struct DashboardMustDoRow: View {
-    let item: DashboardMustDoItem
-
-    var body: some View {
-        HStack(spacing: AppSpacing.tight + 2) {
-            Image(systemName: item.systemImage)
-                .font(.callout.weight(.semibold))
-                .foregroundStyle(item.color)
-                .frame(width: 24)
-            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
-                Text(item.title)
-                    .font(.callout.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .appListPrimaryTextLayout()
-                Text(item.detail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .appListSecondaryTextLayout()
-            }
-            Spacer()
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, AppSpacing.normal - 2)
-        .padding(.vertical, AppSpacing.tight + 1)
-        .background(
-            RoundedRectangle(cornerRadius: AppSpacing.tight)
-                .fill(item.color.opacity(0.10))
-        )
-        .accessibilityElement(children: .combine)
-    }
-}
-
 struct LogPreviewRow: View {
     let log: DailyLog
     let projectName: String?

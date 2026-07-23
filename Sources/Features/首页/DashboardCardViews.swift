@@ -1,39 +1,5 @@
 import SwiftUI
 
-struct ProjectContextRow: View {
-    let project: Project
-    let note: String
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(project.name)
-                    .font(.callout.weight(.semibold))
-                    .appListPrimaryTextLayout()
-                Spacer()
-                Text(project.status.displayName)
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(Color.appPrimaryAction)
-            }
-            HStack(spacing: 8) {
-                if !project.location.isEmpty {
-                    Label(project.location, systemImage: "mappin.and.ellipse")
-                }
-                if !project.managerName.isEmpty {
-                    Label(project.managerName, systemImage: "person.fill")
-                }
-            }
-            .font(.caption2)
-            .foregroundStyle(.secondary)
-
-            Text(note)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 struct DashboardProjectRow: Identifiable {
     var id: UUID { project.id }
     let project: Project
