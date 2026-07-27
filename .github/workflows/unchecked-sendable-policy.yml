@@ -16,6 +16,10 @@ on:
       - "scripts/release/check_unchecked_sendable_policy.sh"
       - ".github/workflows/unchecked-sendable-policy.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   unchecked-sendable-policy:
     runs-on: ubuntu-latest
