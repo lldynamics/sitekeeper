@@ -53,6 +53,85 @@ struct ProjectFinancialMetricsTests {
         #expect(ProjectFinancialMetrics.collectionAmount(records) == 100)
     }
 
+    @Test func missingReceiptMetricsIgnoreDraftAndArchivedRecords() {
+        let projectId = UUID()
+        let active = ProjectFinancialRecord(
+            projectId: projectId,
+            category: .material,
+            status: .active
+        )
+        let draft = ProjectFinancialRecord(
+            projectId: projectId,
+            category: .material,
+            status: .draft
+        )
+        let archived = ProjectFinancialRecord(
+            projectId: projectId,
+            category: .labor,
+            status: .archived
+        )
+
+        let missing = ProjectFinancialMetrics.missingReceiptRecords(
+            [active, draft, archived],
+            hasLinkedDocument: { _ in false }
+        )
+
+        #expect(missing.map(\.id) == [active.id])
+    }
+
+    @Test @MainActor func projectActivityMissingReceiptCountUsesFormalRecordsOnly() {
+        let projectId = UUID()
+        let store = ProjectStore()
+        store.setProjectFinancialRecords([
+            ProjectFinancialRecord(projectId: projectId, category: .material, status: .active),
+            ProjectFinancialRecord(projectId: projectId, category: .material, status: .draft),
+            ProjectFinancialRecord(projectId: projectId, category: .labor, status: .archived)
+        ])
+
+        #expect(store.projectActivitySummary(for: projectId).unattachedReceiptCount == 1)
+    }
+
+    @Test func zeroValuedDetailsDoNotFallBackToStaleManualCosts() {
+        let project = Project(
+            name: "零价明细",
+            location: "",
+            materialCost: "1000",
+            laborCost: "500"
+        )
+
+        #expect(ProjectDetailMetrics.currentMaterialCost(
+            project: project,
+            materialCostAuto: 0,
+            hasMaterialDetails: true
+        ) == 0)
+        #expect(ProjectDetailMetrics.currentLaborCost(
+            project: project,
+            laborCostAuto: 0,
+            hasLaborDetails: true
+        ) == 0)
+        #expect(ProjectDetailMetrics.currentMaterialCost(
+            project: project,
+            materialCostAuto: 0,
+            hasMaterialDetails: false
+        ) == 1000)
+        #expect(ProjectDetailMetrics.currentLaborCost(
+            project: project,
+            laborCostAuto: 0,
+            hasLaborDetails: false
+        ) == 500)
+    }
+
+    @Test func missingReceiptFilterExcludesDraftAndArchivedRecords() {
+        let projectId = UUID()
+        let active = ProjectFinancialRecord(projectId: projectId, category: .material, status: .active)
+        let draft = ProjectFinancialRecord(projectId: projectId, category: .material, status: .draft)
+        let archived = ProjectFinancialRecord(projectId: projectId, category: .material, status: .archived)
+
+        #expect(BookAttachmentFilter.unattached.matches(active) { _ in [] })
+        #expect(!BookAttachmentFilter.unattached.matches(draft) { _ in [] })
+        #expect(!BookAttachmentFilter.unattached.matches(archived) { _ in [] })
+    }
+
     @Test func financialSummaryAndPaidFallbackUseOneSharedRule() {
         let projectId = UUID()
         let project = Project(

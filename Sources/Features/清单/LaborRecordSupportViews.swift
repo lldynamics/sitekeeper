@@ -39,6 +39,64 @@ enum LaborSettlementChip: CaseIterable, Hashable {
     }
 }
 
+enum LaborUnitFilterChip: CaseIterable, Hashable {
+    case all
+    case needsConfirmation
+    case hour
+    case workday
+
+    var title: String {
+        switch self {
+        case .all:
+            String(localized: "全部单位")
+        case .needsConfirmation:
+            String(localized: "待确认单位")
+        case .hour:
+            String(localized: "工时")
+        case .workday:
+            String(localized: "工天")
+        }
+    }
+
+    func matches(_ record: LaborRecord) -> Bool {
+        switch self {
+        case .all:
+            true
+        case .needsConfirmation:
+            record.workloadUnit == .legacyUnspecified
+        case .hour:
+            record.workloadUnit == .hour
+        case .workday:
+            record.workloadUnit == .workday
+        }
+    }
+}
+
+enum LaborUnitConfirmation {
+    static func eligibleRecordIDs(
+        in records: [LaborRecord],
+        limitedTo recordIDs: Set<UUID>
+    ) -> Set<UUID> {
+        Set(records.lazy.filter {
+            recordIDs.contains($0.id) && $0.workloadUnit == .legacyUnspecified
+        }.map(\.id))
+    }
+
+    static func applying(
+        _ unit: LaborWorkloadUnit,
+        to records: [LaborRecord],
+        recordIDs: Set<UUID>
+    ) -> [LaborRecord] {
+        guard unit != .legacyUnspecified else { return records }
+        return records.map { record in
+            guard recordIDs.contains(record.id), record.workloadUnit == .legacyUnspecified else { return record }
+            var updated = record
+            updated.workloadUnit = unit
+            return updated
+        }
+    }
+}
+
 enum LaborExportFormat: String, CaseIterable {
     case html
     case csv

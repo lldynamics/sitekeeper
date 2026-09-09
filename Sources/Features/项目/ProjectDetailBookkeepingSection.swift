@@ -31,10 +31,13 @@ struct ProjectBookkeepingView: View {
                 } label: {
                     Label(String(localized: "记账"), systemImage: "plus.circle.fill")
                 }
-                LabeledContent(String(localized: "收入"), value: ReportBuilder.money(totalIncome))
-                LabeledContent(String(localized: "支出"), value: ReportBuilder.money(totalExpense))
-                LabeledContent(String(localized: "净额"), value: ReportBuilder.money(totalIncome - totalExpense))
+                LabeledContent(String(localized: "正式收入"), value: ReportBuilder.money(totalIncome))
+                LabeledContent(String(localized: "正式支出"), value: ReportBuilder.money(totalExpense))
+                LabeledContent(String(localized: "正式净额"), value: ReportBuilder.money(totalIncome - totalExpense))
                 LabeledContent(String(localized: "未附票据"), value: String(format: String(localized: "%lld 笔"), Int64(unattachedCount)))
+                Text(String(localized: "汇总、往来与缺票统计仅计入正式账目。"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
 
             Section(String(localized: "往来单位")) {
@@ -189,6 +192,9 @@ struct ProjectBookkeepingView: View {
                                     Text(record.category.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(.secondary)
+                                    Text(record.normalizedStatus.displayName)
+                                        .font(.caption2.weight(.semibold))
+                                        .foregroundStyle(.secondary)
                                     Spacer()
                                     Text("\(record.direction.displayName) \(ReportBuilder.money(record.amountValue.doubleValue))")
                                         .font(.caption.weight(.semibold))
@@ -226,7 +232,9 @@ struct ProjectBookkeepingView: View {
             applyQuickFilter(newValue)
         }
     }
+}
 
+private extension ProjectBookkeepingView {
     private var filteredRecords: [ProjectFinancialRecord] {
         records.filter { record in
             if !directionFilter.matches(record) { return false }
@@ -243,21 +251,21 @@ struct ProjectBookkeepingView: View {
     }
 
     private var totalIncome: Double {
-        records
+        ProjectFinancialMetrics.businessRecords(records)
             .filter(\.isIncomeDirection)
             .reduce(MoneyValue.zero) { $0 + $1.amountValue }
             .doubleValue
     }
 
     private var totalExpense: Double {
-        records
+        ProjectFinancialMetrics.businessRecords(records)
             .filter(\.isExpenseDirection)
             .reduce(MoneyValue.zero) { $0 + $1.amountValue }
             .doubleValue
     }
 
     private var unattachedCount: Int {
-        records.filter { $0.requiresAttachment && linkedDocuments($0).isEmpty }.count
+        ProjectFinancialMetrics.missingReceiptRecords(records) { linkedDocuments($0).isEmpty == false }.count
     }
 
     private var projectNameByID: [UUID: String] {
@@ -265,7 +273,7 @@ struct ProjectBookkeepingView: View {
     }
 
     private var counterpartySummaries: [BookCounterpartySummary] {
-        let grouped = Dictionary(grouping: records) { record in
+        let grouped = Dictionary(grouping: ProjectFinancialMetrics.businessRecords(records)) { record in
             counterpartyDisplayName(record.counterparty)
         }
         let matchLookup = grouped.keys.reduce(into: [String: BookCounterpartyMatch]()) { result, name in
@@ -378,7 +386,7 @@ struct ProjectBookkeepingView: View {
     }
 
     private func isMissingReceipt(_ record: ProjectFinancialRecord) -> Bool {
-        record.requiresAttachment && linkedDocuments(record).isEmpty
+        record.countsInBusinessMetrics && record.requiresAttachment && linkedDocuments(record).isEmpty
     }
 
     private func hasLinkedDocument(_ record: ProjectFinancialRecord) -> Bool {

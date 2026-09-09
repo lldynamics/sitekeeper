@@ -16,6 +16,13 @@
 - 小组件：按风险优先展示项目（逾期/待办优先）、待办与库存摘要，并显示最近同步时间。
 - 发布基础：应用图标、隐私清单、正式 Bundle ID、版本号/构建号、共享测试 scheme、单元测试。
 
+## 数据安全与确认流程
+
+- 备份恢复使用持久化事务日志。若恢复中断，恢复包和日志会保留，应用可在下次读取时继续恢复；在读取和恢复完成前，清空数据、存储清理等维护操作会保持不可用。本机与云端导出还会在归档读取期间阻止清理和恢复。
+- 只有备份 ZIP 和校验文件都确认上传后，应用才会记录 iCloud 上传成功。保留策略可选择最近 3、5、10 或 20 份已确认上传的备份，刷新备份列表时按已确认上传状态清理超出数量的旧备份；等待同步或上传失败的文件会保留。这里说明的是应用内上传状态口径，设备上的 iCloud 可用性仍需以实际环境为准。
+- 从材料记录生成报价时，必须明确选择“沿用材料单价（成本参考）”“统一设置对外报价”或“留空待补”。把报价写入工程合同前会预览所选的已确认报价版本和写入金额；若源报价发生变化，预览会刷新并要求再次确认。
+- 无法可靠判断计量单位的历史人工记录会标记为“待确认单位”，不会自动把数值解释成工时或工天。记录需编辑或批量确认单位后才能进入报价；确认单位不会换算原有数量和金额。
+
 ## 快速启动
 
 1. 确保 Xcode 路径正确（只需执行一次）
@@ -110,10 +117,12 @@ scripts/release/run_ui_smoke.sh --device-family ipad
 
 CI 会分别执行两种设备族，并保留对应的 `.xcresult` 作为失败证据。
 
-Swift 代码格式：
+安装与 CI 相同并经过 SHA-256 校验的固定工具版本（XcodeGen 2.46.0、SwiftFormat 0.61.1、SwiftLint 0.63.2），再执行 Swift 检查：
 
 ```sh
-brew install swiftformat swiftlint
+tools_dir="${TMPDIR:-/tmp}/sitekeeper-tools"
+scripts/release/install_ci_tools.sh "$tools_dir"
+export PATH="$tools_dir:$PATH"
 scripts/dev/check_swift_format.sh
 scripts/dev/check_swift_lint.sh
 scripts/dev/format_swift.sh

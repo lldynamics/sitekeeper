@@ -21,7 +21,9 @@ enum UserPreferenceKeys {
     static let cloudBackupAutoInterval = "cloudBackup.autoInterval"
     static let cloudBackupAutoRequiresWiFi = "cloudBackup.autoRequiresWiFi"
     static let cloudBackupRetentionCount = "cloudBackup.retentionCount"
-    static let cloudBackupLastSuccessAt = "cloudBackup.lastSuccessAt"
+    // The old cloudBackup.lastSuccessAt only proved a local copy; do not migrate it as uploaded.
+    static let cloudBackupLastSuccessAt = "cloudBackup.lastConfirmedUploadAt"
+    static let cloudBackupPendingFileName = "cloudBackup.pendingFileName"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
     static let dueNotificationsEnabled = "reminders.dueNotificationsEnabled"

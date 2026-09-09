@@ -12,12 +12,20 @@ enum ProjectDetailMetrics {
         max(project.contractAmountValue.doubleValue - paidAmount, 0)
     }
 
-    static func currentMaterialCost(project: Project, materialCostAuto: Double) -> Double {
-        materialCostAuto > 0 ? materialCostAuto : project.materialCostValue.doubleValue
+    static func currentMaterialCost(
+        project: Project,
+        materialCostAuto: Double,
+        hasMaterialDetails: Bool
+    ) -> Double {
+        hasMaterialDetails ? materialCostAuto : project.materialCostValue.doubleValue
     }
 
-    static func currentLaborCost(project: Project, laborCostAuto: Double) -> Double {
-        laborCostAuto > 0 ? laborCostAuto : project.laborCostValue.doubleValue
+    static func currentLaborCost(
+        project: Project,
+        laborCostAuto: Double,
+        hasLaborDetails: Bool
+    ) -> Double {
+        hasLaborDetails ? laborCostAuto : project.laborCostValue.doubleValue
     }
 
     static func estimatedProfit(project: Project, materialCost: Double, laborCost: Double) -> Double {

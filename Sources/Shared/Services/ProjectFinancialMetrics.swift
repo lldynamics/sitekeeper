@@ -31,6 +31,15 @@ enum ProjectFinancialMetrics {
         summary(records).collectionAmount
     }
 
+    static func missingReceiptRecords(
+        _ records: [ProjectFinancialRecord],
+        hasLinkedDocument: (ProjectFinancialRecord) -> Bool
+    ) -> [ProjectFinancialRecord] {
+        businessRecords(records).filter { record in
+            record.requiresAttachment && !hasLinkedDocument(record)
+        }
+    }
+
     static func summary(_ records: [ProjectFinancialRecord]) -> ProjectFinancialSummary {
         var income = MoneyValue.zero
         var expense = MoneyValue.zero

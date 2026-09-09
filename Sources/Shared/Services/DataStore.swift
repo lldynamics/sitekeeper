@@ -14,6 +14,7 @@ final class DataStore {
     var persistenceErrorMessage: String?
     private(set) var loadState: LoadState = .loading
     var isApplyingBackup = false
+    var activeBackupExportCount = 0
 
     func setLoadState(_ state: LoadState) { loadState = state }
 

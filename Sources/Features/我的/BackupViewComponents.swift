@@ -24,6 +24,9 @@ struct CloudBackupListRow: View {
                 Text(file.formattedSize)
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                Text(file.uploadState.statusMessage)
+                    .font(.caption)
+                    .foregroundStyle(file.uploadState == .uploaded ? Color.appSuccess : Color.appWarning)
                 Text(file.fileName)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
@@ -194,8 +197,10 @@ struct BackupImportPreviewView: View {
                             .frame(maxWidth: .infinity)
                             .fontWeight(.semibold)
                             .tint(.appWarning)
+                            .accessibilityIdentifier("backup-import-confirm")
                     } else if isOverwriteImportArmed {
                         Button(String(localized: "确认覆盖导入"), role: .destructive, action: onApplyImport)
+                            .accessibilityIdentifier("backup-import-overwrite-confirm")
                         Button(String(localized: "返回合并导入"), role: .cancel) {
                             importMode = .merge
                             isOverwriteImportArmed = false

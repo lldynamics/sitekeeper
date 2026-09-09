@@ -53,7 +53,7 @@ extension StorageCleanupCenterView {
             source: cleanupAuditSource
         )
         do {
-            try StorageCleanupExecutionService.restoreQuarantinedFile(entry)
+            try StorageCleanupExecutionService.restoreQuarantinedFile(entry, store: store)
             refreshCleanupTrash()
             cleanupStatusMessage = StorageCleanupAuditService.completeSucceeded(
                 StorageCleanupActionResultBuilder.restoreQuarantinedFileSucceeded(entry),

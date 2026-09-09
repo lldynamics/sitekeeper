@@ -71,6 +71,7 @@ struct QuotationGenerateSheetView: View {
     let projects: [Project]
     @Binding var generateProjectId: UUID?
     @Binding var defaultMaterialPrice: String
+    @Binding var materialPriceMode: MaterialQuotePriceMode?
     @Binding var defaultLaborRate: String
     @Binding var generateTax: String
     @Binding var generateDiscount: String
@@ -92,6 +93,7 @@ struct QuotationGenerateSheetView: View {
                 projects: projects,
                 generateProjectId: $generateProjectId,
                 defaultMaterialPrice: $defaultMaterialPrice,
+                materialPriceMode: $materialPriceMode,
                 defaultLaborRate: $defaultLaborRate,
                 generateTax: $generateTax,
                 generateDiscount: $generateDiscount,
@@ -105,6 +107,86 @@ struct QuotationGenerateSheetView: View {
                 )
             }
         }
+    }
+}
+
+struct QuotationContractWriteSheetView: View {
+    let project: Project?
+    let versions: [String]
+    @Binding var selectedVersion: String
+    let plan: QuotationContractWritePlan?
+    let refreshMessage: String
+    let onCancel: () -> Void
+    let onSelectVersion: (String) -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        AppBusinessEditForm(
+            title: String(localized: "确认写入合同"),
+            primaryActionTitle: String(localized: "确认覆盖合同金额"),
+            isPrimaryActionDisabled: plan?.canApply != true,
+            onCancel: onCancel,
+            onPrimaryAction: onConfirm
+        ) {
+            Form {
+                if let project {
+                    Section(String(localized: "写入范围")) {
+                        LabeledContent(String(localized: "工程"), value: project.name)
+                        Picker(String(localized: "报价版本"), selection: $selectedVersion) {
+                            ForEach(versions, id: \.self) { version in
+                                Text(version).tag(version)
+                            }
+                        }
+                        .accessibilityIdentifier("quotation-contract-version-picker")
+                        .onChange(of: selectedVersion) { _, version in
+                            onSelectVersion(version)
+                        }
+                        LabeledContent(String(localized: "报价状态"), value: QuoteStatus.confirmed.displayName)
+                        if let plan {
+                            LabeledContent(
+                                String(localized: "纳入报价"),
+                                value: String(format: String(localized: "%lld 项"), Int64(plan.itemCount))
+                            )
+                            Text(String(
+                                format: String(localized: "已选择：%@"),
+                                plan.itemNames.joined(separator: String(localized: "、"))
+                            ))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        }
+                    }
+                    Section(String(localized: "金额预览")) {
+                        LabeledContent(
+                            String(localized: "原合同金额"),
+                            value: ReportBuilder.money(plan?.oldAmount.doubleValue ?? project.contractAmountValue.doubleValue)
+                        )
+                        LabeledContent(
+                            String(localized: "新合同金额"),
+                            value: ReportBuilder.money(plan?.newAmount.doubleValue ?? 0)
+                        )
+                        Text(String(localized: "逐项优先采用转合同金额；未填写时采用含税折后报价金额。搜索条件不会影响本次写入。"))
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                        if let plan, plan.incompleteItemCount > 0 {
+                            Text(String(
+                                format: String(localized: "有 %lld 项缺少有效的转合同金额或计价信息，请先补齐金额、单价、数量和费率。"),
+                                Int64(plan.incompleteItemCount)
+                            ))
+                            .font(.footnote)
+                            .foregroundStyle(Color.appRisk)
+                        }
+                        if !refreshMessage.isEmpty {
+                            Text(refreshMessage)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(Color.appWarning)
+                        }
+                    }
+                } else {
+                    ContentUnavailableView(String(localized: "未找到工程"), systemImage: "exclamationmark.triangle")
+                }
+            }
+        }
+        .accessibilityIdentifier("quotation-contract-confirm-sheet")
     }
 }
 

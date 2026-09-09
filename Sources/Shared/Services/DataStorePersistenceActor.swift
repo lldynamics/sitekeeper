@@ -16,6 +16,7 @@ actor DataStorePersistenceActor {
         // A retry may encounter a replaced, missing, or unreadable file.
         // Only a successful load can establish a valid no-op cache.
         lastPersistedData = nil
+        try BackupArchiveRestoreJournal.recoverPending(storeURL: storeURL)
         guard FileManager.default.fileExists(atPath: storeURL.path) else {
             return nil
         }
@@ -34,11 +35,12 @@ actor DataStorePersistenceActor {
     @discardableResult
     func persist(snapshot: BackupSnapshot, preservingExistingFile: Bool = false) throws -> Bool {
         try Task.checkCancellation()
-        let encoder = JSONEncoder()
-        // Stable key ordering makes byte equality a reliable no-op detector.
-        // JSONEncoder otherwise may emit keyed containers in a different order.
-        encoder.outputFormatting = [.sortedKeys]
-        let data = try encoder.encode(snapshot)
+        let data = try BackupArchiveRestoreJournal.encodeMetadata(snapshot)
+        return try persistPreparedBackup(data: data, preservingExistingFile: preservingExistingFile)
+    }
+
+    @discardableResult
+    func persistPreparedBackup(data: Data, preservingExistingFile: Bool = false) throws -> Bool {
         try Task.checkCancellation()
         if !preservingExistingFile, data == lastPersistedData,
            FileManager.default.fileExists(atPath: storeURL.path) {

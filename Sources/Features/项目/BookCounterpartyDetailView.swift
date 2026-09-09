@@ -45,7 +45,7 @@ struct BookCounterpartyDetailView: View {
     }
 
     private var recentProjectRollups: [BookCounterpartyProjectRollup] {
-        let grouped = Dictionary(grouping: records, by: \.projectId)
+        let grouped = Dictionary(grouping: ProjectFinancialMetrics.businessRecords(records), by: \.projectId)
         return grouped.map { projectId, rows in
             let latestRecord = rows.max { lhs, rhs in
                 dateSortKey(lhs.date) < dateSortKey(rhs.date)
@@ -339,6 +339,7 @@ struct BookCounterpartyDetailView: View {
             HStack(spacing: AppSpacing.tight) {
                 Text(projectsByID[record.projectId] ?? String(localized: "未知项目"))
                 Text(record.normalizedCategory.displayName)
+                Text(record.normalizedStatus.displayName)
                 if showsDueDate, !record.dueDate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(String(format: String(localized: "到期 %@"), record.dueDate))
                         .foregroundStyle(Color.appWarning)
@@ -367,7 +368,7 @@ struct BookCounterpartyDetailView: View {
     }
 
     private func isMissingReceipt(_ record: ProjectFinancialRecord) -> Bool {
-        record.requiresAttachment && !hasLinkedDocument(record)
+        ProjectFinancialMetrics.missingReceiptRecords([record], hasLinkedDocument: hasLinkedDocument).isEmpty == false
     }
 
     private func dateSortKey(_ raw: String) -> Date {

@@ -242,11 +242,13 @@ struct ProjectDetailContent: View {
         )
         let materialCostValue = ProjectDetailMetrics.currentMaterialCost(
             project: project,
-            materialCostAuto: snapshot.materialCostAuto
+            materialCostAuto: snapshot.materialCostAuto,
+            hasMaterialDetails: !snapshot.relatedMaterials.isEmpty
         )
         let laborCostValue = ProjectDetailMetrics.currentLaborCost(
             project: project,
-            laborCostAuto: snapshot.laborCostAuto
+            laborCostAuto: snapshot.laborCostAuto,
+            hasLaborDetails: !snapshot.relatedLabor.isEmpty
         )
         return ProjectDetailModeSectionsView(
             mode: mode,

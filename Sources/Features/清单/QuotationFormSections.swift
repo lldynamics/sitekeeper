@@ -181,6 +181,7 @@ struct QuotationGenerateFormSections: View {
     let projects: [Project]
     @Binding var generateProjectId: UUID?
     @Binding var defaultMaterialPrice: String
+    @Binding var materialPriceMode: MaterialQuotePriceMode?
     @Binding var defaultLaborRate: String
     @Binding var generateTax: String
     @Binding var generateDiscount: String
@@ -206,19 +207,31 @@ struct QuotationGenerateFormSections: View {
                 }
             }
             Section(String(localized: "默认价格")) {
-                LabeledContent(String(localized: "材料默认单价")) {
-                    VStack(alignment: .trailing, spacing: 2) {
-                        TextField(String(localized: "留空表示待补"), text: $defaultMaterialPrice.numericInput(.amount))
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($focusedField, equals: .materialPrice)
-                        NumericInputValidationHint(
-                            validation: InputValidator.validate(
-                                defaultMaterialPrice,
-                                kind: .amount,
-                                requirement: .optionalNonNegative
+                Picker(String(localized: "材料报价方式"), selection: $materialPriceMode) {
+                    Text(String(localized: "请选择报价方式")).tag(nil as MaterialQuotePriceMode?)
+                    ForEach(MaterialQuotePriceMode.allCases) { mode in
+                        Text(mode.displayName).tag(mode as MaterialQuotePriceMode?)
+                    }
+                }
+                .accessibilityIdentifier("quotation-material-price-mode")
+                Text(String(localized: "材料单价通常是成本参考；选择统一设置时填写的是对外报价。"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                if materialPriceMode == .overrideAll {
+                    LabeledContent(String(localized: "统一对外单价")) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            TextField("0", text: $defaultMaterialPrice.numericInput(.amount))
+                                .keyboardType(.decimalPad)
+                                .multilineTextAlignment(.trailing)
+                                .focused($focusedField, equals: .materialPrice)
+                            NumericInputValidationHint(
+                                validation: InputValidator.validate(
+                                    defaultMaterialPrice,
+                                    kind: .amount,
+                                    requirement: .requiredNonNegative
+                                )
                             )
-                        )
+                        }
                     }
                 }
                 LabeledContent(String(localized: "人工默认单价（按记录单位）")) {

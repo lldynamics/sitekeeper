@@ -45,6 +45,7 @@ enum StorageCleanupExecutionService {
     }
 
     static func restoreCleanupTrash(_ batch: StorageCleanupTrashBatch, store: DataStore) throws {
+        try store.requireMaintenanceAllowed()
         try StorageCleanupTrashStore.restore(batch)
         batch.snapshot.restore(into: store)
         store.scheduleSave()
@@ -54,7 +55,8 @@ enum StorageCleanupExecutionService {
         try StorageCleanupTrashStore.permanentlyDelete(batch)
     }
 
-    static func restoreQuarantinedFile(_ entry: FileQuarantineEntry) throws {
+    static func restoreQuarantinedFile(_ entry: FileQuarantineEntry, store: DataStore) throws {
+        try store.requireMaintenanceAllowed()
         try FileQuarantineStore.restore(entry)
     }
 
@@ -71,6 +73,7 @@ enum StorageCleanupExecutionService {
         videoFileExtensions: Set<String>,
         drawingSourceFileExtensions: Set<String>
     ) throws -> StorageCleanupTrashBatch {
+        try store.requireMaintenanceAllowed()
         let undoSnapshot = StorageCleanupUndoSnapshot.capture(from: store)
         let cleanupPlan = cleanupPlan(
             store: store,

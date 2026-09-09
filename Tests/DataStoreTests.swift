@@ -9,14 +9,14 @@ struct DataStoreTests {
     let testStore: DataStore
     let storageDirectory: URL
 
-    init() {
+    init() async {
         TransferLimitPolicy.setRuntimeProfileOverride(.development)
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("DataStoreTests-\(UUID().uuidString)", isDirectory: true)
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         self.storageDirectory = directory
         let store = DataStore(storageDirectory: directory)
-        store.clearAllBusinessData(deleteStoredFiles: false)
+        await store.awaitInitialLoad()
         self.testStore = store
     }
 

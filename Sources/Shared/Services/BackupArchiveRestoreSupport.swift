@@ -59,21 +59,14 @@ struct BackupEmbeddedFileRestorePolicy: Sendable {
 }
 
 extension BackupArchiveService {
+    /// Used serially by the import coordinator; no mutable state is shared across its I/O phases.
     final class EmbeddedFileRestoreTransaction: @unchecked Sendable {
         let counts: BackupEmbeddedRestoreCounts
         private let stageRoot: URL
-        private let photoStage: URL
-        private let drawingStage: URL
-        private let documentStage: URL
-        private let quickNoteStage: URL
-        private enum State {
-            case pending
-            case committed
-            case finished
-        }
-
-        private var state: State = .pending
-        private var committedFiles: [CommittedBackupFile] = []
+        private var journal: BackupArchiveRestoreJournal?
+        private var finished = false
+        private var restoresMetadata = false
+        private let fault: BackupArchiveRestoreJournal.FaultInjector?
 
         init(
             stageRoot: URL,
@@ -81,111 +74,92 @@ extension BackupArchiveService {
             drawingStage: URL,
             documentStage: URL,
             quickNoteStage: URL,
-            counts: BackupEmbeddedRestoreCounts
+            counts: BackupEmbeddedRestoreCounts,
+            fault: BackupArchiveRestoreJournal.FaultInjector? = nil
         ) {
             self.stageRoot = stageRoot
-            self.photoStage = photoStage
-            self.drawingStage = drawingStage
-            self.documentStage = documentStage
-            self.quickNoteStage = quickNoteStage
             self.counts = counts
+            self.fault = fault
         }
 
         deinit {
-            switch state {
-            case .pending:
+            guard !finished else { return }
+            if let journal, !restoresMetadata {
+                // Preserve the legacy attachment-only session's rollback-on-release contract.
+                do { try journal.rollback() } catch {
+                    recordBackupArchiveIssue("backup.restore.deinit_rollback_failed", error: error)
+                }
+            } else if journal == nil {
                 cleanupTemporaryFiles()
-            case .committed:
-                BackupArchiveService.rollbackCommittedFiles(committedFiles)
-                cleanupTemporaryFiles()
-            case .finished:
-                break
+            }
+            // Metadata transactions belong to startup recovery. Never delete recovery
+            // originals on release after failed rollback/finalization.
+        }
+
+        func cancel() { rollback() }
+
+        @discardableResult
+        func rollback() -> Bool {
+            do {
+                try rollbackOrThrow()
+                return true
+            } catch {
+                recordBackupArchiveIssue("backup.restore.rollback_failed", fileName: journal?.root.lastPathComponent, error: error)
+                return false
             }
         }
 
-        func cancel() {
-            switch state {
-            case .pending:
-                state = .finished
-                cleanupTemporaryFiles()
-            case .committed:
-                rollback()
-            case .finished:
-                return
-            }
-        }
-
-        func rollback() {
-            guard state != .finished else { return }
-            if state == .committed {
-                BackupArchiveService.rollbackCommittedFiles(committedFiles)
-            }
-            state = .finished
-            committedFiles = []
+        func rollbackOrThrow() throws {
+            guard !finished else { return }
+            if let journal { try journal.rollback() }
+            finished = true
             cleanupTemporaryFiles()
         }
 
         func finalize() {
-            guard state != .finished else { return }
-            state = .finished
-            committedFiles = []
+            do {
+                try finalizeOrThrow()
+            } catch {
+                recordBackupArchiveIssue("backup.restore.finalize_failed", fileName: journal?.root.lastPathComponent, error: error)
+            }
+        }
+
+        func finalizeOrThrow() throws {
+            guard !finished else { return }
+            try journal?.finish(fault: fault)
+            finished = true
             cleanupTemporaryFiles()
         }
 
         @discardableResult
-        func commit(policy: BackupEmbeddedFileRestorePolicy = .restoreAll) throws -> BackupEmbeddedRestoreCounts {
-            guard state == .pending else { return counts }
-
-            let rollbackRoot = stageRoot.appendingPathComponent("rollback", isDirectory: true)
-            var currentCommittedFiles: [CommittedBackupFile] = []
+        func commit(
+            policy: BackupEmbeddedFileRestorePolicy = .restoreAll,
+            storeURL: URL? = nil,
+            metadataAfter: Data? = nil
+        ) throws -> BackupEmbeddedRestoreCounts {
+            guard !finished, journal == nil else {
+                throw BackupArchiveError.restoreFailed(String(localized: "备份回滚尚未完成，恢复包已保留，请重试加载后再操作。"))
+            }
+            let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first
+                ?? FileManager.default.temporaryDirectory
+            // Legacy attachment-only helpers never share journals with a live DataStore.
+            // They preserve their existing explicit/deinit rollback contract independently.
+            let metadataURL = storeURL ?? documents
+                .appendingPathComponent(".backup-attachment-sessions", isDirectory: true)
+                .appendingPathComponent("sitekeeper.json")
+            restoresMetadata = metadataAfter != nil
             do {
-                try FileManager.default.createDirectory(at: rollbackRoot, withIntermediateDirectories: true)
-                let restoredPhotoFileNames = try BackupArchiveService.commitStagedFiles(
-                    from: photoStage,
-                    destinationURL: PhotoStorage.fileURL(for:),
-                    rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles,
-                    fileDestinations: policy.photoFileDestinations,
-                    overwritesExistingFiles: policy.overwritesExistingFiles
+                let prepared = try BackupArchiveRestoreJournal.begin(
+                    stageRoot: stageRoot, storeURL: metadataURL, metadataAfter: metadataAfter, policy: policy
                 )
-                PhotoStorage.regenerateThumbnails(for: restoredPhotoFileNames)
-                let restoredDrawingFileNames = try BackupArchiveService.commitStagedFiles(
-                    from: drawingStage,
-                    destinationURL: DrawingStorage.fileURL(for:),
-                    rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles,
-                    fileDestinations: policy.drawingFileDestinations,
-                    overwritesExistingFiles: policy.overwritesExistingFiles
-                )
-                let restoredDocumentFileNames = try BackupArchiveService.commitStagedFiles(
-                    from: documentStage,
-                    destinationURL: ProjectDocumentStorage.fileURL(for:),
-                    rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles,
-                    fileDestinations: policy.documentFileDestinations,
-                    overwritesExistingFiles: policy.overwritesExistingFiles
-                )
-                let restoredQuickNoteAttachmentFileNames = try BackupArchiveService.commitStagedFiles(
-                    from: quickNoteStage,
-                    destinationURL: QuickNoteAttachmentStorage.fileURL(for:),
-                    rollbackRoot: rollbackRoot,
-                    committedFiles: &currentCommittedFiles,
-                    fileDestinations: policy.quickNoteAttachmentFileDestinations,
-                    overwritesExistingFiles: policy.overwritesExistingFiles
-                )
-                committedFiles = currentCommittedFiles
-                state = .committed
-                return BackupEmbeddedRestoreCounts(
-                    photoFileCount: restoredPhotoFileNames.count,
-                    drawingFileCount: restoredDrawingFileNames.count,
-                    documentFileCount: restoredDocumentFileNames.count,
-                    quickNoteAttachmentFileCount: restoredQuickNoteAttachmentFileNames.count
-                )
+                journal = prepared
+                return try prepared.commitFiles()
             } catch {
-                BackupArchiveService.rollbackCommittedFiles(currentCommittedFiles)
-                state = .finished
-                committedFiles = []
-                cleanupTemporaryFiles()
+                do {
+                    try rollbackOrThrow()
+                } catch {
+                    throw BackupArchiveError.restoreFailed(String(localized: "备份回滚尚未完成，恢复包已保留，请重试加载后再操作。"))
+                }
                 throw error
             }
         }
@@ -194,123 +168,11 @@ extension BackupArchiveService {
             do {
                 _ = try FileOps.removeIfExists(
                     at: stageRoot,
-                    context: .init(
-                        event: "backup.restore.stage_cleanup",
-                        category: .zipArchive,
-                        source: "BackupArchiveService.RestorationSession.cleanupTemporaryFiles"
-                    )
+                    context: .init(event: "backup.restore.stage_cleanup", category: .zipArchive,
+                                   source: "BackupArchiveService.RestorationSession.cleanupTemporaryFiles")
                 )
             } catch {
-                recordBackupArchiveIssue(
-                    "backup.restore.stage_cleanup_failed",
-                    fileName: stageRoot.lastPathComponent,
-                    error: error
-                )
-            }
-        }
-    }
-}
-
-fileprivate struct CommittedBackupFile {
-    let fileName: String
-    let targetURL: URL
-    let rollbackURL: URL?
-}
-
-extension BackupArchiveService {
-    @discardableResult
-    fileprivate static func commitStagedFiles(
-        from stageDirectory: URL,
-        destinationURL: (String) -> URL,
-        rollbackRoot: URL,
-        committedFiles: inout [CommittedBackupFile],
-        fileDestinations: [String: String]?,
-        overwritesExistingFiles: Bool
-    ) throws -> [String] {
-        let manager = FileManager.default
-        let files: [URL]
-        do {
-            files = try manager.contentsOfDirectory(at: stageDirectory, includingPropertiesForKeys: nil)
-        } catch {
-            recordBackupArchiveIssue(
-                "backup.restore.stage_directory_read_failed",
-                fileName: stageDirectory.lastPathComponent,
-                error: error
-            )
-            throw BackupArchiveError.restoreFailed(locFormat("读取备份暂存目录失败：%@", stageDirectory.lastPathComponent))
-        }
-        var committedFileNames: [String] = []
-        for sourceURL in files where !sourceURL.hasDirectoryPath {
-            let fileName = sourceURL.lastPathComponent
-            guard let destinationFileName = fileDestinations?[fileName] ?? (fileDestinations == nil ? fileName : nil) else {
-                continue
-            }
-            let targetURL = destinationURL(destinationFileName)
-            let rollbackURL = rollbackRoot
-                .appendingPathComponent(UUID().uuidString, isDirectory: false)
-                .appendingPathExtension("bak")
-            do {
-                try manager.createDirectory(at: targetURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-                let targetExists = manager.fileExists(atPath: targetURL.path)
-                guard !targetExists || overwritesExistingFiles else { continue }
-                let rollbackURLForRecord: URL?
-                if targetExists {
-                    try manager.copyItem(at: targetURL, to: rollbackURL)
-                    rollbackURLForRecord = rollbackURL
-                } else {
-                    rollbackURLForRecord = nil
-                }
-                committedFiles.append(
-                    CommittedBackupFile(
-                        fileName: destinationFileName,
-                        targetURL: targetURL,
-                        rollbackURL: rollbackURLForRecord
-                    )
-                )
-                _ = try FileOps.removeIfExists(
-                    at: targetURL,
-                    context: .init(
-                        event: "backup.restore.replace_target",
-                        category: .zipArchive,
-                        source: "BackupArchiveService.commitStagedFiles"
-                    )
-                )
-                try manager.copyItem(at: sourceURL, to: targetURL)
-                committedFileNames.append(destinationFileName)
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.restore.commit_file_failed",
-                    fileName: fileName,
-                    path: targetURL.lastPathComponent,
-                    error: error
-                )
-                throw BackupArchiveError.restoreFailed(locFormat("提交原文件失败：%@", fileName))
-            }
-        }
-        return committedFileNames
-    }
-
-    fileprivate static func rollbackCommittedFiles(_ files: [CommittedBackupFile]) {
-        let manager = FileManager.default
-        for file in files.reversed() {
-            do {
-                _ = try FileOps.removeIfExists(
-                    at: file.targetURL,
-                    context: .init(
-                        event: "backup.restore.rollback_remove_target",
-                        category: .zipArchive,
-                        source: "BackupArchiveService.rollbackCommittedFiles"
-                    )
-                )
-                if let rollbackURL = file.rollbackURL, manager.fileExists(atPath: rollbackURL.path) {
-                    try manager.moveItem(at: rollbackURL, to: file.targetURL)
-                }
-            } catch {
-                recordBackupArchiveIssue(
-                    "backup.restore.rollback_file_failed",
-                    fileName: file.fileName,
-                    error: error
-                )
+                recordBackupArchiveIssue("backup.restore.stage_cleanup_failed", fileName: stageRoot.lastPathComponent, error: error)
             }
         }
     }

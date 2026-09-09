@@ -5,6 +5,7 @@ struct QuickNoteView: View {
     let focusedNoteId: UUID?
     let embedsNavigationStack: Bool
     @State private var searchText = ""
+    @State private var searchModel = QuickNoteSearchModel()
     @State private var draftContent = ""
     @State private var draftProjectId: UUID?
     @State private var draftAttachments: [QuickNoteAttachment] = []
@@ -24,10 +25,9 @@ struct QuickNoteView: View {
         self.embedsNavigationStack = embedsNavigationStack
     }
 
-    private var filteredNotes: [QuickNote] {
-        store.quickNotes
-            .filter(matchesSearch(_:))
-            .sorted { $0.createdAt > $1.createdAt }
+    private var searchRequest: QuickNoteSearchRequest {
+        QuickNoteSearchRequest(version: store.projectStore.fileSearchVersion,
+                               keyword: searchText.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 
     var body: some View {
@@ -43,7 +43,7 @@ struct QuickNoteView: View {
     private var quickNoteSurface: some View {
         List {
             QuickNoteTimelineView(
-                notes: filteredNotes,
+                notes: searchModel.notes,
                 projects: store.projects,
                 onEdit: { editingNote = $0 },
                 onConvert: { editingNote = $0 },
@@ -56,6 +56,9 @@ struct QuickNoteView: View {
         .background(Color(.systemGroupedBackground))
         .navigationTitle(String(localized: "随手记"))
         .searchable(text: $searchText, prompt: String(localized: "搜索随手记"))
+        .task(id: searchRequest) {
+            await searchModel.refresh(notes: store.quickNotes, projects: store.projects, keyword: searchText)
+        }
         .scrollDismissesKeyboard(.interactively)
         .onChange(of: draftContent) { _, _ in saveDraftState() }
         .onChange(of: draftProjectId) { _, _ in saveDraftState() }
@@ -112,14 +115,6 @@ struct QuickNoteView: View {
                 showClearComposerConfirm = true
             }
         )
-    }
-
-    private func matchesSearch(_ note: QuickNote) -> Bool {
-        SearchMatcher.filter(
-            [note],
-            keyword: searchText,
-            extraFields: { note in [projectName(note.projectId)] }
-        ).isEmpty == false
     }
 
     private func publishDraft() {
@@ -329,11 +324,6 @@ struct QuickNoteView: View {
         draftProjectId = nil
         draftAttachments = []
         clearStoredDraft()
-    }
-
-    private func projectName(_ id: UUID?) -> String {
-        guard let id else { return "" }
-        return store.projects.first(where: { $0.id == id })?.name ?? ""
     }
 }
 

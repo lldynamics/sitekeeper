@@ -18,6 +18,13 @@ Chinese guide: `README.zh-CN.md`
 - Widget: risk-priority project list (overdue/pending first), todo and stock snapshot, and sync timestamp.
 - Release basics: generated app icon, privacy manifest, bundle ID, version/build number, shared test scheme, and unit tests.
 
+## Data Safety and Confirmation Flows
+
+- Backup restore uses a persistent transaction journal. If a restore is interrupted, the recovery package and journal are retained so the app can recover on the next load. Data clearing, storage cleanup, and other maintenance actions stay unavailable until loading and recovery finish. Local and cloud exports also hold a read lease that blocks cleanup and restore until archive reading finishes.
+- An iCloud backup is recorded as uploaded only after both its ZIP archive and checksum file are confirmed uploaded. Retention can keep the latest 3, 5, 10, or 20 confirmed uploads; pruning uses confirmed upload status when the backup list is refreshed, while pending and failed uploads are retained. These rules describe the app's upload-status handling and do not replace checking iCloud availability on the device.
+- Quote generation requires an explicit material pricing choice: use the stored material price as a cost reference, set one customer-facing price, or leave prices blank for later. Writing a quote into a project contract first shows the selected confirmed quote version and calculated amount; if the source quote changes, the preview refreshes and must be confirmed again.
+- Older labor records whose unit cannot be determined are marked for confirmation instead of treating their values as hours or workdays automatically. They must be edited or batch-confirmed before quote generation; confirmation assigns the unit without converting the saved quantity or amount.
+
 ## Quick Start
 
 1. Use the full Xcode toolchain:
@@ -78,10 +85,12 @@ Release preflight:
 scripts/release/preflight.sh
 ```
 
-Swift formatting:
+Install the same checksum-verified tool versions used by CI (XcodeGen 2.46.0, SwiftFormat 0.61.1, and SwiftLint 0.63.2), then run the Swift checks:
 
 ```sh
-brew install swiftformat swiftlint
+tools_dir="${TMPDIR:-/tmp}/sitekeeper-tools"
+scripts/release/install_ci_tools.sh "$tools_dir"
+export PATH="$tools_dir:$PATH"
 scripts/dev/check_swift_format.sh
 scripts/dev/check_swift_lint.sh
 scripts/dev/format_swift.sh

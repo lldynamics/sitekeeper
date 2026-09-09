@@ -118,6 +118,14 @@ enum QuickNoteAttachmentStorage {
         await fileFamily.dataAsync(for: fileName, failureEvent: "quick_note_attachment.read_failed")
     }
 
+    static func thumbnailAsync(for fileName: String, maxPixelSize: CGFloat) async -> UIImage? {
+        await ImageDownsampleService.downsampledImageAsync(
+            at: fileURL(for: fileName),
+            maxPixelSize: maxPixelSize,
+            source: "QuickNoteAttachmentStorage.thumbnailAsync"
+        )
+    }
+
     static func exists(fileName: String) -> Bool {
         fileFamily.exists(fileName: fileName)
     }

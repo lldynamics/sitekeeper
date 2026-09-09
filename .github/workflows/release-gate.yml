@@ -45,9 +45,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  XCODEGEN_VERSION: 2.46.0
-
 jobs:
   release-boundaries:
     name: Release boundary policies
@@ -83,19 +80,16 @@ jobs:
 
       - name: Install release tools
         run: |
-          brew install ripgrep swiftformat swiftlint
-          curl --fail --location --silent --show-error \
-            --output "$RUNNER_TEMP/xcodegen.zip" \
-            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
-          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-release"
-          echo "$RUNNER_TEMP/xcodegen-release/xcodegen/bin" >> "$GITHUB_PATH"
+          brew install ripgrep
+          bash scripts/release/install_ci_tools.sh "$RUNNER_TEMP/sitekeeper-tools"
+          echo "$RUNNER_TEMP/sitekeeper-tools" >> "$GITHUB_PATH"
 
       - name: Run one-click release gate
         env:
           DERIVED_DATA_PATH: /tmp/sitekeeper-release-derived-data
           SIMULATOR_NAME: sitekeeper-ci-release
         run: |
-          export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
+          export PATH="$RUNNER_TEMP/sitekeeper-tools:$PATH"
           xcodegen --version
           scripts/release/one_click_release_check.sh
 
@@ -114,11 +108,8 @@ jobs:
       - name: Install UI test tools
         run: |
           brew install ripgrep
-          curl --fail --location --silent --show-error \
-            --output "$RUNNER_TEMP/xcodegen.zip" \
-            "https://github.com/yonaskolb/XcodeGen/releases/download/${XCODEGEN_VERSION}/xcodegen.zip"
-          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen-release"
-          echo "$RUNNER_TEMP/xcodegen-release/xcodegen/bin" >> "$GITHUB_PATH"
+          bash scripts/release/install_ci_tools.sh "$RUNNER_TEMP/sitekeeper-tools" --ui
+          echo "$RUNNER_TEMP/sitekeeper-tools" >> "$GITHUB_PATH"
 
       - name: Run adaptive UI smoke tests
         env:
@@ -126,7 +117,7 @@ jobs:
           DERIVED_DATA_PATH: /tmp/sitekeeper-ui-smoke-derived-data
           RESULT_BUNDLE_PATH: /tmp/sitekeeper-ui-smoke-${{ matrix.device_family }}.xcresult
         run: |
-          export PATH="$RUNNER_TEMP/xcodegen-release/xcodegen/bin:$PATH"
+          export PATH="$RUNNER_TEMP/sitekeeper-tools:$PATH"
           xcodegen --version
           scripts/release/run_ui_smoke.sh
 

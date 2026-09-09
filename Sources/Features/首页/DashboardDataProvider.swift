@@ -100,6 +100,8 @@ extension DashboardView {
             guard let projectId = item.projectId else { continue }
             laborCostByProjectID[projectId, default: 0] += ReportBuilder.laborLineTotal(item)
         }
+        let materialDetailProjectIDs = Set(materials.compactMap(\.projectId))
+        let laborDetailProjectIDs = Set(laborRecords.compactMap(\.projectId))
         var collectionByProjectID: [UUID: MoneyValue] = [:]
         for record in financialRecords where record.countsInBusinessMetrics && record.isCollectionIncome {
             collectionByProjectID[record.projectId] =
@@ -117,11 +119,19 @@ extension DashboardView {
         }
         let materialCost = projects.reduce(0) { total, project in
             let recorded = materialCostByProjectID[project.id] ?? 0
-            return total + (recorded > 0 ? recorded : project.materialCostValue.doubleValue)
+            return total + ProjectDetailMetrics.currentMaterialCost(
+                project: project,
+                materialCostAuto: recorded,
+                hasMaterialDetails: materialDetailProjectIDs.contains(project.id)
+            )
         }
         let laborCostAmount = projects.reduce(0) { total, project in
             let recorded = laborCostByProjectID[project.id] ?? 0
-            return total + (recorded > 0 ? recorded : project.laborCostValue.doubleValue)
+            return total + ProjectDetailMetrics.currentLaborCost(
+                project: project,
+                laborCostAuto: recorded,
+                hasLaborDetails: laborDetailProjectIDs.contains(project.id)
+            )
         }
 
         let receivableAmount = max(contractAmount - paidAmount, 0)

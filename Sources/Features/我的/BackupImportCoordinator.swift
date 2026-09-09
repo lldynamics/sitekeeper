@@ -101,6 +101,7 @@ enum BackupImportCoordinator {
         onPersistingMetadata: @MainActor () -> Void = {}
     ) async throws -> BackupEmbeddedRestoreCounts {
         await store.awaitInitialLoad()
+        try store.requireNoBackupExport()
         guard !store.isApplyingBackup else {
             throw DataStore.PersistenceBlockedError(message: nil)
         }
@@ -128,54 +129,11 @@ enum BackupImportCoordinator {
         }
         applyImportMetadata(snapshot: snapshotToApply, mode: importMode, store: store)
 
-        var failedStage = "commit_files"
-        do {
-            let restoredCounts = try await FileIOTaskRunner.run(
-                priority: .userInitiated,
-                logContext: .init(
-                    event: "backup.import.commit_restore_files",
-                    source: "BackupImportCoordinator.commitAndPersistImport",
-                    category: .zipArchive,
-                    details: [
-                        "file": sourceFileName,
-                        "mode": importMode.rawValue
-                    ]
-                )
-            ) {
-                try restoreTransaction.commit(policy: restorePolicy)
-            }
-            failedStage = "persist_metadata"
-            onPersistingMetadata()
-            try await store.persistAppliedBackup()
-            restoreTransaction.finalize()
-            return restoredCounts
-        } catch {
-            restoreTransaction.rollback()
-            await rollbackMetadata(previousSnapshot, store: store, sourceFileName: sourceFileName, failedStage: failedStage)
-            throw error
-        }
-    }
-
-    @MainActor
-    private static func rollbackMetadata(_ previousSnapshot: BackupSnapshot, store: DataStore, sourceFileName: String, failedStage: String) async {
-        applyImportMetadata(snapshot: previousSnapshot, mode: .overwrite, store: store)
-        do {
-            // A failed atomic import write leaves the original disk metadata intact.
-            // In particular, never overwrite an unreadable original during rollback.
-            if store.loadState == .ready {
-                try await store.persistAppliedBackup()
-            }
-        } catch {
-            StorageIssueLog.recordEvent(
-                "backup.import.rollback_persist_failed",
-                category: .dataStore,
-                details: [
-                    "file": sourceFileName,
-                    "stage": failedStage
-                ],
-                error: error
-            )
-        }
+        return try await commitAppliedImport(
+            restoreTransaction: restoreTransaction, restorePolicy: restorePolicy,
+            previousSnapshot: previousSnapshot, importMode: importMode, store: store,
+            sourceFileName: sourceFileName, onPersistingMetadata: onPersistingMetadata
+        )
     }
 }
 

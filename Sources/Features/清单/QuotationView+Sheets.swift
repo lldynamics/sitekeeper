@@ -43,6 +43,7 @@ extension QuotationView {
             projects: store.projects,
             generateProjectId: $generateProjectId,
             defaultMaterialPrice: $defaultMaterialPrice,
+            materialPriceMode: $materialQuotePriceMode,
             defaultLaborRate: $defaultLaborRate,
             generateTax: $generateTax,
             generateDiscount: $generateDiscount,
@@ -72,6 +73,25 @@ extension QuotationView {
             onExport: {
                 activeSheet = nil
                 exportQuotationPDF()
+            }
+        )
+    }
+
+    var contractWriteForm: some View {
+        QuotationContractWriteSheetView(
+            project: projectFilter.flatMap { id in store.projects.first(where: { $0.id == id }) },
+            versions: projectFilter.map {
+                QuotationContractWritePlanner.confirmedVersions(projectId: $0, quotes: store.quoteItems)
+            } ?? [],
+            selectedVersion: $contractWriteVersion,
+            plan: contractWritePlan,
+            refreshMessage: contractWriteRefreshMessage,
+            onCancel: { activeSheet = nil },
+            onSelectVersion: refreshContractWritePlan(versionName:),
+            onConfirm: {
+                if applyContractWritePlan(versionName: contractWriteVersion) {
+                    activeSheet = nil
+                }
             }
         )
     }

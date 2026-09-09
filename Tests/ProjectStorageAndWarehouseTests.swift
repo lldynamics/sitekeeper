@@ -5,6 +5,50 @@ import UIKit
 
 @MainActor
 struct ProjectStorageAndWarehouseTests {
+    @Test func warehouseSyncUsesNormalizedIdentityWithoutMergingDifferentUnits() async {
+        let storageDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("warehouse-normalized-sync-\(UUID().uuidString)", isDirectory: true)
+        let store = DataStore(storageDirectory: storageDirectory)
+        await store.awaitInitialLoad()
+        defer { try? FileManager.default.removeItem(at: storageDirectory) }
+
+        let project = Project(name: "仓库项目", location: "")
+        store.replaceProjects([project])
+        store.replaceMaterialItems([
+            MaterialItem(
+                name: "C30 Concrete",
+                quantity: "99",
+                unit: "M3",
+                specification: "Pumped",
+                projectId: project.id
+            )
+        ])
+        store.replaceProjectWarehouseMovements([
+            ProjectWarehouseMovement(
+                projectId: project.id,
+                movementType: .inbound,
+                materialName: " c30  concrete ",
+                specification: "pumped",
+                unit: "m3",
+                quantity: "2"
+            ),
+            ProjectWarehouseMovement(
+                projectId: project.id,
+                movementType: .inbound,
+                materialName: "C30 Concrete",
+                specification: "Pumped",
+                unit: "吨",
+                quantity: "5"
+            )
+        ])
+
+        store.syncWarehouseToMaterialQuantity(for: Set([project.id]))
+
+        #expect(store.materialItems.count == 2)
+        #expect(store.materialItems.first { MaterialIdentity.normalizedComponent($0.unit) == "m3" }?.quantity == "2")
+        #expect(store.materialItems.first { $0.unit == "吨" }?.quantity == "5")
+    }
+
     @Test func deletingFinancialRecordDoesNotDeleteCrossProjectDocument() async throws {
         let storageDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("cross-project-document-delete-\(UUID().uuidString)", isDirectory: true)

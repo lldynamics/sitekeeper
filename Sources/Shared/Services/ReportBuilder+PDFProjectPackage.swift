@@ -24,8 +24,16 @@ extension ReportBuilder {
         let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: financialRecords)
         let recordedMaterialCost = materials.reduce(0) { $0 + materialLineTotal($1) }
         let recordedLaborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
-        let materialCost = recordedMaterialCost > 0 ? recordedMaterialCost : project.materialCostValue.doubleValue
-        let laborCost = recordedLaborCost > 0 ? recordedLaborCost : project.laborCostValue.doubleValue
+        let materialCost = ProjectDetailMetrics.currentMaterialCost(
+            project: project,
+            materialCostAuto: recordedMaterialCost,
+            hasMaterialDetails: !materials.isEmpty
+        )
+        let laborCost = ProjectDetailMetrics.currentLaborCost(
+            project: project,
+            laborCostAuto: recordedLaborCost,
+            hasLaborDetails: !labor.isEmpty
+        )
         let laborWorkload = laborWorkloadSummary(labor)
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
         let deliveryHealth = projectDeliveryHealthReport(

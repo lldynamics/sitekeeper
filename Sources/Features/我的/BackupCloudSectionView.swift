@@ -80,7 +80,7 @@ struct BackupCloudSectionView: View {
                 }
             }
             .disabled(isBusy)
-            Text(String(localized: "超过保留数量后，会自动删除最旧的 iCloud 备份。"))
+            Text(String(localized: "仅在新备份及校验文件确认上传后，才清理超出保留数量的旧备份；等待同步或上传失败的文件会保留。"))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
 

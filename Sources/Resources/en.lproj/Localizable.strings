@@ -4028,3 +4028,67 @@
 "待确认 %lld 条（原值合计 %@）" = "Unconfirmed: %lld (raw total %@)";
 
 "毛利估算: %@  人工量: %@  进度: %lld%%" = "Estimated gross profit: %@  Labor: %@  Progress: %lld%%";
+
+// Follow-up audit: recovery, finance, and usability
+"仅在新备份及校验文件确认上传后，才清理超出保留数量的旧备份；等待同步或上传失败的文件会保留。" = "Older backups are removed only after the new archive and its checksum are confirmed uploaded. Pending or failed uploads are kept.";
+"全部单位" = "All units";
+"批量确认计量单位" = "Confirm units in bulk";
+"仅更新当前筛选出的待确认记录；数值与金额保持不变。请选择这些历史记录原本使用的单位。" = "Only the filtered records with unconfirmed units will be updated. Values and amounts stay unchanged. Choose the unit originally used for these records.";
+"批量确认为工时" = "Confirm as hours";
+"批量确认为工天" = "Confirm as workdays";
+"确认批量设置人工单位？" = "Confirm units for these labor records?";
+"确认设置" = "Confirm";
+"将当前筛选出的 %lld 条记录确认为“%@”？数值和金额不会换算。" = "Confirm the unit as “%2$@” for %1$lld filtered records? Values and amounts will not be converted.";
+"已确认 %lld 条人工记录的计量单位" = "Confirmed units for %lld labor records";
+"材料报价方式" = "Material pricing method";
+"统一对外单价" = "Uniform quoted unit price";
+"确认写入合同" = "Review contract amount";
+"确认覆盖合同金额" = "Confirm replacement";
+"写入范围" = "Included scope";
+"报价版本" = "Quote version";
+"报价状态" = "Quote status";
+"纳入报价" = "Included quotes";
+"金额预览" = "Amount preview";
+"原合同金额" = "Previous contract amount";
+"新合同金额" = "New contract amount";
+"逐项优先采用转合同金额；未填写时采用含税折后报价金额。搜索条件不会影响本次写入。" = "Each line uses its contract amount when provided, otherwise its quoted amount after tax and discount. Search filters do not affect this operation.";
+"有 %lld 项既未填写转合同金额，也未填写报价单价，请先补价。" = "%lld items have neither a contract amount nor a quoted unit price. Complete their prices first.";
+"未找到工程" = "Project not found";
+"当前工程没有可写入合同的已确认报价。" = "This project has no confirmed quotes available for its contract.";
+"选择已确认报价版本写入项目合同金额" = "Choose a confirmed quote version for the project contract amount";
+"沿用材料单价（成本参考）" = "Use material unit prices (cost reference)";
+"统一设置对外报价" = "Set a uniform quoted price";
+"留空待补" = "Leave prices pending";
+"正式收入" = "Posted income";
+"正式支出" = "Posted expenses";
+"正式净额" = "Posted balance";
+"汇总、往来与缺票统计仅计入正式账目。" = "Totals, counterparties, and missing receipts include posted records only.";
+"备份回滚尚未完成，恢复包已保留，请重试加载后再操作。" = "Backup rollback is incomplete. The recovery package has been kept. Retry loading before making changes.";
+"备份恢复记录无效或路径不安全，已暂停加载。" = "The backup recovery record is invalid or contains an unsafe path. Loading has been paused.";
+"备份恢复尚未完成，恢复包已保留在 %@。请重试读取。" = "Backup recovery is incomplete. The recovery package is kept at %@. Retry loading.";
+"备份已在本机生成，等待 iCloud 同步；请刷新查看上传状态。" = "The backup was created locally and is waiting for iCloud. Refresh to check its upload status.";
+"备份已上传到 iCloud。" = "The backup has been uploaded to iCloud.";
+"iCloud 上传失败：%@。本机备份仍保留，请检查网络和云端空间后刷新。" = "iCloud upload failed: %@. The local backup is kept. Check your network and cloud storage, then refresh.";
+
+"UI测试：读取已验证备份" = "UI test: restore verified backup";
+"UI测试备份已就绪" = "UI test backup ready";
+"UI测试备份已生成并验证" = "UI test backup created and verified";
+"UI测试备份槽位不可用" = "UI test backup slot unavailable";
+"请选择报价方式" = "Choose a pricing method";
+"报价数据已变化，预览已刷新。请核对后再次确认。" = "Quote data changed. The preview has been refreshed. Review it and confirm again.";
+"备份已写入，但恢复事务尚未结束，已暂停保存。请重试读取。" = "The backup was written, but recovery is not finalized. Saving is paused. Retry loading.";
+
+"本机数据已清空" = "Local data has been cleared";
+"清空本机数据失败，请稍后重试。" = "Failed to clear local data. Please try again.";
+"材料单价通常是成本参考；选择统一设置时填写的是对外报价。" = "Material unit prices usually represent costs. A uniform price is the price quoted to your customer.";
+
+"备份上传状态暂时无法确认，已暂停重复自动备份。请刷新列表或重新手动备份。" = "Upload status is temporarily unavailable. Duplicate automatic backups are paused. Refresh the list or create a new manual backup.";
+
+"所选报价版本已变化或不再是已确认状态，请重新选择。" = "The selected quote version changed or is no longer confirmed. Please choose it again.";
+
+"已选择：%@" = "Selected: %@";
+"未命名报价" = "Untitled quote";
+
+"有 %lld 项缺少有效的转合同金额或计价信息，请先补齐金额、单价、数量和费率。" = "%lld items lack a valid contract amount or pricing information. Complete the amount, unit price, quantity, and rates first.";
+
+"正在导出备份，请等待完成后再清理或恢复。" = "A backup is being exported. Wait for it to finish before cleaning up or restoring data.";

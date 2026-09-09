@@ -376,7 +376,7 @@ enum WarehouseStockCalculator {
             guard !name.isEmpty else { continue }
             let spec = movement.specification.trimmingCharacters(in: .whitespacesAndNewlines)
             let unit = movement.unit.trimmingCharacters(in: .whitespacesAndNewlines)
-            let key = [name.lowercased(), spec.lowercased(), unit.lowercased()].joined(separator: "|")
+            let key = MaterialIdentity.key(name: name, specification: spec, unit: unit)
             let type = movement.normalizedMovementType
             var current = groups[key] ?? (name, spec, unit, .zero)
             let quantity = movement.quantityValue

@@ -221,15 +221,26 @@ struct PhotoDetailSheet: View {
             didAttemptLoadImage = true
             return
         }
-        if let data = await PhotoStorage.dataAsync(for: fileName),
-           let image = UIImage(data: data) {
+        if let image = await ImageDownsampleService.downsampledImageAsync(
+            at: PhotoStorage.fileURL(for: fileName),
+            maxPixelSize: 2_400,
+            source: "DailyLogPhotoDetailSheet.loadPreviewImage"
+        ) {
+            guard !Task.isCancelled, selectedPhoto?.fileName == fileName else { return }
             previewImage = image
             didAttemptLoadImage = true
             return
         }
-        if let thumbnail = await PhotoStorage.thumbnailAsync(for: fileName) {
+        guard !Task.isCancelled, selectedPhoto?.fileName == fileName else { return }
+        if let thumbnail = await ImageDownsampleService.downsampledImageAsync(
+            at: PhotoStorage.thumbnailURL(for: fileName),
+            maxPixelSize: 1_200,
+            source: "DailyLogPhotoDetailSheet.loadPreviewThumbnail"
+        ) {
+            guard !Task.isCancelled, selectedPhoto?.fileName == fileName else { return }
             previewImage = thumbnail
         }
+        guard !Task.isCancelled, selectedPhoto?.fileName == fileName else { return }
         didAttemptLoadImage = true
     }
 }

@@ -133,10 +133,14 @@ enum ReportBuilder {
     }
 
     static func quoteGrandTotal(_ item: QuoteItem) -> Double {
+        quoteGrandTotalValue(item).doubleValue
+    }
+
+    static func quoteGrandTotalValue(_ item: QuoteItem) -> MoneyValue {
         let line = quoteLineTotalValue(item)
         let tax = quoteTaxValue(item)
         let discount = quoteDiscountValue(item)
-        return (line + tax - discount).doubleValue
+        return line + tax - discount
     }
 
     static func amountRaw(_ value: Double) -> String {

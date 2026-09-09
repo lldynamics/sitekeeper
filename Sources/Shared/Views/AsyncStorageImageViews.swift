@@ -2,7 +2,9 @@ import SwiftUI
 import UIKit
 
 struct AsyncPhotoThumbnailImageView<Content: View, Placeholder: View>: View {
+    @Environment(\.displayScale) private var displayScale
     let fileName: String?
+    var maxPointSize: CGFloat = 120
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
 
@@ -19,13 +21,21 @@ struct AsyncPhotoThumbnailImageView<Content: View, Placeholder: View>: View {
         .task(id: fileName) {
             image = nil
             guard let fileName else { return }
-            image = await PhotoStorage.thumbnailAsync(for: fileName)
+            let loadedImage = await ImageDownsampleService.downsampledImageAsync(
+                at: PhotoStorage.thumbnailURL(for: fileName),
+                maxPixelSize: maxPointSize * displayScale,
+                source: "AsyncPhotoThumbnailImageView"
+            )
+            guard !Task.isCancelled else { return }
+            image = loadedImage
         }
     }
 }
 
 struct AsyncQuickNoteAttachmentImageView<Content: View, Placeholder: View>: View {
+    @Environment(\.displayScale) private var displayScale
     let fileName: String
+    var maxPointSize: CGFloat = 120
     @ViewBuilder let content: (Image) -> Content
     @ViewBuilder let placeholder: () -> Placeholder
 
@@ -41,11 +51,12 @@ struct AsyncQuickNoteAttachmentImageView<Content: View, Placeholder: View>: View
         }
         .task(id: fileName) {
             image = nil
-            guard let data = await QuickNoteAttachmentStorage.dataAsync(for: fileName),
-                  let uiImage = UIImage(data: data) else {
-                return
-            }
-            image = uiImage
+            let loadedImage = await QuickNoteAttachmentStorage.thumbnailAsync(
+                for: fileName,
+                maxPixelSize: maxPointSize * displayScale
+            )
+            guard !Task.isCancelled else { return }
+            image = loadedImage
         }
     }
 }

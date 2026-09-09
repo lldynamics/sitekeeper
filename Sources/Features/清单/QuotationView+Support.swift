@@ -83,12 +83,18 @@ extension QuotationView {
     }
 
     var canGenerateQuoteForm: Bool {
-        InputValidator.validate(defaultMaterialPrice, kind: .amount, requirement: .optionalNonNegative).isValid &&
+        (!hasMaterialQuoteSources || materialQuotePriceMode != nil) &&
+        (materialQuotePriceMode != .overrideAll ||
+            InputValidator.validate(defaultMaterialPrice, kind: .amount, requirement: .requiredNonNegative).isValid) &&
         InputValidator.validate(defaultLaborRate, kind: .laborRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(generateTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
         discountRateIsWithinBounds(generateDiscount) &&
-        unconfirmedLaborQuoteCount == 0
+            unconfirmedLaborQuoteCount == 0
+    }
+
+    var hasMaterialQuoteSources: Bool {
+        store.materialItems.contains { $0.projectId == generateProjectId }
     }
 
     var unconfirmedLaborQuoteCount: Int {

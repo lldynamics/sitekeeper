@@ -156,7 +156,7 @@ enum BookAttachmentFilter: CaseIterable {
         case .attached:
             return !linkedDocuments(record).isEmpty
         case .unattached:
-            return record.requiresAttachment && linkedDocuments(record).isEmpty
+            return record.countsInBusinessMetrics && record.requiresAttachment && linkedDocuments(record).isEmpty
         }
     }
 }

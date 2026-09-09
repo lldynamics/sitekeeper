@@ -30,6 +30,7 @@ struct QuotationView: View {
     @State var formProjectId: UUID?
     @State var showQuoteDeleteConfirm = false
     @State var generateProjectId: UUID?
+    @State var materialQuotePriceMode: MaterialQuotePriceMode?
     @State var defaultMaterialPrice = ""
     @State var defaultLaborRate = "120"
     @State var generateTax = "0"
@@ -40,6 +41,9 @@ struct QuotationView: View {
     @State var quoteProjectAddress = ""
     @State var quoteSignerName = String(localized: "项目负责人")
     @State var operationNotice: OperationToastNotice?
+    @State var contractWriteVersion = ""
+    @State var contractWritePlan: QuotationContractWritePlan?
+    @State var contractWriteRefreshMessage = ""
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @FocusState var quoteFormFocusedField: QuoteFormField?
     @FocusState var generateQuoteFocusedField: GenerateQuoteField?
@@ -82,6 +86,8 @@ struct QuotationView: View {
                 QuotationToolbarMenu(
                     materialItems: store.materialItems,
                     onOpenGenerate: {
+                        materialQuotePriceMode = nil
+                        defaultMaterialPrice = ""
                         activeSheet = .generate
                     },
                     onOpenExport: {
@@ -97,9 +103,10 @@ struct QuotationView: View {
             if let projectFilter, store.projects.contains(where: { $0.id == projectFilter }) {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(String(localized: "写入合同")) {
-                        applyGrandTotalToProjectContract()
+                        openContractWriteSheet()
                     }
-                    .accessibilityLabel(String(localized: "将当前筛选报价合计写入项目合同金额"))
+                    .accessibilityLabel(String(localized: "选择已确认报价版本写入项目合同金额"))
+                    .accessibilityIdentifier("quotation-write-contract")
                 }
             }
         }
@@ -111,6 +118,8 @@ struct QuotationView: View {
                 generateQuoteForm
             case .export:
                 quotationExportForm
+            case .contractWrite:
+                contractWriteForm
             }
         }
         .fileExporter(

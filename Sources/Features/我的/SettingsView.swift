@@ -12,6 +12,8 @@ struct SettingsView: View {
     @State private var isClearingLocalData = false
     @State private var clearLocalDataFlowStartedAt = 0.0
     @State private var clearLocalDataPhase = ""
+    @State private var clearLocalDataResultMessage = ""
+    @State private var clearLocalDataFailed = false
     @State private var clearLocalDataPreview = ClearLocalDataImpactPreview.empty
 
     var body: some View {
@@ -70,6 +72,12 @@ struct SettingsView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
+                if !clearLocalDataResultMessage.isEmpty {
+                    Text(clearLocalDataResultMessage)
+                        .font(.caption)
+                        .foregroundStyle(clearLocalDataFailed ? Color.appRisk : Color.appSuccess)
+                        .accessibilityIdentifier("clear-local-data-result")
+                }
             }
             Section(String(localized: "关于")) {
                 HStack {
@@ -92,6 +100,8 @@ struct SettingsView: View {
                 Task {
                     let snapshot = clearLocalDataPreview.auditSnapshot
                     await MainActor.run {
+                        clearLocalDataResultMessage = ""
+                        clearLocalDataFailed = false
                         showClearLocalDataSheet = false
                         isClearingLocalData = true
                         clearLocalDataPhase = String(localized: "正在准备")
@@ -103,17 +113,23 @@ struct SettingsView: View {
                             source: "SettingsView"
                         )
                     }
-                    await store.clearAllBusinessDataAsync(deleteStoredFiles: true) { phase in
+                    let cleared = await store.clearAllBusinessDataAsync(deleteStoredFiles: true) { phase in
                         clearLocalDataPhase = phase
                     }
                     await MainActor.run {
                         isClearingLocalData = false
                         clearLocalDataPhase = ""
+                        clearLocalDataFailed = !cleared
+                        clearLocalDataResultMessage = cleared
+                            ? String(localized: "本机数据已清空")
+                            : (store.persistenceErrorMessage ?? String(localized: "清空本机数据失败，请稍后重试。"))
                         OperationAuditLog.record(
                             action: .delete,
-                            outcome: .succeeded,
+                            outcome: cleared ? .succeeded : .failed,
                             summary: String(localized: "清空本机全部数据"),
-                            detail: snapshot,
+                            detail: cleared
+                                ? snapshot
+                                : "\(snapshot) · \(clearLocalDataResultMessage)",
                             source: "SettingsView"
                         )
                     }

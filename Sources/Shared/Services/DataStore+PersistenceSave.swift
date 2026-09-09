@@ -71,13 +71,16 @@ extension DataStore {
     }
 
     /// Only a user-confirmed backup transaction may replace a store that failed to load.
-    func persistAppliedBackup() async throws {
+    func persistAppliedBackup(encodedData: Data? = nil) async throws {
         try Task.checkCancellation()
         let wasFailed = loadState == .failed
-        try await persistenceActor.persist(
-            snapshot: makeSnapshot(includePhotoFiles: false),
-            preservingExistingFile: wasFailed
-        )
+        if let encodedData {
+            try await persistenceActor.persistPreparedBackup(data: encodedData, preservingExistingFile: wasFailed)
+        } else {
+            try await persistenceActor.persist(
+                snapshot: makeSnapshot(includePhotoFiles: false), preservingExistingFile: wasFailed
+            )
+        }
         setLoadState(.ready)
         persistenceErrorMessage = nil
         publishWidgetData()

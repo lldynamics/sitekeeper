@@ -75,11 +75,12 @@ extension SitekeeperUITests {
         resetState: Bool = false,
         enableBackupPreview: Bool = false,
         allowClearWithoutBackup: Bool = false,
+        backupRoundTripSlot: String? = nil,
         dynamicTypeSize: String? = nil,
         languageCode: String = "zh-Hans"
     ) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments += ["-languageCode", languageCode, "-AppleLanguages", "(\(languageCode))"]
+        app.launchArguments += ["-ui-testing", "-languageCode", languageCode, "-AppleLanguages", "(\(languageCode))"]
         if skipOnboarding {
             app.launchArguments += ["-uitest-skip-onboarding"]
             app.launchEnvironment["UITEST_SKIP_ONBOARDING"] = "1"
@@ -95,6 +96,10 @@ extension SitekeeperUITests {
         if allowClearWithoutBackup {
             app.launchArguments += ["-uitest-allow-clear-without-backup"]
             app.launchEnvironment["UITEST_ALLOW_CLEAR_WITHOUT_BACKUP"] = "1"
+        }
+        if let backupRoundTripSlot {
+            app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP"] = "1"
+            app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP_SLOT"] = backupRoundTripSlot
         }
         if let dynamicTypeSize {
             app.launchArguments += ["-uitest-dynamic-type-size", dynamicTypeSize]
@@ -606,6 +611,14 @@ extension SitekeeperUITests {
         let app = launchApp(resetState: true, dynamicTypeSize: "accessibility5")
 
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 8))
+        let emptyProjectCallToAction = button(app, identifier: "dashboard-empty-active-projects", scrollingAttempts: 3)
+        XCTAssertTrue(emptyProjectCallToAction.isHittable)
+        emptyProjectCallToAction.tap()
+        XCTAssertTrue(app.navigationBars["项目"].waitForExistence(timeout: 5))
+        let dashboardBackButton = app.navigationBars.buttons.firstMatch
+        XCTAssertTrue(dashboardBackButton.waitForExistence(timeout: 3))
+        dashboardBackButton.tap()
+        XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 5))
         attachScreenshot(app, named: "axxxl-dashboard")
 
         tapPrimaryModule(app, name: "项目")
@@ -615,6 +628,13 @@ extension SitekeeperUITests {
             || app.buttons["新建项目"].waitForExistence(timeout: 2)
             || app.staticTexts["新建项目"].waitForExistence(timeout: 2)
         XCTAssertTrue(projectSurfaceReady)
+        let statusMenu = button(app, identifier: "project-status-filter-menu", scrollingAttempts: 3)
+        XCTAssertTrue(statusMenu.isHittable)
+        statusMenu.tap()
+        let activeStatus = app.buttons["进行中"]
+        XCTAssertTrue(activeStatus.waitForExistence(timeout: 3))
+        activeStatus.tap()
+        XCTAssertEqual(statusMenu.value as? String, "进行中")
         attachScreenshot(app, named: "axxxl-project-list")
 
         tapPrimaryModule(app, name: "我的")
@@ -623,6 +643,17 @@ extension SitekeeperUITests {
             || app.buttons["profile-data-management-link"].waitForExistence(timeout: 4)
             || app.buttons["profile-settings-link"].waitForExistence(timeout: 4)
         XCTAssertTrue(profileReady, "AXXXL profile module did not present core entries")
+        let editUserName = button(app, identifier: "profile-edit-username", scrollingAttempts: 2)
+        XCTAssertTrue(editUserName.isHittable)
+        editUserName.tap()
+        let userNameField = app.textFields["profile-username-input"]
+        XCTAssertTrue(userNameField.waitForExistence(timeout: 4))
+        userNameField.tap()
+        userNameField.typeText("超大字体用户")
+        let saveUserName = app.buttons["profile-username-save"]
+        XCTAssertTrue(saveUserName.isHittable)
+        saveUserName.tap()
+        XCTAssertTrue(app.staticTexts["超大字体用户"].waitForExistence(timeout: 4))
         attachScreenshot(app, named: "axxxl-profile")
     }
 

@@ -6,6 +6,7 @@ struct CloudBackupFile: Identifiable, Equatable {
     let fileName: String
     let byteSize: Int
     let modifiedAt: Date
+    var uploadState: CloudBackupUploadState = .pending
 
     var formattedSize: String {
         QuickNoteAttachmentStorage.formattedFileSize(byteSize)
@@ -70,7 +71,7 @@ enum CloudBackupService {
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyyMMdd-HHmmss"
-        return "\(backupFilePrefix)-\(formatter.string(from: date)).\(backupFileExtension)"
+        return "\(backupFilePrefix)-\(formatter.string(from: date))-\(UUID().uuidString).\(backupFileExtension)"
     }
 
     static func latestBackup() throws -> CloudBackupFile? {
@@ -98,8 +99,7 @@ enum CloudBackupService {
 
     static func saveArchiveToCloud(
         archiveFileURL: URL,
-        fileName: String = makeBackupFileName(),
-        keepMostRecent retainedCount: Int = 5
+        fileName: String = makeBackupFileName()
     ) throws -> CloudBackupFile {
         do {
             try BackupArchiveSecurity.validateRemoteCopy(at: archiveFileURL, expectedSHA256: nil)
@@ -137,7 +137,6 @@ enum CloudBackupService {
             recordIssue("cloud_backup.upload_validation_failed", fileURL: targetURL, error: error)
             throw CloudBackupError.invalidBackupFile
         }
-        try pruneOldBackups(keepMostRecent: retainedCount)
         guard let file = cloudBackupFile(from: targetURL) else {
             throw CloudBackupError.invalidBackupFile
         }
@@ -185,10 +184,21 @@ enum CloudBackupService {
         return directory
     }
 
-    private static func pruneOldBackups(keepMostRecent retainedCount: Int) throws {
-        guard retainedCount > 0 else { return }
+    /// Refresh completion first; a local copy alone is not proof of cloud availability.
+    static func refreshUploadStatusAndPrune(keepMostRecent retainedCount: Int) throws -> [CloudBackupFile] {
         let backups = try listBackups()
-        for file in backups.dropFirst(retainedCount) {
+        if let confirmed = CloudBackupRetentionPolicy.latestConfirmedDate(backups) {
+            if confirmed > (CloudBackupSettingsStore.loadLastSuccessDate() ?? .distantPast) {
+                CloudBackupSettingsStore.saveLastSuccessDate(confirmed)
+            }
+        }
+        let pendingName = CloudBackupSettingsStore.loadPendingFileName()
+        if !pendingName.isEmpty, backups.contains(where: { $0.fileName == pendingName && $0.uploadState == .uploaded }) {
+            CloudBackupSettingsStore.savePendingFileName("")
+            CloudBackupSettingsStore.saveAutoLastStatus(CloudBackupUploadState.uploaded.statusMessage)
+        }
+        let removable = CloudBackupRetentionPolicy.removableBackups(backups, keeping: retainedCount)
+        for file in removable {
             do {
                 _ = try FileOps.removeIfExists(
                     at: file.fileURL,
@@ -215,6 +225,7 @@ enum CloudBackupService {
                 )
             }
         }
+        return removable.isEmpty ? backups : try listBackups()
     }
 
     private static func cloudBackupFile(from url: URL) -> CloudBackupFile? {
@@ -233,8 +244,26 @@ enum CloudBackupService {
             fileURL: url,
             fileName: url.lastPathComponent,
             byteSize: values.fileSize ?? QuickNoteAttachmentStorage.fileSize(at: url),
-            modifiedAt: values.contentModificationDate ?? Date.distantPast
+            modifiedAt: values.contentModificationDate ?? Date.distantPast,
+            uploadState: uploadState(for: url)
         )
+    }
+
+    private static func uploadState(for archiveURL: URL) -> CloudBackupUploadState {
+        .evaluate(archive: uploadObservation(for: archiveURL), digest: uploadObservation(for: integritySidecarURL(for: archiveURL)))
+    }
+
+    private static func uploadObservation(for url: URL) -> CloudBackupUploadObservation {
+        do {
+            let values = try url.resourceValues(forKeys: [.ubiquitousItemIsUploadedKey, .ubiquitousItemUploadingErrorKey])
+            return CloudBackupUploadObservation(
+                isUploaded: values.ubiquitousItemIsUploaded,
+                errorMessage: values.ubiquitousItemUploadingError?.localizedDescription
+            )
+        } catch {
+            // Missing status/sidecar is unconfirmed, never an uploaded backup.
+            return CloudBackupUploadObservation(isUploaded: nil)
+        }
     }
 
     private static func integritySidecarURL(for archiveURL: URL) -> URL {

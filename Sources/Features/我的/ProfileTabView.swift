@@ -3,6 +3,7 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(DataStore.self) private var store
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
@@ -21,6 +22,7 @@ struct ProfileTabView: View {
     @State private var hasLoadedStorageUsage = false
     @State private var showUserNameEditor = false
     @State private var manualSaveMessage = ""
+    @State private var manualSaveDidFail = false
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
     let embedsNavigationStack: Bool
@@ -78,29 +80,7 @@ struct ProfileTabView: View {
     private var profileSurface: some View {
         List {
             Section {
-                HStack(spacing: 14) {
-                    avatarPicker
-                    VStack(alignment: .leading, spacing: 4) {
-                        Button {
-                            userNameDraft = userName
-                            showUserNameEditor = true
-                        } label: {
-                            HStack(spacing: 6) {
-                                Text(displayUserName)
-                                    .font(.title3.weight(.semibold))
-                                    .foregroundStyle(.primary)
-                                Image(systemName: "pencil")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "编辑用户名"))
-                        Text("\(AppBrand.displayName) · v\(appVersion)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                profileIdentity
                 .padding(.vertical, 8)
             }
 
@@ -110,8 +90,7 @@ struct ProfileTabView: View {
                 if !autoSaveEnabled {
                     Button {
                         Task {
-                            await store.flushSave()
-                            manualSaveMessage = store.persistenceErrorMessage ?? String(localized: "已保存当前记录")
+                            await saveCurrentRecords()
                         }
                     } label: {
                         Label(String(localized: "立即保存当前记录"), systemImage: "square.and.arrow.down")
@@ -119,7 +98,7 @@ struct ProfileTabView: View {
                     if !manualSaveMessage.isEmpty {
                         Text(manualSaveMessage)
                             .font(.caption)
-                            .foregroundStyle(store.persistenceErrorMessage == nil ? .secondary : Color.appRisk)
+                            .foregroundStyle(manualSaveDidFail ? Color.appRisk : .secondary)
                     }
                 }
 
@@ -220,6 +199,63 @@ struct ProfileTabView: View {
         }
     }
 
+    @ViewBuilder
+    private var profileIdentity: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                avatarPicker
+                profileAccountDetails
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            HStack(spacing: 14) {
+                avatarPicker
+                profileAccountDetails
+            }
+        }
+    }
+
+    private var profileAccountDetails: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                userNameDraft = userName
+                showUserNameEditor = true
+            } label: {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(displayUserName)
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                        .multilineTextAlignment(.leading)
+                    Image(systemName: "pencil")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "编辑用户名"))
+            .accessibilityIdentifier("profile-edit-username")
+            Text("\(AppBrand.displayName) · v\(appVersion)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @MainActor
+    private func saveCurrentRecords() async {
+        do {
+            try await store.flushSaveOrThrow()
+            manualSaveMessage = String(localized: "已保存当前记录")
+            manualSaveDidFail = false
+        } catch {
+            manualSaveMessage = String(
+                format: String(localized: "保存本地数据失败：%@"),
+                error.localizedDescription
+            )
+            manualSaveDidFail = true
+        }
+    }
+
     private var backupStatusCard: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             HStack(alignment: .top, spacing: AppSpacing.tight) {
@@ -309,6 +345,7 @@ struct ProfileTabView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(String(localized: "修改头像"))
+        .accessibilityIdentifier("profile-avatar-picker")
         .contextMenu {
             if hasCustomAvatar {
                 Button(role: .destructive) {
@@ -327,6 +364,7 @@ struct ProfileTabView: View {
                     TextField(String(localized: "请输入用户名"), text: $userNameDraft)
                         .autocorrectionDisabled()
                         .textInputAutocapitalization(.never)
+                        .accessibilityIdentifier("profile-username-input")
                     Text(String(localized: "留空将显示“未设置用户名”。"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
@@ -345,6 +383,7 @@ struct ProfileTabView: View {
                         userName = userNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
                         showUserNameEditor = false
                     }
+                    .accessibilityIdentifier("profile-username-save")
                 }
             }
         }

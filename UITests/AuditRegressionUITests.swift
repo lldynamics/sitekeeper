@@ -1,6 +1,111 @@
 import XCTest
 
 extension SitekeeperUITests {
+    func testLocalBackupRoundTripRestoresClearedProjectAfterRestart() {
+        let slot = UUID().uuidString
+        let projectName = "Backup Round Trip Project"
+        let app = launchApp(
+            skipOnboarding: false,
+            resetState: true,
+            allowClearWithoutBackup: true,
+            backupRoundTripSlot: slot
+        )
+
+        createProjectForBackupRoundTrip(app, named: projectName)
+        exportAndValidateRoundTripBackup(app)
+        clearLocalDataForBackupRoundTrip(app)
+
+        tapPrimaryModule(app, name: "项目")
+        XCTAssertFalse(app.staticTexts[projectName].waitForExistence(timeout: 2))
+
+        restoreRoundTripBackup(app)
+
+        persistAndRestart(app)
+        let restarted = launchApp()
+        tapPrimaryModule(restarted, name: "项目")
+        XCTAssertTrue(restarted.staticTexts[projectName].firstMatch.waitForExistence(timeout: 8))
+    }
+
+    private func createProjectForBackupRoundTrip(_ app: XCUIApplication, named projectName: String) {
+        let create = app.buttons.containing(.staticText, identifier: "新建项目").firstMatch
+        XCTAssertTrue(create.waitForExistence(timeout: 5))
+        create.tap()
+        let name = app.textFields["project-create-name"]
+        XCTAssertTrue(name.waitForExistence(timeout: 5))
+        name.tap()
+        name.typeText(projectName)
+        app.buttons["project-create-submit"].tap()
+        XCTAssertTrue(name.waitForNonExistence(timeout: 5))
+    }
+
+    private func exportAndValidateRoundTripBackup(_ app: XCUIApplication) {
+        openRoundTripBackupPage(app)
+        let export = roundTripBackupElement(app, identifier: "backup-export-local")
+        XCTAssertTrue(export.isHittable)
+        export.tap()
+        let ready = roundTripBackupElement(app, identifier: "ui-test-backup-roundtrip-ready")
+        XCTAssertTrue(ready.waitForExistence(timeout: 20))
+        XCTAssertTrue(app.buttons["ui-test-backup-roundtrip-restore"].isEnabled)
+    }
+
+    private func clearLocalDataForBackupRoundTrip(_ app: XCUIApplication) {
+        app.navigationBars.buttons.firstMatch.tap()
+        let settings = button(app, identifier: "profile-settings-link", scrollingAttempts: 8)
+        XCTAssertTrue(settings.isHittable)
+        settings.tap()
+        app.buttons["清空本机全部数据（需先备份）"].tap()
+        let continueClear = app.buttons["继续清空"]
+        XCTAssertTrue(continueClear.waitForExistence(timeout: 5))
+        continueClear.tap()
+        let phrase = app.textFields["确认删除数据"]
+        XCTAssertTrue(phrase.waitForExistence(timeout: 5))
+        phrase.tap()
+        phrase.typeText("确认删除数据")
+        let confirmClear = app.buttons["确认清空"]
+        XCTAssertTrue(confirmClear.isEnabled)
+        confirmClear.tap()
+        XCTAssertTrue(phrase.waitForNonExistence(timeout: 15))
+        let clearResult = app.staticTexts["clear-local-data-result"]
+        XCTAssertTrue(clearResult.waitForExistence(timeout: 15))
+        XCTAssertEqual(clearResult.label, "本机数据已清空")
+        app.navigationBars.buttons.firstMatch.tap()
+    }
+
+    private func restoreRoundTripBackup(_ app: XCUIApplication) {
+        openRoundTripBackupPage(app)
+        let restore = roundTripBackupElement(app, identifier: "ui-test-backup-roundtrip-restore")
+        XCTAssertTrue(restore.isEnabled)
+        restore.tap()
+        XCTAssertTrue(app.navigationBars["确认导入"].waitForExistence(timeout: 15))
+        let confirmImport = app.buttons["backup-import-confirm"]
+        XCTAssertTrue(waitForElementByScrollingDown(confirmImport, in: app, attempts: 24))
+        confirmImport.tap()
+        let status = roundTripBackupElement(app, identifier: "backup-status-message")
+        XCTAssertTrue(status.exists)
+        XCTAssertTrue(status.label.contains("导入完成"))
+    }
+
+    private func openRoundTripBackupPage(_ app: XCUIApplication) {
+        openDataSafetyCenter(app)
+        let shortcut = app.buttons["data-management-shortcut-backup"]
+        XCTAssertTrue(shortcut.waitForExistence(timeout: 5))
+        shortcut.tap()
+    }
+
+    private func roundTripBackupElement(_ app: XCUIApplication, identifier: String) -> XCUIElement {
+        let match = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+        let form = app.collectionViews["backup-local-form"]
+        XCTAssertTrue(form.waitForExistence(timeout: 5))
+        for _ in 0..<30 {
+            if match.waitForExistence(timeout: 1), match.isHittable { return match }
+            // A full flick can skip the local actions when the safety header collapses.
+            let start = form.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.65))
+            let end = start.withOffset(CGVector(dx: 0, dy: -100))
+            start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0)
+        }
+        return match
+    }
+
     func testEnglishLaborEntryUsesTranslatedLabels() {
         let app = launchApp(resetState: true, languageCode: "en")
         tapPrimaryModule(app, name: "工具箱")

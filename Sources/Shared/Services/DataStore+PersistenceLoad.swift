@@ -24,7 +24,9 @@ extension DataStore {
                 initialLoadTask = nil
                 needsSaveAfterInitialLoad = false
                 cancelScheduledSave()
-                if let decodeError = error as? DataStorePersistenceActor.LoadDecodeError {
+                if let recoveryError = error as? BackupArchiveRestoreJournal.RecoveryPendingError {
+                    persistenceErrorMessage = recoveryError.localizedDescription
+                } else if let decodeError = error as? DataStorePersistenceActor.LoadDecodeError {
                     preserveUnreadableData(decodeError.rawData)
                 } else {
                     persistenceErrorMessage = String(

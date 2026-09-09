@@ -33,18 +33,19 @@ extension BackupView {
             return
         }
         beginCloudUploadTask(currentItem: String(localized: "准备生成云备份"))
-        let snapshot = store.makeCloudBackupSnapshot(options: options)
-
         cloudState.cloudBackupTask = Task {
             do {
-                let result = try await BackupCloudTaskCoordinator.uploadBackup(
-                    snapshot: snapshot,
-                    progress: { progress in
-                        Task { @MainActor in
-                            exportProgress = progress
+                let result = try await store.withBackupExport {
+                    let snapshot = store.makeCloudBackupSnapshot(options: options)
+                    return try await BackupCloudTaskCoordinator.uploadBackup(
+                        snapshot: snapshot,
+                        progress: { progress in
+                            Task { @MainActor in
+                                exportProgress = progress
+                            }
                         }
-                    }
-                )
+                    )
+                }
 
                 guard !Task.isCancelled else {
                     await MainActor.run {
@@ -55,14 +56,11 @@ extension BackupView {
 
                 await MainActor.run {
                     cloudState.cloudBackups = result.allBackups
-                    setCloudStatus(String(
-                        format: String(localized: "已备份到 iCloud：%@，%@。"),
-                        result.savedFile.formattedSize,
-                        result.savedFile.formattedModifiedAt
-                    ))
-                    cloudLastSuccessAt = result.savedFile.modifiedAt.timeIntervalSince1970
-                    hasCompletedBackupExportTask = true
-                    hasSeenBackupGuide = true
+                    setCloudStatus(result.savedFile.uploadState.statusMessage)
+                    if result.savedFile.uploadState == .uploaded {
+                        hasCompletedBackupExportTask = true
+                        hasSeenBackupGuide = true
+                    }
                     finalizeCloudBackupTask()
                 }
             } catch {
@@ -83,6 +81,11 @@ extension BackupView {
         cloudState.cloudBackups = files
         if files.isEmpty && force {
             setCloudStatus(String(localized: "iCloud 中还没有备份。"))
+        } else if let latest = files.first {
+            setCloudStatus(latest.uploadState.statusMessage)
+            if latest.uploadState == .uploaded {
+                hasCompletedBackupExportTask = true
+            }
         } else if !files.isEmpty && cloudState.cloudStatusMessage.contains(String(localized: "没有备份")) {
             clearCloudStatus()
         }

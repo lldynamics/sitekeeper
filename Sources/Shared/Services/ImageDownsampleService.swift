@@ -62,6 +62,48 @@ enum ImageDownsampleService {
         return UIImage(cgImage: image)
     }
 
+    static func downsampledImage(at url: URL, maxPixelSize: CGFloat) -> UIImage? {
+        guard maxPixelSize > 0 else { return nil }
+        let sourceOptions: CFDictionary = [kCGImageSourceShouldCache: false] as CFDictionary
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, sourceOptions) else {
+            return nil
+        }
+        guard let image = downsampledCGImage(
+            source: source,
+            maxPixelSize: maxPixelSize,
+            shouldCacheImmediately: true
+        ) else {
+            return nil
+        }
+        return UIImage(cgImage: image)
+    }
+
+    static func downsampledImageAsync(
+        at url: URL,
+        maxPixelSize: CGFloat,
+        source: String
+    ) async -> UIImage? {
+        guard !Task.isCancelled else { return nil }
+        do {
+            return try await FileIOTaskRunner.runWithRelay(
+                priority: .utility,
+                logContext: .init(
+                    event: "image.downsample",
+                    source: source,
+                    category: .fileStorage,
+                    details: ["file": url.lastPathComponent]
+                )
+            ) { relay in
+                guard !relay.isCancelled(), !Task.isCancelled else { return nil }
+                let image = downsampledImage(at: url, maxPixelSize: maxPixelSize)
+                guard !relay.isCancelled(), !Task.isCancelled else { return nil }
+                return image
+            }
+        } catch {
+            return nil
+        }
+    }
+
     private static func downsampledCGImage(
         _ data: Data,
         maxPixelSize: CGFloat,
@@ -71,6 +113,19 @@ enum ImageDownsampleService {
         guard let source = CGImageSourceCreateWithData(data as CFData, sourceOptions) else {
             return nil
         }
+        return downsampledCGImage(
+            source: source,
+            maxPixelSize: maxPixelSize,
+            shouldCacheImmediately: shouldCacheImmediately
+        )
+    }
+
+    private static func downsampledCGImage(
+        source: CGImageSource,
+        maxPixelSize: CGFloat,
+        shouldCacheImmediately: Bool
+    ) -> CGImage? {
+        guard maxPixelSize > 0 else { return nil }
         let thumbnailOptions: CFDictionary = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
             kCGImageSourceCreateThumbnailWithTransform: true,

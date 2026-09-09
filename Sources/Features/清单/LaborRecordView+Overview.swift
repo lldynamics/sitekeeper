@@ -1,13 +1,17 @@
 import SwiftUI
 
 extension LaborRecordView {
-    var filtered: [LaborRecord] {
+    var baseFiltered: [LaborRecord] {
         var records = store.laborRecords
         if let sf = settlementFilter {
             records = records.filter { $0.isSettled == sf }
         }
         records = records.filter { projectFilter == nil || $0.projectId == projectFilter }
         return SearchMatcher.filter(records, keyword: searchText)
+    }
+
+    var filtered: [LaborRecord] {
+        baseFiltered.filter { unitFilter.matches($0) }
     }
 
     var savedTeams: [String] {
@@ -31,7 +35,7 @@ extension LaborRecordView {
     }
 
     var unconfirmedUnitCount: Int {
-        filtered.filter { $0.workloadUnit == .legacyUnspecified }.count
+        baseFiltered.filter { $0.workloadUnit == .legacyUnspecified }.count
     }
 
     var totalCost: Double {
@@ -63,6 +67,28 @@ extension LaborRecordView {
                     selection: settlementChipBinding,
                     title: { $0.title }
                 )
+                FilterChipBar(
+                    options: LaborUnitFilterChip.allCases,
+                    selection: $unitFilter,
+                    title: { $0.title }
+                )
+                .accessibilityIdentifier("labor-unit-filter")
+            }
+
+            if unitFilter == .needsConfirmation, !filtered.isEmpty {
+                Section(String(localized: "批量确认计量单位")) {
+                    Text(String(localized: "仅更新当前筛选出的待确认记录；数值与金额保持不变。请选择这些历史记录原本使用的单位。"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button(String(localized: "批量确认为工时")) {
+                        requestBulkUnitConfirmation(.hour)
+                    }
+                    .accessibilityIdentifier("labor-bulk-confirm-hour")
+                    Button(String(localized: "批量确认为工天")) {
+                        requestBulkUnitConfirmation(.workday)
+                    }
+                    .accessibilityIdentifier("labor-bulk-confirm-workday")
+                }
             }
 
             if filtered.isEmpty {
@@ -121,14 +147,23 @@ extension LaborRecordView {
                             }
                         }
                         if unconfirmedUnitCount > 0 {
-                            HStack {
-                                Text(String(localized: "待确认单位"))
-                                    .foregroundStyle(.appWarning)
-                                Spacer()
-                                Text(String(format: String(localized: "%d 条"), unconfirmedUnitCount))
-                                    .foregroundStyle(.appWarning)
-                                    .monospacedDigit()
+                            Button {
+                                unitFilter = .needsConfirmation
+                            } label: {
+                                HStack {
+                                    Text(String(localized: "待确认单位"))
+                                        .foregroundStyle(.appWarning)
+                                    Spacer()
+                                    Text(String(format: String(localized: "%d 条"), unconfirmedUnitCount))
+                                        .foregroundStyle(.appWarning)
+                                        .monospacedDigit()
+                                    Image(systemName: "chevron.right")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(.secondary)
+                                }
                             }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("labor-show-unconfirmed")
                         }
                         HStack {
                             Text(String(localized: "合计人工费"))
@@ -284,6 +319,17 @@ extension LaborRecordView {
                 deleteLaborRecordsWithUndo(ids: [target.id])
             }
         }
+        .alert(String(localized: "确认批量设置人工单位？"), isPresented: $showBulkUnitConfirmation) {
+            Button(String(localized: "取消"), role: .cancel) {
+                clearPendingBulkUnitConfirmation()
+            }
+            Button(String(localized: "确认设置")) {
+                applyBulkUnitConfirmation()
+            }
+            .accessibilityIdentifier("labor-bulk-confirm-apply")
+        } message: {
+            Text(bulkUnitConfirmationMessage)
+        }
         .onAppear(perform: openFocusedLaborIfNeeded)
         .onDisappear {
             flushPendingLaborDeletionIfNeeded()
@@ -324,6 +370,54 @@ extension LaborRecordView {
         Task { @MainActor in
             editingRecord = record
         }
+    }
+
+    func requestBulkUnitConfirmation(_ unit: LaborWorkloadUnit) {
+        guard unit != .legacyUnspecified else { return }
+        let visibleIDs = Set(filtered.map(\.id))
+        let recordIDs = LaborUnitConfirmation.eligibleRecordIDs(in: filtered, limitedTo: visibleIDs)
+        guard !recordIDs.isEmpty else { return }
+        pendingBulkUnit = unit
+        pendingBulkRecordIDs = recordIDs
+        showBulkUnitConfirmation = true
+    }
+
+    var bulkUnitConfirmationMessage: String {
+        guard let pendingBulkUnit else { return "" }
+        return String(
+            format: String(localized: "将当前筛选出的 %lld 条记录确认为“%@”？数值和金额不会换算。"),
+            Int64(pendingBulkRecordIDs.count),
+            pendingBulkUnit.displayName
+        )
+    }
+
+    func applyBulkUnitConfirmation() {
+        guard let pendingBulkUnit else { return }
+        let ids = LaborUnitConfirmation.eligibleRecordIDs(
+            in: store.laborRecords,
+            limitedTo: pendingBulkRecordIDs
+        )
+        guard !ids.isEmpty else {
+            clearPendingBulkUnitConfirmation()
+            return
+        }
+        store.replaceLaborRecords(LaborUnitConfirmation.applying(
+            pendingBulkUnit,
+            to: store.laborRecords,
+            recordIDs: ids
+        ))
+        store.scheduleSave()
+        operationNotice = .info(String(
+            format: String(localized: "已确认 %lld 条人工记录的计量单位"),
+            Int64(ids.count)
+        ))
+        clearPendingBulkUnitConfirmation()
+        unitFilter = .all
+    }
+
+    func clearPendingBulkUnitConfirmation() {
+        pendingBulkUnit = nil
+        pendingBulkRecordIDs = []
     }
 
     private static func isValidExportedFile(at url: URL) -> Bool {

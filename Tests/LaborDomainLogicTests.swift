@@ -68,6 +68,79 @@ struct LaborDomainLogicTests {
         #expect(quote.unitPrice == "300")
     }
 
+    @Test func bulkUnitConfirmationChangesOnlySelectedLegacyRecordsWithoutConvertingValues() {
+        let legacyHour = LaborRecord(
+            date: "2026-09-01",
+            workers: "2",
+            hours: "8",
+            workloadUnit: .legacyUnspecified,
+            unitRate: "50",
+            note: ""
+        )
+        let legacyUnselected = LaborRecord(
+            date: "2026-09-02",
+            workers: "3",
+            hours: "1",
+            workloadUnit: .legacyUnspecified,
+            unitRate: "300",
+            note: ""
+        )
+        let known = LaborRecord(
+            date: "2026-09-03",
+            workers: "1",
+            hours: "1",
+            workloadUnit: .workday,
+            unitRate: "200",
+            note: ""
+        )
+
+        let updated = LaborUnitConfirmation.applying(
+            .hour,
+            to: [legacyHour, legacyUnselected, known],
+            recordIDs: Set([legacyHour.id, known.id])
+        )
+
+        #expect(updated[0].workloadUnit == .hour)
+        #expect(updated[0].workers == "2")
+        #expect(updated[0].hours == "8")
+        #expect(updated[0].unitRate == "50")
+        #expect(updated[1].workloadUnit == .legacyUnspecified)
+        #expect(updated[2].workloadUnit == .workday)
+    }
+
+    @Test func bulkUnitEligibilityKeepsTheFrozenSelectionAndDropsRowsAlreadyConfirmed() {
+        var originallySelected = LaborRecord(
+            date: "2026-09-01",
+            workers: "1",
+            hours: "8",
+            workloadUnit: .legacyUnspecified,
+            note: ""
+        )
+        let selectedStillLegacy = LaborRecord(
+            date: "2026-09-02",
+            workers: "1",
+            hours: "1",
+            workloadUnit: .legacyUnspecified,
+            note: ""
+        )
+        let addedAfterPreview = LaborRecord(
+            date: "2026-09-03",
+            workers: "1",
+            hours: "1",
+            workloadUnit: .legacyUnspecified,
+            note: ""
+        )
+        let frozenIDs = Set([originallySelected.id, selectedStillLegacy.id])
+        originallySelected.workloadUnit = .hour
+
+        let eligibleIDs = LaborUnitConfirmation.eligibleRecordIDs(
+            in: [originallySelected, selectedStillLegacy, addedAfterPreview],
+            limitedTo: frozenIDs
+        )
+
+        #expect(eligibleIDs == Set([selectedStillLegacy.id]))
+    }
+
     @Test func projectReportLaborSummaryKeepsUnitsSeparate() {
         let records = [
             LaborRecord(date: "2026-09-09", workers: "2", hours: "8", workloadUnit: .hour, note: ""),

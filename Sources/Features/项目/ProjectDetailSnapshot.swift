@@ -107,11 +107,10 @@ struct ProjectDetailSnapshot {
     }
 
     var missingReceiptCount: Int {
-        relatedFinancialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
+        ProjectFinancialMetrics.missingReceiptRecords(relatedFinancialRecords) { record in
             let linkedByRecord = !record.linkedDocumentIds.isEmpty
             let linkedByDocument = relatedDocuments.contains { $0.linkedFinancialRecordId == record.id }
-            return !(linkedByRecord || linkedByDocument)
+            return linkedByRecord || linkedByDocument
         }.count
     }
 

@@ -297,7 +297,7 @@ final class ProjectStore {
             if record.countsInBusinessMetrics, record.isCollectionIncome {
                 summary.collectedIncomeAmount += record.amountValue.doubleValue
             }
-            if record.requiresAttachment {
+            if record.countsInBusinessMetrics, record.requiresAttachment {
                 let linkedByList = !record.linkedDocumentIds.isEmpty
                 let linkedByDocument = summary.linkedFinancialRecordIDs.contains(record.id)
                 if !(linkedByList || linkedByDocument) {

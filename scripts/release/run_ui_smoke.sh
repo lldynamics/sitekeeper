@@ -177,6 +177,7 @@ xcodegen generate
 TESTS=(
   "sitekeeperUITests/SitekeeperUITests/testColdLaunchShowsPrimaryTabs"
   "sitekeeperUITests/SitekeeperUITests/testBackupScreenShowsImportAndExportActions"
+  "sitekeeperUITests/SitekeeperUITests/testLocalBackupRoundTripRestoresClearedProjectAfterRestart"
   "sitekeeperUITests/SitekeeperUITests/testSwitchingFromSettingsToToolboxRefreshesDetail"
   "sitekeeperUITests/SitekeeperUITests/testCreatedProjectSurvivesRestart"
   "sitekeeperUITests/SitekeeperUITests/testCreatedDailyLogSurvivesRestart"

@@ -26,6 +26,10 @@ struct LaborRecordView: View {
     @State var newProjectId: UUID?
     @State var projectFilter: UUID?
     @State var settlementFilter: Bool? = nil
+    @State var unitFilter: LaborUnitFilterChip = .all
+    @State var pendingBulkUnit: LaborWorkloadUnit?
+    @State var pendingBulkRecordIDs = Set<UUID>()
+    @State var showBulkUnitConfirmation = false
     @State var operationNotice: OperationToastNotice?
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var exportPayload: ExportPayload?

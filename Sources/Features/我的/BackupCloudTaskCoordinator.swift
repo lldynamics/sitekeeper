@@ -10,7 +10,7 @@ enum BackupCloudTaskCoordinator {
                 category: .cloudBackup
             )
         ) {
-            try CloudBackupService.listBackups()
+            try CloudBackupService.refreshUploadStatusAndPrune(keepMostRecent: CloudBackupSettingsStore.loadRetentionCount())
         }
     }
 

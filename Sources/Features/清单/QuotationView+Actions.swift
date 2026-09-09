@@ -39,18 +39,7 @@ enum LaborQuoteGenerator {
 
 extension QuotationView {
     func appendQuote(from material: MaterialItem) {
-        store.appendQuoteItem(
-            QuoteItem(
-                name: material.name,
-                unitPrice: "",
-                quantity: material.quantity,
-                unit: material.unit,
-                notes: "",
-                taxRate: "0",
-                discountRate: "0",
-                projectId: material.projectId
-            )
-        )
+        store.appendQuoteItem(MaterialQuoteGenerator.makeQuoteItem(from: material, mode: .leaveUnpriced))
         store.scheduleSave()
     }
 
@@ -144,6 +133,8 @@ extension QuotationView {
     func generateQuoteItems() {
         let materials = store.materialItems.filter { $0.projectId == generateProjectId }
         let labor = store.laborRecords.filter { $0.projectId == generateProjectId }
+        guard materials.isEmpty || materialQuotePriceMode != nil else { return }
+        let resolvedMaterialPriceMode = materialQuotePriceMode ?? .leaveUnpriced
         let unconfirmedCount = labor.filter { $0.workloadUnit == .legacyUnspecified }.count
         guard unconfirmedCount == 0 else {
             operationNotice = .info(String(
@@ -153,17 +144,12 @@ extension QuotationView {
             return
         }
         for material in materials {
-            store.appendQuoteItem(QuoteItem(
-                name: material.name,
-                unitPrice: NumericInputSupport.normalizedStorageText(defaultMaterialPrice, kind: .amount),
-                quantity: material.quantity,
-                unit: material.unit,
-                notes: String(localized: "材料清单导入"),
-                taxRate: NumericInputSupport.normalizedStorageText(generateTax, kind: .taxRate),
-                discountRate: NumericInputSupport.normalizedStorageText(generateDiscount, kind: .discountRate),
-                versionName: "V1",
-                status: .draft,
-                projectId: material.projectId
+            store.appendQuoteItem(MaterialQuoteGenerator.makeQuoteItem(
+                from: material,
+                mode: resolvedMaterialPriceMode,
+                overridePrice: defaultMaterialPrice,
+                taxRate: generateTax,
+                discountRate: generateDiscount
             ))
         }
         for record in labor {
@@ -215,13 +201,63 @@ extension QuotationView {
         activeSheet = .export
     }
 
-    func applyGrandTotalToProjectContract() {
-        guard let pid = projectFilter, let projectIndex = store.projects.firstIndex(where: { $0.id == pid }) else { return }
+    func openContractWriteSheet() {
+        guard let projectId = projectFilter,
+              let firstVersion = QuotationContractWritePlanner.confirmedVersions(
+                  projectId: projectId,
+                  quotes: store.quoteItems
+              ).first else {
+            operationNotice = .info(String(localized: "当前工程没有可写入合同的已确认报价。"))
+            return
+        }
+        contractWriteVersion = firstVersion
+        refreshContractWritePlan(versionName: firstVersion)
+        activeSheet = .contractWrite
+    }
+
+    func refreshContractWritePlan(versionName: String) {
+        guard let projectId = projectFilter,
+              let project = store.projects.first(where: { $0.id == projectId }) else {
+            contractWritePlan = nil
+            return
+        }
+        contractWritePlan = QuotationContractWritePlanner.makePlan(
+            project: project,
+            versionName: versionName,
+            quotes: store.quoteItems
+        )
+        contractWriteRefreshMessage = ""
+    }
+
+    @discardableResult
+    func applyContractWritePlan(versionName: String) -> Bool {
+        guard let projectId = projectFilter,
+              let projectIndex = store.projects.firstIndex(where: { $0.id == projectId }) else { return false }
+        guard let currentPlan = QuotationContractWritePlanner.makePlan(
+            project: store.projects[projectIndex],
+            versionName: versionName,
+            quotes: store.quoteItems
+        ) else {
+            contractWritePlan = nil
+            contractWriteRefreshMessage = String(
+                localized: "所选报价版本已变化或不再是已确认状态，请重新选择。"
+            )
+            return false
+        }
+        guard let previewPlan = contractWritePlan, currentPlan == previewPlan else {
+            contractWritePlan = currentPlan
+            contractWriteRefreshMessage = String(localized: "报价数据已变化，预览已刷新。请核对后再次确认。")
+            return false
+        }
+        guard currentPlan.canApply else { return false }
         var project = store.projects[projectIndex]
-        project.contractAmount = String(format: "%.2f", grandTotalValue.doubleValue)
-        guard store.updateProject(project) else { return }
+        project.contractAmount = Formatters.money(currentPlan.newAmount.doubleValue)
+        guard store.updateProject(project) else { return false }
         store.scheduleSave()
         operationNotice = .info(String(localized: "已同步到项目合同金额"))
+        contractWritePlan = nil
+        contractWriteRefreshMessage = ""
+        return true
     }
 
     func deleteQuotesWithUndo(ids: [UUID]) {

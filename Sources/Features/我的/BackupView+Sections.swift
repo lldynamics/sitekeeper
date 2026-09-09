@@ -8,12 +8,15 @@ extension BackupView {
             shouldShowFirstBackupGuide: shouldShowFirstBackupGuide,
             includeLocalSection: false,
             showsUITestPreviewShortcut: false,
+            showsUITestRoundTrip: false,
+            isUITestRoundTripReady: false,
             isBusy: isBusy,
             onExport: exportBackupZIP,
             onDismissGuide: { hasSeenBackupGuide = true },
             onShowImporter: { showImporter = true },
             onInjectUITestPreview: injectUITestPreview,
-            onTriggerOverwriteConfirm: { showUITestOverwriteImportConfirm = true }
+            onTriggerOverwriteConfirm: { showUITestOverwriteImportConfirm = true },
+            onRestoreUITestRoundTrip: {}
         )
     }
 
@@ -22,12 +25,15 @@ extension BackupView {
             shouldShowFirstBackupGuide: false,
             includeLocalSection: true,
             showsUITestPreviewShortcut: showsUITestPreviewShortcut,
+            showsUITestRoundTrip: isUITestRoundTripEnabled,
+            isUITestRoundTripReady: isUITestRoundTripBackupReady,
             isBusy: isBusy,
             onExport: exportBackupZIP,
             onDismissGuide: { hasSeenBackupGuide = true },
             onShowImporter: { showImporter = true },
             onInjectUITestPreview: injectUITestPreview,
-            onTriggerOverwriteConfirm: { showUITestOverwriteImportConfirm = true }
+            onTriggerOverwriteConfirm: { showUITestOverwriteImportConfirm = true },
+            onRestoreUITestRoundTrip: startUITestRoundTripImport
         )
     }
 
@@ -101,7 +107,11 @@ extension BackupView {
             }
         }
         if !statusMessage.isEmpty {
-            Section { Text(statusMessage).font(.caption) }
+            Section {
+                Text(statusMessage)
+                    .font(.caption)
+                    .accessibilityIdentifier("backup-status-message")
+            }
         }
     }
 

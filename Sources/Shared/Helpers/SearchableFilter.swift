@@ -12,18 +12,15 @@ enum SearchMatcher {
         extraFields: ((Item) -> [String])? = nil
     ) -> [Item] where Item: Searchable {
         let keyword = rawKeyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        var scopedItems = items
-        if let sort {
-            scopedItems.sort(by: sort)
-        }
-        guard !keyword.isEmpty else { return scopedItems }
-        return scopedItems.filter { item in
+        var scopedItems = keyword.isEmpty ? items : items.filter { item in
             if item.searchableFields.contains(where: { $0.localizedStandardContains(keyword) }) {
                 return true
             }
             guard let extraFields else { return false }
             return extraFields(item).contains { $0.localizedStandardContains(keyword) }
         }
+        if let sort { scopedItems.sort(by: sort) }
+        return scopedItems
     }
 }
 
