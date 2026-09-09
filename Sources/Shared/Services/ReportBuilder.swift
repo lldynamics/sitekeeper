@@ -1,6 +1,35 @@
 import Foundation
 import UIKit
 
+struct LaborWorkloadSummary: Equatable {
+    let hours: QuantityValue
+    let workdays: QuantityValue
+    let unconfirmedValue: QuantityValue
+    let unconfirmedCount: Int
+
+    var displayText: String {
+        var parts: [String] = []
+        if !hours.isZero {
+            parts.append("\(String(localized: "总工时")) \(formatted(hours))")
+        }
+        if !workdays.isZero {
+            parts.append("\(String(localized: "总工天")) \(formatted(workdays))")
+        }
+        if unconfirmedCount > 0 {
+            parts.append(String(
+                format: String(localized: "待确认 %lld 条（原值合计 %@）"),
+                Int64(unconfirmedCount),
+                formatted(unconfirmedValue)
+            ))
+        }
+        return parts.isEmpty ? "-" : parts.joined(separator: " · ")
+    }
+
+    private func formatted(_ value: QuantityValue) -> String {
+        value.doubleValue.formatted(.number.precision(.fractionLength(0...2)))
+    }
+}
+
 enum ReportBuilder {
 
     // MARK: - 本地化助手
@@ -66,16 +95,35 @@ enum ReportBuilder {
     }
 
     static func laborHours(_ record: LaborRecord) -> Double {
-        let workers = record.workersValue
-        let hours = record.hoursValue
-        if workers.decimal > 0 {
-            return (workers * hours).doubleValue
+        record.totalWorkloadValue.doubleValue
+    }
+
+    static func laborWorkloadSummary(_ records: [LaborRecord]) -> LaborWorkloadSummary {
+        var hours = QuantityValue.zero
+        var workdays = QuantityValue.zero
+        var unconfirmedValue = QuantityValue.zero
+        var unconfirmedCount = 0
+        for record in records {
+            switch record.workloadUnit {
+            case .legacyUnspecified:
+                unconfirmedValue = unconfirmedValue + record.totalWorkloadValue
+                unconfirmedCount += 1
+            case .hour:
+                hours = hours + record.totalWorkloadValue
+            case .workday:
+                workdays = workdays + record.totalWorkloadValue
+            }
         }
-        return hours.doubleValue
+        return LaborWorkloadSummary(
+            hours: hours,
+            workdays: workdays,
+            unconfirmedValue: unconfirmedValue,
+            unconfirmedCount: unconfirmedCount
+        )
     }
 
     static func laborLineTotal(_ record: LaborRecord) -> Double {
-        let hoursValue = MoneyValue(NSDecimalNumber(value: laborHours(record)).decimalValue)
+        let hoursValue = MoneyValue(record.totalWorkloadValue.decimal)
         let rate = record.unitRateValue.decimal
         return (hoursValue * rate).doubleValue
     }

@@ -27,57 +27,67 @@ enum BackupImportCoordinator {
     @MainActor
     static func applyImportMetadata(snapshot: BackupSnapshot, mode: ImportMode, store: DataStore) {
         switch mode {
-        case .merge:
-            store.mergeMaterialItemsByID(snapshot.materialItems)
-            store.mergeQuoteItemsByID(snapshot.quoteItems)
-            store.mergeLaborRecordsByID(snapshot.laborRecords)
-            store.mergeProjectsByID(snapshot.projects)
-            store.mergeDailyLogsByID(snapshot.dailyLogs)
-            store.mergeHistoryRecordsByID(snapshot.historyRecords)
-            store.mergeProgressTasksByID(snapshot.progressTasks)
-            store.mergeSiteTodosByID(snapshot.siteTodos)
-            store.mergeProjectDrawingsByID(snapshot.projectDrawings)
-            store.mergeProjectContactsByID(snapshot.projectContacts)
-            store.mergeProjectFinancialRecordsByID(snapshot.projectFinancialRecords)
-            store.mergeProjectDocumentsByID(snapshot.projectDocuments)
-            store.mergeQuickNotesByID(snapshot.quickNotes)
-            store.mergeProjectWarehouseMovementsByID(snapshot.projectWarehouseMovements)
-            store.mergeTemplatesByID(snapshot.templates)
-            store.mergeMaterialPriceEntriesByID(snapshot.materialPriceEntries)
-            store.mergeSupplierProfilesByID(snapshot.supplierProfiles)
-            store.mergeConstructionMethodsByID(snapshot.constructionMethods)
-            store.favoriteMaterialKeys = mergeUniqueStrings(existing: store.favoriteMaterialKeys, incoming: snapshot.favoriteMaterialKeys)
-            store.recentMaterialKeys = mergeUniqueStrings(existing: store.recentMaterialKeys, incoming: snapshot.recentMaterialKeys)
-            store.mergeUserMaterialsByID(snapshot.userMaterials)
-            store.mergeDeletedUserMaterialsByID(snapshot.deletedUserMaterials)
-            store.hiddenPresetKeys.formUnion(snapshot.hiddenPresetKeys)
-        case .overwrite:
-            store.replaceMaterialItems(snapshot.materialItems)
-            store.replaceQuoteItems(snapshot.quoteItems)
-            store.replaceLaborRecords(snapshot.laborRecords)
-            store.replaceProjects(snapshot.projects)
-            store.replaceDailyLogs(snapshot.dailyLogs)
-            store.replaceHistoryRecords(snapshot.historyRecords)
-            store.replaceProgressTasks(snapshot.progressTasks)
-            store.replaceSiteTodos(snapshot.siteTodos)
-            store.replaceProjectDrawings(snapshot.projectDrawings)
-            store.replaceProjectContacts(snapshot.projectContacts)
-            store.replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
-            store.replaceProjectDocuments(snapshot.projectDocuments)
-            store.replaceQuickNotes(snapshot.quickNotes)
-            store.replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
-            store.replaceTemplates(snapshot.templates)
-            store.replaceMaterialPriceEntries(snapshot.materialPriceEntries)
-            store.replaceSupplierProfiles(snapshot.supplierProfiles)
-            store.replaceConstructionMethods(snapshot.constructionMethods)
-            store.favoriteMaterialKeys = snapshot.favoriteMaterialKeys
-            store.recentMaterialKeys = snapshot.recentMaterialKeys
-            store.replaceUserMaterials(snapshot.userMaterials)
-            store.replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
-            store.hiddenPresetKeys = snapshot.hiddenPresetKeys
+        case .merge: mergeMetadata(snapshot, into: store)
+        case .overwrite: overwriteMetadata(snapshot, in: store)
         }
         store.enforceCalculationHistoryRetention()
         sanitizeMaterialProjectReferences(in: store)
+    }
+
+    @MainActor
+    private static func mergeMetadata(_ snapshot: BackupSnapshot, into store: DataStore) {
+        store.mergeMaterialItemsByID(snapshot.materialItems)
+        store.mergeQuoteItemsByID(snapshot.quoteItems)
+        store.mergeLaborRecordsByID(snapshot.laborRecords)
+        store.mergeProjectsByID(snapshot.projects)
+        store.mergeDailyLogsByID(snapshot.dailyLogs)
+        store.mergeHistoryRecordsByID(snapshot.historyRecords)
+        store.mergeProgressTasksByID(snapshot.progressTasks)
+        store.mergeSiteTodosByID(snapshot.siteTodos)
+        store.mergeProjectDrawingsByID(snapshot.projectDrawings)
+        store.mergeProjectContactsByID(snapshot.projectContacts)
+        store.mergeProjectFinancialRecordsByID(snapshot.projectFinancialRecords)
+        store.mergeProjectDocumentsByID(snapshot.projectDocuments)
+        store.mergeQuickNotesByID(snapshot.quickNotes)
+        store.mergeProjectWarehouseMovementsByID(snapshot.projectWarehouseMovements)
+        store.mergeTemplatesByID(snapshot.templates)
+        store.mergeMaterialPriceEntriesByID(snapshot.materialPriceEntries)
+        store.mergeMaterialSheetDraftsByID(snapshot.materialSheetDrafts)
+        store.mergeSupplierProfilesByID(snapshot.supplierProfiles)
+        store.mergeConstructionMethodsByID(snapshot.constructionMethods)
+        store.favoriteMaterialKeys = mergeUniqueStrings(existing: store.favoriteMaterialKeys, incoming: snapshot.favoriteMaterialKeys)
+        store.recentMaterialKeys = mergeUniqueStrings(existing: store.recentMaterialKeys, incoming: snapshot.recentMaterialKeys)
+        store.mergeUserMaterialsByID(snapshot.userMaterials)
+        store.mergeDeletedUserMaterialsByID(snapshot.deletedUserMaterials)
+        store.hiddenPresetKeys.formUnion(snapshot.hiddenPresetKeys)
+    }
+
+    @MainActor
+    private static func overwriteMetadata(_ snapshot: BackupSnapshot, in store: DataStore) {
+        store.replaceMaterialItems(snapshot.materialItems)
+        store.replaceQuoteItems(snapshot.quoteItems)
+        store.replaceLaborRecords(snapshot.laborRecords)
+        store.replaceProjects(snapshot.projects)
+        store.replaceDailyLogs(snapshot.dailyLogs)
+        store.replaceHistoryRecords(snapshot.historyRecords)
+        store.replaceProgressTasks(snapshot.progressTasks)
+        store.replaceSiteTodos(snapshot.siteTodos)
+        store.replaceProjectDrawings(snapshot.projectDrawings)
+        store.replaceProjectContacts(snapshot.projectContacts)
+        store.replaceProjectFinancialRecords(snapshot.projectFinancialRecords)
+        store.replaceProjectDocuments(snapshot.projectDocuments)
+        store.replaceQuickNotes(snapshot.quickNotes)
+        store.replaceProjectWarehouseMovements(snapshot.projectWarehouseMovements)
+        store.replaceTemplates(snapshot.templates)
+        store.replaceMaterialPriceEntries(snapshot.materialPriceEntries)
+        store.replaceMaterialSheetDrafts(snapshot.materialSheetDrafts)
+        store.replaceSupplierProfiles(snapshot.supplierProfiles)
+        store.replaceConstructionMethods(snapshot.constructionMethods)
+        store.favoriteMaterialKeys = snapshot.favoriteMaterialKeys
+        store.recentMaterialKeys = snapshot.recentMaterialKeys
+        store.replaceUserMaterials(snapshot.userMaterials)
+        store.replaceDeletedUserMaterials(snapshot.deletedUserMaterials)
+        store.hiddenPresetKeys = snapshot.hiddenPresetKeys
     }
 
     @MainActor
@@ -90,6 +100,18 @@ enum BackupImportCoordinator {
         sourceFileName: String,
         onPersistingMetadata: @MainActor () -> Void = {}
     ) async throws -> BackupEmbeddedRestoreCounts {
+        await store.awaitInitialLoad()
+        guard !store.isApplyingBackup else {
+            throw DataStore.PersistenceBlockedError(message: nil)
+        }
+        store.isApplyingBackup = true
+        store.cancelScheduledSave()
+        store.persistTask?.cancel()
+        await store.persistTask?.value
+        defer {
+            store.isApplyingBackup = false
+            store.cancelScheduledSave()
+        }
         let snapshotToApply: BackupSnapshot
         let restorePolicy: BackupEmbeddedFileRestorePolicy
         switch importMode {
@@ -124,29 +146,40 @@ enum BackupImportCoordinator {
             }
             failedStage = "persist_metadata"
             onPersistingMetadata()
-            try await store.flushSaveOrThrow()
+            try await store.persistAppliedBackup()
             restoreTransaction.finalize()
             return restoredCounts
         } catch {
             restoreTransaction.rollback()
-            applyImportMetadata(snapshot: previousSnapshot, mode: .overwrite, store: store)
-            do {
-                try await store.flushSaveOrThrow()
-            } catch {
-                StorageIssueLog.recordEvent(
-                    "backup.import.rollback_persist_failed",
-                    category: .dataStore,
-                    details: [
-                        "file": sourceFileName,
-                        "stage": failedStage
-                    ],
-                    error: error
-                )
-            }
+            await rollbackMetadata(previousSnapshot, store: store, sourceFileName: sourceFileName, failedStage: failedStage)
             throw error
         }
     }
 
+    @MainActor
+    private static func rollbackMetadata(_ previousSnapshot: BackupSnapshot, store: DataStore, sourceFileName: String, failedStage: String) async {
+        applyImportMetadata(snapshot: previousSnapshot, mode: .overwrite, store: store)
+        do {
+            // A failed atomic import write leaves the original disk metadata intact.
+            // In particular, never overwrite an unreadable original during rollback.
+            if store.loadState == .ready {
+                try await store.persistAppliedBackup()
+            }
+        } catch {
+            StorageIssueLog.recordEvent(
+                "backup.import.rollback_persist_failed",
+                category: .dataStore,
+                details: [
+                    "file": sourceFileName,
+                    "stage": failedStage
+                ],
+                error: error
+            )
+        }
+    }
+}
+
+extension BackupImportCoordinator {
     static func overwrittenLocalFiles(previous: BackupSnapshot, imported: BackupSnapshot) -> BackupFileImpactSummary {
         let oldPhotoNames = photoFileNames(in: previous)
         let newPhotoNames = photoFileNames(in: imported)
@@ -268,7 +301,9 @@ enum BackupImportCoordinator {
             ).filter { !$0.isEmpty }
         )
     }
+}
 
+extension BackupImportCoordinator {
     private struct MergeImportPreparation {
         var snapshot: BackupSnapshot
         var restorePolicy: BackupEmbeddedFileRestorePolicy
@@ -324,27 +359,7 @@ enum BackupImportCoordinator {
         var documentResolver = MergeFileNameResolver(exists: ProjectDocumentStorage.exists(fileName:))
         var attachmentResolver = MergeFileNameResolver(exists: QuickNoteAttachmentStorage.exists(fileName:))
 
-        let existingDailyLogIDs = Set(previousSnapshot.dailyLogs.map(\.id))
-        for index in snapshot.dailyLogs.indices where !existingDailyLogIDs.contains(snapshot.dailyLogs[index].id) {
-            if let fileName = snapshot.dailyLogs[index].photoFileName {
-                snapshot.dailyLogs[index].photoFileName = photoResolver.resolve(fileName)
-            }
-            for photoIndex in snapshot.dailyLogs[index].photos.indices {
-                snapshot.dailyLogs[index].photos[photoIndex].fileName = photoResolver.resolve(
-                    snapshot.dailyLogs[index].photos[photoIndex].fileName
-                )
-            }
-        }
-
-        let existingTodoIDs = Set(previousSnapshot.siteTodos.map(\.id))
-        for index in snapshot.siteTodos.indices where !existingTodoIDs.contains(snapshot.siteTodos[index].id) {
-            if let fileName = snapshot.siteTodos[index].rectificationBeforePhotoFileName {
-                snapshot.siteTodos[index].rectificationBeforePhotoFileName = photoResolver.resolve(fileName)
-            }
-            if let fileName = snapshot.siteTodos[index].rectificationAfterPhotoFileName {
-                snapshot.siteTodos[index].rectificationAfterPhotoFileName = photoResolver.resolve(fileName)
-            }
-        }
+        resolvePhotoReferences(in: &snapshot, previous: previousSnapshot, resolver: &photoResolver)
 
         let existingDrawingIDs = Set(previousSnapshot.projectDrawings.map(\.id))
         for index in snapshot.projectDrawings.indices where !existingDrawingIDs.contains(snapshot.projectDrawings[index].id) {
@@ -388,5 +403,29 @@ enum BackupImportCoordinator {
                 quickNoteAttachmentFileDestinations: attachmentResolver.destinations
             )
         )
+    }
+
+    private static func resolvePhotoReferences(in snapshot: inout BackupSnapshot, previous previousSnapshot: BackupSnapshot, resolver: inout MergeFileNameResolver) {
+        let existingDailyLogIDs = Set(previousSnapshot.dailyLogs.map(\.id))
+        for index in snapshot.dailyLogs.indices where !existingDailyLogIDs.contains(snapshot.dailyLogs[index].id) {
+            if let fileName = snapshot.dailyLogs[index].photoFileName {
+                snapshot.dailyLogs[index].photoFileName = resolver.resolve(fileName)
+            }
+            for photoIndex in snapshot.dailyLogs[index].photos.indices {
+                snapshot.dailyLogs[index].photos[photoIndex].fileName = resolver.resolve(
+                    snapshot.dailyLogs[index].photos[photoIndex].fileName
+                )
+            }
+        }
+
+        let existingTodoIDs = Set(previousSnapshot.siteTodos.map(\.id))
+        for index in snapshot.siteTodos.indices where !existingTodoIDs.contains(snapshot.siteTodos[index].id) {
+            if let fileName = snapshot.siteTodos[index].rectificationBeforePhotoFileName {
+                snapshot.siteTodos[index].rectificationBeforePhotoFileName = resolver.resolve(fileName)
+            }
+            if let fileName = snapshot.siteTodos[index].rectificationAfterPhotoFileName {
+                snapshot.siteTodos[index].rectificationAfterPhotoFileName = resolver.resolve(fileName)
+            }
+        }
     }
 }

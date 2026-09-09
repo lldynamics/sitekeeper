@@ -7,23 +7,28 @@ extension LaborRecordView {
     var workTypePickerSection: some View {
         if !savedWorkTypes.isEmpty {
             LabeledContent(String(localized: "工种")) {
-                Menu {
-                    ForEach(savedWorkTypes, id: \.self) { type in
-                        Button(type) {
-                            selectWorkType(type)
+                HStack(spacing: 8) {
+                    TextField(String(localized: "工种（例如电工）"), text: $newWorkType)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("labor-work-type-input")
+                        .onChange(of: newWorkType) { _, newVal in
+                            autoFillRate(for: newVal)
                         }
+                    Menu {
+                        ForEach(savedWorkTypes, id: \.self) { type in
+                            Button(type) {
+                                selectWorkType(type)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
                     }
-                    Divider()
-                    Button(String(localized: "自定义")) {
-                        newWorkType = ""
-                    }
-                } label: {
-                    Text(newWorkType.isEmpty ? String(localized: "选择工种") : newWorkType)
-                        .foregroundStyle(newWorkType.isEmpty ? .secondary : .primary)
+                    .accessibilityLabel(String(localized: "选择工种"))
                 }
             }
         } else {
             TextField(String(localized: "工种（例如电工）"), text: $newWorkType)
+                .accessibilityIdentifier("labor-work-type-input")
                 .onChange(of: newWorkType) { _, newVal in
                     autoFillRate(for: newVal)
                 }
@@ -36,19 +41,23 @@ extension LaborRecordView {
     var teamPickerSection: some View {
         if !savedTeams.isEmpty {
             LabeledContent(String(localized: "班组")) {
-                Menu {
-                    ForEach(savedTeams, id: \.self) { team in
-                        Button(team) { newTeamName = team }
+                HStack(spacing: 8) {
+                    TextField(String(localized: "班组（例如A组）"), text: $newTeamName)
+                        .multilineTextAlignment(.trailing)
+                        .accessibilityIdentifier("labor-team-input")
+                    Menu {
+                        ForEach(savedTeams, id: \.self) { team in
+                            Button(team) { newTeamName = team }
+                        }
+                    } label: {
+                        Image(systemName: "chevron.up.chevron.down")
                     }
-                    Divider()
-                    Button(String(localized: "自定义")) { newTeamName = "" }
-                } label: {
-                    Text(newTeamName.isEmpty ? String(localized: "选择班组") : newTeamName)
-                        .foregroundStyle(newTeamName.isEmpty ? .secondary : .primary)
+                    .accessibilityLabel(String(localized: "选择班组"))
                 }
             }
         } else {
             TextField(String(localized: "班组（例如A组）"), text: $newTeamName)
+                .accessibilityIdentifier("labor-team-input")
         }
     }
 
@@ -118,8 +127,8 @@ extension LaborRecordView {
     func laborRow(_ r: LaborRecord) -> some View {
         let projectText = r.projectId.flatMap { id in store.projects.first(where: { $0.id == id })?.name } ?? String(localized: "未归属")
         let workersText = r.workers.isEmpty ? "" : String(format: String(localized: "%@人"), r.workers)
-        let daysText = r.days.isEmpty ? "" : String(format: String(localized: "%@天"), r.days)
-        let meta = [r.workType, r.teamName, workersText, daysText, r.date].filter { !$0.isEmpty }.joined(separator: " · ")
+        let workloadText = r.hours.isEmpty ? "" : "\(r.hours)\(r.workloadUnit.displayName)"
+        let meta = [r.workType, r.teamName, workersText, workloadText, r.date].filter { !$0.isEmpty }.joined(separator: " · ")
         return HStack(alignment: .top, spacing: AppSpacing.normal) {
             RoundedRectangle(cornerRadius: 2)
                 .fill(r.isSettled ? Color.appSuccess : Color.appFinance)
@@ -155,6 +164,7 @@ extension LaborRecordView {
             date: Formatters.date.string(from: newDate),
             workers: NumericInputSupport.normalizedStorageText(newWorkers, kind: .quantity),
             hours: NumericInputSupport.normalizedStorageText(newDays, kind: .days),
+            workloadUnit: .workday,
             unitRate: NumericInputSupport.normalizedStorageText(newUnitRate, kind: .laborRate),
             workType: newWorkType,
             teamName: newTeamName,

@@ -20,6 +20,7 @@ targets:
     preBuildScripts:
       - name: Release Boundary Guards
         script: |
+          set -eu
           "${SRCROOT}/scripts/release/check_file_deletion_policy.sh"
           "${SRCROOT}/scripts/release/check_datastore_write_policy.sh"
           "${SRCROOT}/scripts/release/check_backup_contract_boundary.sh"

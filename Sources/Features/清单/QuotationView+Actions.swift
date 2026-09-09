@@ -1,6 +1,42 @@
 import SwiftUI
 import Foundation
 
+enum LaborQuoteGenerator {
+    static func makeQuoteItem(
+        from record: LaborRecord,
+        defaultRate: String,
+        taxRate: String,
+        discountRate: String
+    ) -> QuoteItem? {
+        guard let quoteUnit = record.workloadUnit.quoteUnit else { return nil }
+        let rate = defaultRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? record.unitRate
+            : NumericInputSupport.normalizedStorageText(defaultRate, kind: .laborRate)
+        return QuoteItem(
+            name: String(format: String(localized: "人工费 %@"), record.date),
+            unitPrice: rate,
+            quantity: trim(record.totalWorkloadValue.doubleValue),
+            unit: quoteUnit,
+            notes: record.note,
+            taxRate: NumericInputSupport.normalizedStorageText(taxRate, kind: .taxRate),
+            discountRate: NumericInputSupport.normalizedStorageText(discountRate, kind: .discountRate),
+            versionName: "V1",
+            status: .draft,
+            projectId: record.projectId
+        )
+    }
+
+    private static func trim(_ value: Double) -> String {
+        let rounded = value.rounded()
+        if abs(value - rounded) < 0.000_000_1 {
+            return String(format: "%.0f", rounded)
+        }
+        return String(format: "%.2f", value)
+            .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
+            .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
+    }
+}
+
 extension QuotationView {
     func appendQuote(from material: MaterialItem) {
         store.appendQuoteItem(
@@ -108,6 +144,14 @@ extension QuotationView {
     func generateQuoteItems() {
         let materials = store.materialItems.filter { $0.projectId == generateProjectId }
         let labor = store.laborRecords.filter { $0.projectId == generateProjectId }
+        let unconfirmedCount = labor.filter { $0.workloadUnit == .legacyUnspecified }.count
+        guard unconfirmedCount == 0 else {
+            operationNotice = .info(String(
+                format: String(localized: "有 %lld 条人工记录待确认计量单位，请先编辑确认后再生成报价。"),
+                Int64(unconfirmedCount)
+            ))
+            return
+        }
         for material in materials {
             store.appendQuoteItem(QuoteItem(
                 name: material.name,
@@ -123,24 +167,13 @@ extension QuotationView {
             ))
         }
         for record in labor {
-            let workers = firstNumber(in: record.workers)
-            let hours = firstNumber(in: record.hours)
-            let quantity = workers > 0 ? workers * hours : hours
-            let laborPrice = defaultLaborRate.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? record.unitRate
-            : NumericInputSupport.normalizedStorageText(defaultLaborRate, kind: .laborRate)
-            store.appendQuoteItem(QuoteItem(
-                name: String(format: String(localized: "人工费 %@"), record.date),
-                unitPrice: laborPrice,
-                quantity: quantity > 0 ? trim(quantity) : record.hours,
-                unit: String(localized: "工时"),
-                notes: record.note,
-                taxRate: NumericInputSupport.normalizedStorageText(generateTax, kind: .taxRate),
-                discountRate: NumericInputSupport.normalizedStorageText(generateDiscount, kind: .discountRate),
-                versionName: "V1",
-                status: .draft,
-                projectId: record.projectId
-            ))
+            guard let quote = LaborQuoteGenerator.makeQuoteItem(
+                from: record,
+                defaultRate: defaultLaborRate,
+                taxRate: generateTax,
+                discountRate: generateDiscount
+            ) else { continue }
+            store.appendQuoteItem(quote)
         }
         store.scheduleSave()
         operationNotice = .info(String(localized: "已从材料/人工生成报价"))

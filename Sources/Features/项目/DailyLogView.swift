@@ -35,6 +35,8 @@ struct DailyLogView: View {
     @State var alertMessage = ""
     @State var showAlert = false
     @State var photoWallExportTask: Task<Void, Never>?
+    @State var photoImportTask: Task<Void, Never>?
+    @State var photoImportSession = DailyLogPhotoImportSession()
     @State var operationNotice: OperationToastNotice?
     @State var undoableDeletion = UndoableDeletionCoordinator()
 
@@ -116,7 +118,9 @@ struct DailyLogView: View {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .pdf,
             defaultFilename: exportPayload?.defaultFilename ?? String(localized: "现场照片页.pdf")
-        ) { _ in }
+        ) { result in
+            handleExportCompletion(result)
+        }
         .alert(String(localized: "施工日志"), isPresented: $showAlert) {
             Button(String(localized: "知道了"), role: .cancel) {}
         } message: {
@@ -133,7 +137,13 @@ struct DailyLogView: View {
         .onDisappear {
             photoWallExportTask?.cancel()
             photoWallExportTask = nil
+            cancelPhotoImportAndResetSession()
             undoableDeletion.flushPendingCommit()
+        }
+        .onChange(of: showAdd) { _, isPresented in
+            if !isPresented {
+                cancelPhotoImportAndResetSession()
+            }
         }
     }
 }

@@ -37,6 +37,7 @@ struct ProjectCreateSheet: View {
             Form {
                 Section(String(localized: "工程信息")) {
                     TextField(String(localized: "工程名称"), text: $name)
+                        .accessibilityIdentifier("project-create-name")
                     TextField(String(localized: "项目地址"), text: $location, axis: .vertical)
                         .lineLimit(2...4)
                     TextField(String(localized: "负责人"), text: $managerName)
@@ -132,6 +133,7 @@ struct ProjectCreateSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button(String(localized: "创建"), action: onCreate)
                         .disabled(!canCreate)
+                        .accessibilityIdentifier("project-create-submit")
                 }
                 KeyboardNavigationToolbar(
                     focusedField: focusedField,

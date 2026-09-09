@@ -81,13 +81,14 @@ extension BackupArchiveService {
         var metadataData: Data?
         try SimpleZipArchiveReader.scan(
             fileURL: fileURL,
+            limits: .backup,
+            verifyAllEntries: true,
             onEntry: { entry, readData, _ in
-                let data = try readData()
                 switch entry.path {
                 case manifestPath:
-                    manifestData = data
+                    manifestData = try readData()
                 case metadataPath:
-                    metadataData = data
+                    metadataData = try readData()
                 default:
                     break
                 }

@@ -2,8 +2,9 @@ import SwiftUI
 import UIKit
 
 extension DailyLogView {
-    func save() {
-        guard canSaveLog else { return }
+    @discardableResult
+    func save() -> Bool {
+        guard canSaveLog else { return false }
         let logId = UUID()
         let fileNames: [String]
         do {
@@ -11,7 +12,7 @@ extension DailyLogView {
         } catch {
             alertMessage = String(format: String(localized: "现场照片保存失败：%@"), error.localizedDescription)
             showAlert = true
-            return
+            return false
         }
         let photos = zip(fileNames, composer.photoDrafts).map { fileName, draft in
             LogPhoto(fileName: fileName, note: draft.note, tag: draft.tag)
@@ -35,9 +36,11 @@ extension DailyLogView {
         ))
         store.scheduleSave()
         clearDraft()
+        return true
     }
 
     func clearDraft() {
+        cancelPhotoImportAndResetSession()
         composer.selectedPhotos = []
         composer.photoDrafts = []
         composer.showLogCamera = false

@@ -150,6 +150,12 @@ scripts/release/check_unchecked_sendable_policy.sh
 echo "==> Checking App Store archive configuration"
 scripts/release/check_appstore_archive_config.sh
 
+echo "==> Checking build guard failure propagation"
+python3 scripts/release/check_build_guard_contract.py
+
+echo "==> Checking localized source coverage"
+scripts/localization/check_localization_hardcoded_ui.sh --strict
+
 echo "==> Checking legal policy generated copies"
 python3 scripts/legal/export_privacy_policy.py --check
 

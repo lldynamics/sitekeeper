@@ -5,6 +5,52 @@ import Foundation
 @MainActor
 struct ExportDateFilterTests {
 
+    @Test func exportCompletionValidatesWrittenFile() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export-completion-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        try Data("完成".utf8).write(to: fileURL)
+
+        #expect(
+            ExportCompletionHandler.evaluate(.success(fileURL), source: "ExportDateFilterTests") == .succeeded
+        )
+    }
+
+    @Test func exportCompletionRejectsEmptyFileAndRecognizesCancellation() throws {
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("empty-export-\(UUID().uuidString).txt")
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+        try Data().write(to: fileURL)
+
+        #expect(
+            ExportCompletionHandler.evaluate(.success(fileURL), source: "ExportDateFilterTests") == .invalidFile
+        )
+        #expect(
+            ExportCompletionHandler.evaluate(
+                .failure(CocoaError(.userCancelled)),
+                source: "ExportDateFilterTests"
+            ) == .cancelled
+        )
+        #expect(
+            ExportCompletionHandler.evaluate(
+                .failure(URLError(.cancelled)),
+                source: "ExportDateFilterTests"
+            ) == .cancelled
+        )
+    }
+
+    @Test func exportCompletionKeepsFailureMessage() {
+        let error = NSError(domain: "ExportDateFilterTests", code: 7, userInfo: [
+            NSLocalizedDescriptionKey: "provider write failed"
+        ])
+
+        #expect(
+            ExportCompletionHandler.evaluate(.failure(error), source: "ExportDateFilterTests") ==
+                .failed("provider write failed")
+        )
+    }
+
     // 验证日期筛选函数可用
     @Test func dateRangeFilterMarksOutsideRange() {
         let formatter = Formatters.date

@@ -15,7 +15,7 @@ extension BackupArchiveService {
         let metadata = try encodeMetadata(metadataSnapshot)
         let manifest = try encodeManifest(from: metadataSnapshot)
         let archiveURL = StreamingZipArchiveWriter.makeTemporaryFileURL(prefix: temporaryFilePrefix)
-        var zip = try StreamingZipArchiveWriter(fileURL: archiveURL)
+        var zip = try StreamingZipArchiveWriter(fileURL: archiveURL, limits: .backup)
         var writerFinished = false
         defer {
             if !writerFinished {

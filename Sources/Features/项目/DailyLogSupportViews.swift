@@ -57,6 +57,11 @@ struct CalendarDayCell: View {
         }
         .buttonStyle(.plain)
         .disabled(date == nil)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityValue(accessibilityValue)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+        .accessibilityIdentifier(accessibilityIdentifier)
     }
 
     private var backgroundColor: Color {
@@ -64,6 +69,31 @@ struct CalendarDayCell: View {
         if isSelected { return .appPrimaryAction }
         if !logs.isEmpty { return Color.appPrimarySurfaceSubtle }
         return Color(uiColor: .secondarySystemGroupedBackground)
+    }
+
+    private var accessibilityLabel: String {
+        guard let date else { return "" }
+        return DailyLogDateFormatters.accessibilityDayTitle.string(from: date)
+    }
+
+    private var accessibilityValue: String {
+        guard date != nil else { return "" }
+        var parts = [String(format: String(localized: "%lld 条"), Int64(logs.count))]
+        if isToday {
+            parts.append(String(localized: "今天"))
+        }
+        if isSelected {
+            parts.append(String(localized: "已选中"))
+        }
+        if logs.contains(where: { !$0.photoAttachments.isEmpty }) {
+            parts.append(String(localized: "照片"))
+        }
+        return parts.joined(separator: "，")
+    }
+
+    private var accessibilityIdentifier: String {
+        guard let date else { return "daily-log-calendar-placeholder" }
+        return "daily-log-calendar-day-\(Formatters.date.string(from: date))"
     }
 }
 

@@ -87,7 +87,14 @@ extension QuotationView {
         InputValidator.validate(defaultLaborRate, kind: .laborRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(generateTax, kind: .taxRate, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(generateDiscount, kind: .discountRate, requirement: .requiredNonNegative).isValid &&
-        discountRateIsWithinBounds(generateDiscount)
+        discountRateIsWithinBounds(generateDiscount) &&
+        unconfirmedLaborQuoteCount == 0
+    }
+
+    var unconfirmedLaborQuoteCount: Int {
+        store.laborRecords.filter {
+            $0.projectId == generateProjectId && $0.workloadUnit == .legacyUnspecified
+        }.count
     }
 
     func statusColor(_ status: QuoteStatus) -> Color {

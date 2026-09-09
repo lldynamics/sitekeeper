@@ -184,6 +184,7 @@ struct QuotationGenerateFormSections: View {
     @Binding var defaultLaborRate: String
     @Binding var generateTax: String
     @Binding var generateDiscount: String
+    let unconfirmedLaborCount: Int
     @FocusState.Binding var focusedField: GenerateQuoteField?
 
     var body: some View {
@@ -194,6 +195,14 @@ struct QuotationGenerateFormSections: View {
                     ForEach(projects) { project in
                         Text(project.name).tag(project.id as UUID?)
                     }
+                }
+                if unconfirmedLaborCount > 0 {
+                    Text(String(
+                        format: String(localized: "有 %lld 条人工记录待确认计量单位，请先编辑确认后再生成报价。"),
+                        Int64(unconfirmedLaborCount)
+                    ))
+                    .font(.footnote)
+                    .foregroundStyle(Color.appWarning)
                 }
             }
             Section(String(localized: "默认价格")) {
@@ -212,7 +221,7 @@ struct QuotationGenerateFormSections: View {
                         )
                     }
                 }
-                LabeledContent(String(localized: "人工单价 ¥/工时")) {
+                LabeledContent(String(localized: "人工默认单价（按记录单位）")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         TextField("120", text: $defaultLaborRate.numericInput(.laborRate))
                             .keyboardType(.decimalPad)

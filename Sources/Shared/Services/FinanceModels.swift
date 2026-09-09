@@ -253,6 +253,34 @@ struct QuoteItem: Identifiable, Codable, Sendable {
     }
 }
 
+enum LaborWorkloadUnit: String, Codable, CaseIterable, Sendable {
+    case legacyUnspecified
+    case hour
+    case workday
+
+    var displayName: String {
+        switch self {
+        case .legacyUnspecified:
+            String(localized: "待确认单位")
+        case .hour:
+            String(localized: "工时")
+        case .workday:
+            String(localized: "天")
+        }
+    }
+
+    var quoteUnit: String? {
+        switch self {
+        case .legacyUnspecified:
+            nil
+        case .hour:
+            String(localized: "工时")
+        case .workday:
+            String(localized: "工天")
+        }
+    }
+}
+
 struct LaborRecord: Identifiable, Codable, Sendable {
     var id = UUID()
     var date: String
@@ -260,7 +288,8 @@ struct LaborRecord: Identifiable, Codable, Sendable {
     @NonNegativeNumberText var hours: String
     @NonNegativeNumberText var unitRate: String
 
-    /// UI 展示用，等价于 hours（工天）
+    /// 历史字段名为 hours；实际语义由 workloadUnit 明确。
+    var workloadUnit: LaborWorkloadUnit
     var days: String { hours }
     var workType: String
     var teamName: String
@@ -273,6 +302,7 @@ struct LaborRecord: Identifiable, Codable, Sendable {
         date: String,
         workers: String,
         hours: String,
+        workloadUnit: LaborWorkloadUnit = .hour,
         unitRate: String = "",
         workType: String = "",
         teamName: String = "",
@@ -284,6 +314,7 @@ struct LaborRecord: Identifiable, Codable, Sendable {
         self.date = date
         self.workers = workers
         self.hours = hours
+        self.workloadUnit = workloadUnit
         self.unitRate = unitRate
         self.workType = workType
         self.teamName = teamName
@@ -293,7 +324,7 @@ struct LaborRecord: Identifiable, Codable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, date, workers, hours, unitRate, workType, teamName, isSettled, note, projectId
+        case id, date, workers, hours, workloadUnit, unitRate, workType, teamName, isSettled, note, projectId
     }
 
     init(from decoder: Decoder) throws {
@@ -302,6 +333,8 @@ struct LaborRecord: Identifiable, Codable, Sendable {
         date = try container.decode(String.self, forKey: .date)
         workers = try container.decodeIfPresent(String.self, forKey: .workers) ?? ""
         hours = try container.decodeIfPresent(String.self, forKey: .hours) ?? ""
+        // 旧版本曾同时把工时与工天写进 hours，必须由用户确认后才能用于报价。
+        workloadUnit = try container.decodeIfPresent(LaborWorkloadUnit.self, forKey: .workloadUnit) ?? .legacyUnspecified
         unitRate = try container.decodeIfPresent(String.self, forKey: .unitRate) ?? ""
         workType = try container.decodeIfPresent(String.self, forKey: .workType) ?? ""
         teamName = try container.decodeIfPresent(String.self, forKey: .teamName) ?? ""

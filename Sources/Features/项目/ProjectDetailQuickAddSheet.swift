@@ -268,6 +268,7 @@ struct QuickAddSheet: View {
                         date: date,
                         workers: NumericInputSupport.normalizedStorageText(workers, kind: .quantity),
                         hours: NumericInputSupport.normalizedStorageText(hours, kind: .days),
+                        workloadUnit: .hour,
                         unitRate: NumericInputSupport.normalizedStorageText(unitRate, kind: .laborRate),
                         workType: workType,
                         teamName: teamName,

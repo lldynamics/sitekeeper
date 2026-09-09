@@ -18,10 +18,20 @@ extension LaborRecordView {
         savedWorkTypesRaw.split(separator: ",").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }.filter { !$0.isEmpty }
     }
 
-    var totalDays: Double {
-        filtered.reduce(QuantityValue.zero) { partial, record in
-            partial + QuantityValue(text: record.days)
-        }.doubleValue
+    var totalWorkdays: QuantityValue {
+        filtered
+            .filter { $0.workloadUnit == .workday }
+            .reduce(.zero) { $0 + $1.totalWorkloadValue }
+    }
+
+    var totalHours: QuantityValue {
+        filtered
+            .filter { $0.workloadUnit == .hour }
+            .reduce(.zero) { $0 + $1.totalWorkloadValue }
+    }
+
+    var unconfirmedUnitCount: Int {
+        filtered.filter { $0.workloadUnit == .legacyUnspecified }.count
     }
 
     var totalCost: Double {
@@ -92,12 +102,33 @@ extension LaborRecordView {
                             Text(String(format: String(localized: "%d 条"), filtered.count))
                                 .monospacedDigit()
                         }
-                        HStack {
-                            Text(String(localized: "出工总天数"))
-                                .foregroundStyle(.secondary)
-                            Spacer()
-                            Text(String(format: String(localized: "%@ 天"), totalDays.formatted(.number.precision(.fractionLength(0...1)))))
-                                .monospacedDigit()
+                        if !totalWorkdays.isZero {
+                            HStack {
+                                Text(String(localized: "总工天"))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(totalWorkdays.doubleValue.formatted(.number.precision(.fractionLength(0...2)))) \(String(localized: "工天"))")
+                                    .monospacedDigit()
+                            }
+                        }
+                        if !totalHours.isZero {
+                            HStack {
+                                Text(String(localized: "总工时"))
+                                    .foregroundStyle(.secondary)
+                                Spacer()
+                                Text("\(totalHours.doubleValue.formatted(.number.precision(.fractionLength(0...2)))) \(String(localized: "工时"))")
+                                    .monospacedDigit()
+                            }
+                        }
+                        if unconfirmedUnitCount > 0 {
+                            HStack {
+                                Text(String(localized: "待确认单位"))
+                                    .foregroundStyle(.appWarning)
+                                Spacer()
+                                Text(String(format: String(localized: "%d 条"), unconfirmedUnitCount))
+                                    .foregroundStyle(.appWarning)
+                                    .monospacedDigit()
+                            }
                         }
                         HStack {
                             Text(String(localized: "合计人工费"))
@@ -124,7 +155,7 @@ extension LaborRecordView {
         .searchable(text: $searchText, prompt: String(localized: "按工种、班组或备注搜索"))
         .navigationTitle(String(localized: "人工记录"))
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
                 Menu {
                     Button { showExportConfig = true } label: {
                         Label(String(localized: "导出人工记录"), systemImage: "square.and.arrow.up")
@@ -142,6 +173,7 @@ extension LaborRecordView {
                 }
                 .buttonStyle(.appIcon())
                 .accessibilityLabel(String(localized: "新增人工记录"))
+                .accessibilityIdentifier("labor-add-record")
             }
         }
         .sheet(isPresented: $showAdd) {
@@ -166,6 +198,7 @@ extension LaborRecordView {
                             HStack(spacing: 4) {
                                 TextField("0", text: $newWorkers.numericInput(.quantity))
                                     .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                    .accessibilityIdentifier("labor-workers-input")
                                     .focused($laborFormFocusedField, equals: .workers)
                                     .frame(minWidth: 72, alignment: .trailing)
                                 Text(String(localized: "人")).font(.subheadline).foregroundStyle(.secondary)
@@ -184,6 +217,7 @@ extension LaborRecordView {
                             HStack(spacing: 4) {
                                 TextField("0", text: $newDays.numericInput(.days))
                                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                    .accessibilityIdentifier("labor-duration-input")
                                     .focused($laborFormFocusedField, equals: .hours)
                                     .frame(minWidth: 72, alignment: .trailing)
                                 Text(String(localized: "天")).font(.subheadline).foregroundStyle(.secondary)
@@ -202,6 +236,7 @@ extension LaborRecordView {
                             HStack(spacing: 4) {
                                 TextField("0", text: $newUnitRate.numericInput(.laborRate))
                                     .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                    .accessibilityIdentifier("labor-rate-input")
                                     .focused($laborFormFocusedField, equals: .unitRate)
                                     .frame(minWidth: 88, alignment: .trailing)
                                 Text(String(localized: "元/天")).font(.subheadline).foregroundStyle(.secondary)
@@ -261,7 +296,22 @@ extension LaborRecordView {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .commaSeparatedText,
             defaultFilename: exportPayload?.defaultFilename ?? String(localized: "人工记录.csv")
-        ) { _ in }
+        ) { result in
+            switch result {
+            case .success(let exportedURL):
+                guard Self.isValidExportedFile(at: exportedURL) else {
+                    AppHaptics.error()
+                    operationNotice = .info(String(localized: "导出文件为空或写入不完整，请重试。"))
+                    return
+                }
+                AppHaptics.success()
+                exportPayload = nil
+            case .failure(let error):
+                guard (error as NSError).code != NSUserCancelledError else { return }
+                AppHaptics.error()
+                operationNotice = .info(String(format: String(localized: "导出失败：%@"), error.localizedDescription))
+            }
+        }
         .operationToast(notice: $operationNotice)
     }
 
@@ -274,5 +324,12 @@ extension LaborRecordView {
         Task { @MainActor in
             editingRecord = record
         }
+    }
+
+    private static func isValidExportedFile(at url: URL) -> Bool {
+        guard let values = try? url.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]) else {
+            return false
+        }
+        return values.isRegularFile == true && (values.fileSize ?? 0) > 0
     }
 }

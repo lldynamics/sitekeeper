@@ -370,7 +370,7 @@ struct WarehouseStockLine: Identifiable {
 enum WarehouseStockCalculator {
     static func stockLines(for projectId: UUID, movements: [ProjectWarehouseMovement]) -> [WarehouseStockLine] {
         let related = movements.filter { $0.projectId == projectId }
-        var groups: [String: (name: String, spec: String, unit: String, quantity: Double)] = [:]
+        var groups: [String: (name: String, spec: String, unit: String, quantity: QuantityValue)] = [:]
         for movement in related {
             let name = movement.materialName.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !name.isEmpty else { continue }
@@ -378,8 +378,16 @@ enum WarehouseStockCalculator {
             let unit = movement.unit.trimmingCharacters(in: .whitespacesAndNewlines)
             let key = [name.lowercased(), spec.lowercased(), unit.lowercased()].joined(separator: "|")
             let type = movement.normalizedMovementType
-            var current = groups[key] ?? (name, spec, unit, 0)
-            current.quantity += ReportBuilder.number(movement.quantity) * type.sign
+            var current = groups[key] ?? (name, spec, unit, .zero)
+            let quantity = movement.quantityValue
+            switch type {
+            case .inbound:
+                current.quantity = current.quantity + quantity
+            case .outbound:
+                current.quantity = QuantityValue(
+                    DecimalMath.subtract(current.quantity.decimal, quantity.decimal)
+                )
+            }
             groups[key] = current
         }
         return groups.map { key, value in
@@ -388,7 +396,7 @@ enum WarehouseStockCalculator {
                 materialName: value.name,
                 specification: value.spec,
                 unit: value.unit,
-                quantity: value.quantity
+                quantity: value.quantity.doubleValue
             )
         }
         .sorted { lhs, rhs in

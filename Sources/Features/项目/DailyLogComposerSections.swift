@@ -6,6 +6,7 @@ struct DailyLogWatermarkPhotoSection: View {
     @Binding var cameraPhotoTag: PhotoTag
     @Binding var selectedPhotos: [PhotosPickerItem]
     @Binding var photoDrafts: [PhotoDraft]
+    let isImporting: Bool
 
     let onOpenCamera: () -> Void
 
@@ -27,6 +28,13 @@ struct DailyLogWatermarkPhotoSection: View {
 
             PhotosPicker(selection: $selectedPhotos, maxSelectionCount: 6, matching: .images) {
                 Label(String(localized: "选择照片"), systemImage: "camera.fill")
+            }
+            .disabled(isImporting)
+            .accessibilityIdentifier("daily-log-compose-photo-picker")
+
+            if isImporting {
+                ProgressView(String(localized: "加载中…"))
+                    .accessibilityIdentifier("daily-log-compose-photo-loading")
             }
 
             ForEach($photoDrafts) { $draft in

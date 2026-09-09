@@ -48,6 +48,7 @@ extension QuotationView {
             generateDiscount: $generateDiscount,
             focusedField: $generateQuoteFocusedField,
             canGenerateQuoteForm: canGenerateQuoteForm,
+            unconfirmedLaborCount: unconfirmedLaborQuoteCount,
             onCancel: { activeSheet = nil },
             onGenerate: {
                 generateQuoteItems()

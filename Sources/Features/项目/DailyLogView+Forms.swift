@@ -12,8 +12,9 @@ extension DailyLogView {
                 clearDraft()
             },
             onPrimaryAction: {
-                save()
-                showAdd = false
+                if save() {
+                    showAdd = false
+                }
             }
         ) {
                 Section(String(localized: "基础信息")) {
@@ -42,6 +43,7 @@ extension DailyLogView {
                     }
                     TextField(String(localized: "内容"), text: $composer.content, axis: .vertical)
                         .lineLimit(3...6)
+                        .accessibilityIdentifier("daily-log-compose-content")
                 }
                 Section(String(localized: "安全与材料")) {
                     Menu(String(localized: "套用安全模板")) {
@@ -78,40 +80,12 @@ extension DailyLogView {
                     cameraPhotoTag: $composer.cameraPhotoTag,
                     selectedPhotos: $composer.selectedPhotos,
                     photoDrafts: $composer.photoDrafts,
+                    isImporting: photoImportSession.isImporting,
                     onOpenCamera: { composer.showLogCamera = true }
                 )
         }
         .onChange(of: composer.selectedPhotos) { _, newItems in
-            let remainingSlots = max(6 - composer.photoDrafts.count, 0)
-            Task {
-                guard !newItems.isEmpty else { return }
-                var drafts: [PhotoDraft] = []
-                for item in newItems.prefix(remainingSlots) {
-                    do {
-                        guard let data = try await item.loadTransferable(type: Data.self) else { continue }
-                        if let normalizedData = ImageDownsampleService.downsampledJPEGData(
-                            data,
-                            maxPixelSize: 1600,
-                            compressionQuality: 0.8
-                        ) {
-                            drafts.append(PhotoDraft(data: normalizedData))
-                        }
-                    } catch {
-                        StorageIssueLog.recordEvent(
-                            "daily_log.photo_import_failed",
-                            category: .fileStorage,
-                            details: [
-                                "source": "DailyLogView.composeLogForm.photoPicker"
-                            ],
-                            error: error
-                        )
-                    }
-                }
-                await MainActor.run {
-                    composer.photoDrafts.append(contentsOf: drafts)
-                    composer.selectedPhotos = []
-                }
-            }
+            importSelectedPhotos(newItems)
         }
         .sheet(isPresented: $composer.showLogCamera) {
             ImagePickerView(
@@ -222,6 +196,6 @@ extension DailyLogView {
     var canSaveLog: Bool {
         let contentReady = !composer.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
         let workersReady = composer.workers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || InputValidator.nonNegativeNumber(composer.workers)
-        return contentReady && workersReady
+        return contentReady && workersReady && !photoImportSession.isImporting
     }
 }

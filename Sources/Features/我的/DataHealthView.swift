@@ -217,7 +217,9 @@ struct DataHealthView: View {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .plainText,
             defaultFilename: exportPayload?.defaultFilename ?? l("数据健康报告.txt")
-        ) { _ in }
+        ) { result in
+            handleHealthReportExportCompletion(result)
+        }
         .operationToast(notice: $operationNotice)
     }
 }

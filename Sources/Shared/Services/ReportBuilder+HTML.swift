@@ -24,8 +24,8 @@ extension ReportBuilder {
             })
         }
         if options.includeLabor {
-            table(loc("人工记录"), headers: ["日期", "人数", "工时", "单价", "工种", "班组", "结算", "金额", "备注"], rows: snapshot.laborRecords.map {
-                [$0.date, $0.workers, $0.hours, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? locYes : locNo, money(laborLineTotal($0), currencyDisplayMode: currencyDisplayMode), $0.note]
+            table(loc("人工记录"), headers: ["日期", "人数", "工作量", "单位", "单价", "工种", "班组", "结算", "金额", "备注"], rows: snapshot.laborRecords.map {
+                [$0.date, $0.workers, $0.hours, $0.workloadUnit.displayName, $0.unitRate, $0.workType, $0.teamName, $0.isSettled ? locYes : locNo, money(laborLineTotal($0), currencyDisplayMode: currencyDisplayMode), $0.note]
             })
         }
         if options.includeDailyLogs {

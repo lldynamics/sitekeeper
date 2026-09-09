@@ -145,7 +145,7 @@ enum ProjectTimelineBuilder {
                 date: $0.date,
                 type: String(localized: "人工"),
                 title: $0.workType.isEmpty ? String(localized: "人工记录") : $0.workType,
-                subtitle: "\($0.workers) \(String(localized: "人")) · \($0.hours) \(String(localized: "小时")) · \(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))",
+                subtitle: "\($0.workers) \(String(localized: "人")) · \($0.hours) \($0.workloadUnit.displayName) · \(ReportBuilder.money(ReportBuilder.laborLineTotal($0)))",
                 systemImage: "person.2.fill",
                 tint: .appSuccess,
                 targetMode: .finance

@@ -178,6 +178,11 @@ TESTS=(
   "sitekeeperUITests/SitekeeperUITests/testColdLaunchShowsPrimaryTabs"
   "sitekeeperUITests/SitekeeperUITests/testBackupScreenShowsImportAndExportActions"
   "sitekeeperUITests/SitekeeperUITests/testSwitchingFromSettingsToToolboxRefreshesDetail"
+  "sitekeeperUITests/SitekeeperUITests/testCreatedProjectSurvivesRestart"
+  "sitekeeperUITests/SitekeeperUITests/testCreatedDailyLogSurvivesRestart"
+  "sitekeeperUITests/SitekeeperUITests/testCustomLaborTypesRemainEditableAfterHistoryAndRestart"
+  "sitekeeperUITests/SitekeeperUITests/testAccessibilityAXXXLCoreFlowsRemainOperable"
+  "sitekeeperUITests/SitekeeperUITests/testEnglishLaborEntryUsesTranslatedLabels"
 )
 ONLY_TESTING_ARGS=()
 for test_name in "${TESTS[@]}"; do

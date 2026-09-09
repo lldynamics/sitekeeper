@@ -24,6 +24,7 @@ Package.resolved
 
 # Local Python environments
 .venv/
+__pycache__/
 
 # macOS
 .DS_Store

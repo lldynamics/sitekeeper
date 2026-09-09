@@ -276,11 +276,12 @@ struct ProfileTabView: View {
     }
 
     private var avatarPicker: some View {
-        PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+        let image = avatarUIImage
+        return PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
             ZStack(alignment: .bottomTrailing) {
                 Group {
-                    if let avatarUIImage {
-                        Image(uiImage: avatarUIImage)
+                    if let image {
+                        Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
                     } else {

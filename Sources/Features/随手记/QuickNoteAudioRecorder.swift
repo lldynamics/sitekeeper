@@ -132,6 +132,7 @@ final class QuickNoteAudioRecorder {
     }
 }
 
+@MainActor
 protocol QuickNoteAudioSessionControlling {
     var isInputAvailable: Bool { get }
     func requestRecordPermission() async -> Bool

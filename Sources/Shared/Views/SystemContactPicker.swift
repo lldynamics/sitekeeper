@@ -2,7 +2,7 @@ import SwiftUI
 import Contacts
 import ContactsUI
 
-struct ImportedSystemContact {
+struct ImportedSystemContact: Sendable {
     let fullName: String
     let organizationName: String
     let phoneNumbers: [String]
@@ -63,6 +63,7 @@ struct SystemContactPicker: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: CNContactPickerViewController, context: Context) {}
 
+    @MainActor
     final class Coordinator: NSObject, CNContactPickerDelegate {
         private let parent: SystemContactPicker
 
@@ -70,11 +71,12 @@ struct SystemContactPicker: UIViewControllerRepresentable {
             self.parent = parent
         }
 
-        func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
-            parent.onSelect(ImportedSystemContact.from(contact: contact))
+        nonisolated func contactPicker(_ picker: CNContactPickerViewController, didSelect contact: CNContact) {
+            let imported = ImportedSystemContact.from(contact: contact)
+            Task { @MainActor in self.parent.onSelect(imported) }
         }
 
-        func contactPicker(_ picker: CNContactPickerViewController, didSelect contactProperty: CNContactProperty) {
+        nonisolated func contactPicker(_ picker: CNContactPickerViewController, didSelect contactProperty: CNContactProperty) {
             let selectedPhone: String?
             if contactProperty.key == CNContactPhoneNumbersKey,
                let phoneValue = contactProperty.value as? CNPhoneNumber {
@@ -85,16 +87,15 @@ struct SystemContactPicker: UIViewControllerRepresentable {
             } else {
                 selectedPhone = nil
             }
-            parent.onSelect(
-                ImportedSystemContact.from(
-                    contact: contactProperty.contact,
-                    preferredPhone: selectedPhone
-                )
+            let imported = ImportedSystemContact.from(
+                contact: contactProperty.contact,
+                preferredPhone: selectedPhone
             )
+            Task { @MainActor in self.parent.onSelect(imported) }
         }
 
-        func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
-            parent.onCancel?()
+        nonisolated func contactPickerDidCancel(_ picker: CNContactPickerViewController) {
+            Task { @MainActor in self.parent.onCancel?() }
         }
     }
 }

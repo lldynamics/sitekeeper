@@ -55,14 +55,34 @@ extension LaborRecordView {
 
     private func performCSVExport() {
         let records = recordsForExport()
-        var rows = [String(localized: "人工记录CSV表头")]
+        var rows = [ReportBuilder.csv([
+            String(localized: "日期"),
+            String(localized: "项目"),
+            String(localized: "工种"),
+            String(localized: "班组"),
+            String(localized: "人数"),
+            String(localized: "数量"),
+            String(localized: "单位"),
+            String(localized: "工价"),
+            String(localized: "合计"),
+            String(localized: "已结算"),
+            String(localized: "备注")
+        ])]
         rows += records.map { r in
             let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
-            return [r.date, project, r.workType, r.teamName, r.workers, r.days, r.unitRate,
-                    String(format: "%.2f", ReportBuilder.laborLineTotal(r)),
-                    r.isSettled ? String(localized: "是") : String(localized: "否"), r.note]
-                .map { "\"\($0.replacingOccurrences(of: "\"", with: "\"\""))\"" }
-                .joined(separator: ",")
+            return ReportBuilder.csv([
+                r.date,
+                project,
+                r.workType,
+                r.teamName,
+                r.workers,
+                r.hours,
+                r.workloadUnit.displayName,
+                r.unitRate,
+                String(format: "%.2f", ReportBuilder.laborLineTotal(r)),
+                r.isSettled ? String(localized: "是") : String(localized: "否"),
+                r.note
+            ])
         }
         let data = rows.joined(separator: "\n").data(using: .utf8) ?? Data()
         exportPayload = ExportPayload(data: data, contentType: .commaSeparatedText, defaultFilename: String(localized: "人工记录.csv"))
@@ -71,11 +91,37 @@ extension LaborRecordView {
 
     private func performHTMLExport() {
         let records = recordsForExport()
-        let totalDays = records.reduce(QuantityValue.zero) { partial, record in
-            partial + QuantityValue(text: record.days)
-        }.doubleValue
+        let data = LaborRecordExportBuilder.makeHTML(
+            records: records,
+            projects: store.projects
+        )
+        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "人工记录表.xls"))
+        showExporter = true
+    }
+}
+
+enum LaborRecordExportBuilder {
+    static func makeHTML(
+        records: [LaborRecord],
+        projects: [Project],
+        exportTime: String = Formatters.now()
+    ) -> Data {
+        let workloadSummary = LaborWorkloadUnit.allCases.compactMap { unit -> String? in
+            let total = records
+                .filter { $0.workloadUnit == unit }
+                .reduce(QuantityValue.zero) { $0 + $1.totalWorkloadValue }
+            guard !total.isZero else { return nil }
+            let unitName = unit.quoteUnit ?? unit.displayName
+            return "\(total.doubleValue.formatted(.number.precision(.fractionLength(0...2))))\(unitName)"
+        }.joined(separator: " · ")
         let totalCost = records.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
         let unsettledCost = records.filter { !$0.isSettled }.reduce(0) { $0 + ReportBuilder.laborLineTotal($1) }
+        let summaryParts = [
+            "\(records.count)\(String(localized: "条"))",
+            workloadSummary,
+            "\(String(localized: "合计")) \(ReportBuilder.money(totalCost))",
+            "\(String(localized: "待结算")) \(ReportBuilder.money(unsettledCost))"
+        ].filter { !$0.isEmpty }
 
         var html = """
         <!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -86,21 +132,22 @@ extension LaborRecordView {
         .settled{color:#2E8B3E;}.unsettled{color:#E5661A;}
         .summary{color:#666;font-size:13px;margin:8px 0;}
         .total{font-weight:bold;color:#E5661A;}</style></head><body>
-        <h3>\(String(localized: "人工记录报表"))</h3>
-        <p class="summary">\(String(format: String(localized: "%lld条 · %@天 · 合计 %@ · 待结 %@"), Int64(records.count), totalDays.formatted(.number.precision(.fractionLength(0...1))), ReportBuilder.money(totalCost), ReportBuilder.money(unsettledCost)))</p>
-        <table><tr><th>\(String(localized: "日期"))</th><th>\(String(localized: "项目"))</th><th>\(String(localized: "工种"))</th><th>\(String(localized: "班组"))</th><th>\(String(localized: "人数"))</th><th>\(String(localized: "天数"))</th><th>\(String(localized: "工价"))</th><th>\(String(localized: "合计"))</th><th>\(String(localized: "状态"))</th></tr>
+        <h3>\(ReportBuilder.escapeHTML(String(localized: "人工记录报表")))</h3>
+        <p class="summary">\(ReportBuilder.escapeHTML(summaryParts.joined(separator: " · ")))</p>
+        <table><tr><th>\(String(localized: "日期"))</th><th>\(String(localized: "项目"))</th><th>\(String(localized: "工种"))</th><th>\(String(localized: "班组"))</th><th>\(String(localized: "人数"))</th><th>\(String(localized: "数量"))</th><th>\(String(localized: "单位"))</th><th>\(String(localized: "工价"))</th><th>\(String(localized: "合计"))</th><th>\(String(localized: "状态"))</th></tr>
         """
         for r in records {
-            let project = store.projects.first { $0.id == r.projectId }?.name ?? ""
+            let project = projects.first { $0.id == r.projectId }?.name ?? ""
             let statusClass = r.isSettled ? "settled" : "unsettled"
             let status = r.isSettled ? String(localized: "已结算") : String(localized: "待结算")
-            html += "<tr><td>\(r.date)</td><td>\(project)</td><td>\(r.workType)</td><td>\(r.teamName)</td><td>\(r.workers)</td><td>\(r.days)</td><td>\(r.unitRate)</td><td class=\"total\">\(ReportBuilder.money(ReportBuilder.laborLineTotal(r)))</td><td class=\"\(statusClass)\">\(status)</td></tr>"
+            let cells = [r.date, project, r.workType, r.teamName, r.workers, r.hours, r.workloadUnit.displayName, r.unitRate]
+                .map { "<td>\(ReportBuilder.escapeHTML($0))</td>" }
+                .joined()
+            html += "<tr>\(cells)<td class=\"total\">\(ReportBuilder.escapeHTML(ReportBuilder.money(ReportBuilder.laborLineTotal(r))))</td><td class=\"\(statusClass)\">\(ReportBuilder.escapeHTML(status))</td></tr>"
         }
-        html += "<tr><td colspan=\"8\" style=\"text-align:right;font-weight:bold;\">\(String(localized: "合计"))</td><td class=\"total\">\(ReportBuilder.money(totalCost))</td></tr>"
-        html += "</table><p class=\"summary\">\(String(format: String(localized: "导出时间: %@"), Formatters.now()))</p></body></html>"
+        html += "<tr><td colspan=\"9\" style=\"text-align:right;font-weight:bold;\">\(ReportBuilder.escapeHTML(String(localized: "合计")))</td><td class=\"total\">\(ReportBuilder.escapeHTML(ReportBuilder.money(totalCost)))</td></tr>"
+        html += "</table><p class=\"summary\">\(ReportBuilder.escapeHTML(String(format: String(localized: "导出时间: %@"), exportTime)))</p></body></html>"
 
-        let data = html.data(using: .utf8) ?? Data()
-        exportPayload = ExportPayload(data: data, contentType: .excelHTML, defaultFilename: String(localized: "人工记录表.xls"))
-        showExporter = true
+        return html.data(using: .utf8) ?? Data()
     }
 }

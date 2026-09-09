@@ -239,7 +239,7 @@ struct ProjectLaborSectionView: View {
                                 HStack {
                                     Text(item.date).font(.callout.weight(.medium))
                                     Spacer()
-                                    Text(String(format: String(localized: "%@ 人 · %@h"), item.workers, item.hours))
+                                    Text("\(item.workers) \(String(localized: "人")) · \(item.hours) \(item.workloadUnit.displayName)")
                                         .font(.caption.weight(.semibold))
                                 }
                                 FlowTagLine(tags: laborTags(for: item))

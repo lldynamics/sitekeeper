@@ -48,6 +48,7 @@ struct AppBusinessFormSheet<Content: View>: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(primaryActionTitle, role: primaryActionRole, action: onPrimaryAction)
                             .disabled(isPrimaryActionDisabled)
+                            .accessibilityIdentifier("business-form-save")
                     }
                 }
             }
@@ -94,6 +95,7 @@ struct AppBusinessEditForm<Content: View>: View {
                     ToolbarItem(placement: .confirmationAction) {
                         Button(primaryActionTitle, action: onPrimaryAction)
                             .disabled(isPrimaryActionDisabled)
+                            .accessibilityIdentifier("business-form-save")
                     }
                 }
         }

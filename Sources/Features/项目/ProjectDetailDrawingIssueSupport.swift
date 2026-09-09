@@ -142,7 +142,8 @@ struct ProjectDrawingIssueSheet: View {
     @State private var createdDraftPhotoFileNames: Set<String> = []
 
     var body: some View {
-        NavigationStack {
+        let photoActionTitle = photoFileName == nil ? String(localized: "添加照片/截图") : String(localized: "替换照片/截图")
+        return NavigationStack {
             Form {
                 Section(String(localized: "图纸问题单")) {
                     LabeledContent(String(localized: "图纸"), value: drawingTitle)
@@ -169,7 +170,7 @@ struct ProjectDrawingIssueSheet: View {
                 Section(String(localized: "照片/截图")) {
                     PhotosPicker(selection: $selectedPhotoItem, matching: .images) {
                         Label(
-                            photoFileName == nil ? String(localized: "添加照片/截图") : String(localized: "替换照片/截图"),
+                            photoActionTitle,
                             systemImage: "photo.on.rectangle"
                         )
                     }

@@ -3,7 +3,7 @@ import Foundation
 import Photos
 import UIKit
 
-enum WatermarkPhotoLibraryAccessResult {
+enum WatermarkPhotoLibraryAccessResult: Sendable {
     case granted
     case rejectedRequest
     case denied

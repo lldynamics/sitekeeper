@@ -75,4 +75,36 @@ struct MaterialDomainLogicTests {
         financeStore.setMaterialPriceSpikeIgnored(false, for: detail.id)
         #expect(financeStore.materialPriceSpikeCount(for: projectId) == 1)
     }
+
+    @Test func materialPriceSuggestionRequiresMatchingNormalizedUnitAndSpecification() {
+        let item = MaterialSheetItem(
+            name: "  水泥 ",
+            specification: "P.O   42.5",
+            unit: "kg",
+            quantity: "100",
+            unitPrice: ""
+        )
+        let entries = [
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: "500"),
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "KG", referencePrice: "0.5"),
+            MaterialPriceEntry(name: "水泥", specification: "P.O 32.5", unit: "kg", referencePrice: "0.4")
+        ]
+
+        #expect(MaterialSheetLogicHelpers.suggestedUnitPrice(for: item, entries: entries) == "0.5")
+    }
+
+    @Test func materialPriceSuggestionDoesNotGuessAcrossUnits() {
+        let item = MaterialSheetItem(
+            name: "水泥",
+            specification: "P.O 42.5",
+            unit: "kg",
+            quantity: "100",
+            unitPrice: ""
+        )
+        let entries = [
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: "500")
+        ]
+
+        #expect(MaterialSheetLogicHelpers.suggestedUnitPrice(for: item, entries: entries) == nil)
+    }
 }

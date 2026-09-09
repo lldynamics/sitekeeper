@@ -3,6 +3,14 @@ import PhotosUI
 import UIKit
 
 extension DailyLogView {
+    func handleExportCompletion(_ result: Result<URL, Error>) {
+        let outcome = ExportCompletionHandler.evaluate(result, source: "DailyLogView.photoWall")
+        operationNotice = ExportCompletionHandler.notice(for: outcome) {
+            guard exportPayload != nil else { return }
+            showExporter = true
+        }
+    }
+
     func filteredPhotoWallItems() -> [PhotoWallItem] {
         let allItems = filtered.flatMap { log in
             log.photoAttachments.map { PhotoWallItem(logId: log.id, logDate: log.date, projectId: log.projectId, photo: $0) }

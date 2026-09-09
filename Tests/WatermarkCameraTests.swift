@@ -39,6 +39,48 @@ struct WatermarkCameraTests {
         #expect(seed.capturedAt == capturedAt)
     }
 
+    @Test func dailyLogPhotoImportSessionRejectsResultsFromOlderDraft() {
+        var session = DailyLogPhotoImportSession()
+        let firstDraftToken = session.beginImport()
+
+        session.reset()
+        let secondDraftToken = session.beginImport()
+
+        #expect(!session.accepts(firstDraftToken))
+        #expect(session.accepts(secondDraftToken))
+        session.finishImport(firstDraftToken)
+        #expect(session.isImporting)
+        session.finishImport(secondDraftToken)
+        #expect(!session.isImporting)
+    }
+
+    @Test func dailyLogPhotoImportSessionRejectsSupersededLoad() {
+        var session = DailyLogPhotoImportSession()
+        let firstImportToken = session.beginImport()
+        let replacementImportToken = session.beginImport()
+
+        #expect(!session.accepts(firstImportToken))
+        #expect(session.accepts(replacementImportToken))
+    }
+
+    @Test func dailyLogCalendarIndexGroupsLargeCollectionsByDate() throws {
+        let targetDate = try #require(Formatters.date.date(from: "2026-05-03"))
+        let logs = (0..<10_000).map { index in
+            DailyLog(
+                date: index.isMultiple(of: 2) ? "2026-05-03" : "2026-05-04",
+                weather: "晴",
+                content: "日志 \(index)",
+                workers: "1"
+            )
+        }
+
+        let index = DailyLogCalendarIndex(logs: logs)
+        let selectedLogs = index.logs(on: targetDate)
+
+        #expect(selectedLogs.count == 5_000)
+        #expect(selectedLogs.allSatisfy { $0.date == "2026-05-03" })
+    }
+
     @Test func settingsStorePersistsWatermarkCameraChoices() throws {
         let (defaults, preferences) = try makeIsolatedPreferences()
         let settings = WatermarkCameraSettingsStore(preferences: preferences)

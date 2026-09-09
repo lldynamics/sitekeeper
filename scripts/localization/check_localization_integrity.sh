@@ -147,4 +147,7 @@ if [[ "$failed" -ne 0 ]]; then
   exit 1
 fi
 
-echo "[localization-integrity] PASS: localized string files are complete and unique."
+python3 -B scripts/localization/check_source_coverage.py
+python3 -B scripts/localization/test_source_coverage.py
+
+echo "[localization-integrity] PASS: localized resources cover source keys and matching formats."

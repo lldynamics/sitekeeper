@@ -73,6 +73,7 @@ struct ProjectDetailSnapshot {
     }
 
     var laborHoursTotal: Double {
+        // 兼容旧概览接口；当前概览未显示此值，新的报告汇总按单位拆分。
         relatedLabor.reduce(0) { $0 + ReportBuilder.laborHours($1) }
     }
 

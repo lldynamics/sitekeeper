@@ -69,7 +69,7 @@ enum ExportCurrencyDisplayMode: String, CaseIterable, Identifiable, Codable {
     }
 }
 
-struct ExportPayload {
+struct ExportPayload: Sendable {
     var data: Data
     var sourceFileURL: URL?
     var contentType: UTType

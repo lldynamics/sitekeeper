@@ -250,11 +250,14 @@ enum MaterialSheetLogicHelpers {
         for item: MaterialSheetItem,
         entries: [MaterialPriceEntry]
     ) -> String? {
-        let name = item.name
-        let specification = item.specification
+        let name = MaterialIdentity.normalizedComponent(item.name)
+        let specification = MaterialIdentity.normalizedComponent(item.specification)
+        let unit = MaterialIdentity.normalizedComponent(item.unit)
+        guard !name.isEmpty, !unit.isEmpty else { return nil }
         let match = entries.first { entry in
-            entry.name.localizedCaseInsensitiveContains(name) &&
-                (specification.isEmpty || entry.specification.localizedCaseInsensitiveContains(specification))
+            MaterialIdentity.normalizedComponent(entry.name) == name &&
+                MaterialIdentity.normalizedComponent(entry.specification) == specification &&
+                MaterialIdentity.normalizedComponent(entry.unit) == unit
         }
         let price = match?.referencePrice ?? ""
         return price.isEmpty ? nil : price

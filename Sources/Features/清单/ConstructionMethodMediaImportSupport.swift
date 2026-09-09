@@ -21,7 +21,7 @@ enum ConstructionMethodMediaImportSupport {
         String(format: String(localized: "教程图片保存失败：%@"), error.localizedDescription)
     }
 
-    static var isCameraAvailable: Bool {
+    @MainActor static var isCameraAvailable: Bool {
         UIImagePickerController.isSourceTypeAvailable(.camera)
     }
 
@@ -65,9 +65,9 @@ enum ConstructionMethodMediaImportSupport {
 
     static func importMediaItems(
         _ items: [PhotosPickerItem],
-        setProgressMessage: @escaping @MainActor (String) -> Void,
-        appendAttachment: @escaping @MainActor (QuickNoteAttachment) -> Void,
-        reportError: @escaping @MainActor (String) -> Void
+        setProgressMessage: @escaping @MainActor @Sendable (String) -> Void,
+        appendAttachment: @escaping @MainActor @Sendable (QuickNoteAttachment) -> Void,
+        reportError: @escaping @MainActor @Sendable (String) -> Void
     ) async -> Set<String> {
         var importedFileNames: Set<String> = []
         for item in items {

@@ -24,29 +24,35 @@ extension DashboardView {
     }
 
     var todayLogs: [DailyLog] {
-        projectStore.dailyLogs.filter { log in
-            log.date == todayStr && (log.projectId.map(activeProjectIDs.contains) ?? true)
+        let projectIDs = activeProjectIDs
+        let today = todayStr
+        return projectStore.dailyLogs.filter { log in
+            log.date == today && (log.projectId.map(projectIDs.contains) ?? true)
         }
     }
 
     var openTodos: [SiteTodo] {
-        projectStore.siteTodos.filter { todo in
+        let projectIDs = activeProjectIDs
+        return projectStore.siteTodos.filter { todo in
             guard !todo.isDone else { return false }
             guard let projectId = todo.projectId else { return false }
-            return activeProjectIDs.contains(projectId)
+            return projectIDs.contains(projectId)
         }
     }
 
     var todayTodos: [SiteTodo] {
-        openTodos.filter { $0.dueDate == todayStr }
+        let today = todayStr
+        return openTodos.filter { $0.dueDate == today }
     }
 
     var overdueTasks: [ProgressTask] {
-        projectStore.progressTasks.filter { task in
-            guard activeProjectIDs.contains(task.projectId),
+        let projectIDs = activeProjectIDs
+        let today = Calendar.current.startOfDay(for: Date())
+        return projectStore.progressTasks.filter { task in
+            guard projectIDs.contains(task.projectId),
                   task.clampedCompletion < 1,
                   let due = parseLocalDate(task.dueDate) else { return false }
-            return due < Calendar.current.startOfDay(for: Date())
+            return due < today
         }
     }
 
@@ -55,7 +61,8 @@ extension DashboardView {
     }
 
     var activeFinancialRecords: [ProjectFinancialRecord] {
-        projectStore.projectFinancialRecords.filter { activeProjectIDs.contains($0.projectId) }
+        let projectIDs = activeProjectIDs
+        return projectStore.projectFinancialRecords.filter { projectIDs.contains($0.projectId) }
     }
 
     var dashboardBusinessSummary: ProjectBusinessSummary {
@@ -146,7 +153,8 @@ extension DashboardView {
     }
 
     var warehouseMovementsForActiveProjects: [ProjectWarehouseMovement] {
-        projectStore.projectWarehouseMovements.filter { activeProjectIDs.contains($0.projectId) }
+        let projectIDs = activeProjectIDs
+        return projectStore.projectWarehouseMovements.filter { projectIDs.contains($0.projectId) }
     }
 
     var warehouseStockLines: [WarehouseStockLine] {
@@ -159,7 +167,8 @@ extension DashboardView {
     }
 
     var warehouseTodayMovementCount: Int {
-        warehouseMovementsForActiveProjects.filter { $0.date == todayStr }.count
+        let today = todayStr
+        return warehouseMovementsForActiveProjects.filter { $0.date == today }.count
     }
 
     var warehouseNegativeCount: Int {
@@ -241,16 +250,19 @@ extension DashboardView {
     }
 
     var projectsWithoutTodayLogCount: Int {
-        activeProjects.filter { project in
-            !projectStore.dailyLogs.contains { $0.projectId == project.id && $0.date == todayStr }
-        }.count
+        let today = todayStr
+        let loggedProjects = Set(projectStore.dailyLogs.lazy
+            .filter { $0.date == today }
+            .compactMap(\.projectId))
+        return activeProjects.filter { !loggedProjects.contains($0.id) }.count
     }
 
     var unattachedReceiptCount: Int {
-        activeFinancialRecords.filter { record in
+        let linkedRecordIDs = Set(projectStore.projectDocuments.compactMap(\.linkedFinancialRecordId))
+        return activeFinancialRecords.filter { record in
             guard record.requiresAttachment else { return false }
             let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = projectStore.projectDocuments.contains { $0.linkedFinancialRecordId == record.id }
+            let linkedByDocument = linkedRecordIDs.contains(record.id)
             return !(linkedByRecord || linkedByDocument)
         }.count
     }

@@ -9,6 +9,7 @@ struct BackupRecoveryRehearsalTests {
         var exportedFileURL: URL?
         defer { cleanup(fixture: fixture, exportedFileURL: exportedFileURL) }
 
+        let expectedMetadata = fixture.store.makeSnapshot(includePhotoFiles: false)
         let exportOutcome = try await BackupExportCoordinator.exportBackup(
             snapshot: fixture.store.makeSnapshot(includePhotoFiles: true),
             suggestedFileName: "backup-recovery-rehearsal.zip",
@@ -36,6 +37,9 @@ struct BackupRecoveryRehearsalTests {
         #expect(restoredCounts.totalCount == 4)
         assertRestoredStoreAndFiles(fixture)
         try await assertReloadedStore(fixture)
+        let reloaded = DataStore(storageDirectory: fixture.storageDirectory)
+        await reloaded.awaitInitialLoad()
+        try assertAllCollectionsEqual(expectedMetadata, reloaded.makeSnapshot(includePhotoFiles: false))
     }
 
     private struct Fixture {
@@ -113,6 +117,10 @@ struct BackupRecoveryRehearsalTests {
         documentFileName: String,
         quickNoteFileName: String
     ) {
+        seedAdditionalCollections(store, projectID: projectID)
+        store.replaceMaterialSheetDrafts([
+            MaterialSheetDraft(title: "恢复演练草稿", projectId: projectID)
+        ])
         store.replaceProjects([
             Project(
                 id: projectID,
@@ -146,6 +154,39 @@ struct BackupRecoveryRehearsalTests {
         ])
     }
 
+    private func seedAdditionalCollections(_ store: DataStore, projectID: UUID) {
+        store.replaceMaterialItems([MaterialItem(name: "钢筋", quantity: "1", unit: "吨", projectId: projectID)])
+        store.replaceQuoteItems([QuoteItem(name: "工程报价", unitPrice: "500", quantity: "1", unit: "项", notes: "", taxRate: "0", discountRate: "0", projectId: projectID)])
+        store.replaceLaborRecords([LaborRecord(date: "2026-09-09", workers: "2", hours: "1", note: "", projectId: projectID)])
+        store.replaceHistoryRecords([HistoryRecord(tool: "面积", input: "1×2", result: "2", date: Formatters.now(), projectId: projectID)])
+        store.replaceProgressTasks([ProgressTask(projectId: projectID, title: "验收", startDate: "2026-09-09", dueDate: "2026-09-10", completion: 0.5, note: "")])
+        store.replaceSiteTodos([SiteTodo(title: "检查", projectId: projectID)])
+        store.replaceProjectContacts([ProjectContact(projectId: projectID, name: "负责人")])
+        store.replaceProjectFinancialRecords([ProjectFinancialRecord(projectId: projectID, amount: "123")])
+        store.replaceProjectWarehouseMovements([ProjectWarehouseMovement(projectId: projectID, materialName: "钢筋", quantity: "1")])
+        store.replaceTemplates([ProjectTemplate(name: "验收模板", category: .dailyLog, content: "检查")])
+        store.replaceMaterialPriceEntries([MaterialPriceEntry(name: "钢筋", referencePrice: "3500")])
+        store.replaceSupplierProfiles([SupplierProfile(name: "供应商")])
+        store.replaceConstructionMethods([ConstructionMethod(title: "施工工艺")])
+        store.favoriteMaterialKeys = ["favorite"]
+        store.recentMaterialKeys = ["recent"]
+        store.replaceUserMaterials([UserMaterial(name: "自定义材料")])
+        store.replaceDeletedUserMaterials([UserMaterial(name: "已删除材料")])
+        store.hiddenPresetKeys = ["hidden"]
+    }
+
+    private func assertAllCollectionsEqual(_ expected: BackupSnapshot, _ actual: BackupSnapshot) throws {
+        let expectedJSON = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(expected)) as? [String: Any])
+        let actualJSON = try #require(JSONSerialization.jsonObject(with: JSONEncoder().encode(actual)) as? [String: Any])
+        let fileKeys = Set(["photoFiles", "drawingFiles", "documentFiles", "quickNoteAttachmentFiles"])
+        for (key, value) in expectedJSON {
+            guard let collection = value as? [Any], !fileKeys.contains(key) else { continue }
+            #expect(!collection.isEmpty, "Fixture must populate collection: \(key)")
+            let restored = try #require(actualJSON[key] as? [Any])
+            #expect(NSArray(array: collection).isEqual(to: restored), "Collection must survive restore and reload: \(key)")
+        }
+    }
+
     private func clearMetadataAndFiles(_ fixture: Fixture) async throws {
         fixture.store.clearAllBusinessData(deleteStoredFiles: false)
         try await fixture.store.flushSaveOrThrow()
@@ -155,6 +196,7 @@ struct BackupRecoveryRehearsalTests {
         QuickNoteAttachmentStorage.delete(fileName: fixture.quickNoteFileName)
 
         #expect(fixture.store.projects.isEmpty)
+        #expect(fixture.store.materialSheetDrafts.isEmpty)
         #expect(!PhotoStorage.exists(fileName: fixture.photoFileName))
         #expect(!DrawingStorage.exists(fileName: fixture.drawing.fileName))
         #expect(!ProjectDocumentStorage.exists(fileName: fixture.documentFileName))
@@ -170,6 +212,7 @@ struct BackupRecoveryRehearsalTests {
 
     private func assertRestoredStoreAndFiles(_ fixture: Fixture) {
         #expect(fixture.store.projects.first?.id == fixture.projectID)
+        #expect(fixture.store.materialSheetDrafts.first?.title == "恢复演练草稿")
         #expect(fixture.store.dailyLogs.first?.content == "恢复演练日志")
         #expect(fixture.store.projectDrawings.first?.fileName == fixture.drawing.fileName)
         #expect(fixture.store.projectDocuments.first?.fileName == fixture.documentFileName)
@@ -184,6 +227,7 @@ struct BackupRecoveryRehearsalTests {
         let reloadedStore = DataStore(storageDirectory: fixture.storageDirectory)
         await reloadedStore.awaitInitialLoad()
         #expect(reloadedStore.projects.first?.id == fixture.projectID)
+        #expect(reloadedStore.materialSheetDrafts.first?.title == "恢复演练草稿")
         #expect(reloadedStore.dailyLogs.first?.photos.first?.fileName == fixture.photoFileName)
         #expect(reloadedStore.projectDrawings.first?.fileName == fixture.drawing.fileName)
         #expect(reloadedStore.projectDocuments.first?.fileName == fixture.documentFileName)

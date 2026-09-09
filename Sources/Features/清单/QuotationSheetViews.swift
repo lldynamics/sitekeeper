@@ -76,6 +76,7 @@ struct QuotationGenerateSheetView: View {
     @Binding var generateDiscount: String
     let focusedField: FocusState<GenerateQuoteField?>.Binding
     let canGenerateQuoteForm: Bool
+    let unconfirmedLaborCount: Int
     let onCancel: () -> Void
     let onGenerate: () -> Void
 
@@ -94,6 +95,7 @@ struct QuotationGenerateSheetView: View {
                 defaultLaborRate: $defaultLaborRate,
                 generateTax: $generateTax,
                 generateDiscount: $generateDiscount,
+                unconfirmedLaborCount: unconfirmedLaborCount,
                 focusedField: focusedField
             )
             .toolbar {

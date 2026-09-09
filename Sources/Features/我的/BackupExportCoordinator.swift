@@ -9,8 +9,8 @@ enum BackupExportCoordinator {
     static func exportBackup(
         snapshot: BackupSnapshot,
         suggestedFileName: String,
-        progress: @escaping (BackupArchiveProgress) -> Void,
-        shouldCancel: @escaping () -> Bool
+        progress: @escaping @Sendable (BackupArchiveProgress) -> Void,
+        shouldCancel: @escaping @Sendable () -> Bool
     ) async throws -> BackupExportOutcome {
         let archive = try await FileIOTaskRunner.runWithRelay(
             priority: .userInitiated,

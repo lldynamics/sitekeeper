@@ -7,7 +7,7 @@ enum ProjectDetailPackageRequestDecision {
     case reject(String)
 }
 
-enum ProjectDetailPackageExportTaskResult {
+enum ProjectDetailPackageExportTaskResult: Sendable {
     case success(ExportPayload)
     case failure(String)
 }
@@ -159,6 +159,7 @@ enum ProjectDetailExportWorkflow {
         }
     }
 
+    @MainActor
     static func makeProjectPackageExportTask(
         project: Project,
         projectId: UUID,
@@ -174,9 +175,9 @@ enum ProjectDetailExportWorkflow {
         documents: [ProjectDocument],
         quickNotes: [QuickNote],
         paidAmountOverride: Double,
-        onProgress: @escaping @MainActor (ProjectPackageExportProgress) -> Void,
-        onCancelled: @escaping @MainActor () -> Void,
-        onCompletion: @escaping @MainActor (ProjectDetailPackageExportTaskResult) -> Void
+        onProgress: @escaping @MainActor @Sendable (ProjectPackageExportProgress) -> Void,
+        onCancelled: @escaping @MainActor @Sendable () -> Void,
+        onCompletion: @escaping @MainActor @Sendable (ProjectDetailPackageExportTaskResult) -> Void
     ) -> Task<Void, Never> {
         let relatedTodos = todos.filter { $0.projectId == projectId }
 
@@ -217,18 +218,18 @@ enum ProjectDetailExportWorkflow {
                 }
 
                 guard !Task.isCancelled else {
-                    await onCancelled()
+                    onCancelled()
                     return
                 }
 
                 switch result {
                 case .success(let payload):
-                    await onCompletion(.success(payload))
+                    onCompletion(.success(payload))
                 case .failure(let message):
-                    await onCompletion(.failure(message))
+                    onCompletion(.failure(message))
                 }
             } catch {
-                await onCancelled()
+                onCancelled()
             }
         }
     }

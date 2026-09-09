@@ -11,6 +11,7 @@ struct MaterialSheetEditableItemRow: View {
     let onDelete: () -> Void
 
     var body: some View {
+        let hasAttachment = item.hasAttachment
         VStack(spacing: 0) {
             Button(action: onToggleExpand) {
                 HStack(spacing: 8) {
@@ -68,8 +69,8 @@ struct MaterialSheetEditableItemRow: View {
                     HStack(spacing: 8) {
                         PhotosPicker(selection: photoSelection, maxSelectionCount: 1, matching: .images) {
                             Label(
-                                item.hasAttachment ? "已添加照片" : "添加照片",
-                                systemImage: item.hasAttachment ? "photo.fill" : "photo.badge.plus"
+                                hasAttachment ? "已添加照片" : "添加照片",
+                                systemImage: hasAttachment ? "photo.fill" : "photo.badge.plus"
                             )
                             .font(.caption)
                         }
@@ -77,7 +78,7 @@ struct MaterialSheetEditableItemRow: View {
                         .controlSize(.small)
                         .accessibilityLabel(String(format: String(localized: "%@添加或更换照片"), item.name))
 
-                        if item.hasAttachment {
+                        if hasAttachment {
                             Text(item.attachmentFileName ?? "附件")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)

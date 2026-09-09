@@ -24,6 +24,15 @@ extension LaborRecord {
     var workersValue: QuantityValue { QuantityValue(text: workers) }
     var hoursValue: QuantityValue { QuantityValue(text: hours) }
     var unitRateValue: QuantityValue { QuantityValue(text: unitRate) }
+
+    /// 人数为空表示旧数据未记录人数；明确的 0 人必须保持为 0。
+    var totalWorkloadValue: QuantityValue {
+        let workload = hoursValue
+        guard !workers.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return workload
+        }
+        return workersValue * workload
+    }
 }
 
 extension ProjectFinancialRecord {

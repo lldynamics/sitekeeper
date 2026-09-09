@@ -211,7 +211,9 @@ struct ProjectContactDatabaseView: View {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .vCard,
             defaultFilename: exportPayload?.defaultFilename ?? String(localized: "项目联系人.vcf")
-        ) { _ in }
+        ) { result in
+            handleContactExportCompletion(result)
+        }
         .sheet(isPresented: $showSystemContactPicker) {
             SystemContactPicker(
                 onSelect: { imported in

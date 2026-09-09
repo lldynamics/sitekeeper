@@ -69,13 +69,14 @@ extension ReportBuilder {
         guard options.includeLabor else { return [] }
         var rows: [String] = []
         rows.append(csvMachineSection("labor_records"))
-        rows.append(csv(["date", "workers", "hours", "unit_rate", "work_type", "team_name", "is_settled", "amount_raw", "amount_display", "note", "project_id"]))
+        rows.append(csv(["date", "workers", "hours", "workload_unit", "unit_rate", "work_type", "team_name", "is_settled", "amount_raw", "amount_display", "note", "project_id"]))
         rows += snapshot.laborRecords.map { record in
             let lineTotal = laborAmountColumns(record, currencyDisplayMode: options.currencyDisplayMode)
             return csv([
                 record.date,
                 record.workers,
                 record.hours,
+                record.workloadUnit.rawValue,
                 record.unitRate,
                 record.workType,
                 record.teamName,

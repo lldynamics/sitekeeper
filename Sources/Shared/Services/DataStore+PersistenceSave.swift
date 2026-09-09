@@ -5,6 +5,9 @@ extension DataStore {
         cancelScheduledSave()
         persistTask?.cancel()
         await awaitInitialLoad()
+        guard loadState == .ready, !isApplyingBackup else {
+            throw PersistenceBlockedError(message: persistenceErrorMessage)
+        }
         let snapshot = makeSnapshot(includePhotoFiles: false)
         do {
             try await persistenceActor.persist(snapshot: snapshot)
@@ -32,6 +35,7 @@ extension DataStore {
             needsSaveAfterInitialLoad = true
             return
         }
+        guard loadState == .ready, !isApplyingBackup else { return }
         let snapshot = makeSnapshot(includePhotoFiles: includePhotoFiles)
         latestPersistToken += 1
         let persistToken = latestPersistToken
@@ -53,6 +57,29 @@ extension DataStore {
                 }
             }
         }
+        publishWidgetData()
+        scheduleDataHealthScan(reason: .dataChanged)
+    }
+}
+
+extension DataStore {
+    struct PersistenceBlockedError: LocalizedError {
+        let message: String?
+        var errorDescription: String? {
+            message ?? String(localized: "本地数据尚未安全加载或正在恢复，已暂停保存。")
+        }
+    }
+
+    /// Only a user-confirmed backup transaction may replace a store that failed to load.
+    func persistAppliedBackup() async throws {
+        try Task.checkCancellation()
+        let wasFailed = loadState == .failed
+        try await persistenceActor.persist(
+            snapshot: makeSnapshot(includePhotoFiles: false),
+            preservingExistingFile: wasFailed
+        )
+        setLoadState(.ready)
+        persistenceErrorMessage = nil
         publishWidgetData()
         scheduleDataHealthScan(reason: .dataChanged)
     }

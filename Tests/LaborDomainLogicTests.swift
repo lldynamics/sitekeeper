@@ -1,0 +1,115 @@
+import Foundation
+import Testing
+@testable import sitekeeper
+
+@MainActor
+struct LaborDomainLogicTests {
+    @Test func laborCostDistinguishesMissingWorkersFromExplicitZero() {
+        let historicalMissingWorkers = LaborRecord(
+            date: "2026-09-09",
+            workers: "",
+            hours: "1",
+            unitRate: "300",
+            note: ""
+        )
+        let explicitZeroWorkers = LaborRecord(
+            date: "2026-09-09",
+            workers: "0",
+            hours: "1",
+            workloadUnit: .workday,
+            unitRate: "300",
+            note: ""
+        )
+
+        #expect(ReportBuilder.laborLineTotal(historicalMissingWorkers) == 300)
+        #expect(ReportBuilder.laborLineTotal(explicitZeroWorkers) == 0)
+    }
+
+    @Test func legacyLaborUnitRequiresConfirmationAndRoundTrips() throws {
+        let legacyJSON = """
+        {
+          "date": "2026-09-09",
+          "workers": "2",
+          "hours": "8",
+          "unitRate": "50",
+          "note": ""
+        }
+        """.data(using: .utf8)!
+
+        let legacy = try JSONDecoder().decode(LaborRecord.self, from: legacyJSON)
+        #expect(legacy.workloadUnit == .legacyUnspecified)
+        #expect(legacy.hours == "8")
+        #expect(ReportBuilder.laborLineTotal(legacy) == 800)
+        #expect(LaborQuoteGenerator.makeQuoteItem(from: legacy, defaultRate: "", taxRate: "0", discountRate: "0") == nil)
+
+        let restored = try JSONDecoder().decode(LaborRecord.self, from: JSONEncoder().encode(legacy))
+        #expect(restored.workloadUnit == .legacyUnspecified)
+        #expect(restored.hours == legacy.hours)
+    }
+
+    @Test func confirmedWorkdayLaborCreatesWorkdayQuotation() throws {
+        let record = LaborRecord(
+            date: "2026-09-09",
+            workers: "2",
+            hours: "1.5",
+            workloadUnit: .workday,
+            unitRate: "300",
+            note: ""
+        )
+        let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
+            from: record,
+            defaultRate: "",
+            taxRate: "0",
+            discountRate: "0"
+        ))
+
+        #expect(quote.quantity == "3")
+        #expect(quote.unit == record.workloadUnit.quoteUnit)
+        #expect(quote.unitPrice == "300")
+    }
+
+    @Test func projectReportLaborSummaryKeepsUnitsSeparate() {
+        let records = [
+            LaborRecord(date: "2026-09-09", workers: "2", hours: "8", workloadUnit: .hour, note: ""),
+            LaborRecord(date: "2026-09-09", workers: "3", hours: "1", workloadUnit: .workday, note: ""),
+            LaborRecord(date: "2026-09-09", workers: "2", hours: "4", workloadUnit: .legacyUnspecified, note: "")
+        ]
+
+        let summary = ReportBuilder.laborWorkloadSummary(records)
+
+        #expect(summary.hours == QuantityValue(16))
+        #expect(summary.workdays == QuantityValue(3))
+        #expect(summary.unconfirmedValue == QuantityValue(8))
+        #expect(summary.unconfirmedCount == 1)
+        #expect(summary.displayText.contains(String(localized: "总工时")))
+        #expect(summary.displayText.contains(String(localized: "总工天")))
+        #expect(summary.displayText.contains(String(localized: "待确认")))
+    }
+
+    @Test func laborHTMLExportEscapesProjectWorkTypeAndTeam() throws {
+        let project = Project(name: "A&B <总包>", location: "")
+        let record = LaborRecord(
+            date: "2026-09-09",
+            workers: "2",
+            hours: "1",
+            workloadUnit: .workday,
+            unitRate: "300",
+            workType: "<script>工种</script>",
+            teamName: "一班 & 二班",
+            note: "",
+            projectId: project.id
+        )
+
+        let data = LaborRecordExportBuilder.makeHTML(
+            records: [record],
+            projects: [project],
+            exportTime: "2026-09-09 10:00"
+        )
+        let html = try #require(String(data: data, encoding: .utf8))
+
+        #expect(html.contains("A&amp;B &lt;总包&gt;"))
+        #expect(html.contains("&lt;script&gt;工种&lt;/script&gt;"))
+        #expect(html.contains("一班 &amp; 二班"))
+        #expect(!html.contains("<script>工种</script>"))
+    }
+}

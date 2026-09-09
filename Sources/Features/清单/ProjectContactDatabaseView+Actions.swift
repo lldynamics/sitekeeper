@@ -1,6 +1,14 @@
 import SwiftUI
 
 extension ProjectContactDatabaseView {
+    func handleContactExportCompletion(_ result: Result<URL, Error>) {
+        let outcome = ExportCompletionHandler.evaluate(result, source: "ProjectContactDatabaseView")
+        operationNotice = ExportCompletionHandler.notice(for: outcome) {
+            guard exportPayload != nil else { return }
+            showExporter = true
+        }
+    }
+
     func openFocusedContactIfNeeded() {
         guard let focusedContactId, !didOpenFocusedContact,
               let contact = projectContacts.first(where: { $0.id == focusedContactId }) else { return }

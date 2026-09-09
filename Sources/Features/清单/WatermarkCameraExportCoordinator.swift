@@ -8,7 +8,7 @@ enum WatermarkCameraAlbumSaveResult {
     case error(message: String)
 }
 
-@Observable
+@MainActor @Observable
 final class WatermarkCameraExportCoordinator {
     var exportData = Data()
     var showExporter = false

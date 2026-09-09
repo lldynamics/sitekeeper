@@ -343,7 +343,7 @@ actor CloudBackupCoordinator {
 
     func backupToCloud(
         snapshot: BackupSnapshot,
-        progress: ((BackupArchiveProgress) -> Void)? = nil
+        progress: (@Sendable (BackupArchiveProgress) -> Void)? = nil
     ) async throws -> CloudBackupExecutionResult {
         var archiveFileURL: URL?
         let retentionCount = CloudBackupSettingsStore.loadRetentionCount()

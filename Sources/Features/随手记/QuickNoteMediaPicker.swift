@@ -174,7 +174,7 @@ struct QuickNoteAttachmentPickerBar: View {
         }
     }
 
-    private func compactToolIcon(_ systemImage: String, isActive: Bool = false) -> some View {
+    nonisolated private func compactToolIcon(_ systemImage: String, isActive: Bool = false) -> some View {
         Image(systemName: systemImage)
             .font(.body.weight(.semibold))
             .symbolRenderingMode(.hierarchical)
@@ -183,7 +183,7 @@ struct QuickNoteAttachmentPickerBar: View {
             .background(isActive ? Color.appRisk : Color(.tertiarySystemGroupedBackground), in: Circle())
     }
 
-    private func toolLabel(_ title: String, systemImage: String) -> some View {
+    nonisolated private func toolLabel(_ title: String, systemImage: String) -> some View {
         Label(title, systemImage: systemImage)
             .font(.caption.weight(.semibold))
     }

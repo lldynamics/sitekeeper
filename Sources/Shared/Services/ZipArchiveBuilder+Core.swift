@@ -1,4 +1,5 @@
 import Foundation
+import zlib
 
 struct DOSDateTime {
     let date: UInt16
@@ -21,19 +22,25 @@ struct DOSDateTime {
 
 enum CRC32 {
     static func calculate(_ data: Data) -> UInt32 {
-        var crc: UInt32 = 0xFFFF_FFFF
-        for byte in data {
-            var value = (crc ^ UInt32(byte)) & 0xFF
-            for _ in 0..<8 {
-                if (value & 1) != 0 {
-                    value = (value >> 1) ^ 0xEDB8_8320
-                } else {
-                    value >>= 1
-                }
+        updating(0, with: data)
+    }
+
+    /// zlib accepts the finalized checksum of the previous chunk, starting at zero.
+    /// It applies the ZIP CRC-32 polynomial and pre/post conditioning internally.
+    static func updating(_ checksum: UInt32, with data: Data) -> UInt32 {
+        guard !data.isEmpty else { return checksum }
+        return data.withUnsafeBytes { (buffer: UnsafeRawBufferPointer) -> UInt32 in
+            guard let bytes = buffer.bindMemory(to: Bytef.self).baseAddress else { return checksum }
+            var value = uLong(checksum)
+            var offset = 0
+            while offset < buffer.count {
+                // The classic zlib API has a 32-bit length even on 64-bit platforms.
+                let count = min(buffer.count - offset, Int(uInt.max))
+                value = zlib.crc32(value, bytes.advanced(by: offset), uInt(count))
+                offset += count
             }
-            crc = (crc >> 8) ^ value
+            return UInt32(truncatingIfNeeded: value)
         }
-        return crc ^ 0xFFFF_FFFF
     }
 }
 

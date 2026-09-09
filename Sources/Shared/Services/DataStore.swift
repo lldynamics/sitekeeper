@@ -9,7 +9,13 @@ final class DataStore {
     @ObservationIgnored let materialLibraryStore = MaterialLibraryStore()
     @ObservationIgnored let userPreferenceStore = UserPreferenceStore()
 
+    enum LoadState { case loading, ready, failed }
+
     var persistenceErrorMessage: String?
+    private(set) var loadState: LoadState = .loading
+    var isApplyingBackup = false
+
+    func setLoadState(_ state: LoadState) { loadState = state }
 
     /// 版本签名：任何数据变化时刷新，观察者可据此判定索引是否已过期
     /// 仅用于“是否变更”判定，主线程自增即可。

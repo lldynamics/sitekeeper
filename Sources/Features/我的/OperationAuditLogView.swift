@@ -94,6 +94,7 @@ struct OperationAuditLogView: View {
     @State private var exportPayload: ExportPayload?
     @State private var showExporter = false
     @State private var showClearConfirm = false
+    @State private var operationNotice: OperationToastNotice?
 
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
@@ -215,7 +216,9 @@ struct OperationAuditLogView: View {
             document: ExportDocument(data: exportPayload?.data ?? Data()),
             contentType: exportPayload?.contentType ?? .commaSeparatedText,
             defaultFilename: exportPayload?.defaultFilename ?? String(localized: "操作审计日志.csv")
-        ) { _ in }
+        ) { result in
+            handleExportCompletion(result)
+        }
         .confirmationDialog(String(localized: "清空审计日志？"), isPresented: $showClearConfirm) {
             Button(String(localized: "清空日志"), role: .destructive) {
                 OperationAuditLog.clear()
@@ -225,6 +228,7 @@ struct OperationAuditLogView: View {
         } message: {
             Text(String(localized: "将删除本机保存的审计记录，此操作不会影响业务数据。"))
         }
+        .operationToast(notice: $operationNotice)
     }
 
     private func auditRow(_ entry: OperationAuditEntry) -> some View {
@@ -284,6 +288,14 @@ struct OperationAuditLogView: View {
             defaultFilename: String(localized: "操作审计日志.csv")
         )
         showExporter = true
+    }
+
+    private func handleExportCompletion(_ result: Result<URL, Error>) {
+        let outcome = ExportCompletionHandler.evaluate(result, source: "OperationAuditLogView")
+        operationNotice = ExportCompletionHandler.notice(for: outcome) {
+            guard exportPayload != nil else { return }
+            showExporter = true
+        }
     }
 
     private func actionLabel(_ action: OperationAuditEntry.Action) -> String {

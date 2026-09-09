@@ -4,6 +4,10 @@ on:
   pull_request:
     paths:
       - "project.yml"
+      - "sitekeeper.xcodeproj/**"
+      - ".swiftformat"
+      - ".swiftlint.yml"
+      - ".swiftlint-baseline.json"
       - "Config/**"
       - "Sources/**"
       - "Widget/**"
@@ -20,6 +24,10 @@ on:
       - main
     paths:
       - "project.yml"
+      - "sitekeeper.xcodeproj/**"
+      - ".swiftformat"
+      - ".swiftlint.yml"
+      - ".swiftlint-baseline.json"
       - "Config/**"
       - "Sources/**"
       - "Widget/**"
@@ -61,11 +69,13 @@ jobs:
           bash scripts/release/check_swiftui_identity_policy.sh
           bash scripts/release/check_unchecked_sendable_policy.sh
           bash scripts/release/check_appstore_archive_config.sh
+          python3 scripts/release/check_build_guard_contract.py
+          bash scripts/localization/check_localization_hardcoded_ui.sh --strict
           python3 scripts/legal/export_privacy_policy.py --check
 
   iOS-release-gate:
     name: iOS build, unit tests and release preflight
-    if: github.event_name != 'push'
+    needs: release-boundaries
     runs-on: macos-15
     timeout-minutes: 60
     steps:
@@ -91,7 +101,6 @@ jobs:
 
   ui-smoke:
     name: UI smoke (${{ matrix.device_family }})
-    if: github.event_name != 'push'
     needs: release-boundaries
     runs-on: macos-15
     timeout-minutes: 50

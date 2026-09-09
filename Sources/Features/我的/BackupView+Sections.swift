@@ -92,6 +92,14 @@ extension BackupView {
 
     @ViewBuilder
     var backupStatusSection: some View {
+        if store.loadState == .failed {
+            Section(String(localized: "本地数据读取失败")) {
+                Text(store.persistenceErrorMessage ?? "")
+                    .font(.caption)
+                Button(String(localized: "重试读取本地数据")) { store.loadAsync() }
+                    .disabled(isBusy)
+            }
+        }
         if !statusMessage.isEmpty {
             Section { Text(statusMessage).font(.caption) }
         }

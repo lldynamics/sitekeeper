@@ -24,7 +24,7 @@ struct BackupOverviewSectionsView: View {
                 LabeledContent(String(localized: "数据索引"), value: formattedFileSize(backupEstimate.metadataBytes))
                 LabeledContent(String(localized: "原文件"), value: formattedFileSize(backupEstimate.rawFilesBytes))
                 LabeledContent(String(localized: "预计合计"), value: formattedFileSize(backupEstimate.estimatedBytes))
-                Text(String(localized: "备份导出不设体积上限，会按 ZIP64 流式打包；大文件导出前请确认设备剩余空间充足。"))
+                Text(String(localized: "备份采用 ZIP64 流式导出和恢复：单文件最多 1 GiB，合计最多 32 GiB，最多 100000 个文件。请为备份包、恢复暂存和原文件预留充足空间。"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if !backupEstimate.missingFiles.isEmpty {

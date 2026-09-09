@@ -67,13 +67,16 @@ struct BackupErrorRecoveryTests {
         try Data("not-a-directory".utf8).write(to: invalidStorageRoot, options: .atomic)
         let store = DataStore(storageDirectory: invalidStorageRoot)
         await store.awaitInitialLoad()
+        store.replaceMaterialSheetDrafts([MaterialSheetDraft(title: "本地草稿必须回滚")])
         let previousSnapshot = store.makeSnapshot(includePhotoFiles: false)
+        var importedSnapshot = snapshot
+        importedSnapshot.materialSheetDrafts = [MaterialSheetDraft(title: "导入草稿")]
         let restoreTransaction = try BackupArchiveService.prepareEmbeddedFileRestore(from: archive.fileURL)
 
         do {
             _ = try await BackupImportCoordinator.commitAndPersistImport(
                 restoreTransaction: restoreTransaction,
-                importedSnapshot: snapshot,
+                importedSnapshot: importedSnapshot,
                 previousSnapshot: previousSnapshot,
                 importMode: .overwrite,
                 store: store,
@@ -85,6 +88,7 @@ struct BackupErrorRecoveryTests {
         }
 
         #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+        #expect(store.materialSheetDrafts.map(\.title) == ["本地草稿必须回滚"])
     }
 
     @Test func backupImportCancelDoesNotKeepStagedTempFileOrHalfWriteExistingData() throws {

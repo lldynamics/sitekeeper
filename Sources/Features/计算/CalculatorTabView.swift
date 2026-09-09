@@ -56,7 +56,7 @@ enum CalculatorDestination: CaseIterable {
         }
     }
 
-    @ViewBuilder
+    @MainActor @ViewBuilder
     var destination: some View {
         switch self {
         case .current: CurrentCalcView()

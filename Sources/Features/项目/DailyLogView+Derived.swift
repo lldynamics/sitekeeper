@@ -30,10 +30,6 @@ extension DailyLogView {
         return result
     }
 
-    var selectedDateLogs: [DailyLog] {
-        logs(on: selectedCalendarDate)
-    }
-
     var calendarDays: [Date?] {
         let calendar = Calendar.current
         guard let monthStart = calendar.date(from: calendar.dateComponents([.year, .month], from: calendarMonth)),

@@ -5,6 +5,7 @@ struct DashboardView: View {
     @Environment(ProjectStore.self) var projectStore
     @Environment(FinanceStore.self) var financeStore
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State var dashboardSearchText = ""
     @State private var selectedDashboardSuggestion: RealtimeSearchSuggestion?
     @State private var selectedDashboardDestination: DashboardDestinationSelection?
@@ -229,13 +230,7 @@ struct DashboardView: View {
 
     private var emptyCurrentProjectSelector: some View {
         NavigationLink { ProjectListView() } label: {
-            HStack(spacing: AppSpacing.tight) {
-                Label(String(localized: "暂无进行中工程"), systemImage: "building.2")
-                Spacer()
-                Text(String(localized: "去添加"))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(Color.appPrimaryAction)
-            }
+            emptyCurrentProjectSelectorLabel
         }
         .buttonStyle(.plain)
         .padding(.horizontal, AppSpacing.normal)
@@ -243,6 +238,28 @@ struct DashboardView: View {
         .background {
             AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal - 2) {
                 Color.clear
+            }
+        }
+        .accessibilityIdentifier("dashboard-empty-active-projects")
+    }
+
+    @ViewBuilder
+    private var emptyCurrentProjectSelectorLabel: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                Label(String(localized: "暂无进行中工程"), systemImage: "building.2")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                Text(String(localized: "去添加"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.appPrimaryAction)
+            }
+        } else {
+            HStack(spacing: AppSpacing.tight) {
+                Label(String(localized: "暂无进行中工程"), systemImage: "building.2")
+                Spacer()
+                Text(String(localized: "去添加"))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color.appPrimaryAction)
             }
         }
     }

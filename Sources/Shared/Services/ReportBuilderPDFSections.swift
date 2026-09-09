@@ -25,7 +25,7 @@ enum ReportBuilderPDFSections {
         if options.includeLabor {
             lines.append(String(localized: "人工记录"))
             lines += snapshot.laborRecords.map {
-                "- \($0.date)  \($0.workers)人 × \($0.hours)h  单价\(ReportBuilder.money(ReportBuilder.number($0.unitRate), currencyDisplayMode: currencyDisplayMode))  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0), currencyDisplayMode: currencyDisplayMode))  \($0.note)"
+                "- \($0.date)  \($0.workers)人 × \($0.hours)\($0.workloadUnit.displayName)  单价\(ReportBuilder.money(ReportBuilder.number($0.unitRate), currencyDisplayMode: currencyDisplayMode))/\($0.workloadUnit.displayName)  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0), currencyDisplayMode: currencyDisplayMode))  \($0.note)"
             }
             lines.append("")
         }

@@ -1,14 +1,15 @@
 import XCTest
 import UIKit
 
+@MainActor
 final class SitekeeperUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
     }
 }
 
-private extension SitekeeperUITests {
-    fileprivate var shouldWriteAppStoreScreenshots: Bool {
+extension SitekeeperUITests {
+    var shouldWriteAppStoreScreenshots: Bool {
         let value = ProcessInfo.processInfo.environment["UITEST_CAPTURE_APP_STORE_SCREENSHOTS"]?.lowercased()
         return value == "1" || value == "true" || value == "yes"
             || FileManager.default.fileExists(atPath: screenshotCaptureFlagURL.path)
@@ -19,7 +20,7 @@ private extension SitekeeperUITests {
             .appendingPathComponent(".capture-app-store-screenshots")
     }
 
-    fileprivate var shouldRunExtendedScenarios: Bool {
+    var shouldRunExtendedScenarios: Bool {
         let value = ProcessInfo.processInfo.environment["UITEST_RUN_EXTENDED_SCENARIOS"]?.lowercased()
         return value == "1" || value == "true" || value == "yes"
     }
@@ -40,7 +41,7 @@ private extension SitekeeperUITests {
         return screenshotRootDirectory.appendingPathComponent(deviceFamily, isDirectory: true)
     }
 
-    fileprivate func prepareScreenshotDirectory() {
+    func prepareScreenshotDirectory() {
         guard shouldWriteAppStoreScreenshots else { return }
         let manager = FileManager.default
         let directory = screenshotOutputDirectory
@@ -50,7 +51,7 @@ private extension SitekeeperUITests {
         try? manager.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
-    fileprivate func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
+    func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
         guard shouldWriteAppStoreScreenshots else { return }
         let url = screenshotOutputDirectory.appendingPathComponent("\(name).png")
         do {
@@ -61,7 +62,7 @@ private extension SitekeeperUITests {
         }
     }
 
-    fileprivate func attachScreenshot(_ app: XCUIApplication, named name: String) {
+    func attachScreenshot(_ app: XCUIApplication, named name: String) {
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = name
         attachment.lifetime = .keepAlways
@@ -69,14 +70,16 @@ private extension SitekeeperUITests {
     }
 
     @discardableResult
-    fileprivate func launchApp(
+    func launchApp(
         skipOnboarding: Bool = true,
         resetState: Bool = false,
         enableBackupPreview: Bool = false,
         allowClearWithoutBackup: Bool = false,
-        dynamicTypeSize: String? = nil
+        dynamicTypeSize: String? = nil,
+        languageCode: String = "zh-Hans"
     ) -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments += ["-languageCode", languageCode, "-AppleLanguages", "(\(languageCode))"]
         if skipOnboarding {
             app.launchArguments += ["-uitest-skip-onboarding"]
             app.launchEnvironment["UITEST_SKIP_ONBOARDING"] = "1"
@@ -101,7 +104,7 @@ private extension SitekeeperUITests {
         return app
     }
 
-    fileprivate func tapPrimaryModule(_ app: XCUIApplication, name: String) {
+    func tapPrimaryModule(_ app: XCUIApplication, name: String) {
         let tabIdentifier: String? = switch name {
         case "工作台": "house.fill"
         case "项目": "building.2.fill"
@@ -112,8 +115,7 @@ private extension SitekeeperUITests {
         }
 
         if let tabIdentifier,
-           app.tabBars.buttons[tabIdentifier].waitForExistence(timeout: 2)
-        {
+           app.tabBars.buttons[tabIdentifier].waitForExistence(timeout: 2) {
             app.tabBars.buttons[tabIdentifier].tap()
             return
         }
@@ -136,7 +138,7 @@ private extension SitekeeperUITests {
         }
     }
 
-    fileprivate func waitForPrimaryModule(_ app: XCUIApplication, name: String, timeout: TimeInterval = 5) -> Bool {
+    func waitForPrimaryModule(_ app: XCUIApplication, name: String, timeout: TimeInterval = 5) -> Bool {
         if app.tabBars.buttons[name].waitForExistence(timeout: timeout) {
             return true
         }
@@ -146,7 +148,7 @@ private extension SitekeeperUITests {
         return app.staticTexts[name].waitForExistence(timeout: timeout)
     }
 
-    fileprivate func button(
+    func button(
         _ app: XCUIApplication,
         identifier: String,
         scrollingAttempts: Int = 4
@@ -166,7 +168,7 @@ private extension SitekeeperUITests {
         return button
     }
 
-    fileprivate func element(
+    func element(
         _ app: XCUIApplication,
         identifier: String,
         scrollingAttempts: Int = 6
@@ -208,7 +210,7 @@ private extension SitekeeperUITests {
         shouldSwipeUp ? app.swipeUp() : app.swipeDown()
     }
 
-    fileprivate func waitForElementByScrollingDown(
+    func waitForElementByScrollingDown(
         _ element: XCUIElement,
         in container: XCUIElement,
         attempts: Int = 12,
@@ -228,7 +230,7 @@ private extension SitekeeperUITests {
         return false
     }
 
-    fileprivate func openDataSafetyCenter(_ app: XCUIApplication) {
+    func openDataSafetyCenter(_ app: XCUIApplication) {
         for attempt in 0..<3 {
             tapPrimaryModule(app, name: "我的")
 
@@ -264,7 +266,7 @@ private extension SitekeeperUITests {
         XCTFail("Unable to open profile data management entry")
     }
 
-    fileprivate func openSampleDataImportConfirmation(_ app: XCUIApplication) {
+    func openSampleDataImportConfirmation(_ app: XCUIApplication) {
         openDataSafetyCenter(app)
 
         let directImportButton = app.buttons["data-management-import-sample-data"]
@@ -282,13 +284,13 @@ private extension SitekeeperUITests {
         XCTAssertTrue(app.alerts["恢复测试数据？"].waitForExistence(timeout: 5))
     }
 
-    fileprivate func importSampleDataThroughUI(_ app: XCUIApplication) {
+    func importSampleDataThroughUI(_ app: XCUIApplication) {
         openSampleDataImportConfirmation(app)
         app.alerts["恢复测试数据？"].buttons["清空并导入"].tap()
         XCTAssertTrue(app.staticTexts["已恢复测试数据"].waitForExistence(timeout: 8))
     }
 
-    fileprivate func ensureDashboardBusinessMetricsVisible(_ app: XCUIApplication) {
+    func ensureDashboardBusinessMetricsVisible(_ app: XCUIApplication) {
         let metricId = "dashboard-business-receivable-aging"
         let metric = app.descendants(matching: .any).matching(identifier: metricId).firstMatch
         if metric.waitForExistence(timeout: 1) {
@@ -310,7 +312,7 @@ private extension SitekeeperUITests {
     }
 
     @discardableResult
-    fileprivate func openImportedProject(
+    func openImportedProject(
         _ app: XCUIApplication,
         preferredName: String = "阳光花园 3# 楼"
     ) -> String {

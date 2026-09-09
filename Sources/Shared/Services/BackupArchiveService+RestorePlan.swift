@@ -74,6 +74,7 @@ extension BackupArchiveService {
             do {
                 try SimpleZipArchiveReader.scan(
                     fileURL: fileURL,
+                    limits: .backup,
                     shouldCancel: { shouldCancel?() == true || Task.isCancelled },
                     onProgress: { completed, total, path in
                         report(completed, total, locFormat("恢复 %@", path))

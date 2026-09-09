@@ -208,7 +208,7 @@ enum QuickToolDestination {
     case calculator(CalculatorDestination)
     case watermarkCamera
 
-    @ViewBuilder
+    @MainActor @ViewBuilder
     var view: some View {
         switch self {
         case .calculator(let destination):

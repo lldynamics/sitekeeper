@@ -5,6 +5,8 @@ enum ProjectDetailActionResult<Value> {
     case failure(String)
 }
 
+extension ProjectDetailActionResult: Sendable where Value: Sendable {}
+
 enum ProjectDetailFinanceDocumentActions {
     static let maxImportedDocumentBytes = ImportLimitPolicy.maxImportBytes
 

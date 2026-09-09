@@ -116,7 +116,10 @@ extension DailyLogView {
     }
 
     var calendarContent: some View {
-        Group {
+        let calendarIndex = DailyLogCalendarIndex(logs: filtered)
+        let selectedDateLogs = calendarIndex.logs(on: selectedCalendarDate)
+
+        return Group {
             Section {
                 VStack(spacing: AppSpacing.normal) {
                     HStack {
@@ -185,7 +188,7 @@ extension DailyLogView {
                                 date: slot.date,
                                 isSelected: slot.date.map { Calendar.current.isDate($0, inSameDayAs: selectedCalendarDate) } ?? false,
                                 isToday: slot.date.map { Calendar.current.isDateInToday($0) } ?? false,
-                                logs: slot.date.map { logs(on: $0) } ?? []
+                                logs: slot.date.map { calendarIndex.logs(on: $0) } ?? []
                             ) {
                                 if let date = slot.date {
                                     selectedCalendarDate = date

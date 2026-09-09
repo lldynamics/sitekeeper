@@ -26,7 +26,7 @@ extension ReportBuilder {
         let recordedLaborCost = labor.reduce(0) { $0 + laborLineTotal($1) }
         let materialCost = recordedMaterialCost > 0 ? recordedMaterialCost : project.materialCostValue.doubleValue
         let laborCost = recordedLaborCost > 0 ? recordedLaborCost : project.laborCostValue.doubleValue
-        let totalLaborHours = labor.reduce(0) { $0 + laborHours($1) }
+        let laborWorkload = laborWorkloadSummary(labor)
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
         let deliveryHealth = projectDeliveryHealthReport(
             financialRecords: financialRecords,
@@ -77,7 +77,7 @@ extension ReportBuilder {
             y = drawPDFText(locFormat("工期: %@ 至 %@", project.startDate.isEmpty ? locNotFilled : project.startDate, project.expectedEndDate.isEmpty ? locNotFilled : project.expectedEndDate), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(max(contract - paid, 0))), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            _ = drawPDFText(locFormat("毛利估算: %@  工时: %@  进度: %lld%%", money(contract - materialCost - laborCost), fmt(totalLaborHours), Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            _ = drawPDFText(locFormat("毛利估算: %@  人工量: %@  进度: %lld%%", money(contract - materialCost - laborCost), laborWorkload.displayText, Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
 
             // 2. 目录
             context.beginPage()

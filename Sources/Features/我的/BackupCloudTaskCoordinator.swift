@@ -16,7 +16,7 @@ enum BackupCloudTaskCoordinator {
 
     static func uploadBackup(
         snapshot: BackupSnapshot,
-        progress: @escaping (BackupArchiveProgress) -> Void
+        progress: @escaping @Sendable (BackupArchiveProgress) -> Void
     ) async throws -> CloudBackupExecutionResult {
         try await CloudBackupCoordinator.shared.backupToCloud(
             snapshot: snapshot,

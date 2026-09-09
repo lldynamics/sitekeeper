@@ -1,6 +1,14 @@
 import Foundation
 
 extension DataHealthView {
+    func handleHealthReportExportCompletion(_ result: Result<URL, Error>) {
+        let outcome = ExportCompletionHandler.evaluate(result, source: "DataHealthView")
+        operationNotice = ExportCompletionHandler.notice(for: outcome) {
+            guard exportPayload != nil else { return }
+            showExporter = true
+        }
+    }
+
     func repairReferenceIssues() {
         let beforeCount = referenceIssueCount
         OperationAuditLog.record(

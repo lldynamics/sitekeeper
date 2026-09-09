@@ -8,13 +8,15 @@ struct WatermarkCameraCaptureView: View {
     let showGrid: Bool
     let flashEnabled: Bool
     let burstCount: Int
-    let onCapture: ([UIImage], Date) -> Void
+    let onCapture: @MainActor @Sendable ([UIImage], Date) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @StateObject private var camera = WatermarkCameraSession()
     @State private var isCapturing = false
     @State private var captureError = ""
     @State private var showError = false
+    @State private var appearanceID = UUID()
+    @State private var isVisible = false
 
     var body: some View {
         ZStack {
@@ -94,13 +96,19 @@ struct WatermarkCameraCaptureView: View {
             Text(captureError)
         }
         .onAppear {
-            camera.start()
-            if let message = camera.lastErrorMessage {
-                captureError = message
-                showError = true
+            isVisible = true
+            let currentAppearance = appearanceID
+            camera.start { message in
+                guard isVisible, appearanceID == currentAppearance else { return }
+                if let message {
+                    captureError = message
+                    showError = true
+                }
             }
         }
         .onDisappear {
+            isVisible = false
+            appearanceID = UUID()
             camera.stop()
         }
     }
@@ -108,24 +116,24 @@ struct WatermarkCameraCaptureView: View {
     private func capture() {
         guard !isCapturing else { return }
         isCapturing = true
+        let currentAppearance = appearanceID
         camera.capture(
             count: burstCount,
             flashMode: flashEnabled ? .on : .off
         ) { images, capturedAt, errorMessage in
-            Task { @MainActor in
-                isCapturing = false
-                if let errorMessage {
-                    captureError = errorMessage
-                    showError = true
-                    return
-                }
-                if !images.isEmpty {
-                    onCapture(images, capturedAt)
-                    dismiss()
-                } else {
-                    captureError = String(localized: "wm_camera_capture_empty_result_error")
-                    showError = true
-                }
+            guard isVisible, appearanceID == currentAppearance else { return }
+            isCapturing = false
+            if let errorMessage {
+                captureError = errorMessage
+                showError = true
+                return
+            }
+            if !images.isEmpty {
+                onCapture(images, capturedAt)
+                dismiss()
+            } else {
+                captureError = String(localized: "wm_camera_capture_empty_result_error")
+                showError = true
             }
         }
     }
@@ -157,164 +165,6 @@ private final class PreviewContainerView: UIView {
     }
 }
 
-private final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCaptureDelegate {
-    let session = AVCaptureSession()
-    private let photoOutput = AVCapturePhotoOutput()
-    private let sessionQueue = DispatchQueue(label: "watermark.camera.session")
-    private var completion: (([UIImage], Date, String?) -> Void)?
-    private var targetCount = 1
-    private var capturedImages: [UIImage] = []
-    private var capturedAt = Date()
-    private var currentFlashMode: AVCaptureDevice.FlashMode = .off
-    private(set) var lastErrorMessage: String?
-    private var isConfigured = false
-
-    func start() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.configureIfNeeded()
-            guard self.isConfigured else { return }
-            if !self.session.isRunning {
-                self.session.startRunning()
-            }
-        }
-    }
-
-    func stop() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            if self.session.isRunning {
-                self.session.stopRunning()
-            }
-        }
-    }
-
-    func capture(
-        count: Int,
-        flashMode: AVCaptureDevice.FlashMode,
-        completion: @escaping ([UIImage], Date, String?) -> Void
-    ) {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
-            self.configureIfNeeded()
-            guard self.isConfigured else {
-                completion([], Date(), self.lastErrorMessage ?? String(localized: "wm_camera_init_failed_error"))
-                return
-            }
-            self.completion = completion
-            self.targetCount = max(1, count)
-            self.capturedImages = []
-            self.capturedAt = Date()
-            self.currentFlashMode = flashMode
-            self.captureOne()
-        }
-    }
-
-    private func configureIfNeeded() {
-        guard !isConfigured else { return }
-        let authStatus = AVCaptureDevice.authorizationStatus(for: .video)
-        if authStatus == .denied || authStatus == .restricted {
-            lastErrorMessage = String(localized: "wm_camera_permission_not_enabled_settings_error")
-            return
-        }
-        if authStatus == .notDetermined {
-            lastErrorMessage = String(localized: "wm_camera_permission_request_first_error")
-            return
-        }
-
-        session.beginConfiguration()
-        session.sessionPreset = .photo
-
-        guard let camera = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
-            lastErrorMessage = String(localized: "wm_camera_device_unavailable_error")
-            session.commitConfiguration()
-            return
-        }
-        do {
-            let input = try AVCaptureDeviceInput(device: camera)
-            if session.canAddInput(input) {
-                session.addInput(input)
-            } else {
-                lastErrorMessage = String(localized: "wm_camera_add_input_failed_error")
-                session.commitConfiguration()
-                return
-            }
-        } catch {
-            lastErrorMessage = String(
-                format: String(localized: "wm_camera_input_failed_format"),
-                error.localizedDescription
-            )
-            session.commitConfiguration()
-            return
-        }
-
-        if session.canAddOutput(photoOutput) {
-            session.addOutput(photoOutput)
-        } else {
-            lastErrorMessage = String(localized: "wm_camera_add_output_failed_error")
-            session.commitConfiguration()
-            return
-        }
-        if let bestDimensions = bestSupportedPhotoDimensions(from: camera.activeFormat) {
-            photoOutput.maxPhotoDimensions = bestDimensions
-        }
-        session.commitConfiguration()
-        isConfigured = true
-    }
-
-    private func captureOne() {
-        let settings = AVCapturePhotoSettings()
-        if photoOutput.supportedFlashModes.contains(currentFlashMode) {
-            settings.flashMode = currentFlashMode
-        }
-        settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
-        photoOutput.capturePhoto(with: settings, delegate: self)
-    }
-
-    private func bestSupportedPhotoDimensions(from format: AVCaptureDevice.Format) -> CMVideoDimensions? {
-        var result: CMVideoDimensions?
-        var maxPixelCount = 0
-        for dimensions in format.supportedMaxPhotoDimensions {
-            let pixelCount = Int(dimensions.width) * Int(dimensions.height)
-            if pixelCount > maxPixelCount {
-                maxPixelCount = pixelCount
-                result = dimensions
-            }
-        }
-        return result
-    }
-
-    func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
-        if let error {
-            finish(
-                error: String(
-                    format: String(localized: "wm_camera_capture_failed_format"),
-                    error.localizedDescription
-                )
-            )
-            return
-        }
-        guard let data = photo.fileDataRepresentation(), let image = UIImage(data: data) else {
-            finish(error: String(localized: "wm_camera_corrupted_photo_data_error"))
-            return
-        }
-        capturedImages.append(image)
-        if capturedImages.count < targetCount {
-            sessionQueue.asyncAfter(deadline: .now() + 0.12) { [weak self] in
-                self?.captureOne()
-            }
-        } else {
-            finish(error: nil)
-        }
-    }
-
-    private func finish(error: String?) {
-        let completion = self.completion
-        self.completion = nil
-        completion?(capturedImages, capturedAt, error)
-    }
-}
-
 private struct CameraGridOverlay: View {
     var body: some View {
         GeometryReader { geo in
@@ -340,12 +190,14 @@ private struct CameraGridOverlay: View {
     }
 }
 
+@MainActor
 final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var locationText = ""
     @Published var statusText = ""
 
     private let manager = CLLocationManager()
     private let geocoder = CLGeocoder()
+    private var geocodingGeneration = UUID()
 
     override init() {
         super.init()
@@ -354,6 +206,8 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
     }
 
     func requestLocation() {
+        geocodingGeneration = UUID()
+        geocoder.cancelGeocode()
         guard CLLocationManager.locationServicesEnabled() else {
             statusText = String(localized: "wm_camera_location_service_disabled")
             return
@@ -372,30 +226,42 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
         }
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        if manager.authorizationStatus == .authorizedWhenInUse || manager.authorizationStatus == .authorizedAlways {
-            manager.requestLocation()
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let authorization = manager.authorizationStatus
+        Task { @MainActor in
+            if authorization == .authorizedWhenInUse || authorization == .authorizedAlways {
+                self.manager.requestLocation()
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let latestLocation = locations.last else { return }
         let coordinate = latestLocation.coordinate
-        let fallback = String(format: "%.5f, %.5f", coordinate.latitude, coordinate.longitude)
+        let latitude = coordinate.latitude
+        let longitude = coordinate.longitude
+        Task { @MainActor in
+            self.resolveLocation(latitude: latitude, longitude: longitude)
+        }
+    }
+
+    private func resolveLocation(latitude: Double, longitude: Double) {
+        let generation = UUID()
+        geocodingGeneration = generation
+        geocoder.cancelGeocode()
+        let latestLocation = CLLocation(latitude: latitude, longitude: longitude)
+        let fallback = String(format: "%.5f, %.5f", latitude, longitude)
         geocoder.reverseGeocodeLocation(latestLocation) { [weak self] placemarks, _ in
-            Task { @MainActor in
-                guard let self else { return }
-                if let placemark = placemarks?.first {
-                    let readable = [
-                        placemark.administrativeArea,
-                        placemark.locality,
-                        placemark.subLocality,
-                        placemark.thoroughfare,
-                        placemark.name
-                    ]
+            let readable = placemarks?.first.map { placemark in
+                [placemark.administrativeArea, placemark.locality, placemark.subLocality,
+                 placemark.thoroughfare, placemark.name]
                     .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
                     .filter { !$0.isEmpty }
                     .joined(separator: " ")
+            }
+            Task { @MainActor in
+                guard let self, self.geocodingGeneration == generation else { return }
+                if let readable {
                     if readable.isEmpty {
                         self.locationText = fallback
                     } else {
@@ -410,7 +276,9 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        statusText = String(localized: "wm_camera_location_failed")
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        Task { @MainActor in
+            self.statusText = String(localized: "wm_camera_location_failed")
+        }
     }
 }

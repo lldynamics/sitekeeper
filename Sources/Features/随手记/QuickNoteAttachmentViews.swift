@@ -402,15 +402,17 @@ struct QuickNoteAudioPlayer: View {
     private func startTimer() {
         stopTimer()
         timer = Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { _ in
-            guard let player else { return }
-            currentTime = player.currentTime
-            if !player.isPlaying || player.currentTime >= player.duration {
-                isPlaying = false
-                currentTime = min(player.currentTime, player.duration)
-                stopTimer()
-                if player.currentTime >= player.duration {
-                    player.currentTime = 0
-                    currentTime = 0
+            Task { @MainActor in
+                guard timer != nil, let player else { return }
+                currentTime = player.currentTime
+                if !player.isPlaying || player.currentTime >= player.duration {
+                    isPlaying = false
+                    currentTime = min(player.currentTime, player.duration)
+                    stopTimer()
+                    if player.currentTime >= player.duration {
+                        player.currentTime = 0
+                        currentTime = 0
+                    }
                 }
             }
         }

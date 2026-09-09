@@ -1,11 +1,6 @@
 import SwiftUI
 
 extension DailyLogView {
-    func logs(on date: Date) -> [DailyLog] {
-        let key = Formatters.date.string(from: date)
-        return filtered.filter { $0.date == key }
-    }
-
     func moveMonth(_ value: Int) {
         calendarMonth = Calendar.current.date(byAdding: .month, value: value, to: calendarMonth) ?? calendarMonth
     }

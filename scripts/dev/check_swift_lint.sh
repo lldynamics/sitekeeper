@@ -38,7 +38,9 @@ if [[ "${1:-}" == "--staged" ]]; then
 elif [[ $# -gt 0 ]]; then
   paths=("$@")
 else
-  paths=(Sources Widget Tests UITests)
+  # The configuration already includes Sources, Widget, Tests, and UITests.
+  # Passing those directories separately repeats the configured scan for each root.
+  paths=(.)
 fi
 
 if ! command -v swiftlint >/dev/null 2>&1; then
@@ -47,16 +49,17 @@ if ! command -v swiftlint >/dev/null 2>&1; then
   exit 127
 fi
 
-status=0
 echo "[swiftlint] Checking ${#paths[@]} path(s)."
+existing_paths=()
 for path in "${paths[@]}"; do
   if [[ ! -e "$path" ]]; then
     echo "[swiftlint] Skip missing path: $path"
     continue
   fi
-  if ! swiftlint lint --no-cache --config "$ROOT_DIR/.swiftlint.yml" "$path"; then
-    status=1
-  fi
+  existing_paths+=("$path")
 done
 
-exit $status
+if [[ ${#existing_paths[@]} -gt 0 ]]; then
+  # --config accepts multiple values; terminate options so paths are not consumed as config files.
+  swiftlint lint --no-cache --config "$ROOT_DIR/.swiftlint.yml" -- "${existing_paths[@]}"
+fi

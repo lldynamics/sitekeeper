@@ -69,6 +69,7 @@ struct LaborRecordEditSheet: View {
     @State private var date: Date
     @State private var workers: String
     @State private var hours: String
+    @State private var workloadUnit: LaborWorkloadUnit
     @State private var unitRate: String
     @State private var workType: String
     @State private var teamName: String
@@ -86,6 +87,7 @@ struct LaborRecordEditSheet: View {
         _date = State(initialValue: Formatters.date.date(from: record.date) ?? Date())
         _workers = State(initialValue: record.workers)
         _hours = State(initialValue: record.hours)
+        _workloadUnit = State(initialValue: record.workloadUnit)
         _unitRate = State(initialValue: record.unitRate)
         _workType = State(initialValue: record.workType)
         _teamName = State(initialValue: record.teamName)
@@ -106,6 +108,13 @@ struct LaborRecordEditSheet: View {
         ) {
             Section(String(localized: "人工")) {
                 DatePicker(String(localized: "日期"), selection: $date, displayedComponents: .date)
+                Picker(String(localized: "单位"), selection: $workloadUnit) {
+                    if workloadUnit == .legacyUnspecified {
+                        Text(String(localized: "待确认单位")).tag(LaborWorkloadUnit.legacyUnspecified)
+                    }
+                    Text(String(localized: "工时")).tag(LaborWorkloadUnit.hour)
+                    Text(String(localized: "工天")).tag(LaborWorkloadUnit.workday)
+                }
                 LabeledContent(String(localized: "人数")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         HStack(spacing: 6) {
@@ -127,7 +136,7 @@ struct LaborRecordEditSheet: View {
                         )
                     }
                 }
-                LabeledContent(String(localized: "出工天数")) {
+                LabeledContent(workloadTitle) {
                     VStack(alignment: .trailing, spacing: 2) {
                         HStack(spacing: 6) {
                             TextField("0", text: $hours.numericInput(.days))
@@ -135,7 +144,7 @@ struct LaborRecordEditSheet: View {
                                 .multilineTextAlignment(.trailing)
                                 .focused($editLaborFormFocusedField, equals: .hours)
                                 .frame(minWidth: 72, alignment: .trailing)
-                            Text(String(localized: "天"))
+                            Text(workloadUnit.displayName)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -156,7 +165,7 @@ struct LaborRecordEditSheet: View {
                                 .multilineTextAlignment(.trailing)
                                 .focused($editLaborFormFocusedField, equals: .unitRate)
                                 .frame(minWidth: 88, alignment: .trailing)
-                            Text(String(localized: "元/天"))
+                            Text(rateUnitTitle)
                                 .font(.subheadline)
                                 .foregroundStyle(.secondary)
                         }
@@ -215,6 +224,7 @@ struct LaborRecordEditSheet: View {
         value.date = Formatters.date.string(from: date)
         value.workers = NumericInputSupport.normalizedStorageText(workers, kind: .quantity)
         value.hours = NumericInputSupport.normalizedStorageText(hours, kind: .days)
+        value.workloadUnit = workloadUnit
         value.unitRate = NumericInputSupport.normalizedStorageText(unitRate, kind: .laborRate)
         value.workType = workType.trimmingCharacters(in: .whitespacesAndNewlines)
         value.teamName = teamName.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -224,14 +234,41 @@ struct LaborRecordEditSheet: View {
         return value
     }
 
+    private var workloadTitle: String {
+        switch workloadUnit {
+        case .legacyUnspecified:
+            String(localized: "工作量")
+        case .hour:
+            String(localized: "工时")
+        case .workday:
+            String(localized: "出工天数")
+        }
+    }
+
+    private var rateUnitTitle: String {
+        switch workloadUnit {
+        case .legacyUnspecified:
+            String(localized: "工价")
+        case .hour:
+            String(localized: "人工单价 ¥/工时")
+        case .workday:
+            String(localized: "元/天")
+        }
+    }
+
     private var canSave: Bool {
+        workloadUnit != .legacyUnspecified &&
         InputValidator.validate(workers, kind: .quantity, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(hours, kind: .days, requirement: .requiredNonNegative).isValid &&
         InputValidator.validate(unitRate, kind: .laborRate, requirement: .optionalNonNegative).isValid
     }
 
     private var editLaborTotal: MoneyValue {
-        let totalWorkHours = QuantityValue(text: workers) * QuantityValue(text: hours)
-        return totalWorkHours * MoneyValue(text: unitRate)
+        var draft = record
+        draft.workers = workers
+        draft.hours = hours
+        draft.workloadUnit = workloadUnit
+        draft.unitRate = unitRate
+        return MoneyValue(NSDecimalNumber(value: ReportBuilder.laborLineTotal(draft)).decimalValue)
     }
 }

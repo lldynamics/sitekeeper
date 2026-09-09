@@ -41,9 +41,12 @@ struct StreamingZipArchiveWriter {
     private var entryPaths = Set<String>()
     private var offset: UInt64 = 0
     private var outputHandle: FileHandle?
+    private let limits: BackupArchiveLimits?
+    private var totalUncompressedBytes: UInt64 = 0
 
-    init(fileURL: URL) throws {
+    init(fileURL: URL, limits: BackupArchiveLimits? = nil) throws {
         self.fileURL = fileURL
+        self.limits = limits
         try FileManager.default.createDirectory(
             at: fileURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -82,6 +85,7 @@ struct StreamingZipArchiveWriter {
         }
         let pathData = Data(normalizedPath.utf8)
         let size = UInt64(data.count)
+        try validateLimits(path: normalizedPath, size: size)
         let localOffset = offset
         let dos = StreamingDOSDateTime.now()
         let crc32 = StreamingCRC32.calculate(data)
@@ -106,6 +110,7 @@ struct StreamingZipArchiveWriter {
         }
 
         let size = try sourceFileSize(for: sourceFileURL)
+        try validateLimits(path: normalizedPath, size: size)
         let localOffset = offset
         let dos = StreamingDOSDateTime.now()
         let localExtra = zip64LocalExtra(size: size)
@@ -113,7 +118,7 @@ struct StreamingZipArchiveWriter {
         try write(pathData)
         try write(localExtra)
 
-        let (crc32, written) = try copySourceFileData(from: sourceFileURL)
+        let (crc32, written) = try copySourceFileData(from: sourceFileURL, expectedSize: size)
         guard written == size else {
             throw StreamingZipArchiveWriterError.writeSizeMismatch(expected: Int(clamping: size), actual: Int(clamping: written))
         }
@@ -164,7 +169,7 @@ struct StreamingZipArchiveWriter {
         }
     }
 
-    private mutating func copySourceFileData(from sourceFileURL: URL) throws -> (crc32: UInt32, written: UInt64) {
+    private mutating func copySourceFileData(from sourceFileURL: URL, expectedSize: UInt64) throws -> (crc32: UInt32, written: UInt64) {
         let input = try FileHandle(forReadingFrom: sourceFileURL)
         defer {
             do {
@@ -188,9 +193,17 @@ struct StreamingZipArchiveWriter {
             }
             crc.update(chunk)
             total += UInt64(chunk.count)
+            guard total <= expectedSize else {
+                throw StreamingZipArchiveWriterError.writeSizeMismatch(expected: Int(clamping: expectedSize), actual: Int(clamping: total))
+            }
+            try Task.checkCancellation()
             try write(chunk)
         }
         return (crc.finalValue, total)
+    }
+
+    private mutating func validateLimits(path: String, size: UInt64) throws {
+        try limits?.validate(path: path, size: size, entryCount: entries.count + 1, total: &totalUncompressedBytes)
     }
 
     private func sourceFileSize(for sourceFileURL: URL) throws -> UInt64 {
@@ -400,30 +413,16 @@ private struct StreamingDOSDateTime {
 }
 
 private struct StreamingCRC32 {
-    private var crc: UInt32 = 0xFFFF_FFFF
+    private var crc: UInt32 = 0
 
     mutating func update(_ data: Data) {
-        for byte in data {
-            var value = (crc ^ UInt32(byte)) & 0xFF
-            for _ in 0..<8 {
-                if (value & 1) != 0 {
-                    value = (value >> 1) ^ 0xEDB8_8320
-                } else {
-                    value >>= 1
-                }
-            }
-            crc = (crc >> 8) ^ value
-        }
+        crc = CRC32.updating(crc, with: data)
     }
 
-    var finalValue: UInt32 {
-        crc ^ 0xFFFF_FFFF
-    }
+    var finalValue: UInt32 { crc }
 
     static func calculate(_ data: Data) -> UInt32 {
-        var stream = StreamingCRC32()
-        stream.update(data)
-        return stream.finalValue
+        CRC32.calculate(data)
     }
 }
 
