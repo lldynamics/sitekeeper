@@ -50,7 +50,7 @@ struct ProjectDocumentDetailSheet: View {
                     if !displayedDocument.archiveNumber.isEmpty {
                         LabeledContent(String(localized: "归档编号"), value: displayedDocument.archiveNumber)
                     }
-                    LabeledContent(String(localized: "创建时间"), value: displayedDocument.createdAt)
+                    LabeledContent(String(localized: "创建时间"), value: Formatters.displayDateText(displayedDocument.createdAt))
                     if !linkedMethodTitles.isEmpty {
                         LabeledContent(String(localized: "关联工艺"), value: linkedMethodTitles.joined(separator: "、"))
                     }

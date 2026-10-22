@@ -27,15 +27,15 @@ struct ProjectDetailSnapshot {
         relatedLogs = projectStore.dailyLogs(for: projectId)
         relatedProgress = projectStore.progressTasks(for: projectId)
         relatedDrawings = projectStore.projectDrawings(for: projectId)
-            .sorted { $0.importedAt > $1.importedAt }
+            .sorted { Formatters.isLater($0.importedAt, than: $1.importedAt) }
         relatedContacts = projectStore.projectContacts(for: projectId)
             .sorted { $0.name < $1.name }
         relatedFinancialRecords = projectStore.projectFinancialRecords(for: projectId)
-            .sorted { $0.date > $1.date }
+            .sorted { Formatters.isLater($0.date, than: $1.date) }
         relatedDocuments = projectStore.projectDocuments(for: projectId)
-            .sorted { $0.createdAt > $1.createdAt }
+            .sorted { Formatters.isLater($0.createdAt, than: $1.createdAt) }
         relatedQuickNotes = projectStore.quickNotes(for: projectId)
-            .sorted { $0.createdAt > $1.createdAt }
+            .sorted { Formatters.isLater($0.createdAt, than: $1.createdAt) }
         relatedTodos = projectStore.siteTodos(for: projectId)
             .sorted { ($0.dueDate, $0.title) < ($1.dueDate, $1.title) }
     }

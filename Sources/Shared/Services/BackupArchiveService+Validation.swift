@@ -54,7 +54,7 @@ extension BackupArchiveService {
 
 private extension BackupArchiveService {
     static func validateSupportedSchemaVersion(_ version: Int) throws {
-        guard version == BackupSnapshot.currentSchemaVersion else {
+        guard BackupSnapshot.supportedSchemaVersions.contains(version) else {
             throw BackupArchiveError.unsupportedSchemaVersion(version)
         }
     }

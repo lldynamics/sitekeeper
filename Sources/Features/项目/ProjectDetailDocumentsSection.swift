@@ -166,7 +166,7 @@ struct ProjectDocumentsView: View {
                                     }
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    Text(document.createdAt)
+                                    Text(Formatters.displayDateText(document.createdAt))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                     let registerLine = documentRegisterSummary(for: document)
@@ -406,7 +406,7 @@ struct ProjectDocumentsView: View {
     }
 
     private func parseDate(_ text: String) -> Date? {
-        if let dt = Formatters.dateTime.date(from: text) {
+        if let dt = Formatters.parseDateOrDateTime(text) {
             return dt
         }
         return Formatters.date.date(from: text)

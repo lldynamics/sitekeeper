@@ -111,7 +111,7 @@ struct ProjectDrawingSectionView: View {
                                 .foregroundStyle(.secondary)
                         }
                     }
-                    Text("\(drawing.fileType.uppercased()) · \(drawing.importedAt)")
+                    Text("\(drawing.fileType.uppercased()) · \(Formatters.displayDateText(drawing.importedAt))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                     FlowTagLine(tags: drawingLedgerTags(for: drawing))

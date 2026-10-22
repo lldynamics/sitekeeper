@@ -15,7 +15,7 @@ struct ProjectDocumentMatchSuggestionsView: View {
                         Text(match.document.title)
                             .font(.caption.weight(.semibold))
                             .lineLimit(1)
-                        Text("\(match.record.date) · \(match.record.counterparty.isEmpty ? String(localized: "未填写单位") : match.record.counterparty)")
+                        Text("\(Formatters.displayDateText(match.record.date)) · \(match.record.counterparty.isEmpty ? String(localized: "未填写单位") : match.record.counterparty)")
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                         Text(String(format: String(localized: "建议关联 %@"), ReportBuilder.money(match.record.amountValue.doubleValue)))

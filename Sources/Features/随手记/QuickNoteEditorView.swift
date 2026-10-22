@@ -253,7 +253,7 @@ struct QuickNoteEditSheet: View {
             format: String(localized: "来源: 随手记\n记录时间: %@"),
             note.createdAt
         )
-        let capturedAt = Formatters.dateTime.date(from: note.createdAt)
+        let capturedAt = Formatters.parseDateOrDateTime(note.createdAt)
         var seedPhotos: [DailyLogSeedPhoto] = []
         for attachment in candidates where [.photo, .drawing].contains(attachment.attachmentKind) {
             guard !Task.isCancelled else { break }

@@ -106,7 +106,7 @@ struct StorageCleanupTrashStoreTests {
         #expect(afterIDs == beforeIDs)
     }
 
-    @Test func storageCleanupTrashQuarantineRollsBackWhenManifestWriteFails() throws {
+    @Test func storageCleanupTrashQuarantineRollsBackWhenManifestCannotBeRead() throws {
         let restoreManifest = try StorageCleanupTrashTestSupport.preserveManifest()
         let fileName = "storage-cleanup-manifest-fail-\(UUID().uuidString).bin"
         let fileData = Data([0x61, 0x62, 0x63])
@@ -131,7 +131,7 @@ struct StorageCleanupTrashStoreTests {
             )
             Issue.record("预期清理回收站 manifest 写入失败")
         } catch let error as StorageCleanupTrashError {
-            guard case .manifestWriteFailed = error else {
+            guard case .manifestReadFailed = error else {
                 Issue.record("收到意外 StorageCleanupTrashError：\(error.localizedDescription)")
                 return
             }
@@ -169,7 +169,7 @@ struct StorageCleanupTrashStoreTests {
                 }
                 Issue.record("预期 manifest 写入和回滚恢复都失败")
             } catch let error as StorageCleanupTrashError {
-                guard case .manifestWriteFailed = error else {
+                guard case .manifestReadFailed = error else {
                     Issue.record("收到意外 StorageCleanupTrashError：\(error.localizedDescription)")
                     return
                 }
@@ -298,5 +298,49 @@ struct StorageCleanupTrashStoreTests {
 
         #expect(purgedCount == 0)
         #expect(StorageCleanupTrashStore.loadBatches().contains { $0.id == capturedBatch.id })
+    }
+}
+
+@MainActor
+extension StorageCleanupTrashStoreTests {
+    @Test func corruptManifestRejectsAllMutationsAndRetainsRecoverableBatch() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("trash-corrupt-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let firstName = "trash-existing-\(UUID().uuidString).bin"
+        let nextName = "trash-next-\(UUID().uuidString).bin"
+        let originalData = Data([11, 12])
+        try StorageCleanupTrashTestSupport.write(originalData, to: QuickNoteAttachmentStorage.fileURL(for: firstName))
+        try StorageCleanupTrashTestSupport.write(Data([13]), to: QuickNoteAttachmentStorage.fileURL(for: nextName))
+        defer {
+            StorageCleanupTrashTestSupport.removeFileIfExists(QuickNoteAttachmentStorage.fileURL(for: firstName))
+            StorageCleanupTrashTestSupport.removeFileIfExists(QuickNoteAttachmentStorage.fileURL(for: nextName))
+        }
+        try StorageCleanupTrashStore.withRootURLForTesting(root) {
+            let batch = try StorageCleanupTrashStore.quarantine(
+                plan: .init(quickNoteAttachmentFileNames: [firstName]), snapshot: StorageCleanupTrashTestSupport.emptyUndoSnapshot(),
+                summary: "existing", retentionDays: 7
+            )
+            let manifest = try StorageCleanupTrashStore.manifestURLForTesting()
+            let validManifest = try Data(contentsOf: manifest)
+            let corrupt = Data("invalid manifest".utf8)
+            try corrupt.write(to: manifest, options: .atomic)
+            #expect(throws: StorageCleanupTrashError.self) {
+                try StorageCleanupTrashStore.quarantine(
+                    plan: .init(quickNoteAttachmentFileNames: [nextName]), snapshot: StorageCleanupTrashTestSupport.emptyUndoSnapshot(),
+                    summary: "next", retentionDays: 7
+                )
+            }
+            #expect(QuickNoteAttachmentStorage.data(for: nextName) == Data([13]))
+            #expect(throws: StorageCleanupTrashError.self) { try StorageCleanupTrashStore.restore(batch) }
+            #expect(throws: StorageCleanupTrashError.self) { try StorageCleanupTrashStore.permanentlyDelete(batch) }
+            #expect(StorageCleanupTrashStore.purgeExpiredBatches(now: .distantFuture) == 0)
+            #expect(try Data(contentsOf: manifest) == corrupt)
+            // Per-batch recovery metadata keeps the original batch discoverable.
+            #expect(StorageCleanupTrashStore.loadBatches().map(\.id) == [batch.id])
+            #expect(!QuickNoteAttachmentStorage.exists(fileName: firstName))
+            try validManifest.write(to: manifest, options: .atomic)
+            try StorageCleanupTrashStore.restore(batch)
+            #expect(QuickNoteAttachmentStorage.data(for: firstName) == originalData)
+        }
     }
 }

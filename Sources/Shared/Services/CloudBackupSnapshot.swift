@@ -45,6 +45,23 @@ extension BackupSnapshot {
             snapshot.recentMaterialKeys = []
         }
 
+        var excludedDateCollections = Set<String>()
+        if !normalizedOptions.includeBusinessRecords {
+            excludedDateCollections.formUnion(["materialItems", "quoteItems", "laborRecords", "historyRecords"])
+        }
+        if !normalizedOptions.includeProjectRecords {
+            excludedDateCollections.formUnion(["projects", "dailyLogs", "progressTasks", "siteTodos",
+                                              "projectFinancialRecords", "projectWarehouseMovements"])
+        }
+        if !normalizedOptions.includeProjectFilesAndNotes {
+            excludedDateCollections.formUnion(["projectDrawings", "projectDocuments", "quickNotes"])
+        }
+        if !normalizedOptions.includeKnowledgeBase {
+            excludedDateCollections.formUnion(["materialPriceEntries", "supplierProfiles", "constructionMethods"])
+        }
+        snapshot.legacyDateProvenance.removeAll {
+            excludedDateCollections.contains(String($0.path.split(separator: "/").first ?? ""))
+        }
         snapshot.removeExcludedReferenceLinks()
 
         if !normalizedOptions.includeAttachments {

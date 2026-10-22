@@ -35,7 +35,8 @@ extension DataStore {
                     for: quickNotes,
                     extraAttachments: constructionMethods.flatMap(\.attachments) + constructionMethods.flatMap(\.tutorialAttachments)
                 )
-                : []
+                : [],
+            legacyDateProvenance: legacyDateProvenance
         )
     }
 }

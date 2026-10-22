@@ -26,7 +26,7 @@ enum ProjectFinancialDocumentMatcher {
             }
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
-                return lhs.record.date > rhs.record.date
+                return Formatters.isLater(lhs.record.date, than: rhs.record.date)
             }
             .first
     }
@@ -44,7 +44,7 @@ enum ProjectFinancialDocumentMatcher {
             }
             .sorted { lhs, rhs in
                 if lhs.score != rhs.score { return lhs.score > rhs.score }
-                return lhs.document.createdAt > rhs.document.createdAt
+                return Formatters.isLater(lhs.document.createdAt, than: rhs.document.createdAt)
             }
             .prefix(limit)
             .map { $0 }
@@ -93,7 +93,7 @@ enum ProjectFinancialDocumentMatcher {
     }
 
     private static func parseDate(_ text: String) -> Date? {
-        if let dt = Formatters.dateTime.date(from: text) {
+        if let dt = Formatters.parseDateOrDateTime(text) {
             return dt
         }
         return Formatters.date.date(from: text)

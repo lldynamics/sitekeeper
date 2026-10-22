@@ -407,7 +407,7 @@ enum ProjectFileCollector {
     }
 
     private static func parsedDate(from raw: String) -> Date {
-        if let date = Formatters.dateTime.date(from: raw) {
+        if let date = Formatters.parseDateOrDateTime(raw) {
             return date
         }
         if let date = Formatters.date.date(from: raw) {

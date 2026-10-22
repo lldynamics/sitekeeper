@@ -130,6 +130,7 @@ extension DataStore {
     }
 
     private func clearAllData() {
+        legacyDateProvenance = []
         replaceMaterialItems([])
         replaceQuoteItems([])
         replaceLaborRecords([])

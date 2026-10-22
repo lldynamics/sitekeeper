@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-export PATH="/Applications/Codex.app/Contents/Resources:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
+export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:$PATH"
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
@@ -43,8 +43,8 @@ require_pattern() {
 reject_file "Sample data fixture in production resources" "Sources/Resources/Fixtures/SampleDataFixture.json"
 require_file "Sample data test fixture" "Tests/Fixtures/SampleDataFixture.json"
 
-require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/BackupSnapshot.swift" "static let currentSchemaVersion = 2"
-require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/BackupSnapshot.swift" "guard schemaVersion == BackupSnapshot.currentSchemaVersion"
+require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/BackupSnapshot.swift" "static let currentSchemaVersion = 3"
+require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/BackupSnapshot.swift" "guard Self.supportedSchemaVersions.contains(schemaVersion)"
 require_pattern "BackupSnapshot drawing metadata" "Sources/Shared/Services/BackupSnapshot.swift" "var projectDrawings: [ProjectDrawing]"
 require_pattern "BackupSnapshot drawing file payload" "Sources/Shared/Services/BackupSnapshot.swift" "var drawingFiles: [DrawingBackupFile]"
 require_pattern "BackupSnapshot drawing metadata decode" "Sources/Shared/Services/BackupSnapshot.swift" "projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []"

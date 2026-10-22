@@ -116,7 +116,7 @@ Compose events -> ViewModel -> UseCase -> Repository
 
 - Use the iOS backup ZIP shape: `manifest.json`, `metadata.json`, and referenced attachment directories.
 - Keep `metadata.json` flat, matching `BackupSnapshot`.
-- Match `BackupSnapshot.currentSchemaVersion`; older schemas and packages without `manifest.json` are rejected by iOS.
+- Match `BackupSnapshot.currentSchemaVersion`; schema 2 remains readable through the recorded date migration; unsupported schemas and packages without `manifest.json` are rejected by iOS.
 - Android must accept missing arrays as empty.
 - Android must ignore unknown keys.
 - Android must preserve UUID strings exactly.
@@ -131,7 +131,7 @@ Proposed additive metadata fields for a later iOS patch:
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "exportedAt": "2026-05-16 10:30",
   "exportPlatform": "android",
   "projects": []
@@ -216,7 +216,7 @@ P1 entities:
 - preference arrays and hidden preset keys
 
 Removed compatibility:
-- Legacy backups without `schemaVersion`, schema versions older than the active contract, plain JSON backups, and ZIP packages without `manifest.json` are rejected.
+- Legacy backups without `schemaVersion`, schema versions other than 2 or 3, plain JSON backups, and ZIP packages without `manifest.json` are rejected.
 
 ### Enum Strategy
 

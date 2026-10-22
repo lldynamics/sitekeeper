@@ -30,12 +30,14 @@ struct BackupSchemaHeader: Decodable {
 }
 
 struct BackupSnapshot: Codable, Sendable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 3
+    static let supportedSchemaVersions = [2, 3]
 
     var schemaVersion: Int
     var appVersion: String
     var appBuild: String
     var backupCreatedAt: String
+    var legacyDateProvenance: [LegacyDateProvenance] = []
     var materialItems: [MaterialItem]
     var quoteItems: [QuoteItem]
     var laborRecords: [LaborRecord]
@@ -97,7 +99,8 @@ struct BackupSnapshot: Codable, Sendable {
         photoFiles: [PhotoBackupFile] = [],
         drawingFiles: [DrawingBackupFile] = [],
         documentFiles: [ProjectDocumentBackupFile] = [],
-        quickNoteAttachmentFiles: [QuickNoteAttachmentBackupFile] = []
+        quickNoteAttachmentFiles: [QuickNoteAttachmentBackupFile] = [],
+        legacyDateProvenance: [LegacyDateProvenance] = []
     ) {
         self.schemaVersion = schemaVersion
         self.appVersion = appVersion
@@ -131,6 +134,7 @@ struct BackupSnapshot: Codable, Sendable {
         self.drawingFiles = drawingFiles
         self.documentFiles = documentFiles
         self.quickNoteAttachmentFiles = quickNoteAttachmentFiles
+        self.legacyDateProvenance = legacyDateProvenance
     }
 
     enum CodingKeys: String, CodingKey {
@@ -140,13 +144,13 @@ struct BackupSnapshot: Codable, Sendable {
         case projectContacts, projectFinancialRecords, projectDocuments, quickNotes, projectWarehouseMovements
         case templates, materialPriceEntries, materialSheetDrafts, supplierProfiles, constructionMethods
         case favoriteMaterialKeys, recentMaterialKeys, userMaterials, deletedUserMaterials, hiddenPresetKeys, photoFiles, drawingFiles, documentFiles
-        case quickNoteAttachmentFiles
+        case quickNoteAttachmentFiles, legacyDateProvenance
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
-        guard schemaVersion == BackupSnapshot.currentSchemaVersion else {
+        guard Self.supportedSchemaVersions.contains(schemaVersion) else {
             throw DecodingError.dataCorruptedError(
                 forKey: .schemaVersion,
                 in: container,
@@ -184,11 +188,17 @@ struct BackupSnapshot: Codable, Sendable {
         drawingFiles = try container.decodeIfPresent([DrawingBackupFile].self, forKey: .drawingFiles) ?? []
         documentFiles = try container.decodeIfPresent([ProjectDocumentBackupFile].self, forKey: .documentFiles) ?? []
         quickNoteAttachmentFiles = try container.decodeIfPresent([QuickNoteAttachmentBackupFile].self, forKey: .quickNoteAttachmentFiles) ?? []
+        legacyDateProvenance = try container.decodeIfPresent([LegacyDateProvenance].self, forKey: .legacyDateProvenance) ?? []
+        if schemaVersion == 2 {
+            legacyDateProvenance = try LegacyDateProvenance.capture(from: decoder)
+            schemaVersion = Self.currentSchemaVersion
+        }
     }
 
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(schemaVersion, forKey: .schemaVersion)
+        try container.encode(legacyDateProvenance, forKey: .legacyDateProvenance)
         try container.encode(appVersion, forKey: .appVersion)
         try container.encode(appBuild, forKey: .appBuild)
         try container.encode(backupCreatedAt, forKey: .backupCreatedAt)

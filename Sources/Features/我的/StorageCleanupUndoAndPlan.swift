@@ -8,6 +8,7 @@ struct StorageCleanupUndoSnapshot: Codable, Sendable {
     let projectDocuments: [ProjectDocument]
     let projectFinancialRecords: [ProjectFinancialRecord]
     let projectWarehouseMovements: [ProjectWarehouseMovement]
+    var delta: StorageCleanupRestoreDelta?
 
     @MainActor
     static func capture(from store: DataStore) -> StorageCleanupUndoSnapshot {
@@ -23,7 +24,28 @@ struct StorageCleanupUndoSnapshot: Codable, Sendable {
     }
 
     @MainActor
-    func restore(into store: DataStore) {
+    func scopedForRestoration(after store: DataStore) throws -> StorageCleanupUndoSnapshot {
+        var snapshot = StorageCleanupUndoSnapshot(
+            dailyLogs: [], siteTodos: [], quickNotes: [], projectDrawings: [],
+            projectDocuments: [], projectFinancialRecords: [], projectWarehouseMovements: []
+        )
+        snapshot.delta = try StorageCleanupRestoreDelta(before: self, after: store)
+        return snapshot
+    }
+
+    func validateRestoration() throws {
+        guard delta != nil else { throw StorageCleanupRestoreError.legacySnapshot }
+    }
+
+    @MainActor
+    func restore(into store: DataStore) throws {
+        try validateRestoration()
+        delta?.restore(into: store)
+    }
+
+    /// Immediate rollback only: cleanup is synchronous, so no later user edits can intervene.
+    @MainActor
+    func rollback(into store: DataStore) {
         store.replaceDailyLogs(dailyLogs)
         store.replaceSiteTodos(siteTodos)
         store.replaceQuickNotes(quickNotes)

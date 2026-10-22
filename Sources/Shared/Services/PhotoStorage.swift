@@ -160,6 +160,7 @@ enum PhotoStorage {
                 )
                 guard quarantined else { continue }
                 quarantinedAnyFile = true
+                if FileQuarantineStore.isQuarantineDeferred(for: target.url) { continue }
                 if let entry = latestQuarantineEntry(
                     for: target.url,
                     category: target.category,

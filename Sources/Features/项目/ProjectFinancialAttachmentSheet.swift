@@ -34,7 +34,7 @@ struct ProjectFinancialAttachmentSheet: View {
 
     private var unlinkedDocuments: [ProjectDocument] {
         let linkedSet = Set(linkedDocuments.map(\.id))
-        return documents.filter { !linkedSet.contains($0.id) }.sorted { $0.createdAt > $1.createdAt }
+        return documents.filter { !linkedSet.contains($0.id) }.sorted { Formatters.isLater($0.createdAt, than: $1.createdAt) }
     }
 
     private var selectedDocuments: [ProjectDocument] {
@@ -155,7 +155,7 @@ struct ProjectFinancialAttachmentSheet: View {
                                     }
                                     .font(.caption2)
                                     .foregroundStyle(.secondary)
-                                    Text(suggestion.document.createdAt)
+                                    Text(Formatters.displayDateText(suggestion.document.createdAt))
                                         .font(.caption2)
                                         .foregroundStyle(.secondary)
                                 }

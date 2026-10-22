@@ -5,7 +5,7 @@ enum QuickNoteSearch {
     static func filter(_ notes: [QuickNote], projects: [Project], keyword: String) -> [QuickNote] {
         let names = Dictionary(projects.map { ($0.id, $0.name) }, uniquingKeysWith: { first, _ in first })
         return SearchMatcher.filter(notes, keyword: keyword,
-                                    sort: { $0.createdAt > $1.createdAt },
+                                    sort: { Formatters.isLater($0.createdAt, than: $1.createdAt) },
                                     extraFields: { note in
                                         [note.projectId.flatMap { names[$0] } ?? ""]
                                     })

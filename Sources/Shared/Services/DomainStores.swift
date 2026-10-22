@@ -272,7 +272,7 @@ final class ProjectStore {
         for document in projectDocuments {
             var summary = nextIndex[document.projectId] ?? ProjectActivitySummary()
             summary.documentCount += 1
-            if let createdAt = Formatters.dateTime.date(from: document.createdAt) ?? Formatters.date.date(from: document.createdAt) {
+            if let createdAt = Formatters.parseDateOrDateTime(document.createdAt) ?? Formatters.date.date(from: document.createdAt) {
                 summary.latestDocumentDate = Self.maxDate(summary.latestDocumentDate, createdAt)
             }
             if let linkedFinancialRecordId = document.linkedFinancialRecordId {

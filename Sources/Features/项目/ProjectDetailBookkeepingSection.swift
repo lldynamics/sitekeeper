@@ -108,7 +108,7 @@ struct ProjectBookkeepingView: View {
                     ForEach(unsettledRecords) { record in
                         VStack(alignment: .leading, spacing: 3) {
                             HStack {
-                                Text(record.date)
+                                Text(Formatters.displayDateText(record.date))
                                     .font(.caption.weight(.semibold))
                                 Spacer()
                                 Text(record.dueDate)
@@ -188,7 +188,7 @@ struct ProjectBookkeepingView: View {
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack {
-                                    Text(record.date).font(.callout.weight(.medium))
+                                    Text(Formatters.displayDateText(record.date)).font(.callout.weight(.medium))
                                     Text(record.category.displayName)
                                         .font(.caption2.weight(.semibold))
                                         .foregroundStyle(.secondary)

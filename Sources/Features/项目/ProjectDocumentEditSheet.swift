@@ -4,7 +4,7 @@ enum ProjectDocumentFormDate {
     static func date(from text: String) -> Date? {
         let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else { return nil }
-        return Formatters.date.date(from: normalized) ?? Formatters.dateTime.date(from: normalized)
+        return Formatters.date.date(from: normalized) ?? Formatters.parseDateOrDateTime(normalized)
     }
 }
 

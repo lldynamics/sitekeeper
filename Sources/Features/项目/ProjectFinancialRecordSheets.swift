@@ -193,7 +193,7 @@ struct ProjectFinancialRecordAddSheet: View {
     private var draftRecord: ProjectFinancialRecord {
         ProjectFinancialRecord(
             projectId: projectId,
-            date: Formatters.dateTime.string(from: date),
+            date: Formatters.timestamp(date),
             direction: direction,
             category: category,
             amount: NumericInputSupport.normalizedStorageText(amount, kind: .amount),

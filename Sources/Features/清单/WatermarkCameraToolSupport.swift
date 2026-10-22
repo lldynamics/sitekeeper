@@ -163,7 +163,7 @@ enum WatermarkCameraProjectDocumentWriter {
                 format: String(localized: "wm_camera_project_document_title_format"),
                 Formatters.dateTime.string(from: photo.capturedAt)
             ),
-            createdAt: Formatters.dateTime.string(from: photo.capturedAt),
+            createdAt: Formatters.timestamp(photo.capturedAt),
             category: .constructionRecord,
             note: note,
             projectId: projectId,

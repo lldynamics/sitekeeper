@@ -261,7 +261,7 @@ struct ProjectFinancialRecordEditSheet: View {
 
     private var updatedRecord: ProjectFinancialRecord {
         var value = record
-        value.date = Formatters.dateTime.string(from: date)
+        value.date = Formatters.timestamp(date)
         value.direction = direction
         value.category = ProjectFinancialCategory.normalized(category, for: direction)
         value.amount = NumericInputSupport.normalizedStorageText(amount, kind: .amount)

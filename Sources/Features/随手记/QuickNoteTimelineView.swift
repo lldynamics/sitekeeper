@@ -40,7 +40,7 @@ struct QuickNoteTimelineView: View {
                 title = dateStr
             }
 
-            return DayGroup(id: dateStr, title: title, notes: items.sorted { $0.createdAt > $1.createdAt })
+            return DayGroup(id: dateStr, title: title, notes: items.sorted { Formatters.isLater($0.createdAt, than: $1.createdAt) })
         }.sorted { lhs, rhs in
             lhs.id > rhs.id
         }

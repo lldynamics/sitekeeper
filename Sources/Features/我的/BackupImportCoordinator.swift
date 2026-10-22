@@ -36,6 +36,8 @@ enum BackupImportCoordinator {
 
     @MainActor
     private static func mergeMetadata(_ snapshot: BackupSnapshot, into store: DataStore) {
+        var seen = Set(store.legacyDateProvenance)
+        store.legacyDateProvenance += snapshot.legacyDateProvenance.filter { seen.insert($0).inserted }
         store.mergeMaterialItemsByID(snapshot.materialItems)
         store.mergeQuoteItemsByID(snapshot.quoteItems)
         store.mergeLaborRecordsByID(snapshot.laborRecords)
@@ -64,6 +66,7 @@ enum BackupImportCoordinator {
 
     @MainActor
     private static func overwriteMetadata(_ snapshot: BackupSnapshot, in store: DataStore) {
+        store.legacyDateProvenance = snapshot.legacyDateProvenance
         store.replaceMaterialItems(snapshot.materialItems)
         store.replaceQuoteItems(snapshot.quoteItems)
         store.replaceLaborRecords(snapshot.laborRecords)

@@ -46,8 +46,9 @@ enum StorageCleanupExecutionService {
 
     static func restoreCleanupTrash(_ batch: StorageCleanupTrashBatch, store: DataStore) throws {
         try store.requireMaintenanceAllowed()
+        try batch.snapshot.validateRestoration()
         try StorageCleanupTrashStore.restore(batch)
-        batch.snapshot.restore(into: store)
+        try batch.snapshot.restore(into: store)
         store.scheduleSave()
     }
 
@@ -86,14 +87,14 @@ enum StorageCleanupExecutionService {
         do {
             let batch = try StorageCleanupTrashStore.quarantine(
                 plan: cleanupPlan,
-                snapshot: undoSnapshot,
+                snapshot: try undoSnapshot.scopedForRestoration(after: store),
                 summary: summary,
                 retentionDays: retentionDays
             )
             store.scheduleSave()
             return batch
         } catch {
-            undoSnapshot.restore(into: store)
+            undoSnapshot.rollback(into: store)
             store.scheduleSave()
             throw error
         }

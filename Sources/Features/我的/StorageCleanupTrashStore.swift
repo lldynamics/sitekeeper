@@ -53,6 +53,7 @@ enum StorageCleanupTrashFileKind: String, Codable, Sendable {
 enum StorageCleanupTrashError: LocalizedError {
     case rootUnavailable
     case manifestWriteFailed
+    case manifestReadFailed
     case noFilesToTrash
     case moveToTrashFailed(String)
     case restoreFailed(String)
@@ -64,6 +65,8 @@ enum StorageCleanupTrashError: LocalizedError {
             return String(localized: "无法访问清理回收站目录。")
         case .manifestWriteFailed:
             return String(localized: "无法保存清理回收站清单。")
+        case .manifestReadFailed:
+            return String(localized: "清理回收站清单读取失败，已停止修改并保留原文件。请先恢复清单后重试。")
         case .noFilesToTrash:
             return String(localized: "没有可移入清理回收站的文件。")
         case let .moveToTrashFailed(fileName):
@@ -166,6 +169,18 @@ enum StorageCleanupTrashStore {
         return batches.sorted { lhs, rhs in lhs.createdAt > rhs.createdAt }
     }
 
+    private static func loadBatchesForMutation() throws -> [StorageCleanupTrashBatch] {
+        do {
+            let batches: [StorageCleanupTrashBatch] = try RecoverableDeletionStorage.loadManifest(
+                rootDirectoryName: rootDirectoryName, manifestFileName: manifestFileName, default: []
+            )
+            let ids = Set(batches.map(\.id))
+            return batches + loadRecoveryBatches().filter { !ids.contains($0.id) }
+        } catch {
+            throw StorageCleanupTrashError.manifestReadFailed
+        }
+    }
+
     static func quarantine(
         plan: DeferredProjectFileCleanupPlan,
         snapshot: StorageCleanupUndoSnapshot,
@@ -205,9 +220,10 @@ enum StorageCleanupTrashStore {
                 snapshot: snapshot,
                 files: movedFiles
             )
-            var batches = loadBatches()
+            var batches = try loadBatchesForMutation()
             batches.removeAll { $0.id == batch.id }
             batches.append(batch)
+            try writeRecoveryBatch(batch)
             try saveBatches(batches)
             return batch
         } catch {
@@ -226,19 +242,19 @@ enum StorageCleanupTrashStore {
     }
 
     static func restore(_ batch: StorageCleanupTrashBatch) throws {
+        var batches = try loadBatchesForMutation()
         for file in batch.files {
             try restore(file: file, batchID: batch.id)
         }
         try removeBatchDirectory(batch.id)
-        var batches = loadBatches()
         batches.removeAll { $0.id == batch.id }
         try saveBatches(batches)
     }
 
     static func permanentlyDelete(_ batch: StorageCleanupTrashBatch) throws {
+        var batches = try loadBatchesForMutation()
         do {
             try removeBatchDirectory(batch.id)
-            var batches = loadBatches()
             batches.removeAll { $0.id == batch.id }
             try saveBatches(batches)
         } catch {
@@ -247,7 +263,13 @@ enum StorageCleanupTrashStore {
     }
 
     static func purgeExpiredBatches(now: Date) -> Int {
-        let batches = loadBatches()
+        let batches: [StorageCleanupTrashBatch]
+        do {
+            batches = try loadBatchesForMutation()
+        } catch {
+            StorageIssueLog.recordEvent("storage_cleanup.trash_manifest_read_failed", category: .dataStore, error: error)
+            return 0
+        }
         let purge = RecoverableDeletionStorage.purgeExpiredItems(
             batches,
             now: now,
@@ -432,12 +454,8 @@ private extension StorageCleanupTrashStore {
     }
 
     static func saveRecoveryBatch(_ batch: StorageCleanupTrashBatch) {
-        guard let recoveryURL = rootURL?
-            .appendingPathComponent(batch.id.uuidString, isDirectory: true)
-            .appendingPathComponent(recoveryFileName) else { return }
         do {
-            let data = try JSONEncoder().encode(batch)
-            try data.write(to: recoveryURL, options: .atomic)
+            try writeRecoveryBatch(batch)
         } catch {
             StorageIssueLog.recordEvent(
                 "storage_cleanup.trash_recovery_manifest_write_failed",
@@ -449,6 +467,14 @@ private extension StorageCleanupTrashStore {
                 error: error
             )
         }
+    }
+
+    static func writeRecoveryBatch(_ batch: StorageCleanupTrashBatch) throws {
+        guard let recoveryURL = rootURL?
+            .appendingPathComponent(batch.id.uuidString, isDirectory: true)
+            .appendingPathComponent(recoveryFileName) else { throw StorageCleanupTrashError.rootUnavailable }
+        let data = try JSONEncoder().encode(batch)
+        try data.write(to: recoveryURL, options: .atomic)
     }
 
     static func loadRecoveryBatches() -> [StorageCleanupTrashBatch] {

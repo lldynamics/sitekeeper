@@ -57,11 +57,12 @@ extension DataStore {
 
     private func restoredSnapshotItems<Item: Identifiable>(
         snapshot: [Item],
-        current: [Item]
+        current: [Item],
+        matching wasDeleted: (Item) -> Bool
     ) -> [Item] where Item.ID: Hashable {
-        let snapshotIDs = Set(snapshot.map(\.id))
-        let newItems = current.filter { !snapshotIDs.contains($0.id) }
-        return newItems + snapshot
+        let currentIDs = Set(current.map(\.id))
+        // Undo only this deletion; current records include edits made during the undo window.
+        return current + snapshot.filter { wasDeleted($0) && !currentIDs.contains($0.id) }
     }
 
     func relatedDataCount(for projectId: UUID) -> Int {
@@ -168,26 +169,41 @@ extension DataStore {
 
     func restoreProjectCascade(_ deletion: DataStoreProjectDeletionResult) {
         guard !deletion.isEmpty else { return }
-        replaceProjects(restoredSnapshotItems(snapshot: deletion.snapshot.projects, current: projects))
-        replaceMaterialItems(restoredSnapshotItems(snapshot: deletion.snapshot.materialItems, current: materialItems))
-        replaceQuoteItems(restoredSnapshotItems(snapshot: deletion.snapshot.quoteItems, current: quoteItems))
-        replaceLaborRecords(restoredSnapshotItems(snapshot: deletion.snapshot.laborRecords, current: laborRecords))
-        replaceDailyLogs(restoredSnapshotItems(snapshot: deletion.snapshot.dailyLogs, current: dailyLogs))
-        replaceProgressTasks(restoredSnapshotItems(snapshot: deletion.snapshot.progressTasks, current: progressTasks))
-        replaceSiteTodos(restoredSnapshotItems(snapshot: deletion.snapshot.siteTodos, current: siteTodos))
-        replaceProjectDrawings(restoredSnapshotItems(snapshot: deletion.snapshot.projectDrawings, current: projectDrawings))
-        replaceProjectContacts(restoredSnapshotItems(snapshot: deletion.snapshot.projectContacts, current: projectContacts))
+        let snapshot = deletion.snapshot
+        let projectID = deletion.projectId
+        replaceProjects(restoredSnapshotItems(snapshot: snapshot.projects, current: projects) { $0.id == projectID })
+        replaceMaterialItems(restoredSnapshotItems(snapshot: snapshot.materialItems, current: materialItems) { $0.projectId == projectID })
+        replaceQuoteItems(restoredSnapshotItems(snapshot: snapshot.quoteItems, current: quoteItems) { $0.projectId == projectID })
+        replaceLaborRecords(restoredSnapshotItems(snapshot: snapshot.laborRecords, current: laborRecords) { $0.projectId == projectID })
+        replaceDailyLogs(restoredSnapshotItems(snapshot: snapshot.dailyLogs, current: dailyLogs) { $0.projectId == projectID })
+        replaceProgressTasks(restoredSnapshotItems(snapshot: snapshot.progressTasks, current: progressTasks) { $0.projectId == projectID })
+        replaceSiteTodos(restoredSnapshotItems(snapshot: snapshot.siteTodos, current: siteTodos) { $0.projectId == projectID })
+        replaceProjectDrawings(restoredSnapshotItems(snapshot: snapshot.projectDrawings, current: projectDrawings) { $0.projectId == projectID })
+        restoreProjectDeletionContacts(snapshot.projectContacts, projectID: projectID)
         replaceProjectFinancialRecords(
-            restoredSnapshotItems(snapshot: deletion.snapshot.projectFinancialRecords, current: projectFinancialRecords)
+            restoredSnapshotItems(snapshot: snapshot.projectFinancialRecords, current: projectFinancialRecords) { $0.projectId == projectID }
         )
-        replaceProjectDocuments(restoredSnapshotItems(snapshot: deletion.snapshot.projectDocuments, current: projectDocuments))
-        replaceQuickNotes(restoredSnapshotItems(snapshot: deletion.snapshot.quickNotes, current: quickNotes))
+        replaceProjectDocuments(restoredSnapshotItems(snapshot: snapshot.projectDocuments, current: projectDocuments) { $0.projectId == projectID })
+        replaceQuickNotes(restoredSnapshotItems(snapshot: snapshot.quickNotes, current: quickNotes) { $0.projectId == projectID })
         replaceProjectWarehouseMovements(
-            restoredSnapshotItems(snapshot: deletion.snapshot.projectWarehouseMovements, current: projectWarehouseMovements)
+            restoredSnapshotItems(snapshot: snapshot.projectWarehouseMovements, current: projectWarehouseMovements) { $0.projectId == projectID }
         )
         replaceMaterialSheetDrafts(
-            restoredSnapshotItems(snapshot: deletion.snapshot.materialSheetDrafts, current: materialSheetDrafts)
+            restoredSnapshotItems(snapshot: snapshot.materialSheetDrafts, current: materialSheetDrafts) { $0.projectId == projectID }
         )
+    }
+
+    private func restoreProjectDeletionContacts(_ snapshot: [ProjectContact], projectID: UUID) {
+        let unlinkedContactIDs = Set(snapshot.filter {
+            $0.projectId != projectID && $0.relatedProjectIds.contains(projectID)
+        }.map(\.id))
+        let restored = restoredSnapshotItems(snapshot: snapshot, current: projectContacts) { $0.projectId == projectID }
+        replaceProjectContacts(restored.map { contact in
+            guard unlinkedContactIDs.contains(contact.id), !contact.isLinked(to: projectID) else { return contact }
+            var updated = contact
+            updated.relatedProjectIds.append(projectID)
+            return updated
+        })
     }
 
     func deleteProject(_ projectId: UUID) {

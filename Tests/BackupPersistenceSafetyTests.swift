@@ -72,6 +72,60 @@ struct BackupPersistenceSafetyTests {
         #expect(FileManager.default.fileExists(atPath: store.storeURL.path))
     }
 
+    @Test func cancelledFlushPropagatesCancellationWithoutReportingFailureOrChangingSavedBytes() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        store.replaceProjects([Project(name: "Saved", location: "", status: .active)])
+        try await store.flushSaveOrThrow()
+        let originalData = try Data(contentsOf: store.storeURL)
+        store.replaceProjects([Project(name: "Pending", location: "", status: .active)])
+
+        let cancelledFlush = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await store.flushSaveOrThrow()
+        }
+        do {
+            try await cancelledFlush.value
+            Issue.record("A cancelled flush must propagate CancellationError")
+        } catch is CancellationError {}
+
+        #expect(store.persistenceErrorMessage == nil)
+        #expect(store.loadState == .ready)
+        #expect(try Data(contentsOf: store.storeURL) == originalData)
+        try await store.flushSaveOrThrow()
+        #expect(try JSONDecoder().decode(BackupSnapshot.self, from: Data(contentsOf: store.storeURL)).projects.first?.name == "Pending")
+    }
+
+    @Test func cancelledFlushPreservesAnExistingRealWriteFailure() async throws {
+        let directory = try makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        // Make the destination unwritable as a data file after a successful initial load.
+        try FileManager.default.createDirectory(at: store.storeURL, withIntermediateDirectories: false)
+        let originalFile = store.storeURL.appendingPathComponent("original-data")
+        try Data([0xA1]).write(to: originalFile)
+        do {
+            try await store.flushSaveOrThrow()
+            Issue.record("A directory at the destination must reject the save")
+        } catch {}
+        let writeFailure = try #require(store.persistenceErrorMessage)
+
+        let cancelledFlush = Task { @MainActor in
+            withUnsafeCurrentTask { $0?.cancel() }
+            try await store.flushSaveOrThrow()
+        }
+        do {
+            try await cancelledFlush.value
+            Issue.record("A cancelled flush must propagate CancellationError")
+        } catch is CancellationError {}
+
+        #expect(store.persistenceErrorMessage == writeFailure)
+        #expect(try Data(contentsOf: originalFile) == Data([0xA1]))
+    }
+
     @Test func confirmedRestorePreservesCorruptOriginalAndUnlocksSaving() async throws {
         let directory = try makeDirectory()
         defer { try? FileManager.default.removeItem(at: directory) }

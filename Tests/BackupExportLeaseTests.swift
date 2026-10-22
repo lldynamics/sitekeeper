@@ -123,3 +123,117 @@ struct BackupExportLeaseTests {
         }
     }
 }
+
+@MainActor
+extension BackupExportLeaseTests {
+    @Test func earlierExportKeepsReusedAttachmentWhenLaterSnapshotDoesNotContainIt() async throws {
+        let (store, directory) = try makeStore()
+        defer {
+            store.cancelScheduledSave()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        await store.awaitInitialLoad()
+        let name = "lease-distinct-snapshots-\(UUID().uuidString).bin"
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x41]), fileName: name)
+        let fileURL = QuickNoteAttachmentStorage.fileURL(for: name)
+        defer {
+            StorageCleanupTrashTestSupport.removeFileIfExists(fileURL)
+            for entry in FileQuarantineStore.loadEntries() where entry.originalFileName == name {
+                try? FileQuarantineStore.permanentlyDelete(entry)
+            }
+        }
+        let note = QuickNote(attachments: [QuickNoteAttachment(kind: .file, fileName: name)])
+        store.replaceQuickNotes([note])
+        let firstReader = SuspendedReader()
+        let laterReader = SuspendedReader()
+        let firstExport = Task {
+            try await store.withBackupExport {
+                let snapshot = store.makeSnapshot(includePhotoFiles: false)
+                #expect(snapshot.quickNotes.first?.attachments.first?.fileName == name)
+                await firstReader.wait()
+            }
+        }
+        while !firstReader.started { await Task.yield() }
+        store.replaceQuickNotes([])
+        try QuickNoteAttachmentStorage.deleteOrThrow(fileName: name)
+        let laterExport = Task {
+            try await store.withBackupExport {
+                let snapshot = store.makeSnapshot(includePhotoFiles: false)
+                #expect(snapshot.quickNotes.isEmpty)
+                await laterReader.wait()
+            }
+        }
+        while !laterReader.started { await Task.yield() }
+        #expect(store.activeBackupExportCount == 2)
+        store.replaceQuickNotes([note])
+        firstReader.finish()
+        try await firstExport.value
+        #expect(store.activeBackupExportCount == 1)
+        #expect(QuickNoteAttachmentStorage.exists(fileName: name))
+        #expect(!FileQuarantineStore.isQuarantineDeferred(for: fileURL))
+        laterReader.finish()
+        try await laterExport.value
+        #expect(QuickNoteAttachmentStorage.data(for: name) == Data([0x41]))
+    }
+
+    @Test func ordinaryDeletionKeepsSnapshotAttachmentUntilArchiveFinishes() async throws {
+        let (store, directory) = try makeStore()
+        defer { store.cancelScheduledSave()
+        try? FileManager.default.removeItem(at: directory) }
+        await store.awaitInitialLoad()
+        let name = "lease-delete-\(UUID().uuidString).bin"
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([0x31, 0x32]), fileName: name)
+        defer {
+            StorageCleanupTrashTestSupport.removeFileIfExists(QuickNoteAttachmentStorage.fileURL(for: name))
+            for entry in FileQuarantineStore.loadEntries() where entry.originalFileName == name { try? FileQuarantineStore.permanentlyDelete(entry) }
+        }
+        let note = QuickNote(attachments: [QuickNoteAttachment(kind: .file, fileName: name)])
+        store.replaceQuickNotes([note])
+        try await store.withBackupExport {
+            let snapshot = store.makeSnapshot(includePhotoFiles: false)
+            let deletion = store.removeQuickNotes(ids: [note.id], deferredFileCleanup: .quickNoteAttachments(note.attachments, summary: "lease test"))
+            deletion.performDeferredFileCleanup()
+            #expect(store.quickNotes.isEmpty)
+            #expect(QuickNoteAttachmentStorage.exists(fileName: name))
+            let archive = try BackupArchiveService.makeArchive(from: snapshot)
+            defer { try? FileManager.default.removeItem(at: archive.fileURL) }
+            #expect(archive.missingFiles.isEmpty)
+            let restored = try BackupArchiveService.decodeBackup(from: archive.fileURL)
+            #expect(restored.quickNoteAttachmentFiles.contains { $0.fileName == name && $0.data == Data([0x31, 0x32]) })
+        }
+        #expect(!QuickNoteAttachmentStorage.exists(fileName: name))
+        #expect(FileQuarantineStore.loadEntries().contains { $0.originalFileName == name })
+    }
+
+    @Test func reusingAttachmentBeforeExportEndsCancelsDeferredRemoval() async throws {
+        let (store, directory) = try makeStore()
+        defer { store.cancelScheduledSave()
+        try? FileManager.default.removeItem(at: directory) }
+        await store.awaitInitialLoad()
+        let name = "lease-reuse-\(UUID().uuidString).bin"
+        _ = try QuickNoteAttachmentStorage.saveDataOrThrow(Data([7]), fileName: name)
+        defer { StorageCleanupTrashTestSupport.removeFileIfExists(QuickNoteAttachmentStorage.fileURL(for: name)) }
+        let attachment = QuickNoteAttachment(kind: .file, fileName: name)
+        store.replaceQuickNotes([QuickNote(attachments: [attachment])])
+        try await store.withBackupExport {
+            store.replaceQuickNotes([])
+            try QuickNoteAttachmentStorage.deleteOrThrow(fileName: name)
+            store.replaceQuickNotes([QuickNote(content: "new owner", attachments: [attachment])])
+        }
+        #expect(QuickNoteAttachmentStorage.exists(fileName: name))
+        #expect(!FileQuarantineStore.isQuarantineDeferred(for: QuickNoteAttachmentStorage.fileURL(for: name)))
+    }
+
+    @Test func cloudBackupRejectsMissingAttachmentBeforeAccessingICloud() async throws {
+        let (store, directory) = try makeStore()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        await store.awaitInitialLoad()
+        store.replaceQuickNotes([QuickNote(attachments: [QuickNoteAttachment(kind: .file, fileName: "missing-\(UUID().uuidString).bin")])])
+        do {
+            _ = try await CloudBackupCoordinator.shared.backupToCloud(snapshot: store.makeSnapshot(includePhotoFiles: false))
+            Issue.record("Incomplete archive must not be uploaded")
+        } catch let error as CloudBackupPreparationError {
+            #expect(error == .missingFiles(1))
+        }
+    }
+}

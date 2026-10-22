@@ -11,6 +11,8 @@ extension DataStore {
         let snapshot = makeSnapshot(includePhotoFiles: false)
         do {
             try await persistenceActor.persist(snapshot: snapshot)
+        } catch let error as CancellationError {
+            throw error
         } catch {
             persistenceErrorMessage = String(
                 format: String(localized: "保存本地数据失败：%@"),
@@ -26,7 +28,7 @@ extension DataStore {
         do {
             try await flushSaveOrThrow()
         } catch {
-            // flushSaveOrThrow 已写入 persistenceErrorMessage
+            // Actual save failures are reported by flushSaveOrThrow; cancellation is silent.
         }
     }
 

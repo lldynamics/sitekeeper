@@ -26,6 +26,9 @@ actor CloudBackupCoordinator {
                 )
             }
             archiveFileURL = archive.fileURL
+            guard archive.missingFiles.isEmpty else {
+                throw CloudBackupPreparationError.missingFiles(archive.missingFiles.count)
+            }
 
             let savedFile = try await FileIOTaskRunner.run(
                 priority: .utility,
@@ -83,6 +86,17 @@ actor CloudBackupCoordinator {
                 }
             }
             throw error
+        }
+    }
+}
+
+enum CloudBackupPreparationError: LocalizedError, Equatable {
+    case missingFiles(Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .missingFiles(count):
+            String(format: String(localized: "云备份未上传：有 %lld 个附件原文件缺失，请修复后重试。"), Int64(count))
         }
     }
 }

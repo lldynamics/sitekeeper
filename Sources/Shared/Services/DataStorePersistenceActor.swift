@@ -3,13 +3,17 @@ import Foundation
 actor DataStorePersistenceActor {
     private let storeURL: URL
     private var lastPersistedData: Data?
+    private let writeMigrationBackup: @Sendable (Data, URL) throws -> Void
 
     struct LoadDecodeError: Error {
         let rawData: Data
     }
 
-    init(storeURL: URL) {
+    init(storeURL: URL, writeMigrationBackup: @escaping @Sendable (Data, URL) throws -> Void = {
+        try $0.write(to: $1, options: .atomic)
+    }) {
         self.storeURL = storeURL
+        self.writeMigrationBackup = writeMigrationBackup
     }
 
     func loadSnapshot() throws -> BackupSnapshot? {
@@ -53,6 +57,17 @@ actor DataStorePersistenceActor {
                 .appendingPathComponent("sitekeeper_before_recovery_\(UUID().uuidString).json")
             try FileManager.default.copyItem(at: storeURL, to: preservedURL)
             BackupArchiveSecurity.applyDataProtection(to: preservedURL)
+        }
+        // Preserve the exact v2 bytes before the first v3 write. A copy failure blocks saving.
+        if FileManager.default.fileExists(atPath: storeURL.path) {
+            let previous = try Data(contentsOf: storeURL)
+            if let header = try? JSONDecoder().decode(BackupSchemaHeader.self, from: previous),
+               header.schemaVersion == 2 {
+                let preservedURL = storeURL.deletingLastPathComponent()
+                    .appendingPathComponent("sitekeeper_before_schema3_\(UUID().uuidString).json")
+                try writeMigrationBackup(previous, preservedURL)
+                BackupArchiveSecurity.applyDataProtection(to: preservedURL)
+            }
         }
         try data.write(to: storeURL, options: .atomic)
         BackupArchiveSecurity.applyDataProtection(to: storeURL)

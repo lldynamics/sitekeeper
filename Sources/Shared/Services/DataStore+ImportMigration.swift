@@ -10,6 +10,7 @@ extension DataStore {
     }
 
     func applyLoadedSnapshot(_ snapshot: BackupSnapshot) {
+        legacyDateProvenance = snapshot.legacyDateProvenance
         replaceMaterialItems(snapshot.materialItems)
         replaceQuoteItems(snapshot.quoteItems)
         replaceLaborRecords(snapshot.laborRecords)

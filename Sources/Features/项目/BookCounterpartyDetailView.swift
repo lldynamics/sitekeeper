@@ -326,7 +326,7 @@ struct BookCounterpartyDetailView: View {
     private func counterpartyRecordRow(_ record: ProjectFinancialRecord, showsDueDate: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text(record.date)
+                Text(Formatters.displayDateText(record.date))
                     .font(.caption.weight(.semibold))
                 Spacer()
                 Text(record.normalizedDirection.displayName)

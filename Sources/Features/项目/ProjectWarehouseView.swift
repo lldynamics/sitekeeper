@@ -265,80 +265,27 @@ struct ProjectWarehouseView: View {
         guard !ids.isEmpty else { return }
         flushPendingWarehouseDeletionIfNeeded()
 
-        let movementSnapshot = store.projectWarehouseMovements
-        let documentSnapshot = store.projectDocuments
-        let financialSnapshot = store.projectFinancialRecords
-        let movementTargets = movementSnapshot.filter { ids.contains($0.id) }
-        guard !movementTargets.isEmpty else { return }
-
-        var removableDocumentIDs: Set<UUID> = []
-        var removableFileNames: [String] = []
-
-        if deleteAttachments {
-            let linkedDocumentIds = Set(
-                movementTargets.flatMap(\.linkedDocumentIds)
-            )
-            let remainingMovementDocumentIds = Set(
-                movementSnapshot
-                    .filter { !ids.contains($0.id) }
-                    .flatMap(\.linkedDocumentIds)
-            )
-            let linkedFinancialDocumentIds = Set(financialSnapshot.flatMap(\.linkedDocumentIds))
-            removableDocumentIDs = linkedDocumentIds
-                .subtracting(remainingMovementDocumentIds)
-                .subtracting(linkedFinancialDocumentIds)
-            removableFileNames = documentSnapshot
-                .filter { removableDocumentIDs.contains($0.id) }
-                .map(\.fileName)
-        }
-
-        let summary = deleteAttachments
-        ? String(format: String(localized: "删除 %lld 条出入库流水（含附件）"), Int64(movementTargets.count))
-        : String(format: String(localized: "删除 %lld 条出入库流水"), Int64(movementTargets.count))
-        let movementDeletion = store.removeProjectWarehouseMovements(
+        guard let deletion = ProjectWarehouseDeletionActions.execute(
             ids: ids,
-            audit: DataStoreDeletionAuditContext(
-                summary: summary,
-                detail: String(format: String(localized: "关联附件文件 %lld 个"), Int64(removableFileNames.count)),
-                source: "ProjectWarehouseView"
-            )
-        )
-        guard !movementDeletion.isEmpty else { return }
-
-        var deferredCleanup: DataStoreDeferredFileCleanup?
-        if deleteAttachments, !removableDocumentIDs.isEmpty {
-            let documentDeletion = ProjectDetailFinanceDocumentActions.executeDocumentDeletion(
-                ids: removableDocumentIDs,
-                store: store,
-                documentCleanupMode: .deferred
-            )
-            if let documentDeletion {
-                deferredCleanup = DataStoreDeferredFileCleanup.projectDocumentFiles(
-                    documentDeletion.removableDocumentFileNames,
-                    summary: "projectWarehouse.documentFiles"
-                )
-            }
-        }
+            deleteAttachments: deleteAttachments,
+            store: store
+        ) else { return }
 
         pendingDeleteMovementIds.removeAll()
 
         let message = deleteAttachments
-        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(movementDeletion.deletedCount))
-        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(movementDeletion.deletedCount))
+        ? String(format: String(localized: "已删除 %lld 条出入库流水（含附件）"), Int64(deletion.movements.deletedCount))
+        : String(format: String(localized: "已删除 %lld 条出入库流水"), Int64(deletion.movements.deletedCount))
         undoableDeletion.queue(
             notice: $operationNotice,
             message: message,
             commit: {
-                deferredCleanup?.perform()
-                store.scheduleSave()
+                deletion.commit(in: store)
             },
             undo: {
-                store.replaceProjectWarehouseMovements(movementSnapshot)
-                store.replaceProjectDocuments(documentSnapshot)
-                store.replaceProjectFinancialRecords(financialSnapshot)
-                store.scheduleSave()
+                deletion.restore(in: store)
             },
-            audit: movementDeletion.audit.map(UndoableDeletionAuditContext.init)
+            audit: deletion.movements.audit.map(UndoableDeletionAuditContext.init)
         )
     }
 

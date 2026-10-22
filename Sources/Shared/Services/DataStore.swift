@@ -11,6 +11,7 @@ final class DataStore {
 
     enum LoadState { case loading, ready, failed }
 
+    var legacyDateProvenance: [LegacyDateProvenance] = []
     var persistenceErrorMessage: String?
     private(set) var loadState: LoadState = .loading
     var isApplyingBackup = false

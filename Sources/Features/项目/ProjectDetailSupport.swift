@@ -28,7 +28,7 @@ struct ProjectDrawingTimelineSheet: View {
                                 .foregroundStyle(Color.appSuccess)
                         }
                         Spacer()
-                        Text(drawing.importedAt)
+                        Text(Formatters.displayDateText(drawing.importedAt))
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                     }

@@ -11,7 +11,11 @@ extension DataStore {
             throw PersistenceBlockedError(message: persistenceErrorMessage)
         }
         activeBackupExportCount += 1
-        defer { activeBackupExportCount -= 1 }
+        let fileLease = FileQuarantineStore.beginBackupExport(protecting: referencedFileURLsForBackupProtection())
+        defer {
+            FileQuarantineStore.endBackupExport(fileLease, retaining: referencedFileURLsForBackupProtection())
+            activeBackupExportCount -= 1
+        }
         return try await operation()
     }
 
@@ -19,5 +23,16 @@ extension DataStore {
         guard !isExportingBackup else {
             throw PersistenceBlockedError(message: String(localized: "正在导出备份，请等待完成后再清理或恢复。"))
         }
+    }
+
+    private func referencedFileURLsForBackupProtection() -> Set<URL> {
+        let photos = PhotoStorage.referencedFileNames(logs: dailyLogs, todos: siteTodos)
+        let extraAttachments = constructionMethods.flatMap(\.attachments) + constructionMethods.flatMap(\.tutorialAttachments)
+        let attachments = QuickNoteAttachmentStorage.referencedFileNames(for: quickNotes, extraAttachments: extraAttachments)
+        return Set(photos.map(PhotoStorage.fileURL(for:))
+            + photos.map(PhotoStorage.thumbnailStorageURL(for:))
+            + projectDrawings.map { DrawingStorage.fileURL(for: $0.fileName) }
+            + projectDocuments.map { ProjectDocumentStorage.fileURL(for: $0.fileName) }
+            + attachments.map(QuickNoteAttachmentStorage.fileURL(for:)))
     }
 }
