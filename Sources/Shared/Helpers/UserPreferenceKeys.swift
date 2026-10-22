@@ -26,6 +26,7 @@ enum UserPreferenceKeys {
     static let cloudBackupPendingFileName = "cloudBackup.pendingFileName"
     static let localBackupLastSuccessAt = "backup.local.lastSuccessAt"
     static let backupHealthReminderDays = "backup.health.reminderDays"
+    static let dueOverdueSummaryScheduledAt = "reminders.overdueSummaryScheduledAt"
     static let dueNotificationsEnabled = "reminders.dueNotificationsEnabled"
     static let storageCleanupLargeFileThresholdMB = "storageCleanup.largeFileThresholdMB"
     static let storageCleanupTrashRetentionDays = "storageCleanup.trashRetentionDays"

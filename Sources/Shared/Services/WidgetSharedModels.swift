@@ -242,13 +242,15 @@ enum WidgetDataBuilder {
         backupOverdueCount: Int = 0,
         backupLastSuccessAt: TimeInterval = 0,
         backupReminderDays: Int = 0,
-        now: Date = Date()
+        now: Date = Date(),
+        calendar: Calendar = .current
     ) -> WidgetExportData {
         let activeProjects = projects.filter(\.isActive)
         let pendingTodosCount = todos.filter { !$0.isDone }.count
         let availableStockLineCount = stockLines.filter { $0.quantity > 0 }.count
         let negativeStockLineCount = stockLines.filter { $0.quantity < 0 }.count
-        let today = Calendar.current.startOfDay(for: now)
+        let today = calendar.startOfDay(for: now)
+        let dateParser = WidgetDateParser(timeZone: calendar.timeZone)
         let tasksByProjectID = Dictionary(grouping: tasks, by: \.projectId)
         var pendingTodosByProjectID: [UUID: [WidgetBuilderTodoInput]] = [:]
         for todo in todos where !todo.isDone {
@@ -266,10 +268,10 @@ enum WidgetDataBuilder {
                 }
                 let pendingProjectTodos = pendingTodosByProjectID[project.id] ?? []
                 let overdueTodos = pendingProjectTodos.filter { todo in
-                    guard let dueDate = parseWidgetDate(todo.dueDate) else {
+                    guard let dueDate = dateParser.date(from: todo.dueDate) else {
                         return false
                     }
-                    return Calendar.current.startOfDay(for: dueDate) < today
+                    return calendar.startOfDay(for: dueDate) < today
                 }.count
                 let summary = WidgetProjectSummary(
                     id: project.id,
@@ -306,29 +308,41 @@ enum WidgetDataBuilder {
             lastUpdatedAt: now.timeIntervalSince1970
         )
     }
-
-    private static func parseWidgetDate(_ text: String) -> Date? {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !value.isEmpty else { return nil }
-        if let date = WidgetDateParser.dateTime.date(from: value) { return date }
-        return WidgetDateParser.date.date(from: value)
-    }
 }
 
-private enum WidgetDateParser {
-    static let dateTime: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        return formatter
-    }()
+// Keep a parser local to each build so every date in the risk calculation uses
+// one time zone without mutating shared DateFormatter instances.
+private struct WidgetDateParser {
+    private let dateTimeFormatter: DateFormatter
+    private let dateFormatter: DateFormatter
 
-    static let date: DateFormatter = {
+    init(timeZone: TimeZone) {
+        dateTimeFormatter = Self.makeFormatter("yyyy-MM-dd HH:mm", timeZone: TimeZone(secondsFromGMT: 0)!)
+        dateFormatter = Self.makeFormatter("yyyy-MM-dd", timeZone: timeZone)
+    }
+
+    func date(from text: String) -> Date? {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return nil }
+        if value.hasSuffix("Z"),
+           let date = Self.makeFormatter("yyyy-MM-dd HH:mm:ss'Z'", timeZone: TimeZone(secondsFromGMT: 0)!).date(from: value) {
+            return date
+        }
+        if let date = dateTimeFormatter.date(from: value) { return date }
+        if let date = dateFormatter.date(from: value) { return date }
+        let iso8601 = ISO8601DateFormatter()
+        iso8601.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = iso8601.date(from: value) { return date }
+        iso8601.formatOptions = [.withInternetDateTime]
+        return iso8601.date(from: value)
+    }
+
+    private static func makeFormatter(_ format: String, timeZone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.timeZone = TimeZone(secondsFromGMT: 0)
-        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.timeZone = timeZone
+        formatter.dateFormat = format
         return formatter
-    }()
+    }
 }

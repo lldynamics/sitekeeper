@@ -28,12 +28,8 @@ struct NonNegativeNumberText: Codable, Hashable, Sendable {
             storage = Self.normalize(text)
             return
         }
-        if let number = try? container.decode(Double.self) {
-            storage = Self.normalize(String(number))
-            return
-        }
-        if let integer = try? container.decode(Int.self) {
-            storage = Self.normalize(String(integer))
+        if let number = try? container.decode(Decimal.self), !number.isNaN, number >= .zero {
+            storage = NSDecimalNumber(decimal: number).stringValue
             return
         }
         storage = ""
@@ -45,30 +41,9 @@ struct NonNegativeNumberText: Codable, Hashable, Sendable {
     }
 
     private static func normalize(_ input: String) -> String {
-        let trimmed = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return "" }
-
-        var normalized = trimmed.replacingOccurrences(of: " ", with: "")
-        let hasComma = normalized.contains(",")
-        let hasDot = normalized.contains(".")
-
-        if hasComma && hasDot {
-            normalized = normalized.replacingOccurrences(of: ",", with: "")
-        } else if hasComma {
-            let isThousandsGrouped = normalized.range(
-                of: #"^\d{1,3}(,\d{3})+$"#,
-                options: .regularExpression
-            ) != nil
-            if isThousandsGrouped {
-                normalized = normalized.replacingOccurrences(of: ",", with: "")
-            } else {
-                normalized = normalized.replacingOccurrences(of: ",", with: ".")
-            }
-        }
-
-        guard normalized.range(of: #"^\d+(\.\d+)?$"#, options: .regularExpression) != nil,
-              let decimal = Decimal(string: normalized, locale: Locale(identifier: "en_US_POSIX")),
-              decimal >= 0 else {
+        let normalized = NumericInputSupport.normalizeSeparators(in: input).filter { !$0.isWhitespace }
+        guard let decimal = DataValueParser.decimalValueIfPresent(from: normalized, requiresEntireString: true),
+              !decimal.isNaN, decimal >= .zero else {
             return ""
         }
 

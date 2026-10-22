@@ -204,8 +204,15 @@ enum MaterialLibraryLogicHelpers {
         now: String,
         unitPriceResolver: (PendingMaterialAppendContext) -> String
     ) -> AppendComputationResult {
-        let trimmedQuantity = quantityText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let validQuantity = QuantityValue(text: trimmedQuantity).isPositive ? trimmedQuantity : "1"
+        let validation = appendQuantityValidation(quantityText)
+        guard validation.isValid, let quantity = validation.decimalValue else {
+            return .failure(
+                message: validation.errorMessage ?? String(localized: "数量格式不正确"),
+                nextPendingTargetMode: targetMode,
+                nextPendingDraftID: targetDraftID
+            )
+        }
+        let validQuantity = NSDecimalNumber(decimal: quantity).stringValue
         let note = contexts.count == 1 ? noteText.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         let draftItems = contexts.map { context in
             MaterialSheetDraftItem(

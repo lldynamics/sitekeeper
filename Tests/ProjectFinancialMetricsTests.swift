@@ -330,28 +330,35 @@ struct ProjectFinancialMetricsTests {
         let otherProjectId = UUID()
         let existing = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09 09:00",
+            date: "2026-05-09T09:00:00+08:00",
             direction: .expense,
             amount: "1200.50"
         )
         let otherProject = ProjectFinancialRecord(
             projectId: otherProjectId,
-            date: "2026-05-09 12:00",
+            date: "2026-05-09T12:00:00+08:00",
             direction: .expense,
             amount: "1200.50"
         )
         let draft = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09 18:30",
+            date: "2026-05-09T18:30:00+08:00",
             direction: .expense,
             amount: "1200.5"
         )
 
-        let warnings = ProjectFinancialDuplicateDetector.warnings(for: draft, in: [existing, otherProject])
+        let warnings = ProjectFinancialDuplicateDetector.warnings(for: draft, in: [existing, otherProject], timeZone: TimeZone(identifier: "Asia/Shanghai")!)
 
         #expect(warnings.count == 1)
         #expect(warnings.first?.record.id == existing.id)
         #expect(warnings.first?.reasons.contains(.amountAndDate) == true)
+    }
+
+    @Test func duplicateDaysRespectLegacyUTCAndExplicitOffsets() throws {
+        let zone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-09 18:30", timeZone: zone) == "2026-05-10")
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-10T02:30:00+08:00", timeZone: zone) == "2026-05-10")
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-09", timeZone: zone) == "2026-05-09")
     }
 
     @Test func duplicateDetectorIgnoresCurrentRecordWhenEditing() {

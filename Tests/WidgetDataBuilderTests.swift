@@ -64,6 +64,67 @@ struct WidgetDataBuilderTests {
         #expect(result.lastUpdatedAt > 0)
     }
 
+    @Test(arguments: [
+        ("Asia/Shanghai", "2026-10-13T00:30:00+08:00"),
+        ("America/Los_Angeles", "2026-10-13T00:30:00-07:00")
+    ])
+    func builderDoesNotTreatTodaysLocalDeadlineAsOverdue(zoneID: String, nowText: String) throws {
+        let zone = try #require(TimeZone(identifier: zoneID))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let now = try #require(ISO8601DateFormatter().date(from: nowText))
+        let future = WidgetBuilderProjectInput(id: UUID(), name: "A future", status: "active", isActive: true)
+        let today = WidgetBuilderProjectInput(id: UUID(), name: "B today", status: "active", isActive: true)
+        let overdue = WidgetBuilderProjectInput(id: UUID(), name: "C overdue", status: "active", isActive: true)
+
+        let result = WidgetDataBuilder.build(
+            projects: [today, overdue, future],
+            todos: [
+                WidgetBuilderTodoInput(projectId: future.id, isDone: false, dueDate: "2026-10-14"),
+                WidgetBuilderTodoInput(projectId: today.id, isDone: false, dueDate: "2026-10-13"),
+                WidgetBuilderTodoInput(projectId: overdue.id, isDone: false, dueDate: "2026-10-12")
+            ],
+            tasks: [],
+            stockLines: [],
+            now: now,
+            calendar: calendar
+        )
+
+        // Only yesterday's deadline has priority; today's deadline ties with a future day.
+        #expect(result.projects.map(\.id) == [overdue.id, future.id, today.id])
+    }
+
+    @Test(arguments: [
+        ("Asia/Shanghai", "2026-10-13T00:30:00+08:00", "2026-10-12T15:30:00Z", "2026-10-12T17:30:00.000Z"),
+        ("America/Los_Angeles", "2026-10-13T00:30:00-07:00", "2026-10-13T01:30:00+08:00", "2026-10-13T08:30:00.000Z")
+    ])
+    func builderUsesExplicitTimestampOffsetsForLocalDeadlineRisk(
+        zoneID: String, nowText: String, overdueText: String, todayText: String
+    ) throws {
+        let zone = try #require(TimeZone(identifier: zoneID))
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let now = try #require(ISO8601DateFormatter().date(from: nowText))
+        let today = WidgetBuilderProjectInput(id: UUID(), name: "A today", status: "active", isActive: true)
+        let overdue = WidgetBuilderProjectInput(id: UUID(), name: "B overdue", status: "active", isActive: true)
+        let future = WidgetBuilderProjectInput(id: UUID(), name: "C future", status: "active", isActive: true)
+
+        let result = WidgetDataBuilder.build(
+            projects: [today, future, overdue],
+            todos: [
+                WidgetBuilderTodoInput(projectId: today.id, isDone: false, dueDate: todayText),
+                WidgetBuilderTodoInput(projectId: overdue.id, isDone: false, dueDate: overdueText),
+                WidgetBuilderTodoInput(projectId: future.id, isDone: false, dueDate: "2026-10-14")
+            ],
+            tasks: [],
+            stockLines: [],
+            now: now,
+            calendar: calendar
+        )
+
+        #expect(result.projects.map(\.id) == [overdue.id, today.id, future.id])
+    }
+
     @Test func backupRiskRefreshesWhenTheWidgetTimelineAdvances() {
         let lastBackup = Formatters.date.date(from: "2026-05-01")!.timeIntervalSince1970
         let data = WidgetExportData(

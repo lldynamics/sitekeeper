@@ -15,7 +15,7 @@ enum LaborQuoteGenerator {
         return QuoteItem(
             name: String(format: String(localized: "人工费 %@"), record.date),
             unitPrice: rate,
-            quantity: trim(record.totalWorkloadValue.doubleValue),
+            quantity: NSDecimalNumber(decimal: record.totalWorkloadValue.decimal).stringValue,
             unit: quoteUnit,
             notes: record.note,
             taxRate: NumericInputSupport.normalizedStorageText(taxRate, kind: .taxRate),
@@ -24,16 +24,6 @@ enum LaborQuoteGenerator {
             status: .draft,
             projectId: record.projectId
         )
-    }
-
-    private static func trim(_ value: Double) -> String {
-        let rounded = value.rounded()
-        if abs(value - rounded) < 0.000_000_1 {
-            return String(format: "%.0f", rounded)
-        }
-        return String(format: "%.2f", value)
-            .replacingOccurrences(of: "0+$", with: "", options: .regularExpression)
-            .replacingOccurrences(of: "\\.$", with: "", options: .regularExpression)
     }
 }
 

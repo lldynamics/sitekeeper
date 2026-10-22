@@ -4093,8 +4093,14 @@
 
 "正在导出备份，请等待完成后再清理或恢复。" = "A backup is being exported. Wait for it to finish before cleaning up or restoring data.";
 
+"到期事项汇总" = "Due items summary";
+
+"有 %lld 项待办及 %lld 项应收/应付已到期，请打开应用查看。" = "%lld to-dos and %lld receivables/payables are due. Open the app to review them.";
+
 "此旧版清理批次缺少变更范围，无法安全恢复业务记录。为避免覆盖后续数据，本次未恢复；原文件仍保留在回收站。" = "This older cleanup batch does not record the affected changes, so its business records cannot be safely restored. Nothing was restored, and the original files remain in the trash.";
 
 "清理回收站清单读取失败，已停止修改并保留原文件。请先恢复清单后重试。" = "The cleanup trash index could not be read. Changes were stopped and the original files were preserved. Restore the index before trying again.";
 
 "云备份未上传：有 %lld 个附件原文件缺失，请修复后重试。" = "Cloud backup was not uploaded: %lld original attachment files are missing. Restore them and try again.";
+
+"数量格式不正确" = "Invalid quantity format";

@@ -68,6 +68,86 @@ struct LaborDomainLogicTests {
         #expect(quote.unitPrice == "300")
     }
 
+    @Test func fractionalWorkdayQuotationPreservesLaborAmountWhenUsingRecordedRate() throws {
+        let record = LaborRecord(
+            date: "2026-10-13",
+            workers: "1",
+            hours: "0.125",
+            workloadUnit: .workday,
+            unitRate: "300",
+            note: ""
+        )
+        let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
+            from: record,
+            defaultRate: "   ",
+            taxRate: "0",
+            discountRate: "0"
+        ))
+
+        #expect(quote.quantityValue == record.totalWorkloadValue)
+        #expect(quote.unitPriceValue == MoneyValue(text: "300"))
+        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: "37.50"))
+        #expect(ReportBuilder.quoteGrandTotal(quote) == ReportBuilder.laborLineTotal(record))
+    }
+
+    @Test(arguments: [
+        ("1", "0.1234", "0.1234", "37.02"),
+        ("7", "0.1234", "0.8638", "259.14"),
+        ("3", "1.2345", "3.7035", "1111.05")
+    ])
+    func quotationPreservesFourDecimalWorkloadAndMultipliesWorkers(
+        workers: String,
+        days: String,
+        expectedWorkload: String,
+        expectedAmount: String
+    ) throws {
+        let record = LaborRecord(
+            date: "2026-10-13",
+            workers: workers,
+            hours: days,
+            workloadUnit: .workday,
+            unitRate: "300",
+            note: ""
+        )
+        let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
+            from: record,
+            defaultRate: "",
+            taxRate: "0",
+            discountRate: "0"
+        ))
+
+        #expect(quote.quantityValue == QuantityValue(text: expectedWorkload))
+        #expect(quote.quantityValue == record.totalWorkloadValue)
+        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: expectedAmount))
+        #expect(ReportBuilder.quoteGrandTotal(quote) == ReportBuilder.laborLineTotal(record))
+    }
+
+    @Test func fractionalWorkloadQuotationAppliesSpecifiedRateTaxAndDiscount() throws {
+        let record = LaborRecord(
+            date: "2026-10-13",
+            workers: "1",
+            hours: "0.125",
+            workloadUnit: .hour,
+            unitRate: "300",
+            note: ""
+        )
+        let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
+            from: record,
+            defaultRate: " 400.00 ",
+            taxRate: "13",
+            discountRate: "5"
+        ))
+
+        #expect(quote.quantityValue == record.totalWorkloadValue)
+        #expect(quote.unit == record.workloadUnit.quoteUnit)
+        #expect(quote.unitPriceValue == MoneyValue(text: "400"))
+        #expect(ReportBuilder.quoteLineTotalValue(quote) == MoneyValue(text: "50"))
+        #expect(ReportBuilder.quoteTaxValue(quote) == MoneyValue(text: "6.50"))
+        #expect(ReportBuilder.quoteDiscountValue(quote) == MoneyValue(text: "2.50"))
+        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: "54"))
+        #expect(ReportBuilder.laborLineTotal(record) == 37.50)
+    }
+
     @Test func bulkUnitConfirmationChangesOnlySelectedLegacyRecordsWithoutConvertingValues() {
         let legacyHour = LaborRecord(
             date: "2026-09-01",

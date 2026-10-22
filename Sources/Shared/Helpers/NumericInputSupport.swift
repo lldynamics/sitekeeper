@@ -324,7 +324,7 @@ enum NumericInputSupport {
         return formatter.string(from: NSDecimalNumber(decimal: decimal)) ?? NSDecimalNumber(decimal: decimal).stringValue
     }
 
-    private static func normalizeSeparators(in text: String) -> String {
+    static func normalizeSeparators(in text: String) -> String {
         text
             .replacingOccurrences(of: "，", with: ",")
             .replacingOccurrences(of: "。", with: ".")

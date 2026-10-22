@@ -86,6 +86,17 @@ enum ProjectFinancialMetrics {
         max(project.contractAmountValue.doubleValue - paidAmount(project: project, records: records), 0)
     }
 
+    static func totalReceivableAmount(
+        projects: [Project],
+        recordedCollections: [UUID: MoneyValue]
+    ) -> Double {
+        projects.reduce(MoneyValue.zero) { total, project in
+            let recorded = recordedCollections[project.id] ?? .zero
+            let paid = recorded.isPositive ? recorded : project.paidAmountValue
+            return total + MoneyValue(max(project.contractAmountValue.decimal - paid.decimal, .zero))
+        }.doubleValue
+    }
+
     static func latestCollection(
         records: [ProjectFinancialRecord],
         projectName: (UUID) -> String?
@@ -135,10 +146,11 @@ enum ProjectFinancialDuplicateDetector {
     static func warnings(
         for draft: ProjectFinancialRecord,
         in records: [ProjectFinancialRecord],
-        ignoring ignoredID: UUID? = nil
+        ignoring ignoredID: UUID? = nil,
+        timeZone: TimeZone = .current
     ) -> [ProjectFinancialDuplicateWarning] {
         let draftInvoice = normalizedInvoiceNumber(draft.invoiceNumber)
-        let draftDay = normalizedDay(from: draft.date)
+        let draftDay = normalizedDay(from: draft.date, timeZone: timeZone)
         let draftAmount = draft.amountValue
 
         return records.compactMap { record -> ProjectFinancialDuplicateWarning? in
@@ -154,7 +166,7 @@ enum ProjectFinancialDuplicateDetector {
                draftAmount.isPositive,
                draftAmount == record.amountValue,
                let draftDay,
-               draftDay == normalizedDay(from: record.date) {
+               draftDay == normalizedDay(from: record.date, timeZone: timeZone) {
                 reasons.append(.amountAndDate)
             }
 
@@ -179,8 +191,8 @@ enum ProjectFinancialDuplicateDetector {
         return normalized.count >= 6 ? String(normalized) : ""
     }
 
-    static func normalizedDay(from text: String) -> String? {
-        guard let date = Formatters.parseDateOrDateTime(text) else { return nil }
-        return Formatters.date.string(from: date)
+    static func normalizedDay(from text: String, timeZone: TimeZone = .current) -> String? {
+        guard let date = Formatters.parseDateOrDateTime(text, timeZone: timeZone) else { return nil }
+        return Formatters.dateFormatter(timeZone: timeZone).string(from: date)
     }
 }

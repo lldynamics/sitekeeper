@@ -134,7 +134,10 @@ extension DashboardView {
             )
         }
 
-        let receivableAmount = max(contractAmount - paidAmount, 0)
+        let receivableAmount = ProjectFinancialMetrics.totalReceivableAmount(
+            projects: projects,
+            recordedCollections: collectionByProjectID
+        )
         let receivableAgeDays = projects.compactMap { project -> Int? in
             let projectPaid = (collectionByProjectID[project.id] ?? MoneyValue.zero).doubleValue
             let paid = ProjectFinancialMetrics.effectivePaidAmount(
