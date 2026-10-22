@@ -6,7 +6,7 @@ extension ProjectFileBrowserView {
     }
 
     var normalizedDebouncedQuery: String {
-        debouncedSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        fileBrowserModel.keyword
     }
 
     var fileSearchExecutionKey: FileSearchExecutionKey {
@@ -23,7 +23,7 @@ extension ProjectFileBrowserView {
 
     var fileSearchResults: [ProjectFileSearchResult] {
         guard !normalizedDebouncedQuery.isEmpty else { return [] }
-        return searchResultIDs.compactMap { searchResultByID[$0] }
+        return fileBrowserModel.resultIDs.compactMap { preparedFiles?.resultsByID[$0] }
     }
 
     var displayedFileSearchResults: [ProjectFileSearchResult] {
@@ -35,81 +35,22 @@ extension ProjectFileBrowserView {
         projectStore.fileSearchVersion
     }
 
-    func collectAllFileSearchResults() -> [ProjectFileSearchResult] {
-        var results: [ProjectFileSearchResult] = []
-
-        for project in projectStore.projects {
-            for category in ProjectFileCategory.allCases {
-                let items = ProjectFileCollector.items(for: project.id, category: category, projectStore: projectStore)
-                for item in items {
-                    results.append(ProjectFileSearchResult(project: project, item: item))
-                }
-            }
-        }
-
-        return results
+    var preparedFiles: ProjectFilePreparedData? {
+        fileBrowserModel.data(for: fileSearchDataSignature)
     }
 
-    func makeIndexRows(from results: [ProjectFileSearchResult]) -> [ProjectFileSearchIndexRow] {
-        results.map { result in
-            let searchable = [
-                result.project.name,
-                result.project.location,
-                result.item.title,
-                result.item.subtitle,
-                result.item.fileType
-            ].joined(separator: " ")
-
-            return ProjectFileSearchIndexRow(
-                id: result.id,
-                searchableText: searchable,
-                sortDate: result.item.sortDate
-            )
-        }
-    }
-
-    @MainActor
-    func refreshSearchIndexIfNeeded() async {
-        let signature = fileSearchDataSignature
-        if signature == indexedDataSignature, !searchResultByID.isEmpty {
-            return
-        }
-
-        let allResults = collectAllFileSearchResults()
-        searchResultByID = Dictionary(uniqueKeysWithValues: allResults.map { ($0.id, $0) })
-        let rows = makeIndexRows(from: allResults)
-
-        isBuildingFileIndex = true
-        await fileSearchService.rebuild(signature: signature, rows: rows)
-        indexedDataSignature = signature
-        isBuildingFileIndex = false
-    }
+    var isBuildingFileIndex: Bool { fileBrowserModel.isPreparing }
+    var isSearchingFiles: Bool { fileBrowserModel.isSearching }
 
     @MainActor
     func runFileSearchTask(for text: String) async {
-        let keyword = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !keyword.isEmpty else {
-            debouncedSearchText = ""
-            searchResultIDs = []
-            isSearchingFiles = false
-            return
-        }
-
-        isSearchingFiles = true
-        guard await DebouncedTask.wait(for: .milliseconds(300)) else { return }
-        let requestedKeyword = keyword
-        await refreshSearchIndexIfNeeded()
+        await fileBrowserModel.refresh(
+            snapshot: ProjectFileBrowserSnapshot(projectStore: projectStore),
+            signature: fileSearchDataSignature,
+            keyword: text
+        )
         guard !Task.isCancelled else { return }
-        let ids = await searchIndexedFileIDs(keyword: requestedKeyword)
-        guard !Task.isCancelled else { return }
-        guard requestedKeyword == normalizedQuery else { return }
-        searchResultIDs = ids
-        debouncedSearchText = requestedKeyword
-        isSearchingFiles = false
-    }
-
-    func searchIndexedFileIDs(keyword: String) async -> [String] {
-        await fileSearchService.search(keyword: keyword)
+        syncSplitSelectionIfNeeded()
     }
 
     var missingResultCount: Int {

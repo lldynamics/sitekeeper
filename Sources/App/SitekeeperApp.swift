@@ -25,6 +25,9 @@ struct SitekeeperApp: App {
             .environment(store.financeStore)
             .environment(store.materialLibraryStore)
             .environment(store.userPreferenceStore)
+ #if DEBUG
+            .task { await ReviewRegressionFixture.prepareIfRequested(store: store) }
+ #endif
 
  #if DEBUG
         if let size = UITestLaunchConfig.dynamicTypeSizeOverride {

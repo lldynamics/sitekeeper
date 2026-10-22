@@ -1,5 +1,4 @@
 import SwiftUI
-import QuickLook
 
 struct ProjectFileCategoryView: View {
     @Environment(ProjectStore.self) private var projectStore
@@ -111,6 +110,6 @@ struct ProjectFileCategoryView: View {
         .navigationTitle(project.name)
         .navigationBarTitleDisplayMode(.inline)
         .searchable(text: $searchText, prompt: "搜索本项目的文件")
-        .quickLookPreview($previewURL)
+        .appFilePreview($previewURL)
     }
 }

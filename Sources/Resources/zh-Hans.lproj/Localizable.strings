@@ -3879,7 +3879,7 @@
 "分享/打开" = "分享/打开";
 "该文件在本地已缺失，请回到项目详情重新导入。" = "该文件在本地已缺失，请回到项目详情重新导入。";
 "请选择文件" = "请选择文件";
-"在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。" = "在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。";
+"在中栏点击文件后，右侧显示详情并支持文件预览。" = "在中栏点击文件后，右侧显示详情并支持文件预览。";
 "文件搜索结果" = "文件搜索结果";
 "正在搜索文件…" = "正在搜索文件…";
 "未找到匹配文件，请尝试不同关键词。" = "未找到匹配文件，请尝试不同关键词。";
@@ -4103,3 +4103,17 @@
 "云备份未上传：有 %lld 个附件原文件缺失，请修复后重试。" = "云备份未上传：有 %lld 个附件原文件缺失，请修复后重试。";
 
 "数量格式不正确" = "数量格式不正确";
+
+"pdf_preview_previous_page" = "上一页";
+"pdf_preview_next_page" = "下一页";
+"pdf_preview_search" = "搜索 PDF";
+"pdf_preview_unlock" = "解锁 PDF";
+"pdf_preview_password" = "密码";
+"pdf_preview_password_required" = "此 PDF 需要密码才能打开。";
+"pdf_preview_invalid_password" = "密码错误，请重试。";
+"pdf_preview_unavailable" = "无法预览 PDF，文件可能已丢失或损坏。";
+"pdf_preview_page_format" = "%lld / %lld";
+
+"pdf_preview_previous_match" = "上一个搜索结果";
+
+"pdf_preview_next_match" = "下一个搜索结果";

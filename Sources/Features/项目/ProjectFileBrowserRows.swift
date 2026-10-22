@@ -219,7 +219,7 @@ struct ProjectFileSplitItemRow: View {
     }
 }
 
-struct ProjectFileSearchResult: Identifiable {
+struct ProjectFileSearchResult: Identifiable, Sendable {
     let project: Project
     let item: ProjectFileItem
 

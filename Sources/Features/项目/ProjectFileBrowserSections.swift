@@ -113,6 +113,7 @@ struct ProjectFileBrowserDetailPanel: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(item.title)
                                     .font(.headline)
+                                    .accessibilityIdentifier("project-file-selected-title")
                                 Text(item.subtitle)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -148,6 +149,7 @@ struct ProjectFileBrowserDetailPanel: View {
                                     Label(String(localized: "预览文件"), systemImage: "eye")
                                 }
                                 .buttonStyle(.appProminent())
+                                .accessibilityIdentifier("project-file-preview-\(item.id)")
                             }
                             ShareLink(item: item.url) {
                                 Label(
@@ -171,7 +173,7 @@ struct ProjectFileBrowserDetailPanel: View {
                 ContentUnavailableView(
                     String(localized: "请选择文件"),
                     systemImage: "doc.text.magnifyingglass",
-                    description: Text(String(localized: "在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。"))
+                    description: Text(String(localized: "在中栏点击文件后，右侧显示详情并支持文件预览。"))
                 )
             }
         }

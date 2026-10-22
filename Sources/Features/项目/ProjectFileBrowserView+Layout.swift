@@ -8,17 +8,8 @@ extension ProjectFileBrowserView {
     }
 
     var visibleDeliveryInspections: [ProjectDocumentDeliveryInspection] {
-        searchMatchedProjects
-            .map { ProjectDocumentDeliveryInspection(project: $0, projectStore: projectStore) }
-            .sorted { left, right in
-                if left.isReadyForDelivery != right.isReadyForDelivery {
-                    return !left.isReadyForDelivery
-                }
-                if left.issueDetailCount != right.issueDetailCount {
-                    return left.issueDetailCount > right.issueDetailCount
-                }
-                return left.project.name.localizedStandardCompare(right.project.name) == .orderedAscending
-            }
+        let projectIDs = Set(searchMatchedProjects.map(\.id))
+        return (preparedFiles?.inspections ?? []).filter { projectIDs.contains($0.project.id) }
     }
 
     var usesThreeColumnLayout: Bool {
@@ -32,8 +23,7 @@ extension ProjectFileBrowserView {
 
     var splitCategoryItems: [ProjectFileItem] {
         guard let selectedProjectId else { return [] }
-        return ProjectFileCollector.items(for: selectedProjectId, category: selectedCategory, projectStore: projectStore)
-            .filter { healthFilter.matches($0) }
+        return preparedFiles?.items(for: selectedProjectId, category: selectedCategory, health: healthFilter) ?? []
     }
 
     var selectedSplitItem: ProjectFileItem? {
@@ -233,6 +223,7 @@ extension ProjectFileBrowserView {
                                     }
                                 }
                                 .buttonStyle(.plain)
+                                .accessibilityIdentifier("project-file-result-\(result.item.id)")
                             }
                         }
                     }
@@ -306,7 +297,7 @@ extension ProjectFileBrowserView {
 
                     Section(selectedCategory.title) {
                         if splitCategoryItems.isEmpty {
-                            Text(String(localized: "当前分类暂无文件"))
+                            Text(preparedFiles == nil ? String(localized: "正在搜索文件…") : String(localized: "当前分类暂无文件"))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         } else {

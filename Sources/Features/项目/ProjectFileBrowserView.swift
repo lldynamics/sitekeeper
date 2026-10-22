@@ -1,17 +1,10 @@
 import SwiftUI
-import QuickLook
 
 struct ProjectFileBrowserView: View {
     @Environment(ProjectStore.self) var projectStore
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
     @State var searchText = ""
-    @State var debouncedSearchText = ""
-    @State var searchResultIDs: [String] = []
-    @State var searchResultByID: [String: ProjectFileSearchResult] = [:]
-    @State var indexedDataSignature = 0
-    @State var fileSearchService = ProjectFileSearchIndexService()
-    @State var isBuildingFileIndex = false
-    @State var isSearchingFiles = false
+    @State var fileBrowserModel = ProjectFileBrowserModel()
     @State var previewURL: URL?
     @State var selectedProjectId: UUID?
     @State var selectedCategory: ProjectFileCategory = .images
@@ -29,7 +22,7 @@ struct ProjectFileBrowserView: View {
                 compactBrowserLayout
             }
         }
-        .quickLookPreview($previewURL)
+        .appFilePreview($previewURL)
         .fileExporter(
             isPresented: $showDeliveryInspectionExporter,
             document: ExportDocument(data: deliveryInspectionExportPayload?.data ?? Data()),
@@ -55,10 +48,13 @@ struct ProjectFileBrowserView: View {
         .task(id: fileSearchExecutionKey) {
             await runFileSearchTask(for: fileSearchExecutionKey.keyword)
         }
-        .onChange(of: fileSearchDataSignature) { _, _ in
+        .onChange(of: fileBrowserModel.loadedSignature) { _, _ in
             syncSplitSelectionIfNeeded()
         }
         .onChange(of: filteredProjects.map(\.id)) { _, _ in
+            syncSplitSelectionIfNeeded()
+        }
+        .onChange(of: displayedFileSearchResults.map(\.id)) { _, _ in
             syncSplitSelectionIfNeeded()
         }
         .onChange(of: selectedCategory) { _, _ in
@@ -68,7 +64,7 @@ struct ProjectFileBrowserView: View {
             syncSplitSelectionIfNeeded()
         }
         .onDisappear {
-            isSearchingFiles = false
+            fileBrowserModel.cancel()
         }
     }
 }

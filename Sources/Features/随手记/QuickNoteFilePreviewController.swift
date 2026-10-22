@@ -1,7 +1,19 @@
 import SwiftUI
 import QuickLook
 
-struct QuickNoteFilePreviewController: UIViewControllerRepresentable {
+struct QuickNoteFilePreviewController: View {
+    let url: URL
+
+    var body: some View {
+        if AppFilePreviewRoute.route(for: url) == .pdf {
+            AppPDFDocumentView(url: url)
+        } else {
+            QuickNoteQuickLookController(url: url)
+        }
+    }
+}
+
+private struct QuickNoteQuickLookController: UIViewControllerRepresentable {
     let url: URL
 
     func makeCoordinator() -> Coordinator {

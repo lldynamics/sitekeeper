@@ -1,5 +1,4 @@
 import SwiftUI
-import QuickLook
 import UniformTypeIdentifiers
 import UIKit
 import CoreTransferable
@@ -169,7 +168,7 @@ struct ProjectWarehouseMovementDetailView: View {
         }
         .navigationTitle(String(localized: "出入库详情"))
         .navigationBarTitleDisplayMode(.inline)
-        .quickLookPreview($previewURL)
+        .appFilePreview($previewURL)
     }
 }
 

@@ -1,6 +1,5 @@
 import Foundation
 
-@MainActor
 enum ProjectFileCollector {
     private struct RecentSeed {
         let id: String
@@ -16,33 +15,42 @@ enum ProjectFileCollector {
         let sizeProvider: () -> Int
     }
 
+    @MainActor
     static func items(for projectId: UUID, category: ProjectFileCategory, projectStore: ProjectStore) -> [ProjectFileItem] {
+        items(in: ProjectFileCollectionSnapshot(projectId: projectId, projectStore: projectStore), category: category)
+    }
+
+    static func items(in snapshot: ProjectFileCollectionSnapshot, category: ProjectFileCategory) -> [ProjectFileItem] {
         switch category {
         case .images:
-            return imageItems(for: projectId, projectStore: projectStore)
+            return imageItems(in: snapshot)
         case .drawings:
-            return drawingItems(for: projectId, projectStore: projectStore)
+            return drawingItems(in: snapshot)
         case .documents:
-            return documentItems(for: projectId, projectStore: projectStore)
+            return documentItems(in: snapshot)
         case .quickNoteAttachments:
-            return quickNoteAttachmentItems(for: projectId, projectStore: projectStore)
+            return quickNoteAttachmentItems(in: snapshot)
         }
     }
 
+    @MainActor
     static func items(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> [ProjectFileItem] {
         items(for: projectId, category: category, projectStore: store.projectStore)
     }
 
+    @MainActor
     static func allItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
         ProjectFileCategory.allCases.flatMap { category in
             items(for: projectId, category: category, projectStore: projectStore)
         }
     }
 
+    @MainActor
     static func allItems(for projectId: UUID, store: DataStore) -> [ProjectFileItem] {
         allItems(for: projectId, projectStore: store.projectStore)
     }
 
+    @MainActor
     static func count(for projectId: UUID, category: ProjectFileCategory, projectStore: ProjectStore) -> Int {
         switch category {
         case .images:
@@ -71,10 +79,12 @@ enum ProjectFileCollector {
         }
     }
 
+    @MainActor
     static func count(for projectId: UUID, category: ProjectFileCategory, store: DataStore) -> Int {
         count(for: projectId, category: category, projectStore: store.projectStore)
     }
 
+    @MainActor
     static func allRecent(for projectId: UUID, limit: Int, projectStore: ProjectStore) -> [ProjectFileItem] {
         recentSeeds(for: projectId, projectStore: projectStore)
             .sorted { $0.sortDate > $1.sortDate }
@@ -97,10 +107,12 @@ enum ProjectFileCollector {
             }
     }
 
+    @MainActor
     static func allRecent(for projectId: UUID, limit: Int, store: DataStore) -> [ProjectFileItem] {
         allRecent(for: projectId, limit: limit, projectStore: store.projectStore)
     }
 
+    @MainActor
     private static func recentSeeds(for projectId: UUID, projectStore: ProjectStore) -> [RecentSeed] {
         var seeds: [RecentSeed] = []
 
@@ -252,10 +264,10 @@ enum ProjectFileCollector {
         return seeds
     }
 
-    private static func imageItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
+    private static func imageItems(in snapshot: ProjectFileCollectionSnapshot) -> [ProjectFileItem] {
         var result: [ProjectFileItem] = []
 
-        for log in projectStore.dailyLogs(for: projectId) {
+        for log in snapshot.logs {
             for photo in log.photoAttachments {
                 result.append(photoItem(
                     id: "log-\(log.id.uuidString)-\(photo.fileName)",
@@ -267,7 +279,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for todo in projectStore.siteTodos(for: projectId) {
+        for todo in snapshot.todos {
             if let fileName = todo.rectificationBeforePhotoFileName {
                 result.append(photoItem(
                     id: "todo-before-\(todo.id.uuidString)",
@@ -288,7 +300,7 @@ enum ProjectFileCollector {
             }
         }
 
-        for note in projectStore.quickNotes(for: projectId) {
+        for note in snapshot.quickNotes {
             for attachment in note.attachments where [.photo, .drawing].contains(attachment.attachmentKind) {
                 result.append(quickNoteItem(
                     note: note,
@@ -302,8 +314,8 @@ enum ProjectFileCollector {
         return result.sorted { $0.sortDate > $1.sortDate }
     }
 
-    private static func drawingItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
-        projectStore.projectDrawings(for: projectId)
+    private static func drawingItems(in snapshot: ProjectFileCollectionSnapshot) -> [ProjectFileItem] {
+        snapshot.drawings
             .map { drawing in
                 let url = DrawingStorage.fileURL(for: drawing.fileName)
                 return ProjectFileItem(
@@ -324,8 +336,8 @@ enum ProjectFileCollector {
             .sorted { $0.sortDate > $1.sortDate }
     }
 
-    private static func documentItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
-        projectStore.projectDocuments(for: projectId)
+    private static func documentItems(in snapshot: ProjectFileCollectionSnapshot) -> [ProjectFileItem] {
+        snapshot.documents
             .map { document in
                 let url = ProjectDocumentStorage.fileURL(for: document.fileName)
                 return ProjectFileItem(
@@ -353,8 +365,8 @@ enum ProjectFileCollector {
         return (missingResponsible ? 1 : 0) + (missingFormedDate ? 1 : 0)
     }
 
-    private static func quickNoteAttachmentItems(for projectId: UUID, projectStore: ProjectStore) -> [ProjectFileItem] {
-        projectStore.quickNotes(for: projectId)
+    private static func quickNoteAttachmentItems(in snapshot: ProjectFileCollectionSnapshot) -> [ProjectFileItem] {
+        snapshot.quickNotes
             .flatMap { note in
                 note.attachments
                     .filter { ![QuickNoteAttachmentKind.photo, .drawing].contains($0.attachmentKind) }

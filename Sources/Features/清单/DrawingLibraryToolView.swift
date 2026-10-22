@@ -1,6 +1,5 @@
 import SwiftUI
 import UniformTypeIdentifiers
-import QuickLook
 
 struct DrawingLibraryToolView: View {
     @Environment(DataStore.self) private var store
@@ -228,7 +227,7 @@ struct DrawingLibraryToolView: View {
         } message: {
             Text(importStrategyMessage)
         }
-        .quickLookPreview($quickLookURL)
+        .appFilePreview($quickLookURL)
         .drawingLibrarySharePresenter(shareURL: $shareURL, shareDrawingID: $shareDrawingID, store: store)
         .operationToast(message: $operationMessage)
     }

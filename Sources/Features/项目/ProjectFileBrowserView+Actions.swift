@@ -49,21 +49,19 @@ extension ProjectFileBrowserView {
     ) -> ProjectFileCategory {
         guard issue.kind == .missingFiles else { return .documents }
         return ProjectFileCategory.allCases.first { category in
-            ProjectFileCollector.items(for: inspection.project.id, category: category, projectStore: projectStore)
-                .contains { !$0.exists }
+            !(preparedFiles?.items(for: inspection.project.id, category: category, health: .missing).isEmpty ?? true)
         } ?? .documents
     }
 
     func syncSplitSelectionIfNeeded() {
-        guard usesThreeColumnLayout else { return }
+        guard usesThreeColumnLayout, preparedFiles != nil,
+              !fileBrowserModel.isPreparing, !fileBrowserModel.isSearching else { return }
 
-        if let selectedProjectId,
-           !filteredProjects.contains(where: { $0.id == selectedProjectId }) {
-            self.selectedProjectId = nil
-        }
-        if selectedProjectId == nil {
-            selectedProjectId = filteredProjects.first?.id
-        }
+        selectedProjectId = ProjectFileBrowserSelection.projectID(
+            current: selectedProjectId,
+            projectMatches: filteredProjects.map(\.id),
+            fileMatches: displayedFileSearchResults.map { $0.project.id }
+        )
 
         let itemIds = Set(splitCategoryItems.map(\.id))
         if let selectedSplitItemId, !itemIds.contains(selectedSplitItemId) {
@@ -75,8 +73,6 @@ extension ProjectFileBrowserView {
     }
 
     func projectMatchesHealthFilter(_ project: Project) -> Bool {
-        ProjectFileCollector.allItems(for: project.id, projectStore: projectStore).contains {
-            healthFilter.matches($0)
-        }
+        !(preparedFiles?.items(for: project.id, health: healthFilter).isEmpty ?? true)
     }
 }

@@ -235,7 +235,7 @@ struct ProjectFinancialAttachmentSheet: View {
                 onImportImage(image, String(localized: "来源: 拍照"))
             }
         }
-        .quickLookPreview($previewURL)
+        .appFilePreview($previewURL)
         .onChange(of: selectedPhotoItem) { _, item in
             guard let item else { return }
             Task {

@@ -1,7 +1,6 @@
 import SwiftUI
 import PhotosUI
 import UniformTypeIdentifiers
-import QuickLook
 import VisionKit
 
 private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
@@ -96,7 +95,7 @@ private struct ProjectDetailImportFlowCoordinatorModifier: ViewModifier {
                     }
                 }
             }
-            .quickLookPreview($quickLookURL)
+            .appFilePreview($quickLookURL)
             .sheet(item: $scanTarget) { target in
                 if VNDocumentCameraViewController.isSupported {
                     DocumentScannerView(

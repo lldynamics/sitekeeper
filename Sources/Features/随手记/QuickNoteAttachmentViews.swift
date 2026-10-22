@@ -149,6 +149,7 @@ struct QuickNoteAttachmentPreview: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(String(localized: "quick_note_attachment_close_button")) { dismiss() }
+                        .accessibilityIdentifier("quick-note-attachment-close")
                 }
             }
         }

@@ -3880,7 +3880,7 @@
 "分享/打开" = "Share / Open";
 "该文件在本地已缺失，请回到项目详情重新导入。" = "This file is missing locally. Reimport it from the project details.";
 "请选择文件" = "Select a File";
-"在中栏点击文件后，右侧显示详情并支持 QuickLook 预览。" = "Select a file in the middle column to see its details and Quick Look preview on the right.";
+"在中栏点击文件后，右侧显示详情并支持文件预览。" = "Select a file in the middle column to see its details and preview on the right.";
 "文件搜索结果" = "File Search Results";
 "正在搜索文件…" = "Searching Files…";
 "未找到匹配文件，请尝试不同关键词。" = "No matching files found. Try different keywords.";
@@ -4104,3 +4104,17 @@
 "云备份未上传：有 %lld 个附件原文件缺失，请修复后重试。" = "Cloud backup was not uploaded: %lld original attachment files are missing. Restore them and try again.";
 
 "数量格式不正确" = "Invalid quantity format";
+
+"pdf_preview_previous_page" = "Previous page";
+"pdf_preview_next_page" = "Next page";
+"pdf_preview_search" = "Search PDF";
+"pdf_preview_unlock" = "Unlock PDF";
+"pdf_preview_password" = "Password";
+"pdf_preview_password_required" = "This PDF requires a password.";
+"pdf_preview_invalid_password" = "Incorrect password. Please try again.";
+"pdf_preview_unavailable" = "Unable to preview the PDF. The file may be missing or damaged.";
+"pdf_preview_page_format" = "%lld / %lld";
+
+"pdf_preview_previous_match" = "Previous match";
+
+"pdf_preview_next_match" = "Next match";

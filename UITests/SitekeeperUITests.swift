@@ -77,7 +77,8 @@ extension SitekeeperUITests {
         allowClearWithoutBackup: Bool = false,
         backupRoundTripSlot: String? = nil,
         dynamicTypeSize: String? = nil,
-        languageCode: String = "zh-Hans"
+        languageCode: String = "zh-Hans",
+        reviewRegressionFixture: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments += ["-ui-testing", "-languageCode", languageCode, "-AppleLanguages", "(\(languageCode))"]
@@ -104,6 +105,9 @@ extension SitekeeperUITests {
         if let dynamicTypeSize {
             app.launchArguments += ["-uitest-dynamic-type-size", dynamicTypeSize]
             app.launchEnvironment["UITEST_DYNAMIC_TYPE_SIZE"] = dynamicTypeSize
+        }
+        if reviewRegressionFixture {
+            app.launchEnvironment["UITEST_REVIEW_REGRESSION_FIXTURE"] = "1"
         }
         app.launch()
         return app

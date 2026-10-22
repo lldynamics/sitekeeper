@@ -1,6 +1,6 @@
 import Foundation
 
-enum ProjectFileCategory: CaseIterable {
+enum ProjectFileCategory: CaseIterable, Hashable, Sendable {
     case images
     case drawings
     case documents
@@ -69,7 +69,7 @@ struct ProjectFileSummary {
     }
 }
 
-struct ProjectFileItem: Identifiable {
+struct ProjectFileItem: Identifiable, Sendable {
     static let largeFileWarningBytes = 100 * 1024 * 1024
 
     let id: String
@@ -99,7 +99,7 @@ struct ProjectFileItem: Identifiable {
     }
 }
 
-enum ProjectFileThumbnailToken: Hashable {
+enum ProjectFileThumbnailToken: Hashable, Sendable {
     case photo(fileName: String)
     case quickNote(kind: QuickNoteAttachmentKind, fileName: String)
 

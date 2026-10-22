@@ -16,6 +16,7 @@ struct ProjectFileItemRow: View {
                 Text(item.title)
                     .font(.body.weight(.medium))
                     .lineLimit(2)
+                    .accessibilityIdentifier("project-file-row-\(item.id)")
                 Text(item.subtitle)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -50,6 +51,7 @@ struct ProjectFileItemRow: View {
                         Button(action: onPreview) {
                             Label(String(localized: "project.files.action.preview"), systemImage: "eye")
                         }
+                        .accessibilityIdentifier("project-file-preview-\(item.id)")
                     }
                     ShareLink(item: item.url) {
                         Label(
@@ -64,6 +66,7 @@ struct ProjectFileItemRow: View {
                 }
                 .buttonStyle(.appIcon())
                 .accessibilityLabel(String(localized: "project.files.action.previewShare.accessibility"))
+                .accessibilityIdentifier("project-file-actions-\(item.id)")
             }
         }
         .contentShape(Rectangle())

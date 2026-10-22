@@ -1,5 +1,4 @@
 import SwiftUI
-import QuickLook
 
 struct ProjectFileListView: View {
     let project: Project
@@ -144,6 +143,6 @@ struct ProjectFileListView: View {
         }
         .navigationTitle(category.title)
         .navigationBarTitleDisplayMode(.inline)
-        .quickLookPreview($previewURL)
+        .appFilePreview($previewURL)
     }
 }
