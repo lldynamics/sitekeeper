@@ -29,8 +29,13 @@ def main() -> None:
                 '#!/bin/sh\n[ "$0" != "$FAILING_GUARD" ]\n', encoding="utf-8"
             )
             path.chmod(0o700)
+        # Debug does not require any guard executable (or ripgrep).
+        debug = subprocess.run(["/bin/sh", "-c", phase],
+                               env=dict(os.environ, SRCROOT="/nonexistent", CONFIGURATION="Debug", SITEKEEPER_RUN_BUILD_GUARDS="0"), check=False)
+        if debug.returncode != 0:
+            raise SystemExit("[build-guard-contract] FAIL: Debug still requires guards")
         for failing in [None, *names]:
-            environment = dict(os.environ, SRCROOT=directory)
+            environment = dict(os.environ, SRCROOT=directory, CONFIGURATION="Release")
             environment["FAILING_GUARD"] = str(sandbox / failing) if failing else ""
             result = subprocess.run(["/bin/sh", "-c", phase], env=environment, check=False)
             if (result.returncode == 0) != (failing is None):

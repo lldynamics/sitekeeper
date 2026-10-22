@@ -53,3 +53,6 @@ android/**/build/
 # Local Xcode derived outputs generated inside repo build/
 build/
 build/DerivedData-*/
+
+# Local App Store review package, preserved separately with workspace backups
+AppStoreMetadata/engineering-bookkeeping-quote-review/

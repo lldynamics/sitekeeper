@@ -67,16 +67,22 @@ jobs:
           bash scripts/release/check_unchecked_sendable_policy.sh
           bash scripts/release/check_appstore_archive_config.sh
           python3 scripts/release/check_build_guard_contract.py
+          python3 -m unittest discover -s scripts/release -p 'test_check_ui_test_results.py'
           bash scripts/localization/check_localization_hardcoded_ui.sh --strict
           python3 scripts/legal/export_privacy_policy.py --check
 
   iOS-release-gate:
     name: iOS build, unit tests and release preflight
     needs: release-boundaries
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select pinned Xcode
+        run: |
+          echo "DEVELOPER_DIR=/Applications/Xcode_27.1.0.app/Contents/Developer" >> "$GITHUB_ENV"
+          DEVELOPER_DIR=/Applications/Xcode_27.1.0.app/Contents/Developer bash scripts/release/check_xcode_version.sh
 
       - name: Install release tools
         run: |
@@ -96,7 +102,7 @@ jobs:
   ui-smoke:
     name: UI smoke (${{ matrix.device_family }})
     needs: release-boundaries
-    runs-on: macos-15
+    runs-on: xcode-27
     timeout-minutes: 50
     strategy:
       fail-fast: false
@@ -104,6 +110,11 @@ jobs:
         device_family: [iphone, ipad]
     steps:
       - uses: actions/checkout@v4
+
+      - name: Select pinned Xcode
+        run: |
+          echo "DEVELOPER_DIR=/Applications/Xcode_27.1.0.app/Contents/Developer" >> "$GITHUB_ENV"
+          DEVELOPER_DIR=/Applications/Xcode_27.1.0.app/Contents/Developer bash scripts/release/check_xcode_version.sh
 
       - name: Install UI test tools
         run: |

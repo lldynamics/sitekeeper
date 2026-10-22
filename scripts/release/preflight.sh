@@ -3,6 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
+bash scripts/release/check_xcode_version.sh
 
 ALLOW_DIRTY=0
 SKIP_TESTS=0

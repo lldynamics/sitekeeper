@@ -1,7 +1,7 @@
 name: sitekeeper
 options:
   bundleIdPrefix: com.chengjinfang
-  xcodeVersion: "26.4"
+  xcodeVersion: "27.1"
   groupOrdering:
     - pattern: "^Features$"
       order: [计算, 清单, 首页, 随手记, 我的, 项目]
@@ -21,6 +21,10 @@ targets:
       - name: Release Boundary Guards
         script: |
           set -eu
+          if [ "${CONFIGURATION:-Debug}" = "Debug" ] && [ "${SITEKEEPER_RUN_BUILD_GUARDS:-0}" != "1" ]; then
+            echo "Release boundary guards run in preflight/CI; skipped for incremental Debug build."
+            exit 0
+          fi
           "${SRCROOT}/scripts/release/check_file_deletion_policy.sh"
           "${SRCROOT}/scripts/release/check_datastore_write_policy.sh"
           "${SRCROOT}/scripts/release/check_backup_contract_boundary.sh"

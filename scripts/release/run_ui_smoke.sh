@@ -87,7 +87,7 @@ if [[ -z "$SIMULATOR_SPACE_KB" || "$SIMULATOR_SPACE_KB" -lt "$MIN_SIMULATOR_FREE
   exit 4
 fi
 
-for tool in xcodebuild xcodegen xcrun; do
+for tool in xcodebuild xcodegen xcrun python3; do
   command -v "$tool" >/dev/null 2>&1 || { echo "ERROR: Missing required tool: $tool" >&2; exit 127; }
 done
 
@@ -184,7 +184,19 @@ TESTS=(
   "sitekeeperUITests/SitekeeperUITests/testCustomLaborTypesRemainEditableAfterHistoryAndRestart"
   "sitekeeperUITests/SitekeeperUITests/testAccessibilityAXXXLCoreFlowsRemainOperable"
   "sitekeeperUITests/SitekeeperUITests/testEnglishLaborEntryUsesTranslatedLabels"
+  "sitekeeperUITests/SitekeeperUITests/testProjectKeyboardToolbarNavigatesFieldsAndSurvivesRotation"
+  "sitekeeperUITests/SitekeeperUITests/testCalculatorKeyboardDoneDismissesAndAllowsFurtherInput"
+  "sitekeeperUITests/SitekeeperUITests/testQuickNoteKeyboardDonePreservesDraft"
+  "sitekeeperUITests/SitekeeperUITests/testLaborSheetKeyboardToolbarStaysWithinTheForm"
+  "sitekeeperUITests/SitekeeperUITests/testFileSearchOpensFileOnlyMatchAndKeepsIPadSelectionAfterRotation"
+  "sitekeeperUITests/SitekeeperUITests/testQuickNotePDFPreviewSupportsSearchCloseAndReopen"
+  "sitekeeperUITests/SitekeeperUITests/testCorruptPDFShowsFailureAndAnotherAttachmentStillOpens"
+  "sitekeeperUITests/SitekeeperUITests/testQuotationKeyboardNavigationUsesVisibleFieldsForBothPriceModes"
+  "sitekeeperUITests/SitekeeperUITests/testMaterialLibraryRejectsZeroQuantityForSingleAndBatchAppend"
 )
+if [[ "$DEVICE_FAMILY" == "ipad" ]]; then
+  TESTS+=("sitekeeperUITests/SitekeeperUITests/testIPadOnboardingProjectComposerDoesNotReopenAfterModuleSwitch")
+fi
 ONLY_TESTING_ARGS=()
 for test_name in "${TESTS[@]}"; do
   ONLY_TESTING_ARGS+=("-only-testing:${test_name}")
@@ -199,9 +211,14 @@ perl -e 'alarm shift; exec @ARGV' "$UI_TEST_TIMEOUT_SECONDS" \
     -destination "platform=iOS Simulator,id=${SIM_ID}" \
     -derivedDataPath "$DERIVED_DATA_PATH" \
     -resultBundlePath "$RESULT_BUNDLE_PATH" \
+    -parallel-testing-enabled NO \
     CODE_SIGNING_ALLOWED=NO \
     "${ONLY_TESTING_ARGS[@]}" \
     test
+
+echo "==> Checking UI test results and runtime warnings"
+env DEVELOPER_DIR="$DEVELOPER_DIR_PATH" python3 scripts/release/check_ui_test_results.py \
+  --result-bundle "$RESULT_BUNDLE_PATH"
 
 echo "UI smoke tests passed for ${DEVICE_FAMILY}."
 echo "Result bundle: $RESULT_BUNDLE_PATH"
