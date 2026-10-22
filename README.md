@@ -27,7 +27,7 @@ Chinese guide: `README.zh-CN.md`
 
 ## Quick Start
 
-1. Use the full Xcode toolchain:
+1. Use Xcode 27.1 (the same version checked by CI and release preflight):
 
    ```sh
    sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer
@@ -78,6 +78,11 @@ UI tests:
 ```sh
 DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -project sitekeeper.xcodeproj -scheme sitekeeper-iOS-UITests -destination 'id=<SIMULATOR_UDID>'
 ```
+
+Ordinary Debug builds skip the full release boundary scans. To opt in, set
+`SITEKEEPER_RUN_BUILD_GUARDS=1`; Release builds and release preflight still require
+ripgrep (`brew install ripgrep`) and enforce all guards. They do not depend on a
+Codex application installation.
 
 Release preflight:
 
