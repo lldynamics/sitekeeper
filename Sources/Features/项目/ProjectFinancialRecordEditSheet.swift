@@ -189,7 +189,7 @@ struct ProjectFinancialRecordEditSheet: View {
             .onChange(of: direction) { _, newDirection in
                 category = ProjectFinancialCategory.normalized(category, for: newDirection)
             }
-            .toolbar {
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }

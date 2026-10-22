@@ -155,7 +155,9 @@ struct LaborRecordEditSheet: View {
     }
 
     var body: some View {
-        AppBusinessFormSheet(
+        let currentField = editLaborFormFocusedField
+
+        return AppBusinessFormSheet(
             title: String(localized: "编辑人工记录"),
             isPrimaryActionDisabled: !canSave,
             onCancel: { dismiss() },
@@ -262,9 +264,10 @@ struct LaborRecordEditSheet: View {
                 showDeleteConfirm = true
             }
         }
-        .toolbar {
+        .keyboardBar {
             KeyboardNavigationToolbar(
                 focusedField: $editLaborFormFocusedField,
+                currentField: currentField,
                 fields: [.workers, .hours, .unitRate]
             )
         }

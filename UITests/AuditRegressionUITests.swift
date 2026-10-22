@@ -1,6 +1,53 @@
 import XCTest
+import UIKit
 
 extension SitekeeperUITests {
+    func testIPadOnboardingProjectComposerDoesNotReopenAfterModuleSwitch() throws {
+        try XCTSkipUnless(UIDevice.current.userInterfaceIdiom == .pad, "Requires the iPad split navigation shell.")
+        let app = launchApp(skipOnboarding: false, resetState: true)
+        let onboardingCreate = app.buttons["onboarding-create-project"]
+        let projectNameField = app.textFields["project-create-name"]
+        let projectName = "Onboarding Navigation Project"
+
+        XCTAssertTrue(onboardingCreate.waitForExistence(timeout: 5))
+        onboardingCreate.tap()
+        XCTAssertTrue(projectNameField.waitForExistence(timeout: 5))
+        app.navigationBars["新建工程"].buttons["取消"].tap()
+        XCTAssertTrue(projectNameField.waitForNonExistence(timeout: 5))
+
+        // Cancelling consumes only this request; a new onboarding action must still work.
+        XCTAssertTrue(onboardingCreate.waitForExistence(timeout: 5))
+        onboardingCreate.tap()
+        XCTAssertTrue(projectNameField.waitForExistence(timeout: 5))
+        projectNameField.tap()
+        projectNameField.typeText(projectName)
+        app.buttons["project-create-submit"].tap()
+        XCTAssertTrue(projectNameField.waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.navigationBars["首次设置"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[projectName].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.tabBars.firstMatch.exists)
+
+        assertIPadProjectListReturnsWithoutComposer(app, projectName: projectName)
+
+        // The normal toolbar action remains available after the one-time request is consumed.
+        let manualCreate = app.buttons["project-create-open"]
+        XCTAssertTrue(manualCreate.waitForExistence(timeout: 5))
+        manualCreate.tap()
+        XCTAssertTrue(projectNameField.waitForExistence(timeout: 5))
+        app.navigationBars["新建工程"].buttons["取消"].tap()
+        XCTAssertTrue(projectNameField.waitForNonExistence(timeout: 5))
+        assertIPadProjectListReturnsWithoutComposer(app, projectName: projectName)
+    }
+
+    private func assertIPadProjectListReturnsWithoutComposer(_ app: XCUIApplication, projectName: String) {
+        tapPrimaryModule(app, name: "工具箱")
+        XCTAssertTrue(app.navigationBars["工程工具箱"].waitForExistence(timeout: 5))
+        tapPrimaryModule(app, name: "项目")
+        XCTAssertTrue(app.staticTexts[projectName].firstMatch.waitForExistence(timeout: 5))
+        XCTAssertFalse(app.textFields["project-create-name"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.buttons["project-create-open"].isHittable)
+    }
+
     func testLocalBackupRoundTripRestoresClearedProjectAfterRestart() {
         let slot = UUID().uuidString
         let projectName = "Backup Round Trip Project"
@@ -49,7 +96,7 @@ extension SitekeeperUITests {
     }
 
     private func clearLocalDataForBackupRoundTrip(_ app: XCUIApplication) {
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
         let settings = button(app, identifier: "profile-settings-link", scrollingAttempts: 8)
         XCTAssertTrue(settings.isHittable)
         settings.tap()
@@ -68,7 +115,7 @@ extension SitekeeperUITests {
         let clearResult = app.staticTexts["clear-local-data-result"]
         XCTAssertTrue(clearResult.waitForExistence(timeout: 15))
         XCTAssertEqual(clearResult.label, "本机数据已清空")
-        app.navigationBars.buttons.firstMatch.tap()
+        app.navigationBars.buttons["BackButton"].firstMatch.tap()
     }
 
     private func restoreRoundTripBackup(_ app: XCUIApplication) {
@@ -94,7 +141,9 @@ extension SitekeeperUITests {
 
     private func roundTripBackupElement(_ app: XCUIApplication, identifier: String) -> XCUIElement {
         let match = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-        let form = app.collectionViews["backup-local-form"]
+        let form = UIDevice.current.userInterfaceIdiom == .pad
+            ? app.scrollViews.containing(.button, identifier: "backup-export-local").firstMatch
+            : app.descendants(matching: .any).matching(identifier: "backup-local-form").firstMatch
         XCTAssertTrue(form.waitForExistence(timeout: 5))
         for _ in 0..<30 {
             if match.waitForExistence(timeout: 1), match.isHittable { return match }

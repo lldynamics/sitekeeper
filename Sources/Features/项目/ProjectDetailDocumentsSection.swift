@@ -213,7 +213,7 @@ struct ProjectDocumentsView: View {
                     maxAmount: $maxAmount
                 )
             }
-            .toolbar {
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     AppKeyboard.dismiss()
                 }

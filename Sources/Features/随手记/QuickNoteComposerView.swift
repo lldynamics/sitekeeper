@@ -62,6 +62,7 @@ struct QuickNoteComposerView: View {
                             .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
                     )
                     .accessibilityLabel(String(localized: "quick_note_composer_input_accessibility_label"))
+                    .accessibilityIdentifier("quick-note-content-input")
 
                 Button {
                     onPublish()
@@ -84,10 +85,11 @@ struct QuickNoteComposerView: View {
         .overlay(alignment: .top) {
             Divider()
         }
-        .toolbar {
-            ToolbarItemGroup(placement: .keyboard) {
+        .appKeyboardToolbar {
+            HStack {
                 Spacer()
                 Button(String(localized: "quick_note_composer_done_button")) { isContentFocused = false }
+                    .accessibilityIdentifier("keyboard-done")
             }
         }
     }
@@ -151,6 +153,7 @@ struct QuickNoteComposerView: View {
         VStack(alignment: .leading, spacing: 12) {
             TextField(mode.placeholder, text: $content, axis: .vertical)
                 .focused($isContentFocused)
+                .accessibilityIdentifier("quick-note-content-input")
                 .lineLimit(5...12)
                 .textFieldStyle(.plain)
                 .padding(10)
@@ -197,10 +200,11 @@ struct QuickNoteComposerView: View {
             }
         }
             .padding(.vertical, 4)
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
+            .appKeyboardToolbar {
+                HStack {
                     Spacer()
                     Button(String(localized: "quick_note_composer_done_button")) { isContentFocused = false }
+                    .accessibilityIdentifier("keyboard-done")
                 }
             }
     }

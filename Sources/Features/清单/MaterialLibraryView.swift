@@ -17,7 +17,6 @@ struct MaterialLibraryView: View {
     @State var operationNotice: OperationToastNotice?
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var batchState = MaterialLibraryBatchSelectionState()
-    @FocusState private var appendMaterialFocusedField: AppendMaterialField?
     @AppStorage(UserPreferenceKeys.recentMaterialSearches) private var recentSearchKeywordsRaw = ""
     @AppStorage(UserPreferenceKeys.materialLibraryPromptAfterAdd) var promptAfterAdd = true
     @AppStorage(UserPreferenceKeys.materialLibraryLastTargetMode) var lastAppendTargetModeRaw = MaterialSheetTargetMode.existing.rawValue
@@ -201,10 +200,12 @@ struct MaterialLibraryView: View {
                     Label(String(localized: "materials.library.batchAppend.button"), systemImage: "square.and.arrow.down.on.square")
                 }
                 .disabled(selectedBatchMaterialContexts.isEmpty)
+                .accessibilityIdentifier("material-library-batch-append")
             } else {
                 Button(String(localized: "materials.library.batchSelection.button")) {
                     batchState.isBatchSelectionMode = true
                 }
+                .accessibilityIdentifier("material-library-batch-select")
                 Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel(String(localized: "materials.library.addCustomMaterial.accessibility"))
             }
         }
@@ -236,7 +237,6 @@ struct MaterialLibraryView: View {
             pendingAddDraftID: $appendState.pendingAddDraftId,
             pendingAddDraftTitle: $appendState.pendingAddDraftTitle,
             pendingAddProjectID: $appendState.pendingAddProjectId,
-            appendMaterialFocusedField: $appendMaterialFocusedField,
             operationMessage: $operationMessage,
             canAppendMaterialToSheet: canAppendMaterialToSheet,
             onCancelAppend: {

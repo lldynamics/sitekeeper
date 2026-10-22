@@ -45,8 +45,6 @@ struct QuotationView: View {
     @State var contractWritePlan: QuotationContractWritePlan?
     @State var contractWriteRefreshMessage = ""
     @State var undoableDeletion = UndoableDeletionCoordinator()
-    @FocusState var quoteFormFocusedField: QuoteFormField?
-    @FocusState var generateQuoteFocusedField: GenerateQuoteField?
 
     init(focusedQuoteId: UUID? = nil) {
         self.focusedQuoteId = focusedQuoteId

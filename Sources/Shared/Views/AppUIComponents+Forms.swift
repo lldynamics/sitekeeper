@@ -10,6 +10,7 @@ struct AppBusinessFormSheet<Content: View>: View {
     let onCancel: (() -> Void)?
     let onPrimaryAction: (() -> Void)?
     @ViewBuilder let content: Content
+    private var keyboardBarContent: AnyView?
 
     init(
         title: String,
@@ -31,27 +32,42 @@ struct AppBusinessFormSheet<Content: View>: View {
         self.content = content()
     }
 
+    // The bar belongs to the Form's hosting page inside this sheet's NavigationStack.
+    func keyboardBar<Bar: View>(@ViewBuilder content: () -> Bar) -> Self {
+        var form = self
+        form.keyboardBarContent = AnyView(content())
+        return form
+    }
+
+    @ViewBuilder
+    private var formContent: some View {
+        let form = Form { content }
+        if let keyboardBarContent {
+            form.appKeyboardToolbar { keyboardBarContent }
+        } else {
+            form
+        }
+    }
+
     var body: some View {
         NavigationStack {
-            Form {
-                content
-            }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if let cancelTitle, let onCancel {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button(cancelTitle, action: onCancel)
+            formContent
+                .navigationTitle(title)
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    if let cancelTitle, let onCancel {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button(cancelTitle, action: onCancel)
+                        }
+                    }
+                    if let primaryActionTitle, let onPrimaryAction {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(primaryActionTitle, role: primaryActionRole, action: onPrimaryAction)
+                                .disabled(isPrimaryActionDisabled)
+                                .accessibilityIdentifier("business-form-save")
+                        }
                     }
                 }
-                if let primaryActionTitle, let onPrimaryAction {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(primaryActionTitle, role: primaryActionRole, action: onPrimaryAction)
-                            .disabled(isPrimaryActionDisabled)
-                            .accessibilityIdentifier("business-form-save")
-                    }
-                }
-            }
         }
     }
 }
@@ -205,12 +221,13 @@ struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: Vie
     }
 }
 
-struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
+struct KeyboardNavigationToolbar<Field: Hashable>: View {
     let focusedField: FocusState<Field?>.Binding
+    let currentField: Field?
     let fields: [Field]
 
     private var currentIndex: Int? {
-        guard let value = focusedField.wrappedValue else { return nil }
+        guard let value = currentField else { return nil }
         return fields.firstIndex(of: value)
     }
 
@@ -224,23 +241,27 @@ struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
         return currentIndex < fields.count - 1
     }
 
-    var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .keyboard) {
+    var body: some View {
+        HStack {
             Button(String(localized: "上一个")) {
                 move(delta: -1)
             }
             .disabled(!canMovePrevious)
+            .accessibilityIdentifier("keyboard-previous")
 
             Button(String(localized: "下一个")) {
                 move(delta: 1)
             }
             .disabled(!canMoveNext)
+            .accessibilityIdentifier("keyboard-next")
 
             Spacer()
 
             Button(String(localized: "完成")) {
                 focusedField.wrappedValue = nil
+                AppKeyboard.dismiss()
             }
+            .accessibilityIdentifier("keyboard-done")
         }
     }
 
@@ -252,13 +273,14 @@ struct KeyboardNavigationToolbar<Field: Hashable>: ToolbarContent {
     }
 }
 
-struct KeyboardDismissToolbar: ToolbarContent {
+struct KeyboardDismissToolbar: View {
     let onDone: () -> Void
 
-    var body: some ToolbarContent {
-        ToolbarItemGroup(placement: .keyboard) {
+    var body: some View {
+        HStack {
             Spacer()
             Button(String(localized: "完成"), action: onDone)
+                .accessibilityIdentifier("keyboard-done")
         }
     }
 }

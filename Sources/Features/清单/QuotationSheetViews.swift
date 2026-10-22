@@ -18,7 +18,6 @@ struct QuotationEditSheetView: View {
     @Binding var formCustomerConfirmedDate: String
     @Binding var formContractAmount: String
     @Binding var formProjectId: UUID?
-    let focusedField: FocusState<QuoteFormField?>.Binding
     @Binding var showQuoteDeleteConfirm: Bool
     let onApplyTemplate: (ProjectTemplate) -> Void
     let onCancel: () -> Void
@@ -49,7 +48,6 @@ struct QuotationEditSheetView: View {
                 formCustomerConfirmedDate: $formCustomerConfirmedDate,
                 formContractAmount: $formContractAmount,
                 formProjectId: $formProjectId,
-                focusedField: focusedField,
                 onApplyTemplate: onApplyTemplate,
                 onRequestDelete: {
                     showQuoteDeleteConfirm = true
@@ -75,7 +73,6 @@ struct QuotationGenerateSheetView: View {
     @Binding var defaultLaborRate: String
     @Binding var generateTax: String
     @Binding var generateDiscount: String
-    let focusedField: FocusState<GenerateQuoteField?>.Binding
     let canGenerateQuoteForm: Bool
     let unconfirmedLaborCount: Int
     let onCancel: () -> Void
@@ -97,15 +94,8 @@ struct QuotationGenerateSheetView: View {
                 defaultLaborRate: $defaultLaborRate,
                 generateTax: $generateTax,
                 generateDiscount: $generateDiscount,
-                unconfirmedLaborCount: unconfirmedLaborCount,
-                focusedField: focusedField
+                unconfirmedLaborCount: unconfirmedLaborCount
             )
-            .toolbar {
-                KeyboardNavigationToolbar(
-                    focusedField: focusedField,
-                    fields: [.materialPrice, .laborRate, .taxRate, .discountRate]
-                )
-            }
         }
     }
 }

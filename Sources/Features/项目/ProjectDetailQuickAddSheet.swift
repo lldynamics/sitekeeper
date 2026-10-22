@@ -178,6 +178,8 @@ struct QuickAddSheet: View {
                         }
                     }
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     AppKeyboard.dismiss()
                 }

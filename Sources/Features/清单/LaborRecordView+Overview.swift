@@ -212,101 +212,104 @@ extension LaborRecordView {
             }
         }
         .sheet(isPresented: $showAdd) {
-            AppBusinessFormSheet(
-                title: String(localized: "添加记录"),
-                isPrimaryActionDisabled: !canSave,
-                onCancel: { showAdd = false },
-                onPrimaryAction: {
-                    save()
-                    showAdd = false
+            KeyboardFocusScope(LaborFormField.self) { focusedField, currentField in
+                AppBusinessFormSheet(
+                    title: String(localized: "添加记录"),
+                    isPrimaryActionDisabled: !canSave,
+                    onCancel: { showAdd = false },
+                    onPrimaryAction: {
+                        save()
+                        showAdd = false
+                    }
+                ) {
+                    Section {
+                        DatePicker(String(localized: "日期"), selection: $newDate, displayedComponents: .date)
+
+                        workTypePickerSection
+
+                        teamPickerSection
+
+                        LabeledContent(String(localized: "人数")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newWorkers.numericInput(.quantity))
+                                        .keyboardType(.numberPad).multilineTextAlignment(.trailing)
+                                        .accessibilityIdentifier("labor-workers-input")
+                                        .focused(focusedField, equals: .workers)
+                                        .frame(minWidth: 72, alignment: .trailing)
+                                    Text(String(localized: "人")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newWorkers,
+                                        kind: .quantity,
+                                        requirement: .requiredNonNegative
+                                    )
+                                )
+                            }
+                        }
+                        LabeledContent(String(localized: "出工天数")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newDays.numericInput(.days))
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                        .accessibilityIdentifier("labor-duration-input")
+                                        .focused(focusedField, equals: .hours)
+                                        .frame(minWidth: 72, alignment: .trailing)
+                                    Text(String(localized: "天")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newDays,
+                                        kind: .days,
+                                        requirement: .requiredNonNegative
+                                    )
+                                )
+                            }
+                        }
+                        LabeledContent(String(localized: "工价")) {
+                            VStack(alignment: .trailing, spacing: 2) {
+                                HStack(spacing: 4) {
+                                    TextField("0", text: $newUnitRate.numericInput(.laborRate))
+                                        .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
+                                        .accessibilityIdentifier("labor-rate-input")
+                                        .focused(focusedField, equals: .unitRate)
+                                        .frame(minWidth: 88, alignment: .trailing)
+                                    Text(String(localized: "元/天")).font(.subheadline).foregroundStyle(.secondary)
+                                }
+                                NumericInputValidationHint(
+                                    validation: InputValidator.validate(
+                                        newUnitRate,
+                                        kind: .laborRate,
+                                        requirement: .optionalNonNegative
+                                    )
+                                )
+                            }
+                        }
+                        LabeledContent(String(localized: "合计人工费")) {
+                            Text(ReportBuilder.money(newLaborTotal.doubleValue))
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.appFinance)
+                                .monospacedDigit()
+                        }
+                    } header: { Text(String(localized: "人工明细")).font(.headline) }
+
+                    Section {
+                        Toggle(String(localized: "已结算"), isOn: $newIsSettled)
+                        Picker(String(localized: "归属项目"), selection: $newProjectId) {
+                            Text(String(localized: "无归属")).tag(nil as UUID?)
+                            ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
+                        }
+                        TextField(String(localized: "备注"), text: $newNote, axis: .vertical).lineLimit(2...4)
+                    }
                 }
-            ) {
-                Section {
-                    DatePicker(String(localized: "日期"), selection: $newDate, displayedComponents: .date)
-
-                    workTypePickerSection
-
-                    teamPickerSection
-
-                    LabeledContent(String(localized: "人数")) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newWorkers.numericInput(.quantity))
-                                    .keyboardType(.numberPad).multilineTextAlignment(.trailing)
-                                    .accessibilityIdentifier("labor-workers-input")
-                                    .focused($laborFormFocusedField, equals: .workers)
-                                    .frame(minWidth: 72, alignment: .trailing)
-                                Text(String(localized: "人")).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            NumericInputValidationHint(
-                                validation: InputValidator.validate(
-                                    newWorkers,
-                                    kind: .quantity,
-                                    requirement: .requiredNonNegative
-                                )
-                            )
-                        }
-                    }
-                    LabeledContent(String(localized: "出工天数")) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newDays.numericInput(.days))
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                                    .accessibilityIdentifier("labor-duration-input")
-                                    .focused($laborFormFocusedField, equals: .hours)
-                                    .frame(minWidth: 72, alignment: .trailing)
-                                Text(String(localized: "天")).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            NumericInputValidationHint(
-                                validation: InputValidator.validate(
-                                    newDays,
-                                    kind: .days,
-                                    requirement: .requiredNonNegative
-                                )
-                            )
-                        }
-                    }
-                    LabeledContent(String(localized: "工价")) {
-                        VStack(alignment: .trailing, spacing: 2) {
-                            HStack(spacing: 4) {
-                                TextField("0", text: $newUnitRate.numericInput(.laborRate))
-                                    .keyboardType(.decimalPad).multilineTextAlignment(.trailing)
-                                    .accessibilityIdentifier("labor-rate-input")
-                                    .focused($laborFormFocusedField, equals: .unitRate)
-                                    .frame(minWidth: 88, alignment: .trailing)
-                                Text(String(localized: "元/天")).font(.subheadline).foregroundStyle(.secondary)
-                            }
-                            NumericInputValidationHint(
-                                validation: InputValidator.validate(
-                                    newUnitRate,
-                                    kind: .laborRate,
-                                    requirement: .optionalNonNegative
-                                )
-                            )
-                        }
-                    }
-                    LabeledContent(String(localized: "合计人工费")) {
-                        Text(ReportBuilder.money(newLaborTotal.doubleValue))
-                            .fontWeight(.semibold)
-                            .foregroundStyle(Color.appFinance)
-                            .monospacedDigit()
-                    }
-                } header: { Text(String(localized: "人工明细")).font(.headline) }
-
-                Section {
-                    Toggle(String(localized: "已结算"), isOn: $newIsSettled)
-                    Picker(String(localized: "归属项目"), selection: $newProjectId) {
-                        Text(String(localized: "无归属")).tag(nil as UUID?)
-                        ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
-                    }
-                    TextField(String(localized: "备注"), text: $newNote, axis: .vertical).lineLimit(2...4)
+                .keyboardBar {
+                    KeyboardNavigationToolbar(
+                        focusedField: focusedField,
+                        currentField: currentField,
+                        fields: [.workers, .hours, .unitRate]
+                    )
                 }
-            }
-            .toolbar {
-                KeyboardNavigationToolbar(
-                    focusedField: $laborFormFocusedField,
-                    fields: [.workers, .hours, .unitRate]
-                )
             }
         }
         .sheet(item: $editingRecord) { record in

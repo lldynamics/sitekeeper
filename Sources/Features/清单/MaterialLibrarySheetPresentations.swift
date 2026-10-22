@@ -22,7 +22,6 @@ private struct MaterialLibrarySheetPresentationsModifier: ViewModifier {
     @Binding var pendingAddDraftID: UUID?
     @Binding var pendingAddDraftTitle: String
     @Binding var pendingAddProjectID: UUID?
-    var appendMaterialFocusedField: FocusState<AppendMaterialField?>.Binding
     @Binding var operationMessage: String?
     let canAppendMaterialToSheet: Bool
     let onCancelAppend: () -> Void
@@ -73,7 +72,6 @@ private struct MaterialLibrarySheetPresentationsModifier: ViewModifier {
                     draftId: $pendingAddDraftID,
                     draftTitle: $pendingAddDraftTitle,
                     projectId: $pendingAddProjectID,
-                    focusedField: appendMaterialFocusedField,
                     operationMessage: $operationMessage,
                     canAppendMaterialToSheet: canAppendMaterialToSheet,
                     onCancel: onCancelAppend,
@@ -132,7 +130,6 @@ extension View {
         pendingAddDraftID: Binding<UUID?>,
         pendingAddDraftTitle: Binding<String>,
         pendingAddProjectID: Binding<UUID?>,
-        appendMaterialFocusedField: FocusState<AppendMaterialField?>.Binding,
         operationMessage: Binding<String?>,
         canAppendMaterialToSheet: Bool,
         onCancelAppend: @escaping () -> Void,
@@ -166,7 +163,6 @@ extension View {
                 pendingAddDraftID: pendingAddDraftID,
                 pendingAddDraftTitle: pendingAddDraftTitle,
                 pendingAddProjectID: pendingAddProjectID,
-                appendMaterialFocusedField: appendMaterialFocusedField,
                 operationMessage: operationMessage,
                 canAppendMaterialToSheet: canAppendMaterialToSheet,
                 onCancelAppend: onCancelAppend,

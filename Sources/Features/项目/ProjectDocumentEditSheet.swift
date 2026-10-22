@@ -166,6 +166,8 @@ struct ProjectDocumentEditSheet: View {
                     .disabled(title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
                               (!amount.isEmpty && !InputValidator.nonNegativeNumber(amount)))
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }

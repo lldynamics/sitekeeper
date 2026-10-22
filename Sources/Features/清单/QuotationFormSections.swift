@@ -13,6 +13,11 @@ enum GenerateQuoteField: Hashable {
     case laborRate
     case taxRate
     case discountRate
+
+    static func visibleFields(for mode: MaterialQuotePriceMode?) -> [Self] {
+        let shared: [Self] = [.laborRate, .taxRate, .discountRate]
+        return mode == .overrideAll ? [.materialPrice] + shared : shared
+    }
 }
 
 struct QuotationEditFormSections: View {
@@ -32,7 +37,7 @@ struct QuotationEditFormSections: View {
     @Binding var formCustomerConfirmedDate: String
     @Binding var formContractAmount: String
     @Binding var formProjectId: UUID?
-    @FocusState.Binding var focusedField: QuoteFormField?
+    @FocusState private var focusedField: QuoteFormField?
     let onApplyTemplate: (ProjectTemplate) -> Void
     let onRequestDelete: () -> Void
 
@@ -168,9 +173,10 @@ struct QuotationEditFormSections: View {
                 }
             }
         }
-        .toolbar {
+        .appKeyboardToolbar {
             KeyboardNavigationToolbar(
                 focusedField: $focusedField,
+                currentField: focusedField,
                 fields: [.price, .quantity, .contractAmount, .taxRate, .discountRate]
             )
         }
@@ -186,7 +192,7 @@ struct QuotationGenerateFormSections: View {
     @Binding var generateTax: String
     @Binding var generateDiscount: String
     let unconfirmedLaborCount: Int
-    @FocusState.Binding var focusedField: GenerateQuoteField?
+    @FocusState private var focusedField: GenerateQuoteField?
 
     var body: some View {
         Form {
@@ -221,6 +227,7 @@ struct QuotationGenerateFormSections: View {
                     LabeledContent(String(localized: "统一对外单价")) {
                         VStack(alignment: .trailing, spacing: 2) {
                             TextField("0", text: $defaultMaterialPrice.numericInput(.amount))
+                                .accessibilityIdentifier("quotation-generate-material-price")
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .focused($focusedField, equals: .materialPrice)
@@ -237,6 +244,7 @@ struct QuotationGenerateFormSections: View {
                 LabeledContent(String(localized: "人工默认单价（按记录单位）")) {
                     VStack(alignment: .trailing, spacing: 2) {
                         TextField("120", text: $defaultLaborRate.numericInput(.laborRate))
+                            .accessibilityIdentifier("quotation-generate-labor-rate")
                             .keyboardType(.decimalPad)
                             .multilineTextAlignment(.trailing)
                             .focused($focusedField, equals: .laborRate)
@@ -281,6 +289,18 @@ struct QuotationGenerateFormSections: View {
                         )
                     }
                 }
+            }
+        }
+        .appKeyboardToolbar {
+            KeyboardNavigationToolbar(
+                focusedField: $focusedField,
+                currentField: focusedField,
+                fields: GenerateQuoteField.visibleFields(for: materialPriceMode)
+            )
+        }
+        .onChange(of: materialPriceMode) { _, mode in
+            if focusedField == .materialPrice, mode != .overrideAll {
+                focusedField = .laborRate
             }
         }
     }

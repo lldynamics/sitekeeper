@@ -164,9 +164,10 @@ struct ProjectWarehouseMovementSheet: View {
                     }
                 }
             }
-            .toolbar {
+            .appKeyboardToolbar {
                 KeyboardNavigationToolbar(
                     focusedField: $movementFocusedField,
+                    currentField: movementFocusedField,
                     fields: [.quantity]
                 )
             }

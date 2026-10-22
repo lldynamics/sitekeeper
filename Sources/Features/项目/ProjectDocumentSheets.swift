@@ -111,6 +111,8 @@ struct ProjectDocumentScanSetupSheet: View {
                     }
                     .disabled(!amount.isEmpty && !InputValidator.nonNegativeNumber(amount))
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }

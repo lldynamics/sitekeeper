@@ -29,15 +29,17 @@ struct ProjectListView: View {
     @State var overviewFilter: ProjectOverviewFilter? = nil
     @State var sortOption: ProjectSortOption = .recentUpdate
     @State var lastHandledAutoOpenComposerToken = 0
-    @FocusState private var newProjectFocusedField: ProjectCreateNumericField?
     let autoOpenComposerToken: Int
+    let onAutoOpenComposerConsumed: (Int) -> Void
 
     init(
         initialOverviewFilter: ProjectOverviewFilter? = nil,
-        autoOpenComposerToken: Int = 0
+        autoOpenComposerToken: Int = 0,
+        onAutoOpenComposerConsumed: @escaping (Int) -> Void = { _ in }
     ) {
         _overviewFilter = State(initialValue: initialOverviewFilter)
         self.autoOpenComposerToken = autoOpenComposerToken
+        self.onAutoOpenComposerConsumed = onAutoOpenComposerConsumed
     }
 
     var allowedStatuses: [ProjectStatus] {
@@ -128,7 +130,6 @@ struct ProjectListView: View {
                 laborCost: $newLaborCost,
                 paymentStatus: $newPaymentStatus,
                 requiredDocumentCategories: $newRequiredDocumentCategories,
-                focusedField: $newProjectFocusedField,
                 canCreate: canCreateProject,
                 onCancel: {
                     clearProject()
@@ -192,6 +193,7 @@ struct ProjectListView: View {
                 }
                 .buttonStyle(.appProminent())
                 .accessibilityLabel(String(localized: "新建项目"))
+                .accessibilityIdentifier("project-create-open")
             } else {
                 Button {
                     showAdd = true
@@ -200,12 +202,9 @@ struct ProjectListView: View {
                 }
                 .buttonStyle(.appIcon())
                 .accessibilityLabel(String(localized: "新建项目"))
+                .accessibilityIdentifier("project-create-open")
             }
         }
-    }
-
-    var shouldUseProminentProjectCreateAction: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad || projectStore.projects.isEmpty
     }
 
     @ViewBuilder

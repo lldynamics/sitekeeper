@@ -22,7 +22,7 @@ struct ProjectCreateSheet: View {
     @Binding var laborCost: String
     @Binding var paymentStatus: PaymentStatus
     @Binding var requiredDocumentCategories: Set<ProjectDocumentCategory>
-    let focusedField: FocusState<ProjectCreateNumericField?>.Binding
+    @FocusState private var focusedField: ProjectCreateNumericField?
     let canCreate: Bool
     let onCancel: () -> Void
     let onCreate: () -> Void
@@ -62,7 +62,8 @@ struct ProjectCreateSheet: View {
                             TextField("0", text: $contractAmount.numericInput(.amount))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
-                                .focused(focusedField, equals: .contractAmount)
+                                .focused($focusedField, equals: .contractAmount)
+                                .accessibilityIdentifier("project-create-contract-amount")
                             NumericInputValidationHint(
                                 validation: InputValidator.validate(
                                     contractAmount,
@@ -77,7 +78,8 @@ struct ProjectCreateSheet: View {
                             TextField("0", text: $paidAmount.numericInput(.amount))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
-                                .focused(focusedField, equals: .paidAmount)
+                                .focused($focusedField, equals: .paidAmount)
+                                .accessibilityIdentifier("project-create-paid-amount")
                             NumericInputValidationHint(
                                 validation: InputValidator.validate(
                                     paidAmount,
@@ -92,7 +94,8 @@ struct ProjectCreateSheet: View {
                             TextField("0", text: $materialCost.numericInput(.amount))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
-                                .focused(focusedField, equals: .materialCost)
+                                .focused($focusedField, equals: .materialCost)
+                                .accessibilityIdentifier("project-create-material-cost")
                             NumericInputValidationHint(
                                 validation: InputValidator.validate(
                                     materialCost,
@@ -107,7 +110,8 @@ struct ProjectCreateSheet: View {
                             TextField("0", text: $laborCost.numericInput(.amount))
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
-                                .focused(focusedField, equals: .laborCost)
+                                .focused($focusedField, equals: .laborCost)
+                                .accessibilityIdentifier("project-create-labor-cost")
                             NumericInputValidationHint(
                                 validation: InputValidator.validate(
                                     laborCost,
@@ -124,6 +128,7 @@ struct ProjectCreateSheet: View {
                     }
                 }
             }
+            .accessibilityIdentifier("project-create-form")
             .navigationTitle(String(localized: "新建工程"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -135,8 +140,11 @@ struct ProjectCreateSheet: View {
                         .disabled(!canCreate)
                         .accessibilityIdentifier("project-create-submit")
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardNavigationToolbar(
-                    focusedField: focusedField,
+                    focusedField: $focusedField,
+                    currentField: focusedField,
                     fields: [.contractAmount, .paidAmount, .materialCost, .laborCost]
                 )
             }

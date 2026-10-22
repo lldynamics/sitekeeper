@@ -244,6 +244,8 @@ struct AddMaterialSheet: View {
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     AppKeyboard.dismiss()
                 }
@@ -369,6 +371,8 @@ struct MaterialPriceEditSheet: View {
                     }
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     AppKeyboard.dismiss()
                 }

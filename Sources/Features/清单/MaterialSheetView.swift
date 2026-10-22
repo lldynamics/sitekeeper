@@ -98,6 +98,11 @@ struct MaterialSheetView: View {
             .toolbar {
                 materialSheetToolbar
             }
+            .appKeyboardToolbar {
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
+            }
             .materialSheetPresentations(
                 showExportChoice: $showExportChoice,
                 exportFileURL: $exportFileURL,
@@ -165,9 +170,6 @@ struct MaterialSheetView: View {
                 Image(systemName: "plus").visibleIconStyle()
             }
             .accessibilityLabel(String(localized: "新建材料单"))
-        }
-        KeyboardDismissToolbar {
-            AppKeyboard.dismiss()
         }
     }
 

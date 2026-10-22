@@ -12,7 +12,7 @@ struct MaterialLibraryAppendToSheetForm: View {
     @Binding var draftId: UUID?
     @Binding var draftTitle: String
     @Binding var projectId: UUID?
-    var focusedField: FocusState<AppendMaterialField?>.Binding
+    @FocusState private var focusedField: AppendMaterialField?
 
     var body: some View {
         Form {
@@ -27,22 +27,28 @@ struct MaterialLibraryAppendToSheetForm: View {
                 HStack {
                     TextField(String(localized: "数量"), text: $quantity)
                         .keyboardType(.decimalPad)
-                        .focused(focusedField, equals: .quantity)
+                        .focused($focusedField, equals: .quantity)
+                        .accessibilityIdentifier("material-library-append-quantity")
                     Text(context.unit)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                NumericInputValidationHint(
+                    validation: MaterialLibraryLogicHelpers.appendQuantityValidation(quantity),
+                    showWhenEmpty: true,
+                    alignment: .leading
+                )
                 HStack {
                     TextField(String(localized: "单价（可选）"), text: $unitPrice)
                         .keyboardType(.decimalPad)
-                        .focused(focusedField, equals: .unitPrice)
+                        .focused($focusedField, equals: .unitPrice)
                     Text(String(format: String(localized: "元/%@"), context.unit))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 TextField(String(localized: "备注（可选）"), text: $note, axis: .vertical)
                     .lineLimit(2...4)
-                    .focused(focusedField, equals: .note)
+                    .focused($focusedField, equals: .note)
             }
             Section(String(localized: "保存到材料单")) {
                 if targetMode == .existing {
@@ -103,6 +109,13 @@ struct MaterialLibraryAppendToSheetForm: View {
                 }
             }
         }
+        .appKeyboardToolbar {
+            KeyboardNavigationToolbar(
+                focusedField: $focusedField,
+                currentField: focusedField,
+                fields: [.quantity, .unitPrice, .note]
+            )
+        }
     }
 
     private var selectedDraftTitle: String {
@@ -126,7 +139,6 @@ struct MaterialLibraryAppendToSheetModal: View {
     @Binding var draftId: UUID?
     @Binding var draftTitle: String
     @Binding var projectId: UUID?
-    var focusedField: FocusState<AppendMaterialField?>.Binding
     @Binding var operationMessage: String?
     let canAppendMaterialToSheet: Bool
     let onCancel: () -> Void
@@ -138,7 +150,7 @@ struct MaterialLibraryAppendToSheetModal: View {
             title: String(localized: "materials.library.appendSheet.title"),
             cancelTitle: String(localized: "common.cancel"),
             primaryActionTitle: String(localized: "common.add"),
-            isPrimaryActionDisabled: !canAppendMaterialToSheet,
+            isPrimaryActionDisabled: !canAppendMaterialToSheet || !MaterialLibraryLogicHelpers.appendQuantityValidation(quantity).isValid,
             onCancel: onCancel,
             onPrimaryAction: {
                 guard onConfirm() else { return }
@@ -156,14 +168,7 @@ struct MaterialLibraryAppendToSheetModal: View {
                 targetMode: $targetMode,
                 draftId: $draftId,
                 draftTitle: $draftTitle,
-                projectId: $projectId,
-                focusedField: focusedField
-            )
-        }
-        .toolbar {
-            KeyboardNavigationToolbar(
-                focusedField: focusedField,
-                fields: [.quantity, .unitPrice, .note]
+                projectId: $projectId
             )
         }
         .onChange(of: targetMode) { _, mode in
@@ -202,10 +207,16 @@ struct MaterialLibraryBatchAppendForm: View {
                 HStack {
                     TextField(String(localized: "数量"), text: $quantity)
                         .keyboardType(.decimalPad)
+                        .accessibilityIdentifier("material-library-batch-quantity")
                     Text(String(localized: "每项"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
+                NumericInputValidationHint(
+                    validation: MaterialLibraryLogicHelpers.appendQuantityValidation(quantity),
+                    showWhenEmpty: true,
+                    alignment: .leading
+                )
             }
 
             Section(String(localized: "保存到材料单")) {
@@ -299,7 +310,7 @@ struct MaterialLibraryBatchAppendSheet: View {
             title: String(localized: "materials.library.batchAppendSheet.title"),
             cancelTitle: String(localized: "common.cancel"),
             primaryActionTitle: String(localized: "common.add"),
-            isPrimaryActionDisabled: !canAppendMaterialToSheet,
+            isPrimaryActionDisabled: !canAppendMaterialToSheet || !MaterialLibraryLogicHelpers.appendQuantityValidation(quantity).isValid,
             onCancel: onCancel,
             onPrimaryAction: {
                 guard onConfirm() else { return }
@@ -317,10 +328,10 @@ struct MaterialLibraryBatchAppendSheet: View {
                 draftTitle: $draftTitle,
                 projectId: $projectId
             )
-        }
-        .toolbar {
-            KeyboardDismissToolbar {
-                AppKeyboard.dismiss()
+            .appKeyboardToolbar {
+                KeyboardDismissToolbar {
+                    AppKeyboard.dismiss()
+                }
             }
         }
         .onChange(of: targetMode) { _, mode in

@@ -2,6 +2,10 @@ import Foundation
 import SwiftUI
 
 extension ProjectListView {
+    var shouldUseProminentProjectCreateAction: Bool {
+        UIDevice.current.userInterfaceIdiom == .pad || projectStore.projects.isEmpty
+    }
+
     func clearAllFilters() {
         searchText = ""
         statusFilter = nil
@@ -13,6 +17,7 @@ extension ProjectListView {
               autoOpenComposerToken != lastHandledAutoOpenComposerToken else { return }
         lastHandledAutoOpenComposerToken = autoOpenComposerToken
         showAdd = true
+        onAutoOpenComposerConsumed(autoOpenComposerToken)
     }
 
     func deleteProject(keepData: Bool) {

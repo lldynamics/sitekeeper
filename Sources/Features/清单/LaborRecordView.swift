@@ -41,7 +41,6 @@ struct LaborRecordView: View {
     @State var exportEndDate = Date()
     @State var showExportConfig = false
     @State var exportFormat: LaborExportFormat = .html
-    @FocusState var laborFormFocusedField: LaborFormField?
 
     init(focusedLaborId: UUID? = nil) {
         self.focusedLaborId = focusedLaborId

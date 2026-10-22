@@ -12,6 +12,7 @@ struct RootView: View {
     @State private var showOnboardingBackupImport = false
     @State private var widgetDeepLinkDestination: WidgetDeepLinkDestination?
     @State private var projectComposerOpenToken = 0
+    @State private var consumedProjectComposerOpenToken = 0
     @State private var padDetailResetToken = 0
     @State private var padShellResetToken = 0
     @State private var padColumnVisibility: NavigationSplitViewVisibility = .all
@@ -44,6 +45,10 @@ struct RootView: View {
 
     private var usesPadSplitShell: Bool {
         UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+    }
+
+    private var pendingProjectComposerOpenToken: Int {
+        projectComposerOpenToken == consumedProjectComposerOpenToken ? 0 : projectComposerOpenToken
     }
 
     var body: some View {
@@ -131,7 +136,10 @@ struct RootView: View {
                 .tag(Tab.dashboard)
 
             NavigationStack {
-                ProjectListView(autoOpenComposerToken: projectComposerOpenToken)
+                ProjectListView(
+                    autoOpenComposerToken: pendingProjectComposerOpenToken,
+                    onAutoOpenComposerConsumed: consumeProjectComposerRequest
+                )
             }
             .tabItem { Label(Tab.records.title, systemImage: Tab.records.systemImage) }
             .tag(Tab.records)
@@ -190,7 +198,10 @@ struct RootView: View {
             DashboardView()
         case .records:
             NavigationStack {
-                ProjectListView(autoOpenComposerToken: projectComposerOpenToken)
+                ProjectListView(
+                    autoOpenComposerToken: pendingProjectComposerOpenToken,
+                    onAutoOpenComposerConsumed: consumeProjectComposerRequest
+                )
             }
         case .checklist:
             NavigationStack {
@@ -213,6 +224,12 @@ struct RootView: View {
         padColumnVisibility = .all
         padDetailResetToken &+= 1
         padShellResetToken &+= 1
+    }
+
+    private func consumeProjectComposerRequest(_ token: Int) {
+        guard token == projectComposerOpenToken else { return }
+        // Keep consumption outside the iPad shell, whose identity changes between modules.
+        consumedProjectComposerOpenToken = token
     }
 
     private var persistenceErrorBinding: Binding<Bool> {
@@ -413,6 +430,7 @@ private struct FirstLaunchOnboardingView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(Color.appPrimaryAction)
+                    .accessibilityIdentifier("onboarding-create-project")
                     Button(action: onImportBackup) {
                         actionRow(
                             title: String(localized: "导入备份"),

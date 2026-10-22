@@ -221,7 +221,7 @@ struct CalculatorForm<Content: View>: View {
         }
         .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
+        .appKeyboardToolbar {
             if let focusBinding {
                 KeyboardDismissToolbar {
                     focusBinding.wrappedValue = false

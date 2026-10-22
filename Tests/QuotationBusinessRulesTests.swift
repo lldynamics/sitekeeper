@@ -4,6 +4,14 @@ import Testing
 
 @MainActor
 struct QuotationBusinessRulesTests {
+    @Test func generatedQuoteKeyboardOrderContainsOnlyVisibleInputs() {
+        let shared: [GenerateQuoteField] = [.laborRate, .taxRate, .discountRate]
+        #expect(GenerateQuoteField.visibleFields(for: nil) == shared)
+        #expect(GenerateQuoteField.visibleFields(for: .useMaterialPrice) == shared)
+        #expect(GenerateQuoteField.visibleFields(for: .leaveUnpriced) == shared)
+        #expect(GenerateQuoteField.visibleFields(for: .overrideAll) == [.materialPrice] + shared)
+    }
+
     @Test func materialQuotePriceModeRequiresAnExplicitBusinessChoice() {
         let material = MaterialItem(
             name: "钢筋",

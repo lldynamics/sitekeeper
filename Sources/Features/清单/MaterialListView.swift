@@ -41,7 +41,6 @@ struct MaterialListView: View {
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var pendingDeletePlan: PendingMaterialDeletePlan?
     @State var showDeleteConfirm = false
-    @FocusState var addMaterialFocusedField: AddMaterialField?
 
     init(focusedMaterialId: UUID? = nil) {
         self.focusedMaterialId = focusedMaterialId
@@ -175,64 +174,69 @@ struct MaterialListView: View {
             Text(plan.message)
         }
         .sheet(isPresented: $showAdd) {
-            NavigationStack {
-                Form {
-                    Section(String(localized: "材料")) {
-                        if !store.templates.filter({ $0.category == .material }).isEmpty {
-                            Menu(String(localized: "套用材料模板")) {
-                                ForEach(store.templates.filter { $0.category == .material }) { template in
-                                    Button(template.name) { applyMaterialTemplate(template) }
+            KeyboardFocusScope(AddMaterialField.self) { focusedField, currentField in
+                NavigationStack {
+                    Form {
+                        Section(String(localized: "材料")) {
+                            if !store.templates.filter({ $0.category == .material }).isEmpty {
+                                Menu(String(localized: "套用材料模板")) {
+                                    ForEach(store.templates.filter { $0.category == .material }) { template in
+                                        Button(template.name) { applyMaterialTemplate(template) }
+                                    }
                                 }
                             }
+                            TextField(String(localized: "材料名称"), text: $newName)
+                            LabeledContent(String(localized: "数量")) {
+                                TextField("0", text: $newQty)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .focused(focusedField, equals: .quantity)
+                            }
+                            LabeledContent(String(localized: "单位")) {
+                                TextField(String(localized: "米 / 卷 / 个"), text: $newUnit)
+                                    .multilineTextAlignment(.trailing)
+                            }
+                            LabeledContent(String(localized: "单价")) {
+                                TextField("0", text: $newUnitPrice)
+                                    .keyboardType(.decimalPad)
+                                    .multilineTextAlignment(.trailing)
+                                    .focused(focusedField, equals: .unitPrice)
+                            }
+                            TextField(String(localized: "规格型号"), text: $newSpecification)
+                            TextField(String(localized: "品牌"), text: $newBrand)
+                            TextField(String(localized: "供应商"), text: $newSupplier)
+                            Picker(String(localized: "采购状态"), selection: $newPurchaseStatus) {
+                                ForEach(MaterialPurchaseStatus.allCases, id: \.self) { item in
+                                    Text(item.displayName).tag(item)
+                                }
+                            }
+                            OptionalProjectDatePicker(String(localized: "进场日期"), text: $newArrivalDate)
                         }
-                        TextField(String(localized: "材料名称"), text: $newName)
-                        LabeledContent(String(localized: "数量")) {
-                            TextField("0", text: $newQty)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($addMaterialFocusedField, equals: .quantity)
-                        }
-                        LabeledContent(String(localized: "单位")) {
-                            TextField(String(localized: "米 / 卷 / 个"), text: $newUnit)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        LabeledContent(String(localized: "单价")) {
-                            TextField("0", text: $newUnitPrice)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                                .focused($addMaterialFocusedField, equals: .unitPrice)
-                        }
-                        TextField(String(localized: "规格型号"), text: $newSpecification)
-                        TextField(String(localized: "品牌"), text: $newBrand)
-                        TextField(String(localized: "供应商"), text: $newSupplier)
-                        Picker(String(localized: "采购状态"), selection: $newPurchaseStatus) {
-                            ForEach(MaterialPurchaseStatus.allCases, id: \.self) { item in
-                                Text(item.displayName).tag(item)
+                        Section(String(localized: "归属项目")) {
+                            Picker(String(localized: "归属项目"), selection: $newProjectId) {
+                                Text(String(localized: "无归属")).tag(nil as UUID?)
+                                ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
                             }
                         }
-                        OptionalProjectDatePicker(String(localized: "进场日期"), text: $newArrivalDate)
                     }
-                    Section(String(localized: "归属项目")) {
-                        Picker(String(localized: "归属项目"), selection: $newProjectId) {
-                            Text(String(localized: "无归属")).tag(nil as UUID?)
-                            ForEach(store.projects) { p in Text(p.name).tag(p.id as UUID?) }
+                    .navigationTitle(String(localized: "添加材料")).navigationBarTitleDisplayMode(.inline)
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showAdd = false } }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button(String(localized: "添加")) {
+                                addItem()
+                                showAdd = false
+                            }
+                            .disabled(!canAddMaterial)
                         }
                     }
-                }
-                .navigationTitle(String(localized: "添加材料")).navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button(String(localized: "取消")) { showAdd = false } }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(String(localized: "添加")) {
-                            addItem()
-                            showAdd = false
-                        }
-                        .disabled(!canAddMaterial)
+                    .appKeyboardToolbar {
+                        KeyboardNavigationToolbar(
+                            focusedField: focusedField,
+                            currentField: currentField,
+                            fields: [.quantity, .unitPrice]
+                        )
                     }
-                    KeyboardNavigationToolbar(
-                        focusedField: $addMaterialFocusedField,
-                        fields: [.quantity, .unitPrice]
-                    )
                 }
             }
         }

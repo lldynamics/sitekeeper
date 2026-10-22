@@ -349,6 +349,8 @@ private struct ProjectDocumentStatusChangeSheet: View {
                         dismiss()
                     }
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }

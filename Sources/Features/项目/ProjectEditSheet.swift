@@ -122,6 +122,8 @@ struct ProjectEditSheet: View {
                         !InputValidator.validate(contractAmount, kind: .amount, requirement: .optionalNonNegative).isValid
                     )
                 }
+            }
+            .appKeyboardToolbar {
                 KeyboardDismissToolbar {
                     isInputFocused = false
                 }

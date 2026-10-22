@@ -97,10 +97,9 @@ struct QuickNoteEditSheet: View {
                     }
                     .disabled(content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && attachments.isEmpty)
                 }
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button(String(localized: "完成")) { isContentFocused = false }
-                }
+            }
+            .appKeyboardToolbar {
+                KeyboardDismissToolbar { isContentFocused = false }
             }
             .alert(String(localized: "删除这条随手记？"), isPresented: $showDeleteConfirm) {
                 Button(String(localized: "取消"), role: .cancel) {}
