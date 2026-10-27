@@ -137,10 +137,6 @@ struct ProjectDocumentChecklistTemplate: Identifiable, Equatable, Sendable {
     var categories: [ProjectDocumentCategory]
     var source: Source
 
-    var categoryText: String {
-        categories.map(\.displayName).joined(separator: "、")
-    }
-
     static var builtInPresets: [ProjectDocumentChecklistTemplate] {
         ProjectDocumentChecklistTemplatePreset.allCases.map(\.checklistTemplate)
     }

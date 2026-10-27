@@ -1,8 +1,6 @@
 import SwiftUI
 
 extension DashboardView {
-    static var localDateFormatter: DateFormatter { Formatters.date }
-
     var todayDay: CalendarDay { projectStore.dayContext.day }
 
     var activeProjects: [Project] {
@@ -282,10 +280,6 @@ extension DashboardView {
         activeProjects.reduce(0) { total, project in
             total + financeStore.materialPriceSpikeCount(for: project.id)
         }
-    }
-
-    var materialPriceSpikeProjectCount: Int {
-        activeProjects.filter { financeStore.materialPriceSpikeCount(for: $0.id) > 0 }.count
     }
 
     var usesWideDashboardLayout: Bool {

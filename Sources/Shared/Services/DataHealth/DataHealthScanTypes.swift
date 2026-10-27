@@ -115,25 +115,6 @@ struct DataHealthScanSnapshot: Codable, Equatable, Sendable {
     }
 }
 
-extension DataHealthScanSnapshot {
-    func replacingStorageUsage(_ usage: DataHealthStorageUsageSnapshot) -> DataHealthScanSnapshot {
-        DataHealthScanSnapshot(
-            scannedAt: scannedAt,
-            reason: reason,
-            missingPhotoFileNames: missingPhotoFileNames,
-            missingDocumentFileNames: missingDocumentFileNames,
-            missingQuickNoteAttachmentFileNames: missingQuickNoteAttachmentFileNames,
-            orphanPhotoFileNames: orphanPhotoFileNames,
-            orphanDrawingFileNames: orphanDrawingFileNames,
-            orphanDocumentFileNames: orphanDocumentFileNames,
-            orphanQuickNoteAttachmentFileNames: orphanQuickNoteAttachmentFileNames,
-            storageIssues: storageIssues,
-            storageUsage: usage,
-            widgetHealth: widgetHealth
-        )
-    }
-}
-
 extension DataHealthStorageUsageSnapshot {
     static let zero = DataHealthStorageUsageSnapshot(
         photoStorageBytes: 0,

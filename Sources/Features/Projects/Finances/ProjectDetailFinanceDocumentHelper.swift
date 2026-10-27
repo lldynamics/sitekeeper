@@ -3,18 +3,6 @@ import UIKit
 import CoreGraphics
 
 enum ProjectDetailFinanceDocumentHelper {
-    static func makeCompressedPDF(from image: UIImage) -> Data {
-        let maxEdge: CGFloat = 1600
-        let resized = resize(image, longEdge: maxEdge)
-        let jpeg = resized.jpegData(compressionQuality: 0.72) ?? Data()
-        let finalImage = UIImage(data: jpeg) ?? resized
-        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(origin: .zero, size: finalImage.size))
-        return renderer.pdfData { context in
-            context.beginPage()
-            finalImage.draw(in: CGRect(origin: .zero, size: finalImage.size))
-        }
-    }
-
     static func compressedJPEGData(from image: UIImage) -> Data? {
         let resized = resize(image, longEdge: 1800)
         return resized.jpegData(compressionQuality: 0.78)

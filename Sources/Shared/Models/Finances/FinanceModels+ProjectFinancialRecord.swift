@@ -127,10 +127,6 @@ extension ProjectFinancialRecord {
         normalizedDirection == .expense
     }
 
-    func matchesDirection(_ direction: ProjectFinancialDirection) -> Bool {
-        normalizedDirection == direction
-    }
-
     var normalizedCategory: ProjectFinancialCategory {
         category
     }

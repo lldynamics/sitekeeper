@@ -99,10 +99,6 @@ struct DrawingListViewModel {
         searchScopedDrawings.filter(filter.matches(_:)).count
     }
 
-    func hasDrawings(matching filter: DrawingAvailabilityFilter) -> Bool {
-        count(for: filter) > 0
-    }
-
     var scannableDrawings: [ProjectDrawing] {
         projectScopedDrawings
     }

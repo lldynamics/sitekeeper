@@ -125,19 +125,6 @@ struct ProjectDeliveryHealth: Equatable {
             }
         }
 
-        var repairMode: ProjectDetailMode? {
-            switch self {
-            case .missingReceipts:
-                return .finance
-            case .missingDrawings, .missingOriginals, .missingCurrentDrawingVersion:
-                return .assets
-            case .openTodos:
-                return .records
-            case .backupOverdue:
-                return nil
-            }
-        }
-
         var repairAction: ProjectDeliveryRepairAction {
             switch self {
             case .missingReceipts:

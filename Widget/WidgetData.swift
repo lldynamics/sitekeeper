@@ -36,29 +36,6 @@ final class WidgetDataStore {
         Locale.preferredLanguages.first ?? Locale.autoupdatingCurrent.identifier
     }
 
-    static func healthSnapshot() -> WidgetDataHealthSnapshot {
-        guard let defaults = UserDefaults(suiteName: suiteName) else {
-            WidgetStorageIssueLog.record(
-                String(format: WidgetLocalizedText.string(for: "widget_storage_app_group_unavailable_format"), suiteName)
-            )
-            return WidgetDataHealthSnapshot(
-                appGroupReadable: false,
-                lastUpdatedAt: nil,
-                projectCount: 0,
-                pendingTodos: 0
-            )
-        }
-        let data = decodeWidgetData(from: defaults)
-        let timestamp = defaults.double(forKey: widgetUpdatedAtKey)
-        let updatedAt = timestamp > 0 ? Date(timeIntervalSince1970: timestamp) : data.lastUpdatedDate
-        return WidgetDataHealthSnapshot(
-            appGroupReadable: true,
-            lastUpdatedAt: updatedAt,
-            projectCount: data.projects.count,
-            pendingTodos: data.pendingTodos
-        )
-    }
-
     private static func decodeWidgetData(from defaults: UserDefaults?) -> WidgetExportData {
         guard let defaults else {
             return emptyWidgetData()

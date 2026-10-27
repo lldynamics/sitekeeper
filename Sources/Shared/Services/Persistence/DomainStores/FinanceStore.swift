@@ -115,17 +115,6 @@ final class FinanceStore {
         setMaterialPriceSpikeIgnoredKeys(nextIgnoredKeys)
     }
 
-    func toggleMaterialPriceSpikeIgnored(for detailKey: String) {
-        setMaterialPriceSpikeIgnored(
-            !ignoredMaterialPriceSpikeKeys.contains(detailKey),
-            for: detailKey
-        )
-    }
-
-    func isMaterialPriceSpikeIgnored(_ detailKey: String) -> Bool {
-        ignoredMaterialPriceSpikeKeys.contains(detailKey)
-    }
-
     private func setMaterialPriceSpikeIgnoredKeys(_ keys: Set<String>) {
         guard keys != ignoredMaterialPriceSpikeKeys else { return }
         ignoredMaterialPriceSpikeKeys = keys

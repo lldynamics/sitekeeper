@@ -13,15 +13,6 @@ extension DataStore {
     }
 
     @discardableResult
-    func updateProjectWarehouseMovement(_ movement: ProjectWarehouseMovement) -> Bool {
-        var current = projectWarehouseMovements
-        guard let index = current.firstIndex(where: { $0.id == movement.id }) else { return false }
-        current[index] = movement
-        replaceProjectWarehouseMovements(current)
-        return true
-    }
-
-    @discardableResult
     func mutateProjectWarehouseMovement(
         id: UUID,
         _ mutation: (inout ProjectWarehouseMovement) -> Void
@@ -35,10 +26,6 @@ extension DataStore {
 
     func mergeProjectWarehouseMovementsByID(_ movements: [ProjectWarehouseMovement]) {
         replaceProjectWarehouseMovements(mergedProjectRecordElementsByID(projectWarehouseMovements, with: movements))
-    }
-
-    func restoreProjectWarehouseMovements(from deletion: DataStoreRemovalResult<ProjectWarehouseMovement>) {
-        replaceProjectWarehouseMovements(deletion.restoredItems(current: projectWarehouseMovements, id: \.id))
     }
 
     @discardableResult

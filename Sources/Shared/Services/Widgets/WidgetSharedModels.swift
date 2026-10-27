@@ -209,9 +209,6 @@ enum WidgetProjectStatus: String {
         }
     }
 
-    var isCompleted: Bool {
-        self == .completed
-    }
 }
 
 enum WidgetDataBuilder {

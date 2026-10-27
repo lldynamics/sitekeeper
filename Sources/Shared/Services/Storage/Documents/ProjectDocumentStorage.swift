@@ -12,16 +12,6 @@ enum ProjectDocumentStorage {
         eventPrefix: "project_document"
     )
 
-    static func savePDF(data: Data, projectId: UUID) -> String? {
-        // 兼容旧调用：新写入流程应优先使用 `savePDFOrThrow`。
-        do {
-            return try savePDFOrThrow(data: data, projectId: projectId)
-        } catch {
-            DocumentStorageIssueLogger.record("project_document.save_failed", error: error)
-            return nil
-        }
-    }
-
     static func savePDFOrThrow(data: Data, projectId: UUID) throws -> String {
         return try saveDataOrThrow(data: data, projectId: projectId, fileExtension: "pdf")
     }

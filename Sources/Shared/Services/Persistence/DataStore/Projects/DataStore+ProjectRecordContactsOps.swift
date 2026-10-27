@@ -6,12 +6,6 @@ extension DataStore {
         replaceProjectContacts(projectContacts + [contact])
     }
 
-    func insertProjectContactAtTop(_ contact: ProjectContact) {
-        var contacts = projectContacts
-        contacts.insert(contact, at: 0)
-        replaceProjectContacts(contacts)
-    }
-
     func mergeProjectContactsByID(_ contacts: [ProjectContact]) {
         replaceProjectContacts(mergedProjectRecordElementsByID(projectContacts, with: contacts))
     }

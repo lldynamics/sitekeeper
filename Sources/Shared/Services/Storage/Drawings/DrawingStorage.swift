@@ -17,16 +17,6 @@ enum DrawingStorage {
         fileFamily.directoryURL
     }
 
-    static func saveImportedFile(from sourceURL: URL, projectId: UUID) -> ProjectDrawing? {
-        // 兼容旧调用：新导入流程应优先使用 `saveImportedFileOrThrow`。
-        do {
-            return try saveImportedFileOrThrow(from: sourceURL, projectId: projectId)
-        } catch {
-            DocumentStorageIssueLogger.record("drawing.import_failed", fileName: sourceURL.lastPathComponent, error: error)
-            return nil
-        }
-    }
-
     static func saveImportedFileOrThrow(from sourceURL: URL, projectId: UUID) throws -> ProjectDrawing {
         guard let ext = drawingFileExtension(for: sourceURL) else {
             let rawType = sourceURL.pathExtension.lowercased()

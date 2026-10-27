@@ -95,14 +95,6 @@ enum CalculatorResultCopy {
         )
     }
 
-    static func trayDraftDecodeFailed(_ message: String) -> String {
-        calculatorLocFormat("桥架填充草稿解析失败：%@", message)
-    }
-
-    static func trayDraftEncodeFailed(_ message: String) -> String {
-        calculatorLocFormat("桥架填充草稿编码失败：%@", message)
-    }
-
     static func rebarFormula() -> String {
         calculatorLoc("单位重 = d² ÷ 162；总重 = 单位重 × 单根长度 × 根数。")
     }
@@ -205,10 +197,6 @@ enum CalculatorCopy {
     static var actionAdd: String { AppLocalization.string("添加") }
     static var actionCancel: String { AppLocalization.string("取消") }
     static var resultSection: String { AppLocalization.string("计算结果") }
-
-    static var historySection: String { AppLocalization.string("记录") }
-    static var historyTitle: String { AppLocalization.string("计算历史") }
-    static var historyDescription: String { AppLocalization.string("查看、删除历史计算结果") }
 
     static var currentTool: String { AppLocalization.string("电流计算") }
     static var currentInputSection: String { AppLocalization.string("输入参数") }
@@ -392,8 +380,6 @@ enum CalculatorCopy {
     static var trayWidthRange: String { AppLocalization.string("请输入 50–10000") }
     static var trayHeightRange: String { AppLocalization.string("请输入 30–2000") }
     static var trayUnsupportedSize: String { AppLocalization.string("超出常用规格") }
-    static var trayDraftUTF8EncodeFailed: String { AppLocalization.string("桥架填充草稿编码后 UTF8 转换失败") }
-
     static var unitPieces: String { AppLocalization.string("片") }
     static var unitRoots: String { AppLocalization.string("根") }
     static var unitYuanPerKilogram: String { AppLocalization.string("元/kg") }

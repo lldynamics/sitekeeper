@@ -97,10 +97,6 @@ extension ReportBuilder {
         }
     }
 
-    static func makePhotoWallPDF(title: String, items: [ReportPhotoItem]) -> Data {
-        renderPhotoWallPDF(title: title, items: items, thumbnailsByFileName: [:])
-    }
-
     static func makePhotoWallPDFAsync(title: String, items: [ReportPhotoItem]) async -> Data {
         let thumbnailsByFileName = await preloadPhotoWallThumbnails(for: items)
         return renderPhotoWallPDF(title: title, items: items, thumbnailsByFileName: thumbnailsByFileName)

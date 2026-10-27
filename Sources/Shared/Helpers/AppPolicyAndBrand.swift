@@ -34,10 +34,6 @@ enum AppBrand {
 enum AppPolicy {
     static let privacyPolicyFallbackLastUpdated = "2026-05-24"
 
-    static var privacyPolicyLastUpdated: String {
-        privacyPolicyDocument().lastUpdatedDisplay
-    }
-
     static func privacyPolicyDocument(
         bundle: Bundle = .main,
         preferredLanguages: [String] = Locale.preferredLanguages

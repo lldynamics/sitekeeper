@@ -7,7 +7,6 @@ enum BackupArchiveSecurityError: Error, Equatable {
 }
 
 enum BackupArchiveSecurity {
-    static let digestAlgorithm = "sha256"
     private static let readChunkSize = 1_048_576
 
     static func sha256Hex(of fileURL: URL) throws -> String {

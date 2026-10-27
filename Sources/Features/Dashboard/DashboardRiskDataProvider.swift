@@ -28,10 +28,6 @@ extension DashboardView {
         return String(format: AppLocalization.string("%lld天"), Int64(daysSinceLastSuccessfulBackup))
     }
 
-    var backupReminderRiskCount: Int {
-        isBackupReminderOverdue ? 1 : 0
-    }
-
     private var isIgnoringBackupReminderToday: Bool {
         ignoredBackupRiskDay == todayDay.storageText
     }

@@ -10,9 +10,6 @@ struct BackupRuntimeState {
         isExportingArchive || isImportingBackup || isUploadingCloudBackup
     }
 
-    var isCloudBusy: Bool {
-        isRefreshingCloudBackups || isUploadingCloudBackup
-    }
 }
 
 struct BackupEstimateState {

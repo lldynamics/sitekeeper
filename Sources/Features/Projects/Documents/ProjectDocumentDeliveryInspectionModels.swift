@@ -182,10 +182,6 @@ struct ProjectDocumentDeliveryInspection: Identifiable {
         ].compactMap { $0 }
     }
 
-    var issueGroupCount: Int {
-        issues.count
-    }
-
     var issueDetailCount: Int {
         issues.reduce(0) { $0 + $1.count }
     }

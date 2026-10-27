@@ -44,7 +44,6 @@ enum UserPreferenceKeys {
     static let materialLibraryLastTargetMode = "materialLibrary.lastTargetMode"
     static let materialLibraryLastDraftID = "materialLibrary.lastDraftID"
     static let materialLibraryLastProjectID = "materialLibrary.lastProjectID"
-    static let materialLibraryKeepAppending = "materialLibrary.keepAppending"
     static let recentMaterialSearches = "recentMaterialSearches"
     static let checklistQuickToolOrder = "checklistQuickToolOrder"
     static let checklistQuickToolCustomized = "checklistQuickToolCustomized"

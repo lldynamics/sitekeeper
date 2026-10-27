@@ -48,11 +48,6 @@ enum ReportBuilder {
         keys.map { loc($0) }
     }
 
-    /// CSV 段标题
-    static func csvSection(_ key: String) -> String {
-        "[\(loc(key))]"
-    }
-
     /// 机器可读导出段名保持稳定英文 key，避免语言切换影响后续解析。
     static func csvMachineSection(_ key: String) -> String {
         "[\(key)]"

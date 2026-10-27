@@ -216,14 +216,6 @@ extension BackupImportCoordinator {
         return impact
     }
 
-    private static func appendUniqueByID<T: Identifiable>(_ incoming: [T], to current: inout [T]) where T.ID: Hashable {
-        var existing = Set(current.map(\.id))
-        for item in incoming where !existing.contains(item.id) {
-            current.append(item)
-            existing.insert(item.id)
-        }
-    }
-
     private static func mergeUniqueStrings(existing: [String], incoming: [String]) -> [String] {
         var seen = Set(existing)
         var merged = existing

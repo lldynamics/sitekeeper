@@ -82,18 +82,9 @@ extension Color {
     static var appCalculations: Color { AppTheme.current.palette.calculations }
     static var appQuotation: Color { AppTheme.current.palette.quotation }
     static var appFinanceSurface: Color { Color.appDynamicTint(AppTheme.current.palette.financeUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appInventorySurface: Color { Color.appDynamicTint(AppTheme.current.palette.inventoryUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appPeopleSurface: Color { Color.appDynamicTint(AppTheme.current.palette.peopleUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
     static var appMutedSurface: Color { Color.appDynamicTint(AppTheme.current.palette.peopleUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appJournalSurface: Color { Color.appDynamicTint(AppTheme.current.palette.journalUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appPhotoSurface: Color { Color.appDynamicTint(AppTheme.current.palette.photoUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appCalculationsSurface: Color { Color.appDynamicTint(AppTheme.current.palette.calculationsUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-    static var appQuotationSurface: Color { Color.appDynamicTint(AppTheme.current.palette.quotationUIColor, lightOpacity: 0.12, darkOpacity: 0.25) }
-
     // MARK: - 桥接别名（兼容旧名称，逐步迁移）
 
-    static var appPeach: Color { appPrimaryAction }
-    static var appPeachSurface: Color { appPrimarySurface }
     static var appPeachSurfaceSubtle: Color { appPrimarySurfaceSubtle }
 
     static let appStrokeWarning = Color("StrokeWarning")

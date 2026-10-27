@@ -36,10 +36,6 @@ extension DataStore {
         replaceProjectDocuments(mergedProjectRecordElementsByID(projectDocuments, with: documents))
     }
 
-    func restoreProjectDocuments(from deletion: DataStoreRemovalResult<ProjectDocument>) {
-        replaceProjectDocuments(deletion.restoredItems(current: projectDocuments, id: \.id))
-    }
-
     @discardableResult
     func removeProjectDocuments(
         ids: Set<UUID>,

@@ -13,13 +13,6 @@ enum WarehouseMovementType: String, CaseIterable, Codable, Sendable {
         }
     }
 
-    var sign: Decimal {
-        switch self {
-        case .inbound: return 1
-        case .outbound: return -1
-        }
-    }
-
     var systemImage: String {
         switch self {
         case .inbound: return "tray.and.arrow.down.fill"

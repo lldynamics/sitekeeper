@@ -71,15 +71,6 @@ enum PhotoStorage {
         return fileName
     }
 
-    static func saveMany(originals: [Data], logId: UUID) -> [String] {
-        do {
-            return try saveManyOrThrow(originals: originals, logId: logId)
-        } catch {
-            logIssue("save_batch_failed", error: error)
-            return []
-        }
-    }
-
     static func saveManyOrThrow(originals: [Data], logId: UUID) throws -> [String] {
         try saveManyOrThrow(originals: originals, logId: logId, directory: baseDirectory)
     }

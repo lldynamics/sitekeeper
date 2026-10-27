@@ -11,30 +11,6 @@ extension DailyLogView {
         }
     }
 
-    var splitLogLayout: some View {
-        NavigationSplitView {
-            List {
-                searchPanelSection
-                modePickerSection
-                splitFilterSection
-                Section(AppLocalization.string("快捷操作")) {
-                    Button {
-                        showAdd = true
-                    } label: {
-                        Label(AppLocalization.string("新建施工日志"), systemImage: "plus.circle.fill")
-                    }
-                    .buttonStyle(.appProminent())
-                }
-            }
-            .navigationTitle(AppLocalization.string("日志筛选"))
-        } detail: {
-            List {
-                logDetailContent
-            }
-        }
-        .navigationSplitViewStyle(.balanced)
-    }
-
     var searchPanelSection: some View {
         Section(AppLocalization.string("快速查找")) {
             InlineSearchPanel(

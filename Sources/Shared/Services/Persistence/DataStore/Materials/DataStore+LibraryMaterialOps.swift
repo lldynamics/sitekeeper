@@ -15,12 +15,6 @@ extension DataStore {
         replaceMaterialPriceEntries(mergedUniqueByID(materialPriceEntries, with: entries))
     }
 
-    func insertMaterialPriceEntryAtTop(_ entry: MaterialPriceEntry) {
-        var entries = materialPriceEntries
-        entries.insert(entry, at: 0)
-        replaceMaterialPriceEntries(entries)
-    }
-
     func upsertMaterialPriceEntry(_ entry: MaterialPriceEntry) {
         var entries = materialPriceEntries
         if let index = entries.firstIndex(where: { $0.id == entry.id }) {
@@ -135,21 +129,4 @@ extension DataStore {
         )
     }
 
-    @discardableResult
-    func removeMaterialSheetDrafts(
-        ids: Set<UUID>,
-        audit: DataStoreDeletionAuditContext? = nil,
-        deferredFileCleanup: DataStoreDeferredFileCleanup? = nil,
-        recordsAuditImmediately: Bool = false
-    ) -> DataStoreRemovalResult<MaterialSheetDraft> {
-        removeLibraryElements(
-            from: materialSheetDrafts,
-            ids: ids,
-            id: \.id,
-            replace: replaceMaterialSheetDrafts,
-            audit: audit,
-            deferredFileCleanup: deferredFileCleanup,
-            recordsAuditImmediately: recordsAuditImmediately
-        )
-    }
 }

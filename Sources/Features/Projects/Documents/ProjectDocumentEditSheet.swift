@@ -1,9 +1,5 @@
 import SwiftUI
 
-enum ProjectDocumentFormDate {
-    static func date(from value: BusinessDateValue) -> Date? { value.date() }
-}
-
 struct ProjectDocumentEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @AppStorage(UserPreferenceKeys.userName) private var preferredOperatorName = ""

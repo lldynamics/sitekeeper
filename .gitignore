@@ -57,3 +57,20 @@ build/DerivedData-*/
 
 # Local App Store review package, preserved separately with workspace backups
 AppStoreMetadata/engineering-bookkeeping-quote-review/
+
+# Private validation records and offline data deliveries
+/docs/validation/
+/docs/architecture/source-organization-validation-*.md
+/测试数据交付/
+/backups/
+/private-backups/
+*.xcresult/
+*.xcresult.zip
+
+# Local credentials and signing material
+.env
+.env.*
+!.env.example
+*.p8
+*.p12
+*.mobileprovision

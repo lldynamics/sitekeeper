@@ -6,6 +6,10 @@ Minimum OS: iOS 17.0+ / iPadOS 17.0+ (uses Swift Observation APIs).
 
 Chinese guide: `README.zh-CN.md`
 
+This repository is available for source inspection with rights reserved; it is
+not offered under an open-source license. See [COPYRIGHT.md](COPYRIGHT.md) and
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Current Features
 
 - Dashboard: quick access, pending material reminders, and recent project activity.
@@ -124,3 +128,16 @@ scripts/dev/install_git_hooks.sh
 - Add reusable engineering formulas in `EngineeringCalculations.swift` and cover them with tests.
 
 See [source organization and extension rules](docs/architecture/source-organization.md) for domain boundaries, file splitting, and the ZIP adapter contract.
+
+## Validation records and repository history
+
+Private validation reports, screenshots, backups, and offline data deliveries
+are retained separately and excluded from the public repository. Their absence
+does not mean a test passed; use the verification commands above for the source
+version you are reviewing.
+
+Repository history was sanitized before publication to remove legacy LibreDWG
+vendor files and private validation records. Older commits may no longer be
+buildable after this removal. Re-clone after the history rewrite; merging or
+pushing an old clone can restore removed history. Original history and evidence
+are retained privately by the maintainer.

@@ -253,12 +253,6 @@ extension DashboardView {
         return projectStore.projectDocuments.filter { documentIds.contains($0.id) }
     }
 
-    func dashboardCollectedAmount(for projectId: UUID) -> MoneyValue {
-        let financial = projectStore.projectFinancialRecords(for: projectId)
-        let byFinancialRecords = ProjectFinancialMetrics.collectionAmount(financial)
-        return byFinancialRecords > 0 ? byFinancialRecords : 0
-    }
-
     func dashboardReceivableAgeDays(for project: Project, receivableAmount: MoneyValue) -> Int? {
         guard receivableAmount > 0 else { return nil }
         guard let endDate = Formatters.date.date(from: project.expectedEndDate) else { return nil }
@@ -268,22 +262,8 @@ extension DashboardView {
         return max(days, 0)
     }
 
-    func dashboardLatestCollection() -> CollectionSnapshot? {
-        ProjectFinancialMetrics.latestCollection(
-            records: activeFinancialRecords,
-            projectName: { projectName($0) }
-        )
-    }
-
-    func parseLocalDate(_ text: String) -> Date? {
-        Self.localDateFormatter.date(from: text)
-    }
-
     func parseDashboardDate(_ value: BusinessDateValue) -> Date? {
         value.date()
     }
 
-    func todayString(for date: Date) -> String {
-        Self.localDateFormatter.string(from: date)
-    }
 }

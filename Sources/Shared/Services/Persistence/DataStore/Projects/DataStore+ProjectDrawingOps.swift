@@ -6,11 +6,6 @@ extension DataStore {
         replaceProjectDrawings(projectDrawings + [drawing])
     }
 
-    func appendProjectDrawings(_ drawings: [ProjectDrawing]) {
-        guard !drawings.isEmpty else { return }
-        replaceProjectDrawings(projectDrawings + drawings)
-    }
-
     @discardableResult
     func updateProjectDrawing(_ drawing: ProjectDrawing) -> Bool {
         var current = projectDrawings
@@ -40,10 +35,6 @@ extension DataStore {
             current.append(drawing)
         }
         replaceProjectDrawings(current)
-    }
-
-    func restoreProjectDrawings(from deletion: DataStoreRemovalResult<ProjectDrawing>) {
-        replaceProjectDrawings(deletion.restoredItems(current: projectDrawings, id: \.id))
     }
 
     @discardableResult

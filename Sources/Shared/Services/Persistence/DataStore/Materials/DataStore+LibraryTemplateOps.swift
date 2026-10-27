@@ -2,10 +2,6 @@ import Foundation
 
 @MainActor
 extension DataStore {
-    func appendTemplate(_ template: ProjectTemplate) {
-        replaceTemplates(templates + [template])
-    }
-
     func mergeTemplatesByID(_ templates: [ProjectTemplate]) {
         replaceTemplates(mergedUniqueByID(self.templates, with: templates))
     }

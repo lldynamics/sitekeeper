@@ -171,15 +171,6 @@ extension ProjectDetailFinanceDocumentActions {
     }
 
     @MainActor
-    static func deleteFinancialRecord(
-        _ record: ProjectFinancialRecord,
-        deleteLinkedDocuments: Bool,
-        store: DataStore
-    ) {
-        deleteFinancialRecords(ids: Set([record.id]), deleteLinkedDocuments: deleteLinkedDocuments, store: store)
-    }
-
-    @MainActor
     static func deleteFinancialRecords(
         ids: Set<UUID>,
         deleteLinkedDocuments: Bool,

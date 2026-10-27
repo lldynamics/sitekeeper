@@ -186,20 +186,8 @@ final class ProjectStore {
         rebuildProjectActivityIndex()
     }
 
-    var totalOpenTodoCount: Int {
-        projectActivityIndexByID.values.reduce(0) { $0 + $1.openTodoCount }
-    }
-
     var totalOverdueItemCount: Int {
         projectActivityIndexByID.values.reduce(0) { $0 + $1.overdueItemCount }
-    }
-
-    var totalUnattachedReceiptCount: Int {
-        projectActivityIndexByID.values.reduce(0) { $0 + $1.unattachedReceiptCount }
-    }
-
-    var totalUnsettledFinancialCount: Int {
-        projectActivityIndexByID.values.reduce(0) { $0 + $1.unsettledFinancialCount }
     }
 
     func projectActivitySummary(for projectId: UUID) -> ProjectActivitySummary {
@@ -240,10 +228,6 @@ final class ProjectStore {
 
     func projectWarehouseMovements(for projectId: UUID) -> [ProjectWarehouseMovement] {
         projectWarehouseMovementsByProjectID[projectId] ?? []
-    }
-
-    func hasLinkedFinancialDocument(for recordId: UUID, in projectId: UUID) -> Bool {
-        projectActivityIndexByID[projectId]?.linkedFinancialRecordIDs.contains(recordId) == true
     }
 
     private func rebuildProjectActivityIndex(dayContext context: ProjectDayContext? = nil) {

@@ -19,10 +19,6 @@ extension DataStore {
         replaceProgressTasks(mergedFinanceElementsByID(progressTasks, with: tasks))
     }
 
-    func restoreProgressTasks(from deletion: DataStoreRemovalResult<ProgressTask>) {
-        replaceProgressTasks(deletion.restoredItems(current: progressTasks, id: \.id))
-    }
-
     @discardableResult
     func removeProgressTasks(
         ids: Set<UUID>,

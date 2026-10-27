@@ -22,16 +22,6 @@ enum QuickNoteAttachmentStorage {
         "quick-note-\(UUID().uuidString).\(ext)"
     }
 
-    static func saveImage(_ image: UIImage, compressionQuality: CGFloat = 0.78) -> String? {
-        // 兼容旧调用：新写入流程应优先使用 `saveImageOrThrow`。
-        do {
-            return try saveImageOrThrow(image, compressionQuality: compressionQuality)
-        } catch {
-            DocumentStorageIssueLogger.record("quick_note_attachment.image_save_failed", error: error)
-            return nil
-        }
-    }
-
     static func saveImageOrThrow(_ image: UIImage, compressionQuality: CGFloat = 0.78) throws -> String {
         let resized = image.resizedForQuickNote(longEdge: 1800)
         guard let data = resized.jpegData(compressionQuality: compressionQuality) else {
