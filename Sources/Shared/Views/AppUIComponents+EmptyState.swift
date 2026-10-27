@@ -89,22 +89,34 @@ struct FilterChipBar<Option: Hashable>: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(options, id: \.self) { option in
+                    let isSelected = selection == option
                     Button {
-                        selection = option
+                        if selection != option {
+                            AppHaptics.impact(.light)
+                            selection = option
+                        }
                     } label: {
                         Text(title(option))
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(selection == option ? .white : .secondary)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
+                            .font(.caption.weight(isSelected ? .bold : .medium))
+                            .foregroundStyle(isSelected ? .white : .primary)
+                            .padding(.horizontal, 13)
+                            .padding(.vertical, 7)
+                            .frame(minHeight: 34)
                             .background(
-                                Capsule().fill(selection == option ? Color.appPrimaryAction : Color(uiColor: .tertiarySystemGroupedBackground))
+                                Capsule()
+                                    .fill(isSelected ? Color.appPrimaryAction : Color(uiColor: .secondarySystemGroupedBackground))
+                            )
+                            .overlay(
+                                Capsule()
+                                    .stroke(isSelected ? Color.clear : Color(uiColor: .separator).opacity(0.35), lineWidth: 0.5)
                             )
                     }
                     .buttonStyle(.plain)
+                    .contentShape(Capsule())
                 }
             }
-            .padding(.vertical, 2)
+            .padding(.vertical, 3)
+            .padding(.horizontal, 1)
         }
     }
 }

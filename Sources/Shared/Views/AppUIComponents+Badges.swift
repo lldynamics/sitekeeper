@@ -31,18 +31,27 @@ enum StatusChipTone: Equatable {
     var foreground: Color {
         switch self {
         case .neutral:
-            .primary
+            .secondary
         default:
-            .white
+            tint
         }
     }
 
     var background: Color {
         switch self {
         case .neutral:
-            Color(uiColor: .secondarySystemGroupedBackground)
+            Color(uiColor: .tertiarySystemGroupedBackground)
         default:
-            tint
+            tint.opacity(0.12)
+        }
+    }
+
+    var strokeColor: Color {
+        switch self {
+        case .neutral:
+            Color(uiColor: .separator).opacity(0.25)
+        default:
+            tint.opacity(0.24)
         }
     }
 }
@@ -51,20 +60,21 @@ struct StatusChip: View {
     let text: String
     var tone: StatusChipTone = .neutral
     var compact: Bool = false
+    var isProminent: Bool = false
 
     var body: some View {
         Text(text)
             .font((compact ? Font.caption2 : .caption).weight(.semibold))
-            .foregroundStyle(tone.foreground)
+            .foregroundStyle(isProminent ? .white : tone.foreground)
             .padding(.horizontal, compact ? 8 : AppSpacing.tight)
             .padding(.vertical, compact ? 4 : 5)
             .background(
                 RoundedRectangle(cornerRadius: compact ? 6 : 8, style: .continuous)
-                    .fill(tone.background)
+                    .fill(isProminent ? tone.tint : tone.background)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: compact ? 6 : 8, style: .continuous)
-                    .stroke(tone.tint.opacity(tone == .neutral ? 0.18 : 1), lineWidth: 0.5)
+                    .stroke(isProminent ? tone.tint : tone.strokeColor, lineWidth: 0.5)
             )
     }
 }

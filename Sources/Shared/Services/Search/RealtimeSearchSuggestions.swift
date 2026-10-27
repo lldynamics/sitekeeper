@@ -1,8 +1,8 @@
 import Foundation
 import SwiftUI
 
-struct RealtimeSearchSuggestion: Identifiable, Hashable {
-    enum Category: String, CaseIterable, Hashable {
+struct RealtimeSearchSuggestion: Identifiable, Hashable, Sendable {
+    enum Category: String, CaseIterable, Hashable, Sendable {
         case project
         case contact
         case supplier
@@ -178,36 +178,50 @@ enum RealtimeSearchSuggestionBuilder {
         limit: Int = 8
     ) -> [RealtimeSearchSuggestion] {
         let keyword = rawKeyword.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !keyword.isEmpty else { return [] }
+        guard !keyword.isEmpty, !Task.isCancelled else { return [] }
         let cappedLimit = max(limit, 0)
         guard cappedLimit > 0 else { return [] }
 
         let projectNameByID = Dictionary(uniqueKeysWithValues: projects.map { ($0.id, $0.name) })
         var ranked = commandSuggestions(query: keyword, categories: categories)
-        ranked += projectSuggestions(query: keyword, categories: categories, projects: projects.filter { projectID == nil || $0.id == projectID })
-        ranked += contactSuggestions(query: keyword, categories: categories, contacts: contacts.filter { contact in
+        ranked += projectSuggestions(query: keyword, categories: categories, projects: categories.contains(.project) ? projects.filter { projectID == nil || $0.id == projectID } : [])
+        ranked += contactSuggestions(query: keyword, categories: categories, contacts: categories.contains(.contact) ? contacts.filter { contact in
             guard let projectID else { return true }
             return contact.projectId == projectID || contact.relatedProjectIds.contains(projectID)
-        }, projectNameByID: projectNameByID)
+        } : [], projectNameByID: projectNameByID)
         ranked += supplierSuggestions(query: keyword, categories: categories, suppliers: projectID == nil ? suppliers : [])
         ranked += materialSuggestions(query: keyword, categories: categories, materials: projectID == nil ? materials : [])
         ranked += methodSuggestions(query: keyword, categories: categories, methods: projectID == nil ? methods : [])
-        ranked += logSuggestions(query: keyword, categories: categories, logs: logs.filter { projectID == nil || $0.projectId == projectID }, projectNameByID: projectNameByID)
-        ranked += todoSuggestions(query: keyword, categories: categories, todos: todos.filter { projectID == nil || $0.projectId == projectID }, projectNameByID: projectNameByID)
-        ranked += noteSuggestions(query: keyword, categories: categories, notes: notes.filter { projectID == nil || $0.projectId == projectID }, projectNameByID: projectNameByID)
+        ranked += logSuggestions(query: keyword, categories: categories, logs: categories.contains(.log) ? logs.filter { projectID == nil || $0.projectId == projectID } : [], projectNameByID: projectNameByID)
+        ranked += todoSuggestions(query: keyword, categories: categories, todos: categories.contains(.todo) ? todos.filter { projectID == nil || $0.projectId == projectID } : [], projectNameByID: projectNameByID)
+        ranked += noteSuggestions(query: keyword, categories: categories, notes: categories.contains(.note) ? notes.filter { projectID == nil || $0.projectId == projectID } : [], projectNameByID: projectNameByID)
         ranked += businessSuggestions(query: keyword, categories: categories, quotes: quotes, financialRecords: financialRecords, drawings: drawings, documents: documents, projectID: projectID, projectNameByID: projectNameByID)
 
-        return ranked
-            .sorted { lhs, rhs in
-                if lhs.score != rhs.score { return lhs.score > rhs.score }
-                if lhs.category != rhs.category {
-                    return lhs.category.rawValue < rhs.category.rawValue
-                }
-                let order = lhs.title.localizedStandardCompare(rhs.title)
-                return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
-            }
-            .prefix(cappedLimit)
-            .map { $0 }
+        return topSuggestions(ranked, limit: cappedLimit)
+    }
+
+    /// A bounded, ordered prefix using precisely the same total ordering as full sorting.
+    /// For the dashboard's ten results this avoids sorting thousands of matching rows.
+    static func topSuggestions(_ suggestions: [RealtimeSearchSuggestion], limit: Int) -> [RealtimeSearchSuggestion] {
+        guard limit > 0 else { return [] }
+        if limit > 64 { return Array(suggestions.sorted(by: ranksBefore).prefix(limit)) }
+        var best: [RealtimeSearchSuggestion] = []
+        best.reserveCapacity(min(limit, suggestions.count))
+        for suggestion in suggestions {
+            guard !Task.isCancelled else { return [] }
+            if best.count == limit, let last = best.last, !ranksBefore(suggestion, last) { continue }
+            let index = best.firstIndex { ranksBefore(suggestion, $0) } ?? best.endIndex
+            best.insert(suggestion, at: index)
+            if best.count > limit { best.removeLast() }
+        }
+        return best
+    }
+
+    static func ranksBefore(_ lhs: RealtimeSearchSuggestion, _ rhs: RealtimeSearchSuggestion) -> Bool {
+        if lhs.score != rhs.score { return lhs.score > rhs.score }
+        if lhs.category != rhs.category { return lhs.category.rawValue < rhs.category.rawValue }
+        let order = lhs.title.localizedStandardCompare(rhs.title)
+        return order == .orderedSame ? lhs.id < rhs.id : order == .orderedAscending
     }
 
     private static func commandSuggestions(
@@ -216,6 +230,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.command) else { return [] }
         return RealtimeSearchCommand.allCases.compactMap { command in
+            guard !Task.isCancelled else { return nil }
             guard let score = matchScore(query: query, fields: [command.title, command.subtitle] + command.aliases) else { return nil }
             return RealtimeSearchSuggestion(
                 id: command.suggestionId,
@@ -235,6 +250,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.project) else { return [] }
         return projects.compactMap { project in
+            guard !Task.isCancelled else { return nil }
             let fields = [project.name, project.location, project.customerName, project.managerName]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
             let activeBoost = project.status.isActiveOrPaused ? 20 : 0
@@ -255,6 +271,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.contact) else { return [] }
         return contacts.compactMap { contact in
+            guard !Task.isCancelled else { return nil }
             let projectName = projectNameByID[contact.projectId] ?? AppLocalization.string("未知项目")
             let fields = [contact.name, contact.roleDisplayName, contact.company, contact.phone, contact.note, projectName]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
@@ -273,6 +290,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.supplier) else { return [] }
         return suppliers.compactMap { supplier in
+            guard !Task.isCancelled else { return nil }
             let fields = [supplier.name, supplier.category, supplier.contact, supplier.phone, supplier.note, supplier.address]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
             let phoneBoost = supplier.phone.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? 0 : 8
@@ -291,6 +309,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.material) else { return [] }
         return materials.compactMap { item in
+            guard !Task.isCancelled else { return nil }
             let fields = [item.name, item.specification, item.brand, item.supplier, item.category, item.referencePrice.wireText]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
             let priceBoost = item.referencePrice.isEmpty ? 0 : 8
@@ -309,6 +328,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.method) else { return [] }
         return methods.compactMap { method in
+            guard !Task.isCancelled else { return nil }
             let fields = [
                 method.title, method.trade, method.versionName, method.steps,
                 method.qualityStandard, method.safetyNotes, method.tutorialBody
@@ -332,6 +352,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.log) else { return [] }
         return logs.compactMap { log in
+            guard !Task.isCancelled else { return nil }
             let projectName = log.projectId.flatMap { projectNameByID[$0] } ?? ""
             let fields = [log.date.storageText, log.weather, log.content, log.safety, log.materials, log.tomorrowPlan, projectName]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
@@ -351,6 +372,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.todo) else { return [] }
         return todos.compactMap { todo in
+            guard !Task.isCancelled else { return nil }
             let projectName = todo.projectId.flatMap { projectNameByID[$0] } ?? ""
             let fields = [todo.title, todo.owner, todo.note, todo.dueDate.storageText, projectName]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
@@ -371,6 +393,7 @@ enum RealtimeSearchSuggestionBuilder {
     ) -> [RealtimeSearchSuggestion] {
         guard categories.contains(.note) else { return [] }
         return notes.compactMap { note in
+            guard !Task.isCancelled else { return nil }
             let projectName = note.projectId.flatMap { projectNameByID[$0] } ?? ""
             let fields = [note.title, note.content, note.createdAt.storageText, projectName]
             guard let score = matchScore(query: query, fields: fields) else { return nil }
@@ -385,6 +408,7 @@ enum RealtimeSearchSuggestionBuilder {
     static func matchScore(query: String, fields: [String]) -> Int? {
         var bestScore = 0
         for field in fields {
+            guard !Task.isCancelled else { return nil }
             let normalized = field.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !normalized.isEmpty else { continue }
             if normalized == query {

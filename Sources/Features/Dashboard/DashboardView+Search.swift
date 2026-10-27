@@ -10,5 +10,9 @@ extension DashboardView {
             suggestions: dashboardSearchSuggestions,
             onSelect: { selectedDashboardSuggestion = $0 }
         )
+        .task(id: dashboardSearchRequest) {
+            let request = dashboardSearchRequest
+            await dashboardSearchModel.refresh(snapshot: dashboardSearchSnapshot, request: request)
+        }
     }
 }

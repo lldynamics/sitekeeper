@@ -107,13 +107,13 @@ struct WatermarkCameraToolView: View {
                     .accessibilityLabel(AppLocalization.string("wm_camera_capture_button")).disabled(busy)
             }
         }
-        .sheet(isPresented: $showCamera, onDismiss: finishCameraSession) {
+        .fullScreenCover(isPresented: $showCamera, onDismiss: finishCameraSession) {
             WatermarkCameraCaptureView(watermarkContext: cameraContext, showGrid: settings.showGrid,
                 flashEnabled: settings.flashEnabled, burstCount: settings.boundedBurstCount) { images, date in
                 handleCapturedImages(images, capturedAt: date)
             }
         }
-        .sheet(isPresented: $showRectificationCapture, onDismiss: finishRectificationCapture) {
+        .fullScreenCover(isPresented: $showRectificationCapture, onDismiss: finishRectificationCapture) {
             WatermarkRectificationCapturePicker(projectId: cameraProjectId, context: cameraContext,
                 showGrid: settings.showGrid, flashEnabled: settings.flashEnabled, burstCount: settings.boundedBurstCount,
                 onCapture: handleCapturedImages, onFinished: { pendingRectificationID = $0 })

@@ -65,18 +65,13 @@ struct ExpandedPhoneScrollEdgeModifier: ViewModifier {
     }
 }
 
-/// A decorative column boundary. It occupies no space in the workspace layout.
+/// A clean, standard column boundary matching system separator tone.
 struct ExpandedPhoneColumnDivider: View {
     var body: some View {
-        GeometryReader { geometry in
-            Path { path in
-                path.move(to: CGPoint(x: geometry.size.width * 0.5, y: 0))
-                path.addLine(to: CGPoint(x: geometry.size.width * 0.5, y: geometry.size.height))
-            }
-            .stroke(Color.red.opacity(0.28), style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 4]))
-        }
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+        Rectangle()
+            .fill(Color(uiColor: .separator).opacity(0.45))
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 

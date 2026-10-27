@@ -312,18 +312,22 @@ struct DashboardView: View {
                 }
                 .accessibilityIdentifier("dashboard-more-overview")
             } else {
-                VStack(spacing: AppSpacing.normal) {
+                HStack(spacing: 12) {
                     Image(systemName: "checkmark.seal.fill")
-                        .font(.largeTitle.weight(.semibold))
+                        .font(.title2.weight(.semibold))
                         .foregroundStyle(Color.appSuccess)
-                    Text(AppLocalization.string("全部良好"))
-                        .font(.title3.weight(.semibold))
-                    Text(AppLocalization.string("暂无新增提醒，继续保持"))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(AppLocalization.string("全部良好"))
+                            .font(.subheadline.weight(.semibold))
+                        Text(AppLocalization.string("暂无新增提醒，继续保持"))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
                 }
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
                 .background {
                     AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal) {
                         Color.clear

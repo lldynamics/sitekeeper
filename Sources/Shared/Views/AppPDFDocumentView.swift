@@ -104,8 +104,13 @@ final class AppPDFPreviewController: UIViewController, UISearchBarDelegate {
         unlockButton.accessibilityIdentifier = "pdf-preview-unlock"
         unlockButton.addTarget(self, action: #selector(requestPassword), for: .touchUpInside)
         let controls = UIStackView(arrangedSubviews: [previousButton, pageLabel, nextButton, searchButton])
-        controls.spacing = 12
+        controls.spacing = 14
         controls.alignment = .center
+        controls.backgroundColor = .secondarySystemGroupedBackground
+        controls.layer.cornerRadius = 10
+        controls.layer.masksToBounds = true
+        controls.isLayoutMarginsRelativeArrangement = true
+        controls.layoutMargins = UIEdgeInsets(top: 4, left: 12, bottom: 4, right: 12)
         configureSearchControls()
         let stack = UIStackView(arrangedSubviews: [controls, searchControls, messageLabel, unlockButton, pdfView])
         stack.axis = .vertical

@@ -74,8 +74,9 @@ final class DataStore {
 /// All domain data changes enter the same persistence coordinator, including direct
 /// child-store writes. The sink is immutable in each store and does not retain its owner.
 @MainActor
+@Observable
 final class DomainStoreMutationSink {
-    weak var owner: DataStore?
+    @ObservationIgnored weak var owner: DataStore?
 
     private(set) var versions: [String: UInt64] = [:]
 

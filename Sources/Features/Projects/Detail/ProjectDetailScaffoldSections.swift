@@ -99,14 +99,17 @@ struct ProjectDetailHeaderSection: View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
-                    .font(.caption2)
+                    .font(.caption2.weight(.medium))
                     .foregroundStyle(.secondary)
                 Text(value)
-                    .font(.caption.weight(.semibold))
+                    .font(.subheadline.weight(.bold))
                     .foregroundStyle(color)
                     .appListPrimaryTextLayout()
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .background(Color(uiColor: .tertiarySystemFill).opacity(0.6), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         }
         .buttonStyle(.plain)
     }

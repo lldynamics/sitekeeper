@@ -18,6 +18,7 @@ struct MaterialPriceSpikeDetail: Identifiable, Hashable {
 @MainActor
 @Observable
 final class FinanceStore {
+    var dashboardCollectionVersions: [String: UInt64] { mutationSink.versions }
     @ObservationIgnored private let mutationSink: DomainStoreMutationSink
     private(set) var materialItems: [MaterialItem] = [] {
         didSet {

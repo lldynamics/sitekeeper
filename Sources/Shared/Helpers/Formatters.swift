@@ -96,6 +96,84 @@ enum Formatters {
     /// 两位小数金额
     static func money(_ value: Decimal) -> String { money(decimal: value) }
 
+    /// 中文大写金额转换（用于现场防手滑录错大写校验）
+    static func chineseCurrencySpellout(_ text: String) -> String? {
+        let clean = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let decimal = Decimal(string: clean), decimal >= 0, decimal < 100_000_000_000 else {
+            return nil
+        }
+        if decimal == 0 { return "零元整" }
+
+        let digits = ["零", "壹", "贰", "叁", "肆", "伍", "陆", "柒", "捌", "玖"]
+        let integerUnits = ["", "拾", "佰", "仟"]
+        let sectionUnits = ["", "万", "亿"]
+
+        var source = decimal
+        var rounded = Decimal.zero
+        NSDecimalRound(&rounded, &source, 2, .plain)
+
+        let number = NSDecimalNumber(decimal: rounded)
+        let totalCents = Int64((number.doubleValue * 100).rounded())
+        let integerPart = totalCents / 100
+        let jiao = Int((totalCents % 100) / 10)
+        let fen = Int(totalCents % 10)
+
+        var result = ""
+
+        if integerPart > 0 {
+            var tempInt = integerPart
+            var sectionIndex = 0
+            var intStr = ""
+
+            while tempInt > 0 {
+                let section = Int(tempInt % 10_000)
+                if section > 0 {
+                    var secStr = ""
+                    var secTemp = section
+                    var unitIndex = 0
+                    var zeroFlag = false
+
+                    while secTemp > 0 {
+                        let digit = secTemp % 10
+                        if digit == 0 {
+                            if !zeroFlag && !secStr.isEmpty {
+                                secStr = digits[0] + secStr
+                                zeroFlag = true
+                            }
+                        } else {
+                            secStr = digits[digit] + integerUnits[unitIndex] + secStr
+                            zeroFlag = false
+                        }
+                        secTemp /= 10
+                        unitIndex += 1
+                    }
+                    intStr = secStr + sectionUnits[sectionIndex] + intStr
+                } else if !intStr.isEmpty && !intStr.hasPrefix(digits[0]) {
+                    intStr = digits[0] + intStr
+                }
+                tempInt /= 10_000
+                sectionIndex += 1
+            }
+            result += intStr + "元"
+        }
+
+        if jiao == 0 && fen == 0 {
+            result += "整"
+        } else {
+            if jiao > 0 {
+                result += digits[jiao] + "角"
+            } else if integerPart > 0 && fen > 0 {
+                result += "零"
+            }
+            if fen > 0 {
+                result += digits[fen] + "分"
+            } else if jiao > 0 {
+                result += "整"
+            }
+        }
+        return result
+    }
+
     static func money(decimal value: Decimal) -> String {
         guard !value.isNaN else { return "" }
         var source = value

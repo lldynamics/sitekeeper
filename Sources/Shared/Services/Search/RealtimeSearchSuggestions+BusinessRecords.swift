@@ -9,6 +9,7 @@ extension RealtimeSearchSuggestionBuilder {
         var results: [RealtimeSearchSuggestion] = []
         if categories.contains(.quote) {
             results += quotes.filter { projectID == nil || $0.projectId == projectID }.compactMap { item in
+                guard !Task.isCancelled else { return nil }
                 let projectName = item.projectId.flatMap { projectNameByID[$0] } ?? ""
                 guard let score = matchScore(query: query, fields: [item.name, item.notes, item.versionName, item.status.displayName, projectName]) else { return nil }
                 return RealtimeSearchSuggestion(
@@ -20,6 +21,7 @@ extension RealtimeSearchSuggestionBuilder {
         }
         if categories.contains(.financial) {
             results += financialRecords.filter { projectID == nil || $0.projectId == projectID }.compactMap { record in
+                guard !Task.isCancelled else { return nil }
                 let projectName = projectNameByID[record.projectId] ?? ""
                 guard let score = matchScore(query: query, fields: [record.invoiceNumber, record.counterparty, record.note, record.amount.wireText, record.normalizedCategory.displayName, projectName]) else { return nil }
                 return RealtimeSearchSuggestion(
@@ -31,6 +33,7 @@ extension RealtimeSearchSuggestionBuilder {
         }
         if categories.contains(.drawing) {
             results += drawings.filter { projectID == nil || $0.projectId == projectID }.compactMap { drawing in
+                guard !Task.isCancelled else { return nil }
                 let projectName = projectNameByID[drawing.projectId] ?? ""
                 guard let score = matchScore(query: query, fields: [drawing.name, drawing.drawingNumber, drawing.fileName, drawing.discipline, drawing.floorArea, drawing.version, drawing.note, projectName]) else { return nil }
                 return RealtimeSearchSuggestion(
@@ -42,6 +45,7 @@ extension RealtimeSearchSuggestionBuilder {
         }
         if categories.contains(.file) {
             results += documents.filter { projectID == nil || $0.projectId == projectID }.compactMap { document in
+                guard !Task.isCancelled else { return nil }
                 let projectName = projectNameByID[document.projectId] ?? ""
                 guard let score = matchScore(query: query, fields: [document.title, document.fileName, document.archiveNumber, document.workSection, document.responsiblePerson, document.note, document.category.displayName, projectName]) else { return nil }
                 return RealtimeSearchSuggestion(

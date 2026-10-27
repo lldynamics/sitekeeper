@@ -95,23 +95,30 @@ extension DashboardView {
     }
 
     var dashboardSearchSuggestions: [RealtimeSearchSuggestion] {
-        RealtimeSearchSuggestionBuilder.suggestions(
-            keyword: dashboardSearchText,
-            categories: dashboardSearchCategory.map { Set([$0]) } ?? Set(RealtimeSearchSuggestion.Category.allCases),
-            projects: projectStore.projects,
-            contacts: projectStore.projectContacts,
-            suppliers: store.supplierProfiles,
-            materials: store.materialPriceEntries,
-            methods: store.constructionMethods,
-            logs: projectStore.dailyLogs,
-            todos: projectStore.siteTodos,
-            notes: projectStore.quickNotes,
-            quotes: financeStore.quoteItems,
-            financialRecords: projectStore.projectFinancialRecords,
-            drawings: projectStore.projectDrawings,
-            documents: projectStore.projectDocuments,
-            projectID: dashboardSearchProjectID,
-            limit: 10
+        dashboardSearchModel.suggestions(for: dashboardSearchRequest)
+    }
+
+    var dashboardSearchRequest: DashboardSearchRequest {
+        let versions = store.persistenceVersions
+        let keys = ["projects", "dailyLogs", "siteTodos", "quickNotes", "projectContacts",
+                    "projectFinancialRecords", "projectDrawings", "projectDocuments", "quoteItems",
+                    "supplierProfiles", "materialPriceEntries", "constructionMethods"]
+        return DashboardSearchRequest(
+            keyword: dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines),
+            projectID: dashboardSearchProjectID, category: dashboardSearchCategory,
+            collectionVersions: keys.map { versions[$0, default: 0] },
+            language: dashboardSearchLocale.identifier + AppLanguage.current.resourceLanguageCode
+        )
+    }
+
+    var dashboardSearchSnapshot: DashboardSearchSnapshot {
+        DashboardSearchSnapshot(
+            projects: projectStore.projects, contacts: projectStore.projectContacts,
+            suppliers: store.supplierProfiles, materials: store.materialPriceEntries,
+            methods: store.constructionMethods, logs: projectStore.dailyLogs,
+            todos: projectStore.siteTodos, notes: projectStore.quickNotes,
+            quotes: financeStore.quoteItems, financialRecords: projectStore.projectFinancialRecords,
+            drawings: projectStore.projectDrawings, documents: projectStore.projectDocuments
         )
     }
 

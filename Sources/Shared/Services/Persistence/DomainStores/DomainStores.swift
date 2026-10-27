@@ -1,7 +1,7 @@
 import Foundation
 import Observation
 
-struct ProjectActivitySummary {
+struct ProjectActivitySummary: Equatable {
     var dailyLogCount = 0
     var progressTaskCount = 0
     var todoCount = 0
@@ -51,6 +51,13 @@ struct ProjectActivitySummary {
 final class ProjectStore {
     @ObservationIgnored private var batchDepth = 0
     @ObservationIgnored private var activityRebuildPending = false
+    @ObservationIgnored private var affectedActivityProjectIDs: Set<UUID> = []
+    @ObservationIgnored private var needsFullActivityRebuild = true
+    /// Counts actual builder input, including full refreshes after a day/time-zone change.
+    @ObservationIgnored private(set) var activityIndexProcessedRecordCount = 0
+    @ObservationIgnored private(set) var activityIndexRebuiltProjectCount = 0
+    @ObservationIgnored private(set) var lastActivityIndexProcessedRecordCount = 0
+    @ObservationIgnored private(set) var lastActivityIndexRebuiltProjectCount = 0
     @ObservationIgnored private(set) var activityIndexBuildCount = 0
 
     func withBatchUpdates(_ operation: () -> Void) {
@@ -73,7 +80,10 @@ final class ProjectStore {
     private(set) var dailyLogs: [DailyLog] = [] {
         didSet {
             mutationSink.didMutate("dailyLogs")
-            dailyLogsByProjectID = Self.groupedByProjectID(dailyLogs) { $0.projectId }
+            dailyLogsByProjectID = regroupActivity(
+                dailyLogs, previous: dailyLogsByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshFileSearchVersion()
         }
@@ -84,14 +94,20 @@ final class ProjectStore {
     private(set) var progressTasks: [ProgressTask] = [] {
         didSet {
             mutationSink.didMutate("progressTasks")
-            progressTasksByProjectID = Self.groupedByProjectID(progressTasks) { $0.projectId }
+            progressTasksByProjectID = regroupActivity(
+                progressTasks, previous: progressTasksByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
         }
     }
     private(set) var siteTodos: [SiteTodo] = [] {
         didSet {
             mutationSink.didMutate("siteTodos")
-            siteTodosByProjectID = Self.groupedByProjectID(siteTodos) { $0.projectId }
+            siteTodosByProjectID = regroupActivity(
+                siteTodos, previous: siteTodosByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshFileSearchVersion()
             refreshDueReminderVersion()
@@ -100,7 +116,10 @@ final class ProjectStore {
     private(set) var projectDrawings: [ProjectDrawing] = [] {
         didSet {
             mutationSink.didMutate("projectDrawings")
-            projectDrawingsByProjectID = Self.groupedByProjectID(projectDrawings) { $0.projectId }
+            projectDrawingsByProjectID = regroupActivity(
+                projectDrawings, previous: projectDrawingsByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshFileSearchVersion()
         }
@@ -114,7 +133,10 @@ final class ProjectStore {
     private(set) var projectFinancialRecords: [ProjectFinancialRecord] = [] {
         didSet {
             mutationSink.didMutate("projectFinancialRecords")
-            projectFinancialRecordsByProjectID = Self.groupedByProjectID(projectFinancialRecords) { $0.projectId }
+            projectFinancialRecordsByProjectID = regroupActivity(
+                projectFinancialRecords, previous: projectFinancialRecordsByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshDueReminderVersion()
         }
@@ -122,7 +144,10 @@ final class ProjectStore {
     private(set) var projectDocuments: [ProjectDocument] = [] {
         didSet {
             mutationSink.didMutate("projectDocuments")
-            projectDocumentsByProjectID = Self.groupedByProjectID(projectDocuments) { $0.projectId }
+            projectDocumentsByProjectID = regroupActivity(
+                projectDocuments, previous: projectDocumentsByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshFileSearchVersion()
         }
@@ -130,7 +155,10 @@ final class ProjectStore {
     private(set) var quickNotes: [QuickNote] = [] {
         didSet {
             mutationSink.didMutate("quickNotes")
-            quickNotesByProjectID = Self.groupedByProjectID(quickNotes) { $0.projectId }
+            quickNotesByProjectID = regroupActivity(
+                quickNotes, previous: quickNotesByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
             refreshFileSearchVersion()
         }
@@ -138,7 +166,10 @@ final class ProjectStore {
     private(set) var projectWarehouseMovements: [ProjectWarehouseMovement] = [] {
         didSet {
             mutationSink.didMutate("projectWarehouseMovements")
-            projectWarehouseMovementsByProjectID = Self.groupedByProjectID(projectWarehouseMovements) { $0.projectId }
+            projectWarehouseMovementsByProjectID = regroupActivity(
+                projectWarehouseMovements, previous: projectWarehouseMovementsByProjectID,
+                projectID: { $0.projectId }, activityEqual: ProjectActivityIndexBuilder.hasSameActivity
+            )
             rebuildProjectActivityIndex()
         }
     }
@@ -230,6 +261,21 @@ final class ProjectStore {
         projectWarehouseMovementsByProjectID[projectId] ?? []
     }
 
+    /// Only the assigned collection is grouped. Compare the exact inputs consumed by the
+    /// activity builder; unrelated edits still update full record queries and persistence.
+    private func regroupActivity<Value>(
+        _ values: [Value], previous: [UUID: [Value]],
+        projectID: (Value) -> UUID?, activityEqual: (Value, Value) -> Bool
+    ) -> [UUID: [Value]] {
+        let grouped = Self.groupedByProjectID(values, projectID: projectID)
+        for id in Set(previous.keys).union(grouped.keys) {
+            if !(previous[id] ?? []).elementsEqual(grouped[id] ?? [], by: activityEqual) {
+                affectedActivityProjectIDs.insert(id)
+            }
+        }
+        return grouped
+    }
+
     private func rebuildProjectActivityIndex(dayContext context: ProjectDayContext? = nil) {
         guard batchDepth == 0 else {
             activityRebuildPending = true
@@ -237,19 +283,54 @@ final class ProjectStore {
         }
         activityRebuildPending = false
         activityIndexBuildCount &+= 1
-        var builder = ProjectActivityIndexBuilder(context: applyDayContext(context))
-        builder.add(dailyLogs)
-        builder.add(progressTasks)
-        builder.add(siteTodos)
-        builder.add(projectDocuments)
-        builder.add(projectDrawings)
-        builder.add(projectFinancialRecords)
-        builder.add(projectWarehouseMovements)
-        builder.add(quickNotes)
-        projectActivityIndexByID = builder.summaries
-        todayLogProjectIDs = builder.todayProjectIDs
+        let nextContext = context ?? ProjectDayContext(now: now(), calendar: calendar())
+        let rebuildAll = needsFullActivityRebuild || nextContext != dayContext
+        var builder = ProjectActivityIndexBuilder(context: applyDayContext(nextContext))
+        let affectedIDs = affectedActivityProjectIDs
+        if rebuildAll {
+            builder.add(dailyLogs)
+            builder.add(progressTasks)
+            builder.add(siteTodos)
+            // Documents must precede finance: reverse receipt links belong to the project.
+            builder.add(projectDocuments)
+            builder.add(projectDrawings)
+            builder.add(projectFinancialRecords)
+            builder.add(projectWarehouseMovements)
+            builder.add(quickNotes)
+            lastActivityIndexRebuiltProjectCount = Set(projectActivityIndexByID.keys).union(builder.summaries.keys).count
+            projectActivityIndexByID = builder.summaries
+            todayLogProjectIDs = builder.todayProjectIDs
+        } else {
+            for id in affectedIDs {
+                builder.add(dailyLogsByProjectID[id] ?? [])
+                builder.add(progressTasksByProjectID[id] ?? [])
+                builder.add(siteTodosByProjectID[id] ?? [])
+                builder.add(projectDocumentsByProjectID[id] ?? [])
+                builder.add(projectDrawingsByProjectID[id] ?? [])
+                builder.add(projectFinancialRecordsByProjectID[id] ?? [])
+                builder.add(projectWarehouseMovementsByProjectID[id] ?? [])
+                builder.add(quickNotesByProjectID[id] ?? [])
+            }
+            // Assigning nil removes the summary when a project's final record is removed.
+            for id in affectedIDs {
+                projectActivityIndexByID[id] = builder.summaries[id]
+                if builder.todayProjectIDs.contains(id) {
+                    todayLogProjectIDs.insert(id)
+                } else {
+                    todayLogProjectIDs.remove(id)
+                }
+            }
+            lastActivityIndexRebuiltProjectCount = affectedIDs.count
+        }
+        needsFullActivityRebuild = false
+        affectedActivityProjectIDs.removeAll(keepingCapacity: true)
+        lastActivityIndexProcessedRecordCount = builder.processedRecordCount
+        activityIndexProcessedRecordCount &+= builder.processedRecordCount
+        activityIndexRebuiltProjectCount &+= lastActivityIndexRebuiltProjectCount
         refreshMissingTodayLogCount()
     }
+
+    var dashboardCollectionVersions: [String: UInt64] { mutationSink.versions }
 
     private func refreshProjectStatusIndex() {
         activeOrPausedProjectIDs = Set(

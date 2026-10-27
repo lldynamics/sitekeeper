@@ -3,184 +3,31 @@ import SwiftUI
 extension DashboardView {
     var todayDay: CalendarDay { projectStore.dayContext.day }
 
-    var activeProjects: [Project] {
-        projectStore.projects.filter { $0.status == .active || $0.status == .paused }
+    var dashboardSummaryRevision: DashboardSummaryRevision {
+        DashboardSummaryRevision(projectStore: projectStore, financeStore: financeStore)
     }
 
-    var activeProjectIDs: Set<UUID> {
-        Set(activeProjects.map(\.id))
-    }
-
-    var projectNameByID: [UUID: String] {
-        Dictionary(uniqueKeysWithValues: projectStore.projects.map { ($0.id, $0.name) })
-    }
-
-    var todayLogs: [DailyLog] {
-        let projectIDs = activeProjectIDs
-        let today = todayDay
-        return projectStore.dailyLogs.filter { log in
-            log.date.calendarDay(in: projectStore.dayContext.calendar.timeZone) == today && (log.projectId.map(projectIDs.contains) ?? true)
+    var dashboardSummary: DashboardSummaryModel {
+        dashboardSummaryCache.value(revision: dashboardSummaryRevision) {
+            DashboardSummaryInput(projectStore: projectStore, financeStore: financeStore)
         }
     }
 
-    var openTodos: [SiteTodo] {
-        let projectIDs = activeProjectIDs
-        return projectStore.siteTodos.filter { todo in
-            guard !todo.isDone else { return false }
-            guard let projectId = todo.projectId else { return false }
-            return projectIDs.contains(projectId)
-        }
-    }
-
-    var todayTodos: [SiteTodo] {
-        let today = todayDay
-        return openTodos.filter { $0.dueDate.calendarDay(in: projectStore.dayContext.calendar.timeZone) == today }
-    }
-
-    var overdueTasks: [ProgressTask] {
-        let projectIDs = activeProjectIDs
-        let context = projectStore.dayContext
-        return projectStore.progressTasks.filter { task in
-            projectIDs.contains(task.projectId) && task.clampedCompletion < 1 && context.isOverdue(date: task.dueDate)
-        }
-    }
-
-    var overdueTodos: [SiteTodo] {
-        let context = projectStore.dayContext
-        return openTodos.filter { context.isOverdue(date: $0.dueDate) }
-    }
-
-    var activeFinancialRecords: [ProjectFinancialRecord] {
-        let projectIDs = activeProjectIDs
-        return projectStore.projectFinancialRecords.filter { projectIDs.contains($0.projectId) }
-    }
-
-    var dashboardBusinessSummary: ProjectBusinessSummary {
-        let projects = activeProjects
-        guard !projects.isEmpty else {
-            return ProjectBusinessSummary(
-                quoteTotal: 0,
-                contractAmount: 0,
-                paidAmount: 0,
-                receivableAmount: 0,
-                receivableAgeDays: nil,
-                recentCollection: nil,
-                materialCost: 0,
-                laborCostAmount: 0,
-                pendingMaterialCount: 0,
-                unpricedQuoteCount: 0
-            )
-        }
-
-        // FinanceStore and ProjectStore maintain per-project indexes.  The dashboard
-        // renders this summary several times while its panels are composed, so avoid
-        // repeatedly filtering every record collection once per active project.
-        let quotes = projects.flatMap { financeStore.quoteItems(for: $0.id) }
-        let materials = projects.flatMap { financeStore.materialItems(for: $0.id) }
-        let laborRecords = projects.flatMap { financeStore.laborRecords(for: $0.id) }
-        let financialRecords = projects.flatMap { projectStore.projectFinancialRecords(for: $0.id) }
-
-        var materialCostByProjectID: [UUID: MoneyValue] = [:]
-        for item in materials {
-            guard let projectId = item.projectId else { continue }
-            materialCostByProjectID[projectId, default: 0] += ReportBuilder.materialLineTotal(item)
-        }
-        var laborCostByProjectID: [UUID: MoneyValue] = [:]
-        for item in laborRecords {
-            guard let projectId = item.projectId else { continue }
-            laborCostByProjectID[projectId, default: 0] += ReportBuilder.laborLineTotal(item)
-        }
-        let materialDetailProjectIDs = Set(materials.compactMap(\.projectId))
-        let laborDetailProjectIDs = Set(laborRecords.compactMap(\.projectId))
-        var collectionByProjectID: [UUID: MoneyValue] = [:]
-        for record in financialRecords where record.countsInBusinessMetrics && record.isCollectionIncome {
-            collectionByProjectID[record.projectId] =
-                (collectionByProjectID[record.projectId] ?? MoneyValue.zero) + record.amount
-        }
-
-        let quoteTotal = quotes.reduce(MoneyValue.zero) { $0 + ReportBuilder.quoteGrandTotal($1) }
-        let contractAmount = projects.reduce(MoneyValue.zero) { $0 + $1.contractAmount }
-        let paidAmount = projects.reduce(MoneyValue.zero) { total, project in
-            let recorded = (collectionByProjectID[project.id] ?? MoneyValue.zero)
-            return total + ProjectFinancialMetrics.effectivePaidAmount(
-                recordedCollectionAmount: recorded,
-                manualPaidAmount: project.paidAmount
-            )
-        }
-        let materialCost = projects.reduce(MoneyValue.zero) { total, project in
-            let recorded = materialCostByProjectID[project.id] ?? 0
-            return total + ProjectDetailMetrics.currentMaterialCost(
-                project: project,
-                materialCostAuto: recorded,
-                hasMaterialDetails: materialDetailProjectIDs.contains(project.id)
-            )
-        }
-        let laborCostAmount = projects.reduce(MoneyValue.zero) { total, project in
-            let recorded = laborCostByProjectID[project.id] ?? 0
-            return total + ProjectDetailMetrics.currentLaborCost(
-                project: project,
-                laborCostAuto: recorded,
-                hasLaborDetails: laborDetailProjectIDs.contains(project.id)
-            )
-        }
-
-        let receivableAmount = ProjectFinancialMetrics.totalReceivableAmount(
-            projects: projects,
-            recordedCollections: collectionByProjectID
-        )
-        let receivableAgeDays = projects.compactMap { project -> Int? in
-            let projectPaid = (collectionByProjectID[project.id] ?? MoneyValue.zero)
-            let paid = ProjectFinancialMetrics.effectivePaidAmount(
-                recordedCollectionAmount: projectPaid,
-                manualPaidAmount: project.paidAmount
-            )
-            let receivable = ProjectFinancialMetrics.unpaidAmount(contractAmount: project.contractAmount, paidAmount: paid)
-            return dashboardReceivableAgeDays(for: project, receivableAmount: receivable)
-        }.max()
-
-        return ProjectBusinessSummary(
-            quoteTotal: quoteTotal,
-            contractAmount: contractAmount,
-            paidAmount: paidAmount,
-            receivableAmount: receivableAmount,
-            receivableAgeDays: receivableAgeDays,
-            recentCollection: ProjectFinancialMetrics.latestCollection(
-                records: financialRecords,
-                projectName: { projectName($0) }
-            ),
-            materialCost: materialCost,
-            laborCostAmount: laborCostAmount,
-            pendingMaterialCount: materials.filter { $0.quantity.isZero }.count,
-            unpricedQuoteCount: quotes.filter { !$0.unitPrice.isPositive }.count
-        )
-    }
-
-    var warehouseMovementsForActiveProjects: [ProjectWarehouseMovement] {
-        let projectIDs = activeProjectIDs
-        return projectStore.projectWarehouseMovements.filter { projectIDs.contains($0.projectId) }
-    }
-
-    var warehouseStockLines: [WarehouseStockLine] {
-        activeProjects.flatMap { project in
-            WarehouseStockCalculator.stockLines(
-                for: project.id,
-                movements: projectStore.projectWarehouseMovements(for: project.id)
-            )
-        }
-    }
-
-    var warehouseTodayMovementCount: Int {
-        let today = todayDay
-        return warehouseMovementsForActiveProjects.filter { $0.date.calendarDay(in: projectStore.dayContext.calendar.timeZone) == today }.count
-    }
-
-    var warehouseNegativeCount: Int {
-        warehouseStockLines.filter { $0.quantity.isNegative }.count
-    }
-
-    var recentWarehouseMovements: [ProjectWarehouseMovement] {
-        Array(warehouseMovementsForActiveProjects.sorted { $0.createdAt > $1.createdAt }.prefix(3))
-    }
+    var activeProjects: [Project] { dashboardSummary.activeProjects }
+    var activeProjectIDs: Set<UUID> { dashboardSummary.activeProjectIDs }
+    var projectNameByID: [UUID: String] { dashboardSummary.projectNameByID }
+    var todayLogs: [DailyLog] { dashboardSummary.todayLogs }
+    var openTodos: [SiteTodo] { dashboardSummary.openTodos }
+    var todayTodos: [SiteTodo] { dashboardSummary.todayTodos }
+    var overdueTasks: [ProgressTask] { dashboardSummary.overdueTasks }
+    var overdueTodos: [SiteTodo] { dashboardSummary.overdueTodos }
+    var activeFinancialRecords: [ProjectFinancialRecord] { dashboardSummary.activeFinancialRecords }
+    var dashboardBusinessSummary: ProjectBusinessSummary { dashboardSummary.businessSummary }
+    var warehouseMovementsForActiveProjects: [ProjectWarehouseMovement] { dashboardSummary.warehouseMovements }
+    var warehouseStockLines: [WarehouseStockLine] { dashboardSummary.warehouseStockLines }
+    var warehouseTodayMovementCount: Int { dashboardSummary.warehouseTodayMovementCount }
+    var warehouseNegativeCount: Int { dashboardSummary.warehouseNegativeCount }
+    var recentWarehouseMovements: [ProjectWarehouseMovement] { dashboardSummary.recentWarehouseMovements }
 
     var currentProject: Project? {
         if let selectedProjectId = UUID(uuidString: selectedProjectIdRaw),
@@ -252,35 +99,10 @@ extension DashboardView {
         overdueTasks.count + overdueTodos.count
     }
 
-    var projectsWithoutTodayLogCount: Int {
-        let today = todayDay
-        let loggedProjects = Set(projectStore.dailyLogs.lazy
-            .filter { $0.date.calendarDay(in: projectStore.dayContext.calendar.timeZone) == today }
-            .compactMap(\.projectId))
-        return activeProjects.filter { !loggedProjects.contains($0.id) }.count
-    }
-
-    var unattachedReceiptCount: Int {
-        let linkedRecordIDs = Set(projectStore.projectDocuments.compactMap(\.linkedFinancialRecordId))
-        return activeFinancialRecords.filter { record in
-            guard record.requiresAttachment else { return false }
-            let linkedByRecord = !record.linkedDocumentIds.isEmpty
-            let linkedByDocument = linkedRecordIDs.contains(record.id)
-            return !(linkedByRecord || linkedByDocument)
-        }.count
-    }
-
-    var unsettledFinancialCount: Int {
-        activeFinancialRecords.filter { record in
-            record.normalizedStatus == .active && !record.dueDate.isEmpty
-        }.count
-    }
-
-    var materialPriceSpikeCount: Int {
-        activeProjects.reduce(0) { total, project in
-            total + financeStore.materialPriceSpikeCount(for: project.id)
-        }
-    }
+    var projectsWithoutTodayLogCount: Int { dashboardSummary.projectsWithoutTodayLogCount }
+    var unattachedReceiptCount: Int { dashboardSummary.unattachedReceiptCount }
+    var unsettledFinancialCount: Int { dashboardSummary.unsettledFinancialCount }
+    var materialPriceSpikeCount: Int { dashboardSummary.materialPriceSpikeCount }
 
     var usesWideDashboardLayout: Bool {
         horizontalSizeClass == .regular
