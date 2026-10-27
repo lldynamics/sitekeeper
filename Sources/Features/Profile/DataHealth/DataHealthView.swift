@@ -17,6 +17,7 @@ struct DataHealthView: View {
     @State private var handledRepairRequestID: UUID?
     private let showsNavigationTitle: Bool
     private let bottomContentInset: CGFloat
+    private let onMobileScrollOffsetChange: ((CGFloat) -> Void)?
     private let repairRequestID: UUID?
     private let onRepairRequestConsumed: (() -> Void)?
     let issuePreviewLimit = 50
@@ -25,11 +26,13 @@ struct DataHealthView: View {
     init(
         showsNavigationTitle: Bool = true,
         bottomContentInset: CGFloat = 0,
+        onMobileScrollOffsetChange: ((CGFloat) -> Void)? = nil,
         repairRequestID: UUID? = nil,
         onRepairRequestConsumed: (() -> Void)? = nil
     ) {
         self.showsNavigationTitle = showsNavigationTitle
         self.bottomContentInset = bottomContentInset
+        self.onMobileScrollOffsetChange = onMobileScrollOffsetChange
         self.repairRequestID = repairRequestID
         self.onRepairRequestConsumed = onRepairRequestConsumed
     }
@@ -68,6 +71,10 @@ struct DataHealthView: View {
 
     var body: some View {
         List {
+            if onMobileScrollOffsetChange != nil {
+                DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
+            }
+
             Section(l("健康概览")) {
                 LabeledContent(l("问题总数"), value: "\(totalIssues)")
                 LabeledContent(l("缺失照片"), value: "\(missingPhotoFiles.count)")

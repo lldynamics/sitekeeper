@@ -53,33 +53,38 @@ extension DashboardView {
     }
 
     var projectTimelinePanel: some View {
+        DashboardPanel(title: AppLocalization.string("总项目时间轴"), systemImage: "calendar.badge.clock") {
+            dashboardTimelineContent(prefersSingleColumn: false)
+        }
+    }
+
+    @ViewBuilder
+    func dashboardTimelineContent(prefersSingleColumn: Bool) -> some View {
         let activities = collectRecentActivities(limit: 20)
-        return DashboardPanel(title: AppLocalization.string("总项目时间轴"), systemImage: "calendar.badge.clock") {
-            if activities.isEmpty {
-                HStack {
-                    Image(systemName: "tray")
-                        .foregroundStyle(.secondary)
-                    Text(AppLocalization.string("暂无项目活动，完成一次操作后会显示在这里"))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.vertical, AppSpacing.tight)
-            } else {
-                if usesWideDashboardLayout {
-                    LazyVGrid(
-                        columns: dashboardTimelineColumns,
-                        alignment: .leading,
-                        spacing: AppSpacing.tight * 0.75
-                    ) {
-                        ForEach(activities, id: \.id) { activity in
-                            dashboardTimelineRow(activity)
-                        }
+        if activities.isEmpty {
+            HStack {
+                Image(systemName: "tray")
+                    .foregroundStyle(.secondary)
+                Text(AppLocalization.string("暂无项目活动，完成一次操作后会显示在这里"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.vertical, AppSpacing.tight)
+        } else {
+            if usesWideDashboardLayout && !prefersSingleColumn {
+                LazyVGrid(
+                    columns: dashboardTimelineColumns,
+                    alignment: .leading,
+                    spacing: AppSpacing.tight * 0.75
+                ) {
+                    ForEach(activities, id: \.id) { activity in
+                        dashboardTimelineRow(activity)
                     }
-                } else {
-                    VStack(spacing: AppSpacing.tight * 0.75) {
-                        ForEach(activities, id: \.id) { activity in
-                            dashboardTimelineRow(activity)
-                        }
+                }
+            } else {
+                VStack(spacing: AppSpacing.tight * 0.75) {
+                    ForEach(activities, id: \.id) { activity in
+                        dashboardTimelineRow(activity)
                     }
                 }
             }

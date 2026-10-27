@@ -3,6 +3,9 @@ import PhotosUI
 
 struct ProfileTabView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.expandedPhoneWorkspaceWidth) private var rootWorkspaceWidth
+    @State private var containerWidth: CGFloat = 0
+    @ScaledMetric(relativeTo: .body) private var expandedPhoneMinimumWidth: CGFloat = 820
     @AppStorage(UserPreferenceKeys.userName) private var userName = ""
     @AppStorage(UserPreferenceKeys.userAvatarData) private var userAvatarData = Data()
     @AppStorage(UserPreferenceKeys.useMetric) private var useMetric = true
@@ -20,6 +23,7 @@ struct ProfileTabView: View {
     @State private var showUserNameEditor = false
     @State private var userNameDraft = ""
     @State private var selectedAvatarItem: PhotosPickerItem?
+    @State private var showAvatarPicker = false
     let embedsNavigationStack: Bool
 
     init(embedsNavigationStack: Bool = true) {
@@ -63,16 +67,25 @@ struct ProfileTabView: View {
     }
 
     var body: some View {
-        if embedsNavigationStack {
-            NavigationStack {
+        Group {
+            if embedsNavigationStack {
+                NavigationStack {
+                    profileSurface
+                }
+            } else {
                 profileSurface
             }
-        } else {
-            profileSurface
+        }
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { containerWidth = geometry.size.width }
+                    .onChange(of: geometry.size.width) { _, width in containerWidth = width }
+            }
         }
     }
 
-    private var profileSurface: some View {
+    private var compactProfileList: some View {
         List {
             Section {
                 ProfileIdentityView(
@@ -80,7 +93,7 @@ struct ProfileTabView: View {
                     appVersion: appVersion,
                     avatarImage: avatarUIImage,
                     hasCustomAvatar: hasCustomAvatar,
-                    selectedAvatarItem: $selectedAvatarItem,
+                    onChooseAvatar: { showAvatarPicker = true },
                     onEditUserName: {
                         userNameDraft = userName
                         showUserNameEditor = true
@@ -169,6 +182,16 @@ struct ProfileTabView: View {
                 }
             }
         }
+    }
+
+    private var profileSurface: some View {
+        Group {
+            if usesExpandedProfile {
+                expandedProfileLayout
+            } else {
+                compactProfileList
+            }
+        }
         .navigationTitle(AppLocalization.string("我的"))
         .task {
             guard !hasLoadedStorageUsage else { return }
@@ -194,6 +217,7 @@ struct ProfileTabView: View {
                 selectedAvatarItem = nil
             }
         }
+        .photosPicker(isPresented: $showAvatarPicker, selection: $selectedAvatarItem, matching: .images)
         .sheet(isPresented: $showUserNameEditor) {
             ProfileUserNameEditorSheet(
                 userNameDraft: $userNameDraft,
@@ -203,6 +227,175 @@ struct ProfileTabView: View {
                     showUserNameEditor = false
                 }
             )
+        }
+    }
+
+    private var availableWorkspaceWidth: CGFloat {
+        rootWorkspaceWidth > 0 ? rootWorkspaceWidth : containerWidth
+    }
+
+    private var usesExpandedProfile: Bool {
+        ExpandedPhoneWorkspaceLayout.isAvailable(width: availableWorkspaceWidth,
+                                                 minimumWidth: expandedPhoneMinimumWidth)
+    }
+
+    private var profileSidebarWidth: CGFloat {
+        ExpandedPhoneWorkspaceLayout.sidebarWidth(containerWidth: availableWorkspaceWidth,
+                                                 minimumWorkspaceWidth: expandedPhoneMinimumWidth)
+    }
+
+    private var expandedProfileLayout: some View {
+        HStack(alignment: .top, spacing: 0) {
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: AppSpacing.relaxed) {
+                    profileWorkspaceCard {
+                        ProfileIdentityView(
+                            displayUserName: displayUserName,
+                            appVersion: appVersion,
+                            avatarImage: avatarUIImage,
+                            hasCustomAvatar: hasCustomAvatar,
+                            onChooseAvatar: { showAvatarPicker = true },
+                            onEditUserName: {
+                                userNameDraft = userName
+                                showUserNameEditor = true
+                            },
+                            onResetAvatar: { userAvatarData = Data() }
+                        )
+                    }
+                    profileWorkspaceCard(title: AppLocalization.string("数据安全")) {
+                        ProfileStorageStatusCard(
+                            backupStatusText: backupStatusText,
+                            localStorageUsageText: localStorageUsageText,
+                            storageCaptionText: storageCaptionText,
+                            isRefreshing: isRefreshingStorageUsage,
+                            onRefresh: { Task { await refreshLocalStorageUsage() } }
+                        )
+                        NavigationLink { DataManagementView(initialRoute: .backup) } label: {
+                            Label(AppLocalization.string("数据管理"), systemImage: "externaldrive")
+                                .frame(maxWidth: .infinity, minHeight: 44)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color.appPrimaryAction)
+                        .accessibilityIdentifier("profile-data-management-link")
+                    }
+                }
+                .padding(AppSpacing.relaxed)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: true))
+            .frame(width: profileSidebarWidth)
+            .clipped()
+            .accessibilityIdentifier("profile-expanded-identity-safety-pane")
+
+            ScrollView(.vertical) {
+                VStack(alignment: .leading, spacing: AppSpacing.relaxed) {
+                    profileWorkspaceCard(title: AppLocalization.string("快捷设置")) {
+                        Toggle(AppLocalization.string("公制单位"), isOn: $useMetric)
+                            .frame(minHeight: 44)
+                        Divider()
+                        HStack(spacing: AppSpacing.normal) {
+                            Text(AppLocalization.string("配色"))
+                            Spacer(minLength: AppSpacing.normal)
+                            Picker(AppLocalization.string("配色"), selection: $appTheme) {
+                                ForEach(AppTheme.allCases, id: \.rawValue) { theme in
+                                    Text(theme.displayName).tag(theme.rawValue)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                            .accessibilityIdentifier("profile-theme-picker")
+                        }
+                        .frame(minHeight: 44)
+                        Divider()
+                        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                            Text(AppLocalization.string("主题"))
+                            Picker(AppLocalization.string("主题"), selection: $appearanceMode) {
+                                ForEach(AppAppearanceMode.allCases, id: \.rawValue) { mode in
+                                    Text(LocalizedStringKey(mode.title)).tag(mode.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                        }
+                        Divider()
+                        VStack(alignment: .leading, spacing: AppSpacing.tight) {
+                            Text(AppLocalization.string("语言"))
+                            Picker(AppLocalization.string("语言"), selection: $languageCode) {
+                                ForEach(AppLanguage.allCases, id: \.rawValue) { lang in
+                                    Text(LocalizedStringKey(lang.displayName)).tag(lang.rawValue)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                            .labelsHidden()
+                            .accessibilityIdentifier("profile-language-picker")
+                        }
+                        if didSwitchLanguage {
+                            Text(AppLocalization.string("settings_language_switch_feedback"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    profileWorkspaceCard(title: AppLocalization.string("更多设置")) {
+                        NavigationLink { SettingsView() } label: {
+                            Label(AppLocalization.string("更多设置"), systemImage: "gear")
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .accessibilityIdentifier("profile-settings-link")
+                    }
+                    profileWorkspaceCard(title: AppLocalization.string("关于")) {
+                        HStack {
+                            Label(AppLocalization.string("当前版本"), systemImage: "info.circle")
+                            Spacer(minLength: AppSpacing.tight)
+                            Text("v\(appVersion)")
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        Divider()
+                        NavigationLink { PrivacyPolicyView() } label: {
+                            Label(AppLocalization.string("隐私政策"), systemImage: "hand.raised.fill")
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        Divider()
+                        NavigationLink { FeedbackView() } label: {
+                            Label(AppLocalization.string("意见反馈"), systemImage: "envelope.fill")
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                    }
+                }
+                .padding(AppSpacing.relaxed)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+            .scrollIndicators(.visible)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityIdentifier("profile-expanded-settings-pane")
+        }
+        .overlay(alignment: .leading) {
+            ExpandedPhoneColumnDivider()
+                .frame(width: 1)
+                .offset(x: profileSidebarWidth - 0.5)
+        }
+        .background(Color(.systemGroupedBackground), ignoresSafeAreaEdges: [])
+        .modifier(ExpandedPhoneScrollEdgeModifier(isExpanded: true))
+    }
+
+    private func profileWorkspaceCard<Content: View>(
+        title: String? = nil,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        VStack(alignment: .leading, spacing: AppSpacing.normal) {
+            if let title {
+                Text(title)
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            content()
+        }
+        .padding(AppSpacing.relaxed)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.appStrokeSecondary, lineWidth: 0.5)
         }
     }
 }

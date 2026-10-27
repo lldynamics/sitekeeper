@@ -6,6 +6,7 @@ struct CalculationResult {
     let sections: [ResultSection]
     // A snapshot of the inputs used for this result; persisted only by an explicit save.
     var historyDraft: HistoryDraft?
+    var materialDraft: CalculatorMaterialDraft? = nil
 
     struct HistoryDraft: Equatable {
         let tool: String

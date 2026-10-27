@@ -7,7 +7,7 @@ struct ProfileIdentityView: View {
     let appVersion: String
     let avatarImage: UIImage?
     let hasCustomAvatar: Bool
-    @Binding var selectedAvatarItem: PhotosPickerItem?
+    let onChooseAvatar: () -> Void
     let onEditUserName: () -> Void
     let onResetAvatar: () -> Void
 
@@ -54,7 +54,8 @@ struct ProfileIdentityView: View {
 
     private var avatarPicker: some View {
         let image = avatarImage
-        return PhotosPicker(selection: $selectedAvatarItem, matching: .images) {
+        // The stable profile surface presents the picker while this card changes columns.
+        return Button(action: onChooseAvatar) {
             ZStack(alignment: .bottomTrailing) {
                 Group {
                     if let image {

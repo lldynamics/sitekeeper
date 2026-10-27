@@ -7,6 +7,79 @@ enum AppSpacing {
     static let relaxed: CGFloat = 16
 }
 
+/// The expanded phone workspace follows its container, never a device name or screen size.
+/// iPad keeps its independently selected layouts.
+enum ExpandedPhoneWorkspaceLayout {
+    static func isAvailable(width: CGFloat, minimumWidth: CGFloat = 820) -> Bool {
+        UIDevice.current.userInterfaceIdiom == .phone && width >= max(820, minimumWidth)
+    }
+
+    /// One track width for every expanded-phone workspace, based on the root container.
+    static func sidebarWidth(containerWidth: CGFloat, minimumWorkspaceWidth: CGFloat = 820) -> CGFloat {
+        guard containerWidth.isFinite, containerWidth > 0 else { return 0 }
+        let minimumWidth = minimumWorkspaceWidth.isFinite ? max(820, minimumWorkspaceWidth) : 820
+        let scale = minimumWidth / 820
+        return min(containerWidth, min(460 * scale, max(320 * scale, containerWidth * 0.42)))
+    }
+}
+
+private struct ExpandedPhoneWorkspaceWidthKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    var expandedPhoneWorkspaceWidth: CGFloat {
+        get { self[ExpandedPhoneWorkspaceWidthKey.self] }
+        set { self[ExpandedPhoneWorkspaceWidthKey.self] = newValue }
+    }
+}
+
+/// Native indicators appear only when the system has scrollable content to indicate.
+/// Interior panes use their own boundaries rather than the root navigation rail's inset.
+struct ExpandedPhoneSidebarScrollModifier: ViewModifier {
+    let isExpanded: Bool
+
+    func body(content: Content) -> some View {
+        content
+            .scrollIndicators(isExpanded ? .visible : .automatic)
+            .contentMargins(.horizontal, isExpanded ? 0 : nil, for: .scrollContent)
+            .contentMargins(.horizontal, isExpanded ? 0 : nil, for: .scrollIndicators)
+            .scrollContentBackground(isExpanded ? .hidden : .automatic)
+            .background(isExpanded ? Color(.secondarySystemGroupedBackground) : Color.clear, ignoresSafeAreaEdges: [])
+            .modifier(ExpandedPhoneScrollEdgeModifier(isExpanded: isExpanded))
+    }
+}
+
+struct ExpandedPhoneScrollEdgeModifier: ViewModifier {
+    let isExpanded: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            // Opaque pane backgrounds already separate these regions. Disable both axes
+            // of the system edge fade, not only its horizontal part.
+            content.scrollEdgeEffectHidden(isExpanded, for: .all)
+        } else {
+            content
+        }
+    }
+}
+
+/// A decorative column boundary. It occupies no space in the workspace layout.
+struct ExpandedPhoneColumnDivider: View {
+    var body: some View {
+        GeometryReader { geometry in
+            Path { path in
+                path.move(to: CGPoint(x: geometry.size.width * 0.5, y: 0))
+                path.addLine(to: CGPoint(x: geometry.size.width * 0.5, y: geometry.size.height))
+            }
+            .stroke(Color.red.opacity(0.28), style: StrokeStyle(lineWidth: 1, lineCap: .round, dash: [4, 4]))
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+    }
+}
+
 @MainActor
 enum AppHaptics {
     private static let lightImpact = UIImpactFeedbackGenerator(style: .light)

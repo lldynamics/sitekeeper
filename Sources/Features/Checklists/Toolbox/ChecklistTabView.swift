@@ -1,14 +1,21 @@
 import SwiftUI
+import UIKit
 
 // MARK: - 工具箱主页
 
 struct ChecklistTabView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.expandedPhoneWorkspaceWidth) private var expandedPhoneWorkspaceWidth
     let embedsNavigationStack: Bool
     @AppStorage(UserPreferenceKeys.checklistQuickToolOrder) private var quickToolOrderRaw = ""
     @AppStorage(UserPreferenceKeys.checklistQuickToolCustomized) private var quickToolCustomized = false
     @State private var showQuickToolEditor = false
     @State private var mobileSelectedItem: ToolboxItem?
+    @State private var phoneSelectedItem: ToolboxItem?
+    @State private var phoneToolPath = NavigationPath()
+    @State private var phoneShowsDetail = false
+    @State private var phoneDetailExpanded = false
+    @ScaledMetric(relativeTo: .body) private var expandedPhoneMinimumWidth: CGFloat = 820
 
     init(embedsNavigationStack: Bool = true) {
         self.embedsNavigationStack = embedsNavigationStack
@@ -77,7 +84,13 @@ struct ChecklistTabView: View {
     }
 
     var body: some View {
-        if embedsNavigationStack {
+        if UIDevice.current.userInterfaceIdiom == .phone, embedsNavigationStack {
+            phoneToolboxWorkspace
+                .sheet(isPresented: $showQuickToolEditor) {
+                    quickToolEditor
+                }
+                .onAppear(perform: sanitizeStoredQuickToolOrder)
+        } else if embedsNavigationStack {
             NavigationStack {
                 checklistSurface
             }
@@ -153,54 +166,7 @@ struct ChecklistTabView: View {
                     .padding(.vertical, 12)
                 }
             } else {
-                List {
-                    Section {
-                        ForEach(quickToolItems) { item in
-                            Button {
-                                mobileSelectedItem = item
-                            } label: {
-                                ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
-                            }
-                            .buttonStyle(.plain)
-                            .contentShape(Rectangle())
-                        }
-                    } header: {
-                        HStack {
-                            Text(AppLocalization.string("快捷工具"))
-                            Spacer()
-                            Button {
-                                showQuickToolEditor = true
-                            } label: {
-                                Label(AppLocalization.string("自定义"), systemImage: "slider.horizontal.3")
-                                    .font(.caption)
-                            }
-                        }
-                    }
-                    if practicalUnselectedTools.isEmpty {
-                        Section {
-                            HStack(spacing: 6) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundStyle(Color.appSuccess)
-                                Text(AppLocalization.string("已添加全部工具，长按拖拽可排序"))
-                                    .font(.subheadline)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                    ForEach(toolboxSections) { section in
-                        Section(section.title) {
-                            ForEach(section.items) { item in
-                                Button {
-                                    mobileSelectedItem = item
-                                } label: {
-                                    ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
-                                }
-                                .buttonStyle(.plain)
-                                .contentShape(Rectangle())
-                            }
-                        }
-                    }
-                }
+                mobileToolList { mobileSelectedItem = $0 }
             }
         }
         .navigationTitle(AppLocalization.string("工程工具箱"))
@@ -208,17 +174,226 @@ struct ChecklistTabView: View {
             destinationView(for: item.destination)
         }
         .sheet(isPresented: $showQuickToolEditor) {
-            QuickToolEditorView(
-                currentOrderIDs: quickSelectedToolIDs,
-                defaultOrderIDs: ToolboxCatalog.defaultQuickToolIDs,
-                allTools: practicalTools,
-                onSave: { newIDs in
-                    quickToolCustomized = true
-                    quickToolOrderRaw = newIDs.joined(separator: ",")
-                }
-            )
+            quickToolEditor
         }
         .onAppear(perform: sanitizeStoredQuickToolOrder)
+    }
+
+    private var quickToolEditor: some View {
+        QuickToolEditorView(
+            currentOrderIDs: quickSelectedToolIDs,
+            defaultOrderIDs: ToolboxCatalog.defaultQuickToolIDs,
+            allTools: practicalTools,
+            onSave: { newIDs in
+                quickToolCustomized = true
+                quickToolOrderRaw = newIDs.joined(separator: ",")
+            }
+        )
+    }
+
+    // Keep both navigation owners mounted while the available width changes.
+    // Expanding the selected tool changes frames, never its view identity or navigation path.
+    private var phoneToolboxWorkspace: some View {
+        GeometryReader { geometry in
+            let workspaceWidth = expandedPhoneWorkspaceWidth > 0 ? expandedPhoneWorkspaceWidth : geometry.size.width
+            let isWide = ExpandedPhoneWorkspaceLayout.isAvailable(
+                width: workspaceWidth,
+                minimumWidth: expandedPhoneMinimumWidth
+            )
+            let showsCatalog = isWide ? !phoneDetailExpanded : !phoneShowsDetail
+            let sidebarWidth = isWide ? min(
+                geometry.size.width,
+                ExpandedPhoneWorkspaceLayout.sidebarWidth(containerWidth: workspaceWidth,
+                                                         minimumWorkspaceWidth: expandedPhoneMinimumWidth)
+            ) : geometry.size.width
+            let catalogWidth = showsCatalog ? sidebarWidth : 0
+            let spacing: CGFloat = isWide && showsCatalog ? AppSpacing.normal : 0
+            let detailWidth = max(0, geometry.size.width - catalogWidth - spacing)
+
+            HStack(spacing: spacing) {
+                NavigationStack {
+                    mobileToolList(
+                        highlightedItemID: phoneSelectedItem?.id,
+                        fillsExpandedPane: isWide,
+                        onSelect: selectPhoneTool
+                    )
+                        .navigationTitle(AppLocalization.string("工程工具箱"))
+                }
+                .frame(width: showsCatalog ? sidebarWidth : max(320, sidebarWidth))
+                .frame(width: catalogWidth, alignment: .leading)
+                .clipped()
+                .opacity(showsCatalog ? 1 : 0)
+                .allowsHitTesting(showsCatalog)
+                .accessibilityHidden(!showsCatalog)
+                .accessibilityIdentifier("toolbox-phone-catalog")
+
+                VStack(spacing: 0) {
+                    phoneDetailControls(isWide: isWide)
+                    NavigationStack(path: $phoneToolPath) {
+                        if let item = phoneSelectedItem {
+                            destinationView(for: item.destination)
+                                .id(item.id)
+                        } else {
+                            ContentUnavailableView(
+                                AppLocalization.string("工程工具箱"),
+                                systemImage: "wrench.and.screwdriver",
+                                description: Text(AppLocalization.string("toolbox_select_tool_hint"))
+                            )
+                        }
+                    }
+                }
+                .frame(width: detailWidth > 0 ? detailWidth : 320)
+                .frame(width: detailWidth, alignment: .leading)
+                .clipped()
+                .opacity(detailWidth > 0 ? 1 : 0)
+                .allowsHitTesting(detailWidth > 0)
+                .accessibilityHidden(detailWidth <= 0)
+                .accessibilityIdentifier("toolbox-phone-detail")
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+            .overlay(alignment: .leading) {
+                if isWide && showsCatalog {
+                    ExpandedPhoneColumnDivider()
+                        .frame(width: 1)
+                        .offset(x: catalogWidth - 0.5)
+                }
+            }
+        }
+    }
+
+    private func phoneDetailControls(isWide: Bool) -> some View {
+        HStack(spacing: AppSpacing.normal) {
+            if !isWide {
+                Button {
+                    // Returning to the catalog is a visibility change, so reopening this tool keeps its inputs.
+                    phoneShowsDetail = false
+                } label: {
+                    Label(AppLocalization.string("toolbox_show_catalog"), systemImage: "chevron.left")
+                        .frame(minHeight: 44)
+                }
+                .accessibilityIdentifier("toolbox-show-catalog")
+            }
+            Spacer(minLength: 0)
+            if isWide {
+                Button {
+                    phoneDetailExpanded.toggle()
+                } label: {
+                    Label(
+                        AppLocalization.string(phoneDetailExpanded ? "toolbox_restore_columns" : "toolbox_expand_detail"),
+                        systemImage: phoneDetailExpanded ? "arrow.down.right.and.arrow.up.left" : "arrow.up.left.and.arrow.down.right"
+                    )
+                    .frame(minHeight: 44)
+                }
+                .disabled(phoneSelectedItem == nil)
+                .accessibilityIdentifier("toolbox-toggle-detail-expanded")
+            }
+        }
+        .font(.subheadline.weight(.medium))
+        .buttonStyle(.bordered)
+        .controlSize(.regular)
+        .padding(.horizontal, AppSpacing.normal)
+        .padding(.vertical, AppSpacing.tight)
+        .background(.bar)
+    }
+
+    private func selectPhoneTool(_ item: ToolboxItem) {
+        if phoneSelectedItem?.id != item.id {
+            phoneToolPath = NavigationPath()
+        }
+        phoneSelectedItem = item
+        phoneShowsDetail = true
+    }
+
+    private func mobileToolList(
+        highlightedItemID: String? = nil,
+        fillsExpandedPane: Bool = false,
+        onSelect: @escaping (ToolboxItem) -> Void
+    ) -> some View {
+        List {
+            Section {
+                ForEach(quickToolItems) { item in
+                    Button {
+                        onSelect(item)
+                    } label: {
+                        ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
+                            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                    }
+                    .buttonStyle(.plain)
+                    .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
+                    .contentShape(Rectangle())
+                    .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
+                    .listRowBackground(catalogRowBackground(isSelected: highlightedItemID == item.id, fillsExpandedPane: fillsExpandedPane))
+                    .accessibilityAddTraits(highlightedItemID == item.id ? .isSelected : [])
+                }
+            } header: {
+                catalogSectionHeader(fillsExpandedPane: fillsExpandedPane) {
+                    HStack {
+                        Text(AppLocalization.string("快捷工具"))
+                        Spacer()
+                        Button {
+                            showQuickToolEditor = true
+                        } label: {
+                            Label(AppLocalization.string("自定义"), systemImage: "slider.horizontal.3")
+                                .font(.caption)
+                        }
+                    }
+                }
+            }
+            if practicalUnselectedTools.isEmpty {
+                Section {
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(Color.appSuccess)
+                        Text(AppLocalization.string("已添加全部工具，长按拖拽可排序"))
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            ForEach(toolboxSections) { section in
+                Section {
+                    ForEach(section.items) { item in
+                        Button {
+                            onSelect(item)
+                        } label: {
+                            ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
+                                .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
+                        .contentShape(Rectangle())
+                        .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
+                        .listRowBackground(catalogRowBackground(isSelected: highlightedItemID == item.id, fillsExpandedPane: fillsExpandedPane))
+                        .accessibilityAddTraits(highlightedItemID == item.id ? .isSelected : [])
+                    }
+                } header: {
+                    catalogSectionHeader(fillsExpandedPane: fillsExpandedPane) {
+                        Text(section.title)
+                    }
+                }
+            }
+        }
+        .modifier(ToolboxCatalogListStyleModifier(isExpanded: fillsExpandedPane))
+        .frame(maxWidth: fillsExpandedPane ? .infinity : nil, maxHeight: fillsExpandedPane ? .infinity : nil)
+        // The outer workspace already stays within the screen's safe area. Its catalogue
+        // is an interior pane, so it must not reserve the screen's trailing navigation rail again.
+        .ignoresSafeArea(.container, edges: fillsExpandedPane ? .horizontal : [])
+        .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: fillsExpandedPane))
+    }
+
+    private func catalogSectionHeader<Content: View>(
+        fillsExpandedPane: Bool,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        content()
+            .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
+            .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
+            .background(fillsExpandedPane ? Color(.systemGroupedBackground) : Color.clear, ignoresSafeAreaEdges: [])
+    }
+
+    private func catalogRowBackground(isSelected: Bool, fillsExpandedPane: Bool) -> Color? {
+        if isSelected { return Color.appSuccess.opacity(0.12) }
+        return fillsExpandedPane ? Color(.secondarySystemGroupedBackground) : nil
     }
 
     private func sanitizeStoredQuickToolOrder() {
@@ -271,6 +446,21 @@ struct ChecklistTabView: View {
             ConstructionMethodLibraryView()
         case .drawingLibrary:
             DrawingLibraryToolView()
+        }
+    }
+}
+
+private struct ToolboxCatalogListStyleModifier: ViewModifier {
+    let isExpanded: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isExpanded {
+            // This is a bounded catalogue pane, not a full-screen grouped settings list.
+            // Its headers and rows share the same list viewport and explicit surface.
+            content.listStyle(.plain)
+        } else {
+            content
         }
     }
 }

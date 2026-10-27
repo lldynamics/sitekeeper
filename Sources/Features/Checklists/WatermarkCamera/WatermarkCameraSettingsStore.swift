@@ -16,7 +16,7 @@ final class WatermarkCameraSettingsStore {
         UserPreferenceKeys.watermarkCameraShowGrid,
         UserPreferenceKeys.watermarkCameraFlashEnabled,
         UserPreferenceKeys.watermarkCameraBurstCount
-    ]
+    ] + WatermarkCameraPreferenceKeys.all
 
     private static let defaultTemplateRaw = CameraWatermarkTemplate.constructionLog.rawValue
     private static let defaultExportQualityRaw = WatermarkExportQuality.standard.rawValue
@@ -43,7 +43,42 @@ final class WatermarkCameraSettingsStore {
         didSet { preferences.set(photographer, for: UserPreferenceKeys.watermarkCameraPhotographer) }
     }
     var locationText: String {
-        didSet { preferences.set(locationText, for: UserPreferenceKeys.watermarkCameraLocationText) }
+        didSet {
+            preferences.set(locationText, for: UserPreferenceKeys.watermarkCameraLocationText)
+            if !isApplyingDeviceLocation {
+                locationWasRestored = false
+                locationSnapshot = locationText.isEmpty ? nil : .manual(text: locationText)
+            }
+        }
+    }
+    @ObservationIgnored private var isApplyingDeviceLocation = false
+    private var locationWasRestored = true
+    var locationSnapshot: WatermarkLocationSnapshot? {
+        didSet { persistLocationSnapshot() }
+    }
+    var workSection: String {
+        didSet { preferences.set(workSection, for: WatermarkCameraPreferenceKeys.workSection) }
+    }
+    var floor: String {
+        didSet { preferences.set(floor, for: WatermarkCameraPreferenceKeys.floor) }
+    }
+    var process: String {
+        didSet { preferences.set(process, for: WatermarkCameraPreferenceKeys.process) }
+    }
+    var issueNumber: String {
+        didSet { preferences.set(issueNumber, for: WatermarkCameraPreferenceKeys.issueNumber) }
+    }
+    var completedQuantity: String {
+        didSet { preferences.set(completedQuantity, for: WatermarkCameraPreferenceKeys.completedQuantity) }
+    }
+    var receiptNote: String {
+        didSet { preferences.set(receiptNote, for: WatermarkCameraPreferenceKeys.receiptNote) }
+    }
+    var style: WatermarkCameraStyle {
+        didSet {
+            preferences.set(style.position.rawValue, for: WatermarkCameraPreferenceKeys.stylePosition)
+            preferences.set(style.detail.rawValue, for: WatermarkCameraPreferenceKeys.styleDetail)
+        }
     }
     var templateRaw: String {
         didSet { preferences.set(templateRaw, for: UserPreferenceKeys.watermarkCameraTemplateRaw) }
@@ -78,7 +113,22 @@ final class WatermarkCameraSettingsStore {
         )
         projectName = preferences.string(UserPreferenceKeys.watermarkCameraProjectName)
         photographer = preferences.string(UserPreferenceKeys.watermarkCameraPhotographer)
-        locationText = preferences.string(UserPreferenceKeys.watermarkCameraLocationText)
+        let savedLocationText = preferences.string(UserPreferenceKeys.watermarkCameraLocationText)
+        locationText = savedLocationText
+        let savedLocation = preferences.data(WatermarkCameraPreferenceKeys.locationSnapshot)
+            .flatMap { try? JSONDecoder().decode(WatermarkLocationSnapshot.self, from: $0) }
+        locationSnapshot = savedLocation?.text == savedLocationText ? savedLocation
+            : (savedLocationText.isEmpty ? nil : .manual(text: savedLocationText))
+        workSection = preferences.string(WatermarkCameraPreferenceKeys.workSection)
+        floor = preferences.string(WatermarkCameraPreferenceKeys.floor)
+        process = preferences.string(WatermarkCameraPreferenceKeys.process)
+        issueNumber = preferences.string(WatermarkCameraPreferenceKeys.issueNumber)
+        completedQuantity = preferences.string(WatermarkCameraPreferenceKeys.completedQuantity)
+        receiptNote = preferences.string(WatermarkCameraPreferenceKeys.receiptNote)
+        style = WatermarkCameraStyle(
+            position: WatermarkCameraStyle.Position(rawValue: preferences.string(WatermarkCameraPreferenceKeys.stylePosition)) ?? .bottomRight,
+            detail: WatermarkCameraStyle.Detail(rawValue: preferences.string(WatermarkCameraPreferenceKeys.styleDetail)) ?? .full
+        )
         templateRaw = Self.normalizedTemplateRaw(
             preferences.string(
                 UserPreferenceKeys.watermarkCameraTemplateRaw,
@@ -142,6 +192,35 @@ final class WatermarkCameraSettingsStore {
         burstCount = boundedBurstCount
     }
 
+    func setManualLocation(_ text: String) {
+        locationText = text
+    }
+
+    func acceptDeviceLocation(_ snapshot: WatermarkLocationSnapshot) {
+        guard snapshot.provenance == .device, snapshot.freshness() != .invalid else { return }
+        isApplyingDeviceLocation = true
+        locationText = snapshot.text
+        isApplyingDeviceLocation = false
+        locationWasRestored = false
+        locationSnapshot = snapshot
+    }
+
+    func locationStatusText(at now: Date = Date()) -> String {
+        guard let snapshot = locationSnapshot, !locationText.isEmpty else { return "" }
+        if locationWasRestored {
+            if snapshot.provenance == .manual { return AppLocalization.string("上次填写的位置，请核对") }
+            let dateText = snapshot.timestamp.map { Formatters.dateTime.string(from: $0) } ?? AppLocalization.string("未知时间")
+            return String(format: AppLocalization.string("上次定位（%@），请核对或重新定位"), dateText)
+        }
+        return snapshot.statusText(at: now)
+    }
+
+    private func persistLocationSnapshot() {
+        if let data = try? JSONEncoder().encode(locationSnapshot) {
+            preferences.set(data, for: WatermarkCameraPreferenceKeys.locationSnapshot)
+        }
+    }
+
     private func persistCurrentSettings() {
         preferences.set(selectedProjectIdRaw, for: UserPreferenceKeys.watermarkCameraSelectedProjectId)
         preferences.set(projectName, for: UserPreferenceKeys.watermarkCameraProjectName)
@@ -155,6 +234,15 @@ final class WatermarkCameraSettingsStore {
         preferences.set(showGrid, for: UserPreferenceKeys.watermarkCameraShowGrid)
         preferences.set(flashEnabled, for: UserPreferenceKeys.watermarkCameraFlashEnabled)
         preferences.set(burstCount, for: UserPreferenceKeys.watermarkCameraBurstCount)
+        preferences.set(workSection, for: WatermarkCameraPreferenceKeys.workSection)
+        preferences.set(floor, for: WatermarkCameraPreferenceKeys.floor)
+        preferences.set(process, for: WatermarkCameraPreferenceKeys.process)
+        preferences.set(issueNumber, for: WatermarkCameraPreferenceKeys.issueNumber)
+        preferences.set(completedQuantity, for: WatermarkCameraPreferenceKeys.completedQuantity)
+        preferences.set(receiptNote, for: WatermarkCameraPreferenceKeys.receiptNote)
+        preferences.set(style.position.rawValue, for: WatermarkCameraPreferenceKeys.stylePosition)
+        preferences.set(style.detail.rawValue, for: WatermarkCameraPreferenceKeys.styleDetail)
+        persistLocationSnapshot()
     }
 
     private static func normalizedSelectedProjectIdRaw(_ raw: String) -> String {

@@ -22,9 +22,9 @@ struct WatermarkCameraTests {
         )
         let lines = context.lines(capturedAt: capturedAt)
 
-        #expect(lines.contains("时间: \(Formatters.dateTime.string(from: capturedAt))"))
-        #expect(lines.contains("工程: 测试工程"))
-        #expect(lines.contains("拍摄: 金工"))
+        #expect(lines.contains(String(format: AppLocalization.string("时间: %@"), Formatters.dateTime.string(from: capturedAt))))
+        #expect(lines.contains(String(format: AppLocalization.string("工程: %@"), "测试工程")))
+        #expect(lines.contains(String(format: AppLocalization.string("拍摄: %@"), "金工")))
     }
 
     @Test func dailyLogSeedPhotoKeepsDraftMetadata() throws {

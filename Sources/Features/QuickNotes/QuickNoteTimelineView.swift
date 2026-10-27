@@ -3,6 +3,8 @@ import SwiftUI
 struct QuickNoteTimelineView: View {
     let notes: [QuickNote]
     let projects: [Project]
+    var confirmedSavedNoteId: UUID? = nil
+    var usesWorkspaceCards = false
     let onEdit: (QuickNote) -> Void
     let onConvert: (QuickNote) -> Void
     let onDelete: ([QuickNote]) -> Void
@@ -65,6 +67,8 @@ struct QuickNoteTimelineView: View {
                         QuickNoteTimelineRow(
                             note: note,
                             projectName: projectName(note.projectId),
+                            isSaveConfirmed: note.id == confirmedSavedNoteId,
+                            usesWorkspaceCard: usesWorkspaceCards,
                             onEdit: { onEdit(note) },
                             onConvert: { onConvert(note) },
                             onDelete: { onDelete([note]) },
@@ -102,6 +106,8 @@ struct QuickNoteTimelineView: View {
 private struct QuickNoteTimelineRow: View {
     let note: QuickNote
     let projectName: String
+    let isSaveConfirmed: Bool
+    let usesWorkspaceCard: Bool
     let onEdit: () -> Void
     let onConvert: () -> Void
     let onDelete: () -> Void
@@ -125,7 +131,7 @@ private struct QuickNoteTimelineRow: View {
     var body: some View {
         VStack(alignment: .trailing, spacing: 5) {
             HStack(alignment: .bottom, spacing: 8) {
-                Spacer(minLength: 36)
+                Spacer(minLength: usesWorkspaceCard ? 0 : 36)
                 messageBubble
             }
             metaLine
@@ -202,42 +208,72 @@ private struct QuickNoteTimelineRow: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .frame(maxWidth: 560, alignment: .leading)
+        .frame(maxWidth: usesWorkspaceCard ? .infinity : 560, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(hasProject ? Color.appPrimarySurfaceSubtle : Color(.secondarySystemGroupedBackground))
+                .fill(Color(.secondarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(hasProject ? Color.appPrimaryAction.opacity(0.16) : Color.appStrokeSeparator, lineWidth: 0.5)
+                .stroke(Color.appStrokeSeparator, lineWidth: 0.5)
         )
     }
 
     private var metaLine: some View {
-        HStack(spacing: 6) {
-            if hasProject {
-                Label(projectName, systemImage: "building.2")
-                    .labelStyle(.titleAndIcon)
-                    .lineLimit(1)
+        VStack(alignment: .trailing, spacing: 4) {
+            HStack(spacing: 8) {
+                Spacer(minLength: 0)
+                Text(timeText)
+                if isSaveConfirmed {
+                    Label(AppLocalization.string("quick_note_saved_status"), systemImage: "checkmark")
+                        .foregroundStyle(Color.appPrimaryAction)
+                }
             }
-            if !note.attachments.isEmpty {
-                Text(QuickNoteText.attachmentSummary(note.attachments))
-                    .lineLimit(1)
+
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .center, spacing: 10) {
+                    projectAndAttachmentDetails
+                    Spacer(minLength: 8)
+                    organizeButton
+                }
+                VStack(alignment: .trailing, spacing: 4) {
+                    projectAndAttachmentDetails
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    organizeButton
+                }
             }
-            Text(timeText)
-            Button {
-                onConvert()
-            } label: {
-                Image(systemName: "arrow.triangle.branch")
-                    .font(.caption2.weight(.semibold))
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(AppLocalization.string("quick_note_timeline_convert_record_label"))
-            .accessibilityHint(AppLocalization.string("quick_note_timeline_convert_accessibility_hint"))
         }
-        .font(.caption2)
+        .font(.caption)
         .foregroundStyle(.secondary)
         .frame(maxWidth: 560, alignment: .trailing)
+    }
+
+    private var projectAndAttachmentDetails: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(
+                hasProject ? projectName : AppLocalization.string("quick_note_composer_no_project_option"),
+                systemImage: "building.2"
+            )
+            .fixedSize(horizontal: false, vertical: true)
+            if !note.attachments.isEmpty {
+                Text(QuickNoteText.attachmentSummary(note.attachments))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private var organizeButton: some View {
+        Button(action: onConvert) {
+            Label(AppLocalization.string("quick_note_organize_button"), systemImage: "arrow.triangle.branch")
+                .font(.caption.weight(.semibold))
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(minHeight: 44)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(Color.appPrimaryAction)
+        .accessibilityLabel(AppLocalization.string("quick_note_organize_button"))
+        .accessibilityHint(AppLocalization.string("quick_note_timeline_convert_accessibility_hint"))
+        .accessibilityIdentifier("quick-note-organize")
     }
 
     private var expandedAudioAttachment: QuickNoteAttachment? {

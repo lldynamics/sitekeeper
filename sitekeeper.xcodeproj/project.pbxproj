@@ -840,6 +840,22 @@
 		FFB3FC794797380D241B7D5B /* BackupArchiveTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0232ED8C0C68286775CD74D7 /* BackupArchiveTypes.swift */; };
 		FFC0AC2062E1C596E1FBF413 /* SQLiteCandidateManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3C416821FC8C1937284CEB /* SQLiteCandidateManifest.swift */; };
 		FFD8637993A9F844D3295DC3 /* StorageCleanupCenterView+ScanFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B1F4F3A7416C263AD6867F /* StorageCleanupCenterView+ScanFlow.swift */; };
+		77A7A58C1A1FC50EBD6A1DB7 /* WatermarkCameraBatchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CD166942B1F2C5CA258397B /* WatermarkCameraBatchService.swift */; };
+		2AE45C67BFCAFAD5D017FC72 /* WatermarkCameraDraftStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D784E284176C9C0275807B0 /* WatermarkCameraDraftStorage.swift */; };
+		FD91A6A2CF6BC45F96B12763 /* WatermarkCameraLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = 60912A06BE86AE16706D1CCE /* WatermarkCameraLayout.swift */; };
+		644D752222D980EF542EBFC9 /* WatermarkCameraLocation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A8D63E67E6A2FDB6B0505A7 /* WatermarkCameraLocation.swift */; };
+		52BD9357F881B3C5C37D0DF0 /* WatermarkCameraStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = F99641782AEF6CAED2677D17 /* WatermarkCameraStyle.swift */; };
+		CEB49064D1178ADF4B241DED /* WatermarkDraftGallery.swift in Sources */ = {isa = PBXBuildFile; fileRef = 946AD821729F06D806EFB7E4 /* WatermarkDraftGallery.swift */; };
+		00FA315B83918BA6D5094F37 /* WatermarkPhotoAnnotationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FDE856F05E744C5548AEC2C /* WatermarkPhotoAnnotationView.swift */; };
+		B1F4FE314FE6742F37B3F816 /* WatermarkRectificationSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = 04F3B16DBCC10D6B39467DE6 /* WatermarkRectificationSheet.swift */; };
+		1BCA9B24E690D61EAB3419A2 /* WatermarkCameraBatchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 195C86821077D913C933F6C3 /* WatermarkCameraBatchTests.swift */; };
+		68B73039560B355C0E924B7E /* WatermarkCameraCaptureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BF225A499FB08A782CFB1A17 /* WatermarkCameraCaptureTests.swift */; };
+		386CE8FCD203C544C5338B81 /* WatermarkCameraDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32AA3DD96BF26FF8AEE5F57C /* WatermarkCameraDraftTests.swift */; };
+		B48215B871296B8536BED22C /* WatermarkCameraLayoutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F77385FAAB9D7847D6A5ADB /* WatermarkCameraLayoutTests.swift */; };
+		F7D6F876B350FEB947CCFBA2 /* WatermarkPhotoAnnotationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 327849C0B324C21C72E923A8 /* WatermarkPhotoAnnotationTests.swift */; };
+		E4F8E705C45E338B0F5D83D5 /* WatermarkCameraTestFixture.swift in Sources */ = {isa = PBXBuildFile; fileRef = 89A2E259A5D3A7862DCA802E /* WatermarkCameraTestFixture.swift */; };
+		083C064708DA15D502484750 /* WatermarkCameraUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3EC6D1023759482B86CF70 /* WatermarkCameraUITests.swift */; };
+		10F000DE7DACC2AD03C85574 /* WatermarkRectificationCapturePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5CF14B78E23961BC5936872 /* WatermarkRectificationCapturePicker.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1722,6 +1738,22 @@
 		FF85C28D1FEFCDA44151D7F8 /* LegacyDateProvenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDateProvenance.swift; sourceTree = "<group>"; };
 		FFA0F026C1BB3FC296C7BB64 /* BackupErrorRecoveryTests+MetadataValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupErrorRecoveryTests+MetadataValidation.swift"; sourceTree = "<group>"; };
 		FFFA2CCEE55E9EC9A8B66CE7 /* BackupView+CloudTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupView+CloudTasks.swift"; sourceTree = "<group>"; };
+		9CD166942B1F2C5CA258397B /* WatermarkCameraBatchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraBatchService.swift; sourceTree = "<group>"; };
+		2D784E284176C9C0275807B0 /* WatermarkCameraDraftStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraDraftStorage.swift; sourceTree = "<group>"; };
+		60912A06BE86AE16706D1CCE /* WatermarkCameraLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraLayout.swift; sourceTree = "<group>"; };
+		3A8D63E67E6A2FDB6B0505A7 /* WatermarkCameraLocation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraLocation.swift; sourceTree = "<group>"; };
+		F99641782AEF6CAED2677D17 /* WatermarkCameraStyle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraStyle.swift; sourceTree = "<group>"; };
+		946AD821729F06D806EFB7E4 /* WatermarkDraftGallery.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkDraftGallery.swift; sourceTree = "<group>"; };
+		4FDE856F05E744C5548AEC2C /* WatermarkPhotoAnnotationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkPhotoAnnotationView.swift; sourceTree = "<group>"; };
+		04F3B16DBCC10D6B39467DE6 /* WatermarkRectificationSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkRectificationSheet.swift; sourceTree = "<group>"; };
+		195C86821077D913C933F6C3 /* WatermarkCameraBatchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraBatchTests.swift; sourceTree = "<group>"; };
+		BF225A499FB08A782CFB1A17 /* WatermarkCameraCaptureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraCaptureTests.swift; sourceTree = "<group>"; };
+		32AA3DD96BF26FF8AEE5F57C /* WatermarkCameraDraftTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraDraftTests.swift; sourceTree = "<group>"; };
+		4F77385FAAB9D7847D6A5ADB /* WatermarkCameraLayoutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraLayoutTests.swift; sourceTree = "<group>"; };
+		327849C0B324C21C72E923A8 /* WatermarkPhotoAnnotationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkPhotoAnnotationTests.swift; sourceTree = "<group>"; };
+		89A2E259A5D3A7862DCA802E /* WatermarkCameraTestFixture.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraTestFixture.swift; sourceTree = "<group>"; };
+		2D3EC6D1023759482B86CF70 /* WatermarkCameraUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraUITests.swift; sourceTree = "<group>"; };
+		E5CF14B78E23961BC5936872 /* WatermarkRectificationCapturePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkRectificationCapturePicker.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -2623,6 +2655,11 @@
 				7B12FF8822A30A05B12994A2 /* UnitDisplayTests.swift */,
 				E7E1175873D8AE2DBEDC5563 /* WarehouseDecimalTests.swift */,
 				E7AD13892B4C5CE5FF5DB057 /* WatermarkCameraTests.swift */,
+				327849C0B324C21C72E923A8 /* WatermarkPhotoAnnotationTests.swift */,
+				4F77385FAAB9D7847D6A5ADB /* WatermarkCameraLayoutTests.swift */,
+				32AA3DD96BF26FF8AEE5F57C /* WatermarkCameraDraftTests.swift */,
+				BF225A499FB08A782CFB1A17 /* WatermarkCameraCaptureTests.swift */,
+				195C86821077D913C933F6C3 /* WatermarkCameraBatchTests.swift */,
 				9F6D1A05442DB59741BBFEF8 /* WidgetDataBuilderTests.swift */,
 				198FC6B9C75BEFA0618C70BA /* WorkflowPerformanceTests.swift */,
 				813186C0678CF9AD0D882A72 /* ZipArchiveInteropTests.swift */,
@@ -2859,6 +2896,7 @@
 				E3235EB0E5500E481AE15DD5 /* LinkedWorkflowUITests.swift */,
 				EB2A4FD1D9C6D5CB90939793 /* PDFPreviewUITests.swift */,
 				817B7033B491D538342655B5 /* PresentationPreferenceUITests.swift */,
+				2D3EC6D1023759482B86CF70 /* WatermarkCameraUITests.swift */,
 				017E3F1DD0AD52E84D24CE2A /* RepositoryContactUITests.swift */,
 				B24798F78D558373AACB72EC /* RepositoryFinancialUITests.swift */,
 				C500AAE3D777B3290286CEE8 /* RepositoryLaborUITests.swift */,
@@ -3108,6 +3146,16 @@
 			isa = PBXGroup;
 			children = (
 				AA47B9C6E34B25511E9C16BC /* WatermarkCameraCaptureStore.swift */,
+				E5CF14B78E23961BC5936872 /* WatermarkRectificationCapturePicker.swift */,
+				89A2E259A5D3A7862DCA802E /* WatermarkCameraTestFixture.swift */,
+				04F3B16DBCC10D6B39467DE6 /* WatermarkRectificationSheet.swift */,
+				4FDE856F05E744C5548AEC2C /* WatermarkPhotoAnnotationView.swift */,
+				946AD821729F06D806EFB7E4 /* WatermarkDraftGallery.swift */,
+				F99641782AEF6CAED2677D17 /* WatermarkCameraStyle.swift */,
+				3A8D63E67E6A2FDB6B0505A7 /* WatermarkCameraLocation.swift */,
+				60912A06BE86AE16706D1CCE /* WatermarkCameraLayout.swift */,
+				2D784E284176C9C0275807B0 /* WatermarkCameraDraftStorage.swift */,
+				9CD166942B1F2C5CA258397B /* WatermarkCameraBatchService.swift */,
 				660FAE2ED50E20B82FDA9629 /* WatermarkCameraExportCoordinator.swift */,
 				A43FEDF1681B81EBABB328E9 /* WatermarkCameraInfrastructure.swift */,
 				E2CC137605CE8BAF07B87EB9 /* WatermarkCameraLogDraftCoordinator.swift */,
@@ -4161,6 +4209,16 @@
 				2EE453CE21979A9251C75586 /* WallAreaView.swift in Sources */,
 				1AABD291E31BC2808FF406E1 /* WarehouseLedgerDraftView.swift in Sources */,
 				3B1761E91AC501F037521836 /* WatermarkCameraCaptureStore.swift in Sources */,
+				10F000DE7DACC2AD03C85574 /* WatermarkRectificationCapturePicker.swift in Sources */,
+				E4F8E705C45E338B0F5D83D5 /* WatermarkCameraTestFixture.swift in Sources */,
+				B1F4FE314FE6742F37B3F816 /* WatermarkRectificationSheet.swift in Sources */,
+				00FA315B83918BA6D5094F37 /* WatermarkPhotoAnnotationView.swift in Sources */,
+				CEB49064D1178ADF4B241DED /* WatermarkDraftGallery.swift in Sources */,
+				52BD9357F881B3C5C37D0DF0 /* WatermarkCameraStyle.swift in Sources */,
+				644D752222D980EF542EBFC9 /* WatermarkCameraLocation.swift in Sources */,
+				FD91A6A2CF6BC45F96B12763 /* WatermarkCameraLayout.swift in Sources */,
+				2AE45C67BFCAFAD5D017FC72 /* WatermarkCameraDraftStorage.swift in Sources */,
+				77A7A58C1A1FC50EBD6A1DB7 /* WatermarkCameraBatchService.swift in Sources */,
 				FBDA74736744BB53F299929C /* WatermarkCameraExportCoordinator.swift in Sources */,
 				A5B886653A0C16887E6FFABC /* WatermarkCameraInfrastructure.swift in Sources */,
 				ABDA3BAA4F1B726AC2A4408E /* WatermarkCameraLogDraftCoordinator.swift in Sources */,
@@ -4335,6 +4393,11 @@
 				C84F2349EC274810C90AD9F1 /* UnitDisplayTests.swift in Sources */,
 				0FA63B80E95FA86D024D9CD3 /* WarehouseDecimalTests.swift in Sources */,
 				CA3ADC0DA41E8279408CABA1 /* WatermarkCameraTests.swift in Sources */,
+				F7D6F876B350FEB947CCFBA2 /* WatermarkPhotoAnnotationTests.swift in Sources */,
+				B48215B871296B8536BED22C /* WatermarkCameraLayoutTests.swift in Sources */,
+				386CE8FCD203C544C5338B81 /* WatermarkCameraDraftTests.swift in Sources */,
+				68B73039560B355C0E924B7E /* WatermarkCameraCaptureTests.swift in Sources */,
+				1BCA9B24E690D61EAB3419A2 /* WatermarkCameraBatchTests.swift in Sources */,
 				3BD18FFAB6F51F52E9DD9316 /* WidgetDataBuilderTests.swift in Sources */,
 				6154FF8F1C1F0D50906449C9 /* WorkflowPerformanceTests.swift in Sources */,
 				57A9F7876CCB3BD5B26EE440 /* ZipArchiveInteropTests.swift in Sources */,
@@ -4353,6 +4416,7 @@
 				76F2B7289CF20E92F62E9EAA /* LinkedWorkflowUITests.swift in Sources */,
 				203BB1C95793551E55CCD9B9 /* PDFPreviewUITests.swift in Sources */,
 				767831A4EDC7F4012F0E539B /* PresentationPreferenceUITests.swift in Sources */,
+				083C064708DA15D502484750 /* WatermarkCameraUITests.swift in Sources */,
 				BB2191EEE0B9458A5EAA6CFE /* RepositoryContactUITests.swift in Sources */,
 				F3C6F68C1B1D03EA10732B19 /* RepositoryFinancialUITests.swift in Sources */,
 				395960F2DE125B17A15D182F /* RepositoryLaborUITests.swift in Sources */,

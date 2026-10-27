@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import UIKit
 import AVFoundation
+import ImageIO
 
 struct WatermarkCameraCaptureGenerationGate {
     private(set) var activeGeneration: UUID?
@@ -21,6 +22,16 @@ struct WatermarkCameraCaptureGenerationGate {
     }
 }
 
+struct WatermarkCameraControls: Sendable {
+    var zoom: CGFloat = 1
+    var maximumZoom: CGFloat = 1
+    var supportsFlash = false
+    var supportsTorch = false
+    var torchEnabled = false
+    var isReady = false
+    var message: String?
+}
+
 /// `AVCaptureSession` and all mutable capture state are confined to `sessionQueue`.
 /// AVFoundation's delegate only extracts immutable `Data` and error text before re-entering
 /// that queue. The unchecked marker bridges the Objective-C delegate API; queue preconditions
@@ -37,6 +48,7 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
         var photoData: [Data] = []
     }
 
+    @Published private(set) var controls = WatermarkCameraControls()
     let session = AVCaptureSession()
     private let photoOutput = AVCapturePhotoOutput()
     private let sessionQueue = DispatchQueue(label: "watermark.camera.session")
@@ -46,14 +58,132 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
     private var configurationErrorMessage: String?
     private var didAttemptConfiguration = false
     private var isConfigured = false
+    private var cameraDevice: AVCaptureDevice?
+    private var wantsRunning = false
+    private var rotationAngle: CGFloat = 90
+    private var queueControls = WatermarkCameraControls()
+    private var notificationTokens: [NSObjectProtocol] = []
+
+    override init() {
+        super.init()
+        let center = NotificationCenter.default
+        notificationTokens.append(center.addObserver(forName: AVCaptureSession.wasInterruptedNotification, object: session, queue: nil) { [weak self] _ in
+            self?.sessionQueue.async { [weak self] in self?.handleInterruption(message: AppLocalization.string("相机暂时被占用，恢复后可继续拍摄")) }
+        })
+        notificationTokens.append(center.addObserver(forName: AVCaptureSession.interruptionEndedNotification, object: session, queue: nil) { [weak self] _ in
+            self?.sessionQueue.async { [weak self] in self?.resumeIfNeeded() }
+        })
+        notificationTokens.append(center.addObserver(forName: AVCaptureSession.runtimeErrorNotification, object: session, queue: nil) { [weak self] _ in
+            self?.sessionQueue.async { [weak self] in
+                self?.handleInterruption(message: AppLocalization.string("相机发生中断，正在尝试恢复"))
+                self?.resumeIfNeeded()
+            }
+        })
+    }
+
+    deinit {
+        for token in notificationTokens { NotificationCenter.default.removeObserver(token) }
+    }
+
+    private func publishControls() {
+        dispatchPrecondition(condition: .onQueue(sessionQueue))
+        let state = queueControls
+        Task { @MainActor [weak self] in self?.controls = state }
+    }
+
+    private func handleInterruption(message: String) {
+        dispatchPrecondition(condition: .onQueue(sessionQueue))
+        queueControls.isReady = false
+        queueControls.message = message
+        publishControls()
+        if let capture = activeCapture {
+            finish(generation: capture.generation, capture: capture, error: message)
+        }
+    }
+
+    private func resumeIfNeeded() {
+        dispatchPrecondition(condition: .onQueue(sessionQueue))
+        guard wantsRunning, isConfigured, !session.isInterrupted else { return }
+        if !session.isRunning { session.startRunning() }
+        queueControls.isReady = session.isRunning
+        queueControls.message = session.isRunning ? nil : AppLocalization.string("相机未能恢复，请点重试")
+        publishControls()
+    }
+
+    func setRotationAngle(_ angle: CGFloat) {
+        sessionQueue.async { [weak self] in self?.rotationAngle = angle }
+    }
+
+    func setZoom(_ zoom: CGFloat) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.cameraDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                device.videoZoomFactor = min(max(zoom, device.minAvailableVideoZoomFactor), self.queueControls.maximumZoom)
+                self.queueControls.zoom = device.videoZoomFactor
+                device.unlockForConfiguration()
+                self.publishControls()
+            } catch { self.reportControlError(error) }
+        }
+    }
+
+    func setTorch(_ enabled: Bool) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.cameraDevice, device.hasTorch, device.isTorchAvailable else { return }
+            do {
+                try device.lockForConfiguration()
+                device.torchMode = enabled ? .on : .off
+                device.unlockForConfiguration()
+                self.queueControls.torchEnabled = enabled
+                self.publishControls()
+            } catch { self.reportControlError(error) }
+        }
+    }
+
+    func focus(at point: CGPoint, exposureBias: Float? = nil) {
+        sessionQueue.async { [weak self] in
+            guard let self, let device = self.cameraDevice else { return }
+            do {
+                try device.lockForConfiguration()
+                if device.isFocusPointOfInterestSupported, device.isFocusModeSupported(.autoFocus) {
+                    device.focusPointOfInterest = point
+                    device.focusMode = .autoFocus
+                }
+                if device.isExposurePointOfInterestSupported, device.isExposureModeSupported(.continuousAutoExposure) {
+                    device.exposurePointOfInterest = point
+                    device.exposureMode = .continuousAutoExposure
+                }
+                if let exposureBias {
+                    device.setExposureTargetBias(min(max(exposureBias, device.minExposureTargetBias), device.maxExposureTargetBias))
+                }
+                device.unlockForConfiguration()
+            } catch { self.reportControlError(error) }
+        }
+    }
+
+    private func reportControlError(_ error: Error) {
+        queueControls.message = String(format: AppLocalization.string("相机设置失败：%@"), error.localizedDescription)
+        publishControls()
+    }
 
     func start(completion: @escaping @MainActor @Sendable (String?) -> Void) {
         sessionQueue.async { [weak self] in
             guard let self else { return }
+            self.wantsRunning = true
+            if !self.isConfigured, self.didAttemptConfiguration {
+                self.session.beginConfiguration()
+                for input in self.session.inputs { self.session.removeInput(input) }
+                for output in self.session.outputs { self.session.removeOutput(output) }
+                self.session.commitConfiguration()
+                self.didAttemptConfiguration = false
+            }
             self.configureIfNeeded()
             if self.isConfigured, !self.session.isRunning {
                 self.session.startRunning()
             }
+            self.queueControls.isReady = self.session.isRunning && !self.session.isInterrupted
+            self.queueControls.message = self.configurationErrorMessage
+            self.publishControls()
             let errorMessage = self.configurationErrorMessage
             Task { @MainActor in
                 completion(errorMessage)
@@ -62,8 +192,17 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
     }
 
     func stop() {
-        sessionQueue.async { [weak self] in
-            guard let self else { return }
+        sessionQueue.async { [self] in
+            self.wantsRunning = false
+            if let device = self.cameraDevice, device.hasTorch {
+                if (try? device.lockForConfiguration()) != nil {
+                    device.torchMode = .off
+                    device.unlockForConfiguration()
+                }
+            }
+            self.queueControls.torchEnabled = false
+            self.queueControls.isReady = false
+            self.publishControls()
             self.generationGate.invalidate()
             self.activeCapture = nil
             self.generationByPhotoSettingsID.removeAll()
@@ -90,7 +229,7 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
                 )
                 return
             }
-            guard self.activeCapture == nil else {
+            guard self.session.isRunning, !self.session.isInterrupted, self.activeCapture == nil else {
                 self.deliver(
                     photoData: [],
                     capturedAt: Date(),
@@ -102,7 +241,7 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
             let generation = self.generationGate.begin()
             self.activeCapture = ActiveCapture(
                 generation: generation,
-                targetCount: max(1, count),
+                targetCount: min(5, max(1, count)),
                 capturedAt: Date(),
                 flashMode: flashMode,
                 completion: completion
@@ -164,6 +303,11 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
         session.commitConfiguration()
         configurationErrorMessage = nil
         isConfigured = true
+        cameraDevice = camera
+        queueControls.maximumZoom = max(1, min(6, camera.maxAvailableVideoZoomFactor))
+        queueControls.supportsFlash = camera.hasFlash
+        queueControls.supportsTorch = camera.hasTorch && camera.isTorchAvailable
+        publishControls()
     }
 
     private func captureOne(generation: UUID) {
@@ -171,6 +315,9 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
         guard generationGate.accepts(generation),
               let activeCapture,
               activeCapture.generation == generation else { return }
+        if let connection = photoOutput.connection(with: .video), connection.isVideoRotationAngleSupported(rotationAngle) {
+            connection.videoRotationAngle = rotationAngle
+        }
         let settings = AVCapturePhotoSettings()
         if photoOutput.supportedFlashModes.contains(activeCapture.flashMode) {
             settings.flashMode = activeCapture.flashMode
@@ -181,16 +328,13 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
     }
 
     private func bestSupportedPhotoDimensions(from format: AVCaptureDevice.Format) -> CMVideoDimensions? {
-        var result: CMVideoDimensions?
-        var maxPixelCount = 0
-        for dimensions in format.supportedMaxPhotoDimensions {
-            let pixelCount = Int(dimensions.width) * Int(dimensions.height)
-            if pixelCount > maxPixelCount {
-                maxPixelCount = pixelCount
-                result = dimensions
-            }
+        let dimensions = format.supportedMaxPhotoDimensions
+        let bounded = dimensions.filter { Int64($0.width) * Int64($0.height) <= 12_500_000 }
+        return (bounded.isEmpty ? dimensions : bounded).min {
+            let left = Int64($0.width) * Int64($0.height)
+            let right = Int64($1.width) * Int64($1.height)
+            return bounded.isEmpty ? left < right : left > right
         }
-        return result
     }
 
     func photoOutput(_ output: AVCapturePhotoOutput, didFinishProcessingPhoto photo: AVCapturePhoto, error: Error?) {
@@ -204,6 +348,15 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
         }
         sessionQueue.async { [weak self] in
             self?.handlePhotoResult(settingsID: settingsID, photoData: photoData, errorMessage: errorMessage)
+        }
+    }
+
+    func photoOutput(_ output: AVCapturePhotoOutput, didFinishCaptureFor resolvedSettings: AVCaptureResolvedPhotoSettings, error: Error?) {
+        guard let error else { return }
+        let settingsID = resolvedSettings.uniqueID
+        let message = String(format: AppLocalization.string("wm_camera_capture_failed_format"), error.localizedDescription)
+        sessionQueue.async { [weak self] in
+            self?.handlePhotoResult(settingsID: settingsID, photoData: nil, errorMessage: message)
         }
     }
 
@@ -259,8 +412,19 @@ final class WatermarkCameraSession: NSObject, ObservableObject, AVCapturePhotoCa
         completion: @escaping Completion
     ) {
         dispatchPrecondition(condition: .onQueue(sessionQueue))
-        Task { @MainActor in
-            completion(photoData.compactMap { UIImage(data: $0) }, capturedAt, error)
+        // Decode away from the main thread and bound peak pixel memory for repeated batches.
+        let images = photoData.compactMap { data -> UIImage? in
+            autoreleasepool {
+                guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                      let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                        kCGImageSourceCreateThumbnailFromImageAlways: true,
+                        kCGImageSourceCreateThumbnailWithTransform: true,
+                        kCGImageSourceThumbnailMaxPixelSize: 4096
+                      ] as CFDictionary) else { return nil }
+                return UIImage(cgImage: image)
+            }
         }
+        let resultError = images.count == photoData.count ? error : (error ?? AppLocalization.string("wm_camera_corrupted_photo_data_error"))
+        Task { @MainActor in completion(images, capturedAt, resultError) }
     }
 }

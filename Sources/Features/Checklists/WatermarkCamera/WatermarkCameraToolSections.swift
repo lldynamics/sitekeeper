@@ -86,3 +86,38 @@ private struct WatermarkTemplateChip: View {
             .clipShape(Capsule())
     }
 }
+
+struct WatermarkEngineeringSection: View {
+    let template: CameraWatermarkTemplate
+    @Binding var workSection: String
+    @Binding var floor: String
+    @Binding var process: String
+    @Binding var issueNumber: String
+    @Binding var completedQuantity: String
+    @Binding var receiptNote: String
+
+    var body: some View {
+        Section {
+            TextField(AppLocalization.string("施工段（如 1 号楼东区）"), text: $workSection)
+            if template != .receipt {
+                TextField(AppLocalization.string("楼层/部位（如 3 层走廊）"), text: $floor)
+            }
+            switch template {
+            case .constructionLog:
+                TextField(AppLocalization.string("施工工序（如 桥架安装）"), text: $process)
+            case .rectification:
+                TextField(AppLocalization.string("问题编号（如 ZG-001）"), text: $issueNumber)
+                TextField(AppLocalization.string("整改工序/内容"), text: $process)
+            case .paymentProof:
+                TextField(AppLocalization.string("完成工程量（请填写数值与单位）"), text: $completedQuantity)
+                TextField(AppLocalization.string("施工工序"), text: $process)
+            case .receipt:
+                TextField(AppLocalization.string("票据说明（如 材料采购收据）"), text: $receiptNote)
+            }
+        } header: {
+            Label(String(format: AppLocalization.string("%@信息"), template.displayName), systemImage: template.icon)
+        } footer: {
+            Text(AppLocalization.string("按现场实际填写；未填写的项目会在完整水印中标明。"))
+        }
+    }
+}

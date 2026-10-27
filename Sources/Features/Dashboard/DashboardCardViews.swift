@@ -170,7 +170,7 @@ struct DashboardProjectChip: View {
                 .appListSecondaryTextLayout()
         }
         .frame(minWidth: minChipWidth, maxWidth: maxChipWidth, alignment: .leading)
-        .frame(minHeight: 64, alignment: .topLeading)
+        .frame(minHeight: 64, alignment: .leading)
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight)
         .background(

@@ -1,9 +1,9 @@
 import SwiftUI
 
 private struct DataManagementMobileScrollOffsetPreferenceKey: PreferenceKey {
-    static let defaultValue: CGFloat = 0
+    static let defaultValue: CGFloat? = nil
 
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+    static func reduce(value: inout CGFloat?, nextValue: () -> CGFloat?) {
         value = nextValue()
     }
 }
@@ -22,12 +22,13 @@ struct DataManagementMobileScrollProbeRow: View {
                 GeometryReader { proxy in
                     Color.clear.preference(
                         key: DataManagementMobileScrollOffsetPreferenceKey.self,
-                        value: proxy.frame(in: .global).minY
+                        // Header resizing must not look like scrolling the embedded content.
+                        value: proxy.frame(in: .scrollView(axis: .vertical)).minY
                     )
                 }
             }
             .onPreferenceChange(DataManagementMobileScrollOffsetPreferenceKey.self) { minY in
-                guard let onOffsetChange else { return }
+                guard let minY, let onOffsetChange else { return }
                 if let baselineMinY {
                     let offset = minY - baselineMinY
                     guard lastReportedOffset.isInfinite || abs(offset - lastReportedOffset) > 1 else { return }

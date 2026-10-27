@@ -35,10 +35,13 @@ extension CalculatorResultCard {
         let project = store.projects.first { $0.id == request.projectId }
         let confirmationTitle = request.kind == .materialSheet
             ? calculatorLoc("核对材料单草稿") : calculatorLoc("核对报价项")
+        let reviewNotice = request.materialDraft == nil
+            ? calculatorLoc("初始数量为 1 项，计算结果保留在备注中。请在生成后核对实际数量、单位和单价。")
+            : calculatorLoc("已带入计算用量，请核对数量、单位和单价。")
         return AppBusinessFormSheet(
             title: confirmationTitle,
             primaryActionTitle: calculatorLoc("确认生成"),
-            isPrimaryActionDisabled: project == nil,
+            isPrimaryActionDisabled: project == nil || request.materialDraft?.isValid == false,
             onCancel: { pendingProjectDraft = nil },
             onPrimaryAction: { confirmProjectDraft(request) }
         ) {
@@ -50,15 +53,19 @@ extension CalculatorResultCard {
                     Text(calculatorLoc("已选择的工程已不存在，请重新选择。"))
                         .foregroundStyle(.appWarning)
                 }
-                LabeledContent(calculatorLoc("名称"), value: title)
-                LabeledContent(calculatorLoc("数量"), value: "1")
-                LabeledContent(calculatorLoc("单位"), value: calculatorLoc("项"))
+                LabeledContent(calculatorLoc("名称"), value: request.materialDraft?.name ?? title)
+                LabeledContent(calculatorLoc("数量"), value: request.materialDraft?.quantity.wireText ?? "1")
+                LabeledContent(calculatorLoc("单位"), value: request.materialDraft?.unit ?? calculatorLoc("项"))
                 LabeledContent(calculatorLoc("单价"), value: calculatorLoc("待填写"))
-                Text(calculatorLoc("初始数量为 1 项，计算结果保留在备注中。请在生成后核对实际数量、单位和单价。"))
+                Text(reviewNotice)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("calculator-draft-review-notice")
+                if request.materialDraft?.isValid == false {
+                    Text(calculatorLoc("材料名称、数量或单位无效，请重新计算。"))
+                        .foregroundStyle(.appWarning)
+                }
             }
             Section(calculatorLoc("备注")) {
                 Text(copyText)
@@ -75,6 +82,18 @@ enum CalculatorProjectSelection {
     }
 }
 
+struct CalculatorMaterialDraft: Equatable, Sendable {
+    let name: String
+    let quantity: QuantityValue
+    let unit: String
+
+    var isValid: Bool {
+        !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
+        quantity.isPositive &&
+        !unit.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+}
+
 struct CalculatorProjectDraftRequest: Identifiable {
     enum Kind: Equatable, Sendable {
         case materialSheet
@@ -84,6 +103,13 @@ struct CalculatorProjectDraftRequest: Identifiable {
     let id = UUID()
     let kind: Kind
     let projectId: UUID
+    let materialDraft: CalculatorMaterialDraft?
+
+    init(kind: Kind, projectId: UUID, materialDraft: CalculatorMaterialDraft? = nil) {
+        self.kind = kind
+        self.projectId = projectId
+        self.materialDraft = kind == .materialSheet ? materialDraft : nil
+    }
 }
 
 struct CalculatorSavedProjectDestination: Identifiable, Hashable {

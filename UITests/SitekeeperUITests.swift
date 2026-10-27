@@ -74,10 +74,16 @@ extension SitekeeperUITests {
         tapPrimaryModule(app, name: "随手记")
 
         XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["发送随手记"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["从相册添加媒体"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["quick-note-publish"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["quick-note-project-selector"].exists)
         XCTAssertTrue(app.buttons["拍照添加"].exists)
         XCTAssertTrue(app.buttons["录制语音"].exists)
+        if !app.buttons["从相册添加媒体"].isHittable {
+            let more = app.buttons["quick-note-more-tools"]
+            XCTAssertTrue(more.waitForExistence(timeout: 5))
+            more.tap()
+        }
+        XCTAssertTrue(app.buttons["从相册添加媒体"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["quick-note-add-drawing"].exists)
         XCTAssertTrue(app.buttons["导入文件附件"].exists)
     }
@@ -87,7 +93,13 @@ extension SitekeeperUITests {
         tapPrimaryModule(app, name: "随手记")
 
         let drawingButton = app.buttons["quick-note-add-drawing"]
+        if !drawingButton.isHittable {
+            let more = app.buttons["quick-note-more-tools"]
+            XCTAssertTrue(more.waitForExistence(timeout: 5))
+            more.tap()
+        }
         XCTAssertTrue(drawingButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(drawingButton.isHittable)
         drawingButton.tap()
 
         XCTAssertTrue(app.navigationBars["手绘"].waitForExistence(timeout: 5))

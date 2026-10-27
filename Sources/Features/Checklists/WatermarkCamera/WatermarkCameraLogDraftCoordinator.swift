@@ -19,10 +19,14 @@ struct WatermarkCameraLogDraftCoordinator {
               let data = todoSeedData(for: photo) else { return nil }
         return DailyLogSeedPhoto(
             data: data,
-            note: photoNote(capturedAt: photo.capturedAt),
-            tag: PhotoTag(rawValue: tag.trimmingCharacters(in: .whitespacesAndNewlines)) ?? .general,
+            note: Self.photoNote(for: photo),
+            tag: PhotoTag(rawValue: photo.context.tag.trimmingCharacters(in: .whitespacesAndNewlines)) ?? .general,
             capturedAt: photo.capturedAt
         )
+    }
+
+    static func photoNote(for photo: WatermarkCapturedPhoto) -> String {
+        photo.context.lines(capturedAt: photo.capturedAt).joined(separator: "\n")
     }
 
     func photoNote(capturedAt: Date) -> String {

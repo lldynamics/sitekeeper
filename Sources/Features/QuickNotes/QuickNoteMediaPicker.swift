@@ -5,8 +5,11 @@ import UIKit
 struct QuickNoteAttachmentPickerBar: View {
     let projectName: String
     var mode: QuickNoteMediaPickerMode = .full
+    var onDiscardDraftRequest: (() -> Void)? = nil
+    var onActivityChange: (Bool) -> Void = { _ in }
     let onAppend: (QuickNoteAttachment) -> Void
     @State private var selectedMediaItems: [PhotosPickerItem] = []
+    @State private var showPhotoLibrary = false
     @State private var showCamera = false
     @State private var showDrawing = false
     @State private var showFileImporter = false
@@ -17,6 +20,13 @@ struct QuickNoteAttachmentPickerBar: View {
     @State private var mediaImportTask: Task<Void, Never>?
     @State private var fileImportTask: Task<Void, Never>?
     @State private var audioRecorder = QuickNoteAudioRecorder()
+
+    private var hasAttachmentActivity: Bool {
+        audioRecorder.isRecording || isImportingMedia || !selectedMediaItems.isEmpty || showPhotoLibrary || showCamera
+            || showDrawing || showFileImporter || isRequestingAudio
+    }
+
+    @State private var isRequestingAudio = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -44,6 +54,13 @@ struct QuickNoteAttachmentPickerBar: View {
             mediaImportTask?.cancel()
             mediaImportTask = Task { await importMediaItems(newItems) }
         }
+        .onChange(of: hasAttachmentActivity) { _, isActive in onActivityChange(isActive) }
+        .photosPicker(
+            isPresented: $showPhotoLibrary,
+            selection: $selectedMediaItems,
+            maxSelectionCount: 4,
+            matching: .any(of: [.images, .videos])
+        )
         .sheet(isPresented: $showCamera) {
             ImagePickerView(
                 sourceType: .camera,
@@ -72,54 +89,31 @@ struct QuickNoteAttachmentPickerBar: View {
             mediaImportTask = nil
             fileImportTask = nil
             audioRecorder.cancelRecording()
+            onActivityChange(false)
         }
     }
 
     @ViewBuilder
     private var toolRow: some View {
         if mode == .compact {
-            HStack(spacing: 7) {
-                PhotosPicker(selection: $selectedMediaItems, maxSelectionCount: 4, matching: .any(of: [.images, .videos])) {
-                    compactToolIcon("photo.stack")
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    compactCameraButton
+                    compactAudioButton
+                    compactPhotoButton
+                    compactDrawingButton
+                    compactFileButton
+                    if onDiscardDraftRequest != nil {
+                        compactMoreMenu(includesAttachmentActions: false)
+                    }
                 }
-                .disabled(isImportingMedia)
-                .accessibilityLabel(AppLocalization.string("quick_note_media_add_photo_accessibility_label"))
-                .accessibilityHint(AppLocalization.string("quick_note_media_add_photo_accessibility_hint"))
+                .fixedSize(horizontal: true, vertical: false)
 
-                Button { openCamera() } label: {
-                    compactToolIcon("camera")
+                HStack(alignment: .top, spacing: 12) {
+                    compactCameraButton
+                    compactAudioButton
+                    compactMoreMenu(includesAttachmentActions: true)
                 }
-                .accessibilityLabel(AppLocalization.string("quick_note_media_take_photo_accessibility_label"))
-                .accessibilityHint(AppLocalization.string("quick_note_media_take_photo_accessibility_hint"))
-
-                Button {
-                    Task { await toggleAudioRecording() }
-                } label: {
-                    compactToolIcon(audioRecorder.isRecording ? "stop.fill" : "waveform", isActive: audioRecorder.isRecording)
-                }
-                .accessibilityLabel(
-                    audioRecorder.isRecording
-                    ? AppLocalization.string("quick_note_media_stop_recording_accessibility_label")
-                    : AppLocalization.string("quick_note_media_start_recording_accessibility_label")
-                )
-                .accessibilityHint(
-                    audioRecorder.isRecording
-                    ? AppLocalization.string("quick_note_media_stop_recording_accessibility_hint")
-                    : AppLocalization.string("quick_note_media_start_recording_accessibility_hint")
-                )
-
-                Button { showDrawing = true } label: {
-                    compactToolIcon("pencil.and.outline")
-                }
-                .accessibilityIdentifier("quick-note-add-drawing")
-                .accessibilityLabel(AppLocalization.string("quick_note_media_add_drawing_accessibility_label"))
-                .accessibilityHint(AppLocalization.string("quick_note_media_add_drawing_accessibility_hint"))
-
-                Button { showFileImporter = true } label: {
-                    compactToolIcon("paperclip")
-                }
-                .accessibilityLabel(AppLocalization.string("quick_note_media_import_file_accessibility_label"))
-                .accessibilityHint(AppLocalization.string("quick_note_media_import_file_accessibility_hint"))
             }
             .buttonStyle(.plain)
         } else {
@@ -174,13 +168,112 @@ struct QuickNoteAttachmentPickerBar: View {
         }
     }
 
-    nonisolated private func compactToolIcon(_ systemImage: String, isActive: Bool = false) -> some View {
-        Image(systemName: systemImage)
-            .font(.body.weight(.semibold))
-            .symbolRenderingMode(.hierarchical)
-            .foregroundStyle(isActive ? Color.white : Color.appPrimaryAction)
-            .frame(width: 32, height: 30)
-            .background(isActive ? Color.appRisk : Color(.tertiarySystemGroupedBackground), in: Circle())
+    private var compactCameraButton: some View {
+        Button { openCamera() } label: {
+            compactToolLabel(AppLocalization.string("quick_note_media_tool_camera"), systemImage: "camera")
+        }
+        .accessibilityIdentifier("quick-note-take-photo")
+        .accessibilityLabel(AppLocalization.string("quick_note_media_take_photo_accessibility_label"))
+        .accessibilityHint(AppLocalization.string("quick_note_media_take_photo_accessibility_hint"))
+    }
+
+    private var compactAudioButton: some View {
+        Button {
+            Task { await toggleAudioRecording() }
+        } label: {
+            compactToolLabel(
+                AppLocalization.string(audioRecorder.isRecording ? "quick_note_media_tool_stop_record" : "quick_note_media_tool_voice"),
+                systemImage: audioRecorder.isRecording ? "stop.fill" : "waveform",
+                isActive: audioRecorder.isRecording
+            )
+        }
+        .accessibilityIdentifier("quick-note-record-audio")
+        .accessibilityLabel(
+            audioRecorder.isRecording
+            ? AppLocalization.string("quick_note_media_stop_recording_accessibility_label")
+            : AppLocalization.string("quick_note_media_start_recording_accessibility_label")
+        )
+        .accessibilityHint(
+            audioRecorder.isRecording
+            ? AppLocalization.string("quick_note_media_stop_recording_accessibility_hint")
+            : AppLocalization.string("quick_note_media_start_recording_accessibility_hint")
+        )
+    }
+
+    private var compactPhotoButton: some View {
+        Button { showPhotoLibrary = true } label: {
+            compactToolLabel(AppLocalization.string("quick_note_media_tool_photo"), systemImage: "photo.stack")
+        }
+        .disabled(isImportingMedia)
+        .accessibilityLabel(AppLocalization.string("quick_note_media_add_photo_accessibility_label"))
+        .accessibilityHint(AppLocalization.string("quick_note_media_add_photo_accessibility_hint"))
+    }
+
+    private var compactDrawingButton: some View {
+        Button { showDrawing = true } label: {
+            compactToolLabel(AppLocalization.string("quick_note_media_tool_drawing"), systemImage: "pencil.and.outline")
+        }
+        .accessibilityIdentifier("quick-note-add-drawing")
+        .accessibilityLabel(AppLocalization.string("quick_note_media_add_drawing_accessibility_label"))
+        .accessibilityHint(AppLocalization.string("quick_note_media_add_drawing_accessibility_hint"))
+    }
+
+    private var compactFileButton: some View {
+        Button { showFileImporter = true } label: {
+            compactToolLabel(AppLocalization.string("quick_note_media_tool_file"), systemImage: "paperclip")
+        }
+        .accessibilityLabel(AppLocalization.string("quick_note_media_import_file_accessibility_label"))
+        .accessibilityHint(AppLocalization.string("quick_note_media_import_file_accessibility_hint"))
+    }
+
+    private func compactMoreMenu(includesAttachmentActions: Bool) -> some View {
+        Menu {
+            if includesAttachmentActions {
+                Button { showPhotoLibrary = true } label: {
+                    Label(AppLocalization.string("quick_note_media_tool_photo"), systemImage: "photo.stack")
+                }
+                .disabled(isImportingMedia)
+                .accessibilityLabel(AppLocalization.string("quick_note_media_add_photo_accessibility_label"))
+                .accessibilityHint(AppLocalization.string("quick_note_media_add_photo_accessibility_hint"))
+
+                Button { showDrawing = true } label: {
+                    Label(AppLocalization.string("quick_note_media_tool_drawing"), systemImage: "pencil.and.outline")
+                }
+                .accessibilityIdentifier("quick-note-add-drawing")
+
+                Button { showFileImporter = true } label: {
+                    Label(AppLocalization.string("quick_note_media_tool_file"), systemImage: "paperclip")
+                }
+                .accessibilityLabel(AppLocalization.string("quick_note_media_import_file_accessibility_label"))
+                .accessibilityHint(AppLocalization.string("quick_note_media_import_file_accessibility_hint"))
+            }
+
+            if let onDiscardDraftRequest {
+                if includesAttachmentActions { Divider() }
+                Button(role: .destructive, action: onDiscardDraftRequest) {
+                    Label(AppLocalization.string("quick_note_composer_discard_draft_button"), systemImage: "trash")
+                }
+            }
+        } label: {
+            compactToolLabel(AppLocalization.string("quick_note_media_tool_more"), systemImage: "ellipsis")
+        }
+        .accessibilityLabel(AppLocalization.string("quick_note_media_more_accessibility_label"))
+        .accessibilityIdentifier("quick-note-more-tools")
+    }
+
+    nonisolated private func compactToolLabel(_ title: String, systemImage: String, isActive: Bool = false) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: systemImage)
+                .font(.title2.weight(.medium))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(isActive ? Color.appRisk : Color.appPrimaryAction)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(minWidth: 44, minHeight: 52)
+        .contentShape(Rectangle())
     }
 
     nonisolated private func toolLabel(_ title: String, systemImage: String) -> some View {
@@ -270,6 +363,9 @@ extension QuickNoteAttachmentPickerBar {
 
     @MainActor
     private func toggleAudioRecording() async {
+        guard !isRequestingAudio else { return }
+        isRequestingAudio = true
+        defer { isRequestingAudio = false }
         do {
             if let attachment = try await audioRecorder.toggleRecording() {
                 onAppend(attachment)

@@ -2,6 +2,8 @@ import SwiftUI
 
 enum CalculatorDestination: CaseIterable {
     case current, voltageDrop, conduitFill, trayFill, breakerSelect, concrete, rebar, tile, wallArea, unitConverter
+    case materialUsage, slopeHeight
+    case measurementCheck, linearCutting, circuitPhaseRecord
 
     var icon: String {
         switch self {
@@ -15,6 +17,11 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "square.grid.3x3"
         case .wallArea: "square.split.2x2"
         case .unitConverter: "arrow.left.arrow.right"
+        case .materialUsage: "paintbrush.fill"
+        case .slopeHeight: "angle"
+        case .measurementCheck: "ruler.fill"
+        case .linearCutting: "scissors"
+        case .circuitPhaseRecord: "list.bullet.rectangle"
         }
     }
 
@@ -30,6 +37,11 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "地砖排料"
         case .wallArea: "墙面面积"
         case .unitConverter: "单位换算"
+        case .materialUsage: "材料用量与损耗"
+        case .slopeHeight: "坡度与高差"
+        case .measurementCheck: "实测实量验收表"
+        case .linearCutting: "定尺下料"
+        case .circuitPhaseRecord: "回路负荷分相记录"
         }
     }
 
@@ -45,14 +57,19 @@ enum CalculatorDestination: CaseIterable {
         case .tile: "片数 / 箱数 / 胶粘剂"
         case .wallArea: "扣除门窗后净面积"
         case .unitConverter: "长度、面积、重量"
+        case .materialUsage: "面积、单耗、遍数 → 用量与采购量"
+        case .slopeHeight: "百分比、千分比、坡比与高差互算"
+        case .measurementCheck: "自设目标与偏差 → 测点检查记录"
+        case .linearCutting: "段长、数量、切缝 → 建议组合与余料"
+        case .circuitPhaseRecord: "回路电流、相别 → 分相汇总与记录"
         }
     }
 
     var section: String {
         switch self {
-        case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect: "电气"
-        case .concrete, .rebar, .tile, .wallArea: "土建"
-        case .unitConverter: "通用"
+        case .current, .voltageDrop, .conduitFill, .trayFill, .breakerSelect, .circuitPhaseRecord: "电气"
+        case .concrete, .rebar, .tile, .wallArea, .materialUsage, .linearCutting: "土建"
+        case .unitConverter, .slopeHeight, .measurementCheck: "通用"
         }
     }
 
@@ -69,6 +86,11 @@ enum CalculatorDestination: CaseIterable {
         case .tile: TileCalcView()
         case .wallArea: WallAreaView()
         case .unitConverter: UnitConverterView()
+        case .materialUsage: MaterialUsageCalcView()
+        case .slopeHeight: SlopeHeightCalcView()
+        case .measurementCheck: MeasurementCheckView()
+        case .linearCutting: LinearCuttingView()
+        case .circuitPhaseRecord: CircuitPhaseRecordView()
         }
     }
 }

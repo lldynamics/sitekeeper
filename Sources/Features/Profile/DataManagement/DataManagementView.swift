@@ -3,6 +3,8 @@ import SwiftUI
 struct DataManagementView: View {
     @Environment(DataStore.self) var store
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.verticalSizeClass) var verticalSizeClass
+    @Environment(\.dynamicTypeSize) var dynamicTypeSize
     @State var selectedTab: DataManagementTab
     @State var healthCleanupSection: HealthCleanupSection
     @State var shouldAutoOpenBackupImporter: Bool
@@ -13,7 +15,7 @@ struct DataManagementView: View {
     @State var undoableDeletion = UndoableDeletionCoordinator()
     @State var cleanupTrashBatchCount = 0
     @State var isCompactSafetyHeader = false
-    @State private var lastMobileContentOffset: CGFloat = 0
+    @State private var lastContentOffset: CGFloat = 0
     @State var pendingHealthRepairRequestID: UUID?
     @AppStorage(UserPreferenceKeys.localBackupLastSuccessAt) var localBackupLastSuccessAt = 0.0
     @AppStorage(UserPreferenceKeys.cloudBackupLastSuccessAt) var cloudBackupLastSuccessAt = 0.0
@@ -37,19 +39,15 @@ struct DataManagementView: View {
             }
             .onAppear {
                 refreshRiskSnapshot()
-                if !usesWideLayout {
-                    isCompactSafetyHeader = false
-                    lastMobileContentOffset = 0
-                }
+                isCompactSafetyHeader = false
+                lastContentOffset = 0
             }
             .onChange(of: selectedTab) { _, _ in
                 refreshRiskSnapshot()
-                if !usesWideLayout {
-                    withAnimation(.snappy) {
-                        isCompactSafetyHeader = false
-                    }
-                    lastMobileContentOffset = 0
+                withAnimation(.snappy) {
+                    isCompactSafetyHeader = false
                 }
+                lastContentOffset = 0
             }
     }
 
@@ -92,24 +90,13 @@ struct DataManagementView: View {
         }
     }
 
-    @ViewBuilder
     private var headerContent: some View {
-        if usesWideLayout {
-            safetyHeaderSection
-
-            DataManagementSecondaryFlowShortcutGrid(
-                usesWideLayout: true,
-                cards: secondaryShortcutCards,
-                onSelect: selectSecondaryTarget(_:)
-            )
-        } else {
-            mobileSafetyHeader
-        }
+        collapsibleSafetyHeader
     }
 
     @ViewBuilder
     private var wideSupplementaryContent: some View {
-        if usesWideLayout {
+        if usesWideLayout, !showsCompactSafetyHeader {
             selectedTabSummary
 
             if selectedTab == .backupAndRestore, sampleDataImportEnabled {
@@ -134,14 +121,14 @@ struct DataManagementView: View {
             ExportView(
                 showsNavigationTitle: false,
                 bottomContentInset: embeddedScrollBottomInset,
-                onMobileScrollOffsetChange: mobileScrollHandler
+                onMobileScrollOffsetChange: contentScrollHandler
             )
         case .backupAndRestore:
             BackupView(
                 autoOpenImporter: shouldAutoOpenBackupImporter,
                 showsNavigationTitle: false,
                 bottomContentInset: embeddedScrollBottomInset,
-                onMobileScrollOffsetChange: mobileScrollHandler,
+                onMobileScrollOffsetChange: contentScrollHandler,
                 onAutoOpenImporterConsumed: {
                     shouldAutoOpenBackupImporter = false
                 }
@@ -151,9 +138,12 @@ struct DataManagementView: View {
         }
     }
 
-    private var mobileScrollHandler: ((CGFloat) -> Void)? {
-        guard !usesWideLayout else { return nil }
-        return { offset in handleMobileContentScrollOffsetChange(offset) }
+    var contentScrollHandler: ((CGFloat) -> Void)? {
+        { offset in handleContentScrollOffsetChange(offset) }
+    }
+
+    var showsCompactSafetyHeader: Bool {
+        isCompactSafetyHeader || dynamicTypeSize.isAccessibilitySize || verticalSizeClass == .compact
     }
 
     private var compactActionMenu: some View {
@@ -175,7 +165,7 @@ struct DataManagementView: View {
 
     @ViewBuilder
     private var compactNavigationAction: some View {
-        if !usesWideLayout || showsUITestBackupPreviewShortcut {
+        if !usesWideLayout || showsCompactSafetyHeader || showsUITestBackupPreviewShortcut {
             compactActionMenu
         }
     }
@@ -211,12 +201,13 @@ struct DataManagementView: View {
     }
 
     @ViewBuilder
-    var mobileSafetyHeader: some View {
-        if isCompactSafetyHeader {
+    var collapsibleSafetyHeader: some View {
+        if showsCompactSafetyHeader {
             DataManagementSecondaryFlowShortcutGrid(
-                usesWideLayout: false,
+                usesWideLayout: usesWideLayout,
                 cards: secondaryShortcutCards,
-                onSelect: selectSecondaryTarget(_:)
+                onSelect: selectSecondaryTarget(_:),
+                usesCompactRow: true
             )
             .padding(.vertical, 4)
             .background(.bar)
@@ -226,7 +217,7 @@ struct DataManagementView: View {
                 safetyHeaderSection
 
                 DataManagementSecondaryFlowShortcutGrid(
-                    usesWideLayout: false,
+                    usesWideLayout: usesWideLayout,
                     cards: secondaryShortcutCards,
                     onSelect: selectSecondaryTarget(_:),
                     usesCompactRow: false
@@ -237,10 +228,9 @@ struct DataManagementView: View {
         }
     }
 
-    func handleMobileContentScrollOffsetChange(_ offset: CGFloat) {
-        guard !usesWideLayout else { return }
-        guard abs(offset - lastMobileContentOffset) > 1 else { return }
-        lastMobileContentOffset = offset
+    func handleContentScrollOffsetChange(_ offset: CGFloat) {
+        guard abs(offset - lastContentOffset) > 1 else { return }
+        lastContentOffset = offset
 
         let shouldCompact = offset < -56
         let shouldExpand = offset > -12

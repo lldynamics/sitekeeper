@@ -43,3 +43,27 @@ struct WatermarkAutoSaveSection: View {
         }
     }
 }
+
+struct WatermarkStyleSection: View {
+    @Binding var style: WatermarkCameraStyle
+
+    var body: some View {
+        Section {
+            Picker(AppLocalization.string("水印位置"), selection: $style.position) {
+                ForEach(WatermarkCameraStyle.Position.allCases, id: \.self) { position in
+                    Text(position.displayName).tag(position)
+                }
+            }
+            Picker(AppLocalization.string("水印内容"), selection: $style.detail) {
+                ForEach(WatermarkCameraStyle.Detail.allCases, id: \.self) { detail in
+                    Text(detail.displayName).tag(detail)
+                }
+            }
+            Text(AppLocalization.string("精简模式显示工程、拍摄时间与当前模板的主要记录。"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        } header: {
+            Label(AppLocalization.string("水印样式"), systemImage: "text.below.photo")
+        }
+    }
+}

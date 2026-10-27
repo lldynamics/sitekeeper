@@ -98,10 +98,23 @@ extension ProjectListView {
 /// The split stays in the hierarchy across size changes, so its detail and sheets keep identity.
 struct ProjectWorkspaceView: View {
     @Environment(ProjectStore.self) private var projectStore
+    @Environment(\.expandedPhoneWorkspaceWidth) private var rootWorkspaceWidth
     @State private var selectedProjectID: UUID?
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @ScaledMetric(relativeTo: .body) private var expandedPhoneMinimumWidth: CGFloat = 820
     let autoOpenComposerToken: Int
     let onAutoOpenComposerConsumed: (Int) -> Void
+
+    private var usesExpandedPhoneSidebar: Bool {
+        ExpandedPhoneWorkspaceLayout.isAvailable(width: rootWorkspaceWidth, minimumWidth: expandedPhoneMinimumWidth)
+    }
+
+    private var expandedPhoneSidebarWidth: CGFloat {
+        ExpandedPhoneWorkspaceLayout.sidebarWidth(
+            containerWidth: rootWorkspaceWidth,
+            minimumWorkspaceWidth: expandedPhoneMinimumWidth
+        )
+    }
 
     var body: some View {
         NavigationSplitView(columnVisibility: $columnVisibility) {
@@ -110,7 +123,19 @@ struct ProjectWorkspaceView: View {
                 autoOpenComposerToken: autoOpenComposerToken,
                 onAutoOpenComposerConsumed: onAutoOpenComposerConsumed
             )
-            .navigationSplitViewColumnWidth(min: 280, ideal: 320, max: 400)
+            .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: usesExpandedPhoneSidebar))
+            .overlay(alignment: .trailing) {
+                if usesExpandedPhoneSidebar {
+                    ExpandedPhoneColumnDivider()
+                        .frame(width: 1)
+                        .offset(x: 0.5)
+                }
+            }
+            .navigationSplitViewColumnWidth(
+                min: usesExpandedPhoneSidebar ? expandedPhoneSidebarWidth : 280,
+                ideal: usesExpandedPhoneSidebar ? expandedPhoneSidebarWidth : 320,
+                max: usesExpandedPhoneSidebar ? expandedPhoneSidebarWidth : 400
+            )
         } detail: {
             ProjectWorkspaceDetail(selectedProjectID: selectedProjectID)
         }

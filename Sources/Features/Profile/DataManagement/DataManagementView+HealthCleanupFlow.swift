@@ -7,11 +7,7 @@ extension DataManagementView {
     }
 
     var healthAndCleanupContent: some View {
-        let mobileScrollHandler: ((CGFloat) -> Void)? = usesWideLayout
-            ? nil
-            : { offset in handleMobileContentScrollOffsetChange(offset) }
-
-        return VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
+        VStack(spacing: usesWideLayout ? AppSpacing.normal : AppSpacing.tight) {
             Picker(AppLocalization.string("体检与清理"), selection: $healthCleanupSection) {
                 ForEach(HealthCleanupSection.allCases, id: \.self) { tab in
                     Text(tab.displayName).tag(tab)
@@ -20,7 +16,7 @@ extension DataManagementView {
             .pickerStyle(.segmented)
             .padding(.horizontal)
 
-            if usesWideLayout {
+            if usesWideLayout, !showsCompactSafetyHeader {
                 HStack(alignment: .top, spacing: AppSpacing.tight) {
                     Image(systemName: healthCleanupSection.icon)
                         .foregroundStyle(.appWarning)
@@ -40,6 +36,7 @@ extension DataManagementView {
                     DataHealthView(
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
+                        onMobileScrollOffsetChange: contentScrollHandler,
                         repairRequestID: pendingHealthRepairRequestID,
                         onRepairRequestConsumed: {
                             pendingHealthRepairRequestID = nil
@@ -49,13 +46,13 @@ extension DataManagementView {
                     StorageCleanupCenterView(
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: mobileScrollHandler
+                        onMobileScrollOffsetChange: contentScrollHandler
                     )
                 case .audit:
                     OperationAuditLogView(
                         showsNavigationTitle: false,
                         bottomContentInset: embeddedScrollBottomInset,
-                        onMobileScrollOffsetChange: mobileScrollHandler
+                        onMobileScrollOffsetChange: contentScrollHandler
                     )
                 }
             }

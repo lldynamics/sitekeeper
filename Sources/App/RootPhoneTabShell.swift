@@ -2,15 +2,25 @@ import SwiftUI
 
 struct RootPhoneTabShell: View {
     @Binding var selectedTab: Tab
+    @State private var containerWidth: CGFloat = 0
     let projectComposerOpenToken: Int
     let onComposerConsumed: (Int) -> Void
 
-    @ViewBuilder
     var body: some View {
-        if #available(iOS 18.0, *) {
-            tabs.tabViewStyle(.sidebarAdaptable)
-        } else {
-            tabs
+        Group {
+            if #available(iOS 18.0, *) {
+                tabs.tabViewStyle(.sidebarAdaptable)
+            } else {
+                tabs
+            }
+        }
+        .environment(\.expandedPhoneWorkspaceWidth, containerWidth)
+        .background {
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { containerWidth = geometry.size.width }
+                    .onChange(of: geometry.size.width) { _, width in containerWidth = width }
+            }
         }
     }
 

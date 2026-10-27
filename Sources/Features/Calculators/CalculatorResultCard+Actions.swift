@@ -6,7 +6,9 @@ import UIKit
 extension CalculatorResultCard {
     @MainActor
     func requestProjectDraft(_ kind: CalculatorProjectDraftRequest.Kind, project: Project) {
-        pendingProjectDraft = CalculatorProjectDraftRequest(kind: kind, projectId: project.id)
+        pendingProjectDraft = CalculatorProjectDraftRequest(
+            kind: kind, projectId: project.id, materialDraft: result.materialDraft
+        )
     }
 
     @MainActor
@@ -20,6 +22,8 @@ extension CalculatorResultCard {
         case .missingProject:
             selectedProjectId = nil
             presentSaveError(calculatorLoc("已选择的工程已不存在，请重新选择。"))
+        case .invalidMaterial:
+            presentSaveError(calculatorLoc("材料名称、数量或单位无效，请重新计算。"))
         case .saved(let project):
             let message = request.kind == .materialSheet
                 ? calculatorLocFormat("已加入 %@ 的材料单", project.name)
@@ -201,6 +205,7 @@ enum CalculatorProjectDraftCommitter {
     enum Outcome {
         case ignored
         case missingProject
+        case invalidMaterial
         case saved(Project)
     }
 
@@ -218,14 +223,16 @@ enum CalculatorProjectDraftCommitter {
         }
         switch request.kind {
         case .materialSheet:
+            if request.materialDraft?.isValid == false { return .invalidMaterial }
             let now = Formatters.now()
             store.insertMaterialSheetDraftAtTop(MaterialSheetDraft(
                 title: calculatorLocFormat("%@ 计算结果材料单", title),
                 projectId: project.id,
                 exportProjectName: project.name,
                 items: [MaterialSheetDraftItem(
-                    name: title, unit: calculatorLoc("项"),
-                    quantity: NumericInputSupport.quantity("1"), note: copyText
+                    name: request.materialDraft?.name ?? title,
+                    unit: request.materialDraft?.unit ?? calculatorLoc("项"),
+                    quantity: request.materialDraft?.quantity ?? NumericInputSupport.quantity("1"), note: copyText
                 )],
                 createdAt: BusinessDateValue(legacyText: now),
                 updatedAt: BusinessDateValue(legacyText: now)

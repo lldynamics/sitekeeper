@@ -168,6 +168,11 @@ extension ExportView {
                 exportContentSection
             }
             .padding(.vertical, 2)
+            .background(alignment: .top) {
+                if onMobileScrollOffsetChange != nil {
+                    DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
+                }
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: bottomContentInset)
@@ -183,6 +188,11 @@ extension ExportView {
                 exportButtonSection
             }
             .padding(4)
+            .background(alignment: .top) {
+                if onMobileScrollOffsetChange != nil {
+                    DataManagementMobileScrollProbeRow(onOffsetChange: onMobileScrollOffsetChange)
+                }
+            }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear.frame(height: bottomContentInset)

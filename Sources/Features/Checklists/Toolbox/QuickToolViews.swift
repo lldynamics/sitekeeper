@@ -137,8 +137,8 @@ private struct QuickToolNavigationRow: View {
         } label: {
             ToolRow(
                 icon: isFavorite ? "star.fill" : tool.icon,
-                title: tool.title,
-                desc: tool.desc,
+                title: tool.localizedTitle,
+                desc: tool.localizedDescription,
                 color: isFavorite ? .appWarning : color
             )
         }
@@ -181,6 +181,10 @@ struct QuickToolItem: Identifiable {
 
     var id: String { title }
 
+    // Keep persistent identifiers independent of the current display language.
+    var localizedTitle: String { calculatorLoc(title) }
+    var localizedDescription: String { calculatorLoc(desc) }
+
     init(_ def: CalculatorDestination) {
         icon = def.icon
         title = def.title
@@ -200,7 +204,7 @@ struct QuickToolItem: Identifiable {
 
 extension QuickToolItem: Searchable {
     var searchableFields: [String] {
-        [title, desc]
+        [title, desc, localizedTitle, localizedDescription]
     }
 }
 

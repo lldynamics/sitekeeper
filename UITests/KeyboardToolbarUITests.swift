@@ -215,7 +215,7 @@ extension SitekeeperUITests {
         attachScreenshot(app, named: "Quick note keyboard toolbar")
         dismissKeyboardUsingToolbar(app)
         XCTAssertEqual(input.value as? String, "Keyboard draft")
-        XCTAssertTrue(app.buttons["发送随手记"].isHittable)
+        XCTAssertTrue(app.buttons["quick-note-publish"].isHittable)
     }
 
     func testLaborSheetKeyboardToolbarStaysWithinTheForm() {

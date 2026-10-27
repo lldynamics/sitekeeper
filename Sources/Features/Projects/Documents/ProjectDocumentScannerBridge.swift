@@ -2,7 +2,7 @@ import SwiftUI
 import UIKit
 import VisionKit
 
-enum CameraWatermarkTemplate: String, CaseIterable {
+enum CameraWatermarkTemplate: String, CaseIterable, Codable, Sendable {
     case constructionLog
     case rectification
     case paymentProof
@@ -10,10 +10,10 @@ enum CameraWatermarkTemplate: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .constructionLog: "施工日志"
-        case .rectification: "整改记录"
-        case .paymentProof: "请款取证"
-        case .receipt: "票据留存"
+        case .constructionLog: AppLocalization.string("施工日志")
+        case .rectification: AppLocalization.string("整改记录")
+        case .paymentProof: AppLocalization.string("请款取证")
+        case .receipt: AppLocalization.string("票据留存")
         }
     }
 
@@ -27,28 +27,109 @@ enum CameraWatermarkTemplate: String, CaseIterable {
     }
 }
 
-struct CameraWatermarkContext {
+struct CameraWatermarkContext: Codable, Equatable, Sendable {
     var projectName: String?
     var template: CameraWatermarkTemplate = .constructionLog
     var tag: String = ""
     var photographer: String = ""
     var locationText: String = ""
+    var workSection: String = ""
+    var floor: String = ""
+    var process: String = ""
+    var issueNumber: String = ""
+    var completedQuantity: String = ""
+    var receiptNote: String = ""
+    var style: WatermarkCameraStyle = .init()
+    var locationSnapshot: WatermarkLocationSnapshot?
+
+    init(
+        projectName: String?, template: CameraWatermarkTemplate = .constructionLog,
+        tag: String = "", photographer: String = "", locationText: String = "",
+        workSection: String = "", floor: String = "", process: String = "",
+        issueNumber: String = "", completedQuantity: String = "", receiptNote: String = "",
+        style: WatermarkCameraStyle = .init(), locationSnapshot: WatermarkLocationSnapshot? = nil
+    ) {
+        self.projectName = projectName
+        self.template = template
+        self.tag = tag
+        self.photographer = photographer
+        self.locationText = locationText
+        self.workSection = workSection
+        self.floor = floor
+        self.process = process
+        self.issueNumber = issueNumber
+        self.completedQuantity = completedQuantity
+        self.receiptNote = receiptNote
+        self.style = style
+        self.locationSnapshot = locationSnapshot
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case projectName, template, tag, photographer, locationText, workSection, floor, process
+        case issueNumber, completedQuantity, receiptNote, style, locationSnapshot
+    }
+
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        projectName = try values.decodeIfPresent(String.self, forKey: .projectName)
+        template = try values.decodeIfPresent(CameraWatermarkTemplate.self, forKey: .template) ?? .constructionLog
+        tag = try values.decodeIfPresent(String.self, forKey: .tag) ?? ""
+        photographer = try values.decodeIfPresent(String.self, forKey: .photographer) ?? ""
+        locationText = try values.decodeIfPresent(String.self, forKey: .locationText) ?? ""
+        workSection = try values.decodeIfPresent(String.self, forKey: .workSection) ?? ""
+        floor = try values.decodeIfPresent(String.self, forKey: .floor) ?? ""
+        process = try values.decodeIfPresent(String.self, forKey: .process) ?? ""
+        issueNumber = try values.decodeIfPresent(String.self, forKey: .issueNumber) ?? ""
+        completedQuantity = try values.decodeIfPresent(String.self, forKey: .completedQuantity) ?? ""
+        receiptNote = try values.decodeIfPresent(String.self, forKey: .receiptNote) ?? ""
+        style = try values.decodeIfPresent(WatermarkCameraStyle.self, forKey: .style) ?? .init()
+        locationSnapshot = try values.decodeIfPresent(WatermarkLocationSnapshot.self, forKey: .locationSnapshot)
+    }
 
     func lines(capturedAt: Date) -> [String] {
-        let normalizedProject = projectName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        var result = [
-            "工程: \(normalizedProject.isEmpty ? "未指定项目" : normalizedProject)",
-            "时间: \(Formatters.dateTime.string(from: capturedAt))"
-        ]
-        result.append("模板: \(template.displayName)")
-        if !tag.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            result.append("标签: \(tag)")
+        func cleaned(_ value: String) -> String {
+            value.split(whereSeparator: { $0.isWhitespace }).joined(separator: " ")
         }
-        if !photographer.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            result.append("拍摄: \(photographer)")
+        func field(_ title: String, _ value: String) -> String {
+            let value = cleaned(value)
+            return String(format: AppLocalization.string("%@: %@"), title, value.isEmpty ? AppLocalization.string("未填写") : value)
         }
-        if !locationText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            result.append("位置: \(locationText)")
+        let project = cleaned(projectName ?? "")
+        var result = [String(format: AppLocalization.string("工程: %@"), project.isEmpty ? AppLocalization.string("未指定项目") : project),
+                      String(format: AppLocalization.string("时间: %@"), Formatters.dateTime.string(from: capturedAt))]
+        if style.detail == .full { result.append(String(format: AppLocalization.string("模板: %@"), template.displayName)) }
+        if style.detail == .full {
+            result.append(field(AppLocalization.string("施工段"), workSection))
+            if template != .receipt { result.append(field(AppLocalization.string("楼层/部位"), floor)) }
+        }
+        switch template {
+        case .constructionLog:
+            result.append(field(AppLocalization.string("施工工序"), process))
+        case .rectification:
+            result.append(field(AppLocalization.string("问题编号"), issueNumber))
+            if style.detail == .full { result.append(field(AppLocalization.string("整改工序"), process)) }
+        case .paymentProof:
+            result.append(field(AppLocalization.string("完成工程量"), completedQuantity))
+            if style.detail == .full { result.append(field(AppLocalization.string("施工工序"), process)) }
+        case .receipt:
+            result.append(field(AppLocalization.string("票据说明"), receiptNote))
+        }
+        if style.detail == .full {
+            for (title, value) in [(AppLocalization.string("标签"), tag), (AppLocalization.string("拍摄"), photographer), (AppLocalization.string("位置"), locationText)] {
+                if !cleaned(value).isEmpty { result.append(field(title, value)) }
+            }
+            if let snapshot = locationSnapshot, snapshot.provenance == .device,
+               snapshot.text == locationText {
+                let provenance: String
+                switch snapshot.freshness(at: capturedAt) {
+                case .fresh: provenance = AppLocalization.string("设备定位")
+                case .stale: provenance = AppLocalization.string("历史定位")
+                case .invalid: provenance = AppLocalization.string("无效定位，请核对")
+                case .manual: provenance = AppLocalization.string("手动填写")
+                }
+                let fixTime = snapshot.timestamp.map { Formatters.dateTime.string(from: $0) } ?? AppLocalization.string("未知时间")
+                result.append(String(format: AppLocalization.string("定位: %@ · %@"), provenance, fixTime))
+            }
         }
         return result
     }
@@ -106,7 +187,7 @@ struct DocumentScannerView: UIViewControllerRepresentable {
         }
 
         func documentCameraViewController(_ controller: VNDocumentCameraViewController, didFailWithError error: Error) {
-            onError("扫描失败：\(error.localizedDescription)")
+            onError(String(format: AppLocalization.string("扫描失败：%@"), error.localizedDescription))
             controller.dismiss(animated: true)
         }
 
@@ -219,65 +300,16 @@ struct ImagePickerView: UIViewControllerRepresentable {
 
 extension UIImage {
     func applyingCameraWatermark(context: CameraWatermarkContext?, capturedAt: Date) -> UIImage {
-        let lines = (context ?? CameraWatermarkContext(projectName: nil)).lines(capturedAt: capturedAt)
-
+        let watermarkContext = context ?? CameraWatermarkContext(projectName: nil)
         let baseRect = CGRect(origin: .zero, size: size)
-        let minEdge = min(size.width, size.height)
-        let fontSize = max(16, minEdge * 0.038)
-        let font = UIFont.systemFont(ofSize: fontSize, weight: .semibold)
-        let paragraph = NSMutableParagraphStyle()
-        paragraph.lineBreakMode = .byWordWrapping
-        let attributes: [NSAttributedString.Key: Any] = [
-            .font: font,
-            .foregroundColor: UIColor.white,
-            .paragraphStyle: paragraph
-        ]
-        let horizontalPadding = max(12, minEdge * 0.026)
-        let verticalPadding = max(10, minEdge * 0.022)
-        let margin = max(12, minEdge * 0.028)
-        let maxTextWidth = max(160, size.width - margin * 2 - horizontalPadding * 2)
-        let lineSizes = lines.map {
-            ($0 as NSString)
-                .boundingRect(
-                    with: CGSize(width: maxTextWidth, height: .greatestFiniteMagnitude),
-                    options: [.usesLineFragmentOrigin, .usesFontLeading],
-                    attributes: attributes,
-                    context: nil
-                )
-                .size
-        }
-        let maxLineWidth = lineSizes.map(\.width).max() ?? 0
-        let totalTextHeight = lineSizes.reduce(0) { $0 + ceil($1.height) } + CGFloat(max(0, lines.count - 1)) * (fontSize * 0.24)
-        let watermarkWidth = min(maxLineWidth + horizontalPadding * 2, size.width - margin * 2)
-        let watermarkHeight = totalTextHeight + verticalPadding * 2
-        let watermarkRect = CGRect(
-            x: baseRect.maxX - watermarkWidth - margin,
-            y: baseRect.maxY - watermarkHeight - margin,
-            width: watermarkWidth,
-            height: watermarkHeight
-        )
-
+        guard size.width > 0, size.height > 0 else { return self }
+        let layout = WatermarkCameraLayout.make(context: watermarkContext, capturedAt: capturedAt, canvasSize: size)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = scale
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             draw(in: baseRect)
-            let path = UIBezierPath(roundedRect: watermarkRect, cornerRadius: max(8, minEdge * 0.015))
-            UIColor.black.withAlphaComponent(0.58).setFill()
-            path.fill()
-
-            var cursorY = watermarkRect.minY + verticalPadding
-            for (index, line) in lines.enumerated() {
-                let lineSize = lineSizes[index]
-                let textRect = CGRect(
-                    x: watermarkRect.minX + horizontalPadding,
-                    y: cursorY,
-                    width: watermarkRect.width - horizontalPadding * 2,
-                    height: ceil(lineSize.height)
-                )
-                (line as NSString).draw(in: textRect, withAttributes: attributes)
-                cursorY += ceil(lineSize.height) + fontSize * 0.24
-            }
+            layout.draw()
         }
     }
 
