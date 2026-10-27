@@ -1,5 +1,6 @@
 import Foundation
 
+@MainActor
 enum DashboardSummaryBuilder {
     /// Pure cold-path entry point, also used by performance and compatibility tests.
     static func build(_ input: DashboardSummaryInput) -> DashboardSummaryModel {

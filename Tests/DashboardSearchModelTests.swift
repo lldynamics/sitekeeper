@@ -58,6 +58,35 @@ struct DashboardSearchModelTests {
         #expect(await gate.wasCancelled)
     }
 
+    @Test @MainActor func sameKeywordWithNewProjectCannotBeOverwrittenByEarlierScope() async {
+        let gate = DashboardSearchGate()
+        let firstProject = UUID(), secondProject = UUID()
+        let old = suggestion("first project"), current = suggestion("second project")
+        let model = DashboardSearchModel { _, request in
+            if request.projectID == firstProject { await gate.suspend() }
+            return request.projectID == firstProject ? [old] : [current]
+        }
+        let first = DashboardSearchRequest(keyword: "record", projectID: firstProject, category: .note)
+        let second = DashboardSearchRequest(keyword: "record", projectID: secondProject, category: .note)
+        let task = Task { await model.refresh(snapshot: .init(), request: first, debounce: .zero) }
+        await gate.waitUntilStarted()
+        await model.refresh(snapshot: .init(), request: second, debounce: .zero)
+        await gate.release()
+        await task.value
+        #expect(model.suggestions(for: second) == [current])
+    }
+
+    @Test @MainActor func alreadyCancelledEmptyRequestCannotClearPublishedResults() async {
+        let record = suggestion("record")
+        let model = DashboardSearchModel { _, _ in [record] }
+        let request = DashboardSearchRequest(keyword: "record")
+        await model.refresh(snapshot: .init(), request: request, debounce: .zero)
+        let cancelled = Task { await model.refresh(snapshot: .init(), request: .init(keyword: ""), debounce: .zero) }
+        cancelled.cancel()
+        await cancelled.value
+        #expect(model.suggestions(for: request) == [record])
+    }
+
     @Test @MainActor func cancelledDebounceNeverStartsSearch() async {
         let calls = DashboardSearchCalls()
         let model = DashboardSearchModel { _, _ in

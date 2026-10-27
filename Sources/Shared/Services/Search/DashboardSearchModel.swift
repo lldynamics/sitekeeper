@@ -62,6 +62,7 @@ final class DashboardSearchModel {
 
     func refresh(snapshot: DashboardSearchSnapshot, request: DashboardSearchRequest,
                  debounce: Duration = .milliseconds(150)) async {
+        guard !Task.isCancelled else { return }
         generation &+= 1
         let requestedGeneration = generation
         if request.keyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || request.limit <= 0 {

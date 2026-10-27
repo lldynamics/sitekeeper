@@ -2,6 +2,9 @@ import SwiftUI
 import UIKit
 
 struct DashboardView: View {
+    @State var dashboardSearchModel = DashboardSearchModel()
+    @Environment(\.locale) var dashboardSearchLocale
+    @State var dashboardSummaryCache = DashboardSummaryCache()
     @Environment(DataStore.self) var store
     @Environment(ProjectStore.self) var projectStore
     @Environment(FinanceStore.self) var financeStore
