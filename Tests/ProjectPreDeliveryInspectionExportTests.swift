@@ -18,17 +18,17 @@ struct ProjectPreDeliveryInspectionExportTests {
         let todo = SiteTodo(
             title: "整改收口",
             owner: "李工",
-            dueDate: "2026-05-20",
+            dueDate: BusinessDateValue(legacyText: "2026-05-20"),
             priority: .high,
             issueType: .quality,
             projectId: project.id
         )
         let financialRecord = ProjectFinancialRecord(
             projectId: project.id,
-            date: "2026-05-19",
+            date: BusinessDateValue(legacyText: "2026-05-19"),
             direction: .expense,
             category: .material,
-            amount: "1200",
+            amount: NumericInputSupport.money("1200"),
             counterparty: "材料商"
         )
         let backupState = ReportBuilder.ProjectDeliveryPackageBackupState(
@@ -69,17 +69,17 @@ struct ProjectPreDeliveryInspectionExportTests {
         let todo = SiteTodo(
             title: "整改收口",
             owner: "李工",
-            dueDate: "2026-05-20",
+            dueDate: BusinessDateValue(legacyText: "2026-05-20"),
             priority: .high,
             issueType: .quality,
             projectId: project.id
         )
         let financialRecord = ProjectFinancialRecord(
             projectId: project.id,
-            date: "2026-05-19",
+            date: BusinessDateValue(legacyText: "2026-05-19"),
             direction: .expense,
             category: .material,
-            amount: "1200",
+            amount: NumericInputSupport.money("1200"),
             counterparty: "材料商"
         )
         let backupState = ReportBuilder.ProjectDeliveryPackageBackupState(

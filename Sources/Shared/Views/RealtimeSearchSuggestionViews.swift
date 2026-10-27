@@ -4,7 +4,7 @@ struct InlineSearchPanel: View {
     @Binding var text: String
     let prompt: String
     var suggestions: [RealtimeSearchSuggestion] = []
-    var emptyStateText: String = String(localized: "未找到匹配内容")
+    var emptyStateText: String = AppLocalization.string("未找到匹配内容")
     var materialTone: AppSurfaceTone = .materialThin
     let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
 
@@ -39,7 +39,7 @@ struct InlineSearchPanel: View {
                                 .foregroundStyle(.secondary)
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "清空搜索"))
+                        .accessibilityLabel(AppLocalization.string("清空搜索"))
                     }
                 }
                 .padding(AppSpacing.normal)
@@ -139,6 +139,7 @@ struct RealtimeSearchSuggestionInlineList: View {
                     )
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("search-suggestion-\(suggestion.id)")
 
                 if index < suggestions.count - 1 {
                     Divider()

@@ -3,6 +3,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
+source "$repo_root/scripts/lib/localization_search.sh"
 
 localizable_files=(
   "Sources/Resources/zh-Hans.lproj/Localizable.strings"
@@ -115,8 +116,8 @@ check_english_resource_values() {
 
   # Language names may intentionally be shown in their native script.
   untranslated_values="$(
-    rg -n '=\s*"[^"]*[\p{Han}][^"]*";' "$file" \
-      | rg -v ':"中文" = "中文";$' \
+    localization_search '=\s*"[^"]*[\p{Han}][^"]*";' "$file" \
+      | grep -Ev ':"中文" = "中文";$' \
       || true
   )"
 

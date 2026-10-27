@@ -67,10 +67,10 @@ struct WatermarkCameraTests {
         let targetDate = try #require(Formatters.date.date(from: "2026-05-03"))
         let logs = (0..<10_000).map { index in
             DailyLog(
-                date: index.isMultiple(of: 2) ? "2026-05-03" : "2026-05-04",
+                date: BusinessDateValue(legacyText: index.isMultiple(of: 2) ? "2026-05-03" : "2026-05-04"),
                 weather: "晴",
                 content: "日志 \(index)",
-                workers: "1"
+                workers: NumericInputSupport.quantity("1")
             )
         }
 
@@ -78,7 +78,7 @@ struct WatermarkCameraTests {
         let selectedLogs = index.logs(on: targetDate)
 
         #expect(selectedLogs.count == 5_000)
-        #expect(selectedLogs.allSatisfy { $0.date == "2026-05-03" })
+        #expect(selectedLogs.allSatisfy { $0.date.storageText == "2026-05-03" })
     }
 
     @Test func settingsStorePersistsWatermarkCameraChoices() throws {

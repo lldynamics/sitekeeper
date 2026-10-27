@@ -7,9 +7,9 @@ struct WarehouseDecimalTests {
     @Test func decimalAggregationCancelsExactly() {
         let projectId = UUID()
         let movements = [
-            ProjectWarehouseMovement(projectId: projectId, movementType: .inbound, materialName: "水泥", unit: "吨", quantity: "0.3"),
-            ProjectWarehouseMovement(projectId: projectId, movementType: .outbound, materialName: "水泥", unit: "吨", quantity: "0.1"),
-            ProjectWarehouseMovement(projectId: projectId, movementType: .outbound, materialName: "水泥", unit: "吨", quantity: "0.2")
+            ProjectWarehouseMovement(projectId: projectId, movementType: .inbound, materialName: "水泥", unit: "吨", quantity: NumericInputSupport.quantity("0.3")),
+            ProjectWarehouseMovement(projectId: projectId, movementType: .outbound, materialName: "水泥", unit: "吨", quantity: NumericInputSupport.quantity("0.1")),
+            ProjectWarehouseMovement(projectId: projectId, movementType: .outbound, materialName: "水泥", unit: "吨", quantity: NumericInputSupport.quantity("0.2"))
         ]
 
         let line = WarehouseStockCalculator.stockLines(for: projectId, movements: movements).first
@@ -26,7 +26,7 @@ struct WarehouseDecimalTests {
                 materialName: " C30  Concrete ",
                 specification: " Pumped  ",
                 unit: "M3",
-                quantity: "3"
+                quantity: NumericInputSupport.quantity("3")
             ),
             ProjectWarehouseMovement(
                 projectId: projectId,
@@ -34,7 +34,7 @@ struct WarehouseDecimalTests {
                 materialName: "c30 concrete",
                 specification: "pumped",
                 unit: "m3",
-                quantity: "1"
+                quantity: NumericInputSupport.quantity("1")
             ),
             ProjectWarehouseMovement(
                 projectId: projectId,
@@ -42,7 +42,7 @@ struct WarehouseDecimalTests {
                 materialName: "C30 Concrete",
                 specification: "Pumped",
                 unit: "吨",
-                quantity: "4"
+                quantity: NumericInputSupport.quantity("4")
             )
         ]
 

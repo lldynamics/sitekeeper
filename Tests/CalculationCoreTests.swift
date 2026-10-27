@@ -1,8 +1,22 @@
 import Testing
+import Foundation
 @testable import sitekeeper
 
 @MainActor
 struct CalculationCoreTests {
+
+    @Test func calculatorProjectWorkflowRequiresAnExplicitExistingProject() {
+        let first = UUID()
+        let chosen = UUID()
+        let availableIDs = [first, chosen]
+
+        #expect(CalculatorProjectSelection.resolve(id: nil, availableIDs: availableIDs) == nil)
+        #expect(CalculatorProjectSelection.resolve(id: nil, availableIDs: [first]) == nil)
+        #expect(CalculatorProjectSelection.resolve(id: chosen, availableIDs: availableIDs) == chosen)
+        #expect(CalculatorProjectSelection.resolve(id: chosen, availableIDs: [chosen, first]) == chosen)
+        #expect(CalculatorProjectSelection.resolve(id: chosen, availableIDs: [first]) == nil)
+        #expect(CalculatorProjectSelection.resolve(id: chosen, availableIDs: []) == nil)
+    }
 
     // MARK: - unitConvert
 
@@ -254,5 +268,82 @@ struct CalculationCoreTests {
         let area = EngineeringCalculations.cableArea(diameter: 10, count: 1)
         let expected = Double.pi * 25
         #expect(abs(area - expected) < 0.01)
+    }
+}
+
+@MainActor
+struct CalculatorDraftCommitTests {
+    private func newStore() async throws -> DataStore {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("calculator-draft-commit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = DataStore(storageDirectory: directory)
+        await store.awaitInitialLoad()
+        try #require(store.canEditBusinessData)
+        return store
+    }
+
+    @Test(arguments: [CalculatorProjectDraftRequest.Kind.materialSheet, .quoteItem])
+    func cancellationDoesNotWrite(kind: CalculatorProjectDraftRequest.Kind) async throws {
+        let store = try await newStore()
+        let target = Project(name: "Target", location: "")
+        store.replaceProjects([target])
+        let request = CalculatorProjectDraftRequest(kind: kind, projectId: target.id)
+        var pending: CalculatorProjectDraftRequest? = nil // The review's Cancel action clears this value.
+        _ = CalculatorProjectDraftCommitter.commit(request, pending: &pending, title: "Result", copyText: "Note", store: store)
+        #expect(store.materialSheetDrafts.isEmpty)
+        #expect(store.quoteItems.isEmpty)
+    }
+
+    @Test(arguments: [CalculatorProjectDraftRequest.Kind.materialSheet, .quoteItem])
+    func confirmationWritesExactlyOnceToExplicitProject(kind: CalculatorProjectDraftRequest.Kind) async throws {
+        let store = try await newStore()
+        let other = Project(name: "A Other", location: "")
+        let target = Project(name: "Z Target", location: "")
+        store.replaceProjects([other, target])
+        let request = CalculatorProjectDraftRequest(kind: kind, projectId: target.id)
+        var pending: CalculatorProjectDraftRequest? = request
+        _ = CalculatorProjectDraftCommitter.commit(request, pending: &pending, title: "Result", copyText: "Full\nresult", store: store)
+        #expect(pending == nil)
+        let draftIDs = Set(store.materialSheetDrafts.map(\.id))
+        let quoteIDs = Set(store.quoteItems.map(\.id))
+        _ = CalculatorProjectDraftCommitter.commit(request, pending: &pending, title: "Result", copyText: "Full\nresult", store: store)
+        #expect(Set(store.materialSheetDrafts.map(\.id)) == draftIDs)
+        #expect(Set(store.quoteItems.map(\.id)) == quoteIDs)
+        if kind == .materialSheet {
+            #expect(store.materialSheetDrafts.count == 1 && store.quoteItems.isEmpty)
+            let draft = try #require(store.materialSheetDrafts.first)
+            #expect(draft.projectId == target.id && draft.exportProjectName == target.name)
+            #expect(draft.items.count == 1)
+            let item = try #require(draft.items.first)
+            #expect(item.name == "Result" && item.note == "Full\nresult")
+            #expect(item.quantity.optionalDecimal == 1 && item.unit == calculatorLoc("项"))
+            #expect(item.unitPrice.optionalDecimal == nil)
+        } else {
+            #expect(store.quoteItems.count == 1 && store.materialSheetDrafts.isEmpty)
+            let item = try #require(store.quoteItems.first)
+            #expect(item.projectId == target.id && item.name == "Result")
+            #expect(item.notes == "Full\nresult" && item.quantity.optionalDecimal == 1)
+            #expect(item.unit == calculatorLoc("项") && item.unitPrice.optionalDecimal == nil)
+        }
+    }
+
+    @Test(arguments: [CalculatorProjectDraftRequest.Kind.materialSheet, .quoteItem])
+    func deletedProjectDoesNotFallbackOrWrite(kind: CalculatorProjectDraftRequest.Kind) async throws {
+        let store = try await newStore()
+        let other = Project(name: "A Other", location: "")
+        let target = Project(name: "Z Deleted", location: "")
+        store.replaceProjects([other, target])
+        let request = CalculatorProjectDraftRequest(kind: kind, projectId: target.id)
+        var pending: CalculatorProjectDraftRequest? = request
+        store.deleteProject(target.id)
+        let outcome = CalculatorProjectDraftCommitter.commit(request, pending: &pending, title: "Result", copyText: "Note", store: store)
+        guard case .missingProject = outcome else {
+            Issue.record("Deleted target must reject confirmation")
+            return
+        }
+        #expect(pending == nil)
+        #expect(store.projects.map(\.id) == [other.id])
+        #expect(store.materialSheetDrafts.isEmpty && store.quoteItems.isEmpty)
     }
 }

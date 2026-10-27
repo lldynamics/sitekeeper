@@ -123,6 +123,34 @@ struct KeyboardToolbarTests {
         #expect(!KeyboardToolbarScopeView.hasUsableBounds(CGRect(x: 0, y: 0, width: CGFloat.nan, height: 44)))
         #expect(KeyboardToolbarScopeView.hasUsableBounds(CGRect(x: 0, y: 0, width: 320, height: 44)))
     }
+
+    @Test func resizingKeepsTheFocusedCaretBelowThePageChromeWithoutRefocusing() async throws {
+        let fixture = KeyboardToolbarWindowFixture()
+        defer { fixture.close() }
+        let scroll = UIScrollView(frame: fixture.localController.view.bounds)
+        scroll.contentSize = CGSize(width: 400, height: 1000)
+        fixture.localController.view.insertSubview(scroll, at: 0)
+        fixture.localInput.frame = CGRect(x: 20, y: 500, width: 240, height: 44)
+        fixture.localInput.text = "Retained draft"
+        scroll.addSubview(fixture.localInput)
+        try #require(fixture.localInput.becomeFirstResponder())
+        var visible: Bool?
+        fixture.scope.onVisibilityChange = { visible = $0 }
+        fixture.scope.scheduleVisibilityUpdate()
+        try await waitForVisibility(true) { visible }
+
+        // The retained content offset puts the caret behind the resized page's top bar.
+        scroll.contentOffset.y = 520
+        fixture.scope.frame = CGRect(x: 0, y: 60, width: 400, height: 240)
+        fixture.scope.scheduleVisibilityUpdate()
+        try await waitForVisibility(true) {
+            guard let selection = fixture.localInput.selectedTextRange else { return false }
+            let caret = fixture.localInput.caretRect(for: selection.end)
+            return fixture.localInput.convert(caret, to: fixture.localController.view).minY >= 60
+        }
+        #expect(fixture.localInput.isFirstResponder)
+        #expect(fixture.localInput.text == "Retained draft")
+    }
 }
 
 @MainActor

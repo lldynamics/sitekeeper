@@ -9,7 +9,7 @@ import re
 
 QUOTED = r'"((?:[^"\\]|\\.)*)"'
 ENTRY = re.compile(QUOTED + r'\s*=\s*' + QUOTED + r'\s*;', re.DOTALL)
-REQUEST = re.compile(r'\bString\(\s*localized:\s*' + QUOTED)
+REQUEST = re.compile(r'\b(?:String\(\s*localized:\s*|AppLocalization\.string\(\s*)' + QUOTED)
 FORMAT = re.compile(r'%(?:(\d+)\$)?[-+#0 ]*(?:\d+|\*)?(?:\.(?:\d+|\*))?(hh|ll|h|l|q|z|t|j)?([@diuoxXfFeEgGaAcCsSp])')
 
 
@@ -84,7 +84,11 @@ def resource_values(source):
 def placeholders(value):
     arguments = Counter()
     next_argument = 1
-    for match in FORMAT.finditer(value.replace('%%', '')):
+    matches = list(FORMAT.finditer(value.replace('%%', '')))
+    numbered = [bool(match.group(1)) for match in matches]
+    if any(numbered) and not all(numbered):
+        raise ValueError('mixed numbered and sequential format arguments: ' + repr(value))
+    for match in matches:
         position, length, kind = match.groups()
         for _ in range(match.group(0).count('*')):
             arguments[(next_argument, 'd')] += 1
@@ -104,7 +108,12 @@ def inspect(root):
             path = root / resources / (language + '.lproj') / 'Localizable.strings'
             tables[language] = resource_values(path.read_text(encoding='utf-8'))
         for path in sorted((root / scope).rglob('*.swift')):
-            for key, line in requested_keys(path.read_text(encoding='utf-8')):
+            source = path.read_text(encoding='utf-8')
+            if scope == 'Sources' and path.name != 'AppLanguageAndTheme.swift':
+                for match in re.finditer(r'\bString\(\s*localized:', without_comments(source)):
+                    line = source.count('\n', 0, match.start()) + 1
+                    issues.append(f'{path.relative_to(root)}:{line}: use AppLocalization.string for in-app language changes')
+            for key, line in requested_keys(source):
                 absent = [language for language, values in tables.items() if key not in values]
                 if absent:
                     location = str(path.relative_to(root)) + ':' + str(line)

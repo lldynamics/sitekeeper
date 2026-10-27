@@ -77,12 +77,12 @@ private struct AppPDFPreviewSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
-                        Button(String(localized: "关闭")) { dismiss() }
+                        Button(AppLocalization.string("关闭")) { dismiss() }
                             .accessibilityIdentifier("app-pdf-preview-close")
                     }
                     ToolbarItem(placement: .primaryAction) {
                         ShareLink(item: url) {
-                            Label(String(localized: "分享/打开"), systemImage: "square.and.arrow.up")
+                            Label(AppLocalization.string("分享/打开"), systemImage: "square.and.arrow.up")
                         }
                         .accessibilityIdentifier("app-pdf-preview-share")
                     }

@@ -1,5 +1,6 @@
 import Testing
 import Darwin
+import CoreImage
 import ImageIO
 import UIKit
 import UniformTypeIdentifiers
@@ -92,7 +93,145 @@ struct ImageDownsampleServiceTests {
 
         #expect(image == nil)
     }
+}
 
+extension ImageDownsampleServiceTests {
+    @Test func cameraJPEGUsesPixelDimensionsAndDoesNotUpscale() throws {
+        let source = try #require(UIImage(data: Self.makeJPEGData(width: 240, height: 120))?.cgImage)
+        let image = UIImage(cgImage: source, scale: 3, orientation: .up)
+        for (limit, width, height) in [(160.0, 160, 80), (600.0, 240, 120)] {
+            let data = try #require(ImageDownsampleService.downsampledJPEGData(
+                image, maxPixelSize: CGFloat(limit), compressionQuality: 0.8
+            ))
+            let output = try #require(UIImage(data: data)?.cgImage)
+            #expect(output.width == width)
+            #expect(output.height == height)
+        }
+    }
+
+    @Test(arguments: [UIImage.Orientation.up, .upMirrored, .down, .downMirrored,
+                      .left, .leftMirrored, .right, .rightMirrored])
+    func cameraJPEGNormalizesRotationAndMirroring(_ orientation: UIImage.Orientation) throws {
+        let colors: [[Int]] = [[255, 0, 0], [0, 255, 0], [0, 0, 255], [255, 255, 0]]
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        format.preferredRange = .standard
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 120, height: 80), format: format).image { context in
+            for (index, color) in colors.enumerated() {
+                UIColor(red: CGFloat(color[0]) / 255, green: CGFloat(color[1]) / 255,
+                        blue: CGFloat(color[2]) / 255, alpha: 1).setFill()
+                context.fill(CGRect(x: (index % 2) * 60, y: (index / 2) * 40, width: 60, height: 40))
+            }
+        }
+        let image = UIImage(cgImage: try #require(source.cgImage), scale: 2, orientation: orientation)
+        let data = try #require(ImageDownsampleService.downsampledJPEGData(
+            image, maxPixelSize: 60, compressionQuality: 0.8
+        ))
+        let decoded = try #require(UIImage(data: data))
+        let output = try #require(decoded.cgImage)
+        let corners: [Int]
+        switch orientation {
+        case .up: corners = [0, 1, 2, 3]
+        case .upMirrored: corners = [1, 0, 3, 2]
+        case .down: corners = [3, 2, 1, 0]
+        case .downMirrored: corners = [2, 3, 0, 1]
+        case .left: corners = [1, 3, 0, 2]
+        case .leftMirrored: corners = [0, 2, 1, 3]
+        case .right: corners = [2, 0, 3, 1]
+        case .rightMirrored: corners = [3, 1, 2, 0]
+        @unknown default: return
+        }
+        let swapsAxes = [UIImage.Orientation.left, .leftMirrored, .right, .rightMirrored].contains(orientation)
+        #expect(output.width == (swapsAxes ? 40 : 60))
+        #expect(output.height == (swapsAxes ? 60 : 40))
+        #expect(decoded.imageOrientation == .up)
+        let pixels = try Self.rgbaPixels(output)
+        for (index, colorIndex) in corners.enumerated() {
+            let x = output.width * (index % 2 == 0 ? 1 : 3) / 4
+            let y = output.height * (index < 2 ? 1 : 3) / 4
+            for channel in 0..<3 {
+                #expect(abs(Int(pixels[(y * output.width + x) * 4 + channel]) - colors[colorIndex][channel]) < 20)
+            }
+        }
+    }
+
+    @Test func cameraJPEGAvoidsIntermediateLossyEncoding() throws {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        format.preferredRange = .standard
+        let source = UIGraphicsImageRenderer(size: CGSize(width: 128, height: 96), format: format).image { context in
+            for y in 0..<96 {
+                for x in 0..<128 {
+                    let level = CGFloat(((x * 37 + y * 17) ^ (x * y)) % 256) / 255
+                    UIColor(white: level, alpha: 1).setFill()
+                    context.fill(CGRect(x: x, y: y, width: 1, height: 1))
+                }
+            }
+        }
+        let singleJPEG = try #require(source.jpegData(compressionQuality: 0.8))
+        let actualJPEG = try #require(ImageDownsampleService.downsampledJPEGData(
+            source, maxPixelSize: 128, compressionQuality: 0.8
+        ))
+        let original = try Self.rgbaPixels(#require(source.cgImage))
+        let reference = try Self.rgbaPixels(#require(UIImage(data: singleJPEG)?.cgImage))
+        let actual = try Self.rgbaPixels(#require(UIImage(data: actualJPEG)?.cgImage))
+        func meanSquaredError(_ pixels: [UInt8]) -> Double {
+            stride(from: 0, to: original.count, by: 4).reduce(0.0) { sum, index in
+                let error = Double(pixels[index]) - Double(original[index])
+                return sum + error * error
+            } / Double(original.count / 4)
+        }
+        #expect(meanSquaredError(actual) <= meanSquaredError(reference) * 1.03 + 0.1)
+    }
+
+    @Test func cameraJPEGSupportsCoreImageBackedInput() throws {
+        let source = CIImage(color: CIColor(red: 1, green: 0, blue: 0))
+            .cropped(to: CGRect(x: 0, y: 0, width: 240, height: 120))
+        let image = UIImage(ciImage: source, scale: 2, orientation: .right)
+        #expect(image.cgImage == nil)
+        let data = try #require(ImageDownsampleService.downsampledJPEGData(
+            image, maxPixelSize: 60, compressionQuality: 0.8
+        ))
+        let output = try #require(UIImage(data: data)?.cgImage)
+        #expect(output.width == 30)
+        #expect(output.height == 60)
+        let pixels = try Self.rgbaPixels(output)
+        #expect(pixels[0] > 230)
+        #expect(pixels[1] < 20)
+        #expect(pixels[2] < 20)
+    }
+
+    @Test func cameraJPEGRejectsEmptyImagesAndInvalidPixelLimits() throws {
+        let image = try #require(UIImage(data: Self.makeJPEGData(width: 120, height: 80)))
+        for limit in [CGFloat.zero, -1, 0.5, .nan, .infinity] {
+            #expect(ImageDownsampleService.downsampledJPEGData(
+                image, maxPixelSize: limit, compressionQuality: 0.8
+            ) == nil)
+        }
+        #expect(ImageDownsampleService.downsampledJPEGData(
+            UIImage(), maxPixelSize: 1600, compressionQuality: 0.8
+        ) == nil)
+    }
+
+    private static func rgbaPixels(_ image: CGImage) throws -> [UInt8] {
+        var pixels = [UInt8](repeating: 0, count: image.width * image.height * 4)
+        let colorSpace = try #require(CGColorSpace(name: CGColorSpace.sRGB))
+        try pixels.withUnsafeMutableBytes { buffer in
+            let context = try #require(CGContext(
+                data: buffer.baseAddress, width: image.width, height: image.height,
+                bitsPerComponent: 8, bytesPerRow: image.width * 4,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+            ))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: image.width, height: image.height))
+        }
+        return pixels
+    }
+}
+
+extension ImageDownsampleServiceTests {
     fileprivate static func makeJPEGData(width: CGFloat, height: CGFloat) throws -> Data {
         let format = UIGraphicsImageRendererFormat()
         format.opaque = true

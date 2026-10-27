@@ -19,6 +19,12 @@ String(localized: "dynamic \(name)")'''
         self.assertEqual(set(key for key, _ in requested_keys('String(localized: "New action")')), {'New action'})
         self.assertNotIn('New action', resource_values('"Old action" = "Old action";'))
 
+    def test_app_localization_helper_is_covered(self):
+        source = '\n'.join(['AppLocalization.string("项目")',
+                             'AppLocalization.string(\n    "Save")',
+                             '// AppLocalization.string("ignored")'])
+        self.assertEqual(list(requested_keys(source)), [('项目', 1), ('Save', 2)])
+
     def test_duplicate_resources_fail(self):
         with self.assertRaises(ValueError):
             resource_values('"key"="value"; "key"="other";')
@@ -26,6 +32,12 @@ String(localized: "dynamic \(name)")'''
     def test_placeholder_reordering_and_width(self):
         self.assertEqual(placeholders('%@ %lld %.2f %%'), placeholders('%3$.2f %2$lld %1$@ %%'))
         self.assertNotEqual(placeholders('%lld'), placeholders('%@'))
+
+    def test_mixed_numbered_and_sequential_arguments_are_rejected(self):
+        for value in ['%1$lld tasks (%@)', '%1$lld lines · %@', '%@ %2$lld']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                placeholders(value)
+        self.assertEqual(placeholders('%1$lld tasks (%2$@)'), placeholders('%lld tasks (%@)'))
 
     def test_unindexed_reordering_and_star_arguments_are_checked(self):
         self.assertNotEqual(placeholders('%@ %lld'), placeholders('%lld %@'))

@@ -47,9 +47,9 @@ struct QuickNoteSearchTests {
 
     @Test func matchesContentAndAssociatedProjectWithWhitespaceAndStableOrdering() {
         let project = Project(name: "北区工程", location: "", status: .active)
-        let older = QuickNote(content: "防水验收", projectId: project.id, createdAt: "2026-09-01")
-        let newer = QuickNote(content: "现场记录", projectId: project.id, createdAt: "2026-09-09")
-        let unassigned = QuickNote(content: "防水验收", createdAt: "2026-09-08")
+        let older = QuickNote(content: "防水验收", projectId: project.id, createdAt: BusinessDateValue(legacyText: "2026-09-01"))
+        let newer = QuickNote(content: "现场记录", projectId: project.id, createdAt: BusinessDateValue(legacyText: "2026-09-09"))
+        let unassigned = QuickNote(content: "防水验收", createdAt: BusinessDateValue(legacyText: "2026-09-08"))
         let notes = [older, newer, unassigned]
         #expect(QuickNoteSearch.filter(notes, projects: [project], keyword: " 北区 ").map(\.id) == [newer.id, older.id])
         #expect(QuickNoteSearch.filter(notes, projects: [project], keyword: "防水").map(\.id) == [unassigned.id, older.id])

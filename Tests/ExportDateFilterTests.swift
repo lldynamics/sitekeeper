@@ -106,33 +106,33 @@ struct ExportDateFilterTests {
     // 全模块日期字段验证
     @Test func allModulesWithDateFieldsAreFilterable() {
         // LaborRecord - date
-        let labor = LaborRecord(date: "2025-04-01", workers: "1", hours: "8", unitRate: "100", workType: "瓦工", teamName: "A组", note: "", projectId: nil)
+        let labor = LaborRecord(date: BusinessDateValue(legacyText: "2025-04-01"), workers: NumericInputSupport.quantity("1"), hours: NumericInputSupport.quantity("8"), unitRate: NumericInputSupport.money("100"), workType: "瓦工", teamName: "A组", note: "", projectId: nil)
         #expect(Formatters.date.date(from: labor.date) != nil)
 
         // DailyLog - date
-        let log = DailyLog(date: "2025-04-02", weather: "", content: "", workers: "", photoFileName: nil, photos: [], safety: "", materials: "", projectId: nil)
+        let log = DailyLog(date: BusinessDateValue(legacyText: "2025-04-02"), weather: "", content: "", workers: NumericInputSupport.quantity(""), photoFileName: nil, photos: [], safety: "", materials: "", projectId: nil)
         #expect(Formatters.date.date(from: log.date) != nil)
 
         // ProgressTask - startDate / dueDate
-        let task = ProgressTask(projectId: UUID(), title: "test", startDate: "2025-04-03", dueDate: "2025-05-03", completion: 0, note: "")
+        let task = ProgressTask(projectId: UUID(), title: "test", startDate: BusinessDateValue(legacyText: "2025-04-03"), dueDate: BusinessDateValue(legacyText: "2025-05-03"), completion: 0, note: "")
         #expect(Formatters.date.date(from: task.startDate) != nil)
         #expect(Formatters.date.date(from: task.dueDate) != nil)
 
         // HistoryRecord - date
-        let hist = HistoryRecord(tool: "测试", input: "", result: "", date: "2025-04-04 10:00")
+        let hist = HistoryRecord(tool: "测试", input: "", result: "", date: BusinessDateValue(legacyText: "2025-04-04 10:00"))
         #expect(Formatters.dateTime.date(from: hist.date) != nil)
 
         // SiteTodo - dueDate
-        let todo = SiteTodo(title: "test", dueDate: "2025-04-05", priority: .medium, issueType: .quality, projectId: nil)
+        let todo = SiteTodo(title: "test", dueDate: BusinessDateValue(legacyText: "2025-04-05"), priority: .medium, issueType: .quality, projectId: nil)
         #expect(Formatters.date.date(from: todo.dueDate) != nil)
 
         // ProjectFinancialRecord - date
         let finRecord = ProjectFinancialRecord(
             projectId: UUID(),
-            date: "2025-04-06",
+            date: BusinessDateValue(legacyText: "2025-04-06"),
             direction: .income,
             category: .material,
-            amount: "100",
+            amount: NumericInputSupport.money("100"),
             counterparty: "test",
             invoiceNumber: "",
             linkedDocumentIds: [],
@@ -149,15 +149,15 @@ struct ExportDateFilterTests {
             fileName: "test.pdf",
             fileType: "pdf",
             pageCount: 1,
-            amount: "100",
+            amount: NumericInputSupport.money("100"),
             linkedFinancialRecordId: nil,
-            createdAt: "2025-04-07 12:00",
+            createdAt: BusinessDateValue(legacyText: "2025-04-07 12:00"),
             note: ""
         )
         #expect(Formatters.dateTime.date(from: doc.createdAt) != nil)
 
         // QuoteItem - customerConfirmedDate
-        let quote = QuoteItem(name: "test", unitPrice: "100", quantity: "1", unit: "个", notes: "", taxRate: "0", discountRate: "1", versionName: "", customerConfirmedDate: "2025-04-08", contractAmount: "100", projectId: nil)
+        let quote = QuoteItem(name: "test", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("1"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("1"), versionName: "", customerConfirmedDate: BusinessDateValue(legacyText: "2025-04-08"), contractAmount: NumericInputSupport.money("100"), projectId: nil)
         #expect(Formatters.date.date(from: quote.customerConfirmedDate) != nil)
 
         // ProjectDrawing - importedAt
@@ -167,20 +167,20 @@ struct ExportDateFilterTests {
             fileName: "test.pdf",
             fileType: "PDF",
             version: "1",
-            relatedLogDate: "",
+            relatedLogDate: .empty,
             issueStatus: .closed,
             issueNote: "",
-            importedAt: "2025-04-10 08:00",
+            importedAt: BusinessDateValue(legacyText: "2025-04-10 08:00"),
             note: ""
         )
         #expect(Formatters.dateTime.date(from: drawing.importedAt) != nil)
 
         // ProjectWarehouseMovement - date
-        let movement = ProjectWarehouseMovement(projectId: UUID(), date: "2025-04-11", movementType: .inbound, materialName: "test", specification: "", unit: "个", quantity: "1", counterparty: "test", handler: "test", note: "", linkedDocumentIds: [])
+        let movement = ProjectWarehouseMovement(projectId: UUID(), date: BusinessDateValue(legacyText: "2025-04-11"), movementType: .inbound, materialName: "test", specification: "", unit: "个", quantity: NumericInputSupport.quantity("1"), counterparty: "test", handler: "test", note: "", linkedDocumentIds: [])
         #expect(Formatters.date.date(from: movement.date) != nil)
 
         // QuickNote - updatedAt
-        let note = QuickNote(title: "test", content: "", projectId: nil, createdAt: "2025-04-12 09:00", updatedAt: "2025-04-12 09:00", attachments: [])
+        let note = QuickNote(title: "test", content: "", projectId: nil, createdAt: BusinessDateValue(legacyText: "2025-04-12 09:00"), updatedAt: BusinessDateValue(legacyText: "2025-04-12 09:00"), attachments: [])
         #expect(Formatters.dateTime.date(from: note.updatedAt) != nil)
     }
 
@@ -190,8 +190,8 @@ struct ExportDateFilterTests {
         let p2 = UUID()
 
         let records: [ProjectFinancialRecord] = [
-            ProjectFinancialRecord(projectId: p1, date: "2025-04-01", direction: .income, category: .material, amount: "100", counterparty: "A", invoiceNumber: "", linkedDocumentIds: [], note: ""),
-            ProjectFinancialRecord(projectId: p2, date: "2025-05-15", direction: .expense, category: .labor, amount: "200", counterparty: "B", invoiceNumber: "", linkedDocumentIds: [], note: ""),
+            ProjectFinancialRecord(projectId: p1, date: BusinessDateValue(legacyText: "2025-04-01"), direction: .income, category: .material, amount: NumericInputSupport.money("100"), counterparty: "A", invoiceNumber: "", linkedDocumentIds: [], note: ""),
+            ProjectFinancialRecord(projectId: p2, date: BusinessDateValue(legacyText: "2025-05-15"), direction: .expense, category: .labor, amount: NumericInputSupport.money("200"), counterparty: "B", invoiceNumber: "", linkedDocumentIds: [], note: ""),
         ]
 
         let start = Formatters.date.date(from: "2025-04-01")!

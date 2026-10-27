@@ -6,10 +6,7 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[datastore-write-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 # These arrays are private(set) in DataStore and must be mutated only through
 # explicit domain APIs (append/update/replace/merge/remove/restore helpers).
@@ -40,14 +37,14 @@ PROTECTED_PROPERTIES=(
 
 RG_ARGS=(-n --color=never --glob '*.swift')
 for property in "${PROTECTED_PROPERTIES[@]}"; do
-  RG_ARGS+=(--regexp "\\bstore\\.${property}\\s*=")
-  RG_ARGS+=(--regexp "\\bstore\\.${property}\\.append\\s*\\(")
-  RG_ARGS+=(--regexp "\\bstore\\.${property}\\.insert\\s*\\(")
-  RG_ARGS+=(--regexp "\\bstore\\.${property}\\.removeAll\\s*(\\(|\\{)")
-  RG_ARGS+=(--regexp "\\bstore\\.${property}\\[[^]]+\\]\\s*=")
+  RG_ARGS+=(--regexp "(^|[^[:alnum:]_])store\\.${property}[[:space:]]*=")
+  RG_ARGS+=(--regexp "(^|[^[:alnum:]_])store\\.${property}\\.append[[:space:]]*\\(")
+  RG_ARGS+=(--regexp "(^|[^[:alnum:]_])store\\.${property}\\.insert[[:space:]]*\\(")
+  RG_ARGS+=(--regexp "(^|[^[:alnum:]_])store\\.${property}\\.removeAll[[:space:]]*(\\(|\\{)")
+  RG_ARGS+=(--regexp "(^|[^[:alnum:]_])store\\.${property}\\[[^]]+\\][[:space:]]*=")
 done
 
-MATCHES="$(rg "${RG_ARGS[@]}" Sources || true)"
+MATCHES="$(policy_search "${RG_ARGS[@]}" Sources || true)"
 if [[ -n "$MATCHES" ]]; then
   echo "[datastore-write-policy] FAIL: detected direct DataStore array writes:" >&2
   echo "$MATCHES" >&2
@@ -60,8 +57,8 @@ fi
 # may read them for narrow indexed queries, but every mutation must cross an
 # explicit DataStore write port so save/audit behavior cannot be bypassed.
 DOMAIN_STORE_MUTATIONS="$(
-  rg -n --color=never --glob '*.swift' \
-    --regexp '\b(projectStore|financeStore|materialLibraryStore|userPreferenceStore)\.(set|replace|append|insert|remove|restore|toggle)[A-Z]' \
+  policy_search -n --color=never --glob '*.swift' \
+    --regexp '(^|[^[:alnum:]_])(projectStore|financeStore|materialLibraryStore|materialLibraryPreferencesStore)\.(set|replace|append|insert|remove|restore|toggle)[A-Z]' \
     Sources/Features Sources/App || true
 )"
 if [[ -n "$DOMAIN_STORE_MUTATIONS" ]]; then

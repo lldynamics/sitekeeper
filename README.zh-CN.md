@@ -11,7 +11,7 @@
 - 清单：材料清单、人工记录、报价单、自定义材料库，并支持关联项目。
 - 项目：工程列表、经营看板、项目详情概览、施工进度任务、历史计算、增强施工日志。
 - 施工日志：列表/日历视图、项目/日期/搜索筛选、安全记录、材料记录、天气记录、多张照片和照片备注。
-- 导出/备份：CSV、PDF、Excel 兼容 HTML、报价单 PDF、完整 ZIP 原文件备份（含数据索引 + 照片/图纸/资料/随手记与工艺附件）、合并/覆盖导入、iCloud 备份与恢复预览、ZIP64 大包流式导出。
+- 导出/备份：CSV、PDF、HTML 网页报表（.html）、报价单 PDF、完整 ZIP 原文件备份（含数据索引 + 照片/图纸/资料/随手记与工艺附件）、合并/覆盖导入、iCloud 备份与恢复预览、ZIP64 大包流式导出。
 - 数据健康：支持一键检查缺失原件、孤立项目关联和异常引用，并提供修复入口。
 - 小组件：按风险优先展示项目（逾期/待办优先）、待办与库存摘要，并显示最近同步时间。
 - 发布基础：应用图标、隐私清单、正式 Bundle ID、版本号/构建号、共享测试 scheme、单元测试。
@@ -137,13 +137,19 @@ scripts/dev/install_git_hooks.sh
 ## 目录结构
 
 - `Sources/App`：应用入口和底部导航。
-- `Sources/Features`：按功能页签拆分的业务界面。
-- `Sources/Shared`：公共模型、服务、计算辅助和通用组件。
+- `Sources/Features`：英文功能目录 `Calculators`、`Checklists`、`Dashboard`、`QuickNotes`、`Profile`、`Projects`，内部继续按业务领域归组。
+- `Sources/Shared/Models`：共享领域模型。
+- `Sources/Shared/Services`：持久化、备份、归档、文件存储、报表、搜索等服务。
+- `Sources/Shared/Helpers` 与 `Views`：公共辅助和通用组件。
 - `Sources/Resources`：应用资源、隐私清单和图标资源。
 - `Tests`：单位换算、报价、备份兼容、筛选删除、工程推荐等单元测试。
 
 ## 扩展新功能
 
-- 新增计算器：在 `Sources/Features/计算` 新建视图，并在 `CalculatorTabView.calcDefs` 注册入口。
+- 新增计算器：在 `Sources/Features/Calculators` 新建视图，并在 `CalculatorDestination.swift` 中补充类型、元数据和目标视图。工具箱通过 `QuickToolViews.swift` 使用这一份注册表，无需单独增加计算器首页。
 - 新增持久化数据：在 `DataStore.swift` 增加模型字段，并同步考虑备份、导出和删除项目时的清理逻辑。
 - 新增工程公式：优先放到 `EngineeringCalculations.swift`，再补对应单元测试。
+
+普通 Debug 构建跳过完整发布守卫；可设置 `SITEKEEPER_RUN_BUILD_GUARDS=1` 启用。Release 与发布预检会执行全部守卫，搜索优先使用 ripgrep，未安装时自动使用系统 `grep -E`。
+
+领域归属、文件拆分和 ZIP 适配层约定见[工程结构与接入规范](docs/architecture/source-organization.md)。

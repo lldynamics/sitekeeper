@@ -194,8 +194,8 @@ struct BackupContractCompatibilityTests {
             name: "图纸覆盖项目",
             location: "",
             status: .active,
-            startDate: "2025-01-01",
-            expectedEndDate: "2025-12-31"
+            startDate: BusinessDateValue(legacyText: "2025-01-01"),
+            expectedEndDate: BusinessDateValue(legacyText: "2025-12-31")
         )
 
         let oldDrawing = ProjectDrawing(

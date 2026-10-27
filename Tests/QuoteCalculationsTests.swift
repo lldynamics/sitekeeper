@@ -6,56 +6,56 @@ import Testing
 struct QuoteCalculationsTests {
     // 基础小计
     @Test func lineTotal() {
-        let item = QuoteItem(name: "测试", unitPrice: "100", quantity: "5", unit: "个", notes: "", taxRate: "0", discountRate: "0", projectId: nil)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("5"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0"), projectId: nil)
         let result = ReportBuilder.quoteLineTotal(item)
         #expect(result == 500)
     }
 
     // 税额计算
     @Test func taxCalculation() {
-        let item = QuoteItem(name: "测试", unitPrice: "100", quantity: "1", unit: "个", notes: "", taxRate: "13", discountRate: "0", projectId: nil)
-        let subtotal = ReportBuilder.quoteLineTotalValue(item)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("1"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("13"), discountRate: NumericInputSupport.quantity("0"), projectId: nil)
+        let subtotal = ReportBuilder.quoteLineTotal(item)
         let tax = ReportBuilder.quoteTaxValue(item)
-        #expect(abs(subtotal.doubleValue - 100) < 0.01)
-        #expect(abs(tax.doubleValue - 13) < 0.01)
+        #expect(subtotal.decimal == 100)
+        #expect(tax.decimal == 13)
     }
 
     // 折扣计算
     @Test func discountCalculation() {
-        let item = QuoteItem(name: "测试", unitPrice: "200", quantity: "2", unit: "个", notes: "", taxRate: "0", discountRate: "10", projectId: nil)
-        let subtotal = ReportBuilder.quoteLineTotalValue(item)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("200"), quantity: NumericInputSupport.quantity("2"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("10"), projectId: nil)
+        let subtotal = ReportBuilder.quoteLineTotal(item)
         let discount = ReportBuilder.quoteDiscountValue(item)
-        #expect(subtotal.doubleValue == 400)
-        #expect(discount.doubleValue == 40)
+        #expect(subtotal.decimal == 400)
+        #expect(discount.decimal == 40)
     }
 
     @Test func discountIsClampedToPreventNegativeQuoteTotal() {
-        let item = QuoteItem(name: "测试", unitPrice: "100", quantity: "1", unit: "个", notes: "", taxRate: "0", discountRate: "150", projectId: nil)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("1"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("150"), projectId: nil)
 
-        #expect(ReportBuilder.quoteDiscountValue(item).doubleValue == 100)
+        #expect(ReportBuilder.quoteDiscountValue(item).decimal == 100)
         #expect(ReportBuilder.quoteGrandTotal(item) == 0)
     }
 
     // 含税含折扣合计
     @Test func grandTotal() {
-        let item = QuoteItem(name: "测试", unitPrice: "1000", quantity: "1", unit: "个", notes: "", taxRate: "13", discountRate: "5", projectId: nil)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("1000"), quantity: NumericInputSupport.quantity("1"), unit: "个", notes: "", taxRate: NumericInputSupport.quantity("13"), discountRate: NumericInputSupport.quantity("5"), projectId: nil)
         let grand = ReportBuilder.quoteGrandTotal(item)
         #expect(grand == 1080)
     }
 
     @Test func quotePdfProducesData() {
-        let item = QuoteItem(name: "测试", unitPrice: "100", quantity: "2", unit: "项", notes: "", taxRate: "0", discountRate: "0", projectId: nil)
+        let item = QuoteItem(name: "测试", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("2"), unit: "项", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0"), projectId: nil)
         let data = ReportBuilder.makeQuotationPDF(title: "报价单", items: [item], projects: [])
         #expect(data.count > 100)
     }
 
     // 空值安全
     @Test func emptyValues() {
-        let item = QuoteItem(name: "", unitPrice: "", quantity: "", unit: "", notes: "", taxRate: "abc", discountRate: "", projectId: nil)
-        let price = MoneyValue(text: item.unitPrice)
-        let qty = QuantityValue(text: item.quantity)
-        #expect(price.doubleValue == 0)
-        #expect(qty.doubleValue == 0)
+        let item = QuoteItem(name: "", unitPrice: NumericInputSupport.money(""), quantity: NumericInputSupport.quantity(""), unit: "", notes: "", taxRate: NumericInputSupport.quantity("abc"), discountRate: NumericInputSupport.quantity(""), projectId: nil)
+        let price = item.unitPrice
+        let qty = item.quantity
+        #expect(price.decimal == 0)
+        #expect(qty.decimal == 0)
     }
 
     @Test func decimalParserPreservesPrecisionToken() {

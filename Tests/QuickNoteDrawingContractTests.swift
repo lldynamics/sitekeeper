@@ -3,14 +3,14 @@ import Testing
 
 struct QuickNoteDrawingContractTests {
     @Test func compactComposerKeepsDrawingReachable() throws {
-        let source = try Self.sourceText("Sources/Features/随手记/QuickNoteMediaPicker.swift")
+        let source = try Self.sourceText("Sources/Features/QuickNotes/QuickNoteMediaPicker.swift")
 
         #expect(source.contains("compactToolIcon(\"pencil.and.outline\")"))
         #expect(source.contains(".accessibilityIdentifier(\"quick-note-add-drawing\")"))
     }
 
     @Test func drawingProtectsUnsavedContentAndResetsPhotoSelection() throws {
-        let source = try Self.sourceText("Sources/Features/随手记/QuickNoteDrawingSheet.swift")
+        let source = try Self.sourceText("Sources/Features/QuickNotes/QuickNoteDrawingSheet.swift")
 
         #expect(source.contains("showDiscardConfirmation = true"))
         #expect(source.contains("showClearConfirmation = true"))

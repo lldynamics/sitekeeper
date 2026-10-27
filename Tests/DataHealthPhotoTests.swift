@@ -11,7 +11,7 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "test project", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "test project", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         store.appendProject(project)
 
         // 创建一个有待办但没有实际照片文件的待办
@@ -36,7 +36,7 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "repair test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "repair test", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         store.appendProject(project)
 
         var todo = SiteTodo(title: "安全整改", priority: .high, issueType: .safety, projectId: pid)
@@ -66,7 +66,7 @@ struct DataHealthPhotoTests {
         store.clearAllBusinessData(deleteStoredFiles: true)
 
         let pid = UUID()
-        let project = Project(id: pid, name: "combined test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(id: pid, name: "combined test", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         store.appendProject(project)
 
         var todo = SiteTodo(title: "整改项", priority: .medium, issueType: .quality, projectId: pid)
@@ -97,10 +97,10 @@ struct DataHealthPhotoTests {
             linkedDocumentIds: [missingDocumentId]
         )
         let log = DailyLog(
-            date: "2026-05-21",
+            date: BusinessDateValue(legacyText: "2026-05-21"),
             weather: "",
             content: "",
-            workers: "",
+            workers: NumericInputSupport.quantity(""),
             photoFileName: "missing-log.jpg",
             projectId: invalidProjectId
         )
@@ -111,7 +111,7 @@ struct DataHealthPhotoTests {
         )
         let material = MaterialItem(
             name: "Cement",
-            quantity: "1",
+            quantity: NumericInputSupport.quantity("1"),
             unit: "bag",
             projectId: invalidProjectId
         )
@@ -156,5 +156,202 @@ struct DataHealthPhotoTests {
         #expect(summary.storageIssues == 1)
         #expect(summary.totalIssues == 12)
         #expect(summary.hasIssues)
+    }
+}
+
+@MainActor
+struct BackgroundDataHealthTests {
+    nonisolated private static func summary(
+        _ input: DataHealthScanInput, _ reason: DataHealthScanReason, _ includeMetrics: Bool
+    ) -> DataHealthScanSummary {
+        DataHealthScanSummary(
+            scannedAt: Date(), reason: reason,
+            missingPhotoFiles: input.siteTodos.count, missingDocumentFiles: 0,
+            missingQuickNoteAttachmentFiles: 0, orphanPhotoFiles: 0, orphanDrawingFiles: 0,
+            orphanDocumentFiles: 0, orphanQuickNoteAttachmentFiles: 0,
+            orphanAttachmentMappings: 0, orphanWarehouseAttachmentMappings: 0,
+            danglingDocumentLinks: 0, invalidProjectRefs: 0, storageIssues: 0,
+            fileSnapshot: DataHealthScanFileSnapshot(
+                missingPhotoFileNames: [], missingDocumentFileNames: [],
+                missingQuickNoteAttachmentFileNames: [], orphanPhotoFileNames: [],
+                orphanDrawingFileNames: [], orphanDocumentFileNames: [], orphanQuickNoteAttachmentFileNames: []
+            ), storageIssueEntries: [], widgetHealth: nil,
+            storageUsage: includeMetrics ? .zero : nil
+        )
+    }
+
+    private func makeStore(worker: DataHealthScanWorker) async throws -> (DataStore, URL) {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("background-health-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let store = DataStore(storageDirectory: directory, dataHealthWorker: worker)
+        await store.awaitInitialLoad()
+        store.invalidateDataHealthScan()
+        return (store, directory)
+    }
+
+    @Test func workerScansOffTheMainThread() async throws {
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            #expect(!Thread.isMainThread)
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let scanned = await store.scanDataHealthNow()
+        #expect(scanned != nil)
+        #expect(store.latestDataHealthScan == scanned)
+        #expect(store.latestDataHealthSnapshot != nil)
+    }
+
+    @Test func mutationDuringScanRejectsOldResultAndPreservesMetricsRequest() async throws {
+        let started = AsyncStream<Void>.makeStream()
+        let gate = DispatchSemaphore(value: 0)
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            started.continuation.yield(())
+            #expect(gate.wait(timeout: .now() + 5) == .success)
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            gate.signal()
+            started.continuation.finish()
+            store.cancelScheduledSave()
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let first = Task { await store.scanDataHealthNow() }
+        var events = started.stream.makeAsyncIterator()
+        _ = await events.next()
+        // This MainActor mutation executes while the worker is blocked on its own executor.
+        store.projectStore.setSiteTodos([SiteTodo(title: "new revision")])
+        gate.signal()
+        #expect(await first.value == nil)
+        #expect(store.latestDataHealthScan == nil)
+        gate.signal()
+        let fresh = await store.scanDataHealthNow(reason: .dataChanged, includeSupplementalMetrics: false)
+        #expect(fresh?.missingPhotoFiles == 1)
+        #expect(fresh?.storageUsage != nil)
+    }
+
+    @Test func explicitSaveSchedulingReplacesAnInFlightScan() async throws {
+        let started = AsyncStream<Void>.makeStream()
+        let gate = DispatchSemaphore(value: 0)
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            if reason == .manual {
+                started.continuation.yield(())
+                #expect(gate.wait(timeout: .now() + 5) == .success)
+            }
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            gate.signal()
+            started.continuation.finish()
+            store.cancelScheduledSave()
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let first = Task { await store.scanDataHealthNow() }
+        var events = started.stream.makeAsyncIterator()
+        _ = await events.next()
+        store.scheduleSave()
+        store.cancelScheduledSave()
+        let replacement = store.dataHealthScanTask
+        gate.signal()
+        #expect(await first.value == nil)
+        #expect(await replacement?.value != nil)
+        #expect(store.latestDataHealthScan?.reason == .dataChanged)
+    }
+
+    @Test func newerRequestWinsWithoutDataMutation() async throws {
+        let started = AsyncStream<Void>.makeStream()
+        let gate = DispatchSemaphore(value: 0)
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            if reason == .scheduled {
+                started.continuation.yield(())
+                #expect(gate.wait(timeout: .now() + 5) == .success)
+            }
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            gate.signal()
+            started.continuation.finish()
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let first = Task { await store.scanDataHealthNow(reason: .scheduled) }
+        var events = started.stream.makeAsyncIterator()
+        _ = await events.next()
+        store.runDataHealthScanNow(reason: .manual)
+        let newest = store.dataHealthScanTask
+        gate.signal()
+        #expect(await first.value == nil)
+        #expect(await newest?.value != nil)
+        #expect(store.latestDataHealthScan?.reason == .manual)
+    }
+
+    @Test func cancelledCallerDoesNotPublishScan() async throws {
+        let started = AsyncStream<Void>.makeStream()
+        let gate = DispatchSemaphore(value: 0)
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            started.continuation.yield(())
+            #expect(gate.wait(timeout: .now() + 5) == .success)
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            gate.signal()
+            started.continuation.finish()
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let scan = Task { await store.scanDataHealthNow() }
+        var events = started.stream.makeAsyncIterator()
+        _ = await events.next()
+        scan.cancel()
+        gate.signal()
+        #expect(await scan.value == nil)
+        #expect(store.latestDataHealthScan == nil)
+    }
+
+    @Test func unchangedAutomaticScanKeepsPublishedSnapshotAndUpdatesFreshness() async throws {
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        _ = await store.scanDataHealthNow()
+        let published = store.latestDataHealthScan
+        let snapshot = store.latestDataHealthSnapshot
+        let automatic = await store.scanDataHealthNow(reason: .dataChanged, includeSupplementalMetrics: false)
+        #expect(automatic != nil)
+        #expect(store.latestDataHealthScan == published)
+        #expect(store.latestDataHealthSnapshot == snapshot)
+        #expect(store.dataHealthLastCompletedAt == automatic?.scannedAt)
+        store.scheduleDataHealthScanIfStale(maxAge: 60)
+        #expect(store.dataHealthScanTask == nil)
+    }
+
+    @Test func restoreAndFailedLoadDoNotStartScans() async throws {
+        let worker = DataHealthScanWorker { input, reason, includeMetrics in
+            Issue.record("Scan must not start while persistence is unavailable")
+            return Self.summary(input, reason, includeMetrics)
+        }
+        let (store, directory) = try await makeStore(worker: worker)
+        defer {
+            store.invalidateDataHealthScan()
+            try? FileManager.default.removeItem(at: directory)
+        }
+        store.isApplyingBackup = true
+        #expect(await store.scanDataHealthNow() == nil)
+        #expect(store.dataHealthScanTask == nil)
+        store.isApplyingBackup = false
+        store.setLoadState(.failed)
+        #expect(await store.scanDataHealthNow() == nil)
+        #expect(store.dataHealthScanTask == nil)
     }
 }

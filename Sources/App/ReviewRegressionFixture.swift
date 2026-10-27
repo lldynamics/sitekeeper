@@ -6,12 +6,16 @@ import UIKit
 @MainActor
 enum ReviewRegressionFixture {
     static func prepareIfRequested(store: DataStore) async {
+        await DuoWorkflowFixture.prepareIfRequested(store: store)
+        await RepositoryWorkspaceFixture.prepareIfRequested(store: store)
+        await WorkflowOptimizationFixture.prepareIfRequested(store: store)
+        await LinkedWorkflowFixture.prepareIfRequested(store: store)
         guard ProcessInfo.processInfo.environment["UITEST_REVIEW_REGRESSION_FIXTURE"] == "1" else { return }
         await store.awaitInitialLoad()
         guard store.loadState == .ready, !store.projects.contains(where: { $0.name == "Review Site A" }) else { return }
         do {
-            let project = Project(name: "Review Site A", location: "North", status: .active, contractAmount: "100", paidAmount: "150")
-            let other = Project(name: "Review Site B", location: "South", status: .active, contractAmount: "100")
+            let project = Project(name: "Review Site A", location: "North", status: .active, contractAmount: NumericInputSupport.money("100"), paidAmount: NumericInputSupport.money("150"))
+            let other = Project(name: "Review Site B", location: "South", status: .active, contractAmount: NumericInputSupport.money("100"))
             let pdf = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 400, height: 500)).pdfData { context in
                 context.beginPage()
                 ("Review Acceptance Page One" as NSString).draw(at: CGPoint(x: 30, y: 30), withAttributes: [.font: UIFont.systemFont(ofSize: 20)])
@@ -29,8 +33,8 @@ enum ReviewRegressionFixture {
                 QuickNoteAttachment(kind: .file, fileName: brokenName, originalName: "Review Broken.pdf")
             ]))
             store.appendUserMaterial(UserMaterial(name: "Review Copper", specification: "4 mm", unit: "m", category: "Electrical"))
-            store.appendMaterialPriceEntry(MaterialPriceEntry(name: "Review Copper", specification: "4 mm", unit: "m", referencePrice: "500"))
-            store.appendMaterialItem(MaterialItem(name: "Review Copper", quantity: "1", unit: "m", unitPrice: "500", projectId: project.id))
+            store.appendMaterialPriceEntry(MaterialPriceEntry(name: "Review Copper", specification: "4 mm", unit: "m", referencePrice: NumericInputSupport.money("500")))
+            store.appendMaterialItem(MaterialItem(name: "Review Copper", quantity: NumericInputSupport.quantity("1"), unit: "m", unitPrice: NumericInputSupport.money("500"), projectId: project.id))
             store.scheduleSave()
         } catch {
             assertionFailure("Review regression fixture failed: \(error)")

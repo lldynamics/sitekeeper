@@ -21,6 +21,7 @@ xcuserdata/
 Packages/
 Package.resolved
 .swiftpm/
+!sitekeeper.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # Local Python environments
 .venv/

@@ -11,17 +11,17 @@ enum NumericInputKind: CaseIterable {
     var fieldName: String {
         switch self {
         case .amount:
-            return String(localized: "金额")
+            return AppLocalization.string("金额")
         case .quantity:
-            return String(localized: "数量")
+            return AppLocalization.string("数量")
         case .days:
-            return String(localized: "天数")
+            return AppLocalization.string("天数")
         case .taxRate:
-            return String(localized: "税率")
+            return AppLocalization.string("税率")
         case .discountRate:
-            return String(localized: "折扣")
+            return AppLocalization.string("折扣")
         case .laborRate:
-            return String(localized: "人工费")
+            return AppLocalization.string("人工费")
         }
     }
 
@@ -83,19 +83,39 @@ struct NumericInputValidation {
         guard let error else { return nil }
         switch error {
         case .emptyRequired:
-            return String(format: String(localized: "请输入%@"), kind.fieldName)
+            return String(format: AppLocalization.string("请输入%@"), kind.fieldName)
         case .invalidFormat:
-            return String(format: String(localized: "%@格式不正确"), kind.fieldName)
+            return String(format: AppLocalization.string("%@格式不正确"), kind.fieldName)
         case .negativeNotAllowed:
-            return String(format: String(localized: "%@不能为负数"), kind.fieldName)
+            return String(format: AppLocalization.string("%@不能为负数"), kind.fieldName)
         case .notPositive:
-            return String(format: String(localized: "%@必须大于0"), kind.fieldName)
+            return String(format: AppLocalization.string("%@必须大于0"), kind.fieldName)
         }
     }
 }
 
 enum NumericInputSupport {
     private static let posixLocale = Locale(identifier: "en_US_POSIX")
+
+    // Form and import text crosses into typed domain values exactly once.
+    static func money(_ text: String) -> MoneyValue { MoneyValue(storage: DecimalFieldStorage(text: text)) }
+    static func quantity(_ text: String) -> QuantityValue { QuantityValue(storage: DecimalFieldStorage(text: text)) }
+
+    static func validate<Value: DecimalDomainValue>(
+        _ value: Value, kind: NumericInputKind,
+        requirement: NumericInputRequirement = .requiredNonNegative
+    ) -> NumericInputValidation {
+        let error: NumericInputValidation.ErrorKind?
+        if value.isEmpty {
+            error = requirement.allowsEmpty ? nil : .emptyRequired
+        } else if let number = value.optionalDecimal {
+            error = number < .zero ? .negativeNotAllowed : (requirement.requiresPositive && number <= .zero ? .notPositive : nil)
+        } else {
+            error = .invalidFormat
+        }
+        return NumericInputValidation(kind: kind, requirement: requirement, rawText: value.wireText,
+            sanitizedText: value.wireText, decimalValue: value.optionalDecimal, error: error)
+    }
 
     static func sanitize(_ text: String, kind _: NumericInputKind) -> String {
         let normalizedSeparators = normalizeSeparators(in: text)
@@ -128,7 +148,7 @@ enum NumericInputSupport {
         kind: NumericInputKind,
         requirement: NumericInputRequirement = .requiredNonNegative
     ) -> NumericInputValidation {
-        let sanitized = sanitize(text, kind: kind)
+        let sanitized = normalizeSeparators(in: text).filter { !$0.isWhitespace }
         let trimmed = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
 
         guard !trimmed.isEmpty else {

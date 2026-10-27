@@ -39,7 +39,7 @@ struct SearchableDatabaseView<
     var emptyActionSystemImage: String = "plus.circle.fill"
     var onEmptyAction: (() -> Void)?
     var searchSuggestions: [RealtimeSearchSuggestion] = []
-    var searchEmptyStateText: String = String(localized: "未找到匹配内容")
+    var searchEmptyStateText: String = AppLocalization.string("未找到匹配内容")
     let onSelect: (Item) -> Void
     var onSelectSuggestion: ((RealtimeSearchSuggestion) -> Void)? = nil
     var deleteConfig: SearchableDatabaseDeleteConfig? = nil
@@ -130,24 +130,24 @@ struct SearchableDatabaseView<
                 toolbarContent()
             }
         }
-        .alert(deleteConfig?.title ?? String(localized: "确认删除？"), isPresented: $showDeleteConfirm) {
-            Button(String(localized: "取消"), role: .cancel) {
+        .alert(deleteConfig?.title ?? AppLocalization.string("确认删除？"), isPresented: $showDeleteConfirm) {
+            Button(AppLocalization.string("取消"), role: .cancel) {
                 pendingDeleteItems.removeAll()
             }
-            Button(String(localized: "删除"), role: .destructive) {
+            Button(AppLocalization.string("删除"), role: .destructive) {
                 let targets = pendingDeleteItems
                 pendingDeleteItems.removeAll()
                 onDeleteConfirmed?(targets)
             }
         } message: {
-            let noun = deleteConfig?.itemNoun ?? String(localized: "记录")
+            let noun = deleteConfig?.itemNoun ?? AppLocalization.string("记录")
             if pendingDeleteItems.count > 1 {
                 Text(
                     deleteConfig?.pluralMessage(pendingDeleteItems.count, noun)
-                        ?? String(format: String(localized: "将删除 %lld 条%@，此操作不可撤销。"), Int64(pendingDeleteItems.count), noun)
+                        ?? String(format: AppLocalization.string("将删除 %lld 条%@，此操作不可撤销。"), Int64(pendingDeleteItems.count), noun)
                 )
             } else {
-                Text(deleteConfig?.singularMessage ?? String(localized: "删除后不可撤销。"))
+                Text(deleteConfig?.singularMessage ?? AppLocalization.string("删除后不可撤销。"))
             }
         }
     }

@@ -12,19 +12,31 @@ tool_stage="$(mktemp -d "${TMPDIR:-/tmp}/sitekeeper-ci-tools.XXXXXX")"
 trap 'rm -rf "$tool_stage"' EXIT
 
 install_release_tool() {
-  local name="$1" repo="$2" version="$3" asset="$4" digest="$5" binary="$6"
+  local name="$1" repo="$2" version="$3" asset="$4" digest="$5" binary="$6" bundle="${7:-}"
   local archive="$tool_stage/$name.zip" unpacked="$tool_stage/$name"
   curl --fail --location --silent --show-error --retry 3 \
     "https://github.com/$repo/releases/download/$version/$asset" --output "$archive"
   printf '%s  %s\n' "$digest" "$archive" | shasum -a 256 --check --status
   mkdir -p "$unpacked"
   unzip -q "$archive" -d "$unpacked"
-  install -m 755 "$unpacked/$binary" "$tool_destination/$name"
+  if [[ -z "$bundle" ]]; then
+    install -m 755 "$unpacked/$binary" "$tool_destination/$name"
+    return
+  fi
+  # Keep the binary inside its release folder so it still finds bundled resources.
+  rm -rf "$tool_destination/$name-$version"
+  cp -R "$unpacked/$bundle" "$tool_destination/$name-$version"
+  printf '#!/bin/sh\nexec "$(dirname "$0")/%s/%s" "$@"\n' "$name-$version" "${binary#"$bundle"/}" \
+    >"$tool_destination/$name"
+  chmod 755 "$tool_destination/$name"
 }
 
+# XcodeGen reads ../share/xcodegen/SettingPresets next to its binary. Without them it
+# silently drops default build settings such as PRODUCT_NAME for the test targets.
 install_release_tool xcodegen yonaskolb/XcodeGen 2.46.0 xcodegen.zip \
-  4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806 xcodegen/bin/xcodegen
+  4d9e34b62172d645eed6457cac13fc222569974098ef4ee9c3368bedf0196806 xcodegen/bin/xcodegen xcodegen
 [[ "$("$tool_destination/xcodegen" --version)" == "Version: 2.46.0" ]]
+[[ -d "$tool_destination/xcodegen-2.46.0/share/xcodegen/SettingPresets" ]]
 
 if [[ "$tool_scope" == all ]]; then
   install_release_tool swiftformat nicklockwood/SwiftFormat 0.61.1 swiftformat.zip \

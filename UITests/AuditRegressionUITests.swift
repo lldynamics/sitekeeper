@@ -108,7 +108,7 @@ extension SitekeeperUITests {
         XCTAssertTrue(phrase.waitForExistence(timeout: 5))
         phrase.tap()
         phrase.typeText("确认删除数据")
-        let confirmClear = app.buttons["确认清空"]
+        let confirmClear = clearDataConfirmationAction(app, title: "确认清空")
         XCTAssertTrue(confirmClear.isEnabled)
         confirmClear.tap()
         XCTAssertTrue(phrase.waitForNonExistence(timeout: 15))
@@ -157,7 +157,7 @@ extension SitekeeperUITests {
 
     func testEnglishLaborEntryUsesTranslatedLabels() {
         let app = launchApp(resetState: true, languageCode: "en")
-        tapPrimaryModule(app, name: "工具箱")
+        tapPrimaryModule(app, name: "Toolbox")
         element(app, identifier: "Labor Records", scrollingAttempts: 10).tap()
         XCTAssertTrue(app.navigationBars["Labor Records"].waitForExistence(timeout: 5))
         app.buttons["labor-add-record"].tap()
@@ -187,7 +187,7 @@ extension SitekeeperUITests {
     func testCreatedDailyLogSurvivesRestart() {
         let app = launchApp(resetState: true)
         button(app, identifier: "写日志").tap()
-        let content = app.textFields["daily-log-compose-content"]
+        let content = element(app, identifier: "daily-log-compose-content", scrollingAttempts: 8)
         XCTAssertTrue(content.waitForExistence(timeout: 5))
         content.tap()
         content.typeText("Audit concrete inspection complete")

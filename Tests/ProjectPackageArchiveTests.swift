@@ -9,20 +9,13 @@ struct ProjectPackageArchiveTests {
         #expect(ProjectDetailImportExportActions.packageSizeDecision(for: 0) == .normal)
         #expect(ProjectDetailImportExportActions.packageSizeDecision(for: ProjectDetailImportExportActions.largePackageWarningBytes) == .warn)
         #expect(ProjectDetailImportExportActions.packageSizeDecision(for: 10 * 1024 * 1024 * 1024) == .warn)
-        #expect(StreamingZipArchiveWriter.requiresZip64ForTesting(
-            entrySize: UInt64(UInt32.max) + 1,
-            entryOffset: 0,
-            entryCount: 1,
-            centralSize: 128,
-            centralOffset: 128
-        ))
     }
 
     @Test func missingProjectPackageFilesReportsMissingAssets() {
         let projectId = UUID()
         let documents = [ProjectDocument(projectId: projectId, title: "发票", fileName: "missing-doc.pdf")]
         let drawings = [ProjectDrawing(projectId: projectId, name: "图纸A", fileName: "missing-drawing.pdf", fileType: "pdf")]
-        let logs = [DailyLog(date: "2026-05-03", weather: "晴", content: "巡检", workers: "2", photos: [LogPhoto(fileName: "missing-photo.jpg", tag: .general)], projectId: projectId)]
+        let logs = [DailyLog(date: BusinessDateValue(legacyText: "2026-05-03"), weather: "晴", content: "巡检", workers: NumericInputSupport.quantity("2"), photos: [LogPhoto(fileName: "missing-photo.jpg", tag: .general)], projectId: projectId)]
         let quickNotes = [QuickNote(title: "补充资料", attachments: [QuickNoteAttachment(kind: .file, fileName: "missing-attachment.bin")])]
 
         let issues = ProjectDetailImportExportActions.missingProjectPackageFiles(
@@ -140,7 +133,7 @@ struct ProjectPackageArchiveTests {
         let todo = SiteTodo(
             title: "确认洞口尺寸",
             owner: "李工",
-            dueDate: "2026-05-20",
+            dueDate: BusinessDateValue(legacyText: "2026-05-20"),
             priority: .high,
             issueType: .quality,
             drawingIssueLocation: "一层 A/3 轴洞口",

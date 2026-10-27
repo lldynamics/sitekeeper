@@ -122,7 +122,7 @@ struct ConstructionMethodPackImportMappingTests {
             sourceID: "old-id",
             sourceURL: "https://example.com/old",
             sourceVersion: "old",
-            sourceUpdatedAt: "2025-01-01 10:00",
+            sourceUpdatedAt: BusinessDateValue(legacyText: "2025-01-01 10:00"),
             relatedStandards: ["旧规范"],
             relatedTemplates: [ConstructionMethodKnowledgeLink(title: "旧模板", href: "https://example.com/template-old")],
             relatedArticles: [ConstructionMethodKnowledgeLink(title: "旧文章", href: "https://example.com/article-old")]

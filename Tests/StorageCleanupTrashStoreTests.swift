@@ -105,7 +105,10 @@ struct StorageCleanupTrashStoreTests {
         let afterIDs = Set(StorageCleanupTrashStore.loadBatches().map(\.id))
         #expect(afterIDs == beforeIDs)
     }
+}
 
+// MARK: - Failure recovery
+extension StorageCleanupTrashStoreTests {
     @Test func storageCleanupTrashQuarantineRollsBackWhenManifestCannotBeRead() throws {
         let restoreManifest = try StorageCleanupTrashTestSupport.preserveManifest()
         let fileName = "storage-cleanup-manifest-fail-\(UUID().uuidString).bin"

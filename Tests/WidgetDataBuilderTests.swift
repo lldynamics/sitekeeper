@@ -156,11 +156,11 @@ struct WidgetDataBuilderTests {
     @Test func dataHealthUsesSharedWidgetDefaultsKeys() throws {
         let root = try Self.repositoryRoot()
         let source = try [
-            "Sources/Features/我的/DataHealthView.swift",
-            "Sources/Features/我的/DataHealthViewActions.swift",
-            "Sources/Features/我的/DataHealthViewIssues.swift",
-            "Sources/Features/我的/DataHealthSupport.swift",
-            "Sources/Shared/Services/DataHealthScanner.swift"
+            "Sources/Features/Profile/DataHealth/DataHealthView.swift",
+            "Sources/Features/Profile/DataHealth/DataHealthViewActions.swift",
+            "Sources/Features/Profile/DataHealth/DataHealthViewIssues.swift",
+            "Sources/Features/Profile/DataHealth/DataHealthSupport.swift",
+            "Sources/Shared/Services/DataHealth/DataHealthScanner.swift"
         ]
         .map { try Self.sourceText(root, $0) }
         .joined(separator: "\n")

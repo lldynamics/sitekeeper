@@ -16,7 +16,7 @@ struct ProjectWarehouseDeletionTests {
         deletion.restore(in: fixture.store)
 
         #expect(Set(fixture.store.projectWarehouseMovements.map(\.id)) == Set([fixture.movements[0].id, fixture.movements[1].id, fixture.movements[3].id]))
-        #expect(fixture.store.projectWarehouseMovements.first { $0.id == fixture.movements[1].id }?.quantity == "7")
+        #expect(fixture.store.projectWarehouseMovements.first { $0.id == fixture.movements[1].id }?.quantity.wireText == "7")
         #expect(fixture.store.projectWarehouseMovements.count == 3)
         fixture.expectInterveningDocumentsAndFinancePreserved()
     }
@@ -52,12 +52,12 @@ struct ProjectWarehouseDeletionTests {
             ids: [fixture.movements[0].id], deleteAttachments: true, store: fixture.store
         ))
         deletion.restore(in: fixture.store)
-        fixture.store.mutateProjectWarehouseMovement(id: fixture.movements[0].id) { $0.quantity = "12" }
+        fixture.store.mutateProjectWarehouseMovement(id: fixture.movements[0].id) { $0.quantity = NumericInputSupport.quantity("12") }
         fixture.store.mutateProjectDocument(id: fixture.documents[0].id) { $0.title = "更新后的附件" }
 
         deletion.restore(in: fixture.store)
 
-        #expect(fixture.store.projectWarehouseMovements.first { $0.id == fixture.movements[0].id }?.quantity == "12")
+        #expect(fixture.store.projectWarehouseMovements.first { $0.id == fixture.movements[0].id }?.quantity.wireText == "12")
         #expect(fixture.store.projectDocuments.first { $0.id == fixture.documents[0].id }?.title == "更新后的附件")
         #expect(fixture.store.projectWarehouseMovements.count == 3)
         #expect(fixture.store.projectDocuments.count == 3)
@@ -80,9 +80,9 @@ private extension ProjectWarehouseDeletionTests {
             let project = Project(name: "仓库撤销", location: "")
             let fixtureDocuments = (0..<4).map { ProjectDocument(projectId: project.id, title: "附件\($0)", fileName: "\($0).pdf") }
             documents = fixtureDocuments
-            records = (0..<4).map { ProjectFinancialRecord(projectId: project.id, amount: String($0 + 1)) }
+            records = (0..<4).map { ProjectFinancialRecord(projectId: project.id, amount: NumericInputSupport.money(String($0 + 1))) }
             movements = (0..<4).map { index in
-                ProjectWarehouseMovement(projectId: project.id, materialName: "材料\(index)", unit: "吨", quantity: "1",
+                ProjectWarehouseMovement(projectId: project.id, materialName: "材料\(index)", unit: "吨", quantity: NumericInputSupport.quantity("1"),
                                          linkedDocumentIds: index == 0 ? [fixtureDocuments[0].id] : [])
             }
             store.replaceProjects([project])
@@ -92,9 +92,9 @@ private extension ProjectWarehouseDeletionTests {
         }
 
         func applyInterveningChanges() {
-            store.mutateProjectWarehouseMovement(id: movements[1].id) { $0.quantity = "7" }
+            store.mutateProjectWarehouseMovement(id: movements[1].id) { $0.quantity = NumericInputSupport.quantity("7") }
             store.mutateProjectDocument(id: documents[1].id) { $0.title = "已编辑" }
-            store.mutateProjectFinancialRecord(id: records[1].id) { $0.amount = "99" }
+            store.mutateProjectFinancialRecord(id: records[1].id) { $0.amount = NumericInputSupport.money("99") }
             store.removeProjectWarehouseMovements(ids: [movements[2].id])
             store.removeProjectDocuments(ids: [documents[2].id])
             store.removeProjectFinancialRecords(ids: [records[2].id])
@@ -107,7 +107,7 @@ private extension ProjectWarehouseDeletionTests {
             #expect(Set(store.projectDocuments.map(\.id)) == Set([documents[0].id, documents[1].id, documents[3].id]))
             #expect(store.projectDocuments.first { $0.id == documents[1].id }?.title == "已编辑")
             #expect(Set(store.projectFinancialRecords.map(\.id)) == Set([records[0].id, records[1].id, records[3].id]))
-            #expect(store.projectFinancialRecords.first { $0.id == records[1].id }?.amount == "99")
+            #expect(store.projectFinancialRecords.first { $0.id == records[1].id }?.amount.wireText == "99")
         }
 
         func cleanUp() {

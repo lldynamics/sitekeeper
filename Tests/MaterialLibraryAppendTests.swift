@@ -6,7 +6,7 @@ import Testing
 struct MaterialLibraryAppendTests {
     @Test(arguments: ["", "0", "-2", "abc", "1abc2", "1.2.3"])
     func invalidQuantityCannotAppendSingleOrBatch(_ input: String) {
-        let draft = MaterialSheetDraft(title: "已有材料单", items: [MaterialSheetDraftItem(name: "原材料", quantity: "2")])
+        let draft = MaterialSheetDraft(title: "已有材料单", items: [MaterialSheetDraftItem(name: "原材料", quantity: NumericInputSupport.quantity("2"))])
         for count in [1, 3] {
             for mode in [MaterialSheetTargetMode.existing, .create] {
                 let result = compute(input, count: count, mode: mode, draft: draft)
@@ -35,7 +35,7 @@ struct MaterialLibraryAppendTests {
             let saved = try #require(output.drafts.first { $0.id == output.targetDraftID })
             let restored = try JSONDecoder().decode(MaterialSheetDraft.self, from: JSONEncoder().encode(saved))
             #expect(restored.items.count == count)
-            #expect(restored.items.allSatisfy { $0.quantity == "1234.56" })
+            #expect(restored.items.allSatisfy { $0.quantity.wireText == "1234.56" })
             let total = MaterialSheetLogicHelpers.totals(for: restored.items.map(MaterialSheetItem.init(draftItem:)))
             #expect(total.estimate.decimal == Decimal(123456) / 10 * Decimal(count))
             #expect(output.drafts.count == (mode == .create ? 2 : 1))
@@ -50,7 +50,7 @@ struct MaterialLibraryAppendTests {
         }
         let draft = try #require(output.drafts.first)
         let item = try #require(draft.items.first)
-        #expect(item.quantity == "0.0125")
+        #expect(item.quantity.wireText == "0.0125")
         #expect(MaterialSheetLogicHelpers.lineTotalValue(for: MaterialSheetItem(draftItem: item)).decimal == Decimal(string: "0.125"))
     }
 
@@ -67,7 +67,7 @@ struct MaterialLibraryAppendTests {
         return MaterialLibraryLogicHelpers.computeAppendComputation(
             contexts: contexts, quantityText: quantity, noteText: "备注", targetMode: mode,
             targetDraftID: draft.id, targetProjectID: nil, draftTitleInput: "新材料单",
-            drafts: [draft], projects: [], now: "2026-10-15 10:00",
+            drafts: [draft], projects: [], now: BusinessDateValue(legacyText: "2026-10-15 10:00"),
             unitPriceResolver: { $0.defaultUnitPrice }
         )
     }

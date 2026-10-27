@@ -6,15 +6,12 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[swiftui-identity-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 MATCHES=""
-MATCHES+="$(rg -n --color=never --glob '*.swift' 'ForEach\(\s*Array\(.*\.enumerated\(\)\)\s*,\s*id:\s*\\\.offset' Sources Widget || true)"
+MATCHES+="$(policy_search -n --color=never --glob '*.swift' 'ForEach\([[:space:]]*Array\(.*\.enumerated\(\)\)[[:space:]]*,[[:space:]]*id:[[:space:]]*\\\.offset' Sources Widget || true)"
 MATCHES+=$'\n'
-MATCHES+="$(rg -n --color=never --glob '*.swift' 'ForEach\([^)]*id:\s*\\\.offset' Sources Widget || true)"
+MATCHES+="$(policy_search -n --color=never --glob '*.swift' 'ForEach\([^)]*id:[[:space:]]*\\\.offset' Sources Widget || true)"
 
 if [[ -n "${MATCHES//$'\n'/}" ]]; then
   echo "[swiftui-identity-policy] FAIL: detected unstable ForEach identity (id: .offset) in production targets:" >&2

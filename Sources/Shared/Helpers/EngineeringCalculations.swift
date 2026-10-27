@@ -104,7 +104,10 @@ enum EngineeringCalculations {
             ampacity(for: section, isCopper: isCopper) >= target
         }
     }
+}
 
+// MARK: - Voltage drop and conductor sizing
+extension EngineeringCalculations {
     static func voltageDropValidated(
         current: Double,
         length: Double,
@@ -186,7 +189,10 @@ enum EngineeringCalculations {
         guard let base = copperAmpacity[section] else { return 0 }
         return isCopper ? base : base * 0.78
     }
+}
 
+// MARK: - Conduit and tray fill
+extension EngineeringCalculations {
     static func circleArea(diameter: Double) -> Double {
         .pi * diameter * diameter / 4
     }
@@ -298,7 +304,10 @@ enum EngineeringCalculations {
             return fillRate <= maxFill
         }
     }
+}
 
+// MARK: - Three-phase balancing
+extension EngineeringCalculations {
     /// Returns phase index (0=A, 1=B, 2=C) for each load using a greedy balancing strategy.
     static func assignThreePhases(currents: [Double]) -> [Int] {
         var totals = [0.0, 0.0, 0.0]

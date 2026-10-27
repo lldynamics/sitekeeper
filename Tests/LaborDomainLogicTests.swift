@@ -6,18 +6,18 @@ import Testing
 struct LaborDomainLogicTests {
     @Test func laborCostDistinguishesMissingWorkersFromExplicitZero() {
         let historicalMissingWorkers = LaborRecord(
-            date: "2026-09-09",
-            workers: "",
-            hours: "1",
-            unitRate: "300",
+            date: BusinessDateValue(legacyText: "2026-09-09"),
+            workers: NumericInputSupport.quantity(""),
+            hours: NumericInputSupport.quantity("1"),
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let explicitZeroWorkers = LaborRecord(
-            date: "2026-09-09",
-            workers: "0",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-09"),
+            workers: NumericInputSupport.quantity("0"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .workday,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
 
@@ -38,9 +38,9 @@ struct LaborDomainLogicTests {
 
         let legacy = try JSONDecoder().decode(LaborRecord.self, from: legacyJSON)
         #expect(legacy.workloadUnit == .legacyUnspecified)
-        #expect(legacy.hours == "8")
+        #expect(legacy.hours.wireText == "8")
         #expect(ReportBuilder.laborLineTotal(legacy) == 800)
-        #expect(LaborQuoteGenerator.makeQuoteItem(from: legacy, defaultRate: "", taxRate: "0", discountRate: "0") == nil)
+        #expect(LaborQuoteGenerator.makeQuoteItem(from: legacy, defaultRate: NumericInputSupport.money(""), taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0")) == nil)
 
         let restored = try JSONDecoder().decode(LaborRecord.self, from: JSONEncoder().encode(legacy))
         #expect(restored.workloadUnit == .legacyUnspecified)
@@ -49,44 +49,44 @@ struct LaborDomainLogicTests {
 
     @Test func confirmedWorkdayLaborCreatesWorkdayQuotation() throws {
         let record = LaborRecord(
-            date: "2026-09-09",
-            workers: "2",
-            hours: "1.5",
+            date: BusinessDateValue(legacyText: "2026-09-09"),
+            workers: NumericInputSupport.quantity("2"),
+            hours: NumericInputSupport.quantity("1.5"),
             workloadUnit: .workday,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
             from: record,
-            defaultRate: "",
-            taxRate: "0",
-            discountRate: "0"
+            defaultRate: NumericInputSupport.money(""),
+            taxRate: NumericInputSupport.quantity("0"),
+            discountRate: NumericInputSupport.quantity("0")
         ))
 
-        #expect(quote.quantity == "3")
+        #expect(quote.quantity.wireText == "3")
         #expect(quote.unit == record.workloadUnit.quoteUnit)
-        #expect(quote.unitPrice == "300")
+        #expect(quote.unitPrice.wireText == "300")
     }
 
     @Test func fractionalWorkdayQuotationPreservesLaborAmountWhenUsingRecordedRate() throws {
         let record = LaborRecord(
-            date: "2026-10-13",
-            workers: "1",
-            hours: "0.125",
+            date: BusinessDateValue(legacyText: "2026-10-13"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("0.125"),
             workloadUnit: .workday,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
             from: record,
-            defaultRate: "   ",
-            taxRate: "0",
-            discountRate: "0"
+            defaultRate: NumericInputSupport.money("   "),
+            taxRate: NumericInputSupport.quantity("0"),
+            discountRate: NumericInputSupport.quantity("0")
         ))
 
-        #expect(quote.quantityValue == record.totalWorkloadValue)
-        #expect(quote.unitPriceValue == MoneyValue(text: "300"))
-        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: "37.50"))
+        #expect(quote.quantity == record.totalWorkload)
+        #expect(quote.unitPrice == NumericInputSupport.money("300"))
+        #expect(ReportBuilder.quoteGrandTotal(quote) == NumericInputSupport.money("37.50"))
         #expect(ReportBuilder.quoteGrandTotal(quote) == ReportBuilder.laborLineTotal(record))
     }
 
@@ -102,75 +102,75 @@ struct LaborDomainLogicTests {
         expectedAmount: String
     ) throws {
         let record = LaborRecord(
-            date: "2026-10-13",
-            workers: workers,
-            hours: days,
+            date: BusinessDateValue(legacyText: "2026-10-13"),
+            workers: NumericInputSupport.quantity(workers),
+            hours: NumericInputSupport.quantity(days),
             workloadUnit: .workday,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
             from: record,
-            defaultRate: "",
-            taxRate: "0",
-            discountRate: "0"
+            defaultRate: NumericInputSupport.money(""),
+            taxRate: NumericInputSupport.quantity("0"),
+            discountRate: NumericInputSupport.quantity("0")
         ))
 
-        #expect(quote.quantityValue == QuantityValue(text: expectedWorkload))
-        #expect(quote.quantityValue == record.totalWorkloadValue)
-        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: expectedAmount))
+        #expect(quote.quantity == NumericInputSupport.quantity(expectedWorkload))
+        #expect(quote.quantity == record.totalWorkload)
+        #expect(ReportBuilder.quoteGrandTotal(quote) == NumericInputSupport.money(expectedAmount))
         #expect(ReportBuilder.quoteGrandTotal(quote) == ReportBuilder.laborLineTotal(record))
     }
 
     @Test func fractionalWorkloadQuotationAppliesSpecifiedRateTaxAndDiscount() throws {
         let record = LaborRecord(
-            date: "2026-10-13",
-            workers: "1",
-            hours: "0.125",
+            date: BusinessDateValue(legacyText: "2026-10-13"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("0.125"),
             workloadUnit: .hour,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let quote = try #require(LaborQuoteGenerator.makeQuoteItem(
             from: record,
-            defaultRate: " 400.00 ",
-            taxRate: "13",
-            discountRate: "5"
+            defaultRate: NumericInputSupport.money(" 400.00 "),
+            taxRate: NumericInputSupport.quantity("13"),
+            discountRate: NumericInputSupport.quantity("5")
         ))
 
-        #expect(quote.quantityValue == record.totalWorkloadValue)
+        #expect(quote.quantity == record.totalWorkload)
         #expect(quote.unit == record.workloadUnit.quoteUnit)
-        #expect(quote.unitPriceValue == MoneyValue(text: "400"))
-        #expect(ReportBuilder.quoteLineTotalValue(quote) == MoneyValue(text: "50"))
-        #expect(ReportBuilder.quoteTaxValue(quote) == MoneyValue(text: "6.50"))
-        #expect(ReportBuilder.quoteDiscountValue(quote) == MoneyValue(text: "2.50"))
-        #expect(ReportBuilder.quoteGrandTotalValue(quote) == MoneyValue(text: "54"))
-        #expect(ReportBuilder.laborLineTotal(record) == 37.50)
+        #expect(quote.unitPrice == NumericInputSupport.money("400"))
+        #expect(ReportBuilder.quoteLineTotal(quote) == NumericInputSupport.money("50"))
+        #expect(ReportBuilder.quoteTaxValue(quote) == NumericInputSupport.money("6.50"))
+        #expect(ReportBuilder.quoteDiscountValue(quote) == NumericInputSupport.money("2.50"))
+        #expect(ReportBuilder.quoteGrandTotal(quote) == NumericInputSupport.money("54"))
+        #expect(ReportBuilder.laborLineTotal(record) == MoneyValue(Decimal(string: "37.50")!))
     }
 
     @Test func bulkUnitConfirmationChangesOnlySelectedLegacyRecordsWithoutConvertingValues() {
         let legacyHour = LaborRecord(
-            date: "2026-09-01",
-            workers: "2",
-            hours: "8",
+            date: BusinessDateValue(legacyText: "2026-09-01"),
+            workers: NumericInputSupport.quantity("2"),
+            hours: NumericInputSupport.quantity("8"),
             workloadUnit: .legacyUnspecified,
-            unitRate: "50",
+            unitRate: NumericInputSupport.money("50"),
             note: ""
         )
         let legacyUnselected = LaborRecord(
-            date: "2026-09-02",
-            workers: "3",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-02"),
+            workers: NumericInputSupport.quantity("3"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .legacyUnspecified,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             note: ""
         )
         let known = LaborRecord(
-            date: "2026-09-03",
-            workers: "1",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-03"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .workday,
-            unitRate: "200",
+            unitRate: NumericInputSupport.money("200"),
             note: ""
         )
 
@@ -181,32 +181,32 @@ struct LaborDomainLogicTests {
         )
 
         #expect(updated[0].workloadUnit == .hour)
-        #expect(updated[0].workers == "2")
-        #expect(updated[0].hours == "8")
-        #expect(updated[0].unitRate == "50")
+        #expect(updated[0].workers.wireText == "2")
+        #expect(updated[0].hours.wireText == "8")
+        #expect(updated[0].unitRate.wireText == "50")
         #expect(updated[1].workloadUnit == .legacyUnspecified)
         #expect(updated[2].workloadUnit == .workday)
     }
 
     @Test func bulkUnitEligibilityKeepsTheFrozenSelectionAndDropsRowsAlreadyConfirmed() {
         var originallySelected = LaborRecord(
-            date: "2026-09-01",
-            workers: "1",
-            hours: "8",
+            date: BusinessDateValue(legacyText: "2026-09-01"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("8"),
             workloadUnit: .legacyUnspecified,
             note: ""
         )
         let selectedStillLegacy = LaborRecord(
-            date: "2026-09-02",
-            workers: "1",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-02"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .legacyUnspecified,
             note: ""
         )
         let addedAfterPreview = LaborRecord(
-            date: "2026-09-03",
-            workers: "1",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-03"),
+            workers: NumericInputSupport.quantity("1"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .legacyUnspecified,
             note: ""
         )
@@ -223,9 +223,9 @@ struct LaborDomainLogicTests {
 
     @Test func projectReportLaborSummaryKeepsUnitsSeparate() {
         let records = [
-            LaborRecord(date: "2026-09-09", workers: "2", hours: "8", workloadUnit: .hour, note: ""),
-            LaborRecord(date: "2026-09-09", workers: "3", hours: "1", workloadUnit: .workday, note: ""),
-            LaborRecord(date: "2026-09-09", workers: "2", hours: "4", workloadUnit: .legacyUnspecified, note: "")
+            LaborRecord(date: BusinessDateValue(legacyText: "2026-09-09"), workers: NumericInputSupport.quantity("2"), hours: NumericInputSupport.quantity("8"), workloadUnit: .hour, note: ""),
+            LaborRecord(date: BusinessDateValue(legacyText: "2026-09-09"), workers: NumericInputSupport.quantity("3"), hours: NumericInputSupport.quantity("1"), workloadUnit: .workday, note: ""),
+            LaborRecord(date: BusinessDateValue(legacyText: "2026-09-09"), workers: NumericInputSupport.quantity("2"), hours: NumericInputSupport.quantity("4"), workloadUnit: .legacyUnspecified, note: "")
         ]
 
         let summary = ReportBuilder.laborWorkloadSummary(records)
@@ -242,11 +242,11 @@ struct LaborDomainLogicTests {
     @Test func laborHTMLExportEscapesProjectWorkTypeAndTeam() throws {
         let project = Project(name: "A&B <总包>", location: "")
         let record = LaborRecord(
-            date: "2026-09-09",
-            workers: "2",
-            hours: "1",
+            date: BusinessDateValue(legacyText: "2026-09-09"),
+            workers: NumericInputSupport.quantity("2"),
+            hours: NumericInputSupport.quantity("1"),
             workloadUnit: .workday,
-            unitRate: "300",
+            unitRate: NumericInputSupport.money("300"),
             workType: "<script>工种</script>",
             teamName: "一班 & 二班",
             note: "",

@@ -70,6 +70,7 @@ final class KeyboardToolbarScopeView: UIView {
     var isScopeActive = true
     private var observers: [NSObjectProtocol] = []
     private var updateScheduled = false
+    private var lastPageSize = CGSize.zero
 
     init() {
         super.init(frame: .zero)
@@ -117,7 +118,42 @@ final class KeyboardToolbarScopeView: UIView {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             self.updateScheduled = false
+            let resized = self.lastPageSize != .zero && self.lastPageSize != self.bounds.size
+            self.lastPageSize = self.bounds.size
             self.onVisibilityChange?(self.shouldPresentToolbar)
+            if resized { self.keepFocusedInputVisible() }
+        }
+    }
+
+    private func keepFocusedInputVisible() {
+        guard shouldPresentToolbar, let window,
+              let owner = Self.viewController(containing: self),
+              let responder = Self.firstResponder(in: window) else { return }
+        owner.view.layoutIfNeeded()
+        var target = responder.bounds
+        if let input = responder as? UITextInput, let selection = input.selectedTextRange {
+            let caret = input.caretRect(for: selection.end)
+            if Self.hasUsableBounds(caret) { target = caret }
+        }
+        var ancestor = responder.superview
+        while let view = ancestor, view !== owner.view.superview {
+            if let scroll = view as? UIScrollView, scroll.isScrollEnabled {
+                let safe = owner.view.convert(owner.view.safeAreaLayoutGuide.layoutFrame, to: scroll)
+                let page = convert(bounds, to: scroll)
+                let visible = scroll.bounds.inset(by: scroll.adjustedContentInset).intersection(safe).intersection(page)
+                let input = responder.convert(target, to: scroll).insetBy(dx: 0, dy: -12)
+                if Self.hasUsableBounds(visible), Self.hasUsableBounds(input) {
+                    let delta = input.minY < visible.minY ? input.minY - visible.minY
+                        : max(0, input.maxY - visible.maxY)
+                    let lower = -scroll.adjustedContentInset.top
+                    let upper = max(lower, scroll.contentSize.height - scroll.bounds.height + scroll.adjustedContentInset.bottom)
+                    let offset = min(max(scroll.contentOffset.y + delta, lower), upper)
+                    if abs(offset - scroll.contentOffset.y) > 0.5 {
+                        scroll.setContentOffset(CGPoint(x: scroll.contentOffset.x, y: offset), animated: false)
+                    }
+                }
+            }
+            ancestor = view.superview
         }
     }
 

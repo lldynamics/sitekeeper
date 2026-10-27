@@ -3,6 +3,33 @@ import Testing
 @testable import sitekeeper
 
 struct ProjectDetailRoutingHelpersTests {
+    @Test(arguments: [AppLanguage.chinese, .english])
+    func methodPreviewFormatsKeepNumericAndObjectArgumentsDistinct(language: AppLanguage) {
+        let bundle = AppLocalization.localizedBundle(language: language)
+        let preview = bundle.localizedString(forKey: "将生成 %1$lld 条待办 + 2 份资料（%2$@）", value: nil, table: nil)
+        let body = bundle.localizedString(forKey: "%1$lld 行 · %2$@", value: nil, table: nil)
+        #expect(String(format: preview, Int64(3), "7") == (language == .english
+            ? "Will create 3 tasks and 2 documents (7)" : "将生成 3 条待办 + 2 份资料（7）"))
+        #expect(String(format: body, Int64(4), "Checklist") == (language == .english
+            ? "4 lines · Checklist" : "4 行 · Checklist"))
+    }
+
+    @Test func selectedMethodsAndEmptySelectionRenderWithoutLosingOpenTodoCount() {
+        let selected = ProjectConstructionMethodLoopRecommendationSupport.generationPreviewText(
+            openTodoCount: 7, selectedMethodCount: 3
+        )
+        let empty = ProjectConstructionMethodLoopRecommendationSupport.generationPreviewText(
+            openTodoCount: 7, selectedMethodCount: 0
+        )
+        if AppLanguage.current.resourceLanguageCode == "en" {
+            #expect(selected == "Will create 3 tasks and 2 documents (7 open tasks)")
+            #expect(empty == "7 open tasks · Select methods to generate the workflow")
+        } else {
+            #expect(selected == "将生成 3 条待办 + 2 份资料（当前未完成待办 7 条）")
+            #expect(empty == "当前未完成待办 7 条 · 请选择工艺后生成")
+        }
+    }
+
     @Test func onAppearRouterSetsAutoOpenFlagsOnlyWhenNotYetOpened() {
         let routing = ProjectDetailOnAppearRouter.resolve(
             autoOpenFinancialAdd: true,
@@ -47,7 +74,7 @@ struct ProjectDetailRoutingHelpersTests {
 
     @Test func onAppearRouterResolvesFocusedFinancialRecord() {
         let projectId = UUID()
-        let record = ProjectFinancialRecord(id: UUID(), projectId: projectId, amount: "100")
+        let record = ProjectFinancialRecord(id: UUID(), projectId: projectId, amount: NumericInputSupport.money("100"))
 
         let routing = ProjectDetailOnAppearRouter.resolve(
             autoOpenFinancialAdd: false,
@@ -115,7 +142,7 @@ struct ProjectDetailRoutingHelpersTests {
 
     @Test func focusedItemApplierRoutesFinancialRecordOnly() {
         let projectId = UUID()
-        let record = ProjectFinancialRecord(id: UUID(), projectId: projectId, amount: "200")
+        let record = ProjectFinancialRecord(id: UUID(), projectId: projectId, amount: NumericInputSupport.money("200"))
         var selectedFinancialRecord: ProjectFinancialRecord?
         var selectedDocument: ProjectDocument?
         var selectedContact: ProjectContact?

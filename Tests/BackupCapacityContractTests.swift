@@ -71,10 +71,11 @@ struct BackupCapacityContractTests {
         try handle.close()
         var writer = try StreamingZipArchiveWriter(fileURL: url, limits: .backup)
         defer { try? writer.close() }
+        let before = try Data(contentsOf: url)
         #expect(throws: SimpleZipArchiveReader.ZipReadError.self) {
             try writer.addFile(path: "files/large.bin", sourceFileURL: source)
         }
-        #expect(QuickNoteAttachmentStorage.fileSize(at: url) == 0)
+        #expect(try Data(contentsOf: url) == before)
     }
 
     @Test func productionStreamingRestoreSupportsArchiveLargerThan500MiB() throws {

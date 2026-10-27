@@ -20,141 +20,6 @@ struct DataStoreTests {
         self.testStore = store
     }
 
-    // MARK: - Initial state
-
-    @Test func emptyStoreHasNoBusinessData() {
-        #expect(!testStore.hasAnyBusinessData)
-    }
-
-    @Test func emptyStoreProjectsEmpty() {
-        #expect(testStore.projects.isEmpty)
-    }
-
-    // MARK: - Seed data
-
-    @Test func importSampleDataPopulatesProjects() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.projects.isEmpty)
-        #expect(testStore.projects.count >= 5)
-    }
-
-    @Test func importSampleDataPopulatesMaterials() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.materialItems.isEmpty)
-    }
-
-    @Test func importSampleDataReplacingClearsFirst() {
-        testStore.importSampleData(replacingExisting: false)
-        testStore.importSampleData(replacingExisting: true)
-        #expect(testStore.projects.count >= 5)
-    }
-
-    @Test func importSampleDataSetsHistory() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.historyRecords.isEmpty)
-    }
-
-    @Test func importSampleDataRestoresExpandedFixtureCoverage() throws {
-        #expect(testStore.importSampleData(replacingExisting: true))
-        #expect(testStore.projects.count >= 5)
-        #expect(testStore.materialItems.count >= 10)
-        #expect(testStore.quoteItems.count >= 8)
-        #expect(testStore.projectDrawings.count >= 3)
-        #expect(testStore.projectDocuments.count >= 5)
-        #expect(testStore.projectContacts.count >= 8)
-        #expect(testStore.projectFinancialRecords.count >= 8)
-        #expect(testStore.projectWarehouseMovements.count >= 8)
-        #expect(testStore.materialSheetDrafts.count >= 4)
-        #expect(testStore.quickNotes.contains { !$0.attachments.isEmpty })
-        #expect(testStore.dailyLogs.contains { !$0.allPhotoFileNames.isEmpty })
-
-        let drawing = try #require(testStore.projectDrawings.first)
-        let document = try #require(testStore.projectDocuments.first)
-        let note = try #require(testStore.quickNotes.first { !$0.attachments.isEmpty })
-        let attachment = try #require(note.attachments.first)
-        let photoName = try #require(testStore.dailyLogs.first(where: { !$0.allPhotoFileNames.isEmpty })?.allPhotoFileNames.first)
-
-        #expect(DrawingStorage.exists(fileName: drawing.fileName))
-        #expect(ProjectDocumentStorage.exists(fileName: document.fileName))
-        #expect(QuickNoteAttachmentStorage.exists(fileName: attachment.fileName))
-        #expect(PhotoStorage.exists(fileName: photoName))
-        let photoData = try #require(PhotoStorage.data(for: photoName))
-        #expect(UIImage(data: photoData) != nil)
-    }
-
-    @Test func calculationHistoryRemovalReturnsRestorableResult() {
-        let first = HistoryRecord(tool: "墙面", input: "A", result: "1", date: "2026-05-16 10:00")
-        let second = HistoryRecord(tool: "照明", input: "B", result: "2", date: "2026-05-16 10:01")
-        testStore.replaceHistoryRecords([first, second])
-
-        let deletion = testStore.removeCalculationHistory(ids: Set([first.id]))
-
-        #expect(deletion.deletedCount == 1)
-        #expect(testStore.historyRecords.map(\.id) == [second.id])
-        #expect(deletion.restoredItems(current: testStore.historyRecords, id: \.id).map(\.id) == [first.id, second.id])
-    }
-
-    @Test func calculationHistoryClearReturnsRestorableResult() {
-        let first = HistoryRecord(tool: "墙面", input: "A", result: "1", date: "2026-05-16 10:00")
-        let second = HistoryRecord(tool: "照明", input: "B", result: "2", date: "2026-05-16 10:01")
-        testStore.replaceHistoryRecords([first, second])
-
-        let deletion = testStore.clearCalculationHistory()
-
-        #expect(deletion.deletedCount == 2)
-        #expect(testStore.historyRecords.isEmpty)
-        #expect(deletion.restoredItems(current: testStore.historyRecords, id: \.id).map(\.id) == [first.id, second.id])
-    }
-
-    @Test func hasAnyBusinessDataAfterImport() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(testStore.hasAnyBusinessData)
-    }
-
-    // MARK: - Snapshot roundtrip
-
-    @Test func makeSnapshotPreservesData() {
-        testStore.importSampleData(replacingExisting: false)
-        let snapshot = testStore.makeSnapshot(includePhotoFiles: false)
-        #expect(snapshot.projects.count == testStore.projects.count)
-        #expect(snapshot.materialItems.count == testStore.materialItems.count)
-        #expect(snapshot.quoteItems.count == testStore.quoteItems.count)
-    }
-
-    // MARK: - Clear
-
-    @Test func clearAllBusinessDataEmptiesStore() {
-        testStore.importSampleData(replacingExisting: false)
-        testStore.clearAllBusinessData(deleteStoredFiles: false)
-        #expect(!testStore.hasAnyBusinessData)
-        #expect(testStore.projects.isEmpty)
-    }
-
-    // MARK: - MaterialPriceEntries
-
-    @Test func materialPriceEntriesAfterImport() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.materialPriceEntries.isEmpty)
-        #expect(testStore.materialPriceEntries.contains { $0.name.contains("BV") })
-    }
-
-    // MARK: - supplierProfiles
-
-    @Test func supplierProfilesAfterImport() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.supplierProfiles.isEmpty)
-    }
-
-    // MARK: - templates
-
-    @Test func templatesAfterImport() {
-        testStore.importSampleData(replacingExisting: false)
-        #expect(!testStore.templates.isEmpty)
-        #expect(testStore.templates.contains { $0.category == .dailyLog })
-    }
-
-    // MARK: - deleteProject full cascade
-
     @Test func deleteProjectRemovesProjectAndAllRelatedData() async throws {
         testStore.importSampleData(replacingExisting: true)
         let project = try #require(testStore.projects.first)
@@ -192,8 +57,8 @@ struct DataStoreTests {
 
     @Test func deleteProjectRemovesOnlyMaterialSheetDraftsUnderProject() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let first = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        let second = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let first = Project(name: "A", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
+        let second = Project(name: "B", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         testStore.replaceProjects([first, second])
         testStore.replaceMaterialSheetDrafts([
             MaterialSheetDraft(title: "A 草稿", projectId: first.id),
@@ -211,9 +76,9 @@ struct DataStoreTests {
     @Test func deleteProjectPrunesSharedContactLinksForOtherProjects() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
 
-        let projectA = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        let projectB = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        let projectC = Project(name: "C", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let projectA = Project(name: "A", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
+        let projectB = Project(name: "B", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
+        let projectC = Project(name: "C", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         testStore.replaceProjects([projectA, projectB, projectC])
 
         let sharedContact = ProjectContact(
@@ -239,7 +104,7 @@ struct DataStoreTests {
 
     @Test func removeProjectCascadeDefersStoredFileDeletionUntilCommit() throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let project = Project(name: "文件项目", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(name: "文件项目", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         let photoFile = try PhotoStorage.saveOrThrow(
             original: Self.makeJPEGData(),
             fileName: "project-delete-photo-\(UUID().uuidString).jpg"
@@ -268,10 +133,10 @@ struct DataStoreTests {
         testStore.replaceProjects([project])
         testStore.replaceDailyLogs([
             DailyLog(
-                date: "2026-05-16",
+                date: BusinessDateValue(legacyText: "2026-05-16"),
                 weather: "晴",
                 content: "日志",
-                workers: "2",
+                workers: NumericInputSupport.quantity("2"),
                 photos: [LogPhoto(fileName: photoFile)],
                 projectId: project.id
             )
@@ -312,35 +177,35 @@ struct DataStoreTests {
 
     @Test func removeProjectCascadeCanRestoreDeletedProjectDataAndContactLinks() throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let projectA = Project(name: "A", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        let projectB = Project(name: "B", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
-        let material = MaterialItem(name: "水泥", quantity: "1", unit: "袋", projectId: projectA.id)
+        let projectA = Project(name: "A", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
+        let projectB = Project(name: "B", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
+        let material = MaterialItem(name: "水泥", quantity: NumericInputSupport.quantity("1"), unit: "袋", projectId: projectA.id)
         let quote = QuoteItem(
             name: "报价",
-            unitPrice: "10",
-            quantity: "1",
+            unitPrice: NumericInputSupport.money("10"),
+            quantity: NumericInputSupport.quantity("1"),
             unit: "项",
             notes: "",
-            taxRate: "0",
-            discountRate: "0",
+            taxRate: NumericInputSupport.quantity("0"),
+            discountRate: NumericInputSupport.quantity("0"),
             projectId: projectA.id
         )
-        let labor = LaborRecord(date: "2026-05-16", workers: "2", hours: "1", note: "", projectId: projectA.id)
-        let log = DailyLog(date: "2026-05-16", weather: "晴", content: "日志", workers: "2", projectId: projectA.id)
+        let labor = LaborRecord(date: BusinessDateValue(legacyText: "2026-05-16"), workers: NumericInputSupport.quantity("2"), hours: NumericInputSupport.quantity("1"), note: "", projectId: projectA.id)
+        let log = DailyLog(date: BusinessDateValue(legacyText: "2026-05-16"), weather: "晴", content: "日志", workers: NumericInputSupport.quantity("2"), projectId: projectA.id)
         let progress = ProgressTask(
             projectId: projectA.id,
             title: "进度",
-            startDate: "2026-05-16",
-            dueDate: "2026-05-20",
+            startDate: BusinessDateValue(legacyText: "2026-05-16"),
+            dueDate: BusinessDateValue(legacyText: "2026-05-20"),
             completion: 0.3,
             note: ""
         )
         let todo = SiteTodo(title: "待办", projectId: projectA.id)
         let drawing = ProjectDrawing(projectId: projectA.id, name: "图纸", fileName: "restore-drawing.pdf", fileType: "pdf")
-        let financial = ProjectFinancialRecord(projectId: projectA.id, amount: "100")
+        let financial = ProjectFinancialRecord(projectId: projectA.id, amount: NumericInputSupport.money("100"))
         let document = ProjectDocument(projectId: projectA.id, title: "资料", fileName: "restore-doc.pdf")
         let note = QuickNote(title: "随手记", projectId: projectA.id)
-        let movement = ProjectWarehouseMovement(projectId: projectA.id, materialName: "水泥", unit: "袋", quantity: "1")
+        let movement = ProjectWarehouseMovement(projectId: projectA.id, materialName: "水泥", unit: "袋", quantity: NumericInputSupport.quantity("1"))
         let draft = MaterialSheetDraft(title: "材料单", projectId: projectA.id)
         let sharedContact = ProjectContact(projectId: projectB.id, relatedProjectIds: [projectA.id], name: "共享联系人")
         let deletedPrimaryContact = ProjectContact(projectId: projectA.id, relatedProjectIds: [projectB.id], name: "项目联系人")
@@ -384,114 +249,10 @@ struct DataStoreTests {
         let restoredSharedContact = try #require(testStore.projectContacts.first { $0.id == sharedContact.id })
         #expect(restoredSharedContact.relatedProjectIds.contains(projectA.id))
     }
+}
 
-    @Test func projectPhotoCleanupClearsReferencesAndKeepsSharedFiles() throws {
-        testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let projectA = UUID()
-        let projectB = UUID()
-        let targetLog = DailyLog(
-            date: "2026-05-16",
-            weather: "晴",
-            content: "日志",
-            workers: "2",
-            photoFileName: "legacy.jpg",
-            photos: [
-                LogPhoto(fileName: "target.jpg"),
-                LogPhoto(fileName: "shared.jpg")
-            ],
-            projectId: projectA
-        )
-        let otherLog = DailyLog(
-            date: "2026-05-17",
-            weather: "晴",
-            content: "其他",
-            workers: "1",
-            photos: [LogPhoto(fileName: "shared.jpg")],
-            projectId: projectB
-        )
-        let targetTodo = SiteTodo(
-            title: "整改",
-            rectificationBeforePhotoFileName: "before.jpg",
-            rectificationAfterPhotoFileName: "after.jpg",
-            projectId: projectA
-        )
-        let otherTodo = SiteTodo(
-            title: "其他整改",
-            rectificationBeforePhotoFileName: "other-before.jpg",
-            projectId: projectB
-        )
-        testStore.replaceDailyLogs([targetLog, otherLog])
-        testStore.replaceSiteTodos([targetTodo, otherTodo])
-
-        let result = testStore.clearProjectPhotoReferences(projectId: projectA)
-
-        let cleanedLog = try #require(testStore.dailyLogs.first { $0.id == targetLog.id })
-        let untouchedLog = try #require(testStore.dailyLogs.first { $0.id == otherLog.id })
-        let cleanedTodo = try #require(testStore.siteTodos.first { $0.id == targetTodo.id })
-        let untouchedTodo = try #require(testStore.siteTodos.first { $0.id == otherTodo.id })
-        #expect(cleanedLog.photoFileName == nil)
-        #expect(cleanedLog.photos.isEmpty)
-        #expect(untouchedLog.allPhotoFileNames == ["shared.jpg"])
-        #expect(cleanedTodo.rectificationBeforePhotoFileName == nil)
-        #expect(cleanedTodo.rectificationAfterPhotoFileName == nil)
-        #expect(untouchedTodo.rectificationBeforePhotoFileName == "other-before.jpg")
-        #expect(result.photoFileNames == Set(["legacy.jpg", "target.jpg", "before.jpg", "after.jpg"]))
-    }
-
-    @Test func updateDailyLogPhotoPromotesLegacyPhotoIntoStructuredPhotos() throws {
-        testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let log = DailyLog(
-            date: "2026-05-16",
-            weather: "晴",
-            content: "日志",
-            workers: "2",
-            photoFileName: "legacy.jpg"
-        )
-        testStore.replaceDailyLogs([log])
-
-        let updated = testStore.updateDailyLogPhoto(
-            logId: log.id,
-            photoId: UUID(),
-            legacyFileName: "legacy.jpg",
-            note: "现场门口",
-            tag: .hiddenWork
-        )
-
-        #expect(updated)
-        let stored = try #require(testStore.dailyLogs.first)
-        #expect(stored.photoFileName == "legacy.jpg")
-        #expect(stored.photos.count == 1)
-        #expect(stored.photos.first?.fileName == "legacy.jpg")
-        #expect(stored.photos.first?.note == "现场门口")
-        #expect(stored.photos.first?.tag == .hiddenWork)
-    }
-
-    @Test func removeDailyLogPhotoRepairsPrimaryPhotoReference() throws {
-        testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let firstPhoto = LogPhoto(fileName: "first.jpg")
-        let secondPhoto = LogPhoto(fileName: "second.jpg")
-        let log = DailyLog(
-            date: "2026-05-16",
-            weather: "晴",
-            content: "日志",
-            workers: "2",
-            photoFileName: "first.jpg",
-            photos: [firstPhoto, secondPhoto]
-        )
-        testStore.replaceDailyLogs([log])
-
-        let deletedFileName = testStore.removeDailyLogPhoto(
-            logId: log.id,
-            photoId: firstPhoto.id,
-            legacyFileName: firstPhoto.fileName
-        )
-
-        #expect(deletedFileName == "first.jpg")
-        let stored = try #require(testStore.dailyLogs.first)
-        #expect(stored.photoFileName == "second.jpg")
-        #expect(stored.photos.map(\.fileName) == ["second.jpg"])
-    }
-
+// MARK: - File references and persistence
+extension DataStoreTests {
     @Test func projectFileCleanupRemovesDocumentsDrawingsAndUnlinksReferences() throws {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
         let projectA = UUID()
@@ -537,14 +298,14 @@ struct DataStoreTests {
         let otherSharedDrawing = ProjectDrawing(projectId: projectB, name: "其他图纸", fileName: "shared.dwg", fileType: "dwg")
         let financial = ProjectFinancialRecord(
             projectId: projectA,
-            amount: "100",
+            amount: NumericInputSupport.money("100"),
             linkedDocumentIds: [videoDocument.id, ticketDocument.id]
         )
         let movement = ProjectWarehouseMovement(
             projectId: projectA,
             materialName: "电线",
             unit: "卷",
-            quantity: "1",
+            quantity: NumericInputSupport.quantity("1"),
             linkedDocumentIds: [videoDocument.id, ticketDocument.id]
         )
         testStore.replaceQuickNotes([targetNote, otherNote])
@@ -588,7 +349,7 @@ struct DataStoreTests {
 
     @Test func relatedDataCountIncludesMaterialSheetDrafts() {
         testStore.clearAllBusinessData(deleteStoredFiles: false)
-        let project = Project(name: "草稿项目", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(name: "草稿项目", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         testStore.replaceProjects([project])
         testStore.replaceMaterialSheetDrafts([
             MaterialSheetDraft(title: "D1", projectId: project.id),
@@ -603,7 +364,7 @@ struct DataStoreTests {
 
     @Test func flushSaveWritesToDisk() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
-        let project = Project(name: "flush test", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01")
+        let project = Project(name: "flush test", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01"))
         testStore.appendProject(project)
         await testStore.flushSave()
 
@@ -614,7 +375,7 @@ struct DataStoreTests {
 
     @Test func flushSaveReplacesPendingScheduleSave() async throws {
         testStore.clearAllBusinessData(deleteStoredFiles: true)
-        testStore.appendProject(Project(name: "flush pending", location: "", status: .active, startDate: "2025-01-01", expectedEndDate: "2025-06-01"))
+        testStore.appendProject(Project(name: "flush pending", location: "", status: .active, startDate: BusinessDateValue(legacyText: "2025-01-01"), expectedEndDate: BusinessDateValue(legacyText: "2025-06-01")))
         testStore.scheduleSave()
         await testStore.flushSave()
 
@@ -633,178 +394,5 @@ struct DataStoreTests {
             throw FileStorageError.imageEncodingFailed
         }
         return data
-    }
-}
-
-extension DataStoreTests {
-    @Test func projectCascadeUndoPreservesLaterChangesAcrossEveryRecordCategory() throws {
-        var projectA = Project(name: "待撤销删除的 A", location: "")
-        var projectB = Project(name: "保留的 B", location: "")
-        let projectC = Project(name: "删除后新增的 C", location: "")
-        // A 待恢复；B 的第一条编辑、第二条删除；C 随后新增。
-        var fixture = ProjectCascadeUndoFixture(projectIDs: [projectA.id, projectB.id, projectB.id, projectC.id])
-        testStore.replaceProjects([projectA, projectB])
-        fixture.seedRecords(in: testStore)
-        let deletion = testStore.removeProjectCascade(projectA.id)
-
-        projectB.status = .archived
-        testStore.replaceProjects([projectB, projectC])
-        fixture.applyLaterChanges(to: testStore)
-        testStore.restoreProjectCascade(deletion)
-        try Self.expectSameRecords(testStore.projects, expected: [projectA, projectB, projectC])
-        try fixture.expectRestoredRecords(in: testStore)
-
-        // 同 ID 记录再次编辑后，重复恢复不能覆盖新值或增加副本。
-        projectA.name = "恢复后修改的 A"
-        #expect(testStore.updateProject(projectA))
-        fixture.materials[0].quantity = "12"
-        #expect(testStore.updateMaterialItem(fixture.materials[0]))
-        testStore.restoreProjectCascade(deletion)
-        try Self.expectSameRecords(testStore.projects, expected: [projectA, projectB, projectC])
-        try fixture.expectRestoredRecords(in: testStore)
-    }
-
-    @Test func projectCascadeUndoRestoresOnlyRemovedContactLinksAndKeepsContactEdits() throws {
-        let projectA = Project(name: "A", location: "")
-        let projectB = Project(name: "B", location: "")
-        let projectC = Project(name: "C", location: "")
-        let projectD = Project(name: "D", location: "")
-        let shared = ProjectContact(
-            projectId: projectB.id,
-            relatedProjectIds: [projectA.id, projectC.id],
-            name: "共享联系人",
-            phone: "13000000000"
-        )
-        let subsequentlyDeleted = ProjectContact(projectId: projectB.id, relatedProjectIds: [projectA.id], name: "随后删除")
-        let primary = ProjectContact(projectId: projectA.id, name: "A 主联系人")
-        testStore.replaceProjects([projectA, projectB, projectC, projectD])
-        testStore.replaceProjectContacts([shared, subsequentlyDeleted, primary])
-
-        let deletion = testStore.removeProjectCascade(projectA.id)
-        var editedShared = try #require(testStore.projectContacts.first { $0.id == shared.id })
-        #expect(editedShared.relatedProjectIds == [projectC.id])
-        editedShared.phone = "13900000000"
-        editedShared.name = "更新后的共享联系人"
-        editedShared.relatedProjectIds = [projectD.id]
-        let added = ProjectContact(projectId: projectB.id, relatedProjectIds: [projectD.id], name: "新增联系人")
-        testStore.replaceProjectContacts([editedShared, added])
-
-        testStore.restoreProjectCascade(deletion)
-        testStore.restoreProjectCascade(deletion)
-
-        editedShared.relatedProjectIds.append(projectA.id)
-        try Self.expectSameRecords(testStore.projectContacts, expected: [editedShared, added, primary])
-        let restoredShared = try #require(testStore.projectContacts.first { $0.id == shared.id })
-        #expect(restoredShared.relatedProjectIds.filter { $0 == projectA.id }.count == 1)
-        #expect(!restoredShared.isLinked(to: projectC.id))
-        #expect(!testStore.projectContacts.contains { $0.id == subsequentlyDeleted.id })
-    }
-
-    private static func expectSameRecords<Item: Identifiable & Encodable>(
-        _ actual: [Item],
-        expected: [Item]
-    ) throws where Item.ID == UUID {
-        #expect(actual.count == expected.count)
-        #expect(Set(actual.map(\.id)) == Set(expected.map(\.id)))
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = .sortedKeys
-        for expectedRecord in expected {
-            let actualRecord = try #require(actual.first { $0.id == expectedRecord.id })
-            let actualData = try encoder.encode(actualRecord)
-            let expectedData = try encoder.encode(expectedRecord)
-            #expect(actualData == expectedData)
-        }
-    }
-
-    @MainActor
-    private struct ProjectCascadeUndoFixture {
-        var materials: [MaterialItem]
-        var quotes: [QuoteItem]
-        var labor: [LaborRecord]
-        var logs: [DailyLog]
-        var progress: [ProgressTask]
-        var todos: [SiteTodo]
-        var drawings: [ProjectDrawing]
-        var financial: [ProjectFinancialRecord]
-        var documents: [ProjectDocument]
-        var notes: [QuickNote]
-        var movements: [ProjectWarehouseMovement]
-        var drafts: [MaterialSheetDraft]
-
-        init(projectIDs: [UUID]) {
-            materials = projectIDs.map { MaterialItem(name: "水泥", quantity: "1", unit: "袋", projectId: $0) }
-            quotes = projectIDs.map {
-                QuoteItem(name: "报价", unitPrice: "10", quantity: "1", unit: "项", notes: "", taxRate: "0", discountRate: "0", projectId: $0)
-            }
-            labor = projectIDs.map { LaborRecord(date: "2026-10-13", workers: "2", hours: "1", note: "", projectId: $0) }
-            logs = projectIDs.map { DailyLog(date: "2026-10-13", weather: "晴", content: "日志", workers: "2", projectId: $0) }
-            progress = projectIDs.map {
-                ProgressTask(projectId: $0, title: "进度", startDate: "2026-10-13", dueDate: "2026-10-20", completion: 0.3, note: "")
-            }
-            todos = projectIDs.map { SiteTodo(title: "待办", projectId: $0) }
-            drawings = projectIDs.map { ProjectDrawing(projectId: $0, name: "图纸", fileName: "undo-\(UUID().uuidString).pdf", fileType: "pdf") }
-            financial = projectIDs.map { ProjectFinancialRecord(projectId: $0, amount: "100") }
-            documents = projectIDs.map { ProjectDocument(projectId: $0, title: "资料", fileName: "undo-\(UUID().uuidString).pdf") }
-            notes = projectIDs.map { QuickNote(title: "随手记", projectId: $0) }
-            movements = projectIDs.map { ProjectWarehouseMovement(projectId: $0, materialName: "水泥", unit: "袋", quantity: "1") }
-            drafts = projectIDs.map { MaterialSheetDraft(title: "材料单", projectId: $0) }
-        }
-
-        func seedRecords(in store: DataStore) {
-            store.replaceMaterialItems(Array(materials.prefix(3)))
-            store.replaceQuoteItems(Array(quotes.prefix(3)))
-            store.replaceLaborRecords(Array(labor.prefix(3)))
-            store.replaceDailyLogs(Array(logs.prefix(3)))
-            store.replaceProgressTasks(Array(progress.prefix(3)))
-            store.replaceSiteTodos(Array(todos.prefix(3)))
-            store.replaceProjectDrawings(Array(drawings.prefix(3)))
-            store.replaceProjectFinancialRecords(Array(financial.prefix(3)))
-            store.replaceProjectDocuments(Array(documents.prefix(3)))
-            store.replaceQuickNotes(Array(notes.prefix(3)))
-            store.replaceProjectWarehouseMovements(Array(movements.prefix(3)))
-            store.replaceMaterialSheetDrafts(Array(drafts.prefix(3)))
-        }
-
-        mutating func applyLaterChanges(to store: DataStore) {
-            materials[1].quantity = "9"
-            quotes[1].unitPrice = "99"
-            labor[1].unitRate = "350"
-            logs[1].content = "更新施工日志"
-            progress[1].completion = 0.8
-            todos[1].isDone = true
-            drawings[1].name = "修订图纸"
-            financial[1].amount = "999"
-            documents[1].title = "修订资料"
-            notes[1].content = "新增现场情况"
-            movements[1].quantity = "9"
-            drafts[1].title = "修订材料单"
-            store.replaceMaterialItems([materials[1], materials[3]])
-            store.replaceQuoteItems([quotes[1], quotes[3]])
-            store.replaceLaborRecords([labor[1], labor[3]])
-            store.replaceDailyLogs([logs[1], logs[3]])
-            store.replaceProgressTasks([progress[1], progress[3]])
-            store.replaceSiteTodos([todos[1], todos[3]])
-            store.replaceProjectDrawings([drawings[1], drawings[3]])
-            store.replaceProjectFinancialRecords([financial[1], financial[3]])
-            store.replaceProjectDocuments([documents[1], documents[3]])
-            store.replaceQuickNotes([notes[1], notes[3]])
-            store.replaceProjectWarehouseMovements([movements[1], movements[3]])
-            store.replaceMaterialSheetDrafts([drafts[1], drafts[3]])
-        }
-
-        func expectRestoredRecords(in store: DataStore) throws {
-            try DataStoreTests.expectSameRecords(store.materialItems, expected: [materials[0], materials[1], materials[3]])
-            try DataStoreTests.expectSameRecords(store.quoteItems, expected: [quotes[0], quotes[1], quotes[3]])
-            try DataStoreTests.expectSameRecords(store.laborRecords, expected: [labor[0], labor[1], labor[3]])
-            try DataStoreTests.expectSameRecords(store.dailyLogs, expected: [logs[0], logs[1], logs[3]])
-            try DataStoreTests.expectSameRecords(store.progressTasks, expected: [progress[0], progress[1], progress[3]])
-            try DataStoreTests.expectSameRecords(store.siteTodos, expected: [todos[0], todos[1], todos[3]])
-            try DataStoreTests.expectSameRecords(store.projectDrawings, expected: [drawings[0], drawings[1], drawings[3]])
-            try DataStoreTests.expectSameRecords(store.projectFinancialRecords, expected: [financial[0], financial[1], financial[3]])
-            try DataStoreTests.expectSameRecords(store.projectDocuments, expected: [documents[0], documents[1], documents[3]])
-            try DataStoreTests.expectSameRecords(store.quickNotes, expected: [notes[0], notes[1], notes[3]])
-            try DataStoreTests.expectSameRecords(store.projectWarehouseMovements, expected: [movements[0], movements[1], movements[3]])
-            try DataStoreTests.expectSameRecords(store.materialSheetDrafts, expected: [drafts[0], drafts[1], drafts[3]])
-        }
     }
 }

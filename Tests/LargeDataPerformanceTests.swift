@@ -23,7 +23,7 @@ struct LargeDataPerformanceTests {
         let initialVersion = store.fileSearchVersion
 
         store.setProjects([Project(id: projectID, name: "项目", location: "", status: .active)])
-        store.setDailyLogs([DailyLog(date: "2026-07-13", weather: "晴", content: "日志", workers: "1", projectId: projectID)])
+        store.setDailyLogs([DailyLog(date: BusinessDateValue(legacyText: "2026-07-13"), weather: "晴", content: "日志", workers: NumericInputSupport.quantity("1"), projectId: projectID)])
         store.setSiteTodos([SiteTodo(title: "待办", projectId: projectID)])
         store.setProjectDrawings([ProjectDrawing(projectId: projectID, name: "图纸", fileName: "a.pdf", fileType: "pdf")])
         store.setProjectDocuments([ProjectDocument(projectId: projectID, title: "资料", fileName: "b.pdf")])

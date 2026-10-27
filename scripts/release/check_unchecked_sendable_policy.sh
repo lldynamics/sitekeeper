@@ -6,13 +6,10 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[unchecked-sendable-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 VIOLATIONS="$(
-  rg -n --color=never --glob '*.swift' '@unchecked[[:space:]]+Sendable' Sources Widget 2>/dev/null \
+  policy_search -n --color=never --glob '*.swift' '@unchecked[[:space:]]+Sendable' Sources Widget 2>/dev/null \
     | awk '
       {
         code = $0

@@ -5,6 +5,18 @@ import UIKit
 
 @MainActor
 struct SampleDataFixtureTests {
+    @Test func sourceFixtureDiscoverySurvivesMovingTheLoaderIntoNestedFolders() {
+        let repository = URL(fileURLWithPath: "/tmp/Fixture Project", isDirectory: true)
+        for loader in ["Sources/SampleDataFixture.swift", "Sources/Shared/Services/Fixtures/SampleDataFixture.swift"] {
+            let paths = SampleDataFixtureSourcePaths.candidates(sourceFile: repository.appendingPathComponent(loader))
+            #expect(paths.map(\.path) == [
+                repository.appendingPathComponent("Tests/Fixtures/SampleDataFixture.json").path,
+                repository.appendingPathComponent("Sources/Resources/Fixtures/SampleDataFixture.json").path
+            ])
+        }
+        #expect(SampleDataFixtureSourcePaths.candidates(sourceFile: URL(fileURLWithPath: "/tmp/Other/Loader.swift")).isEmpty)
+    }
+
     @Test func sampleFixtureDecodesAndKeepsBinaryAssetsInSync() throws {
         let store = makeStore()
         let snapshot = try #require(store.loadSampleFixtureSnapshot())

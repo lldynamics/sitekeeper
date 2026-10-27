@@ -25,26 +25,7 @@ extension SitekeeperUITests {
         search.typeText("Acceptance")
 
         if UIDevice.current.userInterfaceIdiom == .pad {
-            let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-file-result-")).firstMatch
-            XCTAssertTrue(result.waitForExistence(timeout: 10))
-            result.tap()
-            let selected = app.staticTexts["project-file-selected-title"]
-            XCTAssertTrue(selected.waitForExistence(timeout: 5))
-            XCTAssertEqual(selected.label, "Review Acceptance")
-            XCUIDevice.shared.orientation = .landscapeLeft
-            let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: app)
-            XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 5), .completed)
-            XCTAssertTrue(selected.isHittable)
-            XCTAssertEqual(selected.label, "Review Acceptance")
-            let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-            screenshot.name = "File-only search selection iPad landscape"
-            screenshot.lifetime = .keepAlways
-            add(screenshot)
-            selected.tap()
-            let preview = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-file-preview-")).firstMatch
-            XCTAssertTrue(preview.waitForExistence(timeout: 5))
-            preview.tap()
-            assertPDFPreviewPagingAndClose(app)
+            assertIPadFileSearchSelectionAndPreview(app)
         } else {
             let actions = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-file-actions-")).firstMatch
             XCTAssertTrue(actions.waitForExistence(timeout: 10))
@@ -55,6 +36,29 @@ extension SitekeeperUITests {
             assertPDFPreviewPagingAndClose(app)
             XCTAssertTrue(app.staticTexts["Review Acceptance"].firstMatch.waitForExistence(timeout: 5))
         }
+    }
+
+    private func assertIPadFileSearchSelectionAndPreview(_ app: XCUIApplication) {
+        let result = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-file-result-")).firstMatch
+        XCTAssertTrue(result.waitForExistence(timeout: 10))
+        result.tap()
+        let selected = app.staticTexts["project-file-selected-title"]
+        XCTAssertTrue(selected.waitForExistence(timeout: 5))
+        XCTAssertEqual(selected.label, "Review Acceptance")
+        XCUIDevice.shared.orientation = .landscapeLeft
+        let landscape = XCTNSPredicateExpectation(predicate: NSPredicate { _, _ in app.frame.width > app.frame.height }, object: app)
+        XCTAssertEqual(XCTWaiter.wait(for: [landscape], timeout: 5), .completed)
+        XCTAssertTrue(selected.isHittable)
+        XCTAssertEqual(selected.label, "Review Acceptance")
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "File-only search selection iPad landscape"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        selected.tap()
+        let preview = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "project-file-preview-")).firstMatch
+        XCTAssertTrue(preview.waitForExistence(timeout: 5))
+        preview.tap()
+        assertPDFPreviewPagingAndClose(app)
     }
 
     private func assertPDFPreviewPagingAndClose(_ app: XCUIApplication) {
@@ -101,11 +105,11 @@ extension SitekeeperUITests {
         labor.tap()
         XCTAssertTrue(app.buttons["keyboard-previous"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["keyboard-previous"].isEnabled)
-        app.buttons["keyboard-next"].tap()
+        tapKeyboardToolbarButton(app, identifier: "keyboard-next")
         XCTAssertTrue(app.buttons["keyboard-previous"].isEnabled)
-        app.buttons["keyboard-previous"].tap()
+        tapKeyboardToolbarButton(app, identifier: "keyboard-previous")
         XCTAssertFalse(app.buttons["keyboard-previous"].isEnabled)
-        app.buttons["keyboard-done"].tap()
+        tapKeyboardToolbarButton(app, identifier: "keyboard-done")
         mode.tap()
         app.buttons["统一设置对外报价"].tap()
         let material = app.textFields["quotation-generate-material-price"]
@@ -113,10 +117,10 @@ extension SitekeeperUITests {
         material.tap()
         XCTAssertTrue(app.buttons["keyboard-previous"].waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["keyboard-previous"].isEnabled)
-        app.buttons["keyboard-next"].tap()
+        tapKeyboardToolbarButton(app, identifier: "keyboard-next")
         XCTAssertTrue(app.buttons["keyboard-previous"].isEnabled)
         attachScreenshot(app, named: "Quotation visible-field keyboard navigation")
-        app.buttons["keyboard-done"].tap()
+        tapKeyboardToolbarButton(app, identifier: "keyboard-done")
         app.navigationBars["生成报价"].buttons["取消"].tap()
         XCTAssertFalse(app.buttons["keyboard-done"].exists)
     }

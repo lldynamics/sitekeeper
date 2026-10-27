@@ -2,109 +2,119 @@ import Foundation
 
 enum DecimalMath {
     static func add(_ lhs: Decimal, _ rhs: Decimal) -> Decimal {
-        NSDecimalNumber(decimal: lhs).adding(NSDecimalNumber(decimal: rhs)).decimalValue
+        var lhs = lhs, rhs = rhs, result = Decimal.zero
+        guard NSDecimalAdd(&result, &lhs, &rhs, .plain) == .noError,
+              let left = ExactDecimalCoefficient(lhs), let right = ExactDecimalCoefficient(rhs),
+              let actual = ExactDecimalCoefficient(result), actual.fitsStoragePrecision,
+              actual == left.adding(right) else { return .nan }
+        return result
     }
 
     static func subtract(_ lhs: Decimal, _ rhs: Decimal) -> Decimal {
-        NSDecimalNumber(decimal: lhs).subtracting(NSDecimalNumber(decimal: rhs)).decimalValue
+        var lhs = lhs, rhs = rhs, result = Decimal.zero
+        guard NSDecimalSubtract(&result, &lhs, &rhs, .plain) == .noError,
+              let left = ExactDecimalCoefficient(lhs), let right = ExactDecimalCoefficient(rhs),
+              let actual = ExactDecimalCoefficient(result), actual.fitsStoragePrecision,
+              actual == left.adding(right, subtract: true) else { return .nan }
+        return result
     }
 
     static func multiply(_ lhs: Decimal, _ rhs: Decimal) -> Decimal {
-        NSDecimalNumber(decimal: lhs).multiplying(by: NSDecimalNumber(decimal: rhs)).decimalValue
+        var lhs = lhs, rhs = rhs, result = Decimal.zero
+        guard NSDecimalMultiply(&result, &lhs, &rhs, .plain) == .noError,
+              let left = ExactDecimalCoefficient(lhs), let right = ExactDecimalCoefficient(rhs),
+              let actual = ExactDecimalCoefficient(result), actual.fitsStoragePrecision,
+              actual == left.multiplied(by: right) else { return .nan }
+        return result
     }
 
     static func divide(_ lhs: Decimal, by rhs: Decimal) -> Decimal {
-        guard rhs != .zero else { return .zero }
-        return NSDecimalNumber(decimal: lhs).dividing(by: NSDecimalNumber(decimal: rhs)).decimalValue
+        var lhs = lhs, rhs = rhs, result = Decimal.zero
+        guard NSDecimalDivide(&result, &lhs, &rhs, .plain) == .noError,
+              let left = ExactDecimalCoefficient(lhs), let right = ExactDecimalCoefficient(rhs),
+              let quotient = ExactDecimalCoefficient(result), quotient.fitsStoragePrecision,
+              quotient.multiplied(by: right) == left else { return .nan }
+        return result
     }
 }
 
-struct MoneyValue: Hashable, Sendable, Comparable {
+struct MoneyValue: DecimalDomainValue, Comparable, CustomStringConvertible, ExpressibleByIntegerLiteral {
     static let zero = MoneyValue()
-    let decimal: Decimal
+    let storage: DecimalFieldStorage
 
     init(_ decimal: Decimal = .zero) {
-        self.decimal = decimal
+        storage = decimal.isNaN ? .unresolved("NaN") : .value(decimal)
     }
 
-    init(text: String) {
-        decimal = DataValueParser.decimalValue(from: text)
-    }
+    init(storage: DecimalFieldStorage) { self.storage = storage }
+    init(integerLiteral value: Int) { storage = .value(Decimal(value)) }
+    var description: String { wireText }
+    var magnitude: MoneyValue { MoneyValue(calculationValue.magnitude) }
 
-    var doubleValue: Double {
-        NSDecimalNumber(decimal: decimal).doubleValue
-    }
+    static func += (lhs: inout MoneyValue, rhs: MoneyValue) { lhs = lhs + rhs }
+    static func -= (lhs: inout MoneyValue, rhs: MoneyValue) { lhs = lhs - rhs }
 
-    var isZero: Bool {
-        decimal == .zero
-    }
-
-    var isPositive: Bool {
-        decimal > .zero
+    /// A ratio is dimensionless. Decimal division rounds a repeating quotient
+    /// only for ratio comparisons; it never changes a stored currency amount.
+    static func / (lhs: MoneyValue, rhs: MoneyValue) -> Decimal {
+        guard rhs.isPositive else { return .nan }
+        return lhs.calculationValue / rhs.calculationValue
     }
 
     static func < (lhs: MoneyValue, rhs: MoneyValue) -> Bool {
-        lhs.decimal < rhs.decimal
+        lhs.storage < rhs.storage
     }
 
     static func + (lhs: MoneyValue, rhs: MoneyValue) -> MoneyValue {
-        MoneyValue(DecimalMath.add(lhs.decimal, rhs.decimal))
+        MoneyValue(DecimalMath.add(lhs.calculationValue, rhs.calculationValue))
     }
 
     static func - (lhs: MoneyValue, rhs: MoneyValue) -> MoneyValue {
-        MoneyValue(DecimalMath.subtract(lhs.decimal, rhs.decimal))
+        MoneyValue(DecimalMath.subtract(lhs.calculationValue, rhs.calculationValue))
     }
 
     static func * (lhs: MoneyValue, rhs: Decimal) -> MoneyValue {
-        MoneyValue(DecimalMath.multiply(lhs.decimal, rhs))
+        MoneyValue(DecimalMath.multiply(lhs.calculationValue, rhs))
     }
 }
 
-struct QuantityValue: Hashable, Sendable, Comparable {
+struct QuantityValue: DecimalDomainValue, Comparable, CustomStringConvertible, ExpressibleByIntegerLiteral {
     static let zero = QuantityValue()
-    let decimal: Decimal
+    let storage: DecimalFieldStorage
 
     init(_ decimal: Decimal = .zero) {
-        self.decimal = decimal
+        storage = decimal.isNaN ? .unresolved("NaN") : .value(decimal)
     }
 
-    init(text: String) {
-        decimal = DataValueParser.decimalValue(from: text)
-    }
-
-    var doubleValue: Double {
-        NSDecimalNumber(decimal: decimal).doubleValue
-    }
-
-    var isZero: Bool {
-        decimal == .zero
-    }
-
-    var isPositive: Bool {
-        decimal > .zero
-    }
+    init(storage: DecimalFieldStorage) { self.storage = storage }
+    init(integerLiteral value: Int) { storage = .value(Decimal(value)) }
+    var description: String { wireText }
 
     var ratioFromPercent: Decimal {
-        DecimalMath.divide(decimal, by: 100)
+        DecimalMath.divide(calculationValue, by: 100)
     }
 
     static func < (lhs: QuantityValue, rhs: QuantityValue) -> Bool {
-        lhs.decimal < rhs.decimal
+        lhs.storage < rhs.storage
     }
 
     static func + (lhs: QuantityValue, rhs: QuantityValue) -> QuantityValue {
-        QuantityValue(DecimalMath.add(lhs.decimal, rhs.decimal))
+        QuantityValue(DecimalMath.add(lhs.calculationValue, rhs.calculationValue))
+    }
+
+    static func - (lhs: QuantityValue, rhs: QuantityValue) -> QuantityValue {
+        QuantityValue(DecimalMath.subtract(lhs.calculationValue, rhs.calculationValue))
     }
 
     static func * (lhs: QuantityValue, rhs: QuantityValue) -> QuantityValue {
-        QuantityValue(DecimalMath.multiply(lhs.decimal, rhs.decimal))
+        QuantityValue(DecimalMath.multiply(lhs.calculationValue, rhs.calculationValue))
     }
 
     static func * (lhs: QuantityValue, rhs: MoneyValue) -> MoneyValue {
-        MoneyValue(DecimalMath.multiply(lhs.decimal, rhs.decimal))
+        MoneyValue(DecimalMath.multiply(lhs.calculationValue, rhs.calculationValue))
     }
 
     static func * (lhs: MoneyValue, rhs: QuantityValue) -> MoneyValue {
-        MoneyValue(DecimalMath.multiply(lhs.decimal, rhs.decimal))
+        MoneyValue(DecimalMath.multiply(lhs.calculationValue, rhs.calculationValue))
     }
 }

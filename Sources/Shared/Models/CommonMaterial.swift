@@ -31,7 +31,7 @@ enum MaterialCategory: String, CaseIterable, Identifiable, Codable, Sendable {
     case tools = "工具/仪器"
     case other = "其他"
 
-    var displayName: String { rawValue }
+    var displayName: String { AppLocalization.string(String.LocalizationValue(rawValue)) }
 
     var id: String { rawValue }
 

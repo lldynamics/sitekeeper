@@ -46,18 +46,18 @@ struct MaterialDomainLogicTests {
         financeStore.setMaterialItems([
             MaterialItem(
                 name: "BV 线",
-                quantity: "1",
+                quantity: NumericInputSupport.quantity("1"),
                 unit: "卷",
-                unitPrice: "100",
-                arrivalDate: "2026-05-01",
+                unitPrice: NumericInputSupport.money("100"),
+                arrivalDate: BusinessDateValue(legacyText: "2026-05-01"),
                 projectId: projectId
             ),
             MaterialItem(
                 name: "BV 线",
-                quantity: "1",
+                quantity: NumericInputSupport.quantity("1"),
                 unit: "卷",
-                unitPrice: "250",
-                arrivalDate: "2026-05-10",
+                unitPrice: NumericInputSupport.money("250"),
+                arrivalDate: BusinessDateValue(legacyText: "2026-05-10"),
                 projectId: projectId
             )
         ])
@@ -85,9 +85,9 @@ struct MaterialDomainLogicTests {
             unitPrice: ""
         )
         let entries = [
-            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: "500"),
-            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "KG", referencePrice: "0.5"),
-            MaterialPriceEntry(name: "水泥", specification: "P.O 32.5", unit: "kg", referencePrice: "0.4")
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: NumericInputSupport.money("500")),
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "KG", referencePrice: NumericInputSupport.money("0.5")),
+            MaterialPriceEntry(name: "水泥", specification: "P.O 32.5", unit: "kg", referencePrice: NumericInputSupport.money("0.4"))
         ]
 
         #expect(MaterialSheetLogicHelpers.suggestedUnitPrice(for: item, entries: entries) == "0.5")
@@ -102,7 +102,7 @@ struct MaterialDomainLogicTests {
             unitPrice: ""
         )
         let entries = [
-            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: "500")
+            MaterialPriceEntry(name: "水泥", specification: "P.O 42.5", unit: "吨", referencePrice: NumericInputSupport.money("500"))
         ]
 
         #expect(MaterialSheetLogicHelpers.suggestedUnitPrice(for: item, entries: entries) == nil)

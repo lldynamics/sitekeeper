@@ -62,23 +62,23 @@ struct ReportBuilderTests {
         let documentId = UUID()
         let snapshot = BackupSnapshot(
             materialItems: [
-                MaterialItem(name: "水泥", quantity: "2", unit: "袋", unitPrice: "35.5", projectId: projectId)
+                MaterialItem(name: "水泥", quantity: NumericInputSupport.quantity("2"), unit: "袋", unitPrice: NumericInputSupport.money("35.5"), projectId: projectId)
             ],
             quoteItems: [
                 QuoteItem(
                     name: "配电箱",
-                    unitPrice: "100",
-                    quantity: "3",
+                    unitPrice: NumericInputSupport.money("100"),
+                    quantity: NumericInputSupport.quantity("3"),
                     unit: "台",
                     notes: "",
-                    taxRate: "0",
-                    discountRate: "0",
-                    contractAmount: "8888.6",
+                    taxRate: NumericInputSupport.quantity("0"),
+                    discountRate: NumericInputSupport.quantity("0"),
+                    contractAmount: NumericInputSupport.money("8888.6"),
                     projectId: projectId
                 )
             ],
             laborRecords: [
-                LaborRecord(date: "2026-05-16", workers: "2", hours: "3.5", unitRate: "120", note: "", projectId: projectId)
+                LaborRecord(date: BusinessDateValue(legacyText: "2026-05-16"), workers: NumericInputSupport.quantity("2"), hours: NumericInputSupport.quantity("3.5"), unitRate: NumericInputSupport.money("120"), note: "", projectId: projectId)
             ],
             projects: [],
             dailyLogs: [],
@@ -86,10 +86,10 @@ struct ReportBuilderTests {
             projectFinancialRecords: [
                 ProjectFinancialRecord(
                     projectId: projectId,
-                    date: "2026-05-16 09:00",
+                    date: BusinessDateValue(legacyText: "2026-05-16 09:00"),
                     direction: .income,
                     category: .collection,
-                    amount: "1234.5",
+                    amount: NumericInputSupport.money("1234.5"),
                     counterparty: "客户A",
                     linkedDocumentIds: [documentId]
                 )
@@ -100,7 +100,7 @@ struct ReportBuilderTests {
                     title: "收据",
                     category: .receipt,
                     fileName: "receipt.pdf",
-                    amount: "450"
+                    amount: NumericInputSupport.money("450")
                 )
             ],
             templates: []
@@ -148,19 +148,46 @@ struct ReportBuilderTests {
         #expect(!csv.isEmpty)
     }
 
-    // MARK: - Excel HTML Export
+    // MARK: - HTML Report Export
+}
 
-    @Test func makeExcelHTMLProducesData() throws {
+// MARK: - Human-readable formats
+extension ReportBuilderTests {
+    @Test func makeHTMLReportProducesData() throws {
         let store = makeSampleStore()
         let snapshot = store.makeSnapshot(includePhotoFiles: false)
 
-        let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: ExportContentOptions())
+        let html = ReportBuilder.makeHTMLReport(snapshot: snapshot, options: ExportContentOptions())
         #expect(!html.isEmpty)
         let text = try #require(String(data: html, encoding: .utf8))
         #expect(text.contains("<table"))
     }
 
     // MARK: - PDF Export
+
+    @Test func humanReadableExportsShowLocalTimesInsteadOfStoredUTCTimestamps() {
+        let projectID = UUID()
+        let stored = "2026-10-21 23:30:00Z"
+        let local = Formatters.displayDateText(stored)
+        let snapshot = BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [Project(id: projectID, name: "时间项目", location: "", status: .active)],
+            dailyLogs: [],
+            historyRecords: [],
+            projectFinancialRecords: [ProjectFinancialRecord(projectId: projectID, date: BusinessDateValue(legacyText: stored), amount: NumericInputSupport.money("10"))],
+            quickNotes: [QuickNote(title: "时间笔记", content: "内容", projectId: projectID, createdAt: BusinessDateValue(legacyText: stored), updatedAt: BusinessDateValue(legacyText: stored))],
+            templates: []
+        )
+        let pdf = pdfText(ReportBuilder.makePDF(snapshot: snapshot, options: ExportContentOptions()))
+        let html = String(decoding: ReportBuilder.makeHTMLReport(snapshot: snapshot, options: ExportContentOptions()), as: UTF8.self)
+        #expect(local != stored)
+        for text in [pdf, html] {
+            #expect(text.contains(local))
+            #expect(!text.contains(stored))
+        }
+    }
 
     @Test func makePDFProducesData() {
         let store = makeSampleStore()
@@ -204,7 +231,7 @@ struct ReportBuilderTests {
         #expect(csv.contains("\"timestamp\",\"action_key\",\"action_display\",\"outcome_key\",\"outcome_display\",\"summary\",\"detail\",\"source\",\"id\""))
         #expect(csv.contains("stage=staging_files"))
 
-        let html = String(data: ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options), encoding: .utf8) ?? ""
+        let html = String(data: ReportBuilder.makeHTMLReport(snapshot: snapshot, options: options), encoding: .utf8) ?? ""
         #expect(html.contains("操作审计日志"))
         #expect(html.contains("BackupView"))
 
@@ -217,7 +244,7 @@ struct ReportBuilderTests {
     // MARK: - Quotation PDF
 
     @Test func makeQuotationPDFProducesData() {
-        let item = QuoteItem(name: "电缆", unitPrice: "100", quantity: "2", unit: "米", notes: "", taxRate: "0", discountRate: "0", projectId: nil)
+        let item = QuoteItem(name: "电缆", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("2"), unit: "米", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0"), projectId: nil)
         let pdf = ReportBuilder.makeQuotationPDF(title: "报价单", items: [item], projects: [])
         #expect(pdf.count > 100)
     }
@@ -237,12 +264,12 @@ struct ReportBuilderTests {
     // MARK: - Quote calculations
 
     @Test func quoteLineTotalEmptyValues() {
-        let item = QuoteItem(name: "", unitPrice: "", quantity: "", unit: "", notes: "", taxRate: "", discountRate: "", projectId: nil)
+        let item = QuoteItem(name: "", unitPrice: NumericInputSupport.money(""), quantity: NumericInputSupport.quantity(""), unit: "", notes: "", taxRate: NumericInputSupport.quantity(""), discountRate: NumericInputSupport.quantity(""), projectId: nil)
         #expect(ReportBuilder.quoteLineTotal(item) == 0)
     }
 
     @Test func quoteGrandTotalWithTaxAndDiscount() {
-        let item = QuoteItem(name: "配电箱", unitPrice: "500", quantity: "3", unit: "台", notes: "", taxRate: "13", discountRate: "5", projectId: nil)
+        let item = QuoteItem(name: "配电箱", unitPrice: NumericInputSupport.money("500"), quantity: NumericInputSupport.quantity("3"), unit: "台", notes: "", taxRate: NumericInputSupport.quantity("13"), discountRate: NumericInputSupport.quantity("5"), projectId: nil)
         let grand = ReportBuilder.quoteGrandTotal(item)
         #expect(grand == 1620)
     }
@@ -260,8 +287,8 @@ struct ReportBuilderTests {
         let p2 = Project(name: "项目B", location: "地址B", status: .active)
         store.replaceProjects([p1, p2])
         store.replaceMaterialItems([
-            MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
-            MaterialItem(name: "钢筋", quantity: "5", unit: "吨", unitPrice: "4000", projectId: p2.id)
+            MaterialItem(name: "水泥", quantity: NumericInputSupport.quantity("10"), unit: "吨", unitPrice: NumericInputSupport.money("300"), projectId: p1.id),
+            MaterialItem(name: "钢筋", quantity: NumericInputSupport.quantity("5"), unit: "吨", unitPrice: NumericInputSupport.money("4000"), projectId: p2.id)
         ])
         store.replaceQuickNotes([
             QuickNote(title: "笔记A", content: "项目A备注", projectId: p1.id),
@@ -274,18 +301,18 @@ struct ReportBuilderTests {
         store.replaceProjectFinancialRecords([
             ProjectFinancialRecord(
                 projectId: p1.id,
-                date: "",
+                date: .empty,
                 direction: .income,
                 category: .collection,
-                amount: "1000",
+                amount: NumericInputSupport.money("1000"),
                 counterparty: "客户A"
             ),
             ProjectFinancialRecord(
                 projectId: p2.id,
-                date: "",
+                date: .empty,
                 direction: .income,
                 category: .collection,
-                amount: "2000",
+                amount: NumericInputSupport.money("2000"),
                 counterparty: "客户B"
             )
         ])
@@ -305,7 +332,10 @@ struct ReportBuilderTests {
         #expect(text.contains(p1.id.uuidString))
         #expect(text.contains(p2.id.uuidString))
     }
+}
 
+// MARK: - Project scope and module coverage
+extension ReportBuilderTests {
     @Test func pdfFullExportIncludesContactsFromAllProjects() {
         let store = DataStore()
         let p1 = Project(name: "项目A", location: "地址A", status: .active)
@@ -334,8 +364,8 @@ struct ReportBuilderTests {
         let p2 = Project(name: "项目B", location: "地址B", status: .active)
         store.replaceProjects([p1, p2])
         store.replaceMaterialItems([
-            MaterialItem(name: "水泥", quantity: "10", unit: "吨", unitPrice: "300", projectId: p1.id),
-            MaterialItem(name: "钢筋", quantity: "5", unit: "吨", unitPrice: "4000", projectId: p2.id)
+            MaterialItem(name: "水泥", quantity: NumericInputSupport.quantity("10"), unit: "吨", unitPrice: NumericInputSupport.money("300"), projectId: p1.id),
+            MaterialItem(name: "钢筋", quantity: NumericInputSupport.quantity("5"), unit: "吨", unitPrice: NumericInputSupport.money("4000"), projectId: p2.id)
         ])
         store.replaceQuickNotes([
             QuickNote(title: "笔记A", content: "项目A备注", projectId: p1.id),
@@ -366,16 +396,16 @@ struct ReportBuilderTests {
                 floorArea: "一层",
                 fileName: "drawing.pdf",
                 fileType: "PDF",
-                issuedAt: "2026-05-04",
+                issuedAt: BusinessDateValue(legacyText: "2026-05-04"),
                 receiver: "张工",
                 fileAvailabilityStatus: .missing,
-                fileAvailabilityCheckedAt: "2026-05-05 09:30",
+                fileAvailabilityCheckedAt: BusinessDateValue(legacyText: "2026-05-05 09:30"),
                 externalOpenFailureReason: "原件被清理",
-                externalOpenFailedAt: "2026-05-05 09:31"
+                externalOpenFailedAt: BusinessDateValue(legacyText: "2026-05-05 09:31")
             )
         ])
         store.replaceProjectWarehouseMovements([
-            ProjectWarehouseMovement(projectId: projectId, date: "2026-05-04", movementType: .inbound, materialName: "材料测试", quantity: "1")
+            ProjectWarehouseMovement(projectId: projectId, date: BusinessDateValue(legacyText: "2026-05-04"), movementType: .inbound, materialName: "材料测试", quantity: NumericInputSupport.quantity("1"))
         ])
         store.replaceQuickNotes([
             QuickNote(title: "随手记测试", content: "现场备注", projectId: projectId)
@@ -408,7 +438,7 @@ struct ReportBuilderTests {
         #expect(csvText.contains("原件被清理"))
         #expect(csvText.contains("\"A-101\""))
 
-        let html = ReportBuilder.makeExcelHTML(snapshot: snapshot, options: options)
+        let html = ReportBuilder.makeHTMLReport(snapshot: snapshot, options: options)
         let htmlText = String(data: html, encoding: .utf8) ?? ""
         #expect(htmlText.contains("项目联系人"))
         #expect(htmlText.contains("图纸索引"))

@@ -1,0 +1,175 @@
+import SwiftUI
+
+private struct MaterialCategoryManagementState {
+    var renameSource = ""
+    var renameTarget = ""
+    var showRenameSheet = false
+    var deleteSource = ""
+    var deleteTarget = MaterialCategory.other.rawValue
+    var showDeleteSheet = false
+}
+
+private struct CategoryUsage: Identifiable {
+    let name: String
+    let userMaterialCount: Int
+    let priceEntryCount: Int
+
+    var id: String { name }
+}
+
+struct MaterialCategoryManagementView: View {
+    @Environment(DataStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var state = MaterialCategoryManagementState()
+
+    private var categoryUsage: [CategoryUsage] {
+        let userCategories = store.userMaterials.map { normalizedCategory($0.category) }.filter { !$0.isEmpty }
+        let priceCategories = store.materialPriceEntries.map { normalizedCategory($0.category) }.filter { !$0.isEmpty }
+        let names = Set(userCategories + priceCategories)
+
+        return names
+            .map { name in
+                CategoryUsage(
+                    name: name,
+                    userMaterialCount: userCategories.filter { $0 == name }.count,
+                    priceEntryCount: priceCategories.filter { $0 == name }.count
+                )
+            }
+            .sorted { $0.name.localizedStandardCompare($1.name) == .orderedAscending }
+    }
+
+    private var migrationTargets: [String] {
+        let preset = MaterialCategory.allCases.map(\.rawValue)
+        let dynamic = categoryUsage.map(\.name)
+        return Array(Set(preset + dynamic)).sorted { $0.localizedStandardCompare($1) == .orderedAscending }
+    }
+
+    var body: some View {
+        List {
+            if categoryUsage.isEmpty {
+                ContentUnavailableView(AppLocalization.string("暂无可管理分类"), systemImage: "tag")
+            } else {
+                Section(AppLocalization.string("现有分类")) {
+                    ForEach(categoryUsage) { usage in
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(usage.name)
+                                .font(.body.weight(.semibold))
+                            Text(
+                                String(
+                                    format: AppLocalization.string("自定义材料 %lld 条 · 价格条目 %lld 条"),
+                                    Int64(usage.userMaterialCount),
+                                    Int64(usage.priceEntryCount)
+                                )
+                            )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+                            Button(AppLocalization.string("删除"), role: .destructive) {
+                                state.deleteSource = usage.name
+                                state.deleteTarget = defaultDeleteTarget(for: usage.name)
+                                state.showDeleteSheet = true
+                            }
+                            Button(AppLocalization.string("重命名")) {
+                                state.renameSource = usage.name
+                                state.renameTarget = usage.name
+                                state.showRenameSheet = true
+                            }
+                            .tint(Color.appDoc)
+                        }
+                    }
+                }
+            }
+        }
+        .navigationTitle(AppLocalization.string("分类管理"))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button(AppLocalization.string("完成")) { dismiss() }
+            }
+        }
+        .sheet(isPresented: $state.showRenameSheet) {
+            AppBusinessFormSheet(
+                title: AppLocalization.string("重命名"),
+                isPrimaryActionDisabled: normalizedCategory(state.renameTarget).isEmpty ||
+                    normalizedCategory(state.renameTarget) == normalizedCategory(state.renameSource),
+                onCancel: { state.showRenameSheet = false },
+                onPrimaryAction: {
+                    renameCategory(from: state.renameSource, to: state.renameTarget)
+                    state.showRenameSheet = false
+                }
+            ) {
+                Section(AppLocalization.string("重命名分类")) {
+                    LabeledContent(AppLocalization.string("原分类"), value: state.renameSource)
+                    TextField(AppLocalization.string("新分类名称"), text: $state.renameTarget)
+                }
+            }
+        }
+        .sheet(isPresented: $state.showDeleteSheet) {
+            AppBusinessFormSheet(
+                title: AppLocalization.string("删除分类"),
+                primaryActionTitle: AppLocalization.string("删除并迁移"),
+                primaryActionRole: .destructive,
+                isPrimaryActionDisabled: state.deleteTarget == state.deleteSource ||
+                    normalizedCategory(state.deleteTarget).isEmpty,
+                onCancel: { state.showDeleteSheet = false },
+                onPrimaryAction: {
+                    migrateCategory(from: state.deleteSource, to: state.deleteTarget)
+                    state.showDeleteSheet = false
+                }
+            ) {
+                Section(AppLocalization.string("删除分类并迁移")) {
+                    Text(String(format: AppLocalization.string("分类“%@”将被移除。"), state.deleteSource))
+                        .font(.subheadline)
+                    Picker(AppLocalization.string("迁移到"), selection: $state.deleteTarget) {
+                        ForEach(migrationTargets.filter { $0 != state.deleteSource }, id: \.self) { name in
+                            Text(name).tag(name)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func renameCategory(from source: String, to target: String) {
+        let normalizedSource = normalizedCategory(source)
+        let normalizedTarget = normalizedCategory(target)
+        guard !normalizedSource.isEmpty, !normalizedTarget.isEmpty, normalizedSource != normalizedTarget else { return }
+        migrateCategory(from: normalizedSource, to: normalizedTarget)
+    }
+
+    private func migrateCategory(from source: String, to target: String) {
+        let normalizedSource = normalizedCategory(source)
+        let normalizedTarget = normalizedCategory(target)
+        guard !normalizedSource.isEmpty, !normalizedTarget.isEmpty, normalizedSource != normalizedTarget else { return }
+
+        var updatedUserMaterials = store.userMaterials
+        var didUpdateUserMaterials = false
+        for index in updatedUserMaterials.indices where normalizedCategory(updatedUserMaterials[index].category) == normalizedSource {
+            updatedUserMaterials[index].category = normalizedTarget
+            didUpdateUserMaterials = true
+        }
+        if didUpdateUserMaterials {
+            store.replaceUserMaterials(updatedUserMaterials)
+        }
+        let materialPriceEntriesToMigrate = store.materialPriceEntries.filter {
+            normalizedCategory($0.category) == normalizedSource
+        }
+        for entry in materialPriceEntriesToMigrate {
+            var updated = entry
+            updated.category = normalizedTarget
+            store.upsertMaterialPriceEntry(updated)
+        }
+        store.scheduleSave()
+    }
+
+    private func defaultDeleteTarget(for source: String) -> String {
+        let candidates = migrationTargets.filter { $0 != source }
+        return candidates.first ?? MaterialCategory.other.rawValue
+    }
+
+    private func normalizedCategory(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}

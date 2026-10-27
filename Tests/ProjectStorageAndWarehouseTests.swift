@@ -17,7 +17,7 @@ struct ProjectStorageAndWarehouseTests {
         store.replaceMaterialItems([
             MaterialItem(
                 name: "C30 Concrete",
-                quantity: "99",
+                quantity: NumericInputSupport.quantity("99"),
                 unit: "M3",
                 specification: "Pumped",
                 projectId: project.id
@@ -30,7 +30,7 @@ struct ProjectStorageAndWarehouseTests {
                 materialName: " c30  concrete ",
                 specification: "pumped",
                 unit: "m3",
-                quantity: "2"
+                quantity: NumericInputSupport.quantity("2")
             ),
             ProjectWarehouseMovement(
                 projectId: project.id,
@@ -38,15 +38,15 @@ struct ProjectStorageAndWarehouseTests {
                 materialName: "C30 Concrete",
                 specification: "Pumped",
                 unit: "吨",
-                quantity: "5"
+                quantity: NumericInputSupport.quantity("5")
             )
         ])
 
         store.syncWarehouseToMaterialQuantity(for: Set([project.id]))
 
         #expect(store.materialItems.count == 2)
-        #expect(store.materialItems.first { MaterialIdentity.normalizedComponent($0.unit) == "m3" }?.quantity == "2")
-        #expect(store.materialItems.first { $0.unit == "吨" }?.quantity == "5")
+        #expect(store.materialItems.first { MaterialIdentity.normalizedComponent($0.unit) == "m3" }?.quantity.wireText == "2")
+        #expect(store.materialItems.first { $0.unit == "吨" }?.quantity.wireText == "5")
     }
 
     @Test func deletingFinancialRecordDoesNotDeleteCrossProjectDocument() async throws {
@@ -120,7 +120,7 @@ struct ProjectStorageAndWarehouseTests {
 
         let documents = [ProjectDocument(projectId: projectId, title: "票据", fileName: documentFile)]
         let drawings = [drawing]
-        let logs = [DailyLog(date: "2026-05-03", weather: "晴", content: "完成", workers: "1", photos: [LogPhoto(fileName: photoFile)], projectId: projectId)]
+        let logs = [DailyLog(date: BusinessDateValue(legacyText: "2026-05-03"), weather: "晴", content: "完成", workers: NumericInputSupport.quantity("1"), photos: [LogPhoto(fileName: photoFile)], projectId: projectId)]
         let quickNotes = [QuickNote(projectId: projectId, attachments: [QuickNoteAttachment(kind: .file, fileName: attachmentFile)])]
 
         let estimated = ProjectDetailImportExportActions.estimatedProjectPackageBytes(
@@ -181,7 +181,7 @@ struct ProjectStorageAndWarehouseTests {
             movementType: .inbound,
             materialName: "测试材料",
             unit: "个",
-            quantity: "1"
+            quantity: NumericInputSupport.quantity("1")
         )
         let draft = ProjectWarehouseAttachmentDraft(fileURL: tempURL, title: "超大附件")
 

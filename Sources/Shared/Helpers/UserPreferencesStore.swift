@@ -1,19 +1,44 @@
 import Foundation
 import Observation
 
-@Observable
-final class UserPreferencesStore: @unchecked Sendable {
+// UserDefaults and ObservationRegistrar support concurrent access. No mutable
+// cache is kept here: @AppStorage and background services share the same values.
+final class UserPreferencesStore: Observable, @unchecked Sendable {
     static let shared = UserPreferencesStore()
 
-    @ObservationIgnored
     private let defaults: UserDefaults
+    private let observation = ObservationRegistrar()
+    private var defaultsObserver: NSObjectProtocol?
+    private var changeToken: Bool { false }
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: nil
+        ) { [weak self] _ in
+            self?.invalidate()
+        }
+    }
+
+    deinit {
+        if let defaultsObserver { NotificationCenter.default.removeObserver(defaultsObserver) }
+    }
+
+    private func trackAccess() {
+        observation.access(self, keyPath: \.changeToken)
+    }
+
+    private func invalidate() {
+        observation.withMutation(of: self, keyPath: \.changeToken) {}
+    }
+
+    private func mutate(_ operation: () -> Void) {
+        observation.withMutation(of: self, keyPath: \.changeToken, operation)
     }
 
     func contains(_ key: String) -> Bool {
-        defaults.object(forKey: key) != nil
+        trackAccess()
+        return defaults.object(forKey: key) != nil
     }
 
     func bool(_ key: String, default defaultValue: Bool) -> Bool {
@@ -27,10 +52,12 @@ final class UserPreferencesStore: @unchecked Sendable {
     }
 
     func optionalInt(_ key: String) -> Int? {
-        defaults.object(forKey: key) as? Int
+        trackAccess()
+        return defaults.object(forKey: key) as? Int
     }
 
     func string(_ key: String, default defaultValue: String = "", trimWhitespace: Bool = true) -> String {
+        trackAccess()
         let raw = defaults.string(forKey: key) ?? ""
         let normalized = trimWhitespace ? raw.trimmingCharacters(in: .whitespacesAndNewlines) : raw
         return normalized.isEmpty ? defaultValue : normalized
@@ -47,47 +74,60 @@ final class UserPreferencesStore: @unchecked Sendable {
     }
 
     func object(for key: String) -> Any? {
-        defaults.object(forKey: key)
+        trackAccess()
+        return defaults.object(forKey: key)
+    }
+
+    func persistentDomain(forName name: String) -> [String: Any]? {
+        trackAccess()
+        return defaults.persistentDomain(forName: name)
     }
 
     func data(_ key: String) -> Data? {
-        defaults.data(forKey: key)
+        trackAccess()
+        return defaults.data(forKey: key)
     }
 
     func stringArray(_ key: String, default defaultValue: [String] = []) -> [String] {
-        defaults.stringArray(forKey: key) ?? defaultValue
+        trackAccess()
+        return defaults.stringArray(forKey: key) ?? defaultValue
     }
 
     func set(_ value: Bool, for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func set(_ value: Int, for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func set(_ value: Double, for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func set(_ value: String, for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func set(_ value: [String], for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func set(_ value: Data, for key: String) {
-        defaults.set(value, forKey: key)
+        mutate { defaults.set(value, forKey: key) }
     }
 
     func removeObject(for key: String) {
-        defaults.removeObject(forKey: key)
+        mutate { defaults.removeObject(forKey: key) }
+    }
+
+    /// Drops values for settings that no longer exist, so stale choices cannot resurface.
+    func removeRetiredKeys() {
+        removeObject(for: UserPreferenceKeys.retiredAutoSave)
     }
 
     func removePersistentDomain(forName name: String) {
-        defaults.removePersistentDomain(forName: name)
+        mutate { defaults.removePersistentDomain(forName: name) }
     }
 
     func synchronize() {

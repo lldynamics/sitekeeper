@@ -13,7 +13,7 @@ Chinese guide: `README.zh-CN.md`
 - Lists: material list, labor records, quote management, custom material library, and project-linked records.
 - Projects: project list, business dashboard, project detail summary, editable progress tasks, calculation history, and enhanced daily logs.
 - Daily logs: list/calendar views, project/date/search filters, safety and material notes, weather capture, and multiple photo attachments.
-- Export and backup: CSV, PDF, Excel-compatible HTML, quote PDF export, full ZIP backup with original files, import merge/overwrite, iCloud backup/restore preview, and large-file ZIP64 streaming export.
+- Export and backup: CSV, PDF, HTML webpage reports (.html), quote PDF export, full ZIP backup with original files, import merge/overwrite, iCloud backup/restore preview, and large-file ZIP64 streaming export.
 - Data health: one-click checks for missing files, orphan project links, and invalid references.
 - Widget: risk-priority project list (overdue/pending first), todo and stock snapshot, and sync timestamp.
 - Release basics: generated app icon, privacy manifest, bundle ID, version/build number, shared test scheme, and unit tests.
@@ -80,8 +80,8 @@ DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild test -projec
 ```
 
 Ordinary Debug builds skip the full release boundary scans. To opt in, set
-`SITEKEEPER_RUN_BUILD_GUARDS=1`; Release builds and release preflight still require
-ripgrep (`brew install ripgrep`) and enforce all guards. They do not depend on a
+`SITEKEEPER_RUN_BUILD_GUARDS=1`; Release builds and release preflight enforce all guards. Search guards prefer
+ripgrep and fall back to the system `grep -E` when it is unavailable. They do not depend on a
 Codex application installation.
 
 Release preflight:
@@ -110,13 +110,17 @@ scripts/dev/install_git_hooks.sh
 ## Project Layout
 
 - `Sources/App`: app entry point and tab navigation.
-- `Sources/Features`: feature views grouped by app tab.
-- `Sources/Shared`: models, services, helpers, and reusable views.
+- `Sources/Features`: English feature paths (`Calculators`, `Checklists`, `Dashboard`, `QuickNotes`, `Profile`, `Projects`), grouped further by business domain.
+- `Sources/Shared/Models`: shared domain models.
+- `Sources/Shared/Services`: persistence, backups, archiving, storage, reporting, search, and other focused services.
+- `Sources/Shared/Helpers` and `Views`: helpers and reusable components.
 - `Sources/Resources`: app resources, privacy manifest, and asset catalog.
 - `Tests`: unit tests for conversion, quotes, backup compatibility, deletion, and engineering recommendations.
 
 ## Extending
 
-- Add a calculator view under `Sources/Features/计算`, then register it in `CalculatorTabView.calcDefs`.
+- Add a calculator view under `Sources/Features/Calculators`, then add its metadata and destination to `CalculatorDestination.swift`. The toolbox uses this registry through `QuickToolViews.swift`; a separate top-level calculator tab is not needed.
 - Add shared persisted data in `DataStore.swift` and include it in backup/export when needed.
 - Add reusable engineering formulas in `EngineeringCalculations.swift` and cover them with tests.
+
+See [source organization and extension rules](docs/architecture/source-organization.md) for domain boundaries, file splitting, and the ZIP adapter contract.

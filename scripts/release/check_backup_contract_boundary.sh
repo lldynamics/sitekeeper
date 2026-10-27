@@ -11,9 +11,7 @@ fail() {
   exit 1
 }
 
-if ! command -v rg >/dev/null 2>&1; then
-  fail "ripgrep (rg) is unavailable in the build script PATH."
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 require_file() {
   local description="$1"
@@ -35,7 +33,7 @@ require_pattern() {
   local pattern="$3"
 
   require_file "$description" "$path"
-  if ! rg -q --fixed-strings "$pattern" "$path"; then
+  if ! policy_search -q --fixed-strings "$pattern" "$path"; then
     fail "$description is missing expected marker '$pattern' in $path"
   fi
 }
@@ -43,27 +41,27 @@ require_pattern() {
 reject_file "Sample data fixture in production resources" "Sources/Resources/Fixtures/SampleDataFixture.json"
 require_file "Sample data test fixture" "Tests/Fixtures/SampleDataFixture.json"
 
-require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/BackupSnapshot.swift" "static let currentSchemaVersion = 3"
-require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/BackupSnapshot.swift" "guard Self.supportedSchemaVersions.contains(schemaVersion)"
-require_pattern "BackupSnapshot drawing metadata" "Sources/Shared/Services/BackupSnapshot.swift" "var projectDrawings: [ProjectDrawing]"
-require_pattern "BackupSnapshot drawing file payload" "Sources/Shared/Services/BackupSnapshot.swift" "var drawingFiles: [DrawingBackupFile]"
-require_pattern "BackupSnapshot drawing metadata decode" "Sources/Shared/Services/BackupSnapshot.swift" "projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []"
-require_pattern "BackupSnapshot drawing file decode" "Sources/Shared/Services/BackupSnapshot.swift" "drawingFiles = try container.decodeIfPresent([DrawingBackupFile].self, forKey: .drawingFiles) ?? []"
+require_pattern "BackupSnapshot schema version" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "static let currentSchemaVersion = 3"
+require_pattern "BackupSnapshot strict schema gate" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "guard Self.supportedSchemaVersions.contains(schemaVersion)"
+require_pattern "BackupSnapshot drawing metadata" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "var projectDrawings: [ProjectDrawing]"
+require_pattern "BackupSnapshot drawing file payload" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "var drawingFiles: [DrawingBackupFile]"
+require_pattern "BackupSnapshot drawing metadata decode" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "projectDrawings = try container.decodeIfPresent([ProjectDrawing].self, forKey: .projectDrawings) ?? []"
+require_pattern "BackupSnapshot drawing file decode" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "drawingFiles = try container.decodeIfPresent([DrawingBackupFile].self, forKey: .drawingFiles) ?? []"
 
-require_pattern "ProjectDrawing availability status field" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "var fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus"
-require_pattern "ProjectDrawing availability checked field" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "var fileAvailabilityCheckedAt: String"
-require_pattern "ProjectDrawing external failure reason field" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "var externalOpenFailureReason: String"
-require_pattern "ProjectDrawing external failure time field" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "var externalOpenFailedAt: String"
-require_pattern "ProjectDrawing availability default" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus = .unknown"
-require_pattern "ProjectDrawing availability decode" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "forKey: .fileAvailabilityStatus"
-require_pattern "ProjectDrawing file availability enum" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "enum ProjectDrawingFileAvailabilityStatus"
+require_pattern "ProjectDrawing availability status field" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "var fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus"
+require_pattern "ProjectDrawing availability checked field" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "var fileAvailabilityCheckedAt: BusinessDateValue"
+require_pattern "ProjectDrawing external failure reason field" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "var externalOpenFailureReason: String"
+require_pattern "ProjectDrawing external failure time field" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "var externalOpenFailedAt: BusinessDateValue"
+require_pattern "ProjectDrawing availability default" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "fileAvailabilityStatus: ProjectDrawingFileAvailabilityStatus = .unknown"
+require_pattern "ProjectDrawing availability decode" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "forKey: .fileAvailabilityStatus"
+require_pattern "ProjectDrawing file availability enum" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "enum ProjectDrawingFileAvailabilityStatus"
 
-require_pattern "CSV export drawing status key" "Sources/Shared/Services/ReportBuilder+CSVSections.swift" "file_availability_status_key"
-require_pattern "CSV export external failure" "Sources/Shared/Services/ReportBuilder+CSVSections.swift" "external_open_failure_reason"
-require_pattern "Project package drawing register" "Sources/Shared/Services/ReportBuilder+ProjectDeliverySupport.swift" "projectCurrentDrawingRegisterTSVText"
-require_pattern "Project package missing drawing check" "Sources/Shared/Services/ReportBuilder+ProjectDeliverySupport.swift" "projectDrawingMissingCheckTSVText"
-require_pattern "Project package drawing status" "Sources/Shared/Services/ReportBuilder+ProjectDeliverySupport.swift" "file_availability_status"
-require_pattern "Project package external failure" "Sources/Shared/Services/ReportBuilder+ProjectDeliverySupport.swift" "external_open_failure_reason"
+require_pattern "CSV export drawing status key" "Sources/Shared/Services/Reporting/ReportBuilder+CSVSections.swift" "file_availability_status_key"
+require_pattern "CSV export external failure" "Sources/Shared/Services/Reporting/ReportBuilder+CSVSections.swift" "external_open_failure_reason"
+require_pattern "Project package drawing register" "Sources/Shared/Services/Reporting/ReportBuilder+ProjectDeliverySupport.swift" "projectCurrentDrawingRegisterTSVText"
+require_pattern "Project package missing drawing check" "Sources/Shared/Services/Reporting/ReportBuilder+ProjectDeliverySupport.swift" "projectDrawingMissingCheckTSVText"
+require_pattern "Project package drawing status" "Sources/Shared/Services/Reporting/ReportBuilder+ProjectDeliverySupport.swift" "file_availability_status"
+require_pattern "Project package external failure" "Sources/Shared/Services/Reporting/ReportBuilder+ProjectDeliverySupport.swift" "external_open_failure_reason"
 
 require_pattern "Backup contract rejects schema-less legacy backup" "Tests/BackupContractCompatibilityTests.swift" "legacyBackupWithoutSchemaVersionIsRejected"
 require_pattern "Backup manifest and metadata schema alignment test" "Tests/BackupContractCompatibilityTests.swift" "backupManifestAndMetadataRoundTripShareCurrentSchema"

@@ -22,28 +22,28 @@ struct ProjectFinancialMetricsTests {
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "100",
+                amount: NumericInputSupport.money("100"),
                 status: .active
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "200",
+                amount: NumericInputSupport.money("200"),
                 status: .draft
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .expense,
                 category: .material,
-                amount: "300",
+                amount: NumericInputSupport.money("300"),
                 status: .archived
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .expense,
                 category: .material,
-                amount: "50",
+                amount: NumericInputSupport.money("50"),
                 status: .active
             )
         ]
@@ -95,8 +95,8 @@ struct ProjectFinancialMetricsTests {
         let project = Project(
             name: "零价明细",
             location: "",
-            materialCost: "1000",
-            laborCost: "500"
+            materialCost: NumericInputSupport.money("1000"),
+            laborCost: NumericInputSupport.money("500")
         )
 
         #expect(ProjectDetailMetrics.currentMaterialCost(
@@ -139,29 +139,29 @@ struct ProjectFinancialMetricsTests {
             name: "统一财务规则",
             location: "",
             status: .active,
-            contractAmount: "1000",
-            paidAmount: "600"
+            contractAmount: NumericInputSupport.money("1000"),
+            paidAmount: NumericInputSupport.money("600")
         )
         let records = [
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "200",
+                amount: NumericInputSupport.money("200"),
                 status: .active
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .income,
                 category: .receipt,
-                amount: "300",
+                amount: NumericInputSupport.money("300"),
                 status: .draft
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .expense,
                 category: .material,
-                amount: "50",
+                amount: NumericInputSupport.money("50"),
                 status: .active
             )
         ]
@@ -184,21 +184,21 @@ struct ProjectFinancialMetricsTests {
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "125",
+                amount: NumericInputSupport.money("125"),
                 status: .active
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "400",
+                amount: NumericInputSupport.money("400"),
                 status: .draft
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
                 direction: .income,
                 category: .collection,
-                amount: "500",
+                amount: NumericInputSupport.money("500"),
                 status: .archived
             )
         ])
@@ -211,37 +211,40 @@ struct ProjectFinancialMetricsTests {
         let records = [
             ProjectFinancialRecord(
                 projectId: projectId,
-                date: "2026-05-08 10:30",
+                date: BusinessDateValue(legacyText: "2026-05-08 10:30"),
                 direction: .income,
                 category: .collection,
-                amount: "1200.5"
+                amount: NumericInputSupport.money("1200.5")
             ),
             ProjectFinancialRecord(
                 projectId: projectId,
-                date: "2026-05-09",
+                date: BusinessDateValue(legacyText: "2026-05-09"),
                 direction: .expense,
                 category: .material,
-                amount: "300.25"
+                amount: NumericInputSupport.money("300.25")
             )
         ]
 
-        #expect(ProjectFinancialMetrics.income(records) == 1200.5)
-        #expect(ProjectFinancialMetrics.expense(records) == 300.25)
-        #expect(ProjectFinancialMetrics.latestCollection(records: records, projectName: { _ in nil })?.date == "2026-05-08 10:30")
+        #expect(ProjectFinancialMetrics.income(records) == MoneyValue(Decimal(string: "1200.5")!))
+        #expect(ProjectFinancialMetrics.expense(records) == MoneyValue(Decimal(string: "300.25")!))
+        #expect(ProjectFinancialMetrics.latestCollection(records: records, projectName: { _ in nil })?.date.storageText == "2026-05-08 10:30")
     }
+}
 
+// MARK: - Export, reminders and duplicates
+extension ProjectFinancialMetricsTests {
     @Test func projectFinanceCSVExportsStatusColumn() throws {
         let projectId = UUID()
         let record = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09 10:30",
+            date: BusinessDateValue(legacyText: "2026-05-09 10:30"),
             direction: .income,
             category: .collection,
-            amount: "100",
+            amount: NumericInputSupport.money("100"),
             counterparty: "客户",
             invoiceNumber: "R-1",
             status: .draft,
-            dueDate: "2026-05-12",
+            dueDate: BusinessDateValue(legacyText: "2026-05-12"),
             reminderStatus: .pending,
             note: "待确认"
         )
@@ -284,15 +287,15 @@ struct ProjectFinancialMetricsTests {
     @Test func dueReminderFlagsRespectStatusAndDate() {
         let overdue = ProjectFinancialRecord(
             projectId: UUID(),
-            dueDate: "2000-01-01",
+            dueDate: BusinessDateValue(legacyText: "2000-01-01"),
             reminderStatus: .pending
         )
         let done = ProjectFinancialRecord(
             projectId: UUID(),
-            dueDate: "2000-01-01",
+            dueDate: BusinessDateValue(legacyText: "2000-01-01"),
             reminderStatus: .done
         )
-        let none = ProjectFinancialRecord(projectId: UUID(), dueDate: "2000-01-01")
+        let none = ProjectFinancialRecord(projectId: UUID(), dueDate: BusinessDateValue(legacyText: "2000-01-01"))
 
         #expect(overdue.hasDueReminder)
         #expect(overdue.isDueReminderOpen)
@@ -305,16 +308,16 @@ struct ProjectFinancialMetricsTests {
         let projectId = UUID()
         let existing = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09 09:00",
+            date: BusinessDateValue(legacyText: "2026-05-09 09:00"),
             direction: .expense,
-            amount: "1200.50",
+            amount: NumericInputSupport.money("1200.50"),
             invoiceNumber: "fp-2026-000188"
         )
         let draft = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-10 10:00",
+            date: BusinessDateValue(legacyText: "2026-05-10 10:00"),
             direction: .expense,
-            amount: "800",
+            amount: NumericInputSupport.money("800"),
             invoiceNumber: "FP2026000188"
         )
 
@@ -330,21 +333,21 @@ struct ProjectFinancialMetricsTests {
         let otherProjectId = UUID()
         let existing = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09T09:00:00+08:00",
+            date: BusinessDateValue(legacyText: "2026-05-09T09:00:00+08:00"),
             direction: .expense,
-            amount: "1200.50"
+            amount: NumericInputSupport.money("1200.50")
         )
         let otherProject = ProjectFinancialRecord(
             projectId: otherProjectId,
-            date: "2026-05-09T12:00:00+08:00",
+            date: BusinessDateValue(legacyText: "2026-05-09T12:00:00+08:00"),
             direction: .expense,
-            amount: "1200.50"
+            amount: NumericInputSupport.money("1200.50")
         )
         let draft = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09T18:30:00+08:00",
+            date: BusinessDateValue(legacyText: "2026-05-09T18:30:00+08:00"),
             direction: .expense,
-            amount: "1200.5"
+            amount: NumericInputSupport.money("1200.5")
         )
 
         let warnings = ProjectFinancialDuplicateDetector.warnings(for: draft, in: [existing, otherProject], timeZone: TimeZone(identifier: "Asia/Shanghai")!)
@@ -356,18 +359,18 @@ struct ProjectFinancialMetricsTests {
 
     @Test func duplicateDaysRespectLegacyUTCAndExplicitOffsets() throws {
         let zone = try #require(TimeZone(identifier: "Asia/Shanghai"))
-        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-09 18:30", timeZone: zone) == "2026-05-10")
-        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-10T02:30:00+08:00", timeZone: zone) == "2026-05-10")
-        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: "2026-05-09", timeZone: zone) == "2026-05-09")
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: BusinessDateValue(legacyText: "2026-05-09 18:30"), timeZone: zone) == "2026-05-10")
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: BusinessDateValue(legacyText: "2026-05-10T02:30:00+08:00"), timeZone: zone) == "2026-05-10")
+        #expect(ProjectFinancialDuplicateDetector.normalizedDay(from: BusinessDateValue(legacyText: "2026-05-09"), timeZone: zone) == "2026-05-09")
     }
 
     @Test func duplicateDetectorIgnoresCurrentRecordWhenEditing() {
         let projectId = UUID()
         let record = ProjectFinancialRecord(
             projectId: projectId,
-            date: "2026-05-09 09:00",
+            date: BusinessDateValue(legacyText: "2026-05-09 09:00"),
             direction: .expense,
-            amount: "1200.50",
+            amount: NumericInputSupport.money("1200.50"),
             invoiceNumber: "FP2026000188"
         )
 
@@ -378,85 +381,5 @@ struct ProjectFinancialMetricsTests {
         )
 
         #expect(warnings.isEmpty)
-    }
-
-    @Test func constructionMethodVersionAndPublishStatusCodable() throws {
-        let method = ConstructionMethod(
-            title: "墙面找平",
-            trade: "泥工",
-            versionName: "V2",
-            publishStatus: .published,
-            tutorialBody: "基层处理",
-            procedureSteps: ["放线", "打点"],
-            qualityChecklist: ["平整度检查"],
-            safetyChecklist: ["高处作业佩戴安全带"]
-        )
-
-        let data = try JSONEncoder().encode(method)
-        let decoded = try JSONDecoder().decode(ConstructionMethod.self, from: data)
-        let encodedObject = try #require(
-            JSONSerialization.jsonObject(with: data) as? [String: Any]
-        )
-        let legacy = try JSONDecoder().decode(
-            ConstructionMethod.self,
-            from: #"{"title":"旧工艺","trade":"水电","steps":"放线\n开槽"}"#.data(using: .utf8)!
-        )
-
-        #expect(encodedObject["steps"] == nil)
-        #expect(encodedObject["qualityStandard"] == nil)
-        #expect(encodedObject["safetyNotes"] == nil)
-        #expect((encodedObject["procedureSteps"] as? [String]) == ["放线", "打点"])
-        #expect((encodedObject["qualityChecklist"] as? [String]) == ["平整度检查"])
-        #expect((encodedObject["safetyChecklist"] as? [String]) == ["高处作业佩戴安全带"])
-        #expect(decoded.versionName == "V2")
-        #expect(decoded.publishStatus == .published)
-        #expect(decoded.procedureSteps == ["放线", "打点"])
-        #expect(decoded.qualityChecklist == ["平整度检查"])
-        #expect(decoded.safetyChecklist == ["高处作业佩戴安全带"])
-        #expect(legacy.versionName == "V1")
-        #expect(legacy.publishStatus == .draft)
-        #expect(legacy.procedureSteps == ["放线", "开槽"])
-    }
-
-    @Test func projectTimelineSortsMixedItemsByDate() {
-        let projectId = UUID()
-        let log = DailyLog(
-            date: "2026-05-08",
-            weather: "晴",
-            content: "安装桥架",
-            workers: "3",
-            projectId: projectId
-        )
-        let finance = ProjectFinancialRecord(
-            projectId: projectId,
-            date: "2026-05-09 10:30",
-            direction: .expense,
-            category: .material,
-            amount: "100"
-        )
-        let material = MaterialItem(
-            name: "桥架",
-            quantity: "10",
-            unit: "米",
-            arrivalDate: "2026-05-07",
-            projectId: projectId
-        )
-
-        let items = ProjectTimelineBuilder.makeItems(
-            logs: [log],
-            progress: [],
-            materials: [material],
-            quotes: [],
-            labor: [],
-            financialRecords: [finance],
-            documents: [],
-            warehouseMovements: [],
-            quickNotes: [],
-            siteTodos: [],
-            drawings: []
-        )
-
-        #expect(items.first?.type == "记账")
-        #expect(items.map(\.type) == ["记账", "日志", "材料"])
     }
 }

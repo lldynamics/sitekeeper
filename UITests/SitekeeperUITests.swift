@@ -5,352 +5,9 @@ import UIKit
 final class SitekeeperUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false
-    }
-}
-
-extension SitekeeperUITests {
-    var shouldWriteAppStoreScreenshots: Bool {
-        let value = ProcessInfo.processInfo.environment["UITEST_CAPTURE_APP_STORE_SCREENSHOTS"]?.lowercased()
-        return value == "1" || value == "true" || value == "yes"
-            || FileManager.default.fileExists(atPath: screenshotCaptureFlagURL.path)
-    }
-
-    private var screenshotCaptureFlagURL: URL {
-        screenshotRootDirectory.deletingLastPathComponent()
-            .appendingPathComponent(".capture-app-store-screenshots")
-    }
-
-    var shouldRunExtendedScenarios: Bool {
-        let value = ProcessInfo.processInfo.environment["UITEST_RUN_EXTENDED_SCENARIOS"]?.lowercased()
-        return value == "1" || value == "true" || value == "yes"
-    }
-
-    private var screenshotRootDirectory: URL {
-        URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("AppStoreShots", isDirectory: true)
-    }
-
-    private var screenshotOutputDirectory: URL {
-        let environmentFamily = ProcessInfo.processInfo.environment["UITEST_SCREENSHOT_DEVICE_FAMILY"]?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        let deviceFamily = environmentFamily?.isEmpty == false
-            ? environmentFamily!
-            : (UIDevice.current.userInterfaceIdiom == .pad ? "iPad" : "iPhone")
-        return screenshotRootDirectory.appendingPathComponent(deviceFamily, isDirectory: true)
-    }
-
-    func prepareScreenshotDirectory() {
-        guard shouldWriteAppStoreScreenshots else { return }
-        let manager = FileManager.default
-        let directory = screenshotOutputDirectory
-        if manager.fileExists(atPath: directory.path) {
-            try? manager.removeItem(at: directory)
+        if ProcessInfo.processInfo.environment["UITEST_REQUIRE_ANIMATIONS"] == "1" {
+            XCTAssertNotEqual(ProcessInfo.processInfo.environment["UITEST_DISABLE_ANIMATIONS"], "1")
         }
-        try? manager.createDirectory(at: directory, withIntermediateDirectories: true)
-    }
-
-    func saveScreenshot(_ app: XCUIApplication, named name: String, line: UInt = #line) {
-        guard shouldWriteAppStoreScreenshots else { return }
-        let url = screenshotOutputDirectory.appendingPathComponent("\(name).png")
-        do {
-            try FileManager.default.createDirectory(at: screenshotOutputDirectory, withIntermediateDirectories: true)
-            try XCUIScreen.main.screenshot().pngRepresentation.write(to: url)
-        } catch {
-            XCTFail("截图保存失败: \(error.localizedDescription)", line: line)
-        }
-    }
-
-    func attachScreenshot(_ app: XCUIApplication, named name: String) {
-        let attachment = XCTAttachment(screenshot: app.screenshot())
-        attachment.name = name
-        attachment.lifetime = .keepAlways
-        add(attachment)
-    }
-
-    @discardableResult
-    func launchApp(
-        skipOnboarding: Bool = true,
-        resetState: Bool = false,
-        enableBackupPreview: Bool = false,
-        allowClearWithoutBackup: Bool = false,
-        backupRoundTripSlot: String? = nil,
-        dynamicTypeSize: String? = nil,
-        languageCode: String = "zh-Hans",
-        reviewRegressionFixture: Bool = false
-    ) -> XCUIApplication {
-        let app = XCUIApplication()
-        app.launchArguments += ["-ui-testing", "-languageCode", languageCode, "-AppleLanguages", "(\(languageCode))"]
-        if skipOnboarding {
-            app.launchArguments += ["-uitest-skip-onboarding"]
-            app.launchEnvironment["UITEST_SKIP_ONBOARDING"] = "1"
-        }
-        if resetState {
-            app.launchArguments += ["-uitest-reset-state"]
-            app.launchEnvironment["UITEST_RESET_STATE"] = "1"
-        }
-        if enableBackupPreview {
-            app.launchArguments += ["-uitest-backup-preview"]
-            app.launchEnvironment["UITEST_BACKUP_PREVIEW"] = "1"
-        }
-        if allowClearWithoutBackup {
-            app.launchArguments += ["-uitest-allow-clear-without-backup"]
-            app.launchEnvironment["UITEST_ALLOW_CLEAR_WITHOUT_BACKUP"] = "1"
-        }
-        if let backupRoundTripSlot {
-            app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP"] = "1"
-            app.launchEnvironment["UITEST_BACKUP_ROUNDTRIP_SLOT"] = backupRoundTripSlot
-        }
-        if let dynamicTypeSize {
-            app.launchArguments += ["-uitest-dynamic-type-size", dynamicTypeSize]
-            app.launchEnvironment["UITEST_DYNAMIC_TYPE_SIZE"] = dynamicTypeSize
-        }
-        if reviewRegressionFixture {
-            app.launchEnvironment["UITEST_REVIEW_REGRESSION_FIXTURE"] = "1"
-        }
-        app.launch()
-        return app
-    }
-
-    func tapPrimaryModule(_ app: XCUIApplication, name: String) {
-        let tabIdentifier: String? = switch name {
-        case "工作台": "house.fill"
-        case "项目": "building.2.fill"
-        case "工具箱": "books.vertical.fill"
-        case "随手记": "square.and.pencil"
-        case "我的": "person.circle"
-        default: nil
-        }
-
-        if let tabIdentifier,
-           app.tabBars.buttons[tabIdentifier].waitForExistence(timeout: 2) {
-            app.tabBars.buttons[tabIdentifier].tap()
-            return
-        }
-
-        let tabButton = app.tabBars.buttons[name]
-        if tabButton.waitForExistence(timeout: 2) {
-            tabButton.tap()
-            return
-        }
-
-        let sidebarButton = app.buttons[name]
-        if sidebarButton.waitForExistence(timeout: 2) {
-            sidebarButton.tap()
-            return
-        }
-
-        let sidebarText = app.staticTexts[name]
-        if sidebarText.waitForExistence(timeout: 2) {
-            sidebarText.tap()
-        }
-    }
-
-    func waitForPrimaryModule(_ app: XCUIApplication, name: String, timeout: TimeInterval = 5) -> Bool {
-        if app.tabBars.buttons[name].waitForExistence(timeout: timeout) {
-            return true
-        }
-        if app.buttons[name].waitForExistence(timeout: timeout) {
-            return true
-        }
-        return app.staticTexts[name].waitForExistence(timeout: timeout)
-    }
-
-    func button(
-        _ app: XCUIApplication,
-        identifier: String,
-        scrollingAttempts: Int = 4
-    ) -> XCUIElement {
-        let button = app.buttons[identifier]
-        if button.waitForExistence(timeout: 2), button.isHittable {
-            return button
-        }
-
-        for attempt in 0..<scrollingAttempts {
-            performSearchScroll(app, attempt: attempt)
-
-            if button.waitForExistence(timeout: 1), button.isHittable {
-                break
-            }
-        }
-        return button
-    }
-
-    func element(
-        _ app: XCUIApplication,
-        identifier: String,
-        scrollingAttempts: Int = 6
-    ) -> XCUIElement {
-        let match = app.descendants(matching: .any).matching(identifier: identifier).firstMatch
-        if match.waitForExistence(timeout: 2), match.isHittable {
-            return match
-        }
-
-        for attempt in 0..<scrollingAttempts {
-            performSearchScroll(app, attempt: attempt)
-
-            if match.waitForExistence(timeout: 1), match.isHittable {
-                break
-            }
-        }
-        return match
-    }
-
-    private func performSearchScroll(_ app: XCUIApplication, attempt: Int) {
-        let shouldSwipeUp = attempt % 2 == 0
-        let table = app.tables.firstMatch
-        let scrollView = app.scrollViews.firstMatch
-        let collectionView = app.collectionViews.firstMatch
-
-        if table.exists, !table.frame.isEmpty {
-            shouldSwipeUp ? table.swipeUp() : table.swipeDown()
-            return
-        }
-
-        if scrollView.exists, !scrollView.frame.isEmpty {
-            shouldSwipeUp ? scrollView.swipeUp() : scrollView.swipeDown()
-            return
-        }
-        if collectionView.exists, !collectionView.frame.isEmpty {
-            shouldSwipeUp ? collectionView.swipeUp() : collectionView.swipeDown()
-            return
-        }
-        shouldSwipeUp ? app.swipeUp() : app.swipeDown()
-    }
-
-    func waitForElementByScrollingDown(
-        _ element: XCUIElement,
-        in container: XCUIElement,
-        attempts: Int = 12,
-        timeoutPerAttempt: TimeInterval = 1
-    ) -> Bool {
-        if element.waitForExistence(timeout: timeoutPerAttempt) {
-            return true
-        }
-
-        for _ in 0..<attempts {
-            container.swipeUp()
-
-            if element.waitForExistence(timeout: timeoutPerAttempt) {
-                return true
-            }
-        }
-        return false
-    }
-
-    func openDataSafetyCenter(_ app: XCUIApplication) {
-        for attempt in 0..<3 {
-            tapPrimaryModule(app, name: "我的")
-
-            if app.navigationBars["我的"].waitForExistence(timeout: 2) {
-                let dataEntry = button(app, identifier: "profile-data-management-link", scrollingAttempts: 8)
-                if dataEntry.waitForExistence(timeout: 4), dataEntry.isHittable {
-                    dataEntry.tap()
-                    if app.navigationBars["数据安全中心"].waitForExistence(timeout: 10) {
-                        return
-                    }
-                }
-
-                let dataLabel = app.staticTexts["数据管理"]
-                if dataLabel.waitForExistence(timeout: 2), dataLabel.isHittable {
-                    dataLabel.tap()
-                    if app.navigationBars["数据安全中心"].waitForExistence(timeout: 10) {
-                        return
-                    }
-                }
-            }
-
-            // AXXXL 字号下 tab 切换偶发失效，补一次明确点击 profile 图标。
-            let profileTabByIdentifier = app.buttons["person.circle"]
-            if profileTabByIdentifier.waitForExistence(timeout: 1), profileTabByIdentifier.isHittable {
-                profileTabByIdentifier.tap()
-            }
-
-            if attempt == 2 {
-                break
-            }
-        }
-
-        XCTFail("Unable to open profile data management entry")
-    }
-
-    func openSampleDataImportConfirmation(_ app: XCUIApplication) {
-        openDataSafetyCenter(app)
-
-        let directImportButton = app.buttons["data-management-import-sample-data"]
-        if directImportButton.waitForExistence(timeout: 2), directImportButton.isHittable {
-            directImportButton.tap()
-        } else {
-            let actionMenu = app.buttons["data-management-actions-menu"]
-            XCTAssertTrue(actionMenu.waitForExistence(timeout: 5))
-            actionMenu.tap()
-            let importButton = app.buttons["导入测试数据"]
-            XCTAssertTrue(importButton.waitForExistence(timeout: 5))
-            importButton.tap()
-        }
-
-        XCTAssertTrue(app.alerts["恢复测试数据？"].waitForExistence(timeout: 5))
-    }
-
-    func importSampleDataThroughUI(_ app: XCUIApplication) {
-        openSampleDataImportConfirmation(app)
-        app.alerts["恢复测试数据？"].buttons["清空并导入"].tap()
-        XCTAssertTrue(app.staticTexts["已恢复测试数据"].waitForExistence(timeout: 8))
-    }
-
-    func ensureDashboardBusinessMetricsVisible(_ app: XCUIApplication) {
-        let metricId = "dashboard-business-receivable-aging"
-        let metric = app.descendants(matching: .any).matching(identifier: metricId).firstMatch
-        if metric.waitForExistence(timeout: 1) {
-            return
-        }
-
-        let moreOverviewButton = app.buttons["更多概况"]
-        if moreOverviewButton.waitForExistence(timeout: 2), moreOverviewButton.isHittable {
-            moreOverviewButton.tap()
-            _ = metric.waitForExistence(timeout: 3)
-            return
-        }
-
-        let moreOverviewText = app.staticTexts["更多概况"]
-        if moreOverviewText.waitForExistence(timeout: 2), moreOverviewText.isHittable {
-            moreOverviewText.tap()
-            _ = metric.waitForExistence(timeout: 3)
-        }
-    }
-
-    @discardableResult
-    func openImportedProject(
-        _ app: XCUIApplication,
-        preferredName: String = "阳光花园 3# 楼"
-    ) -> String {
-        let preferredProject = app.staticTexts[preferredName]
-        if preferredProject.waitForExistence(timeout: 6) {
-            preferredProject.tap()
-            return preferredName
-        }
-
-        let rowButton = app.buttons["project-list-row"].firstMatch
-        if rowButton.waitForExistence(timeout: 4), rowButton.isHittable {
-            rowButton.tap()
-        } else {
-            let firstCollectionCell = app.collectionViews.cells.firstMatch
-            if firstCollectionCell.waitForExistence(timeout: 4), firstCollectionCell.isHittable {
-                firstCollectionCell.tap()
-            } else {
-                let firstTableCell = app.tables.cells.firstMatch
-                if firstTableCell.waitForExistence(timeout: 4), firstTableCell.isHittable {
-                    firstTableCell.tap()
-                } else {
-                    XCTFail("Unable to open any project row after sample import")
-                }
-            }
-        }
-
-        let navigationBar = app.navigationBars.firstMatch
-        XCTAssertTrue(navigationBar.waitForExistence(timeout: 6))
-        return navigationBar.identifier
     }
 }
 
@@ -414,7 +71,7 @@ extension SitekeeperUITests {
 
     func testQuickNoteComposerShowsMediaAndAttachmentActions() {
         let app = launchApp()
-        app.tabBars.buttons["随手记"].tap()
+        tapPrimaryModule(app, name: "随手记")
 
         XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["发送随手记"].waitForExistence(timeout: 5))
@@ -427,7 +84,7 @@ extension SitekeeperUITests {
 
     func testQuickNoteCompactComposerCanOpenDrawingBoard() {
         let app = launchApp()
-        app.tabBars.buttons["随手记"].tap()
+        tapPrimaryModule(app, name: "随手记")
 
         let drawingButton = app.buttons["quick-note-add-drawing"]
         XCTAssertTrue(drawingButton.waitForExistence(timeout: 5))
@@ -466,20 +123,53 @@ extension SitekeeperUITests {
     }
 
     func testProjectFileBrowserEntryOpensList() {
+        let orientations: [UIDeviceOrientation] = UIDevice.current.userInterfaceIdiom == .pad
+            ? [.portrait, .landscapeLeft] : [.portrait]
+        defer { XCUIDevice.shared.orientation = .portrait }
+        for orientation in orientations {
+            XCUIDevice.shared.orientation = orientation
+            assertProjectFileBrowserEntryOpensList()
+        }
+    }
+
+    private func assertProjectFileBrowserEntryOpensList() {
         let app = launchApp(resetState: true)
-        app.tabBars.buttons["项目"].tap()
+        tapPrimaryModule(app, name: "项目")
 
         let browserButton = app.buttons["project-file-browser-entry"]
         XCTAssertTrue(browserButton.waitForExistence(timeout: 5))
         browserButton.tap()
 
-        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.staticTexts["暂无项目资料"].waitForExistence(timeout: 5))
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            let preview = app.navigationBars["文件预览"]
+            XCTAssertTrue(preview.waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["请选择文件"].waitForExistence(timeout: 5))
+            let projects = app.navigationBars["项目资料"]
+            for _ in 0..<2 {
+                if projects.exists, projects.isHittable { break }
+                let categorySidebar = app.navigationBars.matching(identifier: "文件分类")
+                    .buttons["显示边栏"].firstMatch
+                let previewSidebar = app.navigationBars.matching(identifier: "文件预览")
+                    .buttons["显示边栏"].firstMatch
+                let sidebar = categorySidebar.exists ? categorySidebar : previewSidebar
+                XCTAssertTrue(sidebar.waitForExistence(timeout: 5), app.debugDescription)
+                XCTAssertTrue(sidebar.isHittable)
+                sidebar.tap()
+            }
+            XCTAssertTrue(projects.waitForExistence(timeout: 5))
+            XCTAssertTrue(projects.isHittable)
+            let empty = app.staticTexts["暂无项目"]
+            XCTAssertTrue(empty.waitForExistence(timeout: 5))
+            XCTAssertTrue(empty.isHittable)
+        } else {
+            XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
+            XCTAssertTrue(app.staticTexts["暂无项目资料"].waitForExistence(timeout: 5))
+        }
     }
 
     func testClearLocalDataFlowRequiresConfirmationPhrase() {
         let app = launchApp(resetState: true, allowClearWithoutBackup: true)
-        app.tabBars.buttons["我的"].tap()
+        tapPrimaryModule(app, name: "我的")
 
         let settingsEntry = button(app, identifier: "profile-settings-link")
         XCTAssertTrue(settingsEntry.waitForExistence(timeout: 5))
@@ -506,7 +196,8 @@ extension SitekeeperUITests {
         phraseField.typeText("确认删除数据")
 
         XCTAssertTrue(confirmClearButton.isEnabled)
-        app.buttons["取消"].tap()
+        clearDataConfirmationAction(app, title: "取消").tap()
+        XCTAssertTrue(phraseField.waitForNonExistence(timeout: 5))
     }
 
     func testBackupOverwriteImportShowsSecondConfirmation() {
@@ -517,11 +208,15 @@ extension SitekeeperUITests {
         XCTAssertTrue(actionMenu.waitForExistence(timeout: 5))
         actionMenu.tap()
 
-        let previewButton = app.buttons["ui-test-backup-preview"]
-        XCTAssertTrue(previewButton.waitForExistence(timeout: 5))
-        let confirmShortcutButton = app.buttons["ui-test-overwrite-confirm"]
-        XCTAssertTrue(confirmShortcutButton.waitForExistence(timeout: 5))
-        confirmShortcutButton.tap()
+        let previewButtons = app.buttons.matching(identifier: "ui-test-backup-preview")
+        XCTAssertTrue(previewButtons.firstMatch.waitForExistence(timeout: 5))
+        let confirmations = app.buttons.matching(identifier: "ui-test-overwrite-confirm")
+        XCTAssertTrue(confirmations.firstMatch.waitForExistence(timeout: 5))
+        // The wide page also exposes this debug action inline. The open menu
+        // owns the hittable instance; its covered page counterpart is retained.
+        let confirmShortcutButton = confirmations.allElementsBoundByIndex.first(where: { $0.isHittable })
+        XCTAssertNotNil(confirmShortcutButton)
+        confirmShortcutButton?.tap()
 
         let overwriteAlert = app.alerts["确认覆盖导入？"]
         XCTAssertTrue(overwriteAlert.waitForExistence(timeout: 5))
@@ -530,26 +225,32 @@ extension SitekeeperUITests {
 
     func testProjectDeliveryGuideReachesExportActionWithSampleData() throws {
         try XCTSkipUnless(shouldRunExtendedScenarios, "Set UITEST_RUN_EXTENDED_SCENARIOS=1 to run project delivery sample-data scenario tests.")
-        let app = launchApp(resetState: true)
-        importSampleDataThroughUI(app)
-
-        tapPrimaryModule(app, name: "项目")
-        let openedProjectName = openImportedProject(app)
-        XCTAssertFalse(openedProjectName.isEmpty)
-        let moreMenu = app.buttons["project-detail-more-menu"]
-        XCTAssertTrue(moreMenu.waitForExistence(timeout: 5))
-        moreMenu.tap()
-
-        let deliveryGuideButton = app.buttons["打开交付向导"]
-        XCTAssertTrue(deliveryGuideButton.waitForExistence(timeout: 5))
-        deliveryGuideButton.tap()
-
-        XCTAssertTrue(app.navigationBars["完工交付向导"].waitForExistence(timeout: 5))
-        let exportButton = app.buttons["project-delivery-export-package"]
-        XCTAssertTrue(
-            waitForElementByScrollingDown(exportButton, in: app, attempts: 14, timeoutPerAttempt: 1),
-            "Unable to locate project-delivery-export-package in guide"
-        )
+        let orientations: [UIDeviceOrientation] = UIDevice.current.userInterfaceIdiom == .pad
+            ? [.portrait, .landscapeLeft] : [.portrait]
+        defer { XCUIDevice.shared.orientation = .portrait }
+        for orientation in orientations {
+            XCUIDevice.shared.orientation = orientation
+            let app = launchApp(resetState: true)
+            importSampleDataThroughUI(app)
+            tapPrimaryModule(app, name: "项目")
+            let openedProjectName = openImportedProject(app)
+            XCTAssertFalse(openedProjectName.isEmpty)
+            XCTAssertTrue(app.navigationBars[openedProjectName].waitForExistence(timeout: 5))
+            let moreMenu = app.buttons["project-detail-more-menu"]
+            let moreMenuExists = moreMenu.waitForExistence(timeout: 5)
+            if !moreMenuExists { attachInterfaceSnapshot(app, named: "Delivery menu missing") }
+            XCTAssertTrue(moreMenuExists)
+            moreMenu.tap()
+            let deliveryGuideButton = app.buttons["打开交付向导"]
+            XCTAssertTrue(deliveryGuideButton.waitForExistence(timeout: 5))
+            deliveryGuideButton.tap()
+            XCTAssertTrue(app.navigationBars["完工交付向导"].waitForExistence(timeout: 5))
+            let exportButton = app.buttons["project-delivery-export-package"]
+            XCTAssertTrue(
+                waitForElementByScrollingDown(exportButton, in: app, attempts: 14, timeoutPerAttempt: 1),
+                "Unable to locate project-delivery-export-package in guide"
+            )
+        }
     }
 
     func testSwitchingFromSettingsToToolboxRefreshesDetail() {
@@ -590,16 +291,22 @@ extension SitekeeperUITests {
             ("dashboard-business-profit-risk", "project-list-overview-filter-lowMarginRisk")
         ]
 
-        for item in cases {
+        for item in cases + cases {
             let metricEntry = element(app, identifier: item.buttonId, scrollingAttempts: 8)
             XCTAssertTrue(metricEntry.waitForExistence(timeout: 6), "Missing metric entry: \(item.buttonId)")
             XCTAssertTrue(metricEntry.isHittable, "Metric entry not hittable: \(item.buttonId)")
+            XCTAssertGreaterThanOrEqual(metricEntry.frame.height, 44, "Metric tap areas must not overlap adjacent rows")
+            if item.buttonId == "dashboard-business-cost-anomaly" {
+                attachInterfaceSnapshot(app, named: "Before cost anomaly drilldown")
+            }
             metricEntry.tap()
 
             XCTAssertTrue(app.navigationBars["项目"].waitForExistence(timeout: 6))
-            XCTAssertTrue(app.staticTexts[item.filterId].waitForExistence(timeout: 6), "Missing overview filter marker: \(item.filterId)")
+            let filterExists = app.staticTexts[item.filterId].waitForExistence(timeout: 6)
+            if !filterExists { attachInterfaceSnapshot(app, named: "Overview filter missing: \(item.filterId)") }
+            XCTAssertTrue(filterExists, "Missing overview filter marker: \(item.filterId)")
 
-            let backButton = app.navigationBars.buttons.firstMatch
+            let backButton = app.navigationBars["项目"].buttons["BackButton"]
             XCTAssertTrue(backButton.waitForExistence(timeout: 6))
             backButton.tap()
             let returnedToDashboard =
@@ -619,7 +326,7 @@ extension SitekeeperUITests {
         XCTAssertTrue(emptyProjectCallToAction.isHittable)
         emptyProjectCallToAction.tap()
         XCTAssertTrue(app.navigationBars["项目"].waitForExistence(timeout: 5))
-        let dashboardBackButton = app.navigationBars.buttons.firstMatch
+        let dashboardBackButton = app.navigationBars["项目"].buttons["BackButton"]
         XCTAssertTrue(dashboardBackButton.waitForExistence(timeout: 3))
         dashboardBackButton.tap()
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 5))
@@ -692,7 +399,8 @@ extension SitekeeperUITests {
         saveScreenshot(app, named: "04-project-home")
 
         app.buttons["project-file-browser-entry"].tap()
-        XCTAssertTrue(app.navigationBars["项目资料"].waitForExistence(timeout: 5))
+        let browserTitle = UIDevice.current.userInterfaceIdiom == .pad ? "文件预览" : "项目资料"
+        XCTAssertTrue(app.navigationBars[browserTitle].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "05-project-files")
 
         tapPrimaryModule(app, name: "工具箱")
@@ -719,10 +427,12 @@ extension SitekeeperUITests {
         XCTAssertTrue(app.navigationBars["今日工作台"].waitForExistence(timeout: 20))
         saveScreenshot(app, named: "screenshot1_dashboard")
 
-        app.buttons["工具箱"].tap()
+        tapPrimaryModule(app, name: "工具箱")
+        XCTAssertTrue(app.navigationBars["工程工具箱"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "screenshot2_database")
 
-        app.buttons["随手记"].tap()
+        tapPrimaryModule(app, name: "随手记")
+        XCTAssertTrue(app.navigationBars["随手记"].waitForExistence(timeout: 5))
         saveScreenshot(app, named: "screenshot3_quicknote")
     }
 }

@@ -56,7 +56,7 @@ extension QuoteItem: Searchable {
 
 extension LaborRecord: Searchable {
     var searchableFields: [String] {
-        [date, note, workType, teamName]
+        [date.storageText, note, workType, teamName]
     }
 }
 
@@ -74,7 +74,7 @@ extension ProjectTemplate: Searchable {
 
 extension SiteTodo: Searchable {
     var searchableFields: [String] {
-        [title, owner, dueDate, note]
+        [title, owner, dueDate.storageText, note]
     }
 }
 
@@ -92,13 +92,13 @@ extension ProjectFileItem: Searchable {
 
 extension DailyLog: Searchable {
     var searchableFields: [String] {
-        [date, weather, content, workers, safety, materials, tomorrowPlan, qualityIssue, rectification, confirmer]
+        [date.storageText, weather, content, workers.wireText, safety, materials, tomorrowPlan, qualityIssue, rectification, confirmer]
     }
 }
 
 extension QuickNote: Searchable {
     var searchableFields: [String] {
-        [title, content, createdAt, updatedAt, QuickNoteText.attachmentSummary(attachments)]
+        [title, content, createdAt.storageText, updatedAt.storageText, QuickNoteText.attachmentSummary(attachments)]
     }
 }
 

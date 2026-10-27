@@ -68,8 +68,8 @@ final class UndoableDeletionCoordinator {
     func queue(
         notice: Binding<OperationToastNotice?>,
         message: String,
-        undoMessage: String = String(localized: "已撤销删除"),
-        actionTitle: String = String(localized: "撤销"),
+        undoMessage: String = AppLocalization.string("已撤销删除"),
+        actionTitle: String = AppLocalization.string("撤销"),
         commit: @escaping () -> Void,
         undo: @escaping () -> Void,
         audit: UndoableDeletionAuditContext? = nil

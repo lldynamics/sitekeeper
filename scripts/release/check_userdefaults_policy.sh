@@ -6,12 +6,9 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[userdefaults-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
-MATCHES="$(rg -n --color=never --glob '*.swift' 'UserDefaults\.standard' Sources Widget || true)"
+MATCHES="$(policy_search -n --color=never --glob '*.swift' 'UserDefaults\.standard' Sources Widget || true)"
 if [[ -n "$MATCHES" ]]; then
   echo "[userdefaults-policy] FAIL: detected direct UserDefaults.standard usage in production targets:" >&2
   echo "$MATCHES" >&2
@@ -20,7 +17,7 @@ if [[ -n "$MATCHES" ]]; then
   exit 1
 fi
 
-APP_STORAGE_LITERAL_MATCHES="$(rg -n --color=never --glob '*.swift' '@AppStorage\(\s*"[^"]+"' Sources Widget || true)"
+APP_STORAGE_LITERAL_MATCHES="$(policy_search -n --color=never --glob '*.swift' '@AppStorage\([[:space:]]*"[^"]+"' Sources Widget || true)"
 if [[ -n "$APP_STORAGE_LITERAL_MATCHES" ]]; then
   echo "[userdefaults-policy] FAIL: detected @AppStorage literal keys in production targets:" >&2
   echo "$APP_STORAGE_LITERAL_MATCHES" >&2

@@ -1,18 +1,18 @@
 import SwiftUI
 
 struct ProjectBusinessSummary {
-    var quoteTotal: Double
-    var contractAmount: Double
-    var paidAmount: Double
-    var receivableAmount: Double
+    var quoteTotal: MoneyValue
+    var contractAmount: MoneyValue
+    var paidAmount: MoneyValue
+    var receivableAmount: MoneyValue
     var receivableAgeDays: Int?
     var recentCollection: CollectionSnapshot?
-    var materialCost: Double
-    var laborCostAmount: Double
+    var materialCost: MoneyValue
+    var laborCostAmount: MoneyValue
     var pendingMaterialCount: Int
     var unpricedQuoteCount: Int
 
-    var estimatedProfit: Double {
+    var estimatedProfit: MoneyValue {
         contractAmount - materialCost - laborCostAmount
     }
 
@@ -20,8 +20,8 @@ struct ProjectBusinessSummary {
         pendingMaterialCount + unpricedQuoteCount
     }
 
-    var unpaidAmount: Double {
-        max(contractAmount - paidAmount, 0)
+    var unpaidAmount: MoneyValue {
+        ProjectFinancialMetrics.unpaidAmount(contractAmount: contractAmount, paidAmount: paidAmount)
     }
 }
 
@@ -40,50 +40,50 @@ struct ProjectBusinessCardsView: View {
             spacing: AppSpacing.tight
         ) {
             ProjectBusinessMetricCard(
-                title: String(localized: "project.business.core.title"),
+                title: AppLocalization.string("project.business.core.title"),
                 systemImage: "chart.bar.xaxis",
                 tint: .appDoc,
                 metrics: [
-                    .init(title: String(localized: "project.business.quote"), value: ReportBuilder.money(summary.quoteTotal), color: .appPrimaryAction),
-                    .init(title: String(localized: "project.business.contract"), value: ReportBuilder.money(summary.contractAmount)),
-                    .init(title: String(localized: "project.business.collected"), value: ReportBuilder.money(summary.paidAmount), color: .appSuccess),
-                    .init(title: String(localized: "project.business.uncollected"), value: ReportBuilder.money(summary.unpaidAmount), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
-                    .init(title: String(localized: "project.business.materialCost"), value: ReportBuilder.money(summary.materialCost), color: .appDoc),
-                    .init(title: String(localized: "project.business.laborCost"), value: ReportBuilder.money(summary.laborCostAmount), color: .appWarning),
-                    .init(title: String(localized: "project.business.estimatedGrossProfit"), value: ReportBuilder.money(summary.estimatedProfit), color: summary.estimatedProfit >= 0 ? .appSuccess : .appRisk),
-                    .init(title: String(localized: "project.business.pending"), value: "\(summary.pendingCount)", color: summary.pendingCount > 0 ? .appPrimaryAction : .secondary)
+                    .init(title: AppLocalization.string("project.business.quote"), value: ReportBuilder.money(summary.quoteTotal), color: .appPrimaryAction),
+                    .init(title: AppLocalization.string("project.business.contract"), value: ReportBuilder.money(summary.contractAmount)),
+                    .init(title: AppLocalization.string("project.business.collected"), value: ReportBuilder.money(summary.paidAmount), color: .appSuccess),
+                    .init(title: AppLocalization.string("project.business.uncollected"), value: ReportBuilder.money(summary.unpaidAmount), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
+                    .init(title: AppLocalization.string("project.business.materialCost"), value: ReportBuilder.money(summary.materialCost), color: .appDoc),
+                    .init(title: AppLocalization.string("project.business.laborCost"), value: ReportBuilder.money(summary.laborCostAmount), color: .appWarning),
+                    .init(title: AppLocalization.string("project.business.estimatedGrossProfit"), value: ReportBuilder.money(summary.estimatedProfit), color: summary.estimatedProfit >= 0 ? .appSuccess : .appRisk),
+                    .init(title: AppLocalization.string("project.business.pending"), value: "\(summary.pendingCount)", color: summary.pendingCount > 0 ? .appPrimaryAction : .secondary)
                 ],
                 action: onOpenCore
             )
 
             ProjectBusinessMetricCard(
-                title: String(localized: "project.business.insights.title"),
+                title: AppLocalization.string("project.business.insights.title"),
                 systemImage: "waveform.path.ecg",
                 tint: .appPrimaryAction,
                 metrics: [
                     .init(
-                        title: String(localized: "project.business.receivableAge"),
+                        title: AppLocalization.string("project.business.receivableAge"),
                         value: receivableAgeText(summary),
                         color: receivableAgeColor(summary),
                         action: onOpenReceivableAging,
                         accessibilityIdentifier: "dashboard-business-receivable-aging"
                     ),
                     .init(
-                        title: String(localized: "project.business.recentCollection"),
+                        title: AppLocalization.string("project.business.recentCollection"),
                         value: recentCollectionText(summary),
                         color: recentCollectionColor(summary),
                         action: onOpenRecentCollection,
                         accessibilityIdentifier: "dashboard-business-recent-collection"
                     ),
                     .init(
-                        title: String(localized: "project.business.costException"),
+                        title: AppLocalization.string("project.business.costException"),
                         value: costAnomalyText(summary),
                         color: costAnomalyColor(summary),
                         action: onOpenCostAnomaly,
                         accessibilityIdentifier: "dashboard-business-cost-anomaly"
                     ),
                     .init(
-                        title: String(localized: "project.business.profitRisk"),
+                        title: AppLocalization.string("project.business.profitRisk"),
                         value: profitRiskText(summary),
                         color: profitRiskColor(summary),
                         action: onOpenProfitRisk,
@@ -96,16 +96,16 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func receivableAgeText(_ summary: ProjectBusinessSummary) -> String {
-        guard summary.receivableAmount > 0 else { return String(localized: "project.business.noReceivable") }
-        guard let days = summary.receivableAgeDays else { return String(localized: "project.business.missingCompletionDate") }
+        guard summary.receivableAmount > 0 else { return AppLocalization.string("project.business.noReceivable") }
+        guard let days = summary.receivableAgeDays else { return AppLocalization.string("project.business.missingCompletionDate") }
         if days == 0 {
             return DashboardSubtitleBuilder.moneySummary(
-                String(localized: "project.business.notDue"),
+                AppLocalization.string("project.business.notDue"),
                 amount: ReportBuilder.money(summary.receivableAmount)
             )
         }
         return DashboardSubtitleBuilder.moneySummary(
-            String(format: String(localized: "project.business.days"), Int64(days)),
+            String(format: AppLocalization.string("project.business.days"), Int64(days)),
             amount: ReportBuilder.money(summary.receivableAmount)
         )
     }
@@ -120,9 +120,9 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func recentCollectionText(_ summary: ProjectBusinessSummary) -> String {
-        guard let collection = summary.recentCollection else { return String(localized: "project.business.noRecentCollection") }
+        guard let collection = summary.recentCollection else { return AppLocalization.string("project.business.noRecentCollection") }
         return DashboardSubtitleBuilder.datedAmount(
-            collection.date,
+            collection.date.storageText,
             amount: ReportBuilder.money(collection.amount),
             projectName: collection.projectName
         )
@@ -135,26 +135,26 @@ struct ProjectBusinessCardsView: View {
     private func costAnomalyText(_ summary: ProjectBusinessSummary) -> String {
         let totalCost = summary.materialCost + summary.laborCostAmount
         let pendingCount = summary.pendingCount
-        guard summary.contractAmount > 0 else { return String(localized: "project.business.missingContractAmount") }
+        guard summary.contractAmount > 0 else { return AppLocalization.string("project.business.missingContractAmount") }
         guard totalCost > 0 else {
             return pendingCount > 0
-                ? String(format: String(localized: "project.business.pendingItems"), Int64(pendingCount))
-                : String(localized: "project.business.noCostRecorded")
+                ? String(format: AppLocalization.string("project.business.pendingItems"), Int64(pendingCount))
+                : AppLocalization.string("project.business.noCostRecorded")
         }
         let ratio = totalCost / summary.contractAmount
         if ratio > 1 {
             return String(
-                format: String(localized: "project.business.overContract"),
+                format: AppLocalization.string("project.business.overContract"),
                 ReportBuilder.money(totalCost - summary.contractAmount)
             )
         }
         if ratio >= 0.85 {
-            return String(format: String(localized: "project.business.costRatio"), percent(ratio))
+            return String(format: AppLocalization.string("project.business.costRatio"), percent(ratio))
         }
         if pendingCount > 0 {
-            return String(format: String(localized: "project.business.pendingItems"), Int64(pendingCount))
+            return String(format: AppLocalization.string("project.business.pendingItems"), Int64(pendingCount))
         }
-        return String(format: String(localized: "project.business.normalCostRatio"), percent(ratio))
+        return String(format: AppLocalization.string("project.business.normalCostRatio"), percent(ratio))
     }
 
     private func costAnomalyColor(_ summary: ProjectBusinessSummary) -> Color {
@@ -169,19 +169,19 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func profitRiskText(_ summary: ProjectBusinessSummary) -> String {
-        guard summary.contractAmount > 0 else { return String(localized: "project.business.missingContractAmount") }
+        guard summary.contractAmount > 0 else { return AppLocalization.string("project.business.missingContractAmount") }
         let profit = summary.estimatedProfit
         let margin = profit / summary.contractAmount
         if profit < 0 {
-            return String(format: String(localized: "project.business.lossAmount"), ReportBuilder.money(abs(profit)))
+            return String(format: AppLocalization.string("project.business.lossAmount"), ReportBuilder.money(profit.magnitude))
         }
         if margin < 0.10 {
-            return String(format: String(localized: "project.business.lowMargin"), percent(margin))
+            return String(format: AppLocalization.string("project.business.lowMargin"), percent(margin))
         }
         if margin < 0.20 {
-            return String(format: String(localized: "project.business.watchMargin"), percent(margin))
+            return String(format: AppLocalization.string("project.business.watchMargin"), percent(margin))
         }
-        return String(format: String(localized: "project.business.healthyMargin"), percent(margin))
+        return String(format: AppLocalization.string("project.business.healthyMargin"), percent(margin))
     }
 
     private func profitRiskColor(_ summary: ProjectBusinessSummary) -> Color {
@@ -194,13 +194,8 @@ struct ProjectBusinessCardsView: View {
         return .appSuccess
     }
 
-    private func percent(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = Locale(identifier: "en_US_POSIX")
-        formatter.numberStyle = .percent
-        formatter.minimumFractionDigits = 0
-        formatter.maximumFractionDigits = 1
-        return formatter.string(from: NSNumber(value: value)) ?? "\(Int(value * 100))%"
+    private func percent(_ value: Decimal) -> String {
+        value.formatted(.percent.precision(.fractionLength(0...1)).locale(Locale(identifier: "en_US_POSIX")))
     }
 }
 
@@ -286,6 +281,8 @@ private struct ProjectBusinessMetricCard: View {
                                 .font(.caption2.weight(.semibold))
                                 .foregroundStyle(.tertiary)
                         }
+                        .frame(minHeight: 44)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier(metric.accessibilityIdentifier ?? "")

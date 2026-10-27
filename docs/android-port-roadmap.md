@@ -23,10 +23,10 @@ Reference docs:
 
 - `project.yml` defines only iOS targets: `sitekeeper-iOS`, widget extension, unit tests, and UI tests.
 - `Sources/App/RootView.swift` defines the main product modules: dashboard, records, checklist, quick note, profile.
-- `Sources/Shared/Services/BackupSnapshot.swift` is the best cross-platform exchange root.
-- `Sources/Shared/Services/BackupArchiveService.swift` defines the ZIP package contract and schema gate for import/export.
-- `Sources/Shared/Services/DataStore.swift` persists `sitekeeper.json` and still migrates the legacy `construction_toolbox.json`.
-- `Sources/Shared/Services/ProjectModels.swift`, `ProjectDomainTypes.swift`, and `FinanceModels.swift` hold most portable domain models.
+- `Sources/Shared/Services/Backups/BackupSnapshot.swift` is the best cross-platform exchange root.
+- `Sources/Shared/Services/Backups/BackupArchiveService.swift` defines the ZIP package contract and schema gate for import/export.
+- `Sources/Shared/Services/Persistence/DataStore/DataStore.swift` persists `sitekeeper.json` and still migrates the legacy `construction_toolbox.json`.
+- `Sources/Shared/Models/Projects/ProjectModels.swift`, `ProjectDomainTypes.swift`, and `FinanceModels.swift` hold most portable domain models.
 - Native CAD viewing/rendering code has been removed from the shared codebase; DWG/DXF files should remain project attachments opened in external professional viewers.
 
 ## MVP Scope

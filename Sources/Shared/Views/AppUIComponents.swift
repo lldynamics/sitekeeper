@@ -180,6 +180,8 @@ struct ProjectContextStrip: View {
 }
 
 struct BusinessRecordRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .body) private var minimumDetailsWidth: CGFloat = 180
     let icon: String
     let iconColor: Color
     let title: String
@@ -196,38 +198,63 @@ struct BusinessRecordRow: View {
                 .frame(width: 18, height: 18)
                 .padding(.top, 2)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .appListPrimaryTextLayout()
-                if !meta.isEmpty {
-                    Text(meta)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .appListSecondaryTextLayout()
+            if dynamicTypeSize.isAccessibilitySize {
+                stackedDetails
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .top, spacing: 8) {
+                        details.frame(minWidth: minimumDetailsWidth, maxWidth: .infinity, alignment: .leading)
+                        trailingText
+                            .fixedSize(horizontal: true, vertical: true)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    stackedDetails
                 }
-                if !note.isEmpty {
-                    Text(note)
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .appListSecondaryTextLayout()
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            if !trailing.isEmpty {
-                Text(trailing)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(trailingColor)
-                    .multilineTextAlignment(.trailing)
             }
         }
         .padding(.vertical, 2)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityLabelText)
         .accessibilityValue(accessibilityValueText)
+    }
+
+    private var details: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+            if !meta.isEmpty {
+                Text(meta)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !note.isEmpty {
+                Text(note)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .appListSecondaryTextLayout()
+            }
+        }
+    }
+
+    private var stackedDetails: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            details
+            trailingText
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var trailingText: some View {
+        if !trailing.isEmpty {
+            Text(trailing)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(trailingColor)
+        }
     }
 
     private var accessibilityLabelText: String {

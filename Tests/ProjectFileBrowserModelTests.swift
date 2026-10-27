@@ -176,7 +176,7 @@ final class ProjectFileBrowserTestFiles {
                 documents.append(ProjectDocument(
                     projectId: project.id, title: "Acceptance \(index)", fileName: name,
                     submissionStatus: index == documentCount - 1 ? .returned : .archived,
-                    createdAt: "2026-10-15 10:00"
+                    createdAt: BusinessDateValue(legacyText: "2026-10-15 10:00")
                 ))
             }
             records.documents = documents
@@ -205,7 +205,7 @@ final class ProjectFileBrowserTestFiles {
         try write(PhotoStorage.fileURL(for: photo), size: 5)
         try write(QuickNoteAttachmentStorage.fileURL(for: attachment), size: 9)
         records.drawings = [ProjectDrawing(projectId: project.id, name: "Drawing", fileName: drawing, fileType: "pdf")]
-        records.logs = [DailyLog(date: "2026-10-15", weather: "", content: "", workers: "1", photoFileName: photo, projectId: project.id)]
+        records.logs = [DailyLog(date: BusinessDateValue(legacyText: "2026-10-15"), weather: "", content: "", workers: NumericInputSupport.quantity("1"), photoFileName: photo, projectId: project.id)]
         records.todos = [SiteTodo(title: "Rectification", rectificationBeforePhotoFileName: photo, projectId: project.id)]
         records.quickNotes = [QuickNote(projectId: project.id, attachments: [.init(kind: .file, fileName: attachment)])]
     }

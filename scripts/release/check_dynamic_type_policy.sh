@@ -6,15 +6,12 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[dynamic-type-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 # App UI in Sources should use semantic fonts so Dynamic Type can scale text.
 # Fixed point sizes in SwiftUI .font(.system(size: ...)) block accessibility.
 MATCHES="$(
-  rg -n --color=never --glob '*.swift' \
+  policy_search -n --color=never --glob '*.swift' \
     --regexp '\.font\(\.system\(size:' \
     --regexp 'Font\.system\(size:' \
     Sources || true

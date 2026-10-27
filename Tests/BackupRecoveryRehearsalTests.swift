@@ -127,15 +127,15 @@ struct BackupRecoveryRehearsalTests {
                 name: "恢复演练项目",
                 location: "测试现场",
                 status: .active,
-                contractAmount: "880000"
+                contractAmount: NumericInputSupport.money("880000")
             )
         ])
         store.replaceDailyLogs([
             DailyLog(
-                date: "2026-07-13",
+                date: BusinessDateValue(legacyText: "2026-07-13"),
                 weather: "晴",
                 content: "恢复演练日志",
-                workers: "8",
+                workers: NumericInputSupport.quantity("8"),
                 photos: [LogPhoto(fileName: photoFileName)],
                 projectId: projectID
             )
@@ -155,17 +155,17 @@ struct BackupRecoveryRehearsalTests {
     }
 
     private func seedAdditionalCollections(_ store: DataStore, projectID: UUID) {
-        store.replaceMaterialItems([MaterialItem(name: "钢筋", quantity: "1", unit: "吨", projectId: projectID)])
-        store.replaceQuoteItems([QuoteItem(name: "工程报价", unitPrice: "500", quantity: "1", unit: "项", notes: "", taxRate: "0", discountRate: "0", projectId: projectID)])
-        store.replaceLaborRecords([LaborRecord(date: "2026-09-09", workers: "2", hours: "1", note: "", projectId: projectID)])
-        store.replaceHistoryRecords([HistoryRecord(tool: "面积", input: "1×2", result: "2", date: Formatters.now(), projectId: projectID)])
-        store.replaceProgressTasks([ProgressTask(projectId: projectID, title: "验收", startDate: "2026-09-09", dueDate: "2026-09-10", completion: 0.5, note: "")])
+        store.replaceMaterialItems([MaterialItem(name: "钢筋", quantity: NumericInputSupport.quantity("1"), unit: "吨", projectId: projectID)])
+        store.replaceQuoteItems([QuoteItem(name: "工程报价", unitPrice: NumericInputSupport.money("500"), quantity: NumericInputSupport.quantity("1"), unit: "项", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0"), projectId: projectID)])
+        store.replaceLaborRecords([LaborRecord(date: BusinessDateValue(legacyText: "2026-09-09"), workers: NumericInputSupport.quantity("2"), hours: NumericInputSupport.quantity("1"), note: "", projectId: projectID)])
+        store.replaceHistoryRecords([HistoryRecord(tool: "面积", input: "1×2", result: "2", date: .now(), projectId: projectID)])
+        store.replaceProgressTasks([ProgressTask(projectId: projectID, title: "验收", startDate: BusinessDateValue(legacyText: "2026-09-09"), dueDate: BusinessDateValue(legacyText: "2026-09-10"), completion: 0.5, note: "")])
         store.replaceSiteTodos([SiteTodo(title: "检查", projectId: projectID)])
         store.replaceProjectContacts([ProjectContact(projectId: projectID, name: "负责人")])
-        store.replaceProjectFinancialRecords([ProjectFinancialRecord(projectId: projectID, amount: "123")])
-        store.replaceProjectWarehouseMovements([ProjectWarehouseMovement(projectId: projectID, materialName: "钢筋", quantity: "1")])
+        store.replaceProjectFinancialRecords([ProjectFinancialRecord(projectId: projectID, amount: NumericInputSupport.money("123"))])
+        store.replaceProjectWarehouseMovements([ProjectWarehouseMovement(projectId: projectID, materialName: "钢筋", quantity: NumericInputSupport.quantity("1"))])
         store.replaceTemplates([ProjectTemplate(name: "验收模板", category: .dailyLog, content: "检查")])
-        store.replaceMaterialPriceEntries([MaterialPriceEntry(name: "钢筋", referencePrice: "3500")])
+        store.replaceMaterialPriceEntries([MaterialPriceEntry(name: "钢筋", referencePrice: NumericInputSupport.money("3500"))])
         store.replaceSupplierProfiles([SupplierProfile(name: "供应商")])
         store.replaceConstructionMethods([ConstructionMethod(title: "施工工艺")])
         store.favoriteMaterialKeys = ["favorite"]
@@ -173,6 +173,14 @@ struct BackupRecoveryRehearsalTests {
         store.replaceUserMaterials([UserMaterial(name: "自定义材料")])
         store.replaceDeletedUserMaterials([UserMaterial(name: "已删除材料")])
         store.hiddenPresetKeys = ["hidden"]
+        store.legacyDateProvenance = [
+            LegacyDateProvenance(
+                path: "laborRecords/legacy/date",
+                originalText: "2026-09-09 08:30",
+                interpretation: "legacy-UTC",
+                sourceSchemaVersion: 2
+            )
+        ]
     }
 
     private func assertAllCollectionsEqual(_ expected: BackupSnapshot, _ actual: BackupSnapshot) throws {

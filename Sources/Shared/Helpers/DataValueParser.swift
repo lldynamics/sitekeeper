@@ -27,15 +27,14 @@ enum DataValueParser {
         ) == token.startIndex..<token.endIndex else {
             return nil
         }
-        return Decimal(string: token, locale: posixLocale)
-    }
-
-    static func double(from text: String) -> Double {
-        NSDecimalNumber(decimal: decimalValue(from: text)).doubleValue
-    }
-
-    static func decimal(from text: String) -> Double {
-        double(from: text)
+        // Foundation may round a coefficient that exceeds Decimal's precision.
+        // Refuse it before parsing so settlement amounts are never approximated.
+        let coefficient = token.filter { $0.isNumber }
+        let significant = coefficient.drop(while: { $0 == "0" }).reversed().drop(while: { $0 == "0" })
+        guard significant.count <= 38,
+              let value = Decimal(string: token, locale: posixLocale), !value.isNaN,
+              value != .zero || significant.isEmpty else { return nil }
+        return value
     }
 
     static func parseDate(_ text: String, preferredFormatter: DateFormatter? = nil) -> Date? {
@@ -45,6 +44,10 @@ enum DataValueParser {
             return date
         }
         return Formatters.parseDateOrDateTime(value)
+    }
+
+    static func parseDate(_ value: BusinessDateValue, preferredFormatter: DateFormatter? = nil) -> Date? {
+        value.date(in: preferredFormatter?.timeZone ?? .current)
     }
 
     private static func normalizedDecimalToken(_ token: String) -> String {

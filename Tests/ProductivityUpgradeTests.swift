@@ -7,8 +7,8 @@ struct ProductivityUpgradeTests {
     @Test func globalSearchIncludesLogsTodosNotesAndQuickEntryCommands() {
         let projectID = UUID()
         let project = Project(id: projectID, name: "东楼改造", location: "", status: .active)
-        let log = DailyLog(date: "2026-07-13", weather: "晴", content: "地下室防水验收", workers: "4", projectId: projectID)
-        let todo = SiteTodo(title: "更换配电箱标识", owner: "李工", dueDate: "2026-07-14", projectId: projectID)
+        let log = DailyLog(date: BusinessDateValue(legacyText: "2026-07-13"), weather: "晴", content: "地下室防水验收", workers: NumericInputSupport.quantity("4"), projectId: projectID)
+        let todo = SiteTodo(title: "更换配电箱标识", owner: "李工", dueDate: BusinessDateValue(legacyText: "2026-07-14"), projectId: projectID)
         let note = QuickNote(title: "甲方临时要求", content: "走廊增加应急灯", projectId: projectID)
 
         let logResult = RealtimeSearchSuggestionBuilder.suggestions(
@@ -46,21 +46,21 @@ struct ProductivityUpgradeTests {
         let now = calendar.date(from: DateComponents(year: 2026, month: 7, day: 13, hour: 8))!
         let projectID = UUID()
         let project = Project(id: projectID, name: "东楼改造", location: "", status: .active)
-        let openTodo = SiteTodo(title: "检查防护", dueDate: "2026-07-14", projectId: projectID)
-        let closedTodo = SiteTodo(title: "已完成", dueDate: "2026-07-14", isDone: true, projectId: projectID)
+        let openTodo = SiteTodo(title: "检查防护", dueDate: BusinessDateValue(legacyText: "2026-07-14"), projectId: projectID)
+        let closedTodo = SiteTodo(title: "已完成", dueDate: BusinessDateValue(legacyText: "2026-07-14"), isDone: true, projectId: projectID)
         let openFinancial = ProjectFinancialRecord(
             projectId: projectID,
             direction: .income,
-            amount: "1200",
+            amount: NumericInputSupport.money("1200"),
             counterparty: "甲方",
-            dueDate: "2026-07-15",
+            dueDate: BusinessDateValue(legacyText: "2026-07-15"),
             reminderStatus: .pending
         )
         let closedFinancial = ProjectFinancialRecord(
             projectId: projectID,
             direction: .expense,
-            amount: "800",
-            dueDate: "2026-07-15",
+            amount: NumericInputSupport.money("800"),
+            dueDate: BusinessDateValue(legacyText: "2026-07-15"),
             reminderStatus: .done
         )
         let snapshot = DueReminderSnapshot(

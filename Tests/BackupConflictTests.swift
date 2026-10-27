@@ -27,33 +27,11 @@ struct BackupConflictTests {
         }
 
         let project = Project(id: projectID, name: "同名附件项目", location: "现场", status: .active)
-        store.replaceProjects([project])
-        store.replaceQuickNotes([
-            QuickNote(
-                id: localNoteID,
-                projectId: projectID,
-                attachments: [QuickNoteAttachment(kind: .file, fileName: sharedFileName)]
-            )
-        ])
+        seedLocalNote(project: project, noteID: localNoteID, fileName: sharedFileName, store: store)
         let previousSnapshot = store.makeSnapshot(includePhotoFiles: false)
 
         _ = try QuickNoteAttachmentStorage.saveDataOrThrow(incomingData, fileName: sharedFileName)
-        let importedSnapshot = BackupSnapshot(
-            materialItems: [],
-            quoteItems: [],
-            laborRecords: [],
-            projects: [project],
-            dailyLogs: [],
-            historyRecords: [],
-            quickNotes: [
-                QuickNote(
-                    id: importedNoteID,
-                    projectId: projectID,
-                    attachments: [QuickNoteAttachment(kind: .file, fileName: sharedFileName)]
-                )
-            ],
-            templates: []
-        )
+        let importedSnapshot = incomingNoteSnapshot(project: project, noteID: importedNoteID, fileName: sharedFileName)
         let archive = try BackupArchiveService.makeArchive(from: importedSnapshot)
         defer { try? FileManager.default.removeItem(at: archive.fileURL) }
         _ = try QuickNoteAttachmentStorage.saveDataOrThrow(localData, fileName: sharedFileName)
@@ -113,22 +91,7 @@ struct BackupConflictTests {
         store.replaceQuickNotes([localNote])
         let previousSnapshot = store.makeSnapshot(includePhotoFiles: false)
 
-        let importedSnapshot = BackupSnapshot(
-            materialItems: [],
-            quoteItems: [],
-            laborRecords: [],
-            projects: [project],
-            dailyLogs: [],
-            historyRecords: [],
-            quickNotes: [
-                QuickNote(
-                    id: noteID,
-                    projectId: projectID,
-                    attachments: [QuickNoteAttachment(kind: .file, fileName: incomingFileName)]
-                )
-            ],
-            templates: []
-        )
+        let importedSnapshot = incomingNoteSnapshot(project: project, noteID: noteID, fileName: incomingFileName)
         let archive = try BackupArchiveService.makeArchive(from: importedSnapshot)
         defer { try? FileManager.default.removeItem(at: archive.fileURL) }
         QuickNoteAttachmentStorage.delete(fileName: incomingFileName)
@@ -186,10 +149,10 @@ struct BackupConflictTests {
             projects: [Project(id: projectId, name: "覆盖前项目", location: "现场", status: .active)],
             dailyLogs: [
                 DailyLog(
-                    date: "2026-05-03",
+                    date: BusinessDateValue(legacyText: "2026-05-03"),
                     weather: "晴",
                     content: "覆盖前日志",
-                    workers: "2",
+                    workers: NumericInputSupport.quantity("2"),
                     photos: [
                         LogPhoto(fileName: removedPhotoFile),
                         LogPhoto(fileName: retainedPhotoFile),
@@ -222,10 +185,10 @@ struct BackupConflictTests {
             projects: [Project(id: projectId, name: "覆盖后项目", location: "现场", status: .active)],
             dailyLogs: [
                 DailyLog(
-                    date: "2026-05-03",
+                    date: BusinessDateValue(legacyText: "2026-05-03"),
                     weather: "晴",
                     content: "覆盖后日志",
-                    workers: "2",
+                    workers: NumericInputSupport.quantity("2"),
                     photos: [LogPhoto(fileName: retainedPhotoFile)],
                     projectId: projectId
                 )
@@ -256,7 +219,10 @@ struct BackupConflictTests {
         #expect(!QuickNoteAttachmentStorage.exists(fileName: removedAttachmentFile))
         #expect(QuickNoteAttachmentStorage.exists(fileName: retainedAttachmentFile))
     }
+}
 
+// MARK: - Transaction rollback
+extension BackupConflictTests {
     @Test func backupPreparedEmbeddedFileRestoreRollbackRestoresExistingFile() throws {
         let projectId = UUID()
         let quickNoteFile = "backup-transaction-rollback-\(UUID().uuidString).bin"
@@ -325,5 +291,37 @@ struct BackupConflictTests {
         transaction = nil
 
         #expect(QuickNoteAttachmentStorage.data(for: quickNoteFile) == oldData)
+    }
+}
+
+private extension BackupConflictTests {
+    func seedLocalNote(project: Project, noteID: UUID, fileName: String, store: DataStore) {
+        store.replaceProjects([project])
+        store.replaceQuickNotes([
+            QuickNote(
+                id: noteID,
+                projectId: project.id,
+                attachments: [QuickNoteAttachment(kind: .file, fileName: fileName)]
+            )
+        ])
+    }
+
+    func incomingNoteSnapshot(project: Project, noteID: UUID, fileName: String) -> BackupSnapshot {
+        BackupSnapshot(
+            materialItems: [],
+            quoteItems: [],
+            laborRecords: [],
+            projects: [project],
+            dailyLogs: [],
+            historyRecords: [],
+            quickNotes: [
+                QuickNote(
+                    id: noteID,
+                    projectId: project.id,
+                    attachments: [QuickNoteAttachment(kind: .file, fileName: fileName)]
+                )
+            ],
+            templates: []
+        )
     }
 }

@@ -108,6 +108,101 @@ extension SitekeeperUITests {
         XCTAssertEqual(power.value as? String, "12")
     }
 
+    func testCalculatorInputsResetOnReentryAndHistoryRequiresExplicitSave() {
+        let app = launchApp(resetState: true)
+        tapPrimaryModule(app, name: "工具箱")
+        element(app, identifier: "快速计算", scrollingAttempts: 8).tap()
+        app.buttons["电气"].tap()
+        app.staticTexts["电流计算"].firstMatch.tap()
+        let power = app.textFields["例如 10"]
+        XCTAssertTrue(power.waitForExistence(timeout: 5))
+        power.tap()
+        app.typeText("12")
+        dismissKeyboardUsingToolbar(app)
+        app.buttons["计算"].tap()
+        let saveHistory = element(app, identifier: "calculator-save-history", scrollingAttempts: 8)
+        XCTAssertTrue(saveHistory.isEnabled)
+        app.buttons["calculator-open-history"].tap()
+        XCTAssertTrue(app.staticTexts["还没有计算历史"].waitForExistence(timeout: 5))
+        app.navigationBars["历史计算"].buttons.element(boundBy: 0).tap()
+        saveHistory.tap()
+        XCTAssertFalse(saveHistory.isEnabled)
+        app.buttons["calculator-open-history"].tap()
+        let inputs = app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "输入: 12"))
+        XCTAssertTrue(inputs.firstMatch.waitForExistence(timeout: 5))
+        XCTAssertEqual(inputs.count, 1)
+        app.navigationBars["历史计算"].buttons.element(boundBy: 0).tap()
+        app.navigationBars["电流计算"].buttons.element(boundBy: 0).tap()
+        app.staticTexts["电流计算"].firstMatch.tap()
+        XCTAssertTrue(power.waitForExistence(timeout: 5))
+        XCTAssertEqual(power.value as? String, "例如 10")
+        power.tap()
+        app.typeText("99")
+        dismissKeyboardUsingToolbar(app)
+        app.terminate()
+        let restarted = launchApp()
+        tapPrimaryModule(restarted, name: "工具箱")
+        element(restarted, identifier: "快速计算", scrollingAttempts: 8).tap()
+        restarted.buttons["电气"].tap()
+        restarted.staticTexts["电流计算"].firstMatch.tap()
+        XCTAssertTrue(restarted.textFields["例如 10"].waitForExistence(timeout: 5))
+        XCTAssertEqual(restarted.textFields["例如 10"].value as? String, "例如 10")
+        attachScreenshot(restarted, named: "Calculator inputs reset after reentry and restart")
+    }
+
+    func testCalculatorDraftGenerationRequiresProjectSelectionAndReview() {
+        let app = launchApp(resetState: true)
+        let projectName = "Calculator Draft Target"
+        tapPrimaryModule(app, name: "项目")
+        let create = app.buttons["project-create-open"]
+        XCTAssertTrue(create.waitForExistence(timeout: 8))
+        create.tap()
+        let projectNameField = app.textFields["project-create-name"]
+        XCTAssertTrue(projectNameField.waitForExistence(timeout: 5))
+        projectNameField.tap()
+        projectNameField.typeText(projectName)
+        app.buttons["project-create-submit"].tap()
+        XCTAssertTrue(projectNameField.waitForNonExistence(timeout: 8))
+
+        tapPrimaryModule(app, name: "工具箱")
+        element(app, identifier: "快速计算", scrollingAttempts: 8).tap()
+        app.buttons["电气"].tap()
+        app.staticTexts["电流计算"].firstMatch.tap()
+        let power = app.textFields["例如 10"]
+        XCTAssertTrue(power.waitForExistence(timeout: 5))
+        power.tap()
+        app.typeText("12")
+        dismissKeyboardUsingToolbar(app)
+        app.buttons["计算"].tap()
+
+        let material = element(app, identifier: "calculator-generate-material", scrollingAttempts: 10)
+        XCTAssertTrue(material.exists)
+        XCTAssertFalse(material.isEnabled, "Even a single project must be selected explicitly")
+        let quote = app.buttons["calculator-generate-quote"]
+        XCTAssertFalse(quote.isEnabled)
+        let picker = element(app, identifier: "calculator-project-picker", scrollingAttempts: 10)
+        picker.tap()
+        app.buttons[projectName].tap()
+        XCTAssertEqual(picker.value as? String, projectName)
+
+        material.tap()
+        XCTAssertTrue(app.navigationBars["核对材料单草稿"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[projectName].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["calculator-draft-review-notice"].exists)
+        XCTAssertTrue(app.buttons["business-form-save"].isEnabled)
+        attachScreenshot(app, named: "Calculator material draft target and pending quantity unit price review")
+        app.navigationBars["核对材料单草稿"].buttons["取消"].tap()
+        XCTAssertTrue(app.navigationBars["核对材料单草稿"].waitForNonExistence(timeout: 5))
+
+        quote.tap()
+        XCTAssertTrue(app.navigationBars["核对报价项"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts[projectName].firstMatch.exists)
+        XCTAssertTrue(app.staticTexts["calculator-draft-review-notice"].exists)
+        app.navigationBars["核对报价项"].buttons["取消"].tap()
+        XCTAssertTrue(app.navigationBars["核对报价项"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(quote.isEnabled)
+    }
+
     func testQuickNoteKeyboardDonePreservesDraft() {
         let app = launchApp(resetState: true)
         tapPrimaryModule(app, name: "随手记")
@@ -144,6 +239,8 @@ extension SitekeeperUITests {
         dismissKeyboardUsingToolbar(app)
         workers.tap()
         XCTAssertTrue(app.buttons["keyboard-done"].waitForExistence(timeout: 5))
+        dismissFloatingKeyboardPreview(app)
+        XCTAssertTrue(app.keyboards.firstMatch.exists)
         app.navigationBars.buttons["取消"].tap()
         XCTAssertTrue(workType.waitForNonExistence(timeout: 5))
         XCTAssertFalse(app.buttons["keyboard-done"].exists)
@@ -161,10 +258,20 @@ extension SitekeeperUITests {
         XCTAssertTrue(app.keyboards.firstMatch.waitForNonExistence(timeout: 5))
     }
 
-    private func tapKeyboardToolbarButton(_ app: XCUIApplication, identifier: String) {
+    func tapKeyboardToolbarButton(_ app: XCUIApplication, identifier: String) {
+        dismissFloatingKeyboardPreview(app)
         let control = app.buttons[identifier]
         XCTAssertTrue(control.waitForExistence(timeout: 5))
         XCTAssertTrue(control.isEnabled)
+        if UIDevice.current.userInterfaceIdiom == .pad,
+           !control.isHittable, app.frame.contains(CGPoint(x: control.frame.midX, y: control.frame.midY)) {
+            // iPad's decimal keypad popover can intercept the first tap on the
+            // visible toolbar. Dismiss that layer before navigating or finishing input.
+            control.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            if identifier == "keyboard-done", app.keyboards.firstMatch.waitForNonExistence(timeout: 2) { return }
+            let hittable = XCTNSPredicateExpectation(predicate: NSPredicate(format: "hittable == true"), object: control)
+            XCTAssertEqual(XCTWaiter.wait(for: [hittable], timeout: 3), .completed)
+        }
         XCTAssertTrue(control.isHittable)
         control.tap()
     }
@@ -191,6 +298,7 @@ extension SitekeeperUITests {
         )
         XCTAssertEqual(XCTWaiter.wait(for: [rotation], timeout: 5), .completed)
         XCTAssertTrue(app.buttons["keyboard-done"].waitForExistence(timeout: 5))
+        dismissFloatingKeyboardPreview(app)
         XCTAssertTrue(app.buttons["keyboard-done"].isHittable)
         let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
         screenshot.name = "Keyboard toolbar after rotation"

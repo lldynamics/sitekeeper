@@ -27,6 +27,17 @@ enum Formatters {
         formatterCache.formatter("yyyy-MM-dd HH:mm", timeZone: timeZone)
     }
 
+    static func parseDateOrDateTime(_ value: BusinessDateValue, timeZone: TimeZone = .current) -> Date? {
+        value.date(in: timeZone)
+    }
+
+    static func displayDateText(_ value: BusinessDateValue, timeZone: TimeZone = .current) -> String {
+        guard value.includesTime, let date = value.date(in: timeZone) else { return value.storageText }
+        return dateTimeFormatter(timeZone: timeZone).string(from: date)
+    }
+
+    static func isLater(_ lhs: BusinessDateValue, than rhs: BusinessDateValue) -> Bool { lhs > rhs }
+
     /// Zone-less date-times were written as UTC by v2. Keep that interpretation
     /// regardless of the current device zone; date-only values are calendar days.
     static func parseDateOrDateTime(_ text: String, timeZone: TimeZone = .current) -> Date? {
@@ -59,6 +70,9 @@ enum Formatters {
 
     static func now() -> String { timestamp(Date()) }
 
+    /// Local wall-clock text for people reading a generated document. Never persist it.
+    static func displayNow() -> String { dateTimeFormatter().string(from: Date()) }
+
     static func displayDateText(_ text: String, timeZone: TimeZone = .current) -> String {
         guard text.contains(":"), let value = parseDateOrDateTime(text, timeZone: timeZone) else { return text }
         return dateTimeFormatter(timeZone: timeZone).string(from: value)
@@ -80,15 +94,17 @@ enum Formatters {
     }
 
     /// 两位小数金额
-    static func money(_ v: Double) -> String { String(format: "%.2f", v) }
+    static func money(_ value: Decimal) -> String { money(decimal: value) }
 
-    static func localizedCurrency(_ value: Double, locale: Locale = .autoupdatingCurrent) -> String {
-        let formatter = NumberFormatter()
-        formatter.locale = locale
-        formatter.numberStyle = .currency
-        formatter.minimumFractionDigits = 2
-        formatter.maximumFractionDigits = 2
-        return formatter.string(from: NSNumber(value: value)) ?? money(value)
+    static func money(decimal value: Decimal) -> String {
+        guard !value.isNaN else { return "" }
+        var source = value
+        var rounded = Decimal.zero
+        NSDecimalRound(&rounded, &source, 2, .plain)
+        let text = NSDecimalNumber(decimal: rounded).stringValue
+        let parts = text.split(separator: ".", omittingEmptySubsequences: false)
+        if parts.count == 1 { return text + ".00" }
+        return text + String(repeating: "0", count: max(0, 2 - parts[1].count))
     }
 
     // DateFormatter supports concurrent formatting. The lock protects cache creation;

@@ -2,20 +2,19 @@ import SwiftUI
 
 struct RootView: View {
     @Environment(DataStore.self) private var store
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedTab: Tab = .dashboard
+    @AppStorage(UserPreferenceKeys.appTheme) private var appTheme = AppTheme.jiangnanSpring.rawValue
     @AppStorage(UserPreferenceKeys.appearanceMode) private var appearanceMode = AppAppearanceMode.system.rawValue
     @AppStorage(UserPreferenceKeys.didCompleteOnboarding) private var didCompleteOnboarding = false
     @AppStorage(UserPreferenceKeys.completedOnboardingVersion) private var completedOnboardingVersion = 0
     @AppStorage(UserPreferenceKeys.languageCode) private var languageCode = AppLanguage.chinese.rawValue
     @State private var showOnboarding = false
     @State private var showOnboardingBackupImport = false
+    @State private var showRecoveryBackupImport = false
+    @State private var pendingDeepLinkURL: URL?
     @State private var widgetDeepLinkDestination: WidgetDeepLinkDestination?
     @State private var projectComposerOpenToken = 0
     @State private var consumedProjectComposerOpenToken = 0
-    @State private var padDetailResetToken = 0
-    @State private var padShellResetToken = 0
-    @State private var padColumnVisibility: NavigationSplitViewVisibility = .all
 
     private let currentOnboardingVersion = 1
 
@@ -43,9 +42,9 @@ struct RootView: View {
         StringEnumFallback.value(languageCode, default: AppLanguage.chinese).preferredLocale
     }
 
-    private var usesPadSplitShell: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
-    }
+    // A resize must not replace the entire navigation tree and dismiss editors.
+    // NavigationSplitView handles compact collapse without replacing its content.
+    @State private var usesPadSplitShell = UIDevice.current.userInterfaceIdiom == .pad
 
     private var pendingProjectComposerOpenToken: Int {
         projectComposerOpenToken == consumedProjectComposerOpenToken ? 0 : projectComposerOpenToken
@@ -57,7 +56,17 @@ struct RootView: View {
                 .ignoresSafeArea()
 
             mainContentShell
-            .allowsHitTesting(!showOnboarding)
+            .disabled(!store.canEditBusinessData)
+            .allowsHitTesting(!showOnboarding && store.canEditBusinessData)
+            .accessibilityHidden(!store.canEditBusinessData)
+
+            if !store.canEditBusinessData {
+                StoreAvailabilityOverlay(
+                    failed: store.loadState == .failed,
+                    onRetry: { store.loadAsync() },
+                    onRestore: { showRecoveryBackupImport = true }
+                )
+            }
 
             if showOnboarding {
                 FirstLaunchOnboardingView(
@@ -76,11 +85,11 @@ struct RootView: View {
                 .ignoresSafeArea()
             }
         }
-        .tint(Color.appPrimaryAction)
+        .tint(StringEnumFallback.value(appTheme, default: AppTheme.jiangnanSpring).palette.primary)
         .preferredColorScheme(preferredAppearance)
         .environment(\.locale, preferredLocale)
-        .alert(String(localized: "数据读写异常"), isPresented: persistenceErrorBinding) {
-            Button(String(localized: "知道了"), role: .cancel) {
+        .alert(AppLocalization.string("数据读写异常"), isPresented: persistenceErrorBinding) {
+            Button(AppLocalization.string("知道了"), role: .cancel) {
                 store.persistenceErrorMessage = nil
             }
         } message: {
@@ -95,12 +104,18 @@ struct RootView: View {
                 DataManagementView(initialRoute: .restore)
             }
         }
+        .sheet(isPresented: $showRecoveryBackupImport) {
+            NavigationStack {
+                DataManagementView(initialRoute: .restore)
+            }
+        }
         .sheet(item: $widgetDeepLinkDestination) { destination in
             NavigationStack {
                 widgetDeepLinkView(for: destination)
+                    .disabled(!store.canEditBusinessData)
                     .toolbar {
                         ToolbarItem(placement: .cancellationAction) {
-                            Button(String(localized: "关闭")) {
+                            Button(AppLocalization.string("关闭")) {
                                 widgetDeepLinkDestination = nil
                             }
                         }
@@ -117,118 +132,36 @@ struct RootView: View {
             }
             refreshOnboardingState()
         }
+        .onChange(of: store.canEditBusinessData) { _, canEdit in
+            refreshOnboardingState()
+            if canEdit, let url = pendingDeepLinkURL {
+                pendingDeepLinkURL = nil
+                handleIncomingURL(url)
+            }
+        }
         .onOpenURL(perform: handleIncomingURL)
     }
 
     @ViewBuilder
     private var mainContentShell: some View {
         if usesPadSplitShell {
-            padSplitShell
+            RootPadNavigationShell(
+                selectedTab: $selectedTab,
+                projectComposerOpenToken: pendingProjectComposerOpenToken,
+                onComposerConsumed: consumeProjectComposerRequest
+            )
         } else {
-            phoneTabShell
+            RootPhoneTabShell(
+                selectedTab: $selectedTab,
+                projectComposerOpenToken: pendingProjectComposerOpenToken,
+                onComposerConsumed: consumeProjectComposerRequest
+            )
         }
-    }
-
-    private var phoneTabShell: some View {
-        TabView(selection: $selectedTab) {
-            DashboardView()
-                .tabItem { Label(Tab.dashboard.title, systemImage: Tab.dashboard.systemImage) }
-                .tag(Tab.dashboard)
-
-            NavigationStack {
-                ProjectListView(
-                    autoOpenComposerToken: pendingProjectComposerOpenToken,
-                    onAutoOpenComposerConsumed: consumeProjectComposerRequest
-                )
-            }
-            .tabItem { Label(Tab.records.title, systemImage: Tab.records.systemImage) }
-            .tag(Tab.records)
-
-            ChecklistTabView()
-                .tabItem { Label(Tab.checklist.title, systemImage: Tab.checklist.systemImage) }
-                .tag(Tab.checklist)
-
-            QuickNoteView()
-                .tabItem { Label(Tab.quickNote.title, systemImage: Tab.quickNote.systemImage) }
-                .tag(Tab.quickNote)
-
-            ProfileTabView()
-                .tabItem { Label(Tab.profile.title, systemImage: Tab.profile.systemImage) }
-                .tag(Tab.profile)
-        }
-    }
-
-    private var padSplitShell: some View {
-        NavigationSplitView(columnVisibility: $padColumnVisibility) {
-            List {
-                ForEach(Tab.allCases) { tab in
-                    Button {
-                        switchPadModule(to: tab)
-                    } label: {
-                        HStack(spacing: AppSpacing.tight) {
-                            if selectedTab == tab {
-                                RoundedRectangle(cornerRadius: 1.5)
-                                    .fill(Color.appPrimaryAction)
-                                    .frame(width: 3, height: 22)
-                            }
-                            Label(tab.title, systemImage: tab.systemImage)
-                                .font(.body.weight(selectedTab == tab ? .semibold : .regular))
-                            Spacer(minLength: 0)
-                        }
-                        .foregroundStyle(selectedTab == tab ? Color.appPrimaryAction : Color.primary)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(selectedTab == tab ? Color.appPrimarySurfaceSubtle : Color.clear)
-                }
-            }
-            .navigationTitle(AppBrand.displayName)
-            .listStyle(.sidebar)
-        } detail: {
-            selectedModuleContent
-                .id("pad-detail-\(selectedTab.id)-\(padDetailResetToken)")
-        }
-        .navigationSplitViewStyle(.balanced)
-        .id("pad-shell-\(padShellResetToken)")
-    }
-
-    @ViewBuilder
-    private var selectedModuleContent: some View {
-        switch selectedTab {
-        case .dashboard:
-            DashboardView()
-        case .records:
-            NavigationStack {
-                ProjectListView(
-                    autoOpenComposerToken: pendingProjectComposerOpenToken,
-                    onAutoOpenComposerConsumed: consumeProjectComposerRequest
-                )
-            }
-        case .checklist:
-            NavigationStack {
-                ChecklistTabView(embedsNavigationStack: false)
-            }
-        case .quickNote:
-            NavigationStack {
-                QuickNoteView(embedsNavigationStack: false)
-            }
-        case .profile:
-            NavigationStack {
-                ProfileTabView(embedsNavigationStack: false)
-            }
-        }
-    }
-
-    private func switchPadModule(to tab: Tab) {
-        guard selectedTab != tab else { return }
-        selectedTab = tab
-        padColumnVisibility = .all
-        padDetailResetToken &+= 1
-        padShellResetToken &+= 1
     }
 
     private func consumeProjectComposerRequest(_ token: Int) {
         guard token == projectComposerOpenToken else { return }
-        // Keep consumption outside the iPad shell, whose identity changes between modules.
+        // Keep the one-time request above all adaptive navigation shells.
         consumedProjectComposerOpenToken = token
     }
 
@@ -243,29 +176,12 @@ struct RootView: View {
         )
     }
 
-    private func refreshOnboardingState() {
-        let needsFirstSetup = !didCompleteOnboarding && !store.hasAnyBusinessData
-        let needsVersionGuide = didCompleteOnboarding && completedOnboardingVersion < currentOnboardingVersion
-        showOnboarding = !skipOnboardingForUITests && (needsFirstSetup || needsVersionGuide)
-    }
-
-    private func finishOnboarding() {
-        didCompleteOnboarding = true
-        completedOnboardingVersion = currentOnboardingVersion
-        showOnboarding = false
-    }
-
-    private func migrateOnboardingVersionIfNeeded() {
-        guard didCompleteOnboarding, completedOnboardingVersion == 0 else { return }
-        completedOnboardingVersion = currentOnboardingVersion
-    }
-
     @ViewBuilder
     private func widgetDeepLinkView(for destination: WidgetDeepLinkDestination) -> some View {
         switch destination {
         case .todos:
             SiteTodoView()
-                .navigationTitle(String(localized: "现场待办"))
+                .navigationTitle(AppLocalization.string("现场待办"))
                 .navigationBarTitleDisplayMode(.inline)
         case .lowStock:
             MaterialCenterView(initialTab: .warehouse)
@@ -280,9 +196,9 @@ struct RootView: View {
                 ProjectDetailView(projectId: projectId)
             } else {
                 ContentUnavailableView(
-                    String(localized: "项目不存在"),
+                    AppLocalization.string("项目不存在"),
                     systemImage: "exclamationmark.triangle",
-                    description: Text(String(localized: "该项目可能已被删除或尚未同步到本机。"))
+                    description: Text(AppLocalization.string("该项目可能已被删除或尚未同步到本机。"))
                 )
             }
         }
@@ -290,6 +206,10 @@ struct RootView: View {
 
     private func handleIncomingURL(_ url: URL) {
         guard let destination = WidgetDeepLinkDestination(url: url) else { return }
+        guard store.canEditBusinessData else {
+            pendingDeepLinkURL = url
+            return
+        }
         switch destination {
         case .todos:
             selectedTab = .dashboard
@@ -308,163 +228,23 @@ struct RootView: View {
     }
 }
 
-private enum WidgetDeepLinkDestination: Identifiable, Equatable {
-    case todos
-    case lowStock
-    case missingReceipt
-    case backupOverdue
-    case priceSpike
-    case project(UUID)
-
-    var id: String {
-        switch self {
-        case .todos:
-            return "todos"
-        case .lowStock:
-            return "low-stock"
-        case .missingReceipt:
-            return "missing-receipt"
-        case .backupOverdue:
-            return "backup-overdue"
-        case .priceSpike:
-            return "price-spike"
-        case .project(let projectId):
-            return "project-\(projectId.uuidString)"
-        }
+private extension RootView {
+    func refreshOnboardingState() {
+        guard store.canEditBusinessData else { showOnboarding = false
+        return }
+        let needsFirstSetup = !didCompleteOnboarding && !store.hasAnyBusinessData
+        let needsVersionGuide = didCompleteOnboarding && completedOnboardingVersion < currentOnboardingVersion
+        showOnboarding = !skipOnboardingForUITests && (needsFirstSetup || needsVersionGuide)
     }
 
-    init?(url: URL) {
-        guard url.scheme?.lowercased() == "sitekeeper",
-              url.host?.lowercased() == "widget" else {
-            return nil
-        }
-        let route = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        switch route {
-        case "todos":
-            self = .todos
-        case "low-stock":
-            self = .lowStock
-        case "missing-receipt":
-            self = .missingReceipt
-        case "backup-overdue":
-            self = .backupOverdue
-        case "price-spike":
-            self = .priceSpike
-        case "project":
-            guard let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-                  let projectIDText = components.queryItems?.first(where: { $0.name == "id" })?.value,
-                  let projectID = UUID(uuidString: projectIDText) else {
-                return nil
-            }
-            self = .project(projectID)
-        default:
-            return nil
-        }
-    }
-}
-
-enum Tab: Hashable, CaseIterable, Identifiable {
-    case dashboard
-    case records
-    case checklist
-    case quickNote
-    case profile
-
-    var id: Self { self }
-
-    var title: String {
-        switch self {
-        case .dashboard:
-            return String(localized: "工作台")
-        case .records:
-            return String(localized: "项目")
-        case .checklist:
-            return String(localized: "工具箱")
-        case .quickNote:
-            return String(localized: "随手记")
-        case .profile:
-            return String(localized: "我的")
-        }
+    func finishOnboarding() {
+        didCompleteOnboarding = true
+        completedOnboardingVersion = currentOnboardingVersion
+        showOnboarding = false
     }
 
-    var systemImage: String {
-        switch self {
-        case .dashboard:
-            return "house.fill"
-        case .records:
-            return "building.2.fill"
-        case .checklist:
-            return "books.vertical.fill"
-        case .quickNote:
-            return "square.and.pencil"
-        case .profile:
-            return "person.circle"
-        }
-    }
-}
-
-private struct FirstLaunchOnboardingView: View {
-    let onCreateProject: () -> Void
-    let onImportBackup: () -> Void
-    let onSkip: () -> Void
-
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 22) {
-                Spacer(minLength: 0)
-                Text("\(String(localized: "欢迎使用")) \(AppBrand.displayName)")
-                    .font(.largeTitle.bold())
-                Text(String(localized: "首次打开建议先选择一个开始方式"))
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                Text(String(localized: "数据默认保存在本机，可随时手动导出完整 ZIP 备份"))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                VStack(spacing: 12) {
-                    Button(action: onCreateProject) {
-                        actionRow(
-                            title: String(localized: "新建项目"),
-                            subtitle: String(localized: "从空白开始创建你的第一个工程"),
-                            icon: "building.2.fill"
-                        )
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .tint(Color.appPrimaryAction)
-                    .accessibilityIdentifier("onboarding-create-project")
-                    Button(action: onImportBackup) {
-                        actionRow(
-                            title: String(localized: "导入备份"),
-                            subtitle: String(localized: "从 ZIP 恢复已有项目数据"),
-                            icon: "square.and.arrow.down.fill"
-                        )
-                    }
-                    .buttonStyle(.bordered)
-                    Button(String(localized: "稍后设置"), action: onSkip)
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                        .accessibilityIdentifier("onboarding-skip")
-                }
-                .buttonBorderShape(.roundedRectangle)
-                Spacer()
-            }
-            .padding(20)
-            .navigationTitle(String(localized: "首次设置"))
-            .navigationBarTitleDisplayMode(.inline)
-        }
-    }
-
-    private func actionRow(title: String, subtitle: String, icon: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.title3.weight(.semibold))
-                .frame(width: 28)
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.headline)
-                Text(subtitle)
-                    .font(.caption)
-            }
-            Spacer()
-        }
+    func migrateOnboardingVersionIfNeeded() {
+        guard didCompleteOnboarding, completedOnboardingVersion == 0 else { return }
+        completedOnboardingVersion = currentOnboardingVersion
     }
 }

@@ -4,13 +4,20 @@ options:
   xcodeVersion: "27.1"
   groupOrdering:
     - pattern: "^Features$"
-      order: [计算, 清单, 首页, 随手记, 我的, 项目]
+      order: [Calculators, Checklists, Dashboard, QuickNotes, Profile, Projects]
   deploymentTarget:
     iOS: "17.0"
 settings:
   SWIFT_VERSION: "5.0"
   SWIFT_STRICT_CONCURRENCY: complete
   DEVELOPMENT_TEAM: "3H8UVVUCP3"
+packages:
+  GRDB:
+    url: https://github.com/groue/GRDB.swift.git
+    exactVersion: 7.11.1
+  ZIPFoundation:
+    url: https://github.com/weichsel/ZIPFoundation.git
+    exactVersion: 0.9.20
 targets:
   sitekeeper-iOS:
     type: application
@@ -42,12 +49,17 @@ targets:
           - "$(SRCROOT)/scripts/release/check_userdefaults_policy.sh"
           - "$(SRCROOT)/scripts/release/check_swiftui_identity_policy.sh"
           - "$(SRCROOT)/scripts/release/check_unchecked_sendable_policy.sh"
+          - "$(SRCROOT)/scripts/lib/policy_search.sh"
           - "$(SRCROOT)/project.yml"
           - "$(SRCROOT)/sitekeeper.xcodeproj/project.pbxproj"
           - "$(SRCROOT)/Sources"
           - "$(SRCROOT)/Widget"
         basedOnDependencyAnalysis: false
     dependencies:
+      - package: GRDB
+        product: GRDB
+      - package: ZIPFoundation
+        product: ZIPFoundation
       - target: sitekeeperWidgetExtension
         embed: true
     settings:
@@ -68,7 +80,7 @@ targets:
     platform: iOS
     sources:
       - path: Widget
-      - path: Sources/Shared/Services/WidgetSharedModels.swift
+      - path: Sources/Shared/Services/Widgets/WidgetSharedModels.swift
     settings:
       base:
         SWIFT_VERSION: "5.0"

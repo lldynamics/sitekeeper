@@ -18,13 +18,13 @@ struct DueReminderSchedulingTests {
     private func overdueSnapshot(count: Int = 60) -> DueReminderSnapshot {
         DueReminderSnapshot(
             projects: [],
-            todos: (0..<count).map { SiteTodo(title: "Overdue \($0)", dueDate: "2026-10-14") },
+            todos: (0..<count).map { SiteTodo(title: "Overdue \($0)", dueDate: BusinessDateValue(legacyText: "2026-10-14")) },
             financialRecords: []
         )
     }
 
     @Test func overdueBacklogLeavesFutureReminderScheduled() throws {
-        let future = SiteTodo(title: "Tomorrow", dueDate: "2026-10-16")
+        let future = SiteTodo(title: "Tomorrow", dueDate: BusinessDateValue(legacyText: "2026-10-16"))
         let overdue = overdueSnapshot()
         let snapshot = DueReminderSnapshot(projects: [], todos: overdue.todos + [future], financialRecords: [])
         let plans = DueReminderPlanBuilder.makePlans(snapshot: snapshot, now: now, calendar: calendar)
@@ -38,8 +38,8 @@ struct DueReminderSchedulingTests {
     }
 
     @Test func futureQuotaAndClosedItemsAreRespected() {
-        let future = (0..<70).map { SiteTodo(title: "Future \($0)", dueDate: "2026-10-16") }
-        let closed = SiteTodo(title: "Closed", dueDate: "2026-10-14", isDone: true)
+        let future = (0..<70).map { SiteTodo(title: "Future \($0)", dueDate: BusinessDateValue(legacyText: "2026-10-16")) }
+        let closed = SiteTodo(title: "Closed", dueDate: BusinessDateValue(legacyText: "2026-10-14"), isDone: true)
         let snapshot = DueReminderSnapshot(projects: [], todos: future + overdueSnapshot().todos + [closed], financialRecords: [])
         let plans = DueReminderPlanBuilder.makePlans(snapshot: snapshot, now: now, calendar: calendar)
         #expect(plans.count == 60)
@@ -51,7 +51,7 @@ struct DueReminderSchedulingTests {
         buddhist.timeZone = TimeZone(identifier: "Asia/Bangkok")!
         var gregorian = Calendar(identifier: .gregorian)
         gregorian.timeZone = buddhist.timeZone
-        let tomorrow = SiteTodo(title: "Tomorrow", dueDate: "2026-10-16")
+        let tomorrow = SiteTodo(title: "Tomorrow", dueDate: BusinessDateValue(legacyText: "2026-10-16"))
         let plans = DueReminderPlanBuilder.makePlans(
             snapshot: DueReminderSnapshot(projects: [], todos: [tomorrow], financialRecords: []),
             now: now, calendar: buddhist
@@ -62,8 +62,8 @@ struct DueReminderSchedulingTests {
     }
 
     @Test func summaryCombinesFinancialAndTodoItemsAndRejectsInvalidDates() throws {
-        let financial = ProjectFinancialRecord(projectId: UUID(), direction: .income, amount: "100", dueDate: "2026-10-14", reminderStatus: .pending)
-        let invalid = SiteTodo(title: "Invalid date", dueDate: "2026-02-30")
+        let financial = ProjectFinancialRecord(projectId: UUID(), direction: .income, amount: NumericInputSupport.money("100"), dueDate: BusinessDateValue(legacyText: "2026-10-14"), reminderStatus: .pending)
+        let invalid = SiteTodo(title: "Invalid date", dueDate: BusinessDateValue(legacyText: "2026-02-30"))
         let snapshot = DueReminderSnapshot(projects: [], todos: overdueSnapshot(count: 1).todos + [invalid], financialRecords: [financial])
         let plans = DueReminderPlanBuilder.makePlans(snapshot: snapshot, now: now, calendar: calendar)
         let summary = try #require(plans.first)

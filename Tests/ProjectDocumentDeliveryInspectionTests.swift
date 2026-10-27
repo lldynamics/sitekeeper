@@ -19,7 +19,7 @@ struct ProjectDocumentDeliveryInspectionTests {
             category: .constructionTechnical,
             fileName: "missing-\(UUID().uuidString).pdf",
             submissionStatus: .returned,
-            createdAt: "2026-05-17 10:00"
+            createdAt: BusinessDateValue(legacyText: "2026-05-17 10:00")
         )
         let unarchivedDocument = ProjectDocument(
             projectId: projectId,
@@ -28,8 +28,8 @@ struct ProjectDocumentDeliveryInspectionTests {
             fileName: "",
             submissionStatus: .submitted,
             responsiblePerson: "王工",
-            formedAt: "2026-05-01",
-            createdAt: "2026-05-17 09:00"
+            formedAt: BusinessDateValue(legacyText: "2026-05-01"),
+            createdAt: BusinessDateValue(legacyText: "2026-05-17 09:00")
         )
 
         let inspection = ProjectDocumentDeliveryInspection(

@@ -1,15 +1,21 @@
 import SwiftUI
+import UIKit
 
 @main
 struct SitekeeperApp: App {
     @State private var store: DataStore
     @State private var scenePhaseTask: Task<Void, Never>?
+    @State private var dayBoundaryRefreshTask: Task<Void, Never>?
     @State private var dueReminderRefreshTask: Task<Void, Never>?
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
         AppLanguage.restoreFromStorage()
+        UserPreferencesStore.shared.removeRetiredKeys()
 #if DEBUG
+        if UITestLaunchConfig.disablesAnimations {
+            UIView.setAnimationsEnabled(false)
+        }
         if UITestLaunchConfig.shouldResetLocalState {
             UITestLaunchConfig.resetLocalState()
         }
@@ -24,9 +30,12 @@ struct SitekeeperApp: App {
             .environment(store.projectStore)
             .environment(store.financeStore)
             .environment(store.materialLibraryStore)
-            .environment(store.userPreferenceStore)
+            .environment(store.materialLibraryPreferencesStore)
  #if DEBUG
-            .task { await ReviewRegressionFixture.prepareIfRequested(store: store) }
+            .task {
+                await ReviewRegressionFixture.prepareIfRequested(store: store)
+                await DataSafetyRegressionFixture.prepareIfRequested(store: store)
+            }
  #endif
 
  #if DEBUG
@@ -43,8 +52,30 @@ struct SitekeeperApp: App {
     var body: some Scene {
         WindowGroup {
             rootContent
+#if DEBUG
+                .transaction { transaction in
+                    if UITestLaunchConfig.disablesAnimations {
+                        transaction.animation = nil
+                        transaction.disablesAnimations = true
+                    }
+                }
+#endif
+                .task { refreshDayAndScheduleBoundaryIfActive() }
+                .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+                    refreshDayAndScheduleBoundaryIfActive()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .NSSystemTimeZoneDidChange)) { _ in
+                    refreshDayAndScheduleBoundaryIfActive()
+                }
+                .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+                    refreshDayAndScheduleBoundaryIfActive()
+                }
         }
         .onChange(of: scenePhase) { _, newPhase in
+            dayBoundaryRefreshTask?.cancel()
+            if newPhase == .active {
+                refreshDayAndScheduleBoundaryIfActive()
+            }
             scenePhaseTask?.cancel()
             scenePhaseTask = Task {
                 switch newPhase {
@@ -57,11 +88,16 @@ struct SitekeeperApp: App {
                         snapshot: DueReminderSnapshot(store: store)
                     )
                 case .background, .inactive:
-                    await store.flushSave()
+                    await BackgroundTaskAssertion.application.run(named: "sitekeeper.final-save") {
+                        await store.flushSave()
+                    }
                 default:
                     break
                 }
             }
+        }
+        .onChange(of: store.projectStore.dayContext) { _, _ in
+            store.publishWidgetData()
         }
         .onChange(of: store.projectStore.dueReminderVersion) { _, _ in
             dueReminderRefreshTask?.cancel()
@@ -73,10 +109,31 @@ struct SitekeeperApp: App {
             }
         }
     }
+
+    @MainActor
+    private func refreshDayAndScheduleBoundaryIfActive() {
+        guard scenePhase == .active else { return }
+        dayBoundaryRefreshTask?.cancel()
+        store.projectStore.refreshDateSensitiveStateIfNeeded()
+        let delay = store.projectStore.secondsUntilNextDay
+        dayBoundaryRefreshTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(delay))
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else { return }
+            refreshDayAndScheduleBoundaryIfActive()
+        }
+    }
 }
 
 #if DEBUG
 private enum UITestLaunchConfig {
+    /// Opt in for deterministic functional UI tests on simulator runtimes whose
+    /// animation-idle notification can remain pending after text entry.
+    static let disablesAnimations = ProcessInfo.processInfo.environment["UITEST_DISABLE_ANIMATIONS"] == "1"
+
     private static let resetArguments = ["-uitest-reset-state"]
     private static let dynamicTypeSizeArgument = "-uitest-dynamic-type-size"
     private static let knownUITestArguments = [
@@ -124,62 +181,8 @@ private enum UITestLaunchConfig {
         }
 
         if let documentsDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let localStoreFiles = ["sitekeeper.json"]
-            for fileName in localStoreFiles {
-                let fileURL = documentsDirectory.appendingPathComponent(fileName)
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: fileURL,
-                        context: .init(
-                            event: "ui_test.reset_local_state.remove_store_file",
-                            category: .dataStore,
-                            source: "SitekeeperApp.resetLocalState"
-                        )
-                    )
-                } catch {
-                    StorageIssueLog.recordEvent(
-                        "ui_test.reset_local_state_remove_file_failed",
-                        category: .dataStore,
-                        details: [
-                            "source": "SitekeeperApp.resetLocalState",
-                            "file_name": fileURL.lastPathComponent
-                        ],
-                        error: error
-                    )
-                }
-            }
-
-            // UI tests 需要可重复、可预期的冷启动；这里直接清空目录，避免大批量隔离迁移导致启动超时。
-            let storageDirectories = [
-                "Photos",
-                "PhotoThumbnails",
-                "Drawings",
-                "ProjectDocuments",
-                "QuickNoteAttachments"
-            ]
-            for directoryName in storageDirectories {
-                let directoryURL = documentsDirectory.appendingPathComponent(directoryName, isDirectory: true)
-                do {
-                    _ = try FileOps.removeIfExists(
-                        at: directoryURL,
-                        context: .init(
-                            event: "ui_test.reset_local_state.remove_storage_directory",
-                            category: .fileStorage,
-                            source: "SitekeeperApp.resetLocalState"
-                        )
-                    )
-                } catch {
-                    StorageIssueLog.recordEvent(
-                        "ui_test.reset_local_state_remove_storage_directory_failed",
-                        category: .fileStorage,
-                        details: [
-                            "source": "SitekeeperApp.resetLocalState",
-                            "directory": directoryName
-                        ],
-                        error: error
-                    )
-                }
-            }
+            removeLocalStoreFiles(in: documentsDirectory)
+            removeStorageDirectories(in: documentsDirectory)
         }
 
         if let applicationSupportDirectory = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
@@ -205,6 +208,69 @@ private enum UITestLaunchConfig {
 
         StorageIssueLog.clear()
         preferenceStore.synchronize()
+    }
+
+    private static func removeLocalStoreFiles(in documentsDirectory: URL) {
+        let localStoreFiles = ["sitekeeper.json", "sitekeeper_date_provenance.json"]
+        for fileName in localStoreFiles {
+            let fileURL = documentsDirectory.appendingPathComponent(fileName)
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: fileURL,
+                    context: .init(
+                        event: "ui_test.reset_local_state.remove_store_file",
+                        category: .dataStore,
+                        source: "SitekeeperApp.resetLocalState"
+                    )
+                )
+            } catch {
+                StorageIssueLog.recordEvent(
+                    "ui_test.reset_local_state_remove_file_failed",
+                    category: .dataStore,
+                    details: [
+                        "source": "SitekeeperApp.resetLocalState",
+                        "file_name": fileURL.lastPathComponent
+                    ],
+                    error: error
+                )
+            }
+        }
+    }
+
+    private static func removeStorageDirectories(in documentsDirectory: URL) {
+        // UI tests 需要可重复、可预期的冷启动；这里直接清空目录，避免大批量隔离迁移导致启动超时。
+        let storageDirectories = [
+            "Photos",
+            "PhotoThumbnails",
+            "Drawings",
+            "ProjectDocuments",
+            "QuickNoteAttachments",
+            "BusinessDrafts",
+            ".sqlite-candidates"
+        ]
+        for directoryName in storageDirectories {
+            let directoryURL = documentsDirectory.appendingPathComponent(directoryName, isDirectory: true)
+            do {
+                _ = try FileOps.removeIfExists(
+                    at: directoryURL,
+                    context: .init(
+                        event: "ui_test.reset_local_state.remove_storage_directory",
+                        category: .fileStorage,
+                        source: "SitekeeperApp.resetLocalState"
+                    )
+                )
+            } catch {
+                StorageIssueLog.recordEvent(
+                    "ui_test.reset_local_state_remove_storage_directory_failed",
+                    category: .fileStorage,
+                    details: [
+                        "source": "SitekeeperApp.resetLocalState",
+                        "directory": directoryName
+                    ],
+                    error: error
+                )
+            }
+        }
     }
 }
 #endif

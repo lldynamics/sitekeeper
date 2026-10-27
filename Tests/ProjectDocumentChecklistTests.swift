@@ -11,19 +11,19 @@ struct ProjectDocumentChecklistTests {
             name: "开工前项目",
             location: "",
             status: .active,
-            startDate: "2026-06-01"
+            startDate: BusinessDateValue(legacyText: "2026-06-01")
         )
         let startedProject = Project(
             name: "施工中项目",
             location: "",
             status: .active,
-            startDate: "2026-05-01"
+            startDate: BusinessDateValue(legacyText: "2026-05-01")
         )
         let nearlyDoneTask = ProgressTask(
             projectId: startedProject.id,
             title: "收尾",
-            startDate: "2026-05-01",
-            dueDate: "2026-05-20",
+            startDate: BusinessDateValue(legacyText: "2026-05-01"),
+            dueDate: BusinessDateValue(legacyText: "2026-05-20"),
             completion: 0.9,
             note: ""
         )
@@ -131,7 +131,7 @@ struct ProjectDocumentChecklistTests {
                     fromStatus: .pending,
                     toStatus: .submitted,
                     operatorName: "张工",
-                    changedAt: changedAt,
+                    changedAt: BusinessDateValue(legacyText: changedAt),
                     reason: "报验完成"
                 )
             ],
@@ -154,7 +154,7 @@ struct ProjectDocumentChecklistTests {
         #expect(entry.fromStatus == .pending)
         #expect(entry.toStatus == .submitted)
         #expect(entry.operatorName == "张工")
-        #expect(entry.changedAt == changedAt)
+        #expect(entry.changedAt.storageText == changedAt)
         #expect(entry.reason == "报验完成")
 
         let legacyJSON = """

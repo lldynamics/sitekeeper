@@ -3,8 +3,8 @@ import UIKit
 
 struct AppBusinessFormSheet<Content: View>: View {
     let title: String
-    var cancelTitle: String? = String(localized: "取消")
-    var primaryActionTitle: String? = String(localized: "保存")
+    var cancelTitle: String? = AppLocalization.string("取消")
+    var primaryActionTitle: String? = AppLocalization.string("保存")
     var primaryActionRole: ButtonRole?
     var isPrimaryActionDisabled = false
     let onCancel: (() -> Void)?
@@ -14,8 +14,8 @@ struct AppBusinessFormSheet<Content: View>: View {
 
     init(
         title: String,
-        cancelTitle: String? = String(localized: "取消"),
-        primaryActionTitle: String? = String(localized: "保存"),
+        cancelTitle: String? = AppLocalization.string("取消"),
+        primaryActionTitle: String? = AppLocalization.string("保存"),
         primaryActionRole: ButtonRole? = nil,
         isPrimaryActionDisabled: Bool = false,
         onCancel: (() -> Void)? = nil,
@@ -45,7 +45,9 @@ struct AppBusinessFormSheet<Content: View>: View {
         if let keyboardBarContent {
             form.appKeyboardToolbar { keyboardBarContent }
         } else {
-            form
+            form.appKeyboardToolbar {
+                KeyboardDismissToolbar { AppKeyboard.dismiss() }
+            }
         }
     }
 
@@ -74,8 +76,8 @@ struct AppBusinessFormSheet<Content: View>: View {
 
 struct AppBusinessEditForm<Content: View>: View {
     let title: String
-    var cancelTitle: String = String(localized: "取消")
-    var primaryActionTitle: String = String(localized: "保存")
+    var cancelTitle: String = AppLocalization.string("取消")
+    var primaryActionTitle: String = AppLocalization.string("保存")
     var isPrimaryActionDisabled = false
     let onCancel: () -> Void
     let onPrimaryAction: () -> Void
@@ -83,8 +85,8 @@ struct AppBusinessEditForm<Content: View>: View {
 
     init(
         title: String,
-        cancelTitle: String = String(localized: "取消"),
-        primaryActionTitle: String = String(localized: "保存"),
+        cancelTitle: String = AppLocalization.string("取消"),
+        primaryActionTitle: String = AppLocalization.string("保存"),
         isPrimaryActionDisabled: Bool = false,
         onCancel: @escaping () -> Void,
         onPrimaryAction: @escaping () -> Void,
@@ -120,7 +122,7 @@ struct AppBusinessEditForm<Content: View>: View {
 
 struct AppPreparedFileExporterSheet: View {
     let fileURL: URL?
-    var preparingMessage: String = String(localized: "正在准备导出文件...")
+    var preparingMessage: String = AppLocalization.string("正在准备导出文件...")
     let onCompletion: (Result<URL, Error>) -> Void
 
     var body: some View {
@@ -138,7 +140,7 @@ struct AppBusinessFormValidationSection: View {
 
     var body: some View {
         if !messages.isEmpty {
-            Section(String(localized: "表单问题")) {
+            Section(AppLocalization.string("表单问题")) {
                 ForEach(messages, id: \.self) { message in
                     Label(message, systemImage: "exclamationmark.triangle.fill")
                         .font(.caption)
@@ -202,7 +204,7 @@ struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: Vie
         if let forceSplit {
             return forceSplit
         }
-        return UIDevice.current.userInterfaceIdiom == .pad && horizontalSizeClass == .regular
+        return horizontalSizeClass == .regular
     }
 
     var body: some View {
@@ -243,13 +245,13 @@ struct KeyboardNavigationToolbar<Field: Hashable>: View {
 
     var body: some View {
         HStack {
-            Button(String(localized: "上一个")) {
+            Button(AppLocalization.string("上一个")) {
                 move(delta: -1)
             }
             .disabled(!canMovePrevious)
             .accessibilityIdentifier("keyboard-previous")
 
-            Button(String(localized: "下一个")) {
+            Button(AppLocalization.string("下一个")) {
                 move(delta: 1)
             }
             .disabled(!canMoveNext)
@@ -257,7 +259,7 @@ struct KeyboardNavigationToolbar<Field: Hashable>: View {
 
             Spacer()
 
-            Button(String(localized: "完成")) {
+            Button(AppLocalization.string("完成")) {
                 focusedField.wrappedValue = nil
                 AppKeyboard.dismiss()
             }
@@ -279,7 +281,7 @@ struct KeyboardDismissToolbar: View {
     var body: some View {
         HStack {
             Spacer()
-            Button(String(localized: "完成"), action: onDone)
+            Button(AppLocalization.string("完成"), action: onDone)
                 .accessibilityIdentifier("keyboard-done")
         }
     }

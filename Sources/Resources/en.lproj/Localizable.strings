@@ -47,7 +47,6 @@
 "设置" = "Settings";
 "偏好" = "Preferences";
 "公制单位" = "Metric Units";
-"自动保存记录" = "Auto-save Records";
 "主题" = "Theme";
 "语言" = "Language";
 "已关闭实时自动保存。为降低意外丢失风险，应用退到后台时仍会自动保存一次" = "Auto-save disabled. To prevent data loss, the app will still save once when entering background.";
@@ -819,7 +818,7 @@
 "金额待补" = "Amount Needed";
 "入账" = "Book";
 "quick_tool_unselected_hint" = "Unselected items are removed from top shortcuts and stay available in the full \"Practical Tools\" list below.";
-"settings_language_switch_feedback" = "Language switched. Most pages refresh immediately; restart the app if a few system labels do not update yet.";
+"settings_language_switch_feedback" = "App language updated.";
 "settings_auto_save_disabled_hint" = "Real-time auto-save is off. Data now auto-saves when the app goes inactive or enters background.";
 "project_delete_dialog_message" = "Project \"%@\" has %d related records. Archiving keeps contacts, finance, files, drawings, and logs; deleting removes all related data and material-sheet drafts under this project.";
 "quick_tool_editor_header" = "Choose shortcuts shown at the top of Toolbox";
@@ -1382,7 +1381,7 @@
 "人工明细" = "Labor Details";
 "人工记录 (%d)" = "Labor Records (%d)";
 "人工记录.csv" = "labor-records.csv";
-"人工记录表.xls" = "labor-records.xls";
+"人工记录表.html" = "labor-records.html";
 "从" = "From";
 "元/天" = "CNY/day";
 "全部工种" = "All Work Types";
@@ -2924,7 +2923,7 @@
 "备份恢复" = "Backup & Restore";
 "体检清理" = "Health & Cleanup";
 "统一完成本地/iCloud 备份、恢复预览与导入校验。" = "Handle local and iCloud backup, restore preview, and import checks in one flow.";
-"按项目或日期筛选后导出 CSV / Excel / PDF。" = "Export CSV, Excel, or PDF after filtering by project or date.";
+"按项目或日期筛选后导出 CSV / PDF / HTML。" = "Filter by project or date and export CSV / PDF / HTML.";
 "统一查看健康检查、存储占用、审计记录与清理风险。" = "Review health checks, storage use, audit logs, and cleanup risk together.";
 "把备份健康、导入恢复、导出交付和清理风险收进同一条操作链路，先判断风险，再执行动作。" = "Keep backup health, import restore, delivery export, and cleanup risk in one flow: check risk first, then act.";
 "云备份" = "Cloud Backup";
@@ -3358,8 +3357,6 @@
 "系统邮件未能完成发送。" = "Mail could not send the message.";
 "系统邮件返回了未知状态。" = "Mail returned an unknown status.";
 "邮件未发送" = "Email Not Sent";
-"已保存当前记录" = "Current records saved";
-"立即保存当前记录" = "Save Current Records Now";
 "该设置会影响文件清理后的可恢复窗口，到期后将进入永久删除队列。" = "This setting controls how long cleaned-up files remain recoverable. After that period, they enter the permanent deletion queue.";
 "照片记录" = "Photo Records";
 "票据记录" = "Receipt Records";
@@ -3437,7 +3434,7 @@
 "来源链接" = "Source Link";
 "来源版本" = "Source Version";
 "空" = "Empty";
-"%1$lld 行 · %@" = "%1$lld lines · %@";
+"%1$lld 行 · %2$@" = "%1$lld lines · %2$@";
 "%1$@（共 %2$lld 项）" = "%1$@ (%2$lld items in total)";
 "%1$@（共 %2$lld 条）" = "%1$@ (%2$lld records in total)";
 "默认端点" = "Default Endpoint";
@@ -3705,7 +3702,7 @@
 "质量检查：" = "Quality checks:";
 "当前未完成待办 %lld 条" = "%lld open tasks";
 "请选择工艺后生成" = "Select methods to generate the workflow";
-"将生成 %1$lld 条待办 + 2 份资料（%@）" = "Will create %1$lld tasks and 2 documents (%@)";
+"将生成 %1$lld 条待办 + 2 份资料（%2$@）" = "Will create %1$lld tasks and 2 documents (%2$@)";
 "全部专业" = "All Trades";
 "%@阶段匹配度 %lld" = "%@ stage match score %lld";
 "基础推荐（可手动勾选后生成闭环）" = "Basic Recommendations (Select Methods to Generate a Workflow)";
@@ -4118,3 +4115,398 @@
 "pdf_preview_previous_match" = "Previous match";
 
 "pdf_preview_next_match" = "Next match";
+
+/* Automatic business drafts */
+"丢弃草稿" = "Discard Draft";
+"丢弃草稿？" = "Discard Draft?";
+"保存失败，草稿已保留：%@" = "Save failed. Your draft has been kept: %@";
+"保留当前记录并丢弃草稿" = "Keep Current Record and Discard Draft";
+"原记录在草稿保存后已有变化，恢复后请逐项核对。" = "The original record has changed since this draft was saved. Review each field after restoring.";
+"原记录已不存在，请关闭页面并核对数据。" = "The original record no longer exists. Close this page and check your data.";
+"原记录已变化，草稿仍保留。请关闭后重新打开并核对。" = "The original record has changed. Your draft has been kept. Close and reopen this page to review it.";
+"发现未完成的编辑草稿" = "Unfinished Edit Draft Found";
+"恢复草稿" = "Restore Draft";
+"恢复草稿只会填入表单；请核对当前记录后再保存。" = "Restoring fills in this form. Review the current record before saving.";
+"正在保存，请稍候…" = "Saving, please wait…";
+"自动保留草稿，关闭后可继续填写。" = "Your draft is saved automatically. You can close this page and continue later.";
+"草稿保存失败，请保留此页面并重试：%@" = "Could not save the draft. Keep this page open and try again: %@";
+"读取草稿失败，原文件已保留：%@" = "Could not read the draft. The original file has been kept: %@";
+"这份草稿对应的记录已保存，请丢弃草稿或作为新记录继续。" = "This draft’s record has already been saved. Discard the draft or continue as a new record.";
+"作为新记录继续" = "Continue as a New Record";
+
+// Repository trial workspace
+"上一页" = "Previous";
+"下一页" = "Next";
+"从当前数据创建副本" = "Create a copy of current data";
+"保留 %lld 个照片引用、%lld 个工法关联" = "Keeping %lld photo references and %lld method links";
+"关闭副本" = "Close copy";
+"副本保留附件引用，当前支持文字编辑。副本不包含附件文件，也不属于完整备份。" = "The copy retains attachment references and supports text editing. Attachment files are not included; this is not a complete backup.";
+"副本施工日志" = "Copy: daily logs";
+"副本项目" = "Copy: projects";
+"在独立副本中试用项目与日志。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects and daily logs in an independent copy. Changes are saved only in the selected copy. Original app data remains separate.";
+"按项目开工日期排序" = "Sorted by project start date";
+"搜索日志文字" = "Search log text";
+"搜索项目名称、地址或联系人" = "Search project names, locations or contacts";
+"操作失败：%@" = "Operation failed: %@";
+"放弃当前编辑？" = "Discard current edits?";
+"放弃编辑" = "Discard edits";
+"数据已变化，已回到第一页。" = "Data changed. Returned to the first page.";
+"整改情况" = "Rectification";
+"施工人数" = "Worker count";
+"日期顺序" = "Date order";
+"未命名记录" = "Untitled record";
+"材料情况" = "Materials";
+"正在准备副本" = "Preparing copy";
+"正在读取" = "Loading";
+"此副本不可用，原件与现有文件已保留。" = "This copy is unavailable. Original data and existing files have been retained.";
+"没有匹配记录" = "No matching records";
+"由新到旧" = "Newest first";
+"由旧到新" = "Oldest first";
+"第 %lld 页" = "Page %lld";
+"继续使用已有副本" = "Continue with an existing copy";
+"记录已不存在，请返回列表刷新。" = "This record no longer exists. Return to the list and refresh.";
+"记录已变化，编辑内容已保留。请重新载入原记录并核对后再保存。" = "The record changed. Your edits are retained. Reload and review the record before saving.";
+"质量与确认" = "Quality and confirmation";
+"重新载入会替换当前编辑内容。" = "Reloading will replace your current edits.";
+"重新载入原记录" = "Reload original record";
+"重试" = "Retry";
+"项目与日志试用副本" = "Project and log trial copies";
+"项目详情" = "Project details";
+"预计完工日期" = "Expected completion date";
+"试用功能" = "Trial features";
+
+"在独立副本中试用项目、日志与财务。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, daily logs, and financial records in an independent copy. Changes are saved only in the selected copy. Original app data remains separate.";
+
+"副本财务记录" = "Copy: financial records";
+
+"新建财务记录" = "New financial record";
+
+"搜索往来单位、票号或备注" = "Search counterparties, invoice numbers, or notes";
+
+"全部收支" = "All directions";
+
+"金额待核对" = "Amount needs review";
+
+"筛选范围金额汇总" = "Totals for current filters";
+
+"共 %lld 条，正式记录 %lld 条" = "%lld records, %lld active";
+
+"收支差额" = "Income minus expenses";
+
+"金额超出精确计算范围，暂不显示合计。记录已保留。" = "Amounts exceed the exact calculation range. Totals are unavailable; records are preserved.";
+
+"%lld 条正式记录金额缺失或无效，修正后才能显示合计。" = "%lld active records have missing or invalid amounts. Correct them to see totals.";
+
+"汇总覆盖当前筛选的全部记录，不限于本页。草稿和归档不计入金额；收支差额不代表现金余额。" = "Totals cover all matching records, across all pages. Drafts and archived records are excluded. The difference is not a cash balance.";
+
+"请输入大于零的有效金额，使用小数点且最多保留 38 位有效数字。" = "Enter an amount greater than zero, using a decimal point and at most 38 significant digits.";
+
+"收支信息" = "Financial details";
+
+"往来与票据" = "Counterparty and invoice";
+
+"保留 %lld 个资料关联" = "Preserving %lld document links";
+
+"副本中的提醒信息仅保存，不安排系统通知。" = "Reminder details are saved in this copy without scheduling system notifications.";
+
+"到期日期" = "Due date";
+
+"提醒信息" = "Reminder details";
+
+"收支方向" = "Direction";
+
+"票据号码" = "Invoice number";
+
+"记录状态" = "Record status";
+
+"财务记录" = "Financial records";
+
+"请输入大于零的有效数量，使用小数点且最多保留 38 位有效数字。" = "Enter a quantity greater than zero, using a decimal point and at most 38 significant digits.";
+
+"查看库存汇总" = "View inventory totals";
+
+"全部出入库" = "All movements";
+
+"副本仓储流水" = "Copy: warehouse ledger";
+
+"搜索材料、规格、往来或备注" = "Search materials, specifications, counterparties, or notes";
+
+"数量待核对" = "Quantity needs review";
+
+"出入库记录" = "Warehouse movement";
+
+"往来与备注" = "Counterparty and notes";
+
+"副本只保存仓储流水，不改写材料清单数量。" = "This copy saves warehouse movements without changing material-list quantities.";
+
+"匹配库存材料 %lld 种" = "%lld matching inventory materials";
+
+"同名、同规格、同单位的全部出入库计算库存。不同单位不相加；流水筛选不改变库存。" = "Inventory includes all movements for each material name, specification, and unit. Different units are kept separate; ledger filters do not change stock.";
+
+"本项目 %lld 条记录缺少材料名称，未纳入库存，请在流水中修正。" = "%lld movements in this project have no material name and are excluded from inventory. Correct them in the ledger.";
+
+"副本库存汇总" = "Copy: inventory totals";
+
+"搜索库存材料、规格或单位" = "Search inventory materials, specifications, or units";
+
+"共 %lld 条流水" = "%lld movements";
+
+"负库存，请核对出入库记录。" = "Negative stock. Please check the movements.";
+
+"数量超出精确计算范围，暂不显示库存。" = "Quantities exceed the exact calculation range. Stock is unavailable.";
+
+"存在缺失或无效数量，修正后才能显示库存。" = "Some quantities are missing or invalid. Correct them to see stock.";
+
+"仓储记录" = "Warehouse records";
+
+"在独立副本中试用项目、日志、财务与仓储。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, logs, finances, and warehouse records in an independent copy. Changes are saved only in the selected copy; original app data remains separate.";
+
+"库存" = "Stock";
+
+"在独立副本中试用项目、日志、财务、仓储与材料清单。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, logs, finances, warehouse records and materials in a separate copy. Changes stay in the selected copy; the main app continues to use its own data.";
+
+"请填写材料名称和大于零的数量。单价可留空或填写非负数，金额须能精确计算。" = "Enter a material name and a quantity greater than zero. Leave the unit price blank or enter a nonnegative number. Amounts must be exactly calculable.";
+
+"按进场日期文字排序，未填日期排在最早。" = "Sorted by arrival date text, with blank dates first in ascending order.";
+
+"副本材料清单" = "Materials in Copy";
+
+"搜索材料、规格、品牌或供应商" = "Search materials, specifications, brands or suppliers";
+
+"未填单价" = "Price not entered";
+
+"全部筛选结果的材料金额" = "Material Amounts for All Matching Records";
+
+"材料总额" = "Total material amount";
+
+"可计算部分金额" = "Known subtotal";
+
+"未填单价 %lld 条，数值待核对 %lld 条" = "%lld missing prices, %lld values to review";
+
+"金额超出精确计算范围，请核对数量和单价。" = "The amount exceeds exact calculation limits. Review quantities and unit prices.";
+
+"按数量乘单价汇总全部筛选结果，包含所选采购状态；材料金额不等于实际支出，也不改变库存。" = "Totals use quantity times unit price across all matches and selected purchase statuses. Material amounts are not actual expenses and do not change stock.";
+
+"单价可留空；零单价表示已确认无需费用。" = "Leave the price blank if unknown. A zero price means confirmed free of charge.";
+
+"仅保存此副本中的材料，不同步报价、财务记录或仓储记录。" = "Saves materials in this copy only. Quotes, financial records and warehouse records are not updated.";
+
+"未关联项目的材料" = "Materials Without a Project";
+
+"采购信息" = "Purchase Details";
+
+"新建材料" = "New Material";
+
+"请填写材料名称、单位和非负数量。单价可留空或填写非负数，金额须能精确计算。" = "Enter a material name, unit and nonnegative quantity. Leave the unit price blank or enter a nonnegative number. Amounts must be exactly calculable.";
+
+"待填写" = "To be filled in";
+
+"天气待填写" = "Weather not recorded";
+
+"请按日志日期的现场实况选择天气；未选择时将留空保存。" = "Select the actual site weather for the log date. If unselected, it will be saved blank.";
+
+"保存到历史记录" = "Save to history";
+
+"已保存到历史记录" = "Saved to history";
+
+"HTML 网页" = "HTML webpage";
+
+"CSV（可用 Excel 打开）" = "CSV (opens in Excel)";
+
+"计算完成后，点击“保存到历史记录”即可在这里查看。" = "After calculating, tap “Save to history” to view the result here.";
+
+"查看历史记录" = "View history";
+
+"已生成施工日志，请补充现场天气。" = "Site log created. Please fill in the observed site weather.";
+"已替换" = "Replaced";
+"已作废" = "Voided";
+"未报验" = "Not Submitted";
+"待报验" = "Pending Submission";
+"已报验" = "Submitted";
+"部分收款" = "Partially Paid";
+"正式" = "Active";
+"不提醒" = "No Reminder";
+"待提醒" = "Pending Reminder";
+"已提醒" = "Reminded";
+"已处理" = "Resolved";
+
+"在独立副本中试用项目、日志、财务、仓储、材料清单与报价单。修改仅保存在所选副本中；原应用数据继续独立使用。" = "Try projects, logs, finances, warehouse records, materials and quotes in a separate copy. Changes stay in the copy; the main app uses its own data.";
+
+"请填写报价名称、单位及非负的单价、数量和税率；折扣率须在 0–100 之间，合同金额可留空，金额须能精确计算。" = "Enter a quote name, unit, and nonnegative price, quantity and tax rate. Discount must be 0–100%. Contract amount is optional. All amounts must be exactly calculable.";
+
+"仅此报价版本（留空为全部）" = "Exact quote version (blank for all)";
+
+"按客户确认日期文字排序，未填日期排在最早。" = "Sorted by customer confirmation date text; blank dates are earliest.";
+
+"副本报价单" = "Quotes in Copy";
+
+"搜索报价名称、版本或备注" = "Search quote name, version or notes";
+
+"全部筛选结果的报价金额" = "Quote Amounts for All Matches";
+
+"报价基础金额" = "Quote base amount";
+
+"报价税额" = "Quote tax";
+
+"报价折扣额" = "Quote discount";
+
+"报价合计" = "Quote total";
+
+"报价数值待核对 %lld 条" = "%lld quote items need numeric review";
+
+"报价金额超出精确计算范围，请核对数量、单价和费率。" = "Quote amounts exceed exact calculation limits. Review quantity, price and rates.";
+
+"合计为基础金额加税额减折扣，税额与折扣均按基础金额计算。包含所选状态和版本；另存的合同金额不计入，也不写回项目合同额。" = "Total equals base amount plus tax minus discount, both calculated on the base amount. Includes selected statuses and versions. Separate contract amounts are excluded and project contracts are not updated.";
+
+"报价版本与确认" = "Quote Version and Confirmation";
+
+"仅保存此副本中的报价。合同金额单独保留，不自动写回项目或财务记录。" = "Saves quotes in this copy only. Contract amounts are preserved separately and do not update projects or finances.";
+
+"未关联项目的报价" = "Quotes Without a Project";
+
+"报价信息" = "Quote Details";
+
+"版本名称" = "Version Name";
+
+"税率（%）" = "Tax Rate (%)";
+
+"折扣率（%）" = "Discount Rate (%)";
+
+"报价名称" = "Quote Name";
+
+"请确认计量单位并填写有效的非负人数与工作量，单价可留空；金额须能精确计算。" = "Confirm the unit and enter valid nonnegative workers and workload. The rate may be blank; amounts must be exactly calculable.";
+
+"副本人工记录" = "Labor Records in Copy";
+
+"未关联项目的人工记录" = "Labor Records Without a Project";
+
+"全部筛选结果的人工金额" = "Labor Amounts for All Matching Records";
+
+"搜索班组、工种或备注" = "Search team, trade, or notes";
+
+"数值待核对" = "Values to Review";
+
+"金额按人数乘工作量再乘单价计算；历史空人数沿用原工作量。工时与工天不换算，待确认单位保留原金额，不自动写入财务或报价。" = "Amounts equal workers × workload × rate. Legacy blank worker counts retain the original workload. Hours and workdays are not converted; unconfirmed units retain recorded amounts. No financial records or quotes are created.";
+
+"仅保存此副本中的人工记录，不自动生成报价或财务流水。" = "Save labor records only in this copy. No quotes or financial records are generated.";
+
+"金额超出可精确计算范围，请核对原始数值。" = "The amount exceeds exact calculation limits. Review the original values.";
+
+"计量单位" = "Workload Unit";
+
+"结算状态" = "Settlement Status";
+
+"未结算金额" = "Unsettled Amount";
+
+"全部往来单位" = "All contacts";
+
+"请填写往来单位联系人姓名。" = "Enter the contact name.";
+
+"名称顺序" = "Name order";
+
+"名称正序" = "Name ascending";
+
+"名称倒序" = "Name descending";
+
+"按联系人姓名排序，保留主项目及其他项目关联。" = "Sorted by contact name. Primary and related project links are preserved.";
+
+"新增往来单位请先进入对应项目。" = "Open a project to add a contact.";
+
+"未填写姓名" = "Name not provided";
+
+"副本往来单位" = "Copy contacts";
+
+"搜索姓名、单位、电话或备注" = "Search name, company, phone or notes";
+
+"添加往来单位" = "Add contact";
+
+"保留主项目及 %lld 个其他项目关联" = "Preserves the primary project and %lld other project links";
+
+"仅保存此副本中的往来单位，不修改系统通讯录。" = "Saves contacts in this copy only. System contacts are unchanged.";
+
+"全部角色" = "All roles";
+
+"本地数据暂不可用" = "Local data is unavailable";
+"已暂停编辑并保留原文件。请重试读取，或从备份恢复后继续。" = "Editing is paused and the original file is preserved. Retry loading or restore a backup to continue.";
+"从备份恢复" = "Restore from Backup";
+"正在准备本地数据，请稍候…" = "Preparing local data. Please wait…";
+"请先关闭正在使用的试用副本，再清理数据。" = "Close any open trial copies before clearing data.";
+"试用副本目录异常，已停止清理并保留文件。" = "The trial copy directory is invalid. Cleanup stopped and the files were preserved.";
+"试用副本已变化，请重新查看清空预览后确认。" = "Trial copies have changed. Review the cleanup preview again before confirming.";
+"包含试用副本，请通过设置中的清空流程处理。" = "Trial copies exist. Use the clear-data flow in Settings.";
+"正在清理试用副本" = "Removing trial copies";
+"试用副本" = "Trial copies";
+"试用副本占用：%@" = "Trial copy storage: %@";
+"试用副本及其中的独立修改也将删除。常规备份不包含这些修改，请先在试用副本管理中分别导出。" = "Trial copies and their independent changes will also be deleted. Regular backups do not include these changes. Export each copy from trial copy management first.";
+"删除试用副本" = "Delete Trial Copy";
+"仅删除所选试用副本及其中的独立修改，无法撤销。请先导出需要保留的内容。" = "Only the selected trial copy and its independent changes will be deleted. This cannot be undone. Export anything you need to keep first.";
+"导出副本备份" = "Export Copy Backup";
+"管理试用副本" = "Manage Trial Copy";
+"核对材料单草稿" = "Review Material Draft";
+"核对报价项" = "Review Quote Item";
+"确认生成" = "Confirm and Generate";
+"目标工程" = "Target Project";
+"请先选择目标工程。" = "Select a target project first.";
+"初始数量为 1 项，计算结果保留在备注中。请在生成后核对实际数量、单位和单价。" = "The initial quantity is 1 item, with the calculation result kept in the notes. Check the actual quantity, unit, and unit price after generation.";
+"已选择的工程已不存在，请重新选择。" = "The selected project no longer exists. Select another project.";
+
+"搜索项目、票号、报价、图纸或资料" = "Search projects, invoices, quotes, drawings or documents";
+
+"全部类型" = "All types";
+
+"请填写待办事项。" = "Enter a task title.";
+
+/* Linked workflows and installment payments */
+"该工程的收付计划正在保存，请稍后重试。" = "This project's payment plan is being saved. Please try again shortly.";
+"票据编号" = "Receipt number";
+"已结清" = "Settled";
+"入库记账" = "Book warehouse receipt";
+"关联记录不存在，已保留输入，请重新选择。" = "The linked record is unavailable. Your input is retained; select it again.";
+"分期收付到期提醒" = "Installment payment due";
+"分期收付款" = "Installment payments";
+"删除期次" = "Delete installment";
+"到货入库" = "Receive into warehouse";
+"到货数量" = "Delivered quantity";
+"到货生成入库记录，计划数量保持不变。可在入库详情中生成记账草稿。" = "Receiving creates a warehouse entry and keeps the planned quantity. Create a bookkeeping draft from the entry details.";
+"启用到期提醒" = "Enable due reminders";
+"实际收付日期" = "Actual payment date";
+"已收付" = "Received / paid";
+"已有关联收付的期次不能删除；归档计划保留全部历史记录。" = "Installments with linked payments cannot be deleted. Archiving preserves the complete history.";
+"已有关联账目，重复操作会打开原记录。草稿需核对并改为正式后才计入汇总。" = "A linked entry already exists. Repeated actions open the same entry. Review and confirm the draft to include it in totals.";
+"归档计划" = "Archive plan";
+"待到货" = "Awaiting delivery";
+"打开关联账目" = "Open linked ledger entry";
+"收付计划" = "Payment plan";
+"收付金额、方向或关联期次不符合当前计划，请重新核对。" = "The amount, direction, or linked installment does not match the current plan. Review the details.";
+"新增收付计划" = "Add payment plan";
+"期次名称" = "Installment name";
+"未结金额" = "Remaining amount";
+"本期已结清，不能重复收付。" = "This installment is settled. No further payment can be recorded.";
+"本次到货" = "This delivery";
+"本次金额" = "Payment amount";
+"添加期次" = "Add installment";
+"源记录已变化，请重新打开并核对；当前输入仍保留。" = "The source changed. Reopen and review it; your current input is retained.";
+"生成记账草稿" = "Create bookkeeping draft";
+"登记实际收付" = "Record actual payment";
+"第 %lld / %lld 页" = "Page %lld of %lld";
+"累计到货" = "Received to date";
+"计划名称" = "Plan name";
+"计划数量" = "Planned quantity";
+"计划金额不计入经营汇总，只有登记的正式收付才会计入。" = "Plans are excluded from business totals. Only recorded, confirmed payments count.";
+"请核对名称、日期、数量与金额。" = "Check the name, date, quantity, and amount.";
+"请核对实际结算单价。生成的账目为草稿，票据关联会一并保留。" = "Check the actual unit price. The entry is a draft and keeps linked documents.";
+"质保金" = "Retention";
+"这条来源记录已经生成记账，请打开原账目核对。" = "This source already has a ledger entry. Open it to review.";
+"金额或关联记录异常，请核对账目后再登记收付。" = "An amount or linked entry needs attention. Review the ledger before recording payments.";
+
+"并排查看" = "View side by side";
+
+"查看内容" = "View content";
+
+"核对明细" = "Review items";
+
+"记录问题" = "Record issue";
+
+"引用当前页" = "Reference current page";
+
+"边看图纸边记录" = "View drawing and record";

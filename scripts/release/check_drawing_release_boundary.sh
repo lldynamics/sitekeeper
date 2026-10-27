@@ -11,9 +11,7 @@ fail() {
   exit 1
 }
 
-if ! command -v rg >/dev/null 2>&1; then
-  fail "ripgrep (rg) is unavailable in the build script PATH."
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 require_file() {
   local description="$1"
@@ -28,7 +26,7 @@ require_pattern() {
   local pattern="$3"
 
   require_file "$description" "$path"
-  if ! rg -q --fixed-strings "$pattern" "$path"; then
+  if ! policy_search -q --fixed-strings "$pattern" "$path"; then
     fail "$description is missing expected marker '$pattern' in $path"
   fi
 }
@@ -47,7 +45,7 @@ require_pattern_in_any() {
   done
 
   [[ "${#existing_paths[@]}" -gt 0 ]] || fail "$description has no files to scan"
-  if ! rg -q --fixed-strings "$pattern" "${existing_paths[@]}"; then
+  if ! policy_search -q --fixed-strings "$pattern" "${existing_paths[@]}"; then
     fail "$description is missing expected marker '$pattern' in ${existing_paths[*]}"
   fi
 }
@@ -75,7 +73,7 @@ for symbol in "${FORBIDDEN_PRODUCTION_SYMBOLS[@]}"; do
   RG_ARGS+=(--regexp "$symbol")
 done
 
-FORBIDDEN_MATCHES="$(rg "${RG_ARGS[@]}" "${PRODUCTION_SCAN_PATHS[@]}" || true)"
+FORBIDDEN_MATCHES="$(policy_search "${RG_ARGS[@]}" "${PRODUCTION_SCAN_PATHS[@]}" || true)"
 if [[ -n "$FORBIDDEN_MATCHES" ]]; then
   echo "[drawing-release-boundary] FAIL: removed CAD kernel symbols still appear in production target inputs:" >&2
   echo "$FORBIDDEN_MATCHES" >&2
@@ -84,23 +82,23 @@ if [[ -n "$FORBIDDEN_MATCHES" ]]; then
   exit 1
 fi
 
-require_pattern "ProjectDrawing domain model" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "struct ProjectDrawing"
-require_pattern "ProjectDrawing allowed import contract" "Sources/Shared/Services/ProjectDomainDrawingTypes.swift" "allowedFileExtensions"
-require_pattern "drawing file storage" "Sources/Shared/Services/DrawingStorage.swift" "enum DrawingStorage"
-require_pattern "DataStore drawing write port" "Sources/Shared/Services/DataStore+ProjectDrawingOps.swift" "appendProjectDrawing"
-require_pattern "DataStore drawing write port" "Sources/Shared/Services/DataStore+ProjectDrawingOps.swift" "removeProjectDrawings"
-require_pattern "drawing library tool entry" "Sources/Features/清单/ToolboxCatalog.swift" "drawing-library"
-require_pattern "drawing library screen" "Sources/Features/清单/DrawingLibraryToolView.swift" "DrawingLibraryToolView"
-require_pattern "backup drawing metadata contract" "Sources/Shared/Services/BackupSnapshot.swift" "projectDrawings: [ProjectDrawing]"
-require_pattern "backup drawing file contract" "Sources/Shared/Services/BackupSnapshot.swift" "drawingFiles: [DrawingBackupFile]"
+require_pattern "ProjectDrawing domain model" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "struct ProjectDrawing"
+require_pattern "ProjectDrawing allowed import contract" "Sources/Shared/Models/Projects/ProjectDomainDrawingTypes.swift" "allowedFileExtensions"
+require_pattern "drawing file storage" "Sources/Shared/Services/Storage/Drawings/DrawingStorage.swift" "enum DrawingStorage"
+require_pattern "DataStore drawing write port" "Sources/Shared/Services/Persistence/DataStore/Projects/DataStore+ProjectDrawingOps.swift" "appendProjectDrawing"
+require_pattern "DataStore drawing write port" "Sources/Shared/Services/Persistence/DataStore/Projects/DataStore+ProjectDrawingOps.swift" "removeProjectDrawings"
+require_pattern "drawing library tool entry" "Sources/Features/Checklists/Toolbox/ToolboxCatalog.swift" "drawing-library"
+require_pattern "drawing library screen" "Sources/Features/Checklists/Drawings/DrawingLibraryToolView.swift" "DrawingLibraryToolView"
+require_pattern "backup drawing metadata contract" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "projectDrawings: [ProjectDrawing]"
+require_pattern "backup drawing file contract" "Sources/Shared/Services/Backups/BackupSnapshot.swift" "drawingFiles: [DrawingBackupFile]"
 require_pattern_in_any \
   "backup archive drawing files" \
   "DrawingStorage.fileURL" \
-  "Sources/Shared/Services/BackupArchiveService.swift" \
-  "Sources/Shared/Services/BackupArchiveService+Write.swift" \
-  "Sources/Shared/Services/BackupArchiveRestoreSupport.swift"
-require_pattern "export option preserves drawing index" "Sources/Shared/Services/ReportBuilderTypes.swift" "includeProjectDrawings"
-require_pattern "CSV export preserves drawing index" "Sources/Shared/Services/ReportBuilder+CSVSections.swift" "project_drawings"
-require_pattern "user export flow exposes drawing index" "Sources/Features/我的/ExportView.swift" "includeProjectDrawings"
+  "Sources/Shared/Services/Backups/BackupArchiveService.swift" \
+  "Sources/Shared/Services/Backups/BackupArchiveService+Write.swift" \
+  "Sources/Shared/Services/Backups/BackupArchiveRestoreSupport.swift"
+require_pattern "export option preserves drawing index" "Sources/Shared/Services/Reporting/ReportBuilderTypes.swift" "includeProjectDrawings"
+require_pattern "CSV export preserves drawing index" "Sources/Shared/Services/Reporting/ReportBuilder+CSVSections.swift" "project_drawings"
+require_pattern "user export flow exposes drawing index" "Sources/Features/Profile/Exports/ExportView.swift" "includeProjectDrawings"
 
 echo "[drawing-release-boundary] PASS: removed CAD kernel symbols are absent and drawing ledger/export contracts remain present."

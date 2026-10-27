@@ -6,29 +6,26 @@ export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT_DIR"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "[file-deletion-policy] FAIL: ripgrep (rg) is unavailable in the build script PATH." >&2
-  exit 127
-fi
+source "$ROOT_DIR/scripts/lib/policy_search.sh"
 
 # Production code must route destructive project-asset deletes through
 # DataStoreDeletionPolicy so audit, undo, and deferred cleanup stay consistent.
 ALLOWED_FILES=(
-  "Sources/Shared/Services/DataStoreDeletionPolicy.swift"
-  "Sources/Shared/Services/DataStoreDeferredFileCleanup.swift"
-  "Sources/Shared/Services/PhotoStorage.swift"
-  "Sources/Shared/Services/DocumentStorage.swift"
-  "Sources/Shared/Services/ProjectDocumentStorage.swift"
-  "Sources/Shared/Services/DrawingStorage.swift"
-  "Sources/Shared/Services/QuickNoteAttachmentStorage.swift"
+  "Sources/Shared/Helpers/DataStoreDeletionPolicy.swift"
+  "Sources/Shared/Services/Persistence/DataStore/Maintenance/DataStoreDeferredFileCleanup.swift"
+  "Sources/Shared/Services/Storage/Photos/PhotoStorage.swift"
+  "Sources/Shared/Services/Storage/Documents/DocumentStorage.swift"
+  "Sources/Shared/Services/Storage/Documents/ProjectDocumentStorage.swift"
+  "Sources/Shared/Services/Storage/Drawings/DrawingStorage.swift"
+  "Sources/Shared/Services/Storage/QuickNotes/QuickNoteAttachmentStorage.swift"
 )
 
 MATCHES="$(
-  rg -n --color=never --glob '*.swift' \
-    --regexp '\bPhotoStorage\.(delete|deleteOrThrow)\b' \
-    --regexp '\bDrawingStorage\.(delete|deleteOrThrow)\b' \
-    --regexp '\bQuickNoteAttachmentStorage\.(delete|deleteOrThrow)\b' \
-    --regexp '\bProjectDocumentStorage\.(delete|deleteOrThrow)\b' \
+  policy_search -n --color=never --glob '*.swift' \
+    --regexp '(^|[^[:alnum:]_])PhotoStorage\.(delete|deleteOrThrow)(^|[^[:alnum:]_])' \
+    --regexp '(^|[^[:alnum:]_])DrawingStorage\.(delete|deleteOrThrow)(^|[^[:alnum:]_])' \
+    --regexp '(^|[^[:alnum:]_])QuickNoteAttachmentStorage\.(delete|deleteOrThrow)(^|[^[:alnum:]_])' \
+    --regexp '(^|[^[:alnum:]_])ProjectDocumentStorage\.(delete|deleteOrThrow)(^|[^[:alnum:]_])' \
     Sources || true
 )"
 

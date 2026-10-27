@@ -92,10 +92,26 @@ struct FormattersTests {
         #expect(Formatters.money(-5.1) == "-5.10")
     }
 
-    @Test func projectDateInputNormalizesEditableProjectDates() {
-        #expect(ProjectDateInput.normalizedStorageText(" 2026-05-17 ") == "2026-05-17")
-        #expect(ProjectDateInput.normalizedStorageText("2026-05-17 08:30") == "2026-05-17")
-        #expect(ProjectDateInput.normalizedStorageText("   ") == "")
-        #expect(ProjectDateInput.normalizedStorageText("待现场确认") == "待现场确认")
+    @Test func editableProjectDatesPreserveLegacyClockAndUnknownText() {
+        for text in [" 2026-05-17 ", "2026-05-17 08:30", "   ", "待现场确认"] {
+            #expect(BusinessDateValue(legacyText: text).storageText == text)
+        }
+    }
+}
+
+extension FormattersTests {
+    @MainActor @Test func exportDateFilterReadsStoredInstantsAsUTCAndCalendarDaysLocally() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try #require(TimeZone(identifier: "Asia/Shanghai"))
+        let day = try #require(calendar.date(from: DateComponents(year: 2026, month: 10, day: 22, hour: 12)))
+        let dayFormatter = Formatters.dateFormatter(timeZone: calendar.timeZone)
+        // 07:30 on 22 Oct in Shanghai, as written by v2 (zone-less UTC) and by v3 (explicit Z).
+        for stored in ["2026-10-21 23:30", "2026-10-21 23:30:00Z"] {
+            #expect(ExportView.isDate(BusinessDateValue(legacyText: stored), dayFormatter: nil, within: day, day, calendar: calendar) == true)
+            #expect(ExportView.isDate(BusinessDateValue(legacyText: stored), dayFormatter: dayFormatter, within: day, day, calendar: calendar) == true)
+        }
+        #expect(ExportView.isDate(BusinessDateValue(legacyText: "2026-10-22"), dayFormatter: dayFormatter, within: day, day, calendar: calendar) == true)
+        #expect(ExportView.isDate(BusinessDateValue(legacyText: "2026-10-21"), dayFormatter: dayFormatter, within: day, day, calendar: calendar) == false)
+        #expect(ExportView.isDate(BusinessDateValue(legacyText: "待确认"), dayFormatter: nil, within: day, day, calendar: calendar) == nil)
     }
 }

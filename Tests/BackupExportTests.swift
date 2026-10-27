@@ -6,12 +6,12 @@ import Foundation
 struct BackupExportTests {
     @Test func snapshotRoundtrip() throws {
         let original = BackupSnapshot(
-            materialItems: [MaterialItem(name: "电线", quantity: "3", unit: "卷", projectId: nil)],
+            materialItems: [MaterialItem(name: "电线", quantity: NumericInputSupport.quantity("3"), unit: "卷", projectId: nil)],
             quoteItems: [],
             laborRecords: [],
             projects: [Project(name: "测试项目", location: "测试地点", status: .active)],
             dailyLogs: [],
-            historyRecords: [HistoryRecord(tool: "电流计算", input: "10kW", result: "45A", date: "2026-05-01 10:00")],
+            historyRecords: [HistoryRecord(tool: "电流计算", input: "10kW", result: "45A", date: BusinessDateValue(legacyText: "2026-05-01 10:00"))],
             templates: [],
             favoriteMaterialKeys: ["key1"],
             recentMaterialKeys: ["key2"]
@@ -54,7 +54,7 @@ struct BackupExportTests {
             quoteItems: [],
             laborRecords: [],
             projects: [Project(id: projectId, name: "备份项目", location: "现场", status: .active)],
-            dailyLogs: [DailyLog(date: "2026-05-03", weather: "晴", content: "完成", workers: "2", photos: [LogPhoto(fileName: photoFile)], projectId: projectId)],
+            dailyLogs: [DailyLog(date: BusinessDateValue(legacyText: "2026-05-03"), weather: "晴", content: "完成", workers: NumericInputSupport.quantity("2"), photos: [LogPhoto(fileName: photoFile)], projectId: projectId)],
             historyRecords: [],
             projectDrawings: [drawing],
             projectDocuments: [ProjectDocument(projectId: projectId, title: "票据", fileName: documentFile)],
@@ -240,13 +240,6 @@ struct BackupExportTests {
 
         let estimate = BackupArchiveService.estimateArchive(from: snapshot)
         #expect(estimate.estimatedBytes > BackupArchiveService.largeArchiveWarningBytes)
-        #expect(StreamingZipArchiveWriter.requiresZip64ForTesting(
-            entrySize: UInt64(estimate.rawFilesBytes),
-            entryOffset: 0,
-            entryCount: 1,
-            centralSize: 128,
-            centralOffset: UInt64(estimate.rawFilesBytes)
-        ))
     }
 
     @Test func streamingZipWriterRejectsDuplicatePath() throws {

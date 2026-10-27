@@ -4,6 +4,33 @@ import SwiftUI
 import WidgetKit
 #endif
 
+enum AppLocalization {
+    // Resource lookup needs the selected language bundle; locale also controls
+    // interpolation. SwiftUI's locale cannot update an already resolved String.
+    static func string(
+        _ key: String.LocalizationValue,
+        table: String? = nil,
+        bundle: Bundle = .main,
+        locale: Locale? = nil,
+        comment: StaticString? = nil
+    ) -> String {
+        let language = AppLanguage.current
+        return String(
+            localized: key,
+            table: table,
+            bundle: localizedBundle(language: language, bundle: bundle),
+            locale: locale ?? language.preferredLocale,
+            comment: comment
+        )
+    }
+
+    static func localizedBundle(language: AppLanguage, bundle: Bundle = .main) -> Bundle {
+        guard let path = bundle.path(forResource: language.resourceLanguageCode, ofType: "lproj"),
+              let localized = Bundle(path: path) else { return bundle }
+        return localized
+    }
+}
+
 enum AppAppearanceMode: String, CaseIterable {
     case system
     case light
@@ -37,7 +64,7 @@ enum AppLanguage: String, CaseIterable {
     var preferredLocale: Locale {
         switch self {
         case .system:
-            return .autoupdatingCurrent
+            return Locale(identifier: resourceLanguageCode)
         case .chinese, .english:
             return Locale(identifier: rawValue)
         }
@@ -50,6 +77,15 @@ enum AppLanguage: String, CaseIterable {
         case .chinese, .english:
             return [rawValue]
         }
+    }
+
+    var resourceLanguageCode: String {
+        guard self == .system else { return rawValue }
+        // The app domain can contain our previous in-app choice. Resolve the
+        // system option from device preferences rather than that override.
+        let languages = UserPreferencesStore.shared.persistentDomain(forName: UserDefaults.globalDomain)?["AppleLanguages"] as? [String]
+            ?? Locale.preferredLanguages
+        return Bundle.preferredLocalizations(from: ["zh-Hans", "en"], forPreferences: languages).first ?? "en"
     }
 
     static var current: AppLanguage {
@@ -139,9 +175,9 @@ enum AppTheme: String, CaseIterable {
 
     var displayName: String {
         switch self {
-        case .dropboxBlue: return String(localized: "晴空蓝")
-        case .jiangnanSpring: return String(localized: "江南春")
-        case .warmAmber: return String(localized: "暖橙")
+        case .dropboxBlue: return AppLocalization.string("晴空蓝")
+        case .jiangnanSpring: return AppLocalization.string("江南春")
+        case .warmAmber: return AppLocalization.string("暖橙")
         }
     }
 
@@ -279,6 +315,26 @@ enum AppTheme: String, CaseIterable {
                 calculationsUIColor: UIColor(red: 0.83, green: 0.56, blue: 0.35, alpha: 1),
                 quotationUIColor: UIColor(red: 0.77, green: 0.61, blue: 0.38, alpha: 1)
             )
+        }
+    }
+}
+
+// App-only presentation stays outside the model compiled into the widget target.
+extension WidgetProjectStatus {
+    var displayName: String {
+        switch self {
+        case .active:
+            return AppLocalization.string("widget_project_status_active")
+        case .paused:
+            return AppLocalization.string("widget_project_status_paused")
+        case .completed:
+            return AppLocalization.string("widget_project_status_completed")
+        case .settled:
+            return AppLocalization.string("widget_project_status_settled")
+        case .archived:
+            return AppLocalization.string("widget_project_status_archived")
+        case .unknown:
+            return AppLocalization.string("widget_project_status_unknown")
         }
     }
 }

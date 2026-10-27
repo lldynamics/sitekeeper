@@ -104,6 +104,17 @@ enum BackupImportExportTestSupport {
         return result
     }
 
+    static func partialRestoreExtractions() -> [URL] {
+        guard let files = FileManager.default.enumerator(
+            at: FileManager.default.temporaryDirectory,
+            includingPropertiesForKeys: nil,
+            options: [.skipsPackageDescendants]
+        ) else { return [] }
+        return files.compactMap { $0 as? URL }.filter {
+            $0.lastPathComponent.hasPrefix(".zip-extract-") && $0.path.contains("backup-restore-")
+        }
+    }
+
     static func fileSize(at url: URL) -> Int? {
         (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize
     }
