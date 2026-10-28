@@ -94,11 +94,14 @@ struct SiteTodoEditSheet: View {
                     photoPickerRow(before: false)
                 }
                 Section(AppLocalization.string("状态")) {
-                    Toggle(AppLocalization.string("已完成"), isOn: $draft.record.isDone)
+                    if draft.record.review == nil {
+                        Toggle(AppLocalization.string("已完成"), isOn: $draft.record.isDone)
+                    }
                     if let completedAt = draft.record.completedAt, draft.record.isDone {
                         LabeledContent(AppLocalization.string("完成时间"), value: completedAt)
                     }
                 }
+                SiteTodoReviewSection(record: $draft.record)
                 if todo != nil {
                     Section {
                         Button(AppLocalization.string("删除待办"), role: .destructive) { showDeleteConfirm = true }

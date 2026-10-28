@@ -85,7 +85,10 @@ extension ReportBuilder {
             y = drawPDFText(locFormat("工期: %@ 至 %@", project.startDate.isEmpty ? locNotFilled : project.startDate.storageText, project.expectedEndDate.isEmpty ? locNotFilled : project.expectedEndDate.storageText), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid))), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            _ = drawPDFText(locFormat("毛利估算: %@  人工量: %@  进度: %lld%%", money(contract - materialCost - laborCost), laborWorkload.displayText, Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("毛利估算: %@  人工量: %@  进度: %lld%%", money(contract - materialCost - laborCost), laborWorkload.displayText, Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13)) + 8
+            let paidExplanation = ProjectPaidAmountExplanation(project: project, records: financialRecords)
+            y = drawPDFText(locFormat("已收金额来源: %@；手填历史和正式收款不会相加。", paidExplanation.source.displayName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11)) + 5
+            _ = drawPDFText(loc("毛利估算＝合同金额－材料成本－人工成本；不等于最终利润，其他支出需另行核对。成本有明细时采用明细，否则采用手填金额。"), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
 
             // 2. 目录
             context.beginPage()

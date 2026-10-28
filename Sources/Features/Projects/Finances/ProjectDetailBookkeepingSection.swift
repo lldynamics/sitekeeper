@@ -33,6 +33,34 @@ struct ProjectBookkeepingView: View {
         let unsettledPage = RecordPage(unsettledRecords, index: unsettledPageIndex)
         let counterpartyPage = RecordPage(counterpartySummaries, index: counterpartyPageIndex)
         Group {
+            if let project = projects.first(where: { $0.id == projectID }) {
+                let explanation = ProjectPaidAmountExplanation(project: project, records: records)
+                Section(AppLocalization.string("paid_explanation_title")) {
+                    LabeledContent(AppLocalization.string("paid_explanation_current"), value: ReportBuilder.money(explanation.effectivePaidAmount))
+                    LabeledContent(AppLocalization.string("paid_explanation_source"), value: explanation.source.displayName)
+                    LabeledContent(
+                        AppLocalization.string("paid_explanation_manual"),
+                        value: explanation.manualPaidAmount.isEmpty
+                            ? AppLocalization.string("paid_explanation_manual_empty")
+                            : ReportBuilder.money(explanation.manualPaidAmount)
+                    )
+                    LabeledContent(AppLocalization.string("paid_explanation_recorded"), value: ReportBuilder.money(explanation.recordedCollectionAmount))
+                    Text(AppLocalization.string("paid_explanation_rule"))
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    if explanation.requiresReconciliation {
+                        Label(AppLocalization.string("paid_explanation_mismatch"), systemImage: "info.circle")
+                            .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                    if explanation.requiresAmountReview {
+                        Label(AppLocalization.string("paid_explanation_invalid"), systemImage: "exclamationmark.triangle")
+                            .font(.footnote)
+                            .foregroundStyle(Color.appWarning)
+                    }
+                }
+                .accessibilityIdentifier("project.paid-amount-explanation")
+            }
             ProjectDetailAnchoredSection(AppLocalization.string("成本汇总"), anchor: .finance) {
                 NavigationLink { ProjectPaymentPlanView(projectID: projectID) } label: {
                     Label(AppLocalization.string("分期收付款"), systemImage: "calendar.badge.clock")

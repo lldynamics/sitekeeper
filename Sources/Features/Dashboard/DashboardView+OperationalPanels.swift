@@ -38,9 +38,8 @@ extension DashboardView {
     }
 
     private func toggleTodo(_ todo: SiteTodo) {
-        var updated = todo
-        updated.isDone.toggle()
-        updated.completedAt = updated.isDone ? BusinessDateValue.now() : nil
+        guard var updated = store.siteTodos.first(where: { $0.id == todo.id }) else { return }
+        updated.toggleCompletionForWorkflow()
         if store.updateSiteTodo(updated) {
             store.scheduleSave()
         }

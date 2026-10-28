@@ -214,7 +214,7 @@ struct TodoPreviewRow: View {
 
     var body: some View {
         HStack(spacing: AppSpacing.tight + 2) {
-            if let onToggle {
+            if let onToggle, todo.review == nil {
                 Button(action: onToggle) {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : (todo.isOverdue ? "exclamationmark.circle.fill" : "circle"))
                         .font(.body)
@@ -237,6 +237,11 @@ struct TodoPreviewRow: View {
                 ViewThatFits(in: .horizontal) {
                     todoMetadataRow
                     todoMetadataColumn
+                }
+                if let review = todo.review {
+                    Text(review.status.displayName)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(review.status == .closed ? Color.appSuccess : Color.appWarning)
                 }
                 if let completedAt = todo.completedAt, todo.isDone {
                     Text(String(format: AppLocalization.string("完成 %@"), Formatters.displayDateText(completedAt)))

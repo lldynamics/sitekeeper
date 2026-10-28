@@ -17,6 +17,8 @@ struct Project: Identifiable, Codable, Sendable {
     @NonNegativeDecimal var laborCost: MoneyValue
     var requiredDocumentCategories: [ProjectDocumentCategory]
     var paymentPlans: [ProjectPaymentPlan]
+    /// Independent change confirmations; never added to contract or receipts automatically.
+    var changeOrders: [ProjectChangeOrder]
 
     init(
         id: UUID = UUID(),
@@ -34,7 +36,8 @@ struct Project: Identifiable, Codable, Sendable {
         materialCost: MoneyValue = .empty,
         laborCost: MoneyValue = .empty,
         requiredDocumentCategories: [ProjectDocumentCategory] = ProjectDocumentCategory.defaultConstructionArchiveRequirements,
-        paymentPlans: [ProjectPaymentPlan] = []
+        paymentPlans: [ProjectPaymentPlan] = [],
+        changeOrders: [ProjectChangeOrder] = []
     ) {
         self.id = id
         self.name = name
@@ -52,11 +55,12 @@ struct Project: Identifiable, Codable, Sendable {
         self.laborCost = laborCost
         self.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(requiredDocumentCategories)
         self.paymentPlans = paymentPlans
+        self.changeOrders = changeOrders
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, location, status, customerName, customerPhone, startDate, expectedEndDate
-        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, requiredDocumentCategories, paymentPlans
+        case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, requiredDocumentCategories, paymentPlans, changeOrders
     }
 
     init(from decoder: Decoder) throws {
@@ -79,6 +83,7 @@ struct Project: Identifiable, Codable, Sendable {
             try container.decodeIfPresent([ProjectDocumentCategory].self, forKey: .requiredDocumentCategories) ?? []
         )
         paymentPlans = try container.decodeIfPresent([ProjectPaymentPlan].self, forKey: .paymentPlans) ?? []
+        changeOrders = try container.decodeIfPresent([ProjectChangeOrder].self, forKey: .changeOrders) ?? []
     }
 
     func encode(to encoder: Encoder) throws {
@@ -99,6 +104,7 @@ struct Project: Identifiable, Codable, Sendable {
         try container.encode(laborCost, forKey: .laborCost)
         try container.encode(requiredDocumentCategories.map(\.rawValue), forKey: .requiredDocumentCategories)
         if !paymentPlans.isEmpty { try container.encode(paymentPlans, forKey: .paymentPlans) }
+        if !changeOrders.isEmpty { try container.encode(changeOrders, forKey: .changeOrders) }
     }
 }
 
@@ -257,6 +263,8 @@ struct SiteTodo: Identifiable, Codable, Sendable {
     var rectificationAfterPhotoFileName: String?
     var isDone: Bool
     var completedAt: BusinessDateValue?
+    /// Nil preserves the original one-tap completion workflow for ordinary todos.
+    var review: SiteTodoReview?
     var note: String
     var linkedConstructionMethodIDs: [UUID]
     var projectId: UUID?
@@ -276,6 +284,7 @@ struct SiteTodo: Identifiable, Codable, Sendable {
         rectificationAfterPhotoFileName: String? = nil,
         isDone: Bool = false,
         completedAt: BusinessDateValue? = nil,
+        review: SiteTodoReview? = nil,
         note: String = "",
         linkedConstructionMethodIDs: [UUID] = [],
         projectId: UUID? = nil
@@ -294,16 +303,18 @@ struct SiteTodo: Identifiable, Codable, Sendable {
         self.rectificationAfterPhotoFileName = rectificationAfterPhotoFileName
         self.isDone = isDone
         self.completedAt = completedAt
+        self.review = review
         self.note = note
         self.linkedConstructionMethodIDs = linkedConstructionMethodIDs
         self.projectId = projectId
+        normalizeReviewCompletion()
     }
 
     enum CodingKeys: String, CodingKey {
         case id, title, owner, dueDate, priority, issueType
         case drawingIssueLocation, drawingIssueLayerOrPage, drawingIssueMeasurement, drawingIssueCloseEvidence
         case rectificationBeforePhotoFileName, rectificationAfterPhotoFileName
-        case isDone, completedAt, note, linkedConstructionMethodIDs, projectId
+        case isDone, completedAt, review, note, linkedConstructionMethodIDs, projectId
     }
 
     init(from decoder: Decoder) throws {
@@ -330,9 +341,11 @@ struct SiteTodo: Identifiable, Codable, Sendable {
         rectificationAfterPhotoFileName = try container.decodeIfPresent(String.self, forKey: .rectificationAfterPhotoFileName)
         isDone = try container.decodeIfPresent(Bool.self, forKey: .isDone) ?? false
         completedAt = try container.decodeIfPresent(BusinessDateValue.self, forKey: .completedAt)
+        review = try container.decodeIfPresent(SiteTodoReview.self, forKey: .review)
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         linkedConstructionMethodIDs = try container.decodeIfPresent([UUID].self, forKey: .linkedConstructionMethodIDs) ?? []
         projectId = try container.decodeIfPresent(UUID.self, forKey: .projectId)
+        normalizeReviewCompletion()
     }
 
     var isOverdue: Bool {

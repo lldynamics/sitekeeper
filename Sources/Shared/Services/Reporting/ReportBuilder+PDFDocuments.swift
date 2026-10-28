@@ -148,6 +148,8 @@ extension ReportBuilder {
         lines.append(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)))
         lines.append(locFormat("记账收入: %@  记账支出: %@  账面结余: %@", money(income), money(expense), money(income - expense)))
         lines.append(locFormat("毛利估算: %@", money(contract - materialCost - laborCost)))
+        lines.append(locFormat("已收金额来源: %@；手填历史和正式收款不会相加。", ProjectPaidAmountExplanation(project: project, records: financialRecords).source.displayName))
+        lines.append(loc("本报告毛利估算＝合同金额－材料明细合计－人工明细合计；不等于最终利润，其他支出需另行核对。"))
         lines.append("")
         lines.append(loc("三、资料完整度"))
         lines.append(locFormat("施工日志: %lld 条  现场照片: %lld 张  进度平均: %lld%%", Int64(logs.count), Int64(photosCount), Int64(progress * 100)))

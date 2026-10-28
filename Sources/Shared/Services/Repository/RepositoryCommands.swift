@@ -44,8 +44,7 @@ extension RepositoryCommand {
         case .setTodoCompletion(let id, let done, let date):
             guard let data = try fetch(.siteTodos, id) else { throw RepositoryError.missingRecord }
             var todo = try JSONDecoder().decode(SiteTodo.self, from: data)
-            todo.isDone = done
-            todo.completedAt = done ? date : nil
+            if done { todo.requestCompletion(at: date) } else { todo.reopenForWork() }
             return .put(try RepositoryRecord(collection: .siteTodos, payload: JSONEncoder().encode(todo), position: 0))
         default: throw RepositoryError.invalidRecord("existing record command")
         }

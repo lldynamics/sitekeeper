@@ -213,6 +213,15 @@ extension BackupSnapshot {
 
         removeExcludedProjectLinks(projectIDs: projectIDs)
         removeExcludedKnowledgeLinks(projectIDs: projectIDs, constructionMethodIDs: constructionMethodIDs)
+        projects = projects.map { project in
+            var value = project
+            value.changeOrders = value.changeOrders.map { order in
+                var retained = order
+                retained.documentIDs = retained.documentIDs.filter { documentProjectIDs[$0] == value.id }
+                return retained
+            }
+            return value
+        }
         projectFinancialRecords = projectFinancialRecords.map { record in
             var value = record
             value.linkedDocumentIds = value.linkedDocumentIds.filter { documentProjectIDs[$0] == value.projectId }

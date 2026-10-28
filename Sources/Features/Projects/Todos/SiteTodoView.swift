@@ -191,7 +191,9 @@ struct SiteTodoView: View {
                             toggleDone(todo)
                         } label: {
                             Label(
-                                todo.isDone ? AppLocalization.string("重开") : AppLocalization.string("完成"),
+                                todo.review?.status == .awaitingReview ? AppLocalization.string("记录复验") :
+                                    todo.review != nil && !todo.isDone ? AppLocalization.string("提交复验") :
+                                    todo.isDone ? AppLocalization.string("重开") : AppLocalization.string("完成"),
                                 systemImage: todo.isDone ? "arrow.uturn.backward" : "checkmark.circle.fill"
                             )
                         }
@@ -226,9 +228,12 @@ private extension SiteTodoView {
     }
 
     func toggleDone(_ todo: SiteTodo) {
-        var value = todo
-        value.isDone.toggle()
-        value.completedAt = value.isDone ? .now() : nil
+        guard var value = store.siteTodos.first(where: { $0.id == todo.id }) else { return }
+        if value.review?.status == .awaitingReview {
+            editingTodo = value
+            return
+        }
+        value.toggleCompletionForWorkflow()
         save(value)
     }
 

@@ -70,6 +70,11 @@ extension ProjectDetailContainer {
 
             Divider()
 
+            NavigationLink { ProjectFieldWorkflowView(project: project) } label: {
+                Label(AppLocalization.string("现场汇报与核对"), systemImage: "doc.text.magnifyingglass")
+            }
+            .accessibilityIdentifier("project-detail-field-workflow")
+
             Button {
                 routeState.presentation = .deliveryGuide
             } label: {

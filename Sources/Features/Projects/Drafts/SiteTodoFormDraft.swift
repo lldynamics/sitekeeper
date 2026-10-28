@@ -33,6 +33,7 @@ struct SiteTodoFormDraft: Codable, Equatable {
         value.drawingIssueMeasurement = value.drawingIssueMeasurement.trimmingCharacters(in: .whitespacesAndNewlines)
         value.drawingIssueCloseEvidence = value.drawingIssueCloseEvidence.trimmingCharacters(in: .whitespacesAndNewlines)
         value.completedAt = value.isDone ? (value.completedAt ?? .now()) : nil
+        value.normalizeReviewCompletion()
         return value
     }
 }
