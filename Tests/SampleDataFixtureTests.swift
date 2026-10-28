@@ -1,20 +1,21 @@
 import Testing
 import Foundation
 import UIKit
+import PDFKit
 @testable import sitekeeper
 
 @MainActor
 struct SampleDataFixtureTests {
-    @Test func sourceFixtureDiscoverySurvivesMovingTheLoaderIntoNestedFolders() {
-        let repository = URL(fileURLWithPath: "/tmp/Fixture Project", isDirectory: true)
-        for loader in ["Sources/SampleDataFixture.swift", "Sources/Shared/Services/Fixtures/SampleDataFixture.swift"] {
-            let paths = SampleDataFixtureSourcePaths.candidates(sourceFile: repository.appendingPathComponent(loader))
-            #expect(paths.map(\.path) == [
-                repository.appendingPathComponent("Tests/Fixtures/SampleDataFixture.json").path,
-                repository.appendingPathComponent("Sources/Resources/Fixtures/SampleDataFixture.json").path
-            ])
-        }
-        #expect(SampleDataFixtureSourcePaths.candidates(sourceFile: URL(fileURLWithPath: "/tmp/Other/Loader.swift")).isEmpty)
+    @Test func syntheticFixtureIsDeterministicAndRoundTrips() throws {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        let first = try encoder.encode(SyntheticSampleFixtureBuilder.makeSnapshot())
+        let second = try encoder.encode(SyntheticSampleFixtureBuilder.makeSnapshot())
+        #expect(first == second)
+        let decoded = try JSONDecoder().decode(BackupSnapshot.self, from: first)
+        #expect(try encoder.encode(decoded) == first)
+        #expect(decoded.projects.allSatisfy { $0.customerPhone.hasPrefix("NON-DIALABLE-") })
+        #expect(decoded.projectContacts.allSatisfy { $0.phone.hasPrefix("NON-DIALABLE-") })
     }
 
     @Test func sampleFixtureDecodesAndKeepsBinaryAssetsInSync() throws {
@@ -48,6 +49,27 @@ struct SampleDataFixtureTests {
 
         let samplePhoto = try #require(snapshot.photoFiles.first)
         #expect(UIImage(data: samplePhoto.data) != nil)
+        #expect(snapshot.photoFiles.allSatisfy { UIImage(data: $0.data) != nil })
+        #expect(snapshot.quickNoteAttachmentFiles.allSatisfy { UIImage(data: $0.data) != nil })
+        #expect(snapshot.drawingFiles.count == 3)
+        #expect(snapshot.documentFiles.count == 5)
+        #expect(snapshot.drawingFiles.allSatisfy { PDFDocument(data: $0.data)?.pageCount == 1 })
+        #expect(snapshot.documentFiles.allSatisfy { PDFDocument(data: $0.data)?.pageCount == 1 })
+
+        let projectIDs = Set(snapshot.projects.map(\.id))
+        #expect(projectIDs.count == snapshot.projects.count)
+        let projectReferences = snapshot.materialItems.compactMap(\.projectId)
+            + snapshot.quoteItems.compactMap(\.projectId) + snapshot.laborRecords.compactMap(\.projectId)
+            + snapshot.dailyLogs.compactMap(\.projectId) + snapshot.siteTodos.compactMap(\.projectId)
+            + snapshot.quickNotes.compactMap(\.projectId) + snapshot.materialSheetDrafts.compactMap(\.projectId)
+            + snapshot.projectDrawings.map(\.projectId) + snapshot.projectDocuments.map(\.projectId)
+            + snapshot.projectFinancialRecords.map(\.projectId) + snapshot.projectContacts.map(\.projectId)
+            + snapshot.progressTasks.map(\.projectId) + snapshot.projectWarehouseMovements.map(\.projectId)
+        #expect(projectReferences.allSatisfy { projectIDs.contains($0) })
+        #expect(drawingFileNames.count == snapshot.drawingFiles.count)
+        #expect(documentFileNames.count == snapshot.documentFiles.count)
+        #expect(attachmentFileNames.count == snapshot.quickNoteAttachmentFiles.count)
+        #expect(photoFileNames.count == snapshot.photoFiles.count)
     }
 
     private func makeStore() -> DataStore {
