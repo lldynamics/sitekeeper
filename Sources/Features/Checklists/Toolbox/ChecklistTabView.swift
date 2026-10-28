@@ -315,7 +315,7 @@ struct ChecklistTabView: View {
                     Button {
                         onSelect(item)
                     } label: {
-                        ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
+                        ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color, showsChevron: true)
                             .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                     }
                     .buttonStyle(.plain)
@@ -356,7 +356,7 @@ struct ChecklistTabView: View {
                         Button {
                             onSelect(item)
                         } label: {
-                            ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color)
+                            ToolRow(icon: item.icon, title: item.title, desc: item.desc, color: item.color, showsChevron: true)
                                 .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
                         }
                         .buttonStyle(.plain)

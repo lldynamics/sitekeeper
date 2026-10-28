@@ -85,19 +85,28 @@ struct ProjectRowContent: View {
     private var detailParts: [DetailPart] {
         var parts: [DetailPart] = []
         if unpaidAmount > 0 {
+            let moneyText: String
+            if unpaidAmount >= 10_000 {
+                let wan = (unpaidAmount.decimal as NSDecimalNumber).doubleValue / 10_000.0
+                let formatted = String(format: "%.1f", wan).replacingOccurrences(of: ".0", with: "")
+                moneyText = "¥\(formatted)万"
+            } else {
+                moneyText = ReportBuilder.money(unpaidAmount)
+            }
             parts.append(
                 DetailPart(
                     id: "unpaid-amount",
-                    text: String(format: AppLocalization.string("未收 %@"), ReportBuilder.money(unpaidAmount)),
+                    text: String(format: AppLocalization.string("未收 %@"), moneyText),
                     emphasizesPrimaryColor: true
                 )
             )
         }
         if !project.expectedEndDate.isEmpty {
+            let dateText = Formatters.displayRelativeOrShortDate(project.expectedEndDate.storageText)
             parts.append(
                 DetailPart(
                     id: "expected-end-date",
-                    text: String(format: AppLocalization.string("完工 %@"), project.expectedEndDate.storageText),
+                    text: String(format: AppLocalization.string("完工 %@"), dateText),
                     emphasizesPrimaryColor: false
                 )
             )
@@ -139,19 +148,43 @@ struct ProjectRowContent: View {
                 }
 
                 if !detailParts.isEmpty {
-                    HStack(spacing: AppSpacing.tight) {
-                        ForEach(Array(detailParts.enumerated()), id: \.element.id) { index, part in
-                            if index > 0 {
-                                Text("·")
-                                    .foregroundStyle(.tertiary)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: AppSpacing.tight) {
+                            ForEach(Array(detailParts.enumerated()), id: \.element.id) { index, part in
+                                if index > 0 {
+                                    Text("·")
+                                        .foregroundStyle(.tertiary)
+                                }
+                                Text(part.text)
+                                    .foregroundStyle(part.emphasizesPrimaryColor ? Color.appPrimaryAction : .secondary)
                             }
-                            Text(part.text)
-                                .foregroundStyle(part.emphasizesPrimaryColor ? Color.appPrimaryAction : .secondary)
+                            Spacer(minLength: 0)
                         }
-                        Spacer(minLength: 0)
+                        .font(.caption)
+                        .lineLimit(1)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            if let first = detailParts.first {
+                                Text(first.text)
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(first.emphasizesPrimaryColor ? Color.appPrimaryAction : .secondary)
+                            }
+                            if detailParts.count > 1 {
+                                HStack(spacing: AppSpacing.tight) {
+                                    ForEach(Array(detailParts.dropFirst().enumerated()), id: \.element.id) { index, part in
+                                        if index > 0 {
+                                            Text("·")
+                                                .foregroundStyle(.tertiary)
+                                        }
+                                        Text(part.text)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .font(.caption2)
+                                .lineLimit(1)
+                            }
+                        }
                     }
-                    .font(.caption)
-                    .lineLimit(1)
                 }
 
                 if !badges.isEmpty {

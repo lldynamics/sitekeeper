@@ -21,12 +21,28 @@ extension DashboardView {
                         NavigationLink {
                             SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
                         } label: {
-                            TodoPreviewRow(todo: todo, projectName: projectName(todo.projectId))
+                            TodoPreviewRow(
+                                todo: todo,
+                                projectName: projectName(todo.projectId),
+                                onToggle: {
+                                    AppHaptics.success()
+                                    toggleTodo(todo)
+                                }
+                            )
                         }
                         .buttonStyle(.plain)
                     }
                 }
             }
+        }
+    }
+
+    private func toggleTodo(_ todo: SiteTodo) {
+        var updated = todo
+        updated.isDone.toggle()
+        updated.completedAt = updated.isDone ? BusinessDateValue.now() : nil
+        if store.updateSiteTodo(updated) {
+            store.scheduleSave()
         }
     }
 

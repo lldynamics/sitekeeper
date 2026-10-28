@@ -25,28 +25,37 @@ struct ProjectListFiltersSection: View {
 
             compactToolbar
 
-            if overviewFilter != nil {
+            if let activeOverview = overviewFilter {
                 HStack(spacing: AppSpacing.tight) {
-                    if let overviewFilter {
-                        Label(
-                            String(
-                                format: AppLocalization.string("概况筛选：%@"),
-                                overviewFilter.displayName
-                            ),
-                            systemImage: "scope"
-                        )
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .accessibilityIdentifier("project-list-overview-filter-\(overviewFilter.rawValue)")
+                    HStack(spacing: 6) {
+                        Image(systemName: "scope")
+                            .font(.caption2)
+                        Text(String(format: AppLocalization.string("概况：%@"), activeOverview.displayName))
+                            .font(.caption.weight(.medium))
+                        Button {
+                            overviewFilter = nil
+                        } label: {
+                            Image(systemName: "xmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("project-list-overview-filter-clear")
                     }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(
+                        Capsule()
+                            .fill(Color.appPrimaryAction.opacity(0.12))
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.appPrimaryAction.opacity(0.28), lineWidth: 0.8)
+                    )
+                    .foregroundStyle(Color.appPrimaryAction)
+                    .accessibilityIdentifier("project-list-overview-filter-\(activeOverview.rawValue)")
+
                     Spacer(minLength: 0)
-                    Button {
-                        overviewFilter = nil
-                    } label: {
-                        Label(AppLocalization.string("清除概况筛选"), systemImage: "xmark.circle")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .accessibilityIdentifier("project-list-overview-filter-clear")
                 }
             }
         } header: {

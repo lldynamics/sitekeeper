@@ -178,7 +178,11 @@ struct SiteTodoView: View {
                             todo: todo,
                             isOverdue: !todo.isDone && store.projectStore.dayContext.isOverdue(date: todo.dueDate),
                             projectName: projectName(todo.projectId),
-                            methodTitles: methodTitles(for: todo.linkedConstructionMethodIDs)
+                            methodTitles: methodTitles(for: todo.linkedConstructionMethodIDs),
+                            onToggle: {
+                                AppHaptics.impact(.light)
+                                toggleDone(todo)
+                            }
                         )
                     }
                     .buttonStyle(.plain)

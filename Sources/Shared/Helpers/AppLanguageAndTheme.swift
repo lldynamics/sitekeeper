@@ -24,6 +24,16 @@ enum AppLocalization {
         )
     }
 
+    static func string(
+        _ key: String,
+        table: String? = nil,
+        bundle: Bundle = .main,
+        locale: Locale? = nil,
+        comment: StaticString? = nil
+    ) -> String {
+        string(String.LocalizationValue(key), table: table, bundle: bundle, locale: locale, comment: comment)
+    }
+
     static func localizedBundle(language: AppLanguage, bundle: Bundle = .main) -> Bundle {
         guard let path = bundle.path(forResource: language.resourceLanguageCode, ofType: "lproj"),
               let localized = Bundle(path: path) else { return bundle }

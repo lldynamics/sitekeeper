@@ -5,20 +5,45 @@ struct SiteTodoRow: View {
     let isOverdue: Bool
     let projectName: String
     let methodTitles: [String]
+    var onToggle: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Image(systemName: todo.isDone ? "checkmark.circle.fill" : isOverdue ? "exclamationmark.circle.fill" : "circle")
-                    .foregroundStyle(todo.isDone ? Color.appSuccess : isOverdue ? .appRisk : Color.appWarning)
+                if let onToggle {
+                    Button(action: onToggle) {
+                        Image(systemName: todo.isDone ? "checkmark.circle.fill" : isOverdue ? "exclamationmark.circle.fill" : "circle")
+                            .font(.title3)
+                            .foregroundStyle(todo.isDone ? Color.appSuccess : isOverdue ? .appRisk : Color.appWarning)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(todo.isDone ? AppLocalization.string("标记未完成") : AppLocalization.string("标记完成"))
+                } else {
+                    Image(systemName: todo.isDone ? "checkmark.circle.fill" : isOverdue ? "exclamationmark.circle.fill" : "circle")
+                        .font(.title3)
+                        .foregroundStyle(todo.isDone ? Color.appSuccess : isOverdue ? .appRisk : Color.appWarning)
+                }
                 Text(todo.title.isEmpty ? AppLocalization.string("未命名事项") : todo.title)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(todo.isDone ? .secondary : .primary)
+                    .strikethrough(todo.isDone)
                 Spacer()
+                if isOverdue && !todo.isDone {
+                    Text(AppLocalization.string("已逾期"))
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.appRisk)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(
+                            Capsule()
+                                .fill(Color.appRisk.opacity(0.12))
+                        )
+                }
                 priorityBadge(todo.priority)
             }
             HStack(spacing: 8) {
-                Text(todo.dueDate)
+                Text(Formatters.displayRelativeOrShortDate(todo.dueDate))
                 Text(todo.issueType.displayName)
                 if !todo.owner.isEmpty { Text(todo.owner) }
                 if !projectName.isEmpty { Text(projectName).foregroundStyle(Color.appDoc) }

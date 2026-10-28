@@ -210,14 +210,29 @@ struct LogPreviewRow: View {
 struct TodoPreviewRow: View {
     let todo: SiteTodo
     let projectName: String?
+    var onToggle: (() -> Void)? = nil
 
     var body: some View {
         HStack(spacing: AppSpacing.tight + 2) {
-            Image(systemName: todo.isOverdue ? "exclamationmark.circle.fill" : "circle")
-                .foregroundStyle(todo.isOverdue ? Color.appRisk : Color.appPrimaryAction)
+            if let onToggle {
+                Button(action: onToggle) {
+                    Image(systemName: todo.isDone ? "checkmark.circle.fill" : (todo.isOverdue ? "exclamationmark.circle.fill" : "circle"))
+                        .font(.body)
+                        .foregroundStyle(todo.isDone ? Color.appSuccess : (todo.isOverdue ? Color.appRisk : Color.appPrimaryAction))
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(todo.isDone ? AppLocalization.string("标记未完成") : AppLocalization.string("标记完成"))
+            } else {
+                Image(systemName: todo.isDone ? "checkmark.circle.fill" : (todo.isOverdue ? "exclamationmark.circle.fill" : "circle"))
+                    .font(.body)
+                    .foregroundStyle(todo.isDone ? Color.appSuccess : (todo.isOverdue ? Color.appRisk : Color.appPrimaryAction))
+            }
             VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
                 Text(todo.title)
                     .font(.callout.weight(.medium))
+                    .foregroundStyle(todo.isDone ? .secondary : .primary)
+                    .strikethrough(todo.isDone)
                     .appListPrimaryTextLayout()
                 ViewThatFits(in: .horizontal) {
                     todoMetadataRow
