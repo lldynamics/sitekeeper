@@ -78,6 +78,32 @@ enum Formatters {
         return dateTimeFormatter(timeZone: timeZone).string(from: value)
     }
 
+    /// Friendly relative or short date for timeline and dashboard badges
+    static func displayRelativeOrShortDate(_ value: BusinessDateValue, timeZone: TimeZone = .current) -> String {
+        displayRelativeOrShortDate(value.storageText, timeZone: timeZone)
+    }
+
+    static func displayRelativeOrShortDate(_ text: String, timeZone: TimeZone = .current) -> String {
+        guard let date = parseDateOrDateTime(text, timeZone: timeZone) else { return text }
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) {
+            if text.contains(":") {
+                let timeFormatter = formatterCache.formatter("HH:mm", timeZone: timeZone)
+                return "\(AppLocalization.string("今天")) \(timeFormatter.string(from: date))"
+            }
+            return AppLocalization.string("今天")
+        } else if calendar.isDateInYesterday(date) {
+            if text.contains(":") {
+                let timeFormatter = formatterCache.formatter("HH:mm", timeZone: timeZone)
+                return "\(AppLocalization.string("昨天")) \(timeFormatter.string(from: date))"
+            }
+            return AppLocalization.string("昨天")
+        } else {
+            let monthDayFormatter = formatterCache.formatter(text.contains(":") ? "MM-dd HH:mm" : "MM-dd", timeZone: timeZone)
+            return monthDayFormatter.string(from: date)
+        }
+    }
+
     static func isLater(_ lhs: String, than rhs: String) -> Bool {
         (parseDateOrDateTime(lhs) ?? .distantPast) > (parseDateOrDateTime(rhs) ?? .distantPast)
     }

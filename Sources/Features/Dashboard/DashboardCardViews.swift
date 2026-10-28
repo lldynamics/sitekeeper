@@ -144,16 +144,16 @@ struct DashboardProjectChip: View {
     let color: Color
 
     private var minChipWidth: CGFloat {
-        isSelected ? 124 : 104
+        isSelected ? 136 : 116
     }
 
     private var maxChipWidth: CGFloat {
-        isSelected ? 240 : 152
+        isSelected ? 260 : 200
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight * 0.625) {
-            HStack(spacing: AppSpacing.tight * 0.625) {
+            HStack(alignment: .center, spacing: AppSpacing.tight * 0.625) {
                 Circle()
                     .fill(isSelected ? .white : color)
                     .frame(width: AppSpacing.tight * 0.75, height: AppSpacing.tight * 0.75)
@@ -170,15 +170,15 @@ struct DashboardProjectChip: View {
                 .appListSecondaryTextLayout()
         }
         .frame(minWidth: minChipWidth, maxWidth: maxChipWidth, alignment: .leading)
-        .frame(minHeight: 64, alignment: .leading)
+        .frame(minHeight: 66, alignment: .leading)
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight)
         .background(
-            RoundedRectangle(cornerRadius: AppSpacing.tight + 1)
+            RoundedRectangle(cornerRadius: AppSpacing.tight + 2, style: .continuous)
                 .fill(isSelected ? color : color.opacity(0.12))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: AppSpacing.tight + 1)
+            RoundedRectangle(cornerRadius: AppSpacing.tight + 2, style: .continuous)
                 .stroke(isSelected ? color : color.opacity(0.28), lineWidth: 1)
         )
     }
@@ -258,12 +258,12 @@ struct TimelineActivityRow: View {
     var body: some View {
         HStack(spacing: AppSpacing.tight + 2) {
             Image(systemName: icon)
-                .font(.callout)
+                .font(.callout.weight(.medium))
                 .foregroundStyle(tint)
                 .frame(width: 24)
-            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.25) {
+            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.35) {
                 Text(activity.title)
-                    .font(.callout)
+                    .font(.subheadline.weight(.medium))
                     .foregroundStyle(.primary)
                     .appListPrimaryTextLayout()
                 HStack(spacing: AppSpacing.tight * 0.75) {
@@ -274,30 +274,30 @@ struct TimelineActivityRow: View {
                             .appListSecondaryTextLayout(lines: 1)
                     }
                     Text(activity.subtitle)
-                        .font(.caption2)
+                        .font(.caption2.weight(.medium))
                         .foregroundStyle(tint)
                         .appListSecondaryTextLayout(lines: 1)
                 }
             }
             Spacer()
-            Text(Formatters.displayDateText(activity.date))
-                .font(.caption2)
+            Text(Formatters.displayRelativeOrShortDate(activity.date))
+                .font(.caption2.weight(.medium))
                 .foregroundStyle(.secondary)
             if showsChevron {
                 Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
                     .foregroundStyle(.tertiary)
             }
         }
         .padding(.horizontal, AppSpacing.normal - 2)
-        .padding(.vertical, AppSpacing.tight)
+        .padding(.vertical, AppSpacing.tight + 1)
         .background(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color(uiColor: .tertiarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
+                .stroke(Color(uiColor: .separator).opacity(0.12), lineWidth: 0.5)
         )
     }
 }

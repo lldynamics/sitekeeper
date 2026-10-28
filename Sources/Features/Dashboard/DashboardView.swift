@@ -130,8 +130,8 @@ struct DashboardView: View {
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: AppSpacing.normal) {
                         currentProjectSelector
-                        todayQuickActions
                         todayTodoPanel
+                        todayQuickActions
                         if showsBusinessOverviewPanel {
                             businessOverviewPanel
                         }
@@ -279,6 +279,7 @@ struct DashboardView: View {
             globalSearchInput
             currentProjectSelector
             if hasDashboardRisk { dashboardRiskStrip }
+            todayTodoPanel
             todayQuickActions
             if hasCompactOverviewSignal {
                 DisclosureGroup(isExpanded: $showMoreOverview) {
@@ -288,7 +289,6 @@ struct DashboardView: View {
                         }
                         warehousePanel
                         overduePanel
-                        todayTodoPanel
                         todayLogPanel
                     }
                     .padding(.top, AppSpacing.tight)

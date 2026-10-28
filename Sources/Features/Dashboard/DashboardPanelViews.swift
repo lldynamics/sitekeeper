@@ -28,55 +28,47 @@ struct DashboardRiskPill: View {
     var quickActions: [DashboardRiskQuickAction] = []
 
     var body: some View {
-        HStack(spacing: AppSpacing.tight * 0.5) {
-            NavigationLink {
-                LazyDashboardDestinationView(destination: destination)
-            } label: {
-                HStack(spacing: AppSpacing.tight * 0.75) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(hasRisk ? Color.white : color)
-                    Text(value)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(hasRisk ? Color.white : color)
-                }
-                .padding(.horizontal, AppSpacing.normal - 2)
-                .padding(.vertical, AppSpacing.tight - 1)
-                .background(
-                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                        .fill(hasRisk ? color : color.opacity(0.12))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                        .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
-                )
+        NavigationLink {
+            LazyDashboardDestinationView(destination: destination)
+        } label: {
+            HStack(spacing: AppSpacing.tight * 0.75) {
+                Text(title)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(hasRisk ? Color.white : color)
+                Text(value)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(hasRisk ? Color.white : color)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("\(title)：\(value)")
-            .accessibilityHint(String(format: AppLocalization.string("打开%@详情"), title))
-
+            .padding(.horizontal, AppSpacing.normal - 2)
+            .padding(.vertical, AppSpacing.tight - 1)
+            .background(
+                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                    .fill(hasRisk ? color : color.opacity(0.12))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
+                    .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
+            )
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
             if !quickActions.isEmpty {
-                Menu {
-                    ForEach(quickActions) { action in
-                        Button(role: action.role) {
-                            action.action()
-                        } label: {
-                            Label(action.title, systemImage: action.systemImage)
-                        }
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 5)
-                        .background {
-                            AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight * 0.75) {
-                                Color.clear
-                        }
+                ForEach(quickActions) { action in
+                    Button(role: action.role) {
+                        action.action()
+                    } label: {
+                        Label(action.title, systemImage: action.systemImage)
                     }
                 }
-                .accessibilityLabel(String(format: AppLocalization.string("%@更多操作"), title))
+            }
+        }
+        .accessibilityLabel("\(title)：\(value)")
+        .accessibilityHint(String(format: AppLocalization.string("打开%@详情"), title))
+        .accessibilityActions {
+            ForEach(quickActions) { action in
+                Button(action.title) {
+                    action.action()
+                }
             }
         }
     }

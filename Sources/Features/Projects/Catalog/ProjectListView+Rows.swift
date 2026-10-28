@@ -140,6 +140,18 @@ struct ProjectWorkspaceView: View {
             ProjectWorkspaceDetail(selectedProjectID: selectedProjectID)
         }
         .navigationSplitViewStyle(.balanced)
+        .onAppear {
+            if selectedProjectID == nil, usesExpandedPhoneSidebar {
+                selectedProjectID = projectStore.projects.first(where: { $0.status == .active })?.id
+                    ?? projectStore.projects.first?.id
+            }
+        }
+        .onChange(of: usesExpandedPhoneSidebar) { _, isExpanded in
+            if isExpanded, selectedProjectID == nil {
+                selectedProjectID = projectStore.projects.first(where: { $0.status == .active })?.id
+                    ?? projectStore.projects.first?.id
+            }
+        }
         .onChange(of: projectStore.projects.map(\.id)) { _, ids in
             if let selectedProjectID, !ids.contains(selectedProjectID) {
                 self.selectedProjectID = nil
