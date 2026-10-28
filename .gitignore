@@ -68,6 +68,8 @@ AppStoreMetadata/engineering-bookkeeping-quote-review/
 *.xcresult.zip
 
 # Local credentials and signing material
+.local-material-guard/
+.local-materials/
 .env
 .env.*
 !.env.example

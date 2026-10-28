@@ -3,7 +3,14 @@ import Testing
 import UIKit
 @testable import sitekeeper
 
-@Suite(.serialized)
+@Suite(
+    .serialized,
+    .enabled(
+        if: ProcessInfo.processInfo.environment["UITEST_VALIDATION_ISOLATED"] == "1"
+            && Bundle.main.bundleIdentifier?.contains(".validation.followup.") == true,
+        "Requires explicit opt-in and an independently prepared validation app"
+    )
+)
 @MainActor
 struct ThumbnailRuntimeValidationTests {
     @Test func photoStorageReplacementDeletionAndRestoreInvalidatePixels() async throws {

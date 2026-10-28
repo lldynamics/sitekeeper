@@ -29,10 +29,13 @@ def install_thumbnail_fixture(output: Path, manifest: dict) -> None:
     """Add the opt-in UI surface only to the isolated application copy."""
     fixture = Path("scripts/tests/fixtures/Phase2ThumbnailValidationView.swift")
     target = Path("Sources/App/Phase2ThumbnailValidationView.swift")
+    fixture_bytes = (output / fixture).read_bytes()
     if (output / target).exists():
-        raise RuntimeError("The validation fixture must not already be in the app target")
-    (output / target).write_bytes((output / fixture).read_bytes())
-    manifest["injected_files"] = {str(target): helpers.fingerprint(output / target)}
+        if (output / target).read_bytes() != fixture_bytes:
+            raise RuntimeError("Existing validation fixture differs; review before preparing")
+    else:
+        (output / target).write_bytes(fixture_bytes)
+        manifest["injected_files"] = {str(target): helpers.fingerprint(output / target)}
     app_path = Path("Sources/App/SitekeeperApp.swift")
     app = (output / app_path).read_text()
     anchor = "    private var rootContent: some View {\n        normalRootContent\n    }"

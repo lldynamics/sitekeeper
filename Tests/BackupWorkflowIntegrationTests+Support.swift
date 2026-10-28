@@ -32,6 +32,8 @@ final class BackupWorkflowIntegrationFixture {
     }
 
     static func make() async throws -> BackupWorkflowIntegrationFixture {
+        try #require(ProcessInfo.processInfo.environment["UITEST_VALIDATION_ISOLATED"] == "1")
+        try #require(Bundle.main.bundleIdentifier?.contains(".validation.followup.") == true)
         let fixture = try BackupWorkflowIntegrationFixture()
         do {
             await fixture.store.awaitInitialLoad()
@@ -149,7 +151,9 @@ final class BackupWorkflowIntegrationFixture {
             dataStore.initialLoadTask?.cancel()
             dataStore.dataHealthScanTask?.cancel()
         }
-        for name in fileNames { QuickNoteAttachmentStorage.delete(fileName: name) }
+        FileQuarantineStore.withRootURLForTesting(root.appendingPathComponent("quarantine")) {
+            for name in fileNames { QuickNoteAttachmentStorage.delete(fileName: name) }
+        }
         try? FileManager.default.removeItem(at: root)
     }
 }

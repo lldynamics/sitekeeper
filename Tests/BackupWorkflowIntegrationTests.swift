@@ -3,7 +3,14 @@ import Testing
 @testable import sitekeeper
 
 @MainActor
-@Suite(.serialized)
+@Suite(
+    .serialized,
+    .enabled(
+        if: ProcessInfo.processInfo.environment["UITEST_VALIDATION_ISOLATED"] == "1"
+            && Bundle.main.bundleIdentifier?.contains(".validation.followup.") == true,
+        "Requires explicit opt-in and an independently prepared validation app"
+    )
+)
 struct BackupWorkflowIntegrationTests {
     @Test func liveMergeRenamesCollidingAttachmentAndPersistsAcrossReload() async throws {
         let fixture = try await BackupWorkflowIntegrationFixture.make()
