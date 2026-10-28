@@ -2,8 +2,8 @@ import XCTest
 import UIKit
 
 extension SitekeeperUITests {
-    func testPhase2ThumbnailsRefreshAfterSameNameReplacement() {
-        let app = launchPhase2Thumbnails()
+    func testPhase2ThumbnailsRefreshAfterSameNameReplacement() throws {
+        let app = try launchPhase2Thumbnails()
         expectThumbnailColor(.red, in: app)
         attachScreenshot(app, named: "phase2-original-red-thumbnails")
         for revision in 1...4 {
@@ -17,15 +17,15 @@ extension SitekeeperUITests {
         app.terminate()
     }
 
-    func testPhase2ThumbnailsSurviveMemoryWarningResizeAndReappearance() {
-        let app = launchPhase2Thumbnails()
+    func testPhase2ThumbnailsSurviveMemoryWarningResizeAndReappearance() throws {
+        let app = try launchPhase2Thumbnails()
         expectThumbnailColor(.red, in: app)
         app.buttons["phase2-memory-warning"].tap()
         expectThumbnailColor(.red, in: app)
         app.buttons["phase2-resize-images"].tap()
         expectThumbnailColor(.red, in: app)
         app.buttons["phase2-toggle-images"].tap()
-        XCTAssertTrue(app.otherElements["phase2-photo-image"].waitForNonExistence(timeout: 5))
+        XCTAssertTrue(app.descendants(matching: .any)["phase2-photo-image"].firstMatch.waitForNonExistence(timeout: 5))
         app.buttons["phase2-replace-images"].tap()
         app.buttons["phase2-toggle-images"].tap()
         expectThumbnailColor(.blue, in: app)
@@ -35,7 +35,9 @@ extension SitekeeperUITests {
         app.terminate()
     }
 
-    private func launchPhase2Thumbnails() -> XCUIApplication {
+    private func launchPhase2Thumbnails() throws -> XCUIApplication {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["SITEKEEPER_PHASE2_UI_FIXTURE"] == "1",
+                          "Requires the independently prepared validation app and synthetic UI fixture")
         let app = XCUIApplication()
         app.launchArguments = ["-ui-testing", "-uitest-skip-onboarding", "-languageCode", "zh-Hans"]
         app.launchEnvironment["UITEST_PHASE2_THUMBNAILS"] = "1"

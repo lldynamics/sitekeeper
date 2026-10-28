@@ -65,6 +65,11 @@ let package = Package(
             name: "ThumbnailImageBenchmarks",
             dependencies: ["ThumbnailCacheCore"],
             path: "HostTests/ThumbnailBenchmarks"
+        ),
+        .testTarget(
+            name: "ThumbnailHostMemoryTests",
+            dependencies: ["ThumbnailCacheCore"],
+            path: "HostTests/ThumbnailMemory"
         )
     ],
     swiftLanguageModes: [.v5]
