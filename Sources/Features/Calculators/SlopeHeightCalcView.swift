@@ -1,28 +1,5 @@
 import SwiftUI
 
-private enum SiteLengthUnit: String, CaseIterable, Identifiable {
-    case meters = "m"
-    case centimeters = "cm"
-    case millimeters = "mm"
-
-    var id: String { rawValue }
-    var metersPerUnit: Double {
-        switch self {
-        case .meters: 1
-        case .centimeters: 0.01
-        case .millimeters: 0.001
-        }
-    }
-}
-
-private enum SiteSlopeUnit: String, CaseIterable, Identifiable {
-    case percent = "%"
-    case perMille = "‰"
-    case ratio = "1:n"
-
-    var id: String { rawValue }
-}
-
 struct SlopeHeightCalcView: View {
     @State private var calculatesHeight = true
     @State private var distance = ""
@@ -123,28 +100,33 @@ struct SlopeHeightCalcView: View {
         resultModel = nil
         let distanceInput = distanceRule.validate(distance)
         guard distanceInput.errorMessage == nil, let rawDistance = distanceInput.doubleValue else { return }
-        let distanceMeters = rawDistance * distanceUnit.metersPerUnit
-        let gradient: Double
-        let heightMeters: Double
+        let calculation: Result<SlopeHeightMetrics, CalculationError>
         if calculatesHeight {
             let slopeInput = slopeRule.validate(slope)
             guard slopeInput.errorMessage == nil, let value = slopeInput.doubleValue else { return }
-            switch slopeUnit {
-            case .percent: gradient = value / 100
-            case .perMille: gradient = value / 1000
-            case .ratio: gradient = 1 / value
-            }
-            heightMeters = distanceMeters * gradient
+            calculation = SlopeHeightCalculation.fromSlope(
+                horizontalDistance: rawDistance, distanceUnit: distanceUnit,
+                slope: value, slopeUnit: slopeUnit
+            )
         } else {
             let heightInput = heightRule.validate(height)
             guard heightInput.errorMessage == nil, let value = heightInput.doubleValue else { return }
-            heightMeters = value * heightUnit.metersPerUnit
-            gradient = heightMeters / distanceMeters
+            calculation = SlopeHeightCalculation.fromHeight(
+                horizontalDistance: rawDistance, distanceUnit: distanceUnit,
+                height: value, heightUnit: heightUnit
+            )
         }
-        guard gradient.isFinite, heightMeters.isFinite else {
+        guard case .success(let metrics) = calculation else {
             resultModel = .error(calculatorLoc("计算结果超出可表示范围，请减小输入。"))
             return
         }
+        resultModel = makeResult(for: metrics)
+    }
+
+    private func makeResult(for metrics: SlopeHeightMetrics) -> CalculationResult {
+        let distanceMeters = metrics.distanceMeters
+        let heightMeters = metrics.heightMeters
+        let gradient = metrics.gradient
         let direction = gradient == 0 ? calculatorLoc("水平") : calculatorLoc(rises ? "上升" : "下降")
         let ratio = gradient == 0
             ? calculatorLoc("水平（无高差）")
@@ -169,7 +151,7 @@ struct SlopeHeightCalcView: View {
             input: calculatorLocFormat("水平距离 %@ %@；%@；%@", distance, distanceUnit.rawValue, knownInput, direction),
             result: result.plainText(title: calculatorLoc("坡度与高差"))
         )
-        resultModel = result
+        return result
     }
 
     private func formatted(_ value: Double) -> String {

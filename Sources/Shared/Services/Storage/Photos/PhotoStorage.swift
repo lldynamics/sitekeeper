@@ -91,9 +91,9 @@ enum PhotoStorage {
         return PhotoCache.shared.thumbnail(for: name)
     }
 
-    static func thumbnailAsync(for fileName: String?) async -> UIImage? {
+    static func thumbnailAsync(for fileName: String?, maxPixelSize: CGFloat = 512) async -> UIImage? {
         guard let name = fileName else { return nil }
-        return await PhotoCache.shared.thumbnailAsync(for: name)
+        return await PhotoCache.shared.thumbnailAsync(for: name, maxPixelSize: maxPixelSize)
     }
 
     /// 公开文件 URL（供缓存使用）
@@ -127,6 +127,7 @@ enum PhotoStorage {
     }
 
     static func deleteOrThrow(fileName: String) throws {
+        defer { PhotoCache.shared.invalidate(fileName: fileName) }
         let manager = FileManager.default
         let targets: [(url: URL, category: FileQuarantineCategory)] = [
             (fileURL(for: fileName), .photoOriginal),

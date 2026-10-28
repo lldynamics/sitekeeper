@@ -98,9 +98,13 @@ struct DashboardInventoryPill: View {
                 .foregroundStyle(color)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(AppSpacing.tight + 1)
+        .padding(AppSpacing.tight + 2)
         .background {
-            AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
+            AppSurface(
+                tone: .tertiary,
+                cornerRadius: 10,
+                stroke: Color(uiColor: .separator).opacity(0.12)
+            ) {
                 Color.clear
             }
         }
@@ -157,9 +161,11 @@ struct DashboardPanel<Content: View>: View {
 private struct DashboardPanelSurfaceModifier: ViewModifier {
     func body(content: Content) -> some View {
         AppPanel(
-            tone: .materialThin,
-            cornerRadius: AppSpacing.tight,
-            padding: AppSpacing.normal + 2
+            tone: .grouped,
+            cornerRadius: 16,
+            padding: AppSpacing.normal,
+            shadow: .card,
+            stroke: Color(uiColor: .separator).opacity(0.18)
         ) {
             content
         }
@@ -194,6 +200,16 @@ struct LogPreviewRow: View {
                 .foregroundStyle(.secondary)
                 .appListSecondaryTextLayout()
         }
+        .padding(.horizontal, AppSpacing.normal - 2)
+        .padding(.vertical, AppSpacing.tight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
+        )
         .accessibilityElement(children: .combine)
     }
 }
@@ -222,6 +238,16 @@ struct TodoPreviewRow: View {
             }
             Spacer()
         }
+        .padding(.horizontal, AppSpacing.normal - 2)
+        .padding(.vertical, AppSpacing.tight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
+        )
         .accessibilityElement(children: .combine)
     }
 
@@ -269,6 +295,16 @@ struct IssueRow: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
         }
+        .padding(.horizontal, AppSpacing.normal - 2)
+        .padding(.vertical, AppSpacing.tight)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
+        )
         .accessibilityElement(children: .combine)
     }
 }
@@ -280,7 +316,11 @@ struct EmptyDashboardRow: View {
         Text(text)
             .font(.callout)
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, minHeight: 42, alignment: .center)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .center)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(Color(uiColor: .tertiarySystemGroupedBackground).opacity(0.6))
+            )
             .accessibilityLabel(text)
     }
 }

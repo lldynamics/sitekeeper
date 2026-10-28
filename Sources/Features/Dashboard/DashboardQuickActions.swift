@@ -14,15 +14,10 @@ struct DashboardQuickActions: View {
     let onTrigger: (String) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            Label(AppLocalization.string("快速录入"), systemImage: "plus.circle.fill")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-
+        DashboardPanel(title: AppLocalization.string("快速录入"), systemImage: "bolt.fill") {
             DashboardQuickActionLayout(prefersSingleColumn: dynamicTypeSize.isAccessibilitySize) {
                 DashboardQuickActionButtons(items: items, onTrigger: onTrigger)
             }
-            .padding(.vertical, AppSpacing.tight * 0.25)
         }
     }
 }

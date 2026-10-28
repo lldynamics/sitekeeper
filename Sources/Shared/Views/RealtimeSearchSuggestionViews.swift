@@ -5,7 +5,7 @@ struct InlineSearchPanel: View {
     let prompt: String
     var suggestions: [RealtimeSearchSuggestion] = []
     var emptyStateText: String = AppLocalization.string("未找到匹配内容")
-    var materialTone: AppSurfaceTone = .materialThin
+    var materialTone: AppSurfaceTone = .grouped
     let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
 
     private var trimmedText: String {
@@ -19,8 +19,10 @@ struct InlineSearchPanel: View {
     var body: some View {
         AppPanel(
             tone: materialTone,
-            cornerRadius: AppSpacing.normal - 2,
-            padding: 0
+            cornerRadius: 14,
+            padding: 0,
+            shadow: .card,
+            stroke: Color(uiColor: .separator).opacity(0.18)
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: AppSpacing.tight + 2) {

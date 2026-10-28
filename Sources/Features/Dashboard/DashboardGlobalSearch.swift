@@ -25,7 +25,7 @@ struct DashboardGlobalSearch: View {
                 prompt: AppLocalization.string("搜索项目、票号、报价、图纸或资料"),
                 suggestions: suggestions,
                 emptyStateText: AppLocalization.string("未找到匹配的业务记录或命令"),
-                materialTone: .materialThin,
+                materialTone: .grouped,
                 onSelectSuggestion: { suggestion in
                     text = ""
                     onSelect(suggestion)

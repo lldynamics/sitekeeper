@@ -164,7 +164,11 @@ struct TodayMiniAction: View {
             .padding(.vertical, verticalPadding)
             .contentShape(Rectangle())
             .background {
-                AppSurface(tone: .grouped, cornerRadius: AppSpacing.tight) {
+                AppSurface(
+                    tone: .tertiary,
+                    cornerRadius: 12,
+                    stroke: Color(uiColor: .separator).opacity(0.12)
+                ) {
                     Color.clear
                 }
             }

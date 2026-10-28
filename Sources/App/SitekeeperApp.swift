@@ -25,6 +25,19 @@ struct SitekeeperApp: App {
 
     @ViewBuilder
     private var rootContent: some View {
+#if DEBUG && targetEnvironment(simulator)
+        if Phase2ThumbnailValidationView.isRequested {
+            Phase2ThumbnailValidationView()
+        } else {
+            normalRootContent
+        }
+#else
+        normalRootContent
+#endif
+    }
+
+    @ViewBuilder
+    private var normalRootContent: some View {
         let rootView = RootView()
             .environment(store)
             .environment(store.projectStore)

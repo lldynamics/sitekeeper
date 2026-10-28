@@ -45,6 +45,7 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func saveDataOrThrow(_ data: Data, fileName: String) throws -> String {
+        defer { StorageThumbnailCache.invalidate(resourceURL: fileURL(for: fileName)) }
         try fileFamily.writeDataOrThrow(data, fileName: fileName)
         return fileName
     }
@@ -109,10 +110,9 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func thumbnailAsync(for fileName: String, maxPixelSize: CGFloat) async -> UIImage? {
-        await ImageDownsampleService.downsampledImageAsync(
-            at: fileURL(for: fileName),
-            maxPixelSize: maxPixelSize,
-            source: "QuickNoteAttachmentStorage.thumbnailAsync"
+        await StorageThumbnailCache.image(
+            for: ThumbnailCacheKey(resourceURL: fileURL(for: fileName), maxPixelSize: Double(maxPixelSize)),
+            sourceURL: fileURL(for: fileName)
         )
     }
 
@@ -149,6 +149,7 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func deleteOrThrow(fileName: String) throws {
+        defer { StorageThumbnailCache.invalidate(resourceURL: fileURL(for: fileName)) }
         try fileFamily.deleteOrThrow(
             fileName: fileName,
             quarantineCategory: .quickNoteAttachment,
@@ -218,6 +219,7 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func restoreOrThrow(_ files: [QuickNoteAttachmentBackupFile]) throws {
+        defer { files.forEach { StorageThumbnailCache.invalidate(resourceURL: fileURL(for: $0.fileName)) } }
         try fileFamily.restoreOrThrow(files.map { ($0.fileName, $0.data) })
     }
 
@@ -249,6 +251,8 @@ enum QuickNoteAttachmentStorage {
     }
 
     static func clearAttachmentsDirectory() {
+        StorageThumbnailCache.invalidate(directoryURL: attachmentDir)
+        defer { StorageThumbnailCache.invalidate(directoryURL: attachmentDir) }
         do {
             _ = try FileOps.removeIfExists(
                 at: attachmentDir,

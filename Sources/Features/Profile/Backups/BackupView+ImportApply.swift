@@ -32,205 +32,116 @@ extension BackupView {
         )
 
         importTask = Task {
-            var failureStage = BackupImportStage.readingMetadata
-            var failureDetail = ""
             do {
-                let snapshot: BackupSnapshot
-                if let metadataSnapshot {
-                    snapshot = metadataSnapshot
-                } else {
-                    let preview = try await FileIOTaskRunner.runWithRelay(
-                        priority: .userInitiated,
-                        logContext: .init(
-                            event: "backup.import.preview_fallback",
-                            source: "BackupView.startApplyingImport",
-                            category: .zipArchive,
-                            details: ["file_name": pendingImportFileURL.lastPathComponent]
-                        )
-                    ) { relay in
-                        try BackupArchiveService.previewBackup(
-                            from: pendingImportFileURL,
-                            progress: { progress in
-                                Task { @MainActor in
-                                    importProgress = progress
-                                }
-                            },
-                            shouldCancel: { relay.isCancelled() || Task.isCancelled }
-                        )
-                    }
-                    snapshot = preview.snapshot
-                }
-                guard !Task.isCancelled else {
-                    await MainActor.run {
-                        finalizeImportTask(
-                            status: AppLocalization.string("已取消导入，当前数据未变更。"),
-                            cleanupPendingFile: true,
-                            closePreview: true
-                        )
-                        OperationAuditLog.record(
-                            action: .import,
-                            outcome: .cancelled,
-                            summary: AppLocalization.string("已取消导入，当前数据未变更。"),
-                            detail: failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent),
-                            source: "BackupView"
-                        )
-                    }
-                    return
-                }
-
-                let (existingSnapshot, selectedImportMode) = await MainActor.run {
-                    (store.makeSnapshot(includePhotoFiles: false), importMode)
-                }
-                let overwrittenLocalFiles = selectedImportMode == .overwrite
-                    ? BackupImportCoordinator.overwrittenLocalFiles(previous: existingSnapshot, imported: snapshot)
-                    : BackupFileImpactSummary()
-
-                failureStage = .stagingFiles
-                failureDetail = failureStage.auditDetail(
-                    fileName: pendingImportFileURL.lastPathComponent,
-                    extra: selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"
-                )
-                await MainActor.run {
-                    importProgressTitle = AppLocalization.string("正在恢复原文件")
-                    importProgress = BackupImportProgress(
-                        completedBytes: 0,
-                        totalBytes: sourceSize,
-                        currentItem: AppLocalization.string("准备恢复")
-                    )
-                }
-
-                let restoreTransaction = try await FileIOTaskRunner.runWithRelay(
-                    priority: .userInitiated,
-                    logContext: .init(
-                        event: "backup.import.prepare_restore",
-                        source: "BackupView.startApplyingImport",
-                        category: .zipArchive,
-                        details: ["file_name": pendingImportFileURL.lastPathComponent]
-                    )
-                ) { relay in
-                    try BackupArchiveService.prepareEmbeddedFileRestore(
-                        from: pendingImportFileURL,
-                        progress: { progress in
-                            Task { @MainActor in
-                                importProgress = progress
-                            }
-                        },
-                        shouldCancel: { relay.isCancelled() || Task.isCancelled }
-                    )
-                }
-                guard !Task.isCancelled else {
-                    restoreTransaction.cancel()
-                    throw BackupArchiveError.cancelled
-                }
-
-                failureStage = .applyingMetadata
-                failureDetail = failureStage.auditDetail(
-                    fileName: pendingImportFileURL.lastPathComponent,
-                    extra: selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"
-                )
-                await MainActor.run {
-                    importProgressTitle = AppLocalization.string("正在应用数据索引")
-                }
-
-                failureStage = .committingFiles
-                failureDetail = failureStage.auditDetail(
-                    fileName: pendingImportFileURL.lastPathComponent,
-                    extra: "restore=\(restoreTransaction.counts.totalCount)"
-                )
-                await MainActor.run {
-                    importProgressTitle = AppLocalization.string("正在提交原文件")
-                    importProgress = BackupImportProgress(
-                        completedBytes: sourceSize,
-                        totalBytes: max(sourceSize, 1),
-                        currentItem: AppLocalization.string("提交原文件")
-                    )
-                }
-
-                let restoredCounts = try await BackupImportCoordinator.commitAndPersistImport(
-                    restoreTransaction: restoreTransaction,
-                    importedSnapshot: snapshot,
-                    previousSnapshot: existingSnapshot,
-                    importMode: selectedImportMode,
-                    store: store,
-                    sourceFileName: pendingImportFileURL.lastPathComponent,
-                    onPersistingMetadata: {
-                        failureStage = .persistingMetadata
-                        failureDetail = failureStage.auditDetail(
-                            fileName: pendingImportFileURL.lastPathComponent
-                        )
-                        importProgressTitle = AppLocalization.string("正在写入本地数据")
-                        importProgress = BackupImportProgress(
-                            completedBytes: sourceSize,
-                            totalBytes: max(sourceSize, 1),
-                            currentItem: AppLocalization.string("写入数据索引")
-                        )
+                let result = try await BackupImportWorkflow.run(
+                    sourceURL: pendingImportFileURL,
+                    preparedMetadata: metadataSnapshot,
+                    operations: LiveBackupImportWorkflowOperations(store: store, selectedImportMode: { importMode }),
+                    onEvent: { event in
+                        presentImportWorkflowEvent(event, sourceSize: sourceSize)
                     }
                 )
-
-                failureStage = .cleaningOverwrittenFiles
-                failureDetail = failureStage.auditDetail(
-                    fileName: pendingImportFileURL.lastPathComponent,
-                    extra: "remove=\(overwrittenLocalFiles.totalCount)"
-                )
-                await MainActor.run {
-                    if selectedImportMode == .overwrite {
-                        BackupImportCoordinator.cleanupOverwrittenFiles(previous: existingSnapshot, imported: snapshot)
-                    }
-                    isImportingBackup = false
-                    importTask = nil
-                    showPreview = false
-                    lastImportSucceeded = true
-                    lastExportSucceeded = false
-                    hasSeenBackupGuide = true
-                    if restoredCounts.totalCount > 0 {
-                        setStatus(String(format: AppLocalization.string("导入完成（恢复 %d 个原文件）"), restoredCounts.totalCount))
-                    } else {
-                        setStatus(AppLocalization.string("导入完成"))
-                    }
-                    OperationAuditLog.record(
-                        action: .import,
-                        outcome: .succeeded,
-                        summary: AppLocalization.string("导入完成"),
-                        detail: BackupImportStage.cleaningOverwrittenFiles.auditDetail(
-                            fileName: pendingImportFileURL.lastPathComponent,
-                            extra: "\(selectedImportMode == .overwrite ? "mode=overwrite" : "mode=merge"), restore=\(restoredCounts.totalCount), remove=\(overwrittenLocalFiles.totalCount)"
-                        ),
-                        source: "BackupView"
-                    )
-                    cleanupPendingImportFileIfNeeded()
-                }
+                finishApplyingImport(result, sourceURL: pendingImportFileURL)
             } catch {
-                guard !Task.isCancelled else {
-                    await MainActor.run {
-                        finalizeImportTask(
-                            status: AppLocalization.string("已取消导入，当前数据未变更。"),
-                            cleanupPendingFile: true,
-                            closePreview: true
-                        )
-                        OperationAuditLog.record(
-                            action: .import,
-                            outcome: .cancelled,
-                            summary: AppLocalization.string("已取消导入，当前数据未变更。"),
-                            detail: failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent),
-                            source: "BackupView"
-                        )
-                    }
-                    return
-                }
-                await MainActor.run {
-                    isImportingBackup = false
-                    importTask = nil
-                    setStatus(failureStage.failureSummary(error: error))
-                    OperationAuditLog.record(
-                        action: .import,
-                        outcome: .failed,
-                        summary: failureStage.failureSummary(error: error),
-                        detail: failureDetail.isEmpty
-                            ? failureStage.auditDetail(fileName: pendingImportFileURL.lastPathComponent)
-                            : failureDetail,
-                        source: "BackupView"
-                    )
-                }
+                presentApplyingImportFailure(error, sourceURL: pendingImportFileURL)
+            }
+        }
+    }
+
+    private func finishApplyingImport(_ result: BackupImportWorkflowResult, sourceURL: URL) {
+        isImportingBackup = false
+        importTask = nil
+        showPreview = false
+        lastImportSucceeded = true
+        lastExportSucceeded = false
+        hasSeenBackupGuide = true
+        if result.restoredFileCount > 0 {
+            setStatus(String(format: AppLocalization.string("导入完成（恢复 %d 个原文件）"), result.restoredFileCount))
+        } else {
+            setStatus(AppLocalization.string("导入完成"))
+        }
+        OperationAuditLog.record(
+            action: .import,
+            outcome: .succeeded,
+            summary: AppLocalization.string("导入完成"),
+            detail: BackupImportStage.cleaningOverwrittenFiles.auditDetail(
+                fileName: sourceURL.lastPathComponent,
+                extra: "mode=\(result.mode.rawValue), restore=\(result.restoredFileCount), remove=\(result.overwrittenFileCount)"
+            ),
+            source: "BackupView"
+        )
+        cleanupPendingImportFileIfNeeded()
+    }
+
+    private func presentApplyingImportFailure(_ error: Error, sourceURL: URL) {
+        let failure = error as? BackupImportWorkflowFailure
+        let stage = failure?.phase.importStage ?? .readingMetadata
+        if failure?.cancelledBeforeCommit == true {
+            finalizeImportTask(
+                status: AppLocalization.string("已取消导入，当前数据未变更。"),
+                cleanupPendingFile: true,
+                closePreview: true
+            )
+            OperationAuditLog.record(
+                action: .import,
+                outcome: .cancelled,
+                summary: AppLocalization.string("已取消导入，当前数据未变更。"),
+                detail: stage.auditDetail(fileName: sourceURL.lastPathComponent),
+                source: "BackupView"
+            )
+            return
+        }
+        let underlyingError = failure?.underlyingError ?? error
+        isImportingBackup = false
+        importTask = nil
+        setStatus(stage.failureSummary(error: underlyingError))
+        OperationAuditLog.record(
+            action: .import,
+            outcome: .failed,
+            summary: stage.failureSummary(error: underlyingError),
+            detail: stage.auditDetail(
+                fileName: sourceURL.lastPathComponent,
+                extra: failure?.auditExtra
+            ),
+            source: "BackupView"
+        )
+    }
+
+    private func presentImportWorkflowEvent(_ event: BackupImportWorkflowEvent, sourceSize: Int64) {
+        switch event {
+        case let .progress(_, progress):
+            importProgress = BackupImportProgress(
+                completedBytes: progress.completedBytes,
+                totalBytes: progress.totalBytes,
+                currentItem: progress.currentItem
+            )
+        case let .phase(phase):
+            switch phase {
+            case .readingMetadata, .cleaningOverwrittenFiles:
+                break
+            case .stagingFiles:
+                importProgressTitle = AppLocalization.string("正在恢复原文件")
+                importProgress = BackupImportProgress(
+                    completedBytes: 0,
+                    totalBytes: sourceSize,
+                    currentItem: AppLocalization.string("准备恢复")
+                )
+            case .applyingMetadata:
+                importProgressTitle = AppLocalization.string("正在应用数据索引")
+            case .committingFiles:
+                importProgressTitle = AppLocalization.string("正在提交原文件")
+                importProgress = BackupImportProgress(
+                    completedBytes: sourceSize,
+                    totalBytes: max(sourceSize, 1),
+                    currentItem: AppLocalization.string("提交原文件")
+                )
+            case .persistingMetadata:
+                importProgressTitle = AppLocalization.string("正在写入本地数据")
+                importProgress = BackupImportProgress(
+                    completedBytes: sourceSize,
+                    totalBytes: max(sourceSize, 1),
+                    currentItem: AppLocalization.string("写入数据索引")
+                )
             }
         }
     }

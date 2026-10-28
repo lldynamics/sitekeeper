@@ -176,6 +176,16 @@ extension DashboardView {
                             )
                         } label: {
                             WarehouseMovementRow(movement: movement)
+                                .padding(.horizontal, AppSpacing.normal - 2)
+                                .padding(.vertical, AppSpacing.tight)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
+                                )
                         }
                         .buttonStyle(.plain)
                     }

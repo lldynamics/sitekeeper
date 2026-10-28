@@ -1,17 +1,9 @@
 import UIKit
 
+/// Project rows use the storage cache directly so replacement/deletion invalidation
+/// cannot leave a second, independent image cache holding stale pixels.
 enum ProjectFileThumbnailCache {
-    private final class Storage: @unchecked Sendable {
-        let cache = NSCache<NSString, UIImage>()
-    }
-
-    private static let storage = Storage()
-
-    static func image(for key: String) -> UIImage? {
-        storage.cache.object(forKey: key as NSString)
-    }
-
-    static func store(_ image: UIImage, for key: String) {
-        storage.cache.setObject(image, forKey: key as NSString)
+    static func image(for token: ProjectFileThumbnailToken) async -> UIImage? {
+        await token.loadImageAsync()
     }
 }

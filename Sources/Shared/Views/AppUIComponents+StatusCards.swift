@@ -28,6 +28,7 @@ enum AppSurfaceTone {
 
 enum AppSurfaceShadow {
     case none
+    case subtle
     case card
     case overlay
 
@@ -35,10 +36,12 @@ enum AppSurfaceShadow {
         switch self {
         case .none:
             .clear
+        case .subtle:
+            .black.opacity(0.025)
         case .card:
-            .black.opacity(0.06)
+            .black.opacity(0.04)
         case .overlay:
-            .black.opacity(0.12)
+            .black.opacity(0.08)
         }
     }
 
@@ -46,10 +49,12 @@ enum AppSurfaceShadow {
         switch self {
         case .none:
             0
+        case .subtle:
+            4
         case .card:
-            6
+            8
         case .overlay:
-            12
+            14
         }
     }
 
@@ -57,17 +62,19 @@ enum AppSurfaceShadow {
         switch self {
         case .none:
             0
+        case .subtle:
+            1
         case .card:
-            2
+            2.5
         case .overlay:
-            4
+            5
         }
     }
 }
 
 struct AppSurface<Content: View>: View {
     let tone: AppSurfaceTone
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = 16
     var shadow: AppSurfaceShadow = .none
     var stroke: Color? = nil
     var strokeWidth: CGFloat = 0.5
@@ -75,7 +82,7 @@ struct AppSurface<Content: View>: View {
 
     init(
         tone: AppSurfaceTone = .grouped,
-        cornerRadius: CGFloat = 12,
+        cornerRadius: CGFloat = 16,
         shadow: AppSurfaceShadow = .none,
         stroke: Color? = nil,
         strokeWidth: CGFloat = 0.5,
@@ -109,18 +116,18 @@ struct AppSurface<Content: View>: View {
 
 struct AppPanel<Content: View>: View {
     let tone: AppSurfaceTone
-    var cornerRadius: CGFloat = 12
+    var cornerRadius: CGFloat = 16
     var padding: CGFloat = AppSpacing.normal
-    var shadow: AppSurfaceShadow = .none
-    var stroke: Color? = nil
+    var shadow: AppSurfaceShadow = .card
+    var stroke: Color? = Color(uiColor: .separator).opacity(0.18)
     @ViewBuilder let content: Content
 
     init(
         tone: AppSurfaceTone = .grouped,
-        cornerRadius: CGFloat = 12,
+        cornerRadius: CGFloat = 16,
         padding: CGFloat = AppSpacing.normal,
-        shadow: AppSurfaceShadow = .none,
-        stroke: Color? = nil,
+        shadow: AppSurfaceShadow = .card,
+        stroke: Color? = Color(uiColor: .separator).opacity(0.18),
         @ViewBuilder content: () -> Content
     ) {
         self.tone = tone

@@ -4,19 +4,19 @@ extension ProjectFileThumbnailToken {
     func loadImageAsync() async -> UIImage? {
         switch self {
         case .photo(let fileName):
-            return await PhotoStorage.thumbnailAsync(for: fileName)
+            return await PhotoStorage.thumbnailAsync(for: fileName, maxPixelSize: 256)
         case .quickNote(let kind, let fileName):
             switch kind {
             case .photo, .drawing:
-                guard let data = await QuickNoteAttachmentStorage.dataAsync(for: fileName) else { return nil }
-                return await loadDetachedThumbnail {
-                    guard !Task.isCancelled else { return nil }
-                    return ImageDownsampleService.downsampledImage(data, maxPixelSize: 256)
-                }
+                return await QuickNoteAttachmentStorage.thumbnailAsync(for: fileName, maxPixelSize: 256)
             case .video:
-                return await loadDetachedThumbnail {
-                    guard !Task.isCancelled else { return nil }
-                    return QuickNoteAttachmentStorage.videoThumbnail(for: fileName)
+                let key = ThumbnailCacheKey(resourceURL: QuickNoteAttachmentStorage.fileURL(for: fileName),
+                                            maxPixelSize: 512, variant: "video")
+                return await StorageThumbnailCache.image(for: key) {
+                    guard !Task.isCancelled,
+                          let image = QuickNoteAttachmentStorage.videoThumbnail(for: fileName)?.cgImage,
+                          !Task.isCancelled else { return nil }
+                    return DecodedThumbnail(image: image)
                 }
             case .audio, .file:
                 return nil
@@ -24,22 +24,4 @@ extension ProjectFileThumbnailToken {
         }
     }
 
-    private func loadDetachedThumbnail(_ work: @escaping @Sendable () -> UIImage?) async -> UIImage? {
-        do {
-            return try await FileIOTaskRunner.run(
-                priority: .utility,
-                logContext: .init(
-                    event: "project.thumbnail.load",
-                    source: "ProjectFileThumbnailToken.loadDetachedThumbnail",
-                    category: .fileStorage
-                )
-            ) {
-                let image = work()
-                guard !Task.isCancelled else { return nil }
-                return image
-            }
-        } catch {
-            return nil
-        }
-    }
 }

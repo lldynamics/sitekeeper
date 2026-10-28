@@ -128,9 +128,56 @@ struct DashboardSearchModelTests {
         var data = request; data.collectionVersions = [2]
         var language = request; language.language = "en"
         var keyword = request; keyword.keyword = "other"
-        for changed in [project, category, data, language, keyword] {
+        var timezone = request; timezone.timeZoneIdentifier = "Asia/Shanghai"
+        for changed in [project, category, data, language, keyword, timezone] {
             #expect(model.suggestions(for: changed).isEmpty)
         }
+    }
+
+    @Test @MainActor func timezoneRefreshHidesOldDatesAndRejectsEarlierTimezoneWorker() async {
+        let gate = DashboardSearchGate()
+        let shanghai = suggestion("2026-10-28 08:00"), losAngeles = suggestion("2026-10-27 17:00")
+        let model = DashboardSearchModel { _, request in
+            if request.timeZoneIdentifier == "Asia/Shanghai" { await gate.suspend() }
+            return request.timeZoneIdentifier == "Asia/Shanghai" ? [shanghai] : [losAngeles]
+        }
+        let first = DashboardSearchRequest(keyword: "record", timeZoneIdentifier: "Asia/Shanghai")
+        let changed = DashboardSearchRequest(keyword: "record", timeZoneIdentifier: "America/Los_Angeles")
+        let task = Task { await model.refresh(snapshot: .init(), request: first, debounce: .zero) }
+        await gate.waitUntilStarted()
+        await model.refresh(snapshot: .init(), request: changed, debounce: .zero)
+        #expect(model.suggestions(for: first).isEmpty)
+        await gate.release()
+        await task.value
+        #expect(model.suggestions(for: changed) == [losAngeles])
+    }
+
+    @Test @MainActor func replacingAnySourceWithEqualRevisionsInvalidatesRows() async {
+        let store = NSObject(), otherStore = NSObject()
+        let projectStore = ProjectStore(), otherProjectStore = ProjectStore()
+        let financeStore = FinanceStore(), otherFinanceStore = FinanceStore()
+        let record = suggestion("record")
+        let model = DashboardSearchModel { _, _ in [record] }
+        let request = DashboardSearchRequest(
+            keyword: "record", category: .note, collectionVersions: [1, 2, 3],
+            storeSource: ObjectIdentifier(store), projectSource: ObjectIdentifier(projectStore),
+            financeSource: ObjectIdentifier(financeStore)
+        )
+        await model.refresh(snapshot: .init(), request: request, debounce: .zero)
+        var otherRoot = request; otherRoot.storeSource = ObjectIdentifier(otherStore)
+        var otherProject = request; otherProject.projectSource = ObjectIdentifier(otherProjectStore)
+        var otherFinance = request; otherFinance.financeSource = ObjectIdentifier(otherFinanceStore)
+        for changed in [otherRoot, otherProject, otherFinance] {
+            #expect(changed.collectionVersions == request.collectionVersions)
+            #expect(model.suggestions(for: changed).isEmpty)
+        }
+        let oldNote = QuickNote(title: "record old", content: "")
+        let newNote = QuickNote(title: "record new", content: "")
+        let liveModel = DashboardSearchModel()
+        await liveModel.refresh(snapshot: .init(notes: [oldNote]), request: request, debounce: .zero)
+        await liveModel.refresh(snapshot: .init(notes: [newNote]), request: otherProject, debounce: .zero)
+        #expect(liveModel.suggestions(for: otherProject).map(\.entityId) == [newNote.id])
+        #expect(liveModel.suggestions(for: request).isEmpty)
     }
 
     @Test @MainActor func sameCountEditAndDeletionRefreshFromNewSnapshot() async {

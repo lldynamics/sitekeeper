@@ -5,12 +5,13 @@ import AVFoundation
 extension QuickNoteAttachmentStorage {
     static func videoThumbnail(for fileName: String) -> UIImage? {
         let thumbName = videoThumbnailFileName(for: fileName)
-        if let data = data(for: thumbName), let image = UIImage(data: data) {
-            return image
+        if let thumbnail = ThumbnailImageDecoder.decode(at: fileURL(for: thumbName), maxPixelSize: 512) {
+            return UIImage(cgImage: thumbnail.image)
         }
         let asset = AVAsset(url: fileURL(for: fileName))
         let generator = AVAssetImageGenerator(asset: asset)
         generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 512, height: 512)
         let cgImage: CGImage
         do {
             cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
@@ -18,6 +19,7 @@ extension QuickNoteAttachmentStorage {
             DocumentStorageIssueLogger.record("quick_note_attachment.video_thumbnail_failed", fileName: fileName, error: error)
             return nil
         }
+        guard !Task.isCancelled else { return nil }
         let image = UIImage(cgImage: cgImage)
         if let data = image.jpegData(compressionQuality: 0.72) {
             _ = saveData(data, fileName: thumbName)
@@ -46,6 +48,8 @@ extension QuickNoteAttachmentStorage {
     }
 
     static func clearThumbnailCache() {
+        StorageThumbnailCache.invalidate(directoryURL: attachmentDir)
+        defer { StorageThumbnailCache.invalidate(directoryURL: attachmentDir) }
         let files: [URL]
         do {
             files = try FileManager.default.contentsOfDirectory(at: attachmentDir, includingPropertiesForKeys: nil)

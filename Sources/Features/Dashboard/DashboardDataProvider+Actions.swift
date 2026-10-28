@@ -107,7 +107,10 @@ extension DashboardView {
             keyword: dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines),
             projectID: dashboardSearchProjectID, category: dashboardSearchCategory,
             collectionVersions: keys.map { versions[$0, default: 0] },
-            language: dashboardSearchLocale.identifier + AppLanguage.current.resourceLanguageCode
+            language: dashboardSearchLocale.identifier + AppLanguage.current.resourceLanguageCode,
+            timeZoneIdentifier: projectStore.dayContext.calendar.timeZone.identifier,
+            storeSource: ObjectIdentifier(store), projectSource: ObjectIdentifier(projectStore),
+            financeSource: ObjectIdentifier(financeStore)
         )
     }
 

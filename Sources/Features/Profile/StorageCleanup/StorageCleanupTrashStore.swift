@@ -44,7 +44,9 @@ enum StorageCleanupTrashFileKind: String, Codable, Sendable {
         switch self {
         case .photoOriginal, .photoThumbnail:
             PhotoCache.shared.invalidate(fileName: fileName)
-        case .drawing, .quickNoteAttachment, .projectDocument:
+        case .quickNoteAttachment:
+            StorageThumbnailCache.invalidate(resourceURL: originalURL(for: fileName))
+        case .drawing, .projectDocument:
             break
         }
     }

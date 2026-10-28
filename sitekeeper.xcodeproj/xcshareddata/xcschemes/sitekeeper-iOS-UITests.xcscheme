@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Scheme
    LastUpgradeVersion = "2710"
-   version = "1.3">
+   version = "1.7">
    <BuildAction
       parallelizeBuildables = "YES"
-      buildImplicitDependencies = "YES">
+      buildImplicitDependencies = "YES"
+      runPostActionsOnFailure = "NO">
       <BuildActionEntries>
          <BuildActionEntry
             buildForTesting = "YES"
@@ -15,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "976D7DF3C550B78F9AAAE5DD"
-               BuildableName = "&#x5de5;&#x5730;&#x638c;&#x67dc;.app"
+               BuildableName = "sitekeeper-iOS.app"
                BlueprintName = "sitekeeper-iOS"
                ReferencedContainer = "container:sitekeeper.xcodeproj">
             </BuildableReference>
@@ -29,7 +30,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "1798D906DD4780E6FC846714"
-               BuildableName = "SitekeeperWidget.appex"
+               BuildableName = "sitekeeperWidgetExtension.appex"
                BlueprintName = "sitekeeperWidgetExtension"
                ReferencedContainer = "container:sitekeeper.xcodeproj">
             </BuildableReference>
@@ -40,19 +41,21 @@
       buildConfiguration = "Debug"
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
-      shouldUseLaunchSchemeArgsEnv = "YES">
+      shouldUseLaunchSchemeArgsEnv = "YES"
+      onlyGenerateCoverageForSpecifiedTargets = "NO">
       <MacroExpansion>
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "976D7DF3C550B78F9AAAE5DD"
-            BuildableName = "&#x5de5;&#x5730;&#x638c;&#x67dc;.app"
+            BuildableName = "sitekeeper-iOS.app"
             BlueprintName = "sitekeeper-iOS"
             ReferencedContainer = "container:sitekeeper.xcodeproj">
          </BuildableReference>
       </MacroExpansion>
       <Testables>
          <TestableReference
-            skipped = "NO">
+            skipped = "NO"
+            parallelizable = "NO">
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "742297A986618961BD9556D8"
@@ -62,6 +65,8 @@
             </BuildableReference>
          </TestableReference>
       </Testables>
+      <CommandLineArguments>
+      </CommandLineArguments>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -78,7 +83,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "976D7DF3C550B78F9AAAE5DD"
-            BuildableName = "&#x5de5;&#x5730;&#x638c;&#x67dc;.app"
+            BuildableName = "sitekeeper-iOS.app"
             BlueprintName = "sitekeeper-iOS"
             ReferencedContainer = "container:sitekeeper.xcodeproj">
          </BuildableReference>
@@ -95,7 +100,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "976D7DF3C550B78F9AAAE5DD"
-            BuildableName = "&#x5de5;&#x5730;&#x638c;&#x67dc;.app"
+            BuildableName = "sitekeeper-iOS.app"
             BlueprintName = "sitekeeper-iOS"
             ReferencedContainer = "container:sitekeeper.xcodeproj">
          </BuildableReference>

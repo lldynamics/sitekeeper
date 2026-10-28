@@ -115,6 +115,7 @@ enum FileQuarantineStore {
             expiresAt: expiresAt
         )
 
+        defer { invalidateCache(for: entry) }
         try recordQuarantinedEntry(entry, sourceURL: sourceURL, destinationURL: destinationURL)
 
         return true
@@ -262,7 +263,9 @@ enum FileQuarantineStore {
         switch entry.category {
         case .photoOriginal, .photoThumbnail:
             PhotoCache.shared.invalidate(fileName: entry.originalFileName)
-        case .drawing, .drawingSidecar, .projectDocument, .quickNoteAttachment:
+        case .quickNoteAttachment:
+            StorageThumbnailCache.invalidate(resourceURL: URL(fileURLWithPath: entry.originalPath))
+        case .drawing, .drawingSidecar, .projectDocument:
             break
         }
     }

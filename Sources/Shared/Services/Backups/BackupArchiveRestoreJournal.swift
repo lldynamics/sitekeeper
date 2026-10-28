@@ -145,6 +145,8 @@ final class BackupArchiveRestoreJournal {
 
     @discardableResult
     func commitFiles(fault: FaultInjector? = nil) throws -> BackupEmbeddedRestoreCounts {
+        invalidateMemoryThumbnails()
+        defer { invalidateMemoryThumbnails() }
         try fault?(.prepared)
         for (index, entry) in record.entries.enumerated() {
             try fault?(.beforeReplace(index))
@@ -166,6 +168,8 @@ final class BackupArchiveRestoreJournal {
     }
 
     func rollback(fault: FaultInjector? = nil) throws {
+        invalidateMemoryThumbnails()
+        defer { invalidateMemoryThumbnails() }
         if record.phase == .finished {
             try finish()
             return
@@ -277,6 +281,12 @@ final class BackupArchiveRestoreJournal {
 }
 
 private extension BackupArchiveRestoreJournal {
+    func invalidateMemoryThumbnails() {
+        for entry in record.entries where entry.family == .photos || entry.family == .attachments {
+            StorageThumbnailCache.invalidate(resourceURL: entry.family.target(entry.destination))
+        }
+    }
+
     private func refreshThumbnails() {
         PhotoStorage.regenerateThumbnails(for: record.entries.filter { $0.family == .photos }.map(\.destination))
     }

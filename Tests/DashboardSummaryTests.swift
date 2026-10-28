@@ -118,6 +118,28 @@ struct DashboardSummaryTests {
         #expect(cache.buildCount == 1)
     }
 
+    @Test func cacheHitStillRegistersVersionObservation() async {
+        let projects = ProjectStore()
+        let finance = FinanceStore()
+        let cache = DashboardSummaryCache()
+        func get() {
+            _ = cache.value(revision: DashboardSummaryRevision(projectStore: projects, financeStore: finance)) {
+                DashboardSummaryInput(projectStore: projects, financeStore: finance)
+            }
+        }
+        get()
+        await confirmation(expectedCount: 1) { changed in
+            withObservationTracking {
+                get()
+            } onChange: {
+                changed()
+            }
+            projects.setDailyLogs([])
+        }
+        get()
+        #expect(cache.buildCount == 2)
+    }
+
     @Test func everyRelevantCollectionAndSameCountEditsInvalidate() {
         let projects = ProjectStore()
         let finance = FinanceStore()

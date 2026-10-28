@@ -127,24 +127,23 @@ struct DashboardView: View {
                 .accessibilitySortPriority(2)
 
             HStack(alignment: .top, spacing: AppSpacing.normal) {
-                DashboardPanel(title: AppLocalization.string("工作概况"), systemImage: "chart.bar.xaxis") {
-                    ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: AppSpacing.normal) {
-                            currentProjectSelector
-                            todayQuickActions
-                            todayTodoPanel
-                            if showsBusinessOverviewPanel {
-                                businessOverviewPanel
-                            }
-                            warehousePanel
-                            todayLogPanel
-                            overduePanel
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                        currentProjectSelector
+                        todayQuickActions
+                        todayTodoPanel
+                        if showsBusinessOverviewPanel {
+                            businessOverviewPanel
                         }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        warehousePanel
+                        todayLogPanel
+                        overduePanel
                     }
-                    .scrollIndicators(.visible)
-                    .accessibilityIdentifier("dashboard-expanded-phone-overview-scroll")
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 1)
                 }
+                .scrollIndicators(.visible)
+                .accessibilityIdentifier("dashboard-expanded-phone-overview-scroll")
                 .frame(width: overviewWidth)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
 
@@ -160,12 +159,9 @@ struct DashboardView: View {
             }
             .frame(maxHeight: .infinity, alignment: .topLeading)
             .overlay(alignment: .leading) {
-                Rectangle()
-                    .fill(Color.red.opacity(0.28))
-                    .frame(width: 2)
-                    .offset(x: overviewWidth - 1)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
+                ExpandedPhoneColumnDivider()
+                    .frame(width: 1)
+                    .offset(x: overviewWidth + AppSpacing.normal * 0.5 - 0.5)
             }
 
             dashboardRiskStrip
@@ -214,22 +210,21 @@ struct DashboardView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
-                DashboardPanel(title: AppLocalization.string("工作概况"), systemImage: "chart.bar.xaxis") {
-                    ScrollView(.vertical) {
-                        VStack(alignment: .leading, spacing: AppSpacing.normal) {
-                            todayTodoPanel
-                            if showsBusinessOverviewPanel {
-                                businessOverviewPanel
-                            }
-                            warehousePanel
-                            todayLogPanel
-                            overduePanel
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: AppSpacing.normal) {
+                        todayTodoPanel
+                        if showsBusinessOverviewPanel {
+                            businessOverviewPanel
                         }
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
+                        warehousePanel
+                        todayLogPanel
+                        overduePanel
                     }
-                    .scrollIndicators(.visible)
-                    .accessibilityIdentifier("dashboard-ipad-overview-scroll")
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .padding(.horizontal, 1)
                 }
+                .scrollIndicators(.visible)
+                .accessibilityIdentifier("dashboard-ipad-overview-scroll")
                 .frame(width: overviewWidth)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
             }
@@ -332,7 +327,12 @@ struct DashboardView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .background {
-                    AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal) {
+                    AppSurface(
+                        tone: .grouped,
+                        cornerRadius: 16,
+                        shadow: .card,
+                        stroke: Color(uiColor: .separator).opacity(0.18)
+                    ) {
                         Color.clear
                     }
                 }
@@ -380,11 +380,7 @@ struct DashboardView: View {
 
     private var wideDashboardSidebar: some View {
         VStack(alignment: .leading, spacing: AppSpacing.normal) {
-            DashboardPanel(title: AppLocalization.string("今日快捷动作"), systemImage: "bolt.fill") {
-                VStack(alignment: .leading, spacing: AppSpacing.tight) {
-                    DashboardQuickActionButtons(items: primaryQuickActions, onTrigger: showQuickActionFeedback)
-                }
-            }
+            todayQuickActions
 
             if hasDashboardRisk { dashboardRiskStrip }
         }

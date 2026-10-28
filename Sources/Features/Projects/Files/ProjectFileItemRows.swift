@@ -82,13 +82,13 @@ struct ProjectFileThumbnail: View {
     let item: ProjectFileItem
 
     @State private var image: UIImage?
-    @State private var loadTask: Task<Void, Never>?
+    @State private var reloadRevision: UInt64 = 0
 
     var body: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 8)
                 .fill(item.category.tint.opacity(0.12))
-            if let image {
+            if let image, item.exists {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -104,36 +104,26 @@ struct ProjectFileThumbnail: View {
             RoundedRectangle(cornerRadius: 8)
                 .stroke(item.exists ? Color.clear : Color.appStrokeError, lineWidth: 1)
         )
-        .task(id: item.id) {
+        .reloadThumbnail(onInvalidationOf: item.url) { reloadRevision &+= 1 }
+        .task(id: Request(token: item.thumbnailToken, exists: item.exists, revision: reloadRevision)) {
             await loadThumbnailIfNeeded()
-        }
-        .onDisappear {
-            loadTask?.cancel()
-            loadTask = nil
         }
     }
 
     private func loadThumbnailIfNeeded() async {
-        guard let token = item.thumbnailToken else {
+        image = nil
+        guard item.exists, let token = item.thumbnailToken else {
             image = nil
             return
         }
-        if let cached = ProjectFileThumbnailCache.image(for: token.cacheKey) {
-            image = cached
-            return
-        }
+        let loaded = await ProjectFileThumbnailCache.image(for: token)
+        guard !Task.isCancelled else { return }
+        image = loaded
+    }
 
-        loadTask?.cancel()
-        loadTask = Task {
-            let loaded = await token.loadImageAsync()
-            guard !Task.isCancelled else { return }
-            await MainActor.run {
-                if let loaded {
-                    ProjectFileThumbnailCache.store(loaded, for: token.cacheKey)
-                }
-                image = loaded
-            }
-        }
-        await loadTask?.value
+    private struct Request: Hashable {
+        let token: ProjectFileThumbnailToken?
+        let exists: Bool
+        let revision: UInt64
     }
 }

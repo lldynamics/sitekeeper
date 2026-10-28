@@ -305,8 +305,12 @@ private struct ProjectBusinessMetricCard: View {
         .frame(maxWidth: .infinity, minHeight: 158, alignment: .topLeading)
         .padding(AppSpacing.normal)
         .background(
-            RoundedRectangle(cornerRadius: AppSpacing.tight, style: .continuous)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(uiColor: .separator).opacity(0.12), lineWidth: 0.5)
         )
     }
 }

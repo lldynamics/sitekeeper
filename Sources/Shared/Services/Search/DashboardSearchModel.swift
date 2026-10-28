@@ -9,6 +9,10 @@ struct DashboardSearchRequest: Equatable, Sendable {
     var category: RealtimeSearchSuggestion.Category? = nil
     var collectionVersions: [UInt64] = []
     var language = ""
+    var timeZoneIdentifier = ""
+    var storeSource: ObjectIdentifier? = nil
+    var projectSource: ObjectIdentifier? = nil
+    var financeSource: ObjectIdentifier? = nil
     var limit = 10
 }
 

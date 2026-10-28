@@ -1,74 +1,34 @@
 import UIKit
 import Foundation
 
-/// 缩略图缓存，避免重复磁盘 I/O
-final class PhotoCache: @unchecked Sendable {
+/// Photo compatibility entry points share the same decoded-byte budget as other thumbnails.
+final class PhotoCache: Sendable {
     static let shared = PhotoCache()
-    private let cache = NSCache<NSString, UIImage>()
+
+    func key(for fileName: String, maxPixelSize: CGFloat = 512) -> ThumbnailCacheKey {
+        ThumbnailCacheKey(resourceURL: PhotoStorage.fileURL(for: fileName), maxPixelSize: Double(maxPixelSize))
+    }
 
     func cachedThumbnail(for fileName: String) -> UIImage? {
-        cache.object(forKey: fileName as NSString)
+        StorageThumbnailCache.cachedImage(for: key(for: fileName))
     }
 
     func thumbnail(for fileName: String) -> UIImage? {
-        if let img = cachedThumbnail(for: fileName) { return img }
-        return loadThumbnailFromDisk(for: fileName)
+        StorageThumbnailCache.imageSynchronously(
+            for: key(for: fileName), sourceURL: PhotoStorage.thumbnailURL(for: fileName)
+        )
     }
 
-    func thumbnailAsync(for fileName: String) async -> UIImage? {
-        if let img = cachedThumbnail(for: fileName) { return img }
-        do {
-            return try await FileIOTaskRunner.run(
-                priority: .utility,
-                logContext: .init(
-                    event: "photo_cache.thumbnail_read",
-                    source: "PhotoCache.thumbnailAsync",
-                    category: .fileStorage,
-                    details: ["file_name": fileName]
-                )
-            ) { [self] in
-                loadThumbnailFromDisk(for: fileName)
-            }
-        } catch {
-            return nil
-        }
-    }
-
-    private func loadThumbnailFromDisk(for fileName: String) -> UIImage? {
-        let url = PhotoStorage.thumbnailURL(for: fileName)
-        let data: Data
-        do {
-            data = try Data(contentsOf: url, options: .mappedIfSafe)
-        } catch {
-            StorageIssueLog.recordEvent(
-                "photo_cache.thumbnail_read_failed",
-                category: .fileStorage,
-                details: [
-                    "source": "PhotoCache.loadThumbnailFromDisk",
-                    "file_name": fileName
-                ],
-                error: error
-            )
-            return nil
-        }
-        guard let img = UIImage(data: data) else {
-            StorageIssueLog.recordEvent(
-                "photo_cache.thumbnail_decode_failed",
-                category: .fileStorage,
-                details: [
-                    "source": "PhotoCache.loadThumbnailFromDisk",
-                    "file_name": fileName
-                ]
-            )
-            return nil
-        }
-        cache.setObject(img, forKey: fileName as NSString)
-        return img
+    func thumbnailAsync(for fileName: String, maxPixelSize: CGFloat = 512) async -> UIImage? {
+        await StorageThumbnailCache.image(
+            for: key(for: fileName, maxPixelSize: maxPixelSize),
+            sourceURL: PhotoStorage.thumbnailURL(for: fileName)
+        )
     }
 
     func invalidate(fileName: String) {
-        cache.removeObject(forKey: fileName as NSString)
+        StorageThumbnailCache.invalidate(resourceURL: PhotoStorage.fileURL(for: fileName))
     }
 
-    func clear() { cache.removeAllObjects() }
+    func clear() { StorageThumbnailCache.invalidate(directoryURL: PhotoStorage.photoDir) }
 }

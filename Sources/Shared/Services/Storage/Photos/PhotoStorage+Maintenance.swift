@@ -71,6 +71,8 @@ extension PhotoStorage {
     }
 
     static func clearThumbnailCache() {
+        PhotoCache.shared.clear()
+        defer { PhotoCache.shared.clear() }
         let files: [URL]
         do {
             files = try FileManager.default.contentsOfDirectory(at: thumbnailDir, includingPropertiesForKeys: nil)
@@ -94,7 +96,6 @@ extension PhotoStorage {
                 // FileOps 已记录失败事件，继续清理其他缓存文件。
             }
         }
-        PhotoCache.shared.clear()
     }
 
     static func restore(_ files: [PhotoBackupFile]) {

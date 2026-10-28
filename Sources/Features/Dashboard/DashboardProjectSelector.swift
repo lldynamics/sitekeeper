@@ -24,10 +24,14 @@ struct DashboardProjectSelector: View {
             emptyCurrentProjectSelectorLabel
         }
         .buttonStyle(.plain)
-        .padding(.horizontal, AppSpacing.normal)
-        .padding(.vertical, AppSpacing.tight + 1)
+        .padding(AppSpacing.normal)
         .background {
-            AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal - 2) {
+            AppSurface(
+                tone: .grouped,
+                cornerRadius: 16,
+                shadow: .card,
+                stroke: Color(uiColor: .separator).opacity(0.18)
+            ) {
                 Color.clear
             }
         }
@@ -59,8 +63,7 @@ struct DashboardProjectSelector: View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
             HStack(spacing: AppSpacing.tight) {
                 Label(AppLocalization.string("进行中的工程"), systemImage: "scope")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                    .font(.headline)
                 Spacer()
                 if activeProjectCount > displayLimit {
                     Text(String(format: AppLocalization.string("共 %lld 个"), Int64(activeProjectCount)))
@@ -90,10 +93,14 @@ struct DashboardProjectSelector: View {
                 }
             }
         }
-        .padding(.horizontal, AppSpacing.normal)
-        .padding(.vertical, AppSpacing.tight + 1)
+        .padding(AppSpacing.normal)
         .background {
-            AppSurface(tone: .grouped, cornerRadius: AppSpacing.normal - 2) {
+            AppSurface(
+                tone: .grouped,
+                cornerRadius: 16,
+                shadow: .card,
+                stroke: Color(uiColor: .separator).opacity(0.18)
+            ) {
                 Color.clear
             }
         }
