@@ -50,5 +50,6 @@ struct RootPhoneTabShell: View {
                 .tabItem { Label(Tab.profile.title, systemImage: Tab.profile.systemImage) }
                 .tag(Tab.profile)
         }
+        .sensoryFeedback(.selection, trigger: selectedTab)
     }
 }

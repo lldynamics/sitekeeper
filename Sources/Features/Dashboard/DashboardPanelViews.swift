@@ -20,6 +20,7 @@ struct DashboardRiskPin: Identifiable {
 }
 
 struct DashboardRiskPill: View {
+    @Environment(\.colorScheme) private var colorScheme
     let title: String
     let value: String
     let color: Color
@@ -34,20 +35,20 @@ struct DashboardRiskPill: View {
             HStack(spacing: AppSpacing.tight * 0.75) {
                 Text(title)
                     .font(.caption.weight(.semibold))
-                    .foregroundStyle(hasRisk ? Color.white : color)
+                    .foregroundStyle(hasRisk ? (colorScheme == .dark ? color : Color.white) : color)
                 Text(value)
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(hasRisk ? Color.white : color)
+                    .foregroundStyle(hasRisk ? (colorScheme == .dark ? color : Color.white) : color)
             }
             .padding(.horizontal, AppSpacing.normal - 2)
             .padding(.vertical, AppSpacing.tight - 1)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                    .fill(hasRisk ? color : color.opacity(0.12))
+                    .fill(hasRisk ? (colorScheme == .dark ? color.opacity(0.22) : color) : color.opacity(0.12))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
-                    .stroke(hasRisk ? Color.clear : color.opacity(0.28), lineWidth: 0.8)
+                    .stroke(hasRisk ? (colorScheme == .dark ? color.opacity(0.45) : Color.clear) : color.opacity(0.28), lineWidth: 0.8)
             )
         }
         .buttonStyle(.plain)
@@ -245,7 +246,7 @@ struct TodoPreviewRow: View {
 
     @ViewBuilder
     private var todoMetadataContent: some View {
-        Text(todo.dueDate)
+        Text(Formatters.displayRelativeOrShortDate(todo.dueDate))
         Text(todo.priority.displayName)
         Text(todo.issueType.displayName)
         if !todo.owner.isEmpty { Text(todo.owner) }

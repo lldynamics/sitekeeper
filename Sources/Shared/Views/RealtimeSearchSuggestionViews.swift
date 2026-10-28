@@ -1,12 +1,31 @@
 import SwiftUI
 
-struct InlineSearchPanel: View {
+struct InlineSearchPanel<TrailingContent: View>: View {
     @Binding var text: String
     let prompt: String
     var suggestions: [RealtimeSearchSuggestion] = []
     var emptyStateText: String = AppLocalization.string("未找到匹配内容")
     var materialTone: AppSurfaceTone = .grouped
+    var trailingContent: TrailingContent
     let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
+
+    init(
+        text: Binding<String>,
+        prompt: String,
+        suggestions: [RealtimeSearchSuggestion] = [],
+        emptyStateText: String = AppLocalization.string("未找到匹配内容"),
+        materialTone: AppSurfaceTone = .grouped,
+        @ViewBuilder trailingContent: () -> TrailingContent,
+        onSelectSuggestion: @escaping (RealtimeSearchSuggestion) -> Void
+    ) {
+        self._text = text
+        self.prompt = prompt
+        self.suggestions = suggestions
+        self.emptyStateText = emptyStateText
+        self.materialTone = materialTone
+        self.trailingContent = trailingContent()
+        self.onSelectSuggestion = onSelectSuggestion
+    }
 
     private var trimmedText: String {
         text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -32,6 +51,7 @@ struct InlineSearchPanel: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .submitLabel(.done)
+                    trailingContent
                     if hasSearchKeyword {
                         Button {
                             text = ""
@@ -44,7 +64,8 @@ struct InlineSearchPanel: View {
                         .accessibilityLabel(AppLocalization.string("清空搜索"))
                     }
                 }
-                .padding(AppSpacing.normal)
+                .padding(.horizontal, AppSpacing.normal)
+                .padding(.vertical, AppSpacing.tight + 3)
 
                 if hasSearchKeyword {
                     Divider()
@@ -64,6 +85,27 @@ struct InlineSearchPanel: View {
                 }
             }
         }
+    }
+}
+
+extension InlineSearchPanel where TrailingContent == EmptyView {
+    init(
+        text: Binding<String>,
+        prompt: String,
+        suggestions: [RealtimeSearchSuggestion] = [],
+        emptyStateText: String = AppLocalization.string("未找到匹配内容"),
+        materialTone: AppSurfaceTone = .grouped,
+        onSelectSuggestion: @escaping (RealtimeSearchSuggestion) -> Void
+    ) {
+        self.init(
+            text: text,
+            prompt: prompt,
+            suggestions: suggestions,
+            emptyStateText: emptyStateText,
+            materialTone: materialTone,
+            trailingContent: { EmptyView() },
+            onSelectSuggestion: onSelectSuggestion
+        )
     }
 }
 
