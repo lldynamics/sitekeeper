@@ -1,4 +1,13 @@
 import Foundation
+import CryptoKit
+
+/// Issued only after the business transaction commits; identifies its exact attachment.
+struct SiteTodoSaveReceipt {
+    let record: SiteTodo
+    let afterPhotoSourceID: UUID?
+    let afterPhotoFileName: String?
+    let afterPhotoContentDigest: Data?
+}
 
 extension BusinessDraftStore {
     /// Keep the form and its independent photo blobs until the business write succeeds.
@@ -10,11 +19,23 @@ extension BusinessDraftStore {
         in store: DataStore,
         persist: (() async throws -> Void)? = nil
     ) async throws -> SiteTodo {
+        try await commitTodoWithReceipt(draft, key: key, editing: editing, in: store, persist: persist).record
+    }
+
+    @MainActor
+    func commitTodoWithReceipt(
+        _ draft: SiteTodoFormDraft,
+        key: Key,
+        editing: Bool,
+        in store: DataStore,
+        persist: (() async throws -> Void)? = nil
+    ) async throws -> SiteTodoSaveReceipt {
         await store.awaitInitialLoad()
         try validateTodoDraft(draft, editing: editing, in: store)
         let previous = store.siteTodos.first { $0.id == draft.record.id }
         var value = draft.normalizedRecord
         var attemptNames: [String] = []
+        var afterPhotoContentDigest: Data?
         var committed = false
         var didApply = false
         do {
@@ -30,7 +51,10 @@ extension BusinessDraftStore {
                     value.rectificationBeforePhotoFileName = attemptNames[index]
                     index += 1
                 }
-                if draft.afterPhotoID != nil { value.rectificationAfterPhotoFileName = attemptNames[index] }
+                if draft.afterPhotoID != nil {
+                    value.rectificationAfterPhotoFileName = attemptNames[index]
+                    afterPhotoContentDigest = Data(SHA256.hash(data: originals[index]))
+                }
             }
             // Photo preparation suspends; another window may have edited the record meanwhile.
             try validateTodoDraft(draft, editing: editing, in: store)
@@ -42,7 +66,12 @@ extension BusinessDraftStore {
             }
             let oldNames = [previous?.rectificationBeforePhotoFileName, previous?.rectificationAfterPhotoFileName].compactMap { $0 }
             cleanupUnreferencedTodoPhotos(oldNames, in: store)
-            return store.siteTodos.first { $0.id == value.id } ?? value
+            return SiteTodoSaveReceipt(
+                record: value,
+                afterPhotoSourceID: draft.afterPhotoID == nil ? nil : draft.afterPhotoSourceID,
+                afterPhotoFileName: draft.afterPhotoID == nil ? nil : value.rectificationAfterPhotoFileName,
+                afterPhotoContentDigest: afterPhotoContentDigest
+            )
         } catch {
             if didApply, !committed,
                let current = store.siteTodos.first(where: { $0.id == value.id }),

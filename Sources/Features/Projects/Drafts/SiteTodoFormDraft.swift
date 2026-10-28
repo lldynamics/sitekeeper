@@ -5,12 +5,14 @@ struct SiteTodoFormDraft: Codable, Equatable {
     var baseRecord: Data?
     var beforePhotoID: UUID?
     var afterPhotoID: UUID?
+    var afterPhotoSourceID: UUID? = nil
 
-    init(record: SiteTodo, baseRecord: Data? = nil, beforePhotoID: UUID? = nil, afterPhotoID: UUID? = nil) {
+    init(record: SiteTodo, baseRecord: Data? = nil, beforePhotoID: UUID? = nil, afterPhotoID: UUID? = nil, afterPhotoSourceID: UUID? = nil) {
         self.record = record
         self.baseRecord = baseRecord
         self.beforePhotoID = beforePhotoID
         self.afterPhotoID = afterPhotoID
+        self.afterPhotoSourceID = afterPhotoSourceID
     }
 
     static func == (lhs: Self, rhs: Self) -> Bool {
@@ -18,6 +20,7 @@ struct SiteTodoFormDraft: Codable, Equatable {
             && lhs.baseRecord == rhs.baseRecord
             && lhs.beforePhotoID == rhs.beforePhotoID
             && lhs.afterPhotoID == rhs.afterPhotoID
+            && lhs.afterPhotoSourceID == rhs.afterPhotoSourceID
     }
 
     var normalizedRecord: SiteTodo {

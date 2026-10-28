@@ -15,6 +15,7 @@ struct WatermarkCameraStyle: Codable, Equatable, Sendable {
 
 /// Preferences belong to this tool and remain part of its managed reset/backup inventory.
 enum WatermarkCameraPreferenceKeys {
+    static let projectDetails = "watermarkCamera.projectDetails"
     static let workSection = "watermarkCamera.workSection"
     static let floor = "watermarkCamera.floor"
     static let process = "watermarkCamera.process"
@@ -24,6 +25,6 @@ enum WatermarkCameraPreferenceKeys {
     static let stylePosition = "watermarkCamera.stylePosition"
     static let styleDetail = "watermarkCamera.styleDetail"
     static let locationSnapshot = "watermarkCamera.locationSnapshot"
-    static let all = [workSection, floor, process, issueNumber, completedQuantity, receiptNote,
+    static let all = [projectDetails, workSection, floor, process, issueNumber, completedQuantity, receiptNote,
                       stylePosition, styleDetail, locationSnapshot]
 }

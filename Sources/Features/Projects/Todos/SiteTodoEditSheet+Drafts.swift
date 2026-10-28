@@ -16,17 +16,8 @@ extension SiteTodoEditSheet {
             }
             draftLoaded = true
             draftError = nil
-            // A camera invocation must not replace previously retained before/after evidence.
-            if pendingRestoration == nil {
-                if draft.beforePhotoID == nil, draft.record.rectificationBeforePhotoFileName == nil, let initialBeforePhotoData {
-                    beforePhotoData = initialBeforePhotoData
-                    draft.beforePhotoID = UUID()
-                }
-                if draft.afterPhotoID == nil, draft.record.rectificationAfterPhotoFileName == nil, let initialAfterPhotoData {
-                    afterPhotoData = initialAfterPhotoData
-                    draft.afterPhotoID = UUID()
-                }
-            }
+            // Preserve the incoming camera photo independently while an older draft is unresolved.
+            if pendingRestoration == nil { applyIncomingPhotosIfVacant() }
         } catch { draftError = String(format: AppLocalization.string("读取草稿失败，原文件已保留：%@"), error.localizedDescription) }
     }
 
@@ -43,6 +34,66 @@ extension SiteTodoEditSheet {
         afterPhotoData = after
         draft = restored
         pendingRestoration = nil
+        applyIncomingPhotosIfVacant()
+    }
+
+    var hasIncomingProjectMismatch: Bool {
+        initialAfterPhotoSourceID != nil && draft.record.projectId != initialProjectId
+    }
+
+    func applyIncomingPhotosIfVacant() {
+        if draft.beforePhotoID == nil, draft.record.rectificationBeforePhotoFileName == nil, let initialBeforePhotoData {
+            beforePhotoData = initialBeforePhotoData
+            draft.beforePhotoID = UUID()
+        }
+        guard incomingAfterPhotoPending, let initialAfterPhotoData, !hasIncomingProjectMismatch else { return }
+        if draft.afterPhotoSourceID == initialAfterPhotoSourceID, draft.afterPhotoID != nil,
+           afterPhotoData == initialAfterPhotoData {
+            incomingAfterPhotoPending = false
+        } else if draft.afterPhotoID == nil, draft.record.rectificationAfterPhotoFileName == nil {
+            stageIncomingAfterPhoto()
+        }
+    }
+
+    func stageIncomingAfterPhoto() {
+        guard let initialAfterPhotoData, !hasIncomingProjectMismatch else { return }
+        afterPhotoData = initialAfterPhotoData
+        draft.afterPhotoID = UUID()
+        draft.afterPhotoSourceID = initialAfterPhotoSourceID
+        incomingAfterPhotoPending = false
+        persistDraft()
+    }
+
+    @ViewBuilder
+    var incomingAfterPhotoSection: some View {
+        if initialAfterPhotoData != nil, hasIncomingProjectMismatch {
+            Section {
+                Text(AppLocalization.string("草稿归属与本次拍摄项目不同，请先核对归属再保存。"))
+                    .foregroundStyle(.orange)
+                Button(AppLocalization.string("将草稿归属改为拍摄项目")) {
+                    draft.record.projectId = initialProjectId
+                    if pendingRestoration == nil { applyIncomingPhotosIfVacant() }
+                }
+                .disabled(pendingRestoration != nil)
+            }
+        }
+        if incomingAfterPhotoPending {
+            Section(AppLocalization.string("本次拍摄照片待处理")) {
+                Text(AppLocalization.string("本次照片仍单独保留。请先处理旧草稿，再决定是否将本次照片作为整改后证据。"))
+                    .font(.subheadline).foregroundStyle(.secondary)
+                if pendingRestoration == nil {
+                    Button(AppLocalization.string("使用本次照片作为整改后证据")) { stageIncomingAfterPhoto() }
+                        .disabled(hasIncomingProjectMismatch)
+                    if draft.afterPhotoID != nil || draft.record.rectificationAfterPhotoFileName != nil {
+                        Text(AppLocalization.string("使用本次照片会替换表单中的整改后证据，保存后生效。"))
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button(AppLocalization.string("保留旧证据，本次照片暂不关联")) {
+                            incomingAfterPhotoPending = false
+                        }
+                    }
+                }
+            }
+        }
     }
 
     func persistDraft() {
@@ -60,7 +111,7 @@ extension SiteTodoEditSheet {
     }
 
     func saveDraft() {
-        guard draftLoaded, !isSaving, !isImportingPhoto, pendingRestoration == nil else { return }
+        guard draftLoaded, !isSaving, !isImportingPhoto, pendingRestoration == nil, !incomingAfterPhotoPending, !hasIncomingProjectMismatch else { return }
         persistDraft()
         guard draftError == nil else { return }
         isSaving = true
@@ -68,9 +119,10 @@ extension SiteTodoEditSheet {
         Task { @MainActor in
             defer { isSaving = false }
             do {
-                let record = try await draftStore.commitTodo(savedDraft, key: draftKey, editing: todo != nil, in: store)
+                let receipt = try await draftStore.commitTodoWithReceipt(savedDraft, key: draftKey, editing: todo != nil, in: store)
                 draftCompleted = true
-                onSave(record)
+                onSave(receipt.record)
+                onSaveReceipt?(receipt)
                 dismiss()
             } catch { draftError = String(format: AppLocalization.string("保存失败，草稿已保留：%@"), error.localizedDescription) }
         }
@@ -110,6 +162,7 @@ extension SiteTodoEditSheet {
                         self.pendingRestoration = nil
                         hasSavedDraft = false
                         draftError = nil
+                        applyIncomingPhotosIfVacant()
                     } catch { draftError = error.localizedDescription }
                 }
             }

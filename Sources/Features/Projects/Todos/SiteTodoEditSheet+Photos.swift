@@ -24,6 +24,7 @@ extension SiteTodoEditSheet {
                         } else {
                             afterPhotoData = nil
                             draft.afterPhotoID = nil
+                            draft.afterPhotoSourceID = nil
                             draft.record.rectificationAfterPhotoFileName = nil
                         }
                     }
@@ -58,7 +59,8 @@ extension SiteTodoEditSheet {
             try draftStore.savePhoto(normalized, id: photoID, key: draftKey)
             if before { beforePhotoData = normalized
             draft.beforePhotoID = photoID } else { afterPhotoData = normalized
-            draft.afterPhotoID = photoID }
+            draft.afterPhotoID = photoID
+            draft.afterPhotoSourceID = nil }
             persistDraft()
         } catch {
             draftError = String(format: AppLocalization.string("整改照片保存失败：%@"), error.localizedDescription)

@@ -44,9 +44,24 @@ struct WatermarkCameraCaptureView: View {
                             camera.focus(at: point, exposureBias: exposureBias)
                         }
                         if referenceVisible, let referenceImage {
-                            Image(uiImage: referenceImage).resizable().scaledToFill()
-                                .opacity(0.3).allowsHitTesting(false)
+                            let imageSize = referenceImage.size
+                            let fitted = WatermarkCameraFraming.referenceFittedSize(image: imageSize, in: frame)
+                            Image(uiImage: referenceImage).resizable().scaledToFit()
+                                .opacity(0.3)
+                                .frame(width: fitted.width, height: fitted.height)
+                                .overlay { Rectangle().stroke(.white.opacity(0.8), lineWidth: 1) }
+                                .allowsHitTesting(false)
                                 .accessibilityHidden(true)
+                            if WatermarkCameraFraming.referenceDiffers(image: imageSize, from: frame) {
+                                VStack {
+                                    Text(AppLocalization.string("参考照片与当前画面的方向或比例不同，请转动设备；如比例仍不同，请按边框对齐。"))
+                                        .font(.caption2).multilineTextAlignment(.center)
+                                        .padding(6).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 6))
+                                    Spacer()
+                                }
+                                .padding(8)
+                                .allowsHitTesting(false)
+                            }
                         }
                         if showGrid { CameraGridOverlay() }
                         TimelineView(.periodic(from: .now, by: 1)) { timeline in
@@ -224,6 +239,19 @@ struct WatermarkCameraCaptureView: View {
 }
 
 struct WatermarkCameraFraming {
+    static func referenceFittedSize(image: CGSize, in frame: CGSize) -> CGSize {
+        guard image.width > 0, image.height > 0, frame.width > 0, frame.height > 0 else { return .zero }
+        let scale = min(frame.width / image.width, frame.height / image.height)
+        return CGSize(width: image.width * scale, height: image.height * scale)
+    }
+
+    static func referenceDiffers(image: CGSize, from frame: CGSize) -> Bool {
+        guard image.width > 0, image.height > 0, frame.width > 0, frame.height > 0 else { return false }
+        let imageRatio = image.width / image.height
+        let frameRatio = frame.width / frame.height
+        return abs(imageRatio / frameRatio - 1) > 0.03
+    }
+
     static func fittedSize(in available: CGSize, landscape: Bool) -> CGSize {
         let ratio: CGFloat = landscape ? 4 / 3 : 3 / 4
         let width = max(0, min(available.width, available.height * ratio))

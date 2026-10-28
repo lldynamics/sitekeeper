@@ -15,6 +15,7 @@ struct DailyLogComposerState {
     var linkedMethodIDs: Set<UUID> = []
     var selectedPhotos: [PhotosPickerItem] = []
     var photoDrafts: [PhotoDraft] = []
+    var appliedSeedSourceIDs: Set<UUID> = []
     var showLogCamera = false
     var cameraPhotoTag: PhotoTag = .general
     var projectId: UUID?
@@ -28,6 +29,7 @@ struct DailyLogComposerState {
         date = .day(CalendarDay(date: initialDate))
         content = initialContent
         photoDrafts = initialPhotoDrafts
+        appliedSeedSourceIDs = Set(initialPhotoDrafts.compactMap(\.sourcePhotoID))
         projectId = initialProjectId
     }
 }

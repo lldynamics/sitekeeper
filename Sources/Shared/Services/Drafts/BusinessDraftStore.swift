@@ -42,6 +42,13 @@ struct BusinessDraftStore {
         return try JSONDecoder().decode(type, from: Data(contentsOf: url))
     }
 
+    /// Metadata-only lookup. Call off the main actor when used to populate gallery status.
+    func dailyLogDraftSourcePhotoIDs(projectID: UUID?) throws -> Set<UUID> {
+        guard let draft = try load(DailyLogFormDraft.self, key: .daily(projectID: projectID)) else { return [] }
+        guard draft.projectId == projectID else { throw CocoaError(.fileReadCorruptFile) }
+        return Set(draft.photos.compactMap(\.sourcePhotoID))
+    }
+
     func save<Value: Encodable>(_ value: Value, key: Key) throws {
         let data = try JSONEncoder().encode(value)
         try FileManager.default.createDirectory(at: directory(key), withIntermediateDirectories: true)

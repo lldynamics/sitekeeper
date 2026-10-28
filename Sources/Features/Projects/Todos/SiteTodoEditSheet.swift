@@ -12,6 +12,8 @@ struct SiteTodoEditSheet: View {
     let initialProjectId: UUID?
     let initialBeforePhotoData: Data?
     let initialAfterPhotoData: Data?
+    let initialAfterPhotoSourceID: UUID?
+    let onSaveReceipt: ((SiteTodoSaveReceipt) -> Void)?
     let onSave: (SiteTodo) -> Void
     var onDelete: ((SiteTodo) -> Void)?
 
@@ -27,6 +29,7 @@ struct SiteTodoEditSheet: View {
     @State var draftCompleted = false
     @State var draftError: String?
     @State var pendingRestoration: SiteTodoFormDraft?
+    @State var incomingAfterPhotoPending = false
     @State var isSaving = false
     @State var showDeleteConfirm = false
     @State var showDiscardDraft = false
@@ -34,7 +37,9 @@ struct SiteTodoEditSheet: View {
     init(
         todo: SiteTodo?, projects: [Project], constructionMethods: [ConstructionMethod], initialProjectId: UUID?,
         initialBeforePhotoData: Data? = nil, initialAfterPhotoData: Data? = nil,
-        onSave: @escaping (SiteTodo) -> Void, onDelete: ((SiteTodo) -> Void)? = nil
+        initialAfterPhotoSourceID: UUID? = nil,
+        onSave: @escaping (SiteTodo) -> Void, onSaveReceipt: ((SiteTodoSaveReceipt) -> Void)? = nil,
+        onDelete: ((SiteTodo) -> Void)? = nil
     ) {
         self.todo = todo
         self.projects = projects
@@ -42,6 +47,9 @@ struct SiteTodoEditSheet: View {
         self.initialProjectId = initialProjectId
         self.initialBeforePhotoData = initialBeforePhotoData
         self.initialAfterPhotoData = initialAfterPhotoData
+        self.initialAfterPhotoSourceID = initialAfterPhotoSourceID
+        self.onSaveReceipt = onSaveReceipt
+        _incomingAfterPhotoPending = State(initialValue: initialAfterPhotoData != nil)
         self.onSave = onSave
         self.onDelete = onDelete
         _draft = State(initialValue: SiteTodoFormDraft(
@@ -54,6 +62,7 @@ struct SiteTodoEditSheet: View {
         NavigationStack {
             Form {
                 draftStatusSection
+                incomingAfterPhotoSection
                 Section(AppLocalization.string("事项")) {
                     TextField(AppLocalization.string("待办事项"), text: $draft.record.title, axis: .vertical)
                         .lineLimit(2...5)
@@ -78,6 +87,7 @@ struct SiteTodoEditSheet: View {
                         Text(AppLocalization.string("不关联项目")).tag(nil as UUID?)
                         ForEach(projects) { Text($0.name).tag($0.id as UUID?) }
                     }
+                    .disabled(initialAfterPhotoSourceID != nil)
                 }
                 Section(AppLocalization.string("整改照片")) {
                     photoPickerRow(before: true)
@@ -104,7 +114,7 @@ struct SiteTodoEditSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(AppLocalization.string("保存"), action: saveDraft)
-                        .disabled(!draftLoaded || pendingRestoration != nil || draft.record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .disabled(!draftLoaded || pendingRestoration != nil || incomingAfterPhotoPending || hasIncomingProjectMismatch || draft.record.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                         .accessibilityIdentifier("todo-draft-save")
                 }
             }

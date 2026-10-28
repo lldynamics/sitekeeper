@@ -5,6 +5,7 @@ import UIKit
 struct WatermarkCameraToolView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.openURL) private var openURL
+    @Environment(\.scenePhase) private var scenePhase
     let initialProjectId: UUID?
     let autoOpenCameraOnAppear: Bool
     @State private var settings = WatermarkCameraSettingsStore()
@@ -37,10 +38,15 @@ struct WatermarkCameraToolView: View {
     @State private var showTodo = false
     @State private var todoData: Data?
     @State private var todoProjectId: UUID?
-    @State private var showExporter = false
-    @State private var exportData = Data()
-    @State private var exportType = UTType.jpeg
-    @State private var exportName = "现场照片"
+    @State private var preparedExport: WatermarkPreparedExport?
+    @State private var exportCleanupURL: URL?
+    @State private var batchTask: Task<Void, Never>?
+    @State private var draftRefreshTask: Task<Void, Never>?
+    @State private var operationID = UUID()
+    @State private var workProgress = (done: 0, total: 0)
+    @State private var recoveryToDelete: WatermarkRecoveredDraft?
+    @State private var pendingLogPhotoIDs = Set<UUID>()
+    @State private var albumAttemptPhoto: WatermarkCapturedPhoto?
     @State var alertTitle = AppLocalization.string("wm_camera_alert_cannot_continue_title")
     @State var alertMessage = ""
     @State var alertSettingsURL: URL?
@@ -83,10 +89,12 @@ struct WatermarkCameraToolView: View {
             }
             draftSection.id("watermark-drafts")
             WatermarkTemplateSection(templateRaw: binding(for: \.templateRaw))
-            WatermarkInfoSection(tag: binding(for: \.tag), photographer: binding(for: \.photographer),
-                locationText: Binding(get: { settings.locationText }, set: { locationManager.cancelRequest(); settings.setManualLocation($0) }),
-                locationStatusText: locationManager.isRequesting ? locationManager.statusText : locationStatus,
-                requestLocation: locationManager.requestLocation)
+            TimelineView(.periodic(from: .now, by: 1)) { timeline in
+                WatermarkInfoSection(tag: binding(for: \.tag), photographer: binding(for: \.photographer),
+                    locationText: Binding(get: { settings.locationText }, set: { locationManager.cancelRequest(); settings.setManualLocation($0) }),
+                    locationStatusText: locationStatus(at: timeline.date), isRequesting: locationManager.isRequesting,
+                    requestLocation: locationManager.requestLocation)
+            }
             WatermarkEngineeringSection(template: settings.template,
                 workSection: binding(for: \.workSection), floor: binding(for: \.floor), process: binding(for: \.process),
                 issueNumber: binding(for: \.issueNumber), completedQuantity: binding(for: \.completedQuantity), receiptNote: binding(for: \.receiptNote))
@@ -120,26 +128,44 @@ struct WatermarkCameraToolView: View {
         }
         .sheet(item: $annotationPhoto) { photo in
             WatermarkPhotoAnnotationView(photo: photo) { image in
-                Task {
-                    if let id = await captures.addAnnotatedCopy(image: image, of: photo) { selectedIDs = [id] }
+                guard let id = await captures.addAnnotatedCopy(image: image, of: photo) else {
+                    throw WatermarkDraftImageError.encodingFailed
+                }
+                selectedIDs = [id]
+                if captures.photos.first(where: { $0.id == id })?.isPersisted == false {
+                    presentInfo(AppLocalization.string("标注副本暂存在本次会话中，请勿关闭应用并重试保存草稿。"))
                 }
             }
         }
         .sheet(item: $rectificationPhoto) { photo in
             WatermarkRectificationSheet(photo: photo, initialTodoId: rectificationInitialID) { _ in presentInfo(AppLocalization.string("整改照片已保存到原待办。")) }
         }
-        .fileExporter(isPresented: $showExporter, document: ExportDocument(data: exportData), contentType: exportType, defaultFilename: exportName) { result in
-            switch result {
-            case .success: presentInfo(AppLocalization.string("wm_camera_export_photo_success"))
-            case .failure(let error):
-                if (error as NSError).code != NSUserCancelledError { presentBlockingError(error.localizedDescription) }
+        .sheet(item: $preparedExport, onDismiss: cleanupExport) { file in
+            WatermarkFileExportPicker(file: file) { saved in
+                if saved { presentInfo(AppLocalization.string("wm_camera_export_photo_success")) }
+                preparedExport = nil
             }
-            exportData = Data()
         }
         .alert(alertTitle, isPresented: $showAlert) {
             if let alertSettingsURL { Button(AppLocalization.string("wm_camera_go_to_settings_button")) { openURL(alertSettingsURL) } }
             Button(AppLocalization.string("wm_camera_ack_button"), role: .cancel) {}
         } message: { Text(alertMessage) }
+        .confirmationDialog(AppLocalization.string("删除未完成草稿？"), isPresented: Binding(get: { recoveryToDelete != nil }, set: { if !$0 { recoveryToDelete = nil } }), titleVisibility: .visible) {
+            Button(AppLocalization.string("删除未完成草稿"), role: .destructive) {
+                if let item = recoveryToDelete { Task { await captures.removeRecovery(id: item.id) } }
+                recoveryToDelete = nil
+            }
+        } message: { Text(AppLocalization.string("这会删除保留的恢复文件，建议先导出留存。")) }
+        .confirmationDialog(AppLocalization.string("核对相册保存结果"), isPresented: Binding(get: { albumAttemptPhoto != nil }, set: { if !$0 { albumAttemptPhoto = nil } }), titleVisibility: .visible) {
+            Button(AppLocalization.string("已在相册中找到，标记完成")) {
+                if let photo = albumAttemptPhoto { Task { await captures.resolveAlbumAttempt(id: photo.id, retryConfirmed: false) } }
+                albumAttemptPhoto = nil
+            }
+            Button(AppLocalization.string("未找到，允许重新保存")) {
+                if let photo = albumAttemptPhoto { Task { await captures.resolveAlbumAttempt(id: photo.id, retryConfirmed: true); await saveToAlbum([photo]) } }
+                albumAttemptPhoto = nil
+            }
+        } message: { Text(AppLocalization.string("上次保存结果尚未确认。请先检查系统相册，重复保存可能产生重复照片。")) }
         .confirmationDialog(AppLocalization.string("删除所选照片草稿？"), isPresented: $showClearPhotosConfirm, titleVisibility: .visible) {
             Button(AppLocalization.string("删除所选草稿"), role: .destructive) {
                 let ids = selectedIDs
@@ -164,7 +190,7 @@ struct WatermarkCameraToolView: View {
                 captures = WatermarkCameraCaptureStore(storage: WatermarkCameraDraftStorage(directory: directory))
                 scopedDraftURL = directory
             }
-            if let initialProjectId { settings.selectedProjectId = initialProjectId }
+            if !didAutoOpenCamera, let initialProjectId { settings.selectedProjectId = initialProjectId }
             await captures.restore()
             #if DEBUG
             if ProcessInfo.processInfo.arguments.contains("-uitest-watermark-fixture"),
@@ -177,24 +203,48 @@ struct WatermarkCameraToolView: View {
             }
             #endif
             if selectedIDs.isEmpty, let photo = captures.selectedPhoto { selectedIDs = [photo.id] }
-            guard autoOpenCameraOnAppear, !didAutoOpenCamera else { return }
+            let shouldOpen = autoOpenCameraOnAppear && !didAutoOpenCamera
             didAutoOpenCamera = true
-            openCamera()
+            await refreshLogDraftStatus()
+            if shouldOpen { openCamera() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: WatermarkCameraDraftStorage.didChangeNotification).receive(on: RunLoop.main)) { notification in
+            guard notification.userInfo?["directory"] as? String == captures.draftDirectory.standardizedFileURL.path else { return }
+            draftRefreshTask?.cancel()
+            draftRefreshTask = Task { @MainActor in
+                guard await DebouncedTask.wait(for: .milliseconds(200)) else { return }
+                await captures.restore()
+            }
+        }
+        .onChange(of: showLogDraft) { _, shown in
+            if !shown { Task { await refreshLogDraftStatus() } }
+        }
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { Task { await captures.restore(); await refreshLogDraftStatus() } }
         }
         .onReceive(locationManager.$snapshot) { snapshot in
             if let snapshot { settings.acceptDeviceLocation(snapshot) }
         }
     }
 
-    private var locationStatus: String {
-        if let error = locationManager.requestError { return error + " " + settings.locationStatusText() }
+    private func locationStatus(at now: Date) -> String {
+        if locationManager.isRequesting { return locationManager.statusText }
+        if let error = locationManager.requestError { return error + " " + settings.locationStatusText(at: now) }
         if !locationManager.statusText.isEmpty, locationManager.snapshot == nil { return locationManager.statusText }
-        return settings.locationStatusText()
+        return settings.locationStatusText(at: now)
     }
 
     private var draftSection: some View {
         Section {
-            if busy { ProgressView(AppLocalization.string("正在处理照片，请稍候…")) }
+            if busy {
+                if workProgress.total > 0 {
+                    ProgressView(value: Double(workProgress.done), total: Double(workProgress.total)) {
+                        Text(String(format: AppLocalization.string("正在处理 %lld / %lld 张"), workProgress.done, workProgress.total))
+                    }
+                    if batchTask != nil { Button(AppLocalization.string("取消处理")) { batchTask?.cancel() } }
+                } else { ProgressView(AppLocalization.string("正在处理照片，请稍候…")) }
+            }
+            recoverySection
             if let error = captures.persistenceError {
                 Text(error).font(.caption).foregroundStyle(.red)
                 Button(AppLocalization.string("重试暂存")) { Task { await captures.retryPendingDrafts() } }.disabled(busy)
@@ -202,10 +252,65 @@ struct WatermarkCameraToolView: View {
             if captures.photos.isEmpty {
                 Text(AppLocalization.string("拍摄后自动保留本地草稿，可继续拍摄并统一整理。")).foregroundStyle(.secondary)
             } else {
-                WatermarkDraftGallery(photos: captures.photos, selectedPhotoID: Binding(get: { captures.selectedPhotoID }, set: { captures.selectedPhotoID = $0 }), selectedIDs: $selectedIDs)
+                WatermarkDraftGallery(photos: captures.photos, selectedPhotoID: Binding(get: { captures.selectedPhotoID }, set: { captures.selectedPhotoID = $0 }), selectedIDs: $selectedIDs, logStatuses: logStatuses)
+                if let photo = selectedPhotos.first(where: { $0.albumAttemptID != nil && $0.albumStatus != .completed }) {
+                    Button(AppLocalization.string("核对相册保存结果")) { albumAttemptPhoto = photo }.disabled(busy)
+                }
                 batchActions.disabled(busy || selectedPhotos.isEmpty)
             }
         } header: { Text(AppLocalization.string("照片草稿")) }
+    }
+
+    private var logStatuses: [UUID: String] {
+        var statuses = Dictionary(uniqueKeysWithValues: pendingLogPhotoIDs.map { ($0, AppLocalization.string("已加入日志草稿")) })
+        for log in store.dailyLogs {
+            for attachment in log.photos {
+                if let id = attachment.sourcePhotoID {
+                    statuses[id] = String(format: AppLocalization.string("已保存到日志：%@"), log.date.storageText)
+                }
+            }
+        }
+        return statuses
+    }
+
+    private func refreshLogDraftStatus() async {
+        let url = store.storeURL
+        let projects = Set(captures.photos.map(\.projectId))
+        do {
+            pendingLogPhotoIDs = try await FileIOTaskRunner.run {
+                let drafts = BusinessDraftStore.scoped(to: url)
+                var ids = Set<UUID>()
+                for project in projects { ids.formUnion(try drafts.dailyLogDraftSourcePhotoIDs(projectID: project)) }
+                return ids
+            }
+        } catch { pendingLogPhotoIDs = [] }
+    }
+
+    @ViewBuilder private var recoverySection: some View {
+        if !captures.recoveryItems.isEmpty {
+            Text(AppLocalization.string("发现可恢复的照片文件")).font(.headline)
+            ForEach(captures.recoveryItems) { item in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(item.summary).font(.caption)
+                    Text(item.availableFileNames.joined(separator: " · ")).font(.caption2).foregroundStyle(.secondary)
+                    HStack {
+                        Button(AppLocalization.string("导出恢复文件")) {
+                            isWorking = true
+                            Task {
+                                defer { isWorking = false }
+                                do {
+                                    let url = try await captures.exportRecovery(id: item.id)
+                                    let cleanup = url.deletingLastPathComponent()
+                                    exportCleanupURL = cleanup
+                                    preparedExport = WatermarkPreparedExport(url: url, cleanupURL: cleanup)
+                                } catch { presentBlockingError(error.localizedDescription) }
+                            }
+                        }
+                        Button(AppLocalization.string("删除未完成草稿"), role: .destructive) { recoveryToDelete = item }
+                    }.buttonStyle(.borderless).disabled(busy)
+                }
+            }
+        }
     }
 
     private var batchActions: some View {
@@ -317,7 +422,7 @@ struct WatermarkCameraToolView: View {
                 logProjectId = projectId
                 logPhotos = zip(photos, data).map { photo, data in
                     DailyLogSeedPhoto(data: data, note: WatermarkCameraLogDraftCoordinator.photoNote(for: photo),
-                        tag: PhotoTag(rawValue: photo.context.tag) ?? .general, capturedAt: photo.capturedAt)
+                        tag: PhotoTag(rawValue: photo.context.tag) ?? .general, capturedAt: photo.capturedAt, sourcePhotoID: photo.id)
                 }
                 logContent = photos.first.map { WatermarkCameraTextBuilder.logDraftContent(tag: $0.context.tag) } ?? ""
                 showLogDraft = true
@@ -339,32 +444,47 @@ struct WatermarkCameraToolView: View {
     }
 
     private func exportSelected(_ type: UTType) {
+        guard !busy else { return }
         let photos = selectedPhotos
         let quality = settings.exportQuality.compression
+        let format: WatermarkCameraBatchService.FileFormat = type == .pdf ? .pdf : (type == .zip ? .zip : .jpeg)
+        let name = photos.count == 1 ? WatermarkCameraTextBuilder.exportFileName(projectName: photos.first?.context.projectName, capturedAt: photos.first?.capturedAt) : AppLocalization.string("现场照片")
         isWorking = true
-        Task {
-            defer { isWorking = false }
-            do {
-                exportData = try await FileIOTaskRunner.run {
-                    if type == .pdf { return try WatermarkCameraBatchService.pdf(photos) }
-                    if type == .zip { return try WatermarkCameraBatchService.zip(photos, compression: quality) }
-                    guard let first = photos.first else { throw WatermarkCameraBatchError.emptySelection }
-                    return try WatermarkCameraBatchService.jpeg(first, compression: quality)
+        workProgress = (0, photos.count)
+        let token = UUID()
+        operationID = token
+        batchTask = Task { @MainActor in
+            defer { operationID = UUID(); isWorking = false; batchTask = nil; workProgress = (0, 0) }
+            let worker = Task.detached(priority: .userInitiated) {
+                try WatermarkCameraBatchService.exportFile(photos, format: format, compression: quality, name: name) { done, total in
+                    Task { @MainActor in if operationID == token { workProgress = (done, total) } }
                 }
-                exportType = type
-                exportName = photos.count == 1 ? WatermarkCameraTextBuilder.exportFileName(projectName: photos.first?.context.projectName, capturedAt: photos.first?.capturedAt) : AppLocalization.string("现场照片")
-                showExporter = true
-            } catch { presentBlockingError(error.localizedDescription) }
+            }
+            do {
+                let file = try await withTaskCancellationHandler(operation: { try await worker.value }, onCancel: { worker.cancel() })
+                guard !Task.isCancelled else { WatermarkCameraBatchService.cleanupExport(at: file.cleanupURL); return }
+                exportCleanupURL = file.cleanupURL
+                preparedExport = file
+            } catch is CancellationError { presentInfo(AppLocalization.string("已取消处理，照片草稿已保留。")) }
+            catch { presentBlockingError(error.localizedDescription) }
         }
     }
 
+    private func cleanupExport() {
+        if let url = exportCleanupURL { WatermarkCameraBatchService.cleanupExport(at: url) }
+        exportCleanupURL = nil
+    }
+
     private func archiveSelected() {
+        guard !busy else { return }
         let photos = selectedPhotos
         isWorking = true
-        Task {
-            defer { isWorking = false }
+        workProgress = (0, photos.count)
+        batchTask = Task { @MainActor in
+            defer { isWorking = false; batchTask = nil; workProgress = (0, 0) }
             var failures = [String]()
-            for photo in photos {
+            for (index, photo) in photos.enumerated() {
+                if Task.isCancelled { break }
                 do {
                     try await WatermarkCameraBatchService.archive(photo, in: store)
                     await captures.markArchived(id: photo.id)
@@ -372,8 +492,10 @@ struct WatermarkCameraToolView: View {
                     failures.append(error.localizedDescription)
                     await captures.markArchiveFailed(id: photo.id, message: error.localizedDescription)
                 }
+                workProgress = (index + 1, photos.count)
             }
-            if let failure = failures.first { presentBlockingError("\(AppLocalization.string("部分照片未归档，草稿已保留。"))\n\(failure)") }
+            if Task.isCancelled { presentInfo(AppLocalization.string("已取消处理，已完成的归档保留。")) }
+            else if let failure = failures.first { presentBlockingError("\(AppLocalization.string("部分照片未归档，草稿已保留。"))\n\(failure)") }
             else { presentInfo(AppLocalization.string("所选照片已按拍摄项目归档。")) }
         }
     }
@@ -382,27 +504,13 @@ struct WatermarkCameraToolView: View {
         guard !savingAlbumBatch else { return }
         savingAlbumBatch = true
         defer { savingAlbumBatch = false }
-        // Hold the batch lock across loading, permission, every write and status persistence.
         for candidate in photos {
             guard let photo = captures.photos.first(where: { $0.id == candidate.id }), photo.albumStatus != .completed else { continue }
-            do {
-                let image = try await FileIOTaskRunner.run { try photo.imageForDelivery() }
-                let result = await exportCoordinator.saveImagesToAlbum([image])
-                switch result {
-                case .success: await captures.markAlbumSaved(ids: [photo.id])
-                case .blockingError(let message, let url):
-                    await captures.markAlbumFailed(ids: [photo.id], message: message)
-                    presentBlockingError(message, settingsURL: url)
-                    return
-                case .error(let message):
-                    await captures.markAlbumFailed(ids: [photo.id], message: message)
-                    presentBlockingError(message)
-                    return
-                }
-            } catch {
-                await captures.markAlbumFailed(ids: [photo.id], message: error.localizedDescription)
-                presentBlockingError(error.localizedDescription)
-                return
+            let result = await captures.saveToAlbum(photo: photo, quality: settings.exportQuality, coordinator: exportCoordinator)
+            switch result {
+            case .success: break
+            case .blockingError(let message, let url): presentBlockingError(message, settingsURL: url); return
+            case .error(let message): presentBlockingError(message); return
             }
         }
     }

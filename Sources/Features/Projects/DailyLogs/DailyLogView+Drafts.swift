@@ -15,10 +15,9 @@ extension DailyLogView {
         do {
             if let saved = try businessDraftStore.load(DailyLogFormDraft.self, key: composerDraftKey) {
                 var restored = try saved.composer(store: businessDraftStore, key: composerDraftKey)
-                // A camera entry may carry new seed photos. Preserve both the old draft and new input.
+                guard restored.projectId == draftScopeID else { throw CocoaError(.fileReadCorruptFile) }
                 if !seedInputsApplied {
-                    restored.photoDrafts.append(contentsOf: composer.photoDrafts)
-                    if !initialContent.isEmpty { restored.content += (restored.content.isEmpty ? "" : "\n") + initialContent }
+                    mergeSeedInputs(into: &restored)
                 }
                 composer = restored
                 draftRecordID = saved.recordID
@@ -26,6 +25,35 @@ extension DailyLogView {
             seedInputsApplied = true
             draftLoaded = true
         } catch { draftError = String(format: AppLocalization.string("读取草稿失败，原文件已保留：%@"), error.localizedDescription) }
+    }
+
+    /// Content provenance survives reopening; an explicitly reimported removed photo can return.
+    /// Byte comparison also recognizes old drafts written before provenance was stored.
+    func mergeSeedInputs(into restored: inout DailyLogComposerState) {
+        var hasNewContentInput = false
+        for seed in initialPhotoDrafts {
+            if let sourceID = seed.sourcePhotoID, !restored.appliedSeedSourceIDs.contains(sourceID) {
+                hasNewContentInput = true
+            }
+            if let index = restored.photoDrafts.firstIndex(where: { photo in
+                if let sourceID = seed.sourcePhotoID, photo.sourcePhotoID == sourceID { return true }
+                return photo.data == seed.data
+            }) {
+                if restored.photoDrafts[index].sourcePhotoID == nil {
+                    restored.photoDrafts[index].sourcePhotoID = seed.sourcePhotoID
+                }
+            } else {
+                restored.photoDrafts.append(seed.photoDraft)
+                if seed.sourcePhotoID == nil { hasNewContentInput = true }
+            }
+            if let sourceID = seed.sourcePhotoID { restored.appliedSeedSourceIDs.insert(sourceID) }
+        }
+        let content = initialContent.trimmingCharacters(in: .whitespacesAndNewlines)
+        let existing = restored.content.trimmingCharacters(in: .whitespacesAndNewlines)
+        let containsContent = ("\n" + existing + "\n").contains("\n" + content + "\n")
+        if !content.isEmpty, !containsContent, hasNewContentInput || initialPhotoDrafts.isEmpty {
+            restored.content += (restored.content.isEmpty ? "" : "\n") + initialContent
+        }
     }
 
     func switchComposerDraftScope(to projectID: UUID?) {
@@ -39,6 +67,7 @@ extension DailyLogView {
             let targetKey = BusinessDraftStore.Key.daily(projectID: projectID)
             if let saved = try businessDraftStore.load(DailyLogFormDraft.self, key: targetKey) {
                 let restored = try saved.composer(store: businessDraftStore, key: targetKey)
+                guard restored.projectId == projectID else { throw CocoaError(.fileReadCorruptFile) }
                 draftScopeID = projectID
                 draftRecordID = saved.recordID
                 composer = restored

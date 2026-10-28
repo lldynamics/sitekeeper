@@ -57,6 +57,7 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
     }
 
     func requestLocation() {
+        guard !isRequesting else { return }
         requestTimeout?.cancel()
         requestTimeout = nil
         requestError = nil
@@ -78,6 +79,7 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
         geocodingGeneration = UUID()
         pendingExplicitRequest = false
         isRequesting = false
+        statusText = ""
         geocoder.cancelGeocode()
     }
 
@@ -148,7 +150,7 @@ final class WatermarkCameraLocationManager: NSObject, ObservableObject, CLLocati
         }
         snapshot = fix
         locationText = fix.text
-        statusText = fix.statusText()
+        statusText = AppLocalization.string("正在获取位置地址…")
         // A stale fix is usable only as a clearly identified historical value.
         geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, _ in
             let readable = placemarks?.first.map { placemark in

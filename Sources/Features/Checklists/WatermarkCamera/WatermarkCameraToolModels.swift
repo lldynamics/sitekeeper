@@ -8,13 +8,16 @@ enum WatermarkPhotoDeliveryStatus: String, Codable, Sendable {
 }
 
 /// Metadata is frozen when the shutter fires. Only delivery status can change.
-/// Successful drafts retain thumbnail pixels and file URLs, not full-resolution images.
+/// Persisted drafts retain metadata and file URLs. Visible views request pixels asynchronously.
 struct WatermarkCapturedPhoto: Identifiable, Sendable {
     let id: UUID
     let capturedAt: Date
     let context: CameraWatermarkContext
     let projectId: UUID?
     let thumbnail: UIImage
+    let pixelSize: CGSize?
+    var albumAssetIdentifier: String?
+    var albumAttemptID: UUID?
     let originalURL: URL?
     let watermarkedURL: URL?
     var albumStatus: WatermarkPhotoDeliveryStatus = .pending
@@ -29,10 +32,17 @@ struct WatermarkCapturedPhoto: Identifiable, Sendable {
 
     var isPersisted: Bool { originalURL != nil && watermarkedURL != nil }
 
+    /// A shared, lightweight compatibility placeholder for persisted drafts.
+    static let placeholderThumbnail = UIImage()
+
+    var imageAspectRatio: CGFloat {
+        guard let size = pixelSize, size.width > 0, size.height > 0 else { return 4.0 / 3.0 }
+        return size.width / size.height
+    }
+
+    /// Compatibility accessor. Active UI should use WatermarkCameraImageLoader off the UI actor.
     var image: UIImage {
-        if let watermarkedURL, let image = UIImage(contentsOfFile: watermarkedURL.path) { return image }
-        if let pendingWatermarkedData, let image = UIImage(data: pendingWatermarkedData) { return image }
-        return fallbackWatermarkedImage ?? thumbnail
+        (try? imageForDelivery()) ?? thumbnail
     }
 
     /// Delivery must never substitute a thumbnail for missing evidence.
@@ -46,8 +56,6 @@ struct WatermarkCapturedPhoto: Identifiable, Sendable {
             return image
         }
         if let fallbackWatermarkedImage { return fallbackWatermarkedImage }
-        // Legacy in-memory constructor stores its full image in this field.
-        if originalURL == nil && pendingOriginalData == nil && fallbackOriginalImage == nil { return thumbnail }
         throw WatermarkDraftImageError.missingImage
     }
 
@@ -70,10 +78,15 @@ struct WatermarkCapturedPhoto: Identifiable, Sendable {
         ), projectId: UUID? = nil,
         originalURL: URL? = nil, watermarkedURL: URL? = nil,
         pendingOriginalData: Data? = nil, pendingWatermarkedData: Data? = nil,
-        fallbackOriginalImage: UIImage? = nil, fallbackWatermarkedImage: UIImage? = nil
+        fallbackOriginalImage: UIImage? = nil, fallbackWatermarkedImage: UIImage? = nil,
+        pixelSize: CGSize? = nil
     ) {
         self.id = id
-        self.thumbnail = image
+        let legacyMemoryImage = originalURL == nil && watermarkedURL == nil && pendingOriginalData == nil
+            && pendingWatermarkedData == nil && fallbackOriginalImage == nil && fallbackWatermarkedImage == nil
+        self.thumbnail = originalURL != nil || watermarkedURL != nil ? Self.placeholderThumbnail : image
+        self.pixelSize = pixelSize ?? (image.size.width > 0 && image.size.height > 0
+            ? CGSize(width: image.size.width * image.scale, height: image.size.height * image.scale) : nil)
         self.capturedAt = capturedAt
         self.context = context
         self.projectId = projectId
@@ -82,7 +95,7 @@ struct WatermarkCapturedPhoto: Identifiable, Sendable {
         self.pendingOriginalData = pendingOriginalData
         self.pendingWatermarkedData = pendingWatermarkedData
         self.fallbackOriginalImage = fallbackOriginalImage
-        self.fallbackWatermarkedImage = fallbackWatermarkedImage
+        self.fallbackWatermarkedImage = fallbackWatermarkedImage ?? (legacyMemoryImage ? image : nil)
     }
 }
 
@@ -92,13 +105,13 @@ enum WatermarkDraftImageError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingImage: return "照片原文件丢失或已损坏，无法导出或归档。"
-        case .encodingFailed: return "照片编码失败，请重试。"
+        case .missingImage: return AppLocalization.string("照片原文件丢失或已损坏，无法导出或归档。")
+        case .encodingFailed: return AppLocalization.string("照片编码失败，请重试。")
         }
     }
 }
 
-enum WatermarkExportQuality: String, CaseIterable {
+enum WatermarkExportQuality: String, CaseIterable, Sendable {
     case standard
     case high
 

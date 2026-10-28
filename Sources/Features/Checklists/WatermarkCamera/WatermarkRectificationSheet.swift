@@ -1,6 +1,7 @@
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import CryptoKit
 
 struct WatermarkRectificationSheet: View {
     let photo: WatermarkCapturedPhoto
@@ -95,16 +96,28 @@ struct WatermarkRectificationSheet: View {
                     projects: store.projects.filter { $0.id == photo.projectId },
                     constructionMethods: store.constructionMethods,
                     initialProjectId: photo.projectId,
-                    initialAfterPhotoData: afterPhotoData
-                ) { saved in
-                    // The editor calls this only after its draft transaction commits successfully.
-                    guard saved.rectificationAfterPhotoFileName != nil else {
-                        errorMessage = AppLocalization.string("事项已保存，但未保留整改后照片，本次照片仍在水印相机草稿中。")
-                        return
+                    initialAfterPhotoData: afterPhotoData,
+                    initialAfterPhotoSourceID: photo.id,
+                    onSave: { _ in },
+                    onSaveReceipt: { receipt in
+                        // A nonempty filename alone could belong to an older restored draft.
+                        guard receipt.record.id == todo.id,
+                              receipt.record.projectId == photo.projectId,
+                              receipt.afterPhotoSourceID == photo.id,
+                              let expectedData = afterPhotoData,
+                              receipt.afterPhotoContentDigest == Data(SHA256.hash(data: expectedData)),
+                              let savedName = receipt.afterPhotoFileName,
+                              receipt.record.rectificationAfterPhotoFileName == savedName,
+                              let current = store.siteTodos.first(where: { $0.id == todo.id }),
+                              current.projectId == photo.projectId,
+                              current.rectificationAfterPhotoFileName == savedName else {
+                            errorMessage = AppLocalization.string("事项已保存，但未保留本次整改后照片，本次照片仍在水印相机草稿中。")
+                            return
+                        }
+                        onSaved(receipt.record.id)
+                        dismiss()
                     }
-                    onSaved(saved.id)
-                    dismiss()
-                }
+                )
             }
             .fileExporter(isPresented: $showExporter, document: comparisonDocument, contentType: .jpeg, defaultFilename: AppLocalization.string("整改前后对照")) { result in
                 if case .failure(let error) = result { errorMessage = String(format: AppLocalization.string("导出失败：%@"), error.localizedDescription) }
@@ -126,7 +139,8 @@ struct WatermarkRectificationSheet: View {
             .frame(maxWidth: .infinity)
             VStack(spacing: 6) {
                 Text(AppLocalization.string("本次整改后")).font(.caption.weight(.semibold))
-                Image(uiImage: photo.thumbnail).resizable().scaledToFit().frame(maxHeight: 180)
+                WatermarkDraftImageView(photo: photo, maxPixelSize: 800)
+                    .frame(maxHeight: 180)
             }
             .frame(maxWidth: .infinity)
         }

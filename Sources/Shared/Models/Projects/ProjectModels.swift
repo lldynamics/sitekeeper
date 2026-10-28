@@ -214,21 +214,24 @@ struct LogPhoto: Identifiable, Codable, Sendable {
     var fileName: String
     var note: String
     var tag: PhotoTag
+    var sourcePhotoID: UUID?
 
-    init(id: UUID = UUID(), fileName: String, note: String = "", tag: PhotoTag = .general) {
+    init(id: UUID = UUID(), fileName: String, note: String = "", tag: PhotoTag = .general, sourcePhotoID: UUID? = nil) {
         self.id = id
         self.fileName = fileName
         self.note = note
         self.tag = tag
+        self.sourcePhotoID = sourcePhotoID
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, fileName, note, tag
+        case id, fileName, note, tag, sourcePhotoID
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        sourcePhotoID = try container.decodeIfPresent(UUID.self, forKey: .sourcePhotoID)
         fileName = try container.decode(String.self, forKey: .fileName)
         note = try container.decodeIfPresent(String.self, forKey: .note) ?? ""
         tag = try container.decodeStringEnum(

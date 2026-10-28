@@ -884,6 +884,9 @@
 		FFB3FC794797380D241B7D5B /* BackupArchiveTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0232ED8C0C68286775CD74D7 /* BackupArchiveTypes.swift */; };
 		FFC0AC2062E1C596E1FBF413 /* SQLiteCandidateManifest.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2D3C416821FC8C1937284CEB /* SQLiteCandidateManifest.swift */; };
 		FFD8637993A9F844D3295DC3 /* StorageCleanupCenterView+ScanFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = D8B1F4F3A7416C263AD6867F /* StorageCleanupCenterView+ScanFlow.swift */; };
+		E396DF191A2F6588D09539D9 /* WatermarkCameraAlbumSaveCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = F00B82C8FFFE8E151661FE01 /* WatermarkCameraAlbumSaveCoordinator.swift */; };
+		7EA9DE9E7F1E3AB578183AD2 /* WatermarkCameraImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2FF529491EE632CE08850A57 /* WatermarkCameraImageLoader.swift */; };
+		F568A73073AE334AF98E33BF /* WatermarkFileExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 01377208DCAE529044C3AF93 /* WatermarkFileExport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -1810,6 +1813,9 @@
 		FF85C28D1FEFCDA44151D7F8 /* LegacyDateProvenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LegacyDateProvenance.swift; sourceTree = "<group>"; };
 		FFA0F026C1BB3FC296C7BB64 /* BackupErrorRecoveryTests+MetadataValidation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupErrorRecoveryTests+MetadataValidation.swift"; sourceTree = "<group>"; };
 		FFFA2CCEE55E9EC9A8B66CE7 /* BackupView+CloudTasks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackupView+CloudTasks.swift"; sourceTree = "<group>"; };
+		F00B82C8FFFE8E151661FE01 /* WatermarkCameraAlbumSaveCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraAlbumSaveCoordinator.swift; sourceTree = "<group>"; };
+		2FF529491EE632CE08850A57 /* WatermarkCameraImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkCameraImageLoader.swift; sourceTree = "<group>"; };
+		01377208DCAE529044C3AF93 /* WatermarkFileExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatermarkFileExport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -3231,6 +3237,9 @@
 			children = (
 				39F37D046F718406F8225BD4 /* WatermarkCameraBatchService.swift */,
 				AA47B9C6E34B25511E9C16BC /* WatermarkCameraCaptureStore.swift */,
+				01377208DCAE529044C3AF93 /* WatermarkFileExport.swift */,
+				2FF529491EE632CE08850A57 /* WatermarkCameraImageLoader.swift */,
+				F00B82C8FFFE8E151661FE01 /* WatermarkCameraAlbumSaveCoordinator.swift */,
 				B9E9DD5E31729E9B2C9B690D /* WatermarkCameraDraftStorage.swift */,
 				660FAE2ED50E20B82FDA9629 /* WatermarkCameraExportCoordinator.swift */,
 				A43FEDF1681B81EBABB328E9 /* WatermarkCameraInfrastructure.swift */,
@@ -4321,6 +4330,9 @@
 				1AABD291E31BC2808FF406E1 /* WarehouseLedgerDraftView.swift in Sources */,
 				C3E0C4BCA6C64C9B84E23068 /* WatermarkCameraBatchService.swift in Sources */,
 				3B1761E91AC501F037521836 /* WatermarkCameraCaptureStore.swift in Sources */,
+				F568A73073AE334AF98E33BF /* WatermarkFileExport.swift in Sources */,
+				7EA9DE9E7F1E3AB578183AD2 /* WatermarkCameraImageLoader.swift in Sources */,
+				E396DF191A2F6588D09539D9 /* WatermarkCameraAlbumSaveCoordinator.swift in Sources */,
 				FD3F351268A1BCFC6F5B123E /* WatermarkCameraDraftStorage.swift in Sources */,
 				FBDA74736744BB53F299929C /* WatermarkCameraExportCoordinator.swift in Sources */,
 				A5B886653A0C16887E6FFABC /* WatermarkCameraInfrastructure.swift in Sources */,

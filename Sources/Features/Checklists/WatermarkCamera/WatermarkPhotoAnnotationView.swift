@@ -52,9 +52,21 @@ enum WatermarkPhotoAnnotationRenderer {
     }
 
     static func draw(annotations: [WatermarkPhotoAnnotation], in size: CGSize, context: CGContext) {
+        let shortEdge = min(size.width, size.height)
+        guard shortEdge > 0 else { return }
+        let scale = shortEdge / 1_000
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.scaleBy(x: scale, y: scale)
+        drawCanonical(annotations: annotations,
+                      in: CGSize(width: size.width / scale, height: size.height / scale),
+                      context: context)
+    }
+
+    private static func drawCanonical(annotations: [WatermarkPhotoAnnotation], in size: CGSize, context: CGContext) {
         UIGraphicsPushContext(context)
         defer { UIGraphicsPopContext() }
-        let shortEdge = min(size.width, size.height)
+        let shortEdge: CGFloat = 1_000
         let stroke = shortEdge * 0.008
         for mark in annotations {
             let start = CGPoint(x: mark.start.x * size.width, y: mark.start.y * size.height)
@@ -107,7 +119,7 @@ enum WatermarkPhotoAnnotationRenderer {
 
 struct WatermarkPhotoAnnotationView: View {
     let photo: WatermarkCapturedPhoto
-    let onSave: @MainActor (UIImage) -> Void
+    let onSave: @MainActor (UIImage) async throws -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var marks: [WatermarkPhotoAnnotation] = []
@@ -170,11 +182,10 @@ struct WatermarkPhotoAnnotationView: View {
     }
 
     private var annotationPreview: some View {
-        let image = photo.thumbnail
-        let ratio = image.size.width / max(1, image.size.height)
+        let ratio = photo.imageAspectRatio
         return GeometryReader { proxy in
             ZStack {
-                Image(uiImage: image).resizable()
+                WatermarkDraftImageView(photo: photo, maxPixelSize: 1200)
                 Canvas { context, size in
                     context.withCGContext { cg in
                         WatermarkPhotoAnnotationRenderer.draw(annotations: marks + (dragMark.map { [$0] } ?? []), in: size, context: cg)
@@ -186,7 +197,9 @@ struct WatermarkPhotoAnnotationView: View {
                 .onChanged { value in dragMark = makeMark(start: value.startLocation, end: value.location, size: proxy.size) }
                 .onEnded { value in
                     let mark = makeMark(start: value.startLocation, end: value.location, size: proxy.size)
-                    if mark.kind != .text || !mark.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    let distance = hypot(value.location.x - value.startLocation.x, value.location.y - value.startLocation.y)
+                    if (mark.kind == .text && !mark.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        || (mark.kind != .text && distance >= 8) {
                         marks.append(mark)
                     }
                     dragMark = nil
@@ -229,11 +242,11 @@ struct WatermarkPhotoAnnotationView: View {
         let source = photo
         Task { @MainActor in
             do {
-                let result = try await Task.detached(priority: .userInitiated) {
-                    let image = try source.imageForDelivery()
-                    return WatermarkPhotoAnnotationRenderer.render(image: image, annotations: annotations)
+                let image = try await WatermarkCameraImageLoader.shared.imageForDelivery(source)
+                let result = await Task.detached(priority: .userInitiated) {
+                    WatermarkPhotoAnnotationRenderer.render(image: image, annotations: annotations)
                 }.value
-                onSave(result)
+                try await onSave(result)
                 dismiss()
             } catch {
                 errorText = error.localizedDescription

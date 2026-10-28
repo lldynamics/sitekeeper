@@ -5,6 +5,7 @@ struct DailyLogFormDraft: Codable, Equatable {
         var id: UUID
         var note: String
         var tag: PhotoTag
+        var sourcePhotoID: UUID? = nil
     }
     var recordID: UUID
     var dateText: String
@@ -20,6 +21,7 @@ struct DailyLogFormDraft: Codable, Equatable {
     var linkedMethodIDs: Set<UUID>
     var projectId: UUID?
     var photos: [Photo]
+    var appliedSeedSourceIDs: Set<UUID>? = nil
 
     init(composer: DailyLogComposerState, recordID: UUID) {
         self.recordID = recordID
@@ -35,7 +37,8 @@ struct DailyLogFormDraft: Codable, Equatable {
         confirmer = composer.confirmer
         linkedMethodIDs = composer.linkedMethodIDs
         projectId = composer.projectId
-        photos = composer.photoDrafts.map { Photo(id: $0.id, note: $0.note, tag: $0.tag) }
+        photos = composer.photoDrafts.map { Photo(id: $0.id, note: $0.note, tag: $0.tag, sourcePhotoID: $0.sourcePhotoID) }
+        appliedSeedSourceIDs = composer.appliedSeedSourceIDs
     }
 
     func composer(store: BusinessDraftStore, key: BusinessDraftStore.Key) throws -> DailyLogComposerState {
@@ -50,7 +53,8 @@ struct DailyLogFormDraft: Codable, Equatable {
         value.rectification = rectification
         value.confirmer = confirmer
         value.linkedMethodIDs = linkedMethodIDs
-        value.photoDrafts = try photos.map { PhotoDraft(id: $0.id, data: try store.photo(id: $0.id, key: key), note: $0.note, tag: $0.tag) }
+        value.photoDrafts = try photos.map { PhotoDraft(id: $0.id, data: try store.photo(id: $0.id, key: key), note: $0.note, tag: $0.tag, sourcePhotoID: $0.sourcePhotoID) }
+        value.appliedSeedSourceIDs = (appliedSeedSourceIDs ?? []).union(photos.compactMap(\.sourcePhotoID))
         return value
     }
 }

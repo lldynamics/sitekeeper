@@ -102,6 +102,7 @@ struct PhotoDraft: Identifiable {
     var data: Data
     var note: String = ""
     var tag: PhotoTag = .general
+    var sourcePhotoID: UUID? = nil
 }
 
 struct DailyLogSeedPhoto {
@@ -109,9 +110,10 @@ struct DailyLogSeedPhoto {
     var note: String
     var tag: PhotoTag
     var capturedAt: Date?
+    var sourcePhotoID: UUID? = nil
 
     var photoDraft: PhotoDraft {
-        PhotoDraft(data: data, note: note, tag: tag)
+        PhotoDraft(data: data, note: note, tag: tag, sourcePhotoID: sourcePhotoID)
     }
 }
 

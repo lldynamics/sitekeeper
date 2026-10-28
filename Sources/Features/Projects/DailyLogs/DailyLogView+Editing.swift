@@ -23,7 +23,7 @@ extension DailyLogView {
                 try businessDraftStore.registerPhotoAttempt(id: photoAttemptID, count: draft.photoDrafts.count, key: composerDraftKey)
                 let fileNames = try await PhotoStorage.saveManyAsyncOrThrow(originals: draft.photoDrafts.map(\.data), logId: photoAttemptID)
                 attemptPhotoNames = fileNames
-                let photos = zip(fileNames, draft.photoDrafts).map { LogPhoto(fileName: $0.0, note: $0.1.note, tag: $0.1.tag) }
+                let photos = zip(fileNames, draft.photoDrafts).map { LogPhoto(fileName: $0.0, note: $0.1.note, tag: $0.1.tag, sourcePhotoID: $0.1.sourcePhotoID) }
                 let log = DailyLog(
                     id: logId, date: draft.date, weather: draft.weather,
                     content: draft.content, workers: NumericInputSupport.quantity(draft.workers), photoFileName: fileNames.first, photos: photos,
@@ -50,6 +50,7 @@ extension DailyLogView {
         cancelPhotoImportAndResetSession()
         composer.selectedPhotos = []
         composer.photoDrafts = []
+        composer.appliedSeedSourceIDs = []
         composer.showLogCamera = false
         composer.cameraPhotoTag = .general
         composer.projectId = initialProjectId
@@ -168,6 +169,7 @@ extension DailyLogView {
         composer.projectId = log.projectId
         composer.selectedPhotos = []
         composer.photoDrafts = []
+        composer.appliedSeedSourceIDs = []
         showAdd = true
     }
 

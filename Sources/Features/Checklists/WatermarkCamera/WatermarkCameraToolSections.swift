@@ -47,6 +47,7 @@ struct WatermarkInfoSection: View {
     @Binding var photographer: String
     @Binding var locationText: String
     let locationStatusText: String
+    var isRequesting: Bool = false
     let requestLocation: () -> Void
 
     var body: some View {
@@ -56,9 +57,15 @@ struct WatermarkInfoSection: View {
             HStack {
                 TextField(AppLocalization.string("wm_camera_location_field"), text: $locationText)
                 Button(action: requestLocation) {
-                    Image(systemName: "location.fill").visibleIconStyle()
+                    if isRequesting {
+                        ProgressView()
+                    } else {
+                        Image(systemName: "location.fill").visibleIconStyle()
+                    }
                 }
                 .buttonStyle(AppIconButtonStyle())
+                .disabled(isRequesting)
+                .accessibilityLabel(isRequesting ? AppLocalization.string("正在定位") : AppLocalization.string("获取当前位置"))
             }
             if !locationStatusText.isEmpty {
                 Text(locationStatusText)

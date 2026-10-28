@@ -33,8 +33,27 @@ final class WatermarkCameraSettingsStore {
 
     @ObservationIgnored private let preferences: UserPreferencesStore
 
+    private struct ProjectDetails: Codable {
+        var workSection: String
+        var floor: String
+        var process: String
+    }
+    @ObservationIgnored private var projectDetails: [String: ProjectDetails] = [:]
+    @ObservationIgnored private var isLoadingProjectDetails = false
+    private static func projectKey(_ raw: String) -> String { raw.isEmpty ? "unlinked" : raw }
+
     var selectedProjectIdRaw: String {
-        didSet { preferences.set(selectedProjectIdRaw, for: UserPreferenceKeys.watermarkCameraSelectedProjectId) }
+        didSet {
+            guard oldValue != selectedProjectIdRaw else { return }
+            saveProjectDetails(for: oldValue)
+            preferences.set(selectedProjectIdRaw, for: UserPreferenceKeys.watermarkCameraSelectedProjectId)
+            let details = projectDetails[Self.projectKey(selectedProjectIdRaw)]
+            isLoadingProjectDetails = true
+            workSection = details?.workSection ?? ""
+            floor = details?.floor ?? ""
+            process = details?.process ?? ""
+            isLoadingProjectDetails = false
+        }
     }
     var projectName: String {
         didSet { preferences.set(projectName, for: UserPreferenceKeys.watermarkCameraProjectName) }
@@ -57,13 +76,13 @@ final class WatermarkCameraSettingsStore {
         didSet { persistLocationSnapshot() }
     }
     var workSection: String {
-        didSet { preferences.set(workSection, for: WatermarkCameraPreferenceKeys.workSection) }
+        didSet { persistProjectDetails() }
     }
     var floor: String {
-        didSet { preferences.set(floor, for: WatermarkCameraPreferenceKeys.floor) }
+        didSet { persistProjectDetails() }
     }
     var process: String {
-        didSet { preferences.set(process, for: WatermarkCameraPreferenceKeys.process) }
+        didSet { persistProjectDetails() }
     }
     var issueNumber: String {
         didSet { preferences.set(issueNumber, for: WatermarkCameraPreferenceKeys.issueNumber) }
@@ -166,7 +185,19 @@ final class WatermarkCameraSettingsStore {
         burstCount = Self.normalizedBurstCount(
             preferences.int(UserPreferenceKeys.watermarkCameraBurstCount, default: Self.minBurstCount)
         )
+        projectDetails = preferences.data(WatermarkCameraPreferenceKeys.projectDetails)
+            .flatMap { try? JSONDecoder().decode([String: ProjectDetails].self, from: $0) } ?? [:]
+        let key = Self.projectKey(selectedProjectIdRaw)
+        if let details = projectDetails[key] {
+            workSection = details.workSection
+            floor = details.floor
+            process = details.process
+        } else {
+            // The old global values belong only to the project selected at migration.
+            projectDetails[key] = ProjectDetails(workSection: workSection, floor: floor, process: process)
+        }
         persistCurrentSettings()
+        saveProjectDetails(for: selectedProjectIdRaw)
     }
 
     var selectedProjectId: UUID? {
@@ -213,6 +244,22 @@ final class WatermarkCameraSettingsStore {
             return String(format: AppLocalization.string("上次定位（%@），请核对或重新定位"), dateText)
         }
         return snapshot.statusText(at: now)
+    }
+
+    private func persistProjectDetails() {
+        guard !isLoadingProjectDetails else { return }
+        saveProjectDetails(for: selectedProjectIdRaw)
+        // Keep the legacy keys in sync for older backups and versions.
+        preferences.set(workSection, for: WatermarkCameraPreferenceKeys.workSection)
+        preferences.set(floor, for: WatermarkCameraPreferenceKeys.floor)
+        preferences.set(process, for: WatermarkCameraPreferenceKeys.process)
+    }
+
+    private func saveProjectDetails(for raw: String) {
+        projectDetails[Self.projectKey(raw)] = ProjectDetails(workSection: workSection, floor: floor, process: process)
+        if let data = try? JSONEncoder().encode(projectDetails) {
+            preferences.set(data, for: WatermarkCameraPreferenceKeys.projectDetails)
+        }
     }
 
     private func persistLocationSnapshot() {
