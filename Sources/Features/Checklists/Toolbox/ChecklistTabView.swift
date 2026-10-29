@@ -218,6 +218,12 @@ struct ChecklistTabView: View {
                         onSelect: selectPhoneTool
                     )
                         .navigationTitle(AppLocalization.string("工程工具箱"))
+                        .navigationBarTitleDisplayMode(isWide ? .inline : .automatic)
+                        .toolbarBackground(
+                            isWide ? AnyShapeStyle(Color(.secondarySystemGroupedBackground)) : AnyShapeStyle(.bar),
+                            for: .navigationBar
+                        )
+                        .toolbarBackground(isWide ? .visible : .automatic, for: .navigationBar)
                 }
                 .frame(width: showsCatalog ? sidebarWidth : max(320, sidebarWidth))
                 .frame(width: catalogWidth, alignment: .leading)
@@ -251,6 +257,16 @@ struct ChecklistTabView: View {
                 .accessibilityIdentifier("toolbox-phone-detail")
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .leading)
+            .background(alignment: .leading) {
+                if isWide && showsCatalog {
+                    HStack(spacing: 0) {
+                        Color(.secondarySystemGroupedBackground)
+                            .frame(width: catalogWidth)
+                        Color(.systemBackground)
+                    }
+                    .ignoresSafeArea(.container, edges: .bottom)
+                }
+            }
             .overlay(alignment: .leading) {
                 if isWide && showsCatalog {
                     ExpandedPhoneColumnDivider()
@@ -293,7 +309,10 @@ struct ChecklistTabView: View {
         .controlSize(.regular)
         .padding(.horizontal, AppSpacing.normal)
         .padding(.vertical, AppSpacing.tight)
-        .background(.bar)
+        .background(
+            isWide ? AnyShapeStyle(Color(.systemBackground)) : AnyShapeStyle(.bar),
+            ignoresSafeAreaEdges: isWide ? [] : .all
+        )
     }
 
     private func selectPhoneTool(_ item: ToolboxItem) {
@@ -311,6 +330,9 @@ struct ChecklistTabView: View {
     ) -> some View {
         List {
             Section {
+                if fillsExpandedPane {
+                    catalogSectionHeader(fillsExpandedPane: true) { quickToolsHeader }
+                }
                 ForEach(quickToolItems) { item in
                     Button {
                         onSelect(item)
@@ -322,21 +344,15 @@ struct ChecklistTabView: View {
                     .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
                     .contentShape(Rectangle())
                     .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
-                    .listRowBackground(catalogRowBackground(isSelected: highlightedItemID == item.id, fillsExpandedPane: fillsExpandedPane))
+                    .modifier(ToolboxCatalogRowBackgroundModifier(
+                        isSelected: highlightedItemID == item.id,
+                        fillsExpandedPane: fillsExpandedPane
+                    ))
                     .accessibilityAddTraits(highlightedItemID == item.id ? .isSelected : [])
                 }
             } header: {
-                catalogSectionHeader(fillsExpandedPane: fillsExpandedPane) {
-                    HStack {
-                        Text(AppLocalization.string("快捷工具"))
-                        Spacer()
-                        Button {
-                            showQuickToolEditor = true
-                        } label: {
-                            Label(AppLocalization.string("自定义"), systemImage: "slider.horizontal.3")
-                                .font(.caption)
-                        }
-                    }
+                if !fillsExpandedPane {
+                    catalogSectionHeader(fillsExpandedPane: false) { quickToolsHeader }
                 }
             }
             if practicalUnselectedTools.isEmpty {
@@ -352,6 +368,9 @@ struct ChecklistTabView: View {
             }
             ForEach(toolboxSections) { section in
                 Section {
+                    if fillsExpandedPane {
+                        catalogSectionHeader(fillsExpandedPane: true) { Text(section.title) }
+                    }
                     ForEach(section.items) { item in
                         Button {
                             onSelect(item)
@@ -363,12 +382,15 @@ struct ChecklistTabView: View {
                         .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
                         .contentShape(Rectangle())
                         .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
-                        .listRowBackground(catalogRowBackground(isSelected: highlightedItemID == item.id, fillsExpandedPane: fillsExpandedPane))
+                        .modifier(ToolboxCatalogRowBackgroundModifier(
+                            isSelected: highlightedItemID == item.id,
+                            fillsExpandedPane: fillsExpandedPane
+                        ))
                         .accessibilityAddTraits(highlightedItemID == item.id ? .isSelected : [])
                     }
                 } header: {
-                    catalogSectionHeader(fillsExpandedPane: fillsExpandedPane) {
-                        Text(section.title)
+                    if !fillsExpandedPane {
+                        catalogSectionHeader(fillsExpandedPane: false) { Text(section.title) }
                     }
                 }
             }
@@ -381,19 +403,32 @@ struct ChecklistTabView: View {
         .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: fillsExpandedPane))
     }
 
+    private var quickToolsHeader: some View {
+        HStack {
+            Text(AppLocalization.string("快捷工具"))
+            Spacer()
+            Button {
+                showQuickToolEditor = true
+            } label: {
+                Label(AppLocalization.string("自定义"), systemImage: "slider.horizontal.3")
+                    .font(.caption)
+                    .foregroundStyle(Color.appPrimaryAction)
+            }
+        }
+    }
+
     private func catalogSectionHeader<Content: View>(
         fillsExpandedPane: Bool,
         @ViewBuilder content: () -> Content
     ) -> some View {
         content()
+            .font(fillsExpandedPane ? .subheadline : nil)
+            .foregroundStyle(.secondary)
             .frame(maxWidth: fillsExpandedPane ? .infinity : nil, alignment: .leading)
             .listRowInsets(fillsExpandedPane ? EdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12) : nil)
-            .background(fillsExpandedPane ? Color(.systemGroupedBackground) : Color.clear, ignoresSafeAreaEdges: [])
-    }
-
-    private func catalogRowBackground(isSelected: Bool, fillsExpandedPane: Bool) -> Color? {
-        if isSelected { return Color.appSuccess.opacity(0.12) }
-        return fillsExpandedPane ? Color(.secondarySystemGroupedBackground) : nil
+            .listRowBackground(fillsExpandedPane ? Color(.secondarySystemGroupedBackground) : nil)
+            .listRowSeparator(fillsExpandedPane ? .hidden : .automatic)
+            .accessibilityAddTraits(.isHeader)
     }
 
     private func sanitizeStoredQuickToolOrder() {
@@ -461,6 +496,23 @@ private struct ToolboxCatalogListStyleModifier: ViewModifier {
             content.listStyle(.plain)
         } else {
             content
+        }
+    }
+}
+
+private struct ToolboxCatalogRowBackgroundModifier: ViewModifier {
+    let isSelected: Bool
+    let fillsExpandedPane: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if fillsExpandedPane {
+            content.listRowBackground(
+                Color(.secondarySystemGroupedBackground)
+                    .overlay(isSelected ? Color.appSuccess.opacity(0.12) : Color.clear)
+            )
+        } else {
+            content.listRowBackground(isSelected ? Color.appSuccess.opacity(0.12) : nil)
         }
     }
 }

@@ -138,6 +138,8 @@ struct DashboardProjectPickerSheet: View {
 }
 
 struct DashboardProjectChip: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .caption) private var accessibleMinimumHeight: CGFloat = 76
     let title: String
     let subtitle: String
     let isSelected: Bool
@@ -169,17 +171,18 @@ struct DashboardProjectChip: View {
                 .foregroundStyle(isSelected ? .white.opacity(0.88) : color)
                 .appListSecondaryTextLayout()
         }
+        .fixedSize(horizontal: false, vertical: true)
         .frame(minWidth: minChipWidth, maxWidth: maxChipWidth, alignment: .leading)
-        .frame(minHeight: 66, alignment: .leading)
+        .frame(minHeight: dynamicTypeSize.isAccessibilitySize ? accessibleMinimumHeight : 66, alignment: .leading)
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight)
         .background(
             RoundedRectangle(cornerRadius: AppSpacing.tight + 2, style: .continuous)
-                .fill(isSelected ? color : color.opacity(0.12))
+                .fill(isSelected ? color : Color(uiColor: .tertiarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: AppSpacing.tight + 2, style: .continuous)
-                .stroke(isSelected ? color : color.opacity(0.28), lineWidth: 1)
+                .stroke(isSelected ? color : Color(uiColor: .separator).opacity(0.10), lineWidth: isSelected ? 1 : 0.5)
         )
     }
 }
@@ -297,7 +300,7 @@ struct TimelineActivityRow: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color(uiColor: .separator).opacity(0.12), lineWidth: 0.5)
+                .stroke(Color(uiColor: .separator).opacity(0.10), lineWidth: 0.5)
         )
     }
 }

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 from pathlib import Path
-import re,json,hashlib,argparse,tempfile,subprocess,sys
+import re,json,hashlib,argparse,tempfile,subprocess,sys,os
 parser=argparse.ArgumentParser(description="Run Foundation business-core tests without using simulators or application data.")
 parser.add_argument('--output', type=Path, help="New evidence directory; must not already exist")
+parser.add_argument('--no-nested-sandbox', action='store_true', help="Disable only SwiftPM's nested sandbox when the outer managed environment rejects it")
 args=parser.parse_args()
 root=Path(__file__).resolve().parents[2]
 if args.output:
@@ -53,7 +54,13 @@ print('Portable core cases:',expected,flush=True)
 print('Boundary: localization/amount display adapters only; native DataStore, disk restore transactions and UI are excluded.',flush=True)
 log=dest/'test.log'
 with log.open('w') as output:
- result=subprocess.run(['swift','test','--package-path',str(dest),'--cache-path',str(dest/'cache')],cwd=dest,stdout=output,stderr=subprocess.STDOUT)
+ environment=os.environ.copy()
+ environment['CLANG_MODULE_CACHE_PATH']=str(dest/'module-cache')
+ environment['SWIFT_MODULECACHE_PATH']=str(dest/'module-cache')
+ command=['swift','test','--package-path',str(dest),'--cache-path',str(dest/'cache'),
+          '--config-path',str(dest/'config'),'--security-path',str(dest/'security')]
+ if args.no_nested_sandbox: command.append('--disable-sandbox')
+ result=subprocess.run(command,cwd=dest,env=environment,stdout=output,stderr=subprocess.STDOUT)
 text=log.read_text()
 match=re.search(r'Test run with (\d+) tests? in .* passed',text)
 passed=int(match.group(1)) if match else 0

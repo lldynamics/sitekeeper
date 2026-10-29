@@ -26,13 +26,16 @@ struct DashboardSummaryTests {
         let unpriced = QuoteItem(name: "待报价", unitPrice: 0, quantity: 3, unit: "m", notes: "", taxRate: 0, discountRate: 0, projectId: overpaid.id)
         finance.setQuoteItems([quote, unpriced])
         var input = DashboardSummaryInput(projectStore: projects, financeStore: finance)
-        // Freeze time for receivable aging independently of the host's current date.
+        // Freeze the business day independently of the host's current date.
         input = fixedDayInput(copying: input, at: "2026-10-28T04:00:00Z")
         let summary = DashboardSummaryBuilder.build(input).businessSummary
         #expect(summary.contractAmount == NumericInputSupport.money("200.25"))
         #expect(summary.paidAmount == NumericInputSupport.money("190.10"))
         #expect(summary.receivableAmount == NumericInputSupport.money("60.15"))
-        #expect(summary.receivableAgeDays == 8)
+        #expect(summary.unpaidAmount == NumericInputSupport.money("60.15"))
+        #expect(summary.scope?.contractUnpaid == NumericInputSupport.money("60.15"))
+        #expect(summary.scope?.quoteProjectsNeedingReview == 2)
+        #expect(summary.scope?.selectedQuoteAmount == nil)
         #expect(summary.materialCost == NumericInputSupport.money("50.30"))
         #expect(summary.laborCostAmount == NumericInputSupport.money("60.20"))
         #expect(summary.quoteTotal == ReportBuilder.quoteGrandTotal(quote) + ReportBuilder.quoteGrandTotal(unpriced))
@@ -66,6 +69,58 @@ struct DashboardSummaryTests {
         #expect(summary.overdueTasks.count == 1)
         #expect(summary.overdueTodos.isEmpty)
         #expect(summary.projectsWithoutTodayLogCount == 0)
+    }
+
+    @Test func overdueItemsCombineBothKindsInDueDateOrderWithoutLosingTheFullCount() {
+        let projects = ProjectStore()
+        let finance = FinanceStore()
+        let active = Project(name: "在建", location: "")
+        let paused = Project(name: "暂停", location: "", status: .paused)
+        let completed = Project(name: "已完工", location: "", status: .completed)
+        projects.setProjects([active, paused, completed])
+        let sharedID = UUID(uuidString: "00000000-0000-0000-0000-000000000001")!
+        let todos = [
+            SiteTodo(title: "待办 27", dueDate: BusinessDateValue(legacyText: "2026-10-27"), projectId: active.id),
+            SiteTodo(title: "待办 20", dueDate: BusinessDateValue(legacyText: "2026-10-20"), projectId: paused.id),
+            SiteTodo(id: sharedID, title: "待办 23", dueDate: BusinessDateValue(legacyText: "2026-10-23"), projectId: active.id),
+            SiteTodo(title: "待办 25", dueDate: BusinessDateValue(legacyText: "2026-10-25"), projectId: active.id),
+            SiteTodo(title: "已完成", dueDate: BusinessDateValue(legacyText: "2026-10-19"), isDone: true, projectId: active.id),
+            SiteTodo(title: "完工项目", dueDate: BusinessDateValue(legacyText: "2026-10-19"), projectId: completed.id),
+            SiteTodo(title: "无项目", dueDate: BusinessDateValue(legacyText: "2026-10-19")),
+            SiteTodo(title: "日期无效", dueDate: .unresolved("unknown"), projectId: active.id),
+            SiteTodo(title: "今天", dueDate: BusinessDateValue(legacyText: "2026-10-28"), projectId: active.id)
+        ]
+        projects.setSiteTodos(todos)
+        func task(_ title: String, _ date: String, id: UUID = UUID(), projectID: UUID, completion: Double = 0) -> ProgressTask {
+            ProgressTask(id: id, projectId: projectID, title: title, startDate: BusinessDateValue(legacyText: "2026-10-01"), dueDate: BusinessDateValue(legacyText: date), completion: completion, note: "")
+        }
+        projects.setProgressTasks([
+            task("任务 26", "2026-10-26", projectID: active.id),
+            task("任务 23", "2026-10-23", id: sharedID, projectID: active.id),
+            task("任务 21", "2026-10-21", projectID: paused.id),
+            task("任务 24", "2026-10-24", projectID: active.id),
+            task("已完成任务", "2026-10-19", projectID: active.id, completion: 1),
+            task("完工项目任务", "2026-10-19", projectID: completed.id)
+        ])
+
+        let input = fixedDayInput(copying: DashboardSummaryInput(projectStore: projects, financeStore: finance), at: "2026-10-28T04:00:00Z")
+        let summary = DashboardSummaryBuilder.build(input)
+        #expect(summary.overdueItems.count == 8)
+        #expect(summary.overdueItems.count == summary.overdueTodos.count + summary.overdueTasks.count)
+        #expect(summary.overdueItems.map(\.title) == ["待办 20", "任务 21", "任务 23", "待办 23", "任务 24", "待办 25", "任务 26", "待办 27"])
+        #expect(Set(summary.overdueItems.map(\.id)).count == 8)
+        #expect(Array(summary.overdueItems.prefix(6)).map(\.title).last == "待办 25")
+    }
+
+    @Test func overdueSortingUsesTheProjectTimezoneForMixedDateTypes() {
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        let projectID = UUID()
+        let day = SiteTodo(title: "date only", dueDate: BusinessDateValue(legacyText: "2026-10-20"), projectId: projectID)
+        let instant = ProgressTask(projectId: projectID, title: "local morning", startDate: .empty,
+                                   dueDate: .instant(ISO8601DateFormatter().date(from: "2026-10-19T23:00:00Z")!),
+                                   completion: 0, note: "")
+        let items = DashboardOverdueItem.sorted(todos: [day], tasks: [instant], timeZone: zone)
+        #expect(items.map(\.title) == ["date only", "local morning"])
     }
 
     @Test func warehouseAndReceiptsKeepExistingLinkAndDraftSemantics() {
@@ -174,7 +229,10 @@ struct DashboardSummaryTests {
         let clock = DashboardSummaryTestClock()
         let projects = ProjectStore(now: { clock.now }, calendar: { clock.calendar })
         let finance = FinanceStore()
-        let project = Project(name: "跨日", location: "", expectedEndDate: BusinessDateValue(legacyText: "2026-10-27"), contractAmount: 100)
+        let plan = ProjectPaymentPlan(title: "收款", direction: .income, counterparty: "客户", installments: [
+            ProjectPaymentInstallment(title: "一期", dueDate: BusinessDateValue(legacyText: "2026-10-29"), amount: 100)
+        ])
+        let project = Project(name: "跨日", location: "", expectedEndDate: BusinessDateValue(legacyText: "2026-10-27"), contractAmount: 100, paymentPlans: [plan])
         projects.setProjects([project])
         projects.setDailyLogs([log(projectID: project.id)])
         projects.setSiteTodos([todo(projectID: project.id)])
@@ -185,17 +243,103 @@ struct DashboardSummaryTests {
             }
         }
         #expect(get().todayLogs.count == 1)
-        #expect(get().businessSummary.receivableAgeDays == 1)
+        #expect(get().businessSummary.scope?.duePlanAmount == 0)
+        #expect(get().businessSummary.scope?.futurePlanAmount == 100)
         clock.now = ISO8601DateFormatter().date(from: "2026-10-28T16:00:00Z")!
         #expect(projects.refreshDateSensitiveStateIfNeeded())
         #expect(get().todayLogs.isEmpty)
         #expect(get().overdueTodos.count == 1)
-        #expect(get().businessSummary.receivableAgeDays == 2)
+        #expect(get().businessSummary.scope?.duePlanAmount == 100)
+        #expect(get().businessSummary.scope?.futurePlanAmount == 0)
         #expect(cache.buildCount == 2)
         clock.calendar.timeZone = TimeZone(identifier: "America/Los_Angeles")!
         #expect(projects.refreshDateSensitiveStateIfNeeded())
         #expect(get().todayLogs.count == 1)
+        #expect(get().businessSummary.scope?.duePlanAmount == 0)
+        #expect(get().businessSummary.scope?.futurePlanAmount == 100)
         #expect(cache.buildCount == 3)
+    }
+
+    @Test func businessScopeUsesSelectedVersionAndKeepsPlansSeparateFromContract() {
+        let projects = ProjectStore()
+        let finance = FinanceStore()
+        let installment = ProjectPaymentInstallment(title: "首期", dueDate: BusinessDateValue(legacyText: "2026-10-27"), amount: 30)
+        let plan = ProjectPaymentPlan(title: "计划", direction: .income, counterparty: "客户", installments: [installment])
+        let project = Project(name: "经营口径", location: "", contractAmount: 100, materialCost: 10, laborCost: 20,
+                              paymentPlans: [plan], businessQuoteVersion: "V1")
+        projects.setProjects([project])
+        let selected = QuoteItem(name: "当前", unitPrice: 10, quantity: 2, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                                 versionName: "V1", status: .confirmed, projectId: project.id)
+        let old = QuoteItem(name: "历史", unitPrice: 80, quantity: 1, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                            versionName: "V2", status: .confirmed, projectId: project.id)
+        finance.setQuoteItems([selected, old])
+        projects.setProjectFinancialRecords([
+            ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection, amount: 10,
+                                   paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: installment.id)),
+            ProjectFinancialRecord(projectId: project.id, direction: .expense, category: .material, amount: 8)
+        ])
+        let input = fixedDayInput(copying: DashboardSummaryInput(projectStore: projects, financeStore: finance), at: "2026-10-28T04:00:00Z")
+        let scope = DashboardSummaryBuilder.build(input).businessSummary.scope
+        #expect(scope?.selectedQuoteAmount == 20)
+        #expect(scope?.contractUnpaid == 90)
+        #expect(scope?.duePlanAmount == 20)
+        #expect(scope?.futurePlanAmount == 0)
+        #expect(scope?.materialEstimate == 10 && scope?.laborEstimate == 20)
+        #expect(scope?.formalExpense == 8 && scope?.estimatedProfit == 70)
+    }
+
+    @Test func directBusinessScopePreservesProjectBoundariesAndSelectedQuote() {
+        let zone = TimeZone(identifier: "Asia/Shanghai")!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let now = ISO8601DateFormatter().date(from: "2026-10-28T04:00:00Z")!
+        let installment = ProjectPaymentInstallment(title: "一期", dueDate: BusinessDateValue(legacyText: "2026-10-27"), amount: 30)
+        let plan = ProjectPaymentPlan(title: "计划", direction: .income, counterparty: "客户", installments: [installment])
+        let first = Project(name: "A", location: "", contractAmount: 100, materialCost: 10, laborCost: 20,
+                            paymentPlans: [plan], businessQuoteVersion: "V1")
+        let second = Project(name: "B", location: "", contractAmount: 100, paidAmount: 150, materialCost: 0, laborCost: 0)
+        let current = QuoteItem(name: "当前", unitPrice: 10, quantity: 2, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                                versionName: "V1", status: .confirmed, projectId: first.id)
+        let old = QuoteItem(name: "历史", unitPrice: 80, quantity: 1, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                            versionName: "V2", status: .confirmed, projectId: first.id)
+        let receipt = ProjectFinancialRecord(projectId: first.id, direction: .income, category: .collection, amount: 10,
+                                             paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: installment.id))
+        let expense = ProjectFinancialRecord(projectId: first.id, direction: .expense, category: .material, amount: 8)
+        var input = DashboardSummaryInput(dayContext: ProjectDayContext(now: now, calendar: calendar))
+        input.projects = [first, second]
+        input.quotesByProjectID = [first.id: [current, old]]
+        input.financialRecords = [receipt, expense]
+        input.financialRecordsByProjectID = [first.id: [receipt, expense]]
+        let summary = DashboardSummaryBuilder.build(input).businessSummary
+        #expect(summary.scope?.selectedQuoteAmount == 20)
+        #expect(summary.scope?.contractUnpaid == 90 && summary.unpaidAmount == 90)
+        #expect(summary.scope?.duePlanAmount == 20 && summary.scope?.futurePlanAmount == 0)
+        #expect(summary.scope?.materialEstimate == 10 && summary.scope?.laborEstimate == 20)
+        #expect(summary.scope?.formalExpense == 8 && summary.scope?.estimatedProfit == 170)
+    }
+
+    @Test func directBusinessScopeKeepsUnresolvedAmountsAndSchedulesUnknown() {
+        let zone = TimeZone(secondsFromGMT: 0)!
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = zone
+        let installment = ProjectPaymentInstallment(title: "一期", dueDate: BusinessDateValue(legacyText: "2026-10-27"), amount: 30)
+        let plan = ProjectPaymentPlan(title: "计划", direction: .income, counterparty: "客户", installments: [installment])
+        let project = Project(name: "A", location: "", contractAmount: 100, paidAmount: 10, materialCost: 50,
+                              laborCost: 20, paymentPlans: [plan])
+        let material = MaterialItem(name: "未填单价", quantity: 2, unit: "m", projectId: project.id)
+        let quote = QuoteItem(name: "待选择", unitPrice: 10, quantity: 1, unit: "项", notes: "", taxRate: 0,
+                              discountRate: 0, versionName: "V1", status: .confirmed, projectId: project.id)
+        let emptyReceipt = ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection, amount: .empty)
+        var input = DashboardSummaryInput(dayContext: ProjectDayContext(now: Date(), calendar: calendar))
+        input.projects = [project]
+        input.materialsByProjectID = [project.id: [material]]
+        input.quotesByProjectID = [project.id: [quote]]
+        input.financialRecords = [emptyReceipt]
+        input.financialRecordsByProjectID = [project.id: [emptyReceipt]]
+        let scope = DashboardSummaryBuilder.build(input).businessSummary.scope
+        #expect(scope?.selectedQuoteAmount == nil && scope?.quoteProjectsNeedingReview == 1)
+        #expect(scope?.contractUnpaid == nil && scope?.materialEstimate == nil && scope?.estimatedProfit == nil)
+        #expect(scope?.duePlanAmount == nil && scope?.plansNeedingReview == 1)
     }
 
     @Test func inputSnapshotRetainsItsValuesAndSourceChangesCannotReuseCachedSummary() {

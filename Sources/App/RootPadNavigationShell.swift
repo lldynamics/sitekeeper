@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootPadNavigationShell: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(ProjectStore.self) private var projectStore
     @Binding var selectedTab: Tab
     @State private var selectedProjectID: UUID?
@@ -51,15 +52,29 @@ struct RootPadNavigationShell: View {
         List(selection: moduleSelection) {
             ForEach(Tab.allCases) { tab in
                 NavigationLink(value: tab) {
-                    Label(tab.title, systemImage: tab.systemImage)
+                    if dynamicTypeSize.isAccessibilitySize {
+                        VStack(alignment: .leading, spacing: AppSpacing.tight * 0.5) {
+                            Image(systemName: tab.systemImage)
+                                .accessibilityHidden(true)
+                            Text(tab.title)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else {
+                        Label(tab.title, systemImage: tab.systemImage)
+                    }
                 }
                 .tag(tab)
+                .accessibilityLabel(tab.title)
                 .accessibilityIdentifier("primary-module-\(tab.id)")
             }
         }
         .listStyle(.sidebar)
         .navigationTitle(AppBrand.displayName)
-        .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 260)
+        .navigationSplitViewColumnWidth(
+            min: dynamicTypeSize.isAccessibilitySize ? 280 : 180,
+            ideal: dynamicTypeSize.isAccessibilitySize ? 300 : 210,
+            max: dynamicTypeSize.isAccessibilitySize ? 360 : 260
+        )
         .accessibilityIdentifier("primary-module-sidebar")
     }
 

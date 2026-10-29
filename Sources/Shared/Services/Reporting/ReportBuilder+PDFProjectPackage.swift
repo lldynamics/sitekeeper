@@ -19,21 +19,11 @@ extension ReportBuilder {
         quickNotes: [QuickNote] = [],
         paidAmountOverride: MoneyValue? = nil
     ) -> Data {
-        let quoteTotal = quotes.reduce(MoneyValue.zero) { $0 + quoteGrandTotal($1) }
+        let quoteScope = ProjectBusinessQuoteMetrics(project: project, quotes: quotes)
         let contract = project.contractAmount
-        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: financialRecords)
-        let recordedMaterialCost = materials.reduce(MoneyValue.zero) { $0 + materialLineTotal($1) }
-        let recordedLaborCost = labor.reduce(MoneyValue.zero) { $0 + laborLineTotal($1) }
-        let materialCost = ProjectDetailMetrics.currentMaterialCost(
-            project: project,
-            materialCostAuto: recordedMaterialCost,
-            hasMaterialDetails: !materials.isEmpty
-        )
-        let laborCost = ProjectDetailMetrics.currentLaborCost(
-            project: project,
-            laborCostAuto: recordedLaborCost,
-            hasLaborDetails: !labor.isEmpty
-        )
+        let projectRecords = financialRecords.filter { $0.projectId == project.id }
+        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: projectRecords)
+        let costScope = ProjectCostBasisMetrics.summary(project: project, materials: materials, labor: labor, records: projectRecords)
         let laborWorkload = laborWorkloadSummary(labor)
         let progress = tasks.isEmpty ? 0 : tasks.reduce(0) { $0 + $1.clampedCompletion } / Double(tasks.count)
         let deliveryHealth = projectDeliveryHealthReport(
@@ -83,12 +73,16 @@ extension ReportBuilder {
             y = drawPDFText(locFormat("客户: %@  电话: %@", project.customerName.isEmpty ? locNotFilled : project.customerName, project.customerPhone.isEmpty ? "-" : project.customerPhone), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("负责人: %@", project.managerName.isEmpty ? locNotFilled : project.managerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
             y = drawPDFText(locFormat("工期: %@ 至 %@", project.startDate.isEmpty ? locNotFilled : project.startDate.storageText, project.expectedEndDate.isEmpty ? locNotFilled : project.expectedEndDate.storageText), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid))), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
-            y = drawPDFText(locFormat("毛利估算: %@  人工量: %@  进度: %lld%%", money(contract - materialCost - laborCost), laborWorkload.displayText, Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13)) + 8
-            let paidExplanation = ProjectPaidAmountExplanation(project: project, records: financialRecords)
+            let unpaidText = contract.isValid && paid.isValid
+                ? money(ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid)) : "—"
+            y = drawPDFText(locFormat("合同金额: %@  已收: %@  未收: %@", contract.isEmpty ? "—" : money(contract), money(paid), unpaidText), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("report_scope_quote_format", quoteScope.selectedVersion ?? loc("quote_business_selection_none"), scopedBusinessMoney(quoteScope.amount), scopedBusinessMoney(quoteScope.allVersionsAmount)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("report_scope_cost_format", scopedBusinessMoney(costScope.material.amount), scopedBusinessMoney(costScope.labor.amount)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("report_scope_expense_format", costScope.formalExpenseCount == 0 ? loc("cost_basis_no_expenses") : scopedBusinessMoney(costScope.formalExpense)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13))
+            y = drawPDFText(locFormat("毛利估算: %@  人工量: %@  进度: %lld%%", scopedBusinessMoney(costScope.estimatedProfit(contract: contract)), laborWorkload.displayText, Int64(progress * 100)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 13)) + 8
+            let paidExplanation = ProjectPaidAmountExplanation(project: project, records: projectRecords)
             y = drawPDFText(locFormat("已收金额来源: %@；手填历史和正式收款不会相加。", paidExplanation.source.displayName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11)) + 5
-            _ = drawPDFText(loc("毛利估算＝合同金额－材料成本－人工成本；不等于最终利润，其他支出需另行核对。成本有明细时采用明细，否则采用手填金额。"), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
+            _ = drawPDFText(loc("cost_basis_explanation"), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 11))
 
             // 2. 目录
             context.beginPage()
@@ -114,7 +108,7 @@ extension ReportBuilder {
 
             // 3. 报价表
             let quoteColumns: [(title: String, width: CGFloat)] = [
-                (loc("项目"), 140), (loc("版本"), 44), (loc("状态"), 48), (loc("数量"), 44), (loc("单价"), 62), (loc("金额"), 74), (loc("确认日期"), 74), (loc("备注"), 73)
+                (loc("项目"), 112), (loc("版本"), 44), (loc("状态"), 48), (loc("数量"), 44), (loc("单价"), 62), (loc("金额"), 74), (loc("确认日期"), 74), (loc("备注"), 65)
             ]
             var quoteRows = quotes.map { item in
                 [
@@ -122,8 +116,8 @@ extension ReportBuilder {
                     item.versionName,
                     item.status.displayName,
                     "\(item.quantity)\(item.unit)",
-                    money(item.unitPrice),
-                    money(quoteGrandTotal(item)),
+                    scopedBusinessMoney(item.unitPrice.isValid ? item.unitPrice : nil),
+                    scopedBusinessMoney(ProjectBusinessQuoteMetrics.strictAmount(item)),
                     item.customerConfirmedDate.isEmpty ? "-" : item.customerConfirmedDate.storageText,
                     item.notes
                 ]
@@ -143,7 +137,7 @@ extension ReportBuilder {
                     quoteIndex += 1
                 }
                 if quoteIndex == quoteRows.count {
-                    _ = drawPDFText(locFormat("报价合计: %@", money(quoteTotal)), at: CGPoint(x: margin, y: tableY + 12), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 12))
+                    _ = drawPDFText(locFormat("report_scope_all_quote_format", scopedBusinessMoney(quoteScope.allVersionsAmount)), at: CGPoint(x: margin, y: tableY + 12), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 12))
                 }
             }
 
@@ -179,7 +173,7 @@ extension ReportBuilder {
 
             // 5. 项目财务流水
             let financeColumns: [(title: String, width: CGFloat)] = [
-                (loc("日期"), 76), (loc("收支"), 40), (loc("分类"), 52), (loc("状态"), 48), (loc("金额"), 68), (loc("对方"), 96), (loc("票号"), 82), (loc("票据"), 40), (loc("备注"), 83)
+                (loc("日期"), 76), (loc("收支"), 40), (loc("分类"), 52), (loc("状态"), 48), (loc("金额"), 68), (loc("对方"), 75), (loc("票号"), 60), (loc("票据"), 40), (loc("备注"), 64)
             ]
             var financeRows = financialRecords.sorted(by: { $0.date > $1.date }).map { row in
                 [

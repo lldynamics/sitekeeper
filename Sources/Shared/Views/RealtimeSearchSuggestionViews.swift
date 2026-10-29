@@ -6,6 +6,7 @@ struct InlineSearchPanel<TrailingContent: View>: View {
     var suggestions: [RealtimeSearchSuggestion] = []
     var emptyStateText: String = AppLocalization.string("未找到匹配内容")
     var materialTone: AppSurfaceTone = .grouped
+    var shadow: AppSurfaceShadow = .card
     var trailingContent: TrailingContent
     let onSelectSuggestion: (RealtimeSearchSuggestion) -> Void
 
@@ -15,6 +16,7 @@ struct InlineSearchPanel<TrailingContent: View>: View {
         suggestions: [RealtimeSearchSuggestion] = [],
         emptyStateText: String = AppLocalization.string("未找到匹配内容"),
         materialTone: AppSurfaceTone = .grouped,
+        shadow: AppSurfaceShadow = .card,
         @ViewBuilder trailingContent: () -> TrailingContent,
         onSelectSuggestion: @escaping (RealtimeSearchSuggestion) -> Void
     ) {
@@ -23,6 +25,7 @@ struct InlineSearchPanel<TrailingContent: View>: View {
         self.suggestions = suggestions
         self.emptyStateText = emptyStateText
         self.materialTone = materialTone
+        self.shadow = shadow
         self.trailingContent = trailingContent()
         self.onSelectSuggestion = onSelectSuggestion
     }
@@ -40,8 +43,8 @@ struct InlineSearchPanel<TrailingContent: View>: View {
             tone: materialTone,
             cornerRadius: 14,
             padding: 0,
-            shadow: .card,
-            stroke: Color(uiColor: .separator).opacity(0.18)
+            shadow: shadow,
+            stroke: AppSurfaceDefaults.stroke
         ) {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: AppSpacing.tight + 2) {

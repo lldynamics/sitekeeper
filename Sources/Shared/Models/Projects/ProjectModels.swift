@@ -19,6 +19,8 @@ struct Project: Identifiable, Codable, Sendable {
     var paymentPlans: [ProjectPaymentPlan]
     /// Independent change confirmations; never added to contract or receipts automatically.
     var changeOrders: [ProjectChangeOrder]
+    /// Explicit reporting selection only; never changes the contract amount.
+    var businessQuoteVersion: String?
 
     init(
         id: UUID = UUID(),
@@ -37,7 +39,8 @@ struct Project: Identifiable, Codable, Sendable {
         laborCost: MoneyValue = .empty,
         requiredDocumentCategories: [ProjectDocumentCategory] = ProjectDocumentCategory.defaultConstructionArchiveRequirements,
         paymentPlans: [ProjectPaymentPlan] = [],
-        changeOrders: [ProjectChangeOrder] = []
+        changeOrders: [ProjectChangeOrder] = [],
+        businessQuoteVersion: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -56,11 +59,13 @@ struct Project: Identifiable, Codable, Sendable {
         self.requiredDocumentCategories = ProjectDocumentCategory.normalizedConstructionArchiveRequirements(requiredDocumentCategories)
         self.paymentPlans = paymentPlans
         self.changeOrders = changeOrders
+        self.businessQuoteVersion = businessQuoteVersion
     }
 
     enum CodingKeys: String, CodingKey {
         case id, name, location, status, customerName, customerPhone, startDate, expectedEndDate
         case managerName, contractAmount, paidAmount, paymentStatus, materialCost, laborCost, requiredDocumentCategories, paymentPlans, changeOrders
+        case businessQuoteVersion
     }
 
     init(from decoder: Decoder) throws {
@@ -84,6 +89,7 @@ struct Project: Identifiable, Codable, Sendable {
         )
         paymentPlans = try container.decodeIfPresent([ProjectPaymentPlan].self, forKey: .paymentPlans) ?? []
         changeOrders = try container.decodeIfPresent([ProjectChangeOrder].self, forKey: .changeOrders) ?? []
+        businessQuoteVersion = try container.decodeIfPresent(String.self, forKey: .businessQuoteVersion)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -105,6 +111,7 @@ struct Project: Identifiable, Codable, Sendable {
         try container.encode(requiredDocumentCategories.map(\.rawValue), forKey: .requiredDocumentCategories)
         if !paymentPlans.isEmpty { try container.encode(paymentPlans, forKey: .paymentPlans) }
         if !changeOrders.isEmpty { try container.encode(changeOrders, forKey: .changeOrders) }
+        try container.encodeIfPresent(businessQuoteVersion, forKey: .businessQuoteVersion)
     }
 }
 

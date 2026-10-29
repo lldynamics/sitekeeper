@@ -51,14 +51,14 @@ struct ProjectFinancialEntrySections: View {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("¥")
-                            .font(.system(size: 26, weight: .bold, design: .rounded))
+                            .font(.system(.title, design: .rounded).weight(.bold))
                             .foregroundStyle(amountThemeColor)
 
                         TextField(AppLocalization.string("0.00"), text: $amount.numericInput(.amount))
                             .accessibilityIdentifier("finance-draft-amount")
                             .keyboardType(.decimalPad)
                             .focused(focused)
-                            .font(.system(size: 32, weight: .bold, design: .rounded))
+                            .font(.system(.largeTitle, design: .rounded).weight(.bold))
                             .foregroundStyle(amountThemeColor)
                             .multilineTextAlignment(.leading)
 

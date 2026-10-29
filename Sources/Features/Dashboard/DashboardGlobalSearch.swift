@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct DashboardGlobalSearch: View {
+    @Environment(\.dashboardFlatSurfaces) private var flatSurfaces
     @Binding var text: String
     @Binding var projectID: UUID?
     @Binding var category: RealtimeSearchSuggestion.Category?
@@ -26,6 +27,7 @@ struct DashboardGlobalSearch: View {
             suggestions: suggestions,
             emptyStateText: AppLocalization.string("未找到匹配的业务记录或命令"),
             materialTone: .grouped,
+            shadow: flatSurfaces ? .none : .card,
             trailingContent: {
                 searchFilterControls
             },
@@ -79,7 +81,7 @@ struct DashboardGlobalSearch: View {
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.caption2.weight(.bold))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -128,7 +130,7 @@ struct DashboardGlobalSearch: View {
                     .font(.caption.weight(.medium))
                     .lineLimit(1)
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 8, weight: .bold))
+                    .font(.caption2.weight(.bold))
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 5)
@@ -147,13 +149,13 @@ struct DashboardGlobalSearch: View {
 
     private var combinedCompactFilterMenu: some View {
         Menu {
-            Menu(AppLocalization.string("项目: ") + currentProjectName) {
+            Menu(String(format: AppLocalization.string("项目: %@"), currentProjectName)) {
                 Button(AppLocalization.string("全部项目")) { projectID = nil }
                 ForEach(projects) { project in
                     Button(project.name) { projectID = project.id }
                 }
             }
-            Menu(AppLocalization.string("类型: ") + currentCategoryName) {
+            Menu(String(format: AppLocalization.string("类型: %@"), currentCategoryName)) {
                 Button(AppLocalization.string("全部类型")) { category = nil }
                 ForEach(RealtimeSearchSuggestion.Category.allCases, id: \.self) { cat in
                     Button(cat.displayName) { category = cat }

@@ -24,9 +24,9 @@ struct ProjectPaidAmountExplanation {
 
     init(project: Project, records: [ProjectFinancialRecord]) {
         manualPaidAmount = project.paidAmount
-        recordedCollectionAmount = ProjectFinancialMetrics.collectionAmount(
+        recordedCollectionAmount = ProjectFinancialMetrics.strictCollectionAmount(
             records.filter { $0.projectId == project.id }
-        )
+        ) ?? MoneyValue(.nan)
         effectivePaidAmount = ProjectFinancialMetrics.effectivePaidAmount(
             recordedCollectionAmount: recordedCollectionAmount,
             manualPaidAmount: manualPaidAmount

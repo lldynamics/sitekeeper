@@ -18,9 +18,13 @@ struct MaterialReceiptSheet: View {
             Form {
                 Section(material.name) {
                     let progress = MaterialWarehouseWorkflow.progress(material: material, movements: store.projectWarehouseMovements)
-                    LabeledContent(AppLocalization.string("计划数量"), value: "\(progress.planned) \(material.unit)")
-                    LabeledContent(AppLocalization.string("累计到货"), value: "\(progress.received) \(material.unit)")
-                    LabeledContent(AppLocalization.string("待到货"), value: "\(progress.remaining) \(material.unit)")
+                    LabeledContent(AppLocalization.string("计划数量"), value: quantityText(progress.planned))
+                    LabeledContent(AppLocalization.string("material_follow_up_received"), value: quantityText(progress.received))
+                    LabeledContent(AppLocalization.string("待到货"), value: quantityText(progress.remaining))
+                    if let reason = progress.reviewReason {
+                        Label(reason.displayName, systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
                     Text(AppLocalization.string("到货生成入库记录，计划数量保持不变。可在入库详情中生成记账草稿。"))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
@@ -49,6 +53,11 @@ struct MaterialReceiptSheet: View {
             .interactiveDismissDisabled(isSaving)
             .onAppear { if unitPrice.isEmpty { unitPrice = material.unitPrice.wireText } }
         }
+    }
+
+    private func quantityText(_ value: QuantityValue) -> String {
+        guard value.isValid, !value.isNegative else { return AppLocalization.string("material_follow_up_quantity_review") }
+        return [value.wireText, material.unit].filter { !$0.isEmpty }.joined(separator: " ")
     }
 
     private func save() async {

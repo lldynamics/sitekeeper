@@ -52,7 +52,7 @@ struct ProfileStorageStatusCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .fill(Color(uiColor: .tertiarySystemGroupedBackground))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)

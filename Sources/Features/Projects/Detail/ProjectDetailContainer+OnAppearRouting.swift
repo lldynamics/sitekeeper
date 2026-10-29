@@ -18,23 +18,23 @@ extension ProjectDetailContainer {
         )
         if routing.shouldOpenFinancialAdd {
             didAutoOpenFinancialAdd = true
-            openMode(.finance, prefersInlineSections: usesSingleCanvasLayoutOnPad)
+            openMode(.finance, prefersInlineSections: usesSingleCanvasLayoutOnPad, isUserInitiated: false)
             routeState.presentation = .addFinancial
         }
         if routing.shouldOpenDocumentScanSetup {
             didAutoOpenDocumentScanSetup = true
-            openMode(.assets, prefersInlineSections: usesSingleCanvasLayoutOnPad)
+            openMode(.assets, prefersInlineSections: usesSingleCanvasLayoutOnPad, isUserInitiated: false)
             routeState.presentation = .documentScanSetup
         }
         if routing.shouldOpenDeliveryGuide {
             didAutoOpenDeliveryGuide = true
-            openMode(.overview, prefersInlineSections: usesSingleCanvasLayoutOnPad)
+            openMode(.overview, prefersInlineSections: usesSingleCanvasLayoutOnPad, isUserInitiated: false)
             routeState.presentation = .deliveryGuide
         }
         if routing.shouldConsumeFocusRequest {
             didOpenFocusedItem = true
             guard let focusedItem = routing.focusedItem else { return }
-            openMode(focusedItem.mode, prefersInlineSections: usesSingleCanvasLayoutOnPad)
+            openMode(focusedItem.mode, prefersInlineSections: usesSingleCanvasLayoutOnPad, isUserInitiated: false)
             Task { @MainActor in
                 ProjectDetailFocusedItemApplier.apply(
                     focusedItem,

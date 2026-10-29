@@ -3,6 +3,7 @@ import SwiftUI
 struct TaskProgressView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let initialProjectId: UUID?
     @State private var showAdd = false
     @State private var newProjectId: UUID?
@@ -16,6 +17,7 @@ struct TaskProgressView: View {
     @State private var statusFilter: ProgressStatusFilter = .all
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
+    @State private var preferredColumn: NavigationSplitViewColumn = .detail
 
     init(initialProjectId: UUID? = nil) {
         self.initialProjectId = initialProjectId
@@ -55,18 +57,12 @@ struct TaskProgressView: View {
     }
 
     var body: some View {
-        AdaptiveListDetailLayout(
-            forceSplit: usesSplitLayout,
-            compact: {
-                compactProgressLayout
-            },
-            sidebar: {
-                progressSidebar
-            },
-            detail: {
-                progressDetail
-            }
-        )
+        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+            progressSidebar
+        } detail: {
+            progressDetail
+        }
+        .navigationSplitViewStyle(.balanced)
         .navigationTitle(AppLocalization.string("施工进度"))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $showAdd) {
@@ -78,62 +74,27 @@ struct TaskProgressView: View {
         }
     }
 
-    private var compactProgressLayout: some View {
-        List {
-            Section {
-                ProjectContextStrip(
-                    title: AppLocalization.string("当前工程"),
-                    projects: store.projects,
-                    selectedProjectId: $projectFilter,
-                    emptyText: AppLocalization.string("全部项目")
-                )
-                Picker(AppLocalization.string("视图"), selection: $mode) {
-                    ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
+    private var compactProgressFilters: some View {
+        Section {
+            ProjectContextStrip(
+                title: AppLocalization.string("当前工程"),
+                projects: store.projects,
+                selectedProjectId: $projectFilter,
+                emptyText: AppLocalization.string("全部项目")
+            )
+            progressModePicker
 
-                Picker(AppLocalization.string("项目"), selection: $projectFilter) {
-                    Text(AppLocalization.string("全部项目")).tag(nil as UUID?)
-                    ForEach(store.projects) { project in
-                        Text(project.name).tag(project.id as UUID?)
-                    }
+            Picker(AppLocalization.string("项目"), selection: $projectFilter) {
+                Text(AppLocalization.string("全部项目")).tag(nil as UUID?)
+                ForEach(store.projects) { project in
+                    Text(project.name).tag(project.id as UUID?)
                 }
-                FilterChipBar(
-                    options: ProgressStatusFilter.allCases,
-                    selection: $statusFilter,
-                    title: { $0.displayName }
-                )
             }
-
-            if visibleTasks.isEmpty {
-                ContentUnavailableView(
-                    AppLocalization.string("暂无进度任务"),
-                    systemImage: "calendar.badge.plus",
-                    description: Text(AppLocalization.string("添加任务后可按项目跟踪节点、完成率和延期情况"))
-                )
-                Button {
-                    showAdd = true
-                } label: {
-                    Label(AppLocalization.string("新建进度任务"), systemImage: "plus.circle.fill")
-                }
-                .buttonStyle(.appProminent())
-            } else if mode == .timeline {
-                timelineContent
-            } else {
-                listContent
-            }
-        }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button { showAdd = true } label: {
-                    Image(systemName: "plus")
-                        .visibleIconStyle()
-                }
-                .buttonStyle(.appIcon())
-                .accessibilityLabel(AppLocalization.string("新建进度任务"))
-            }
+            FilterChipBar(
+                options: ProgressStatusFilter.allCases,
+                selection: $statusFilter,
+                title: { $0.displayName }
+            )
         }
     }
 
@@ -146,12 +107,7 @@ struct TaskProgressView: View {
                     selectedProjectId: $projectFilter,
                     emptyText: AppLocalization.string("全部项目")
                 )
-                Picker(AppLocalization.string("视图"), selection: $mode) {
-                    ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
-                        Text(mode.displayName).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
+                progressModePicker
                 FilterChipBar(
                     options: ProgressStatusFilter.allCases,
                     selection: $statusFilter,
@@ -170,18 +126,57 @@ struct TaskProgressView: View {
         .navigationTitle(AppLocalization.string("进度筛选"))
     }
 
+    private var modePicker: some View {
+        Picker(AppLocalization.string("视图"), selection: $mode) {
+            ForEach(ProgressDisplayMode.allCases, id: \.self) { mode in
+                Text(mode.displayName).tag(mode)
+            }
+        }
+        .accessibilityIdentifier("progress-mode-picker")
+    }
+
+    @ViewBuilder private var progressModePicker: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            modePicker.pickerStyle(.menu)
+        } else {
+            modePicker.pickerStyle(.segmented)
+        }
+    }
+
     private var progressDetail: some View {
         List {
+            if !usesSplitLayout { compactProgressFilters }
             if visibleTasks.isEmpty {
                 ContentUnavailableView(
                     AppLocalization.string("暂无进度任务"),
                     systemImage: "calendar.badge.plus",
                     description: Text(AppLocalization.string("添加任务后可按项目跟踪节点、完成率和延期情况"))
                 )
+                if !usesSplitLayout {
+                    Button { showAdd = true } label: {
+                        Label(AppLocalization.string("新建进度任务"), systemImage: "plus.circle.fill")
+                    }
+                    .buttonStyle(.appProminent())
+                }
             } else if mode == .timeline {
                 timelineContent
             } else {
                 listContent
+            }
+        }
+        .modifier(AppPreserveListPosition(
+            split: usesSplitLayout,
+            rowIDs: visibleProjects.flatMap { tasks(for: $0.id).map(\.id) }
+        ))
+        .toolbar {
+            if !usesSplitLayout {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { showAdd = true } label: {
+                        Image(systemName: "plus").visibleIconStyle()
+                    }
+                    .buttonStyle(.appIcon())
+                    .accessibilityLabel(AppLocalization.string("新建进度任务"))
+                }
             }
         }
     }
@@ -198,6 +193,8 @@ struct TaskProgressView: View {
                         Section(project.name) {
                             ForEach(tasks) { task in
                                 timelineRow(task, range: range)
+                                    .background { AppListRowAnchor(id: task.id) }
+                                    .id(task.id)
                             }
                             .onDelete { offsets in
                                 delete(tasks: tasks, offsets: offsets)
@@ -217,6 +214,8 @@ struct TaskProgressView: View {
                     Section(project.name) {
                         ForEach(tasks) { task in
                             taskRow(task)
+                                .background { AppListRowAnchor(id: task.id) }
+                                .id(task.id)
                         }
                         .onDelete { offsets in
                             delete(tasks: tasks, offsets: offsets)

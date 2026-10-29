@@ -101,7 +101,7 @@ struct DailyLogWatermarkPhotoSection: View {
                     // 底部半透明标签条
                     HStack(spacing: 4) {
                         Text(draft.tag.displayName)
-                            .font(.system(size: 10, weight: .semibold))
+                            .font(.caption2.weight(.semibold))
                             .foregroundStyle(.white)
                             .lineLimit(1)
                     }
@@ -127,9 +127,11 @@ struct DailyLogWatermarkPhotoSection: View {
                     .font(.subheadline)
                     .foregroundStyle(.white, Color.red.opacity(0.85))
                     .background(Circle().fill(Color.black.opacity(0.3)))
+                    .frame(minWidth: 44, minHeight: 44)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .offset(x: 4, y: -4)
+            .offset(x: 10, y: -10)
         }
     }
 

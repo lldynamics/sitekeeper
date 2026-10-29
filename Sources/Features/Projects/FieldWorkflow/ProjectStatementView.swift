@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct StatementPreviewLine: Identifiable {
+    let id: Int
+    let text: String
+}
+
 struct ProjectStatementView: View {
     let project: Project
     @Environment(DataStore.self) private var store
@@ -14,6 +19,12 @@ struct ProjectStatementView: View {
         ProjectCustomerStatement(project: liveProject, period: period, records: store.projectFinancialRecords)
     }
 
+    private func statementLines(for snapshot: ProjectCustomerStatement) -> [StatementPreviewLine] {
+        ReportBuilder.customerStatementLines(snapshot).enumerated().map {
+            StatementPreviewLine(id: $0.offset, text: $0.element)
+        }
+    }
+
     var body: some View {
         let snapshot = statement
         List {
@@ -26,9 +37,9 @@ struct ProjectStatementView: View {
                 }
             }
             Section(AppLocalization.string("客户对账预览")) {
-                ForEach(Array(ReportBuilder.customerStatementLines(snapshot).enumerated()), id: \.offset) { _, line in
-                    if !line.isEmpty {
-                        Text(line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                ForEach(statementLines(for: snapshot)) { line in
+                    if !line.text.isEmpty {
+                        Text(line.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

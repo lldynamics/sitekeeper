@@ -323,12 +323,14 @@ struct ConduitCrossSectionVisualizer: View {
         .background(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .fill(Color(uiColor: .secondarySystemGroupedBackground))
+                .shadow(color: AppSurfaceShadow.subtle.color,
+                        radius: AppSurfaceShadow.subtle.radius,
+                        y: AppSurfaceShadow.subtle.y)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
                 .stroke(isPass ? Color(uiColor: .separator).opacity(0.18) : Color.appRisk.opacity(0.3), lineWidth: 0.8)
         )
-        .shadow(color: Color.black.opacity(0.03), radius: 6, y: 2)
     }
 
     private func calculateWirePositions(count: Int, wireRadius: CGFloat, center: CGPoint) -> [CGPoint] {

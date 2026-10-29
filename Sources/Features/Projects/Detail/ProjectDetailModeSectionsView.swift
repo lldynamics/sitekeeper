@@ -54,6 +54,7 @@ struct ProjectDetailModeSectionsView: View {
     let onScanDocumentCategory: (ProjectDocumentCategory) -> Void
     let onCaptureDocumentPhoto: () -> Void
     let onEditMaterial: (MaterialItem) -> Void
+    let onReceiveMaterial: (MaterialItem) -> Void
     let onEditQuote: (QuoteItem) -> Void
     let onEditLabor: (LaborRecord) -> Void
     let onEditProgress: (ProgressTask) -> Void
@@ -158,22 +159,12 @@ struct ProjectDetailModeSectionsView: View {
             contractAmount: project.contractAmount,
             paidAmount: paidAmount,
             receivableAmount: unpaidAmount,
-            receivableAgeDays: overviewReceivableAgeDays,
             recentCollection: overviewRecentCollection,
             materialCost: materialCost,
             laborCostAmount: laborCost,
             pendingMaterialCount: relatedMaterials.filter { $0.quantity.isZero }.count,
             unpricedQuoteCount: relatedQuotes.filter { !$0.unitPrice.isPositive }.count
         )
-    }
-
-    private var overviewReceivableAgeDays: Int? {
-        guard unpaidAmount > 0 else { return nil }
-        guard let endDate = Formatters.date.date(from: project.expectedEndDate) else { return nil }
-        let today = Calendar.current.startOfDay(for: Date())
-        let dueDate = Calendar.current.startOfDay(for: endDate)
-        let days = Calendar.current.dateComponents([.day], from: dueDate, to: today).day ?? 0
-        return max(days, 0)
     }
 
     private var overviewRecentCollection: CollectionSnapshot? {
@@ -235,7 +226,8 @@ struct ProjectDetailModeSectionsView: View {
             items: relatedMaterials,
             useMetric: useMetric,
             onAdd: onAddMaterial,
-            onEdit: onEditMaterial
+            onEdit: onEditMaterial,
+            onReceive: onReceiveMaterial
         )
     }
 

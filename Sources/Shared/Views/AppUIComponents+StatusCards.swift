@@ -37,11 +37,11 @@ enum AppSurfaceShadow {
         case .none:
             .clear
         case .subtle:
-            .black.opacity(0.025)
+            Color(light: UIColor(white: 0, alpha: 0.02), dark: UIColor.clear)
         case .card:
-            .black.opacity(0.04)
+            Color(light: UIColor(white: 0, alpha: 0.035), dark: UIColor.clear)
         case .overlay:
-            .black.opacity(0.08)
+            Color(light: UIColor(white: 0, alpha: 0.06), dark: UIColor.clear)
         }
     }
 
@@ -52,9 +52,9 @@ enum AppSurfaceShadow {
         case .subtle:
             4
         case .card:
-            8
+            10
         case .overlay:
-            14
+            16
         }
     }
 
@@ -65,9 +65,9 @@ enum AppSurfaceShadow {
         case .subtle:
             1
         case .card:
-            2.5
+            3
         case .overlay:
-            5
+            6
         }
     }
 }
@@ -98,14 +98,20 @@ struct AppSurface<Content: View>: View {
 
     var body: some View {
         content
-            .background(backgroundShape)
+            .background {
+                backgroundShape
+                    .shadow(
+                        color: shadow.color,
+                        radius: shadow.radius,
+                        y: shadow.y
+                    )
+            }
             .overlay {
                 if let stroke, strokeWidth > 0 {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .stroke(stroke, lineWidth: strokeWidth)
                 }
             }
-            .shadow(color: shadow.color, radius: shadow.radius, y: shadow.y)
     }
 
     private var backgroundShape: some View {
@@ -114,12 +120,18 @@ struct AppSurface<Content: View>: View {
     }
 }
 
+enum AppSurfaceDefaults {
+    static var stroke: Color {
+        Color(light: UIColor(white: 0, alpha: 0.04), dark: UIColor(white: 1, alpha: 0.08))
+    }
+}
+
 struct AppPanel<Content: View>: View {
     let tone: AppSurfaceTone
     var cornerRadius: CGFloat = 16
     var padding: CGFloat = AppSpacing.normal
     var shadow: AppSurfaceShadow = .card
-    var stroke: Color? = Color(uiColor: .separator).opacity(0.18)
+    var stroke: Color? = AppSurfaceDefaults.stroke
     @ViewBuilder let content: Content
 
     init(
@@ -127,7 +139,7 @@ struct AppPanel<Content: View>: View {
         cornerRadius: CGFloat = 16,
         padding: CGFloat = AppSpacing.normal,
         shadow: AppSurfaceShadow = .card,
-        stroke: Color? = Color(uiColor: .separator).opacity(0.18),
+        stroke: Color? = AppSurfaceDefaults.stroke,
         @ViewBuilder content: () -> Content
     ) {
         self.tone = tone

@@ -112,6 +112,7 @@ struct FilterChipBar<Option: Hashable>: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                     .contentShape(Capsule())
                 }
             }

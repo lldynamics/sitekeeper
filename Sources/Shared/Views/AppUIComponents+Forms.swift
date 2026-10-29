@@ -54,6 +54,9 @@ struct AppBusinessFormSheet<Content: View>: View {
     var body: some View {
         NavigationStack {
             formContent
+                .environment(\.keyboardToolbarCancelAction, cancelTitle.flatMap { title in
+                    onCancel.map { KeyboardToolbarCancelAction(title: title, perform: $0) }
+                })
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -104,6 +107,8 @@ struct AppBusinessEditForm<Content: View>: View {
     var body: some View {
         NavigationStack {
             content
+                .environment(\.keyboardToolbarCancelAction,
+                             KeyboardToolbarCancelAction(title: cancelTitle, perform: onCancel))
                 .navigationTitle(title)
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
@@ -219,6 +224,98 @@ struct AdaptiveListDetailLayout<Compact: View, Sidebar: View, Detail: View>: Vie
             } else {
                 compact()
             }
+        }
+    }
+}
+
+private struct AppListRowFramesKey: PreferenceKey {
+    static let defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
+    }
+}
+
+struct AppListRowAnchor: View {
+    let id: UUID
+    var body: some View {
+        GeometryReader { geometry in
+            Color.clear.preference(key: AppListRowFramesKey.self, value: [id: geometry.frame(in: .global)])
+        }
+    }
+}
+
+struct AppPreserveListPosition: ViewModifier {
+    let split: Bool
+    let rowIDs: [UUID]
+    @State private var viewport = CGRect.zero
+    @State private var visibleID: UUID?
+    @State private var deletionAnchor: UUID?
+    @State private var measuredSplit: Bool?
+    @State private var restoring = false
+    @State private var currentIDs: [UUID] = []
+    @State private var restoreGeneration = 0
+
+    func body(content: Content) -> some View {
+        ScrollViewReader { proxy in
+            content
+                .onAppear { currentIDs = rowIDs }
+                .background {
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear { viewport = geometry.frame(in: .global) }
+                            .onChange(of: geometry.frame(in: .global)) { _, frame in viewport = frame }
+                    }
+                }
+                .onPreferenceChange(AppListRowFramesKey.self) { frames in
+                    guard !restoring, measuredSplit == nil || measuredSplit == split, !viewport.isEmpty else { return }
+                    measuredSplit = split
+                    let visible = frames.filter {
+                        rowIDs.contains($0.key) && $0.value.maxY > viewport.minY && $0.value.minY < viewport.maxY
+                    }
+                    if let anchor = deletionAnchor, visible[anchor] == nil {
+                        deletionAnchor = nil
+                    }
+                    if let center = visible.min(by: {
+                        abs($0.value.midY - viewport.midY) < abs($1.value.midY - viewport.midY)
+                    }) {
+                        visibleID = center.key
+                    }
+                }
+                .onChange(of: rowIDs) { oldIDs, newIDs in
+                    currentIDs = newIDs
+                    restoreGeneration += 1
+                    restoring = false
+                    if let anchor = deletionAnchor, !newIDs.contains(anchor) { deletionAnchor = nil }
+                    let removed = oldIDs.filter { !newIDs.contains($0) }
+                    // A single removed row is the user's current context (for
+                    // example, a swipe deletion). Follow its nearest survivor.
+                    let id = removed.count == 1 ? removed[0] : visibleID
+                    guard let id, !newIDs.contains(id) else { return }
+                    guard let index = oldIDs.firstIndex(of: id) else { visibleID = nil; return }
+                    let candidates = Array(oldIDs.dropFirst(index + 1)) + Array(oldIDs.prefix(index).reversed())
+                    visibleID = candidates.first(where: { newIDs.contains($0) })
+                    deletionAnchor = removed.count == 1 ? visibleID : nil
+                }
+                .onChange(of: split) { _, newValue in
+                    // The compact filter section moves into the sidebar, so a
+                    // raw offset alone would move the user's current row.
+                    let id = deletionAnchor ?? visibleID
+                    restoring = true
+                    measuredSplit = newValue
+                    restoreGeneration += 1
+                    let generation = restoreGeneration
+                    DispatchQueue.main.async {
+                        guard generation == restoreGeneration else { return }
+                        if let id, currentIDs.contains(id) { proxy.scrollTo(id, anchor: .center) }
+                        // A split transition can finish laying out the list
+                        // after its filter section moves to the sidebar.
+                        DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(350)) {
+                            guard generation == restoreGeneration else { return }
+                            if let id, currentIDs.contains(id) { proxy.scrollTo(id, anchor: .center) }
+                            restoring = false
+                        }
+                    }
+                }
         }
     }
 }

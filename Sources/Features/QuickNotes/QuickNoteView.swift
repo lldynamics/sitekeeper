@@ -82,7 +82,18 @@ struct QuickNoteView: View {
                     .offset(x: workspaceSidebarWidth - 0.5)
             }
         }
-        .background(Color(.systemGroupedBackground), ignoresSafeAreaEdges: usesExpandedWorkspace ? [] : .all)
+        .background(alignment: .leading) {
+            if usesExpandedWorkspace {
+                HStack(spacing: 0) {
+                    Color(.secondarySystemGroupedBackground)
+                        .frame(width: workspaceSidebarWidth)
+                    Color(.systemGroupedBackground)
+                }
+                .ignoresSafeArea(.container, edges: [.bottom, .trailing])
+            } else {
+                Color(.systemGroupedBackground).ignoresSafeArea()
+            }
+        }
         .modifier(ExpandedPhoneScrollEdgeModifier(isExpanded: usesExpandedWorkspace))
         .navigationTitle(AppLocalization.string("随手记"))
         .searchable(text: $searchText, prompt: AppLocalization.string("搜索随手记"))
@@ -307,6 +318,7 @@ struct QuickNoteView: View {
                 attachments: $draftAttachments,
                 mode: .compact,
                 isPublishing: isPublishing,
+                usesWorkspaceBackground: usesExpandedWorkspace,
                 onPublish: {
                     publishDraft()
                 },
@@ -328,7 +340,10 @@ struct QuickNoteView: View {
             .disabled(isPublishing)
             .operationToast(notice: $publishNotice)
         }
-        .background(.bar)
+        .background(
+            usesExpandedWorkspace ? AnyShapeStyle(Color(.secondarySystemGroupedBackground)) : AnyShapeStyle(.bar),
+            ignoresSafeAreaEdges: usesExpandedWorkspace ? .bottom : .all
+        )
     }
 
     private var draftMatchesWorkspaceSelection: Bool {

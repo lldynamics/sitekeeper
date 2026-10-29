@@ -25,6 +25,125 @@ struct PaymentPlanSummary: Identifiable {
     }
 }
 
+/// An independent view of one receivable schedule, never a partition of contract
+/// unpaid. Ambiguous receipts stay unassigned instead of being spread over dates.
+struct ProjectReceivableScheduleSummary {
+    enum State: Equatable { case noActiveIncomePlan, ready, needsReview }
+    enum ReviewReason: Hashable {
+        case multipleActiveIncomePlans, duplicateIdentity, invalidPlan, overpaidPlan
+        case invalidAllocation, invalidCollectionAmount, unallocatedCollections, historicalManualPaid
+    }
+
+    let state: State
+    let reviewReasons: Set<ReviewReason>
+    let planID: UUID?
+    /// Includes today; overdue and today below are disjoint subsets.
+    let dueUnpaidAmount: MoneyValue?
+    let futureUnpaidAmount: MoneyValue?
+    let overdueUnpaidAmount: MoneyValue?
+    let dueTodayUnpaidAmount: MoneyValue?
+    /// A subset of due plus future, not another amount to add to that total.
+    let retentionUnpaidAmount: MoneyValue?
+    let oldestOverdueDays: Int?
+
+    init(project: Project, records: [ProjectFinancialRecord], today: CalendarDay, timeZone: TimeZone) {
+        let activePlans = project.paymentPlans.filter { $0.direction == .income && !$0.isArchived }
+        let plansByID = Dictionary(grouping: project.paymentPlans, by: \.id)
+        let installmentIDs = project.paymentPlans.flatMap { $0.installments.map(\.id) }
+        let activeRecords = records.filter { $0.projectId == project.id && $0.countsInBusinessMetrics }
+        var reasons: Set<ReviewReason> = []
+        if activePlans.count > 1 { reasons.insert(.multipleActiveIncomePlans) }
+        if plansByID.values.contains(where: { $0.count > 1 }) || Set(installmentIDs).count != installmentIDs.count {
+            reasons.insert(.duplicateIdentity)
+        }
+        let relevantRecords = activeRecords.filter { $0.paymentAllocation != nil || $0.isCollectionIncome }
+        if Set(relevantRecords.map(\.id)).count != relevantRecords.count { reasons.insert(.duplicateIdentity) }
+
+        var allocatedCollections: [ProjectFinancialRecord] = []
+        for record in activeRecords {
+            guard let allocation = record.paymentAllocation else {
+                if !activePlans.isEmpty, record.isCollectionIncome, record.amount.isPositive {
+                    reasons.insert(.unallocatedCollections)
+                }
+                continue
+            }
+            guard let matches = plansByID[allocation.planID], matches.count == 1,
+                  let plan = matches.first,
+                  plan.installments.filter({ $0.id == allocation.installmentID }).count == 1 else {
+                reasons.insert(.invalidAllocation)
+                continue
+            }
+            // A collection linked to a historical or payable plan is not
+            // allocated to this active income plan. Never silently apply it.
+            guard !plan.isArchived, plan.direction == .income else {
+                if !activePlans.isEmpty, record.isCollectionIncome { reasons.insert(.unallocatedCollections) }
+                continue
+            }
+            guard record.isCollectionIncome, record.amount.isPositive else {
+                reasons.insert(.invalidAllocation)
+                continue
+            }
+            allocatedCollections.append(record)
+        }
+        if !activePlans.isEmpty {
+            let collections = activeRecords.filter(\.isCollectionIncome)
+            let recorded = ProjectFinancialMetrics.collectionAmount(collections)
+            if collections.contains(where: { !$0.amount.isValid || !$0.amount.isPositive }) || !recorded.isValid {
+                reasons.insert(.invalidCollectionAmount)
+            }
+            if !recorded.isPositive {
+                if project.paidAmount.isPositive { reasons.insert(.historicalManualPaid) }
+                if !project.paidAmount.isValid && !project.paidAmount.isEmpty { reasons.insert(.invalidCollectionAmount) }
+            }
+        }
+
+        var due = MoneyValue.zero, future = MoneyValue.zero, overdue = MoneyValue.zero
+        var dueToday = MoneyValue.zero, retention = MoneyValue.zero
+        var oldest: Int?
+        if activePlans.count == 1, let plan = activePlans.first {
+            var scope = project
+            scope.paymentPlans = [plan]
+            let summary = ProjectPaymentMetrics.summaries(project: scope, records: allocatedCollections).first
+            let validShape = !plan.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                && plan.installments.count <= 120
+            if let summary, summary.isValid, validShape {
+                if summary.overpaid.isPositive { reasons.insert(.overpaidPlan) }
+                var calendar = Calendar(identifier: .gregorian)
+                calendar.timeZone = timeZone
+                for item in summary.installments {
+                    guard let day = item.installment.dueDate.calendarDay(in: timeZone) else {
+                        reasons.insert(.invalidPlan)
+                        continue
+                    }
+                    if day <= today { due += item.remaining } else { future += item.remaining }
+                    if day == today { dueToday += item.remaining }
+                    if day < today {
+                        overdue += item.remaining
+                        if item.remaining.isPositive, let start = day.date(in: timeZone), let end = today.date(in: timeZone),
+                           let age = calendar.dateComponents([.day], from: start, to: end).day {
+                            oldest = max(oldest ?? age, age)
+                        }
+                    }
+                    if item.installment.isRetention { retention += item.remaining }
+                }
+                if ![due, future, overdue, dueToday, retention].allSatisfy(\.isValid) { reasons.insert(.invalidPlan) }
+            } else {
+                reasons.insert(.invalidPlan)
+            }
+        }
+        reviewReasons = reasons
+        state = !reasons.isEmpty ? .needsReview : activePlans.isEmpty ? .noActiveIncomePlan : .ready
+        let ready = state == .ready
+        planID = activePlans.count == 1 ? activePlans.first?.id : nil
+        dueUnpaidAmount = ready ? due : nil
+        futureUnpaidAmount = ready ? future : nil
+        overdueUnpaidAmount = ready ? overdue : nil
+        dueTodayUnpaidAmount = ready ? dueToday : nil
+        retentionUnpaidAmount = ready ? retention : nil
+        oldestOverdueDays = ready ? oldest : nil
+    }
+}
+
 enum ProjectPaymentMetrics {
     static func summaries(project: Project, records: [ProjectFinancialRecord]) -> [PaymentPlanSummary] {
         let allocated = Dictionary(grouping: records.filter { $0.projectId == project.id && $0.paymentAllocation != nil }) {

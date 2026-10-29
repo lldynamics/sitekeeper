@@ -1,12 +1,12 @@
 import SwiftUI
 
 struct ProjectMaterialSectionView: View {
-    @State private var receivingMaterial: MaterialItem?
     @State private var pageIndex = 0
     let items: [MaterialItem]
     let useMetric: Bool
     let onAdd: () -> Void
     let onEdit: (MaterialItem) -> Void
+    let onReceive: (MaterialItem) -> Void
 
     var body: some View {
         let page = RecordPage(items, index: pageIndex)
@@ -56,14 +56,13 @@ struct ProjectMaterialSectionView: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    Button(AppLocalization.string("到货入库"), systemImage: "shippingbox.and.arrow.backward") { receivingMaterial = item }
+                    Button(AppLocalization.string("到货入库"), systemImage: "shippingbox.and.arrow.backward") { onReceive(item) }
                         .buttonStyle(.borderless)
                         .accessibilityIdentifier("material.receive.\(item.id)")
                     }
                 }
             }
         }
-        .sheet(item: $receivingMaterial) { MaterialReceiptSheet(material: $0) }
     }
 
     private func materialTags(for item: MaterialItem) -> [String] {

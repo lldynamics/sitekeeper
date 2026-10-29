@@ -1,5 +1,10 @@
 import SwiftUI
 
+private struct FieldReportPreviewLine: Identifiable {
+    let id: Int
+    let text: String
+}
+
 struct ProjectFieldReportView: View {
     let project: Project
     @Environment(DataStore.self) private var store
@@ -37,9 +42,12 @@ struct ProjectFieldReportView: View {
                 }
             }
             Section(AppLocalization.string("报表内容预览")) {
-                ForEach(Array(ReportBuilder.fieldReportLines(snapshot, title: kind.title, selectedPhotoIDs: selectedPhotoIDs).enumerated()), id: \.offset) { _, line in
-                    if !line.isEmpty {
-                        Text(line).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                let reportLines = ReportBuilder.fieldReportLines(snapshot, title: kind.title, selectedPhotoIDs: selectedPhotoIDs)
+                    .enumerated()
+                    .map { FieldReportPreviewLine(id: $0.offset, text: $0.element) }
+                ForEach(reportLines) { line in
+                    if !line.text.isEmpty {
+                        Text(line.text).font(.subheadline).fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }

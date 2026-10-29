@@ -25,6 +25,10 @@ enum DashboardSummaryBuilder {
         }
         let linkedRecords = Set(input.documents.compactMap(\.linkedFinancialRecordId))
         let loggedProjects = Set(todayLogs.compactMap(\.projectId))
+        let overdueTasks = input.progressTasks.filter {
+            projectIDs.contains($0.projectId) && $0.clampedCompletion < 1 && context.isOverdue(date: $0.dueDate)
+        }
+        let overdueTodos = openTodos.filter { context.isOverdue(date: $0.dueDate) }
 
         return DashboardSummaryModel(
             activeProjects: projects,
@@ -33,10 +37,9 @@ enum DashboardSummaryBuilder {
             todayLogs: todayLogs,
             openTodos: openTodos,
             todayTodos: openTodos.filter { $0.dueDate.calendarDay(in: context.calendar.timeZone) == context.day },
-            overdueTasks: input.progressTasks.filter {
-                projectIDs.contains($0.projectId) && $0.clampedCompletion < 1 && context.isOverdue(date: $0.dueDate)
-            },
-            overdueTodos: openTodos.filter { context.isOverdue(date: $0.dueDate) },
+            overdueTasks: overdueTasks,
+            overdueTodos: overdueTodos,
+            overdueItems: DashboardOverdueItem.sorted(todos: overdueTodos, tasks: overdueTasks, timeZone: context.calendar.timeZone),
             activeFinancialRecords: financialRecords,
             businessSummary: businessSummary(input, projects: projects, projectNames: names),
             warehouseMovements: warehouseMovements,
@@ -69,18 +72,30 @@ enum DashboardSummaryBuilder {
         var records: [ProjectFinancialRecord] = []
         var pendingMaterialCount = 0
         var unpricedQuoteCount = 0
-        var maximumReceivableAgeDays: Int?
+        var selectedQuote: MoneyValue? = .zero
+        var hasQuotes = false
+        var quoteReviewCount = 0
+        var materialEstimate: MoneyValue? = .zero
+        var laborEstimate: MoneyValue? = .zero
+        var formalExpense: MoneyValue? = .zero
+        var formalExpenseCount = 0
+        var contractsAreComplete = true
+        var paymentsAreComplete = true
+        var duePlanAmount: MoneyValue? = .zero
+        var futurePlanAmount: MoneyValue? = .zero
+        var readyPlanCount = 0
+        var plansNeedingReview = 0
+        var projectsWithoutPlan = 0
         for project in projects {
             let quotes = input.quotesByProjectID[project.id] ?? []
             let materials = input.materialsByProjectID[project.id] ?? []
             let labor = input.laborByProjectID[project.id] ?? []
             let financial = input.financialRecordsByProjectID[project.id] ?? []
             records.append(contentsOf: financial)
-            let collected = financial.reduce(MoneyValue.zero) { total, record in
-                record.countsInBusinessMetrics && record.isCollectionIncome ? total + record.amount : total
-            }
+            let collected = ProjectFinancialMetrics.strictCollectionAmount(financial) ?? MoneyValue(.nan)
             collections[project.id] = collected
             let paid = ProjectFinancialMetrics.effectivePaidAmount(recordedCollectionAmount: collected, manualPaidAmount: project.paidAmount)
+            paymentsAreComplete = paymentsAreComplete && paid.isValid
             paidAmount += paid
             contractAmount += project.contractAmount
             quoteTotal += quotes.reduce(MoneyValue.zero) { $0 + ReportBuilder.quoteGrandTotal($1) }
@@ -97,28 +112,79 @@ enum DashboardSummaryBuilder {
             pendingMaterialCount += materials.filter { $0.quantity.isZero }.count
             unpricedQuoteCount += quotes.filter { !$0.unitPrice.isPositive }.count
             let receivable = ProjectFinancialMetrics.unpaidAmount(contractAmount: project.contractAmount, paidAmount: paid)
-            if let age = receivableAgeDays(project: project, receivable: receivable, context: input.dayContext) {
-                maximumReceivableAgeDays = max(maximumReceivableAgeDays ?? age, age)
+
+            let quote = ProjectBusinessQuoteMetrics(project: project, quotes: quotes)
+            if !quotes.isEmpty || project.businessQuoteVersion != nil {
+                hasQuotes = true
+                if quote.amount == nil { quoteReviewCount += 1 }
+                accumulate(quote.amount, into: &selectedQuote)
             }
+            let costs = ProjectCostBasisMetrics.summary(project: project, materials: materials, labor: labor, records: financial)
+            accumulate(costs.material.amount, into: &materialEstimate)
+            accumulate(costs.labor.amount, into: &laborEstimate)
+            accumulate(costs.formalExpense, into: &formalExpense)
+            formalExpenseCount += costs.formalExpenseCount
+            contractsAreComplete = contractsAreComplete && project.contractAmount.isValid && !project.contractAmount.isNegative
+
+            let schedule = ProjectReceivableScheduleSummary(
+                project: project, records: financial, today: input.dayContext.day,
+                timeZone: input.dayContext.calendar.timeZone
+            )
+            switch schedule.state {
+            case .ready:
+                readyPlanCount += 1
+                accumulate(schedule.dueUnpaidAmount, into: &duePlanAmount)
+                accumulate(schedule.futureUnpaidAmount, into: &futurePlanAmount)
+            case .needsReview:
+                plansNeedingReview += 1
+            case .noActiveIncomePlan:
+                if !project.contractAmount.isValid || !receivable.isValid || receivable.isPositive {
+                    projectsWithoutPlan += 1
+                }
+            }
+        }
+        let profit: MoneyValue?
+        if contractsAreComplete, contractAmount.isValid,
+           let materialEstimate, let laborEstimate {
+            let value = contractAmount - materialEstimate - laborEstimate
+            profit = value.isValid ? value : nil
+        } else {
+            profit = nil
         }
         return ProjectBusinessSummary(
             quoteTotal: quoteTotal,
             contractAmount: contractAmount,
             paidAmount: paidAmount,
             receivableAmount: ProjectFinancialMetrics.totalReceivableAmount(projects: projects, recordedCollections: collections),
-            receivableAgeDays: maximumReceivableAgeDays,
             recentCollection: ProjectFinancialMetrics.latestCollection(records: records) { projectNames[$0] },
             materialCost: materialCost,
             laborCostAmount: laborCost,
             pendingMaterialCount: pendingMaterialCount,
-            unpricedQuoteCount: unpricedQuoteCount
+            unpricedQuoteCount: unpricedQuoteCount,
+            scope: ProjectBusinessScope(
+                contractAmount: contractsAreComplete && contractAmount.isValid ? contractAmount : nil,
+                contractUnpaid: contractsAreComplete && paymentsAreComplete
+                    ? ProjectFinancialMetrics.totalReceivableAmount(projects: projects, recordedCollections: collections) : nil,
+                selectedQuoteAmount: hasQuotes && quoteReviewCount == 0 ? selectedQuote : nil,
+                hasQuotes: hasQuotes,
+                quoteProjectsNeedingReview: quoteReviewCount,
+                materialEstimate: materialEstimate,
+                laborEstimate: laborEstimate,
+                formalExpense: formalExpense,
+                formalExpenseCount: formalExpenseCount,
+                estimatedProfit: profit,
+                duePlanAmount: plansNeedingReview == 0 ? duePlanAmount : nil,
+                futurePlanAmount: plansNeedingReview == 0 ? futurePlanAmount : nil,
+                readyPlanCount: readyPlanCount,
+                plansNeedingReview: plansNeedingReview,
+                projectsWithoutPlan: projectsWithoutPlan
+            )
         )
     }
 
-    private static func receivableAgeDays(project: Project, receivable: MoneyValue, context: ProjectDayContext) -> Int? {
-        guard receivable > 0,
-              let endDate = project.expectedEndDate.date(in: context.calendar.timeZone) else { return nil }
-        let due = context.calendar.startOfDay(for: endDate)
-        return max(context.calendar.dateComponents([.day], from: due, to: context.dayStart).day ?? 0, 0)
+    private static func accumulate(_ value: MoneyValue?, into total: inout MoneyValue?) {
+        guard let current = total, let value else { total = nil; return }
+        let next = current + value
+        total = next.isValid ? next : nil
     }
 }

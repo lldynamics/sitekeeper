@@ -7,6 +7,7 @@ struct QuickNoteComposerView: View {
     @Binding var attachments: [QuickNoteAttachment]
     var mode: QuickNoteComposerMode = .full
     var isPublishing = false
+    var usesWorkspaceBackground = false
     let onPublish: () -> Void
     let onPreview: (QuickNoteAttachment) -> Void
     var onAttachmentAdded: (QuickNoteAttachment) -> Void = { _ in }
@@ -61,7 +62,7 @@ struct QuickNoteComposerView: View {
                 .frame(minHeight: 76, alignment: .topLeading)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(Color(.secondarySystemGroupedBackground))
+                        .fill(Color(usesWorkspaceBackground ? .tertiarySystemGroupedBackground : .secondarySystemGroupedBackground))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -79,7 +80,10 @@ struct QuickNoteComposerView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
-        .background(.bar)
+        .background(
+            usesWorkspaceBackground ? AnyShapeStyle(Color(.secondarySystemGroupedBackground)) : AnyShapeStyle(.bar),
+            ignoresSafeAreaEdges: usesWorkspaceBackground ? [] : .all
+        )
         .background {
             GeometryReader { geometry in
                 Color.clear

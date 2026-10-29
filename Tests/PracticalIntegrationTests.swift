@@ -26,7 +26,8 @@ struct PracticalIntegrationTests {
         let moment = BusinessDateValue(legacyText: "2026-10-28T10:00:00Z")
         let order = ProjectChangeOrder(title: "Extra work", proposedAmount: 20, confirmedAmount: 15,
             confirmationState: .confirmed, confirmedBy: "Recorder", confirmedAt: moment)
-        let project = Project(name: "Synthetic", location: "", contractAmount: 100, paidAmount: 30, changeOrders: [order])
+        let project = Project(name: "Synthetic", location: "", contractAmount: 100, paidAmount: 30, changeOrders: [order],
+                              businessQuoteVersion: "V2")
         var todo = SiteTodo(title: "Repair", projectId: project.id)
         todo.enableReview()
         todo.requestCompletion(at: moment)
@@ -38,6 +39,7 @@ struct PracticalIntegrationTests {
         #expect(restored.projects[0].changeOrders == [order])
         #expect(restored.siteTodos[0].review == todo.review && restored.siteTodos[0].isDone)
         #expect(restored.projects[0].contractAmount == 100 && restored.projects[0].paidAmount == 30)
+        #expect(restored.projects[0].businessQuoteVersion == "V2")
         #expect(restored.projectFinancialRecords.isEmpty && restored.projectWarehouseMovements.isEmpty)
     }
 
@@ -66,5 +68,17 @@ struct PracticalIntegrationTests {
         for secret in ["PRIVATE_ADDRESS", "PRIVATE_PHONE", "PRIVATE_CONTACT", "PRIVATE_INVOICE", "PRIVATE_NOTE", "PRIVATE_EXPENSE"] {
             #expect(!text.contains(secret))
         }
+    }
+
+    @Test func customerStatementDoesNotTurnMissingContractOrCollectionIntoZero() {
+        let period = ProjectReportPeriod(start: Date(timeIntervalSince1970: 1790812800),
+                                         end: Date(timeIntervalSince1970: 1791331200), timeZone: TimeZone(secondsFromGMT: 0)!)
+        let project = Project(name: "Unknown", location: "", paidAmount: 200)
+        let record = ProjectFinancialRecord(projectId: project.id, date: BusinessDateValue(legacyText: "2026-10-02"),
+                                            direction: .income, category: .collection, amount: .empty)
+        let statement = ProjectCustomerStatement(project: project, period: period, records: [record])
+        #expect(!statement.currentCumulativePaid.isValid)
+        #expect(statement.currentOutstanding.isEmpty)
+        #expect(!statement.periodReceived.isValid)
     }
 }

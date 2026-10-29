@@ -28,6 +28,26 @@ enum LaborQuoteGenerator {
 }
 
 extension QuotationView {
+    func saveBusinessQuoteVersion(_ version: String?, project: Project) {
+        guard !isSavingBusinessQuoteVersion else { return }
+        isSavingBusinessQuoteVersion = true
+        Task { @MainActor in
+            defer { isSavingBusinessQuoteVersion = false }
+            do {
+                try await ProjectBusinessQuoteSelectionService.save(
+                    version: version,
+                    projectID: project.id,
+                    expectedSelection: project.businessQuoteVersion,
+                    store: store,
+                    quotes: { store.quoteItems }
+                )
+                operationNotice = .info(AppLocalization.string("quote_business_selection_saved"))
+            } catch {
+                operationNotice = .info(error.localizedDescription)
+            }
+        }
+    }
+
     func appendQuote(from material: MaterialItem) {
         store.appendQuoteItem(MaterialQuoteGenerator.makeQuoteItem(from: material, mode: .leaveUnpriced))
         store.scheduleSave()

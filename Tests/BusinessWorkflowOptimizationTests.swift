@@ -27,6 +27,160 @@ struct BusinessWorkflowOptimizationTests {
             paymentAllocation: ProjectPaymentAllocation(planID: plan.id, installmentID: plan.installments[0].id))
     }
 
+    private func receivableSchedule(_ project: Project, records: [ProjectFinancialRecord] = [],
+                                    timeZone: TimeZone = TimeZone(secondsFromGMT: 0)!) -> ProjectReceivableScheduleSummary {
+        ProjectReceivableScheduleSummary(project: project, records: records,
+            today: CalendarDay(year: 2099, month: 1, day: 1)!, timeZone: timeZone)
+    }
+
+    @Test func receivableScheduleSeparatesTodayOverdueFutureAndRetentionWithoutChangingContract() throws {
+        var plan = plan()
+        plan.installments.insert(ProjectPaymentInstallment(title: "Overdue", dueDate: BusinessDateValue(legacyText: "2098-12-30"), amount: 30), at: 1)
+        let project = Project(name: "A", location: "", contractAmount: 500, paymentPlans: [plan])
+        let paid = payment(plan, project: project.id, amount: "0.10")
+        let result = receivableSchedule(project, records: [paid])
+        #expect(result.state == .ready)
+        #expect(result.reviewReasons.isEmpty)
+        #expect(result.planID == plan.id)
+        #expect(result.dueUnpaidAmount == 130)
+        #expect(result.dueTodayUnpaidAmount == 100)
+        #expect(result.overdueUnpaidAmount == 30)
+        #expect(result.futureUnpaidAmount == NumericInputSupport.money("20.20"))
+        #expect(result.retentionUnpaidAmount == result.futureUnpaidAmount)
+        #expect(result.oldestOverdueDays == 2)
+        #expect(ProjectFinancialMetrics.unpaidAmount(project: project, records: [paid]) == NumericInputSupport.money("499.90"))
+    }
+
+    @Test func receivableScheduleUsesInjectedCivilDayForLegacyInstantDates() {
+        var plan = plan()
+        plan.installments = [ProjectPaymentInstallment(title: "Instant", dueDate: BusinessDateValue(legacyText: "2099-01-02T00:30:00.000Z"), amount: 10)]
+        let project = Project(name: "A", location: "", paymentPlans: [plan])
+        let utc = receivableSchedule(project)
+        let west = receivableSchedule(project, timeZone: TimeZone(identifier: "America/Los_Angeles")!)
+        #expect(utc.futureUnpaidAmount == 10)
+        #expect(utc.dueTodayUnpaidAmount == 0)
+        #expect(west.futureUnpaidAmount == 0)
+        #expect(west.dueTodayUnpaidAmount == 10)
+    }
+
+    @Test func receivableScheduleLeavesManualAndUnallocatedCollectionsForReview() {
+        var project = Project(name: "A", location: "", paidAmount: 20, paymentPlans: [plan()])
+        let manual = receivableSchedule(project)
+        #expect(manual.state == .needsReview)
+        #expect(manual.reviewReasons.contains(.historicalManualPaid))
+        #expect(manual.dueUnpaidAmount == nil)
+        let unallocated = ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection, amount: 5)
+        let actual = receivableSchedule(project, records: [unallocated])
+        #expect(actual.reviewReasons.contains(.unallocatedCollections))
+        #expect(!actual.reviewReasons.contains(.historicalManualPaid))
+        #expect(actual.futureUnpaidAmount == nil)
+        // Positive formal receipts retain the established precedence over manual history.
+        let allocated = payment(project.paymentPlans[0], project: project.id, amount: "5")
+        #expect(receivableSchedule(project, records: [allocated]).state == .ready)
+        project.paidAmount = NumericInputSupport.money("unknown")
+        #expect(receivableSchedule(project).state == .needsReview)
+    }
+
+    @Test func receivableScheduleRejectsOverlappingAndRestoredDuplicateIdentities() {
+        let first = plan()
+        var second = plan()
+        var project = Project(name: "A", location: "", paymentPlans: [first, second])
+        let overlapping = receivableSchedule(project)
+        #expect(overlapping.reviewReasons.contains(.multipleActiveIncomePlans))
+        #expect(overlapping.dueUnpaidAmount == nil)
+        second.isArchived = true
+        second.installments[0].id = first.installments[0].id
+        project.paymentPlans = [first, second]
+        #expect(receivableSchedule(project).reviewReasons.contains(.duplicateIdentity))
+        second = plan()
+        second.id = first.id
+        second.isArchived = true
+        project.paymentPlans = [first, second]
+        #expect(receivableSchedule(project).reviewReasons.contains(.duplicateIdentity))
+        project.paymentPlans = [first]
+        project.paymentPlans[0].installments.append(first.installments[0])
+        #expect(receivableSchedule(project).reviewReasons.contains(.duplicateIdentity))
+    }
+
+    @Test func receivableScheduleRejectsOverpaymentAndInvalidAllocationProvenance() {
+        let plan = plan()
+        let project = Project(name: "A", location: "", paymentPlans: [plan])
+        let overpaid = payment(plan, project: project.id, amount: "101")
+        let result = receivableSchedule(project, records: [overpaid])
+        #expect(result.reviewReasons.contains(.overpaidPlan))
+        #expect(result.retentionUnpaidAmount == nil)
+        var invalid = payment(plan, project: project.id, amount: "10")
+        invalid.category = .other
+        #expect(receivableSchedule(project, records: [invalid]).reviewReasons.contains(.invalidAllocation))
+        invalid.category = .collection
+        invalid.paymentAllocation?.installmentID = UUID()
+        #expect(receivableSchedule(project, records: [invalid]).reviewReasons.contains(.invalidAllocation))
+        invalid.paymentAllocation?.planID = UUID()
+        #expect(receivableSchedule(project, records: [invalid]).reviewReasons.contains(.invalidAllocation))
+        let paid = payment(plan, project: project.id, amount: "10")
+        #expect(receivableSchedule(project, records: [paid, paid]).reviewReasons.contains(.duplicateIdentity))
+    }
+
+    @Test func receivableScheduleExcludesOtherProjectsPayablesArchivesAndInactivePayments() {
+        let income = plan()
+        let expense = plan(direction: .expense)
+        var archived = plan()
+        archived.isArchived = true
+        let project = Project(name: "A", location: "", paymentPlans: [income, expense, archived])
+        let records = [payment(income, project: UUID(), amount: "999"),
+                       payment(income, project: project.id, amount: "999", status: .draft),
+                       payment(income, project: project.id, amount: "999", status: .archived),
+                       payment(expense, project: project.id, amount: "10")]
+        let result = receivableSchedule(project, records: records)
+        #expect(result.state == .ready)
+        #expect(result.dueUnpaidAmount == NumericInputSupport.money("100.10"))
+        #expect(result.futureUnpaidAmount == NumericInputSupport.money("20.20"))
+        let historicalCollection = payment(archived, project: project.id, amount: "10")
+        let historical = receivableSchedule(project, records: records + [historicalCollection])
+        #expect(historical.state == .needsReview)
+        #expect(historical.reviewReasons.contains(.unallocatedCollections))
+        #expect(historical.dueUnpaidAmount == nil)
+        let noPlan = Project(name: "B", location: "", paidAmount: 10, paymentPlans: [expense, archived])
+        let missing = receivableSchedule(noPlan)
+        #expect(missing.state == .noActiveIncomePlan)
+        #expect(missing.dueUnpaidAmount == nil)
+        #expect(missing.futureUnpaidAmount == nil)
+    }
+
+    @Test func receivableScheduleRejectsInvalidPlanInputs() {
+        for kind in ["amount", "date", "title", "planTitle", "overflow"] {
+            var plan = plan()
+            switch kind {
+            case "amount": plan.installments[0].amount = NumericInputSupport.money("unresolved")
+            case "date": plan.installments[0].dueDate = .unresolved("unknown")
+            case "title": plan.installments[0].title = " "
+            case "planTitle": plan.title = " "
+            default:
+                plan.installments[0].amount = NumericInputSupport.money("99999999999999999999999999999999999999")
+                plan.installments[1].amount = NumericInputSupport.money("0.1")
+            }
+            let result = receivableSchedule(Project(name: "A", location: "", paymentPlans: [plan]))
+            #expect(result.state == .needsReview)
+            #expect(result.reviewReasons.contains(.invalidPlan))
+            #expect(result.dueUnpaidAmount == nil)
+        }
+    }
+
+    @Test func receivableScheduleKeepsInvalidCollectionsUnknownAndSettledTodayDistinctFromOverdue() {
+        let plan = plan()
+        let project = Project(name: "A", location: "", paymentPlans: [plan])
+        let invalid = ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection,
+            amount: NumericInputSupport.money("unknown"))
+        #expect(receivableSchedule(project, records: [invalid]).reviewReasons.contains(.invalidCollectionAmount))
+        let paid = payment(plan, project: project.id, amount: "100.10")
+        let settled = receivableSchedule(project, records: [paid])
+        #expect(settled.state == .ready)
+        #expect(settled.dueUnpaidAmount == 0)
+        #expect(settled.overdueUnpaidAmount == 0)
+        #expect(settled.oldestOverdueDays == nil)
+        #expect(settled.futureUnpaidAmount == settled.retentionUnpaidAmount)
+    }
+
     @Test func plansDoNotCountAsCashAndPartialPaymentsUseExactDecimal() throws {
         let plan = plan()
         let project = Project(name: "A", location: "", paymentPlans: [plan])

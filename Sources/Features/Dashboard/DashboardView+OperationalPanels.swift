@@ -18,19 +18,14 @@ extension DashboardView {
             } else {
                 VStack(spacing: AppSpacing.tight) {
                     ForEach(items) { todo in
-                        NavigationLink {
-                            SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
-                        } label: {
-                            TodoPreviewRow(
-                                todo: todo,
-                                projectName: projectName(todo.projectId),
-                                onToggle: {
-                                    AppHaptics.success()
-                                    toggleTodo(todo)
-                                }
-                            )
-                        }
-                        .buttonStyle(.plain)
+                        TodoPreviewRow(
+                            todo: todo,
+                            projectName: projectName(todo.projectId),
+                            onToggle: {
+                                AppHaptics.success()
+                                toggleTodo(todo)
+                            }
+                        )
                     }
                 }
             }
@@ -145,26 +140,36 @@ extension DashboardView {
     }
 
     var overduePanel: some View {
-        DashboardPanel(title: AppLocalization.string("延期提醒"), systemImage: "calendar.badge.exclamationmark", destination: .projectList(initialOverviewFilter: .overdue)) {
-            if overdueTasks.isEmpty && overdueTodos.isEmpty {
+        let items = dashboardSummary.overdueItems
+        return DashboardPanel(title: AppLocalization.string("延期提醒"), systemImage: "calendar.badge.exclamationmark", destination: .overdueItems) {
+            HStack {
+                Text(String(format: AppLocalization.string("共 %lld 项"), Int64(items.count)))
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .accessibilityIdentifier("dashboard-overdue-count")
+                Spacer(minLength: AppSpacing.tight)
+                NavigationLink {
+                    LazyDashboardDestinationView(destination: .overdueItems)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(AppLocalization.string("查看全部"))
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .font(.subheadline.weight(.medium))
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.appPrimaryAction)
+                .accessibilityIdentifier("dashboard-overdue-view-all")
+            }
+            if items.isEmpty {
                 EmptyDashboardRow(text: AppLocalization.string("暂无延期事项"))
             } else {
                 VStack(spacing: AppSpacing.tight) {
-                    ForEach(overdueTodos.prefix(3)) { todo in
-                        NavigationLink {
-                            SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
-                        } label: {
-                            IssueRow(title: todo.title, value: todo.dueDate.storageText, color: .appRisk)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    ForEach(overdueTasks.prefix(3)) { task in
-                        NavigationLink {
-                            TaskProgressView(initialProjectId: task.projectId)
-                        } label: {
-                            IssueRow(title: task.title, value: task.dueDate.storageText, color: .appRisk)
-                        }
-                        .buttonStyle(.plain)
+                    ForEach(items.prefix(6)) { item in
+                        DashboardOverdueItemLink(item: item)
                     }
                 }
             }
@@ -207,5 +212,91 @@ extension DashboardView {
                 }
             }
         }
+    }
+}
+
+private struct DashboardOverdueItemLink: View {
+    let item: DashboardOverdueItem
+    var projectName: String? = nil
+    var showsDetails = false
+
+    var body: some View {
+        NavigationLink {
+            switch item {
+            case .todo(let todo):
+                SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
+            case .task(let task):
+                TaskProgressView(initialProjectId: task.projectId)
+            }
+        } label: {
+            if showsDetails {
+                HStack(alignment: .top, spacing: AppSpacing.normal) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(item.title)
+                            .font(.body)
+                        HStack {
+                            Text(typeName)
+                            if let projectName {
+                                Text(projectName)
+                            }
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: AppSpacing.tight)
+                    Text(item.dueDate.storageText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.appRisk)
+                }
+            } else {
+                IssueRow(title: item.title, value: item.dueDate.storageText, color: .appRisk)
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("dashboard-overdue-item-\(item.id)")
+    }
+
+    private var typeName: String {
+        switch item {
+        case .todo: return AppLocalization.string("现场待办")
+        case .task: return AppLocalization.string("施工进度")
+        }
+    }
+}
+
+struct DashboardOverdueListView: View {
+    @Environment(ProjectStore.self) private var projectStore
+    @Environment(FinanceStore.self) private var financeStore
+    @State private var summaryCache = DashboardSummaryCache()
+
+    private var summary: DashboardSummaryModel {
+        summaryCache.value(revision: DashboardSummaryRevision(projectStore: projectStore, financeStore: financeStore)) {
+            DashboardSummaryInput(projectStore: projectStore, financeStore: financeStore)
+        }
+    }
+
+    var body: some View {
+        let currentSummary = summary
+        List {
+            Section {
+                if currentSummary.overdueItems.isEmpty {
+                    ContentUnavailableView(AppLocalization.string("暂无延期事项"), systemImage: "checkmark.circle")
+                } else {
+                    ForEach(currentSummary.overdueItems) { item in
+                        DashboardOverdueItemLink(
+                            item: item,
+                            projectName: item.projectID.flatMap { currentSummary.projectNameByID[$0] },
+                            showsDetails: true
+                        )
+                    }
+                }
+            } header: {
+                Text(String(format: AppLocalization.string("共 %lld 项"), Int64(currentSummary.overdueItems.count)))
+            }
+        }
+        .listStyle(.insetGrouped)
+        .navigationTitle(AppLocalization.string("延期提醒"))
+        .navigationBarTitleDisplayMode(.inline)
+        .accessibilityIdentifier("dashboard-overdue-list")
     }
 }

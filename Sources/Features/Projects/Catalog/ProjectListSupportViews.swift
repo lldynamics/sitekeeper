@@ -30,7 +30,7 @@ enum ProjectOverviewFilter: String {
         case .priceSpike:
             return AppLocalization.string("价格异动")
         case .receivableAging:
-            return AppLocalization.string("project.business.receivableAge")
+            return AppLocalization.string("business_scope_receivable_plans")
         case .recentCollection:
             return AppLocalization.string("project.business.recentCollection")
         case .costAnomaly:
@@ -84,12 +84,14 @@ struct ProjectRowContent: View {
 
     private var detailParts: [DetailPart] {
         var parts: [DetailPart] = []
-        if unpaidAmount > 0 {
+        if !unpaidAmount.isValid {
+            parts.append(DetailPart(id: "unpaid-amount-review", text: AppLocalization.string("business_scope_receipts_review"), emphasizesPrimaryColor: true))
+        } else if unpaidAmount > 0 {
             let moneyText: String
             if unpaidAmount >= 10_000 {
                 let wan = (unpaidAmount.decimal as NSDecimalNumber).doubleValue / 10_000.0
                 let formatted = String(format: "%.1f", wan).replacingOccurrences(of: ".0", with: "")
-                moneyText = "¥\(formatted)万"
+                moneyText = String(format: AppLocalization.string("¥%@万"), formatted)
             } else {
                 moneyText = ReportBuilder.money(unpaidAmount)
             }

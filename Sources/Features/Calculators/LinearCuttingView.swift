@@ -226,6 +226,17 @@ private struct LinearCuttingVisualizerBar: View {
         return Self.colorPalette[index % Self.colorPalette.count]
     }
 
+    private struct CuttingVisualPiece: Identifiable {
+        let id: String
+        let piece: Int64
+    }
+
+    private var visualPieces: [CuttingVisualPiece] {
+        bar.pieceLengths.enumerated().map { index, piece in
+            CuttingVisualPiece(id: "bar-\(bar.id)-piece-\(index)-\(piece)", piece: piece)
+        }
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack {
@@ -241,7 +252,8 @@ private struct LinearCuttingVisualizerBar: View {
             GeometryReader { geometry in
                 let totalWidth = geometry.size.width
                 HStack(spacing: 1.5) {
-                    ForEach(Array(bar.pieceLengths.enumerated()), id: \.offset) { index, piece in
+                    ForEach(visualPieces) { item in
+                        let piece = item.piece
                         let ratio = plan.stockLength > 0 ? CGFloat(piece) / CGFloat(plan.stockLength) : 0
                         let blockWidth = max(24, totalWidth * ratio - 2)
                         let pieceColor = colorFor(length: piece)
@@ -250,7 +262,7 @@ private struct LinearCuttingVisualizerBar: View {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(pieceColor.opacity(0.85))
                             Text(plan.unit.formatted(piece))
-                                .font(.system(size: 9, weight: .bold))
+                                .font(.caption2.weight(.bold))
                                 .foregroundStyle(.white)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.7)
@@ -267,7 +279,7 @@ private struct LinearCuttingVisualizerBar: View {
                             RoundedRectangle(cornerRadius: 4, style: .continuous)
                                 .fill(Color(uiColor: .tertiarySystemFill))
                             Text(String(format: calculatorLoc("余%@"), plan.unit.formatted(bar.remaining)))
-                                .font(.system(size: 8, weight: .medium))
+                                .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.6)

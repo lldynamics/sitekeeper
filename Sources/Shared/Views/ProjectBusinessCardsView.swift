@@ -5,12 +5,14 @@ struct ProjectBusinessSummary {
     var contractAmount: MoneyValue
     var paidAmount: MoneyValue
     var receivableAmount: MoneyValue
-    var receivableAgeDays: Int?
+    /// Kept for older benchmark adapters; completion dates are not payment aging.
+    var receivableAgeDays: Int? = nil
     var recentCollection: CollectionSnapshot?
     var materialCost: MoneyValue
     var laborCostAmount: MoneyValue
     var pendingMaterialCount: Int
     var unpricedQuoteCount: Int
+    var scope: ProjectBusinessScope? = nil
 
     var estimatedProfit: MoneyValue {
         contractAmount - materialCost - laborCostAmount
@@ -21,11 +23,31 @@ struct ProjectBusinessSummary {
     }
 
     var unpaidAmount: MoneyValue {
-        ProjectFinancialMetrics.unpaidAmount(contractAmount: contractAmount, paidAmount: paidAmount)
+        receivableAmount
     }
 }
 
+/// Optional values represent incomplete or ambiguous inputs, never zero.
+struct ProjectBusinessScope {
+    let contractAmount: MoneyValue?
+    let contractUnpaid: MoneyValue?
+    let selectedQuoteAmount: MoneyValue?
+    let hasQuotes: Bool
+    let quoteProjectsNeedingReview: Int
+    let materialEstimate: MoneyValue?
+    let laborEstimate: MoneyValue?
+    let formalExpense: MoneyValue?
+    let formalExpenseCount: Int
+    let estimatedProfit: MoneyValue?
+    let duePlanAmount: MoneyValue?
+    let futurePlanAmount: MoneyValue?
+    let readyPlanCount: Int
+    let plansNeedingReview: Int
+    let projectsWithoutPlan: Int
+}
+
 struct ProjectBusinessCardsView: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let summary: ProjectBusinessSummary
     var onOpenCore: (() -> Void)? = nil
     var onOpenInsight: (() -> Void)? = nil
@@ -36,7 +58,9 @@ struct ProjectBusinessCardsView: View {
 
     var body: some View {
         LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: AppSpacing.tight), GridItem(.flexible(), spacing: AppSpacing.tight)],
+            columns: dynamicTypeSize.isAccessibilitySize
+                ? [GridItem(.flexible(), spacing: AppSpacing.tight)]
+                : [GridItem(.adaptive(minimum: 240), spacing: AppSpacing.tight)],
             spacing: AppSpacing.tight
         ) {
             ProjectBusinessMetricCard(
@@ -44,13 +68,14 @@ struct ProjectBusinessCardsView: View {
                 systemImage: "chart.bar.xaxis",
                 tint: .appDoc,
                 metrics: [
-                    .init(title: AppLocalization.string("project.business.quote"), value: ReportBuilder.money(summary.quoteTotal), color: .appPrimaryAction),
-                    .init(title: AppLocalization.string("project.business.contract"), value: ReportBuilder.money(summary.contractAmount)),
+                    .init(title: AppLocalization.string("business_scope_selected_quote"), value: selectedQuoteText(summary), color: .appPrimaryAction),
+                    .init(title: AppLocalization.string("project.business.contract"), value: optionalMoney(summary.scope?.contractAmount)),
                     .init(title: AppLocalization.string("project.business.collected"), value: ReportBuilder.money(summary.paidAmount), color: .appSuccess),
-                    .init(title: AppLocalization.string("project.business.uncollected"), value: ReportBuilder.money(summary.unpaidAmount), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
-                    .init(title: AppLocalization.string("project.business.materialCost"), value: ReportBuilder.money(summary.materialCost), color: .appDoc),
-                    .init(title: AppLocalization.string("project.business.laborCost"), value: ReportBuilder.money(summary.laborCostAmount), color: .appWarning),
-                    .init(title: AppLocalization.string("project.business.estimatedGrossProfit"), value: ReportBuilder.money(summary.estimatedProfit), color: summary.estimatedProfit >= 0 ? .appSuccess : .appRisk),
+                    .init(title: AppLocalization.string("business_scope_contract_unpaid"), value: optionalMoney(summary.scope?.contractUnpaid), color: summary.unpaidAmount > 0 ? .appPrimaryAction : .secondary),
+                    .init(title: AppLocalization.string("cost_basis_material"), value: optionalMoney(summary.scope?.materialEstimate), color: .appDoc),
+                    .init(title: AppLocalization.string("cost_basis_labor"), value: optionalMoney(summary.scope?.laborEstimate), color: .appWarning),
+                    .init(title: AppLocalization.string("cost_basis_expense"), value: expenseText(summary), color: .appFinance),
+                    .init(title: AppLocalization.string("project.business.estimatedGrossProfit"), value: optionalMoney(summary.scope?.estimatedProfit), color: profitColor(summary)),
                     .init(title: AppLocalization.string("project.business.pending"), value: "\(summary.pendingCount)", color: summary.pendingCount > 0 ? .appPrimaryAction : .secondary)
                 ],
                 action: onOpenCore
@@ -62,11 +87,25 @@ struct ProjectBusinessCardsView: View {
                 tint: .appPrimaryAction,
                 metrics: [
                     .init(
-                        title: AppLocalization.string("project.business.receivableAge"),
-                        value: receivableAgeText(summary),
-                        color: receivableAgeColor(summary),
+                        title: AppLocalization.string("business_scope_due_plan"),
+                        value: planAmountText(summary, isDue: true),
+                        color: planAmountColor(summary),
                         action: onOpenReceivableAging,
                         accessibilityIdentifier: "dashboard-business-receivable-aging"
+                    ),
+                    .init(
+                        title: AppLocalization.string("business_scope_future_plan"),
+                        value: planAmountText(summary, isDue: false),
+                        color: planAmountColor(summary),
+                        action: onOpenReceivableAging,
+                        accessibilityIdentifier: "dashboard-business-receivable-future"
+                    ),
+                    .init(
+                        title: AppLocalization.string("business_scope_plan_coverage"),
+                        value: planCoverageText(summary),
+                        color: planAmountColor(summary),
+                        action: onOpenReceivableAging,
+                        accessibilityIdentifier: "dashboard-business-receivable-review"
                     ),
                     .init(
                         title: AppLocalization.string("project.business.recentCollection"),
@@ -95,28 +134,47 @@ struct ProjectBusinessCardsView: View {
         }
     }
 
-    private func receivableAgeText(_ summary: ProjectBusinessSummary) -> String {
-        guard summary.receivableAmount > 0 else { return AppLocalization.string("project.business.noReceivable") }
-        guard let days = summary.receivableAgeDays else { return AppLocalization.string("project.business.missingCompletionDate") }
-        if days == 0 {
-            return DashboardSubtitleBuilder.moneySummary(
-                AppLocalization.string("project.business.notDue"),
-                amount: ReportBuilder.money(summary.receivableAmount)
-            )
-        }
-        return DashboardSubtitleBuilder.moneySummary(
-            String(format: AppLocalization.string("project.business.days"), Int64(days)),
-            amount: ReportBuilder.money(summary.receivableAmount)
-        )
+    private func optionalMoney(_ amount: MoneyValue?) -> String {
+        amount.map(ReportBuilder.money) ?? AppLocalization.string("cost_basis_unknown")
     }
 
-    private func receivableAgeColor(_ summary: ProjectBusinessSummary) -> Color {
-        guard summary.receivableAmount > 0 else { return .appSuccess }
-        guard let days = summary.receivableAgeDays else { return .appPrimaryAction }
-        if days >= 60 { return .appRisk }
-        if days >= 30 { return .appPrimaryAction }
-        if days > 0 { return .appDoc }
-        return .secondary
+    private func selectedQuoteText(_ summary: ProjectBusinessSummary) -> String {
+        guard let scope = summary.scope else { return AppLocalization.string("cost_basis_unknown") }
+        guard scope.hasQuotes else { return AppLocalization.string("business_scope_no_quotes") }
+        if scope.quoteProjectsNeedingReview > 0 {
+            return String(format: AppLocalization.string("business_scope_projects_review"), Int64(scope.quoteProjectsNeedingReview))
+        }
+        return optionalMoney(scope.selectedQuoteAmount)
+    }
+
+    private func expenseText(_ summary: ProjectBusinessSummary) -> String {
+        guard let scope = summary.scope else { return AppLocalization.string("cost_basis_unknown") }
+        guard scope.formalExpenseCount > 0 else { return AppLocalization.string("cost_basis_no_expenses") }
+        return optionalMoney(scope.formalExpense)
+    }
+
+    private func profitColor(_ summary: ProjectBusinessSummary) -> Color {
+        guard let profit = summary.scope?.estimatedProfit else { return .appWarning }
+        return profit >= 0 ? .appSuccess : .appRisk
+    }
+
+    private func planAmountText(_ summary: ProjectBusinessSummary, isDue: Bool) -> String {
+        guard let scope = summary.scope else { return AppLocalization.string("cost_basis_unknown") }
+        if scope.plansNeedingReview > 0 { return AppLocalization.string("business_scope_plan_review") }
+        guard scope.readyPlanCount > 0 else { return AppLocalization.string("business_scope_no_plan") }
+        return optionalMoney(isDue ? scope.duePlanAmount : scope.futurePlanAmount)
+    }
+
+    private func planCoverageText(_ summary: ProjectBusinessSummary) -> String {
+        guard let scope = summary.scope else { return AppLocalization.string("cost_basis_unknown") }
+        return String(format: AppLocalization.string("business_scope_plan_coverage_format"),
+                      Int64(scope.projectsWithoutPlan), Int64(scope.plansNeedingReview))
+    }
+
+    private func planAmountColor(_ summary: ProjectBusinessSummary) -> Color {
+        guard let scope = summary.scope else { return .appWarning }
+        if scope.plansNeedingReview > 0 || scope.projectsWithoutPlan > 0 { return .appWarning }
+        return (scope.duePlanAmount?.isPositive ?? false) ? .appFinance : .secondary
     }
 
     private func recentCollectionText(_ summary: ProjectBusinessSummary) -> String {
@@ -133,7 +191,10 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func costAnomalyText(_ summary: ProjectBusinessSummary) -> String {
-        let totalCost = summary.materialCost + summary.laborCostAmount
+        guard let material = summary.scope?.materialEstimate, let labor = summary.scope?.laborEstimate,
+              summary.scope?.contractAmount != nil else { return AppLocalization.string("cost_basis_unknown") }
+        let totalCost = material + labor
+        guard totalCost.isValid else { return AppLocalization.string("cost_basis_unknown") }
         let pendingCount = summary.pendingCount
         guard summary.contractAmount > 0 else { return AppLocalization.string("project.business.missingContractAmount") }
         guard totalCost > 0 else {
@@ -158,7 +219,10 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func costAnomalyColor(_ summary: ProjectBusinessSummary) -> Color {
-        let totalCost = summary.materialCost + summary.laborCostAmount
+        guard let material = summary.scope?.materialEstimate, let labor = summary.scope?.laborEstimate,
+              summary.scope?.contractAmount != nil else { return .appWarning }
+        let totalCost = material + labor
+        guard totalCost.isValid else { return .appWarning }
         guard summary.contractAmount > 0 else { return .appPrimaryAction }
         guard totalCost > 0 else { return summary.pendingCount > 0 ? .appPrimaryAction : .secondary }
         let ratio = totalCost / summary.contractAmount
@@ -169,8 +233,8 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func profitRiskText(_ summary: ProjectBusinessSummary) -> String {
+        guard let profit = summary.scope?.estimatedProfit else { return AppLocalization.string("cost_basis_unknown") }
         guard summary.contractAmount > 0 else { return AppLocalization.string("project.business.missingContractAmount") }
-        let profit = summary.estimatedProfit
         let margin = profit / summary.contractAmount
         if profit < 0 {
             return String(format: AppLocalization.string("project.business.lossAmount"), ReportBuilder.money(profit.magnitude))
@@ -185,8 +249,8 @@ struct ProjectBusinessCardsView: View {
     }
 
     private func profitRiskColor(_ summary: ProjectBusinessSummary) -> Color {
+        guard let profit = summary.scope?.estimatedProfit else { return .appWarning }
         guard summary.contractAmount > 0 else { return .appPrimaryAction }
-        let profit = summary.estimatedProfit
         let margin = profit / summary.contractAmount
         if profit < 0 { return .appRisk }
         if margin < 0.10 { return .appRisk }

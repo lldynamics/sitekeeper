@@ -44,10 +44,13 @@ struct QuotationView: View {
     @State var contractWriteVersion = ""
     @State var contractWritePlan: QuotationContractWritePlan?
     @State var contractWriteRefreshMessage = ""
+    @State var isSavingBusinessQuoteVersion = false
+    @State var businessVersionFilter: QuotationBusinessVersionFilter?
     @State var undoableDeletion = UndoableDeletionCoordinator()
 
-    init(focusedQuoteId: UUID? = nil) {
+    init(focusedQuoteId: UUID? = nil, initialProjectId: UUID? = nil) {
         self.focusedQuoteId = focusedQuoteId
+        _projectFilter = State(initialValue: initialProjectId)
     }
 
     var body: some View {
@@ -64,6 +67,25 @@ struct QuotationView: View {
                 projectQuoteSummaries: projectQuoteSummaries
             )
 
+            if let businessVersionFilter {
+                Section(AppLocalization.string("quote_reference_version_scope")) {
+                    LabeledContent(AppLocalization.string("quote_business_selection_version"), value: businessVersionFilter.version)
+                    if !businessVersionFilterIsValid {
+                        Text(AppLocalization.string("quote_reference_version_filter_stale"))
+                            .font(.footnote)
+                            .foregroundStyle(Color.appWarning)
+                    }
+                    Button(AppLocalization.string("quote_reference_version_filter_off")) {
+                        self.businessVersionFilter = nil
+                    }
+                    .accessibilityIdentifier("quotation-current-business-version-filter-off")
+                }
+            }
+
+            if let projectFilter, let project = store.projects.first(where: { $0.id == projectFilter }) {
+                businessQuoteSelectionSection(project: project)
+            }
+
             QuotationItemsSection(
                 items: filtered,
                 projects: store.projects,
@@ -75,12 +97,7 @@ struct QuotationView: View {
                 }
             )
 
-            QuotationTotalsSection(
-                subtotalBeforeValue: subtotalBeforeValue,
-                totalTaxValue: totalTaxValue,
-                totalDiscountValue: totalDiscountValue,
-                grandTotalValue: grandTotalValue
-            )
+            QuotationTotalsSection(summary: filteredReferenceSummary)
         }
         .searchable(text: $searchText, prompt: AppLocalization.string("搜索报价名称"))
         .navigationTitle(AppLocalization.string("预结算信息"))
@@ -140,10 +157,58 @@ struct QuotationView: View {
                 }
             }
         }
+        .onChange(of: projectFilter) { _, _ in
+            businessVersionFilter = nil
+        }
         .onAppear(perform: openFocusedQuoteIfNeeded)
         .onDisappear {
             flushPendingQuoteDeletionIfNeeded()
         }
         .operationToast(notice: $operationNotice)
+    }
+
+    private func businessQuoteSelectionSection(project: Project) -> some View {
+        let metrics = ProjectBusinessQuoteMetrics(project: project, quotes: store.quoteItems)
+        return Section(AppLocalization.string("quote_business_selection_title")) {
+            LabeledContent(
+                AppLocalization.string("quote_business_selection_version"),
+                value: metrics.selectedVersion ?? AppLocalization.string("quote_business_selection_none")
+            )
+            LabeledContent(
+                AppLocalization.string("quote_business_selection_amount"),
+                value: metrics.amount.map { ReportBuilder.money($0) } ?? AppLocalization.string("quote_business_selection_review")
+            )
+            Menu(AppLocalization.string("quote_business_selection_choose")) {
+                ForEach(metrics.confirmedVersions, id: \.self) { version in
+                    Button(version) {
+                        saveBusinessQuoteVersion(version, project: project)
+                    }
+                }
+            }
+            .disabled(isSavingBusinessQuoteVersion || metrics.confirmedVersions.isEmpty)
+            .accessibilityIdentifier("quotation-business-version-picker")
+            if project.businessQuoteVersion != nil {
+                Button(AppLocalization.string("quote_business_selection_clear")) {
+                    saveBusinessQuoteVersion(nil, project: project)
+                }
+                .disabled(isSavingBusinessQuoteVersion)
+                .accessibilityIdentifier("quotation-business-version-clear")
+            }
+            Toggle(AppLocalization.string("quote_reference_current_version_only"), isOn: Binding(
+                get: { businessVersionFilter != nil },
+                set: { enabled in
+                    if enabled, metrics.state == .ready, let version = metrics.selectedVersion {
+                        businessVersionFilter = QuotationBusinessVersionFilter(projectID: project.id, version: version)
+                    } else {
+                        businessVersionFilter = nil
+                    }
+                }
+            ))
+            .disabled(businessVersionFilter == nil && metrics.state != .ready)
+            .accessibilityIdentifier("quotation-current-business-version-only")
+            Text(AppLocalization.string("quote_business_selection_rule"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
     }
 }

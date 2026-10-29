@@ -26,6 +26,9 @@ struct DashboardBusinessOverviewPanel: View {
                     onOpen(.lowMarginRisk)
                 }
             )
+            Text(AppLocalization.string("business_scope_dashboard_note"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
             Text(String(format: AppLocalization.string("已关注 %lld 个工程"), Int64(projectCount)))
                 .font(.caption2)
                 .foregroundStyle(.secondary)

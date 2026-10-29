@@ -7,6 +7,10 @@ extension QuotationView {
         if let projectFilter {
             result = result.filter { $0.projectId == projectFilter }
         }
+        if let businessVersionFilter {
+            let project = projectFilter.flatMap { id in store.projects.first { $0.id == id } }
+            result = businessVersionFilter.applying(to: result, project: project)
+        }
         result = SearchMatcher.filter(result, keyword: searchText)
         if let statusFilter {
             result = result.filter { $0.status == statusFilter }
@@ -14,29 +18,15 @@ extension QuotationView {
         return result
     }
 
-    var subtotalBeforeValue: MoneyValue {
-        filtered.reduce(MoneyValue.zero) { total, item in
-            total + ReportBuilder.quoteLineTotal(item)
-        }
+    var filteredReferenceSummary: QuotationReferenceSummary {
+        QuotationReferenceSummary(items: filtered)
     }
 
-    var totalTaxValue: MoneyValue {
-        filtered.reduce(MoneyValue.zero) { total, item in
-            total + ReportBuilder.quoteTaxValue(item)
-        }
+    var businessVersionFilterIsValid: Bool {
+        guard let businessVersionFilter else { return true }
+        let project = projectFilter.flatMap { id in store.projects.first { $0.id == id } }
+        return businessVersionFilter.isValid(project: project, quotes: store.quoteItems)
     }
-
-    var totalDiscountValue: MoneyValue {
-        filtered.reduce(MoneyValue.zero) { total, item in
-            total + ReportBuilder.quoteDiscountValue(item)
-        }
-    }
-
-    var grandTotalValue: MoneyValue {
-        subtotalBeforeValue + totalTaxValue - totalDiscountValue
-    }
-
-    var grandTotal: MoneyValue { grandTotalValue }
 
     var statusChipBinding: Binding<QuoteStatusChip> {
         Binding(
@@ -45,18 +35,18 @@ extension QuotationView {
         )
     }
 
-    var projectQuoteSummaries: [(name: String, total: MoneyValue)] {
-        var rows: [(name: String, total: MoneyValue)] = []
-        for project in store.projects {
-            let total = store.quoteItems
-                .filter { $0.projectId == project.id }
-                .reduce(MoneyValue.zero) { $0 + ReportBuilder.quoteGrandTotal($1) }
-            if total > 0 { rows.append((project.name, total)) }
+    var projectQuoteSummaries: [QuotationProjectReferenceSummary] {
+        var rows = store.projects.compactMap { project -> QuotationProjectReferenceSummary? in
+            let items = store.quoteItems.filter { $0.projectId == project.id }
+            guard !items.isEmpty else { return nil }
+            return QuotationProjectReferenceSummary(projectID: project.id, name: project.name,
+                summary: QuotationReferenceSummary(items: items))
         }
-        let unassigned = store.quoteItems
-            .filter { $0.projectId == nil }
-            .reduce(MoneyValue.zero) { $0 + ReportBuilder.quoteGrandTotal($1) }
-        if unassigned > 0 { rows.append((AppLocalization.string("未归属"), unassigned)) }
+        let unassigned = store.quoteItems.filter { $0.projectId == nil }
+        if !unassigned.isEmpty {
+            rows.append(QuotationProjectReferenceSummary(projectID: nil, name: AppLocalization.string("未归属"),
+                summary: QuotationReferenceSummary(items: unassigned)))
+        }
         return rows
     }
 

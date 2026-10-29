@@ -8,6 +8,22 @@ struct ProjectDetailRouteState {
     var editingRoute: ProjectDetailEditingRoute?
     var anchorRequest: ProjectDetailAnchorRequest?
     var documentScanCategory: ProjectDocumentCategory?
+
+    mutating func selectMode(
+        _ mode: ProjectDetailMode,
+        anchor: ProjectDetailAnchor,
+        prefersInlineSections: Bool,
+        isUserInitiated: Bool
+    ) {
+        self.mode = mode
+        guard prefersInlineSections else { return }
+        requestAnchorScroll(anchor, allowRepeat: isUserInitiated)
+    }
+
+    mutating func requestAnchorScroll(_ anchor: ProjectDetailAnchor, allowRepeat: Bool = false) {
+        guard allowRepeat || anchorRequest?.anchor != anchor else { return }
+        anchorRequest = ProjectDetailAnchorRequest(anchor: anchor)
+    }
 }
 
 enum ProjectDetailEditingRoute: Identifiable {

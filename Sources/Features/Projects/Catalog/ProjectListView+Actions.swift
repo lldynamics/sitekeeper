@@ -141,12 +141,7 @@ extension ProjectListView {
     }
 
     func paidAmount(for project: Project) -> MoneyValue {
-        let projectId = project.id
-        let summary = projectStore.projectActivitySummary(for: projectId)
-        return ProjectFinancialMetrics.effectivePaidAmount(
-            recordedCollectionAmount: summary.collectedIncomeAmount,
-            manualPaidAmount: project.paidAmount
-        )
+        ProjectFinancialMetrics.paidAmount(project: project, records: projectStore.projectFinancialRecords(for: project.id))
     }
 
     func customerPhoneURL(for project: Project) -> URL? {
@@ -221,7 +216,22 @@ extension ProjectListView {
     }
 
     func hasReceivableAging(for project: Project) -> Bool {
-        unpaidAmount(for: project) > 0
+        let context = projectStore.dayContext
+        let schedule = ProjectReceivableScheduleSummary(
+            project: project,
+            records: projectStore.projectFinancialRecords(for: project.id),
+            today: context.day,
+            timeZone: context.calendar.timeZone
+        )
+        switch schedule.state {
+        case .needsReview: return true
+        case .noActiveIncomePlan:
+            let amount = unpaidAmount(for: project)
+            return !project.contractAmount.isValid || !amount.isValid || amount.isPositive
+        case .ready:
+            return (schedule.dueUnpaidAmount?.isPositive ?? false)
+                || (schedule.futureUnpaidAmount?.isPositive ?? false)
+        }
     }
 
     func hasRecentCollection(for project: Project, withinDays: Int = 30) -> Bool {
@@ -242,12 +252,9 @@ extension ProjectListView {
         let quoteItems = financeStore.quoteItems.filter { $0.projectId == project.id }
         let laborRecords = financeStore.laborRecords.filter { $0.projectId == project.id }
 
-        let materialCost = materialItems.isEmpty
-            ? project.materialCost
-            : materialItems.reduce(MoneyValue.zero) { $0 + ReportBuilder.materialLineTotal($1) }
-        let laborCost = laborRecords.isEmpty
-            ? project.laborCost
-            : laborRecords.reduce(MoneyValue.zero) { $0 + ReportBuilder.laborLineTotal($1) }
+        let basis = ProjectCostBasisMetrics.summary(project: project, materials: materialItems, labor: laborRecords,
+                                                    records: projectStore.projectFinancialRecords(for: project.id))
+        guard let materialCost = basis.material.amount, let laborCost = basis.labor.amount else { return true }
         let pendingCount = materialItems.filter { $0.quantity.isZero }.count
             + quoteItems.filter { !$0.unitPrice.isPositive }.count
 
@@ -261,18 +268,13 @@ extension ProjectListView {
 
     func hasLowMarginRisk(for project: Project) -> Bool {
         let contract = project.contractAmount
-        guard contract > 0 else { return false }
+        guard contract.isValid, contract > 0 else { return true }
 
         let materialItems = financeStore.materialItems.filter { $0.projectId == project.id }
         let laborRecords = financeStore.laborRecords.filter { $0.projectId == project.id }
-        let materialCost = materialItems.isEmpty
-            ? project.materialCost
-            : materialItems.reduce(MoneyValue.zero) { $0 + ReportBuilder.materialLineTotal($1) }
-        let laborCost = laborRecords.isEmpty
-            ? project.laborCost
-            : laborRecords.reduce(MoneyValue.zero) { $0 + ReportBuilder.laborLineTotal($1) }
-
-        let profit = contract - materialCost - laborCost
+        let basis = ProjectCostBasisMetrics.summary(project: project, materials: materialItems, labor: laborRecords,
+                                                    records: projectStore.projectFinancialRecords(for: project.id))
+        guard let profit = basis.estimatedProfit(contract: contract) else { return true }
         let margin = profit / contract
         return profit < 0 || margin < 0.10
     }

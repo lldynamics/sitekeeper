@@ -1,5 +1,16 @@
 import SwiftUI
 
+private struct DashboardFlatSurfacesKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    var dashboardFlatSurfaces: Bool {
+        get { self[DashboardFlatSurfacesKey.self] }
+        set { self[DashboardFlatSurfacesKey.self] = newValue }
+    }
+}
+
 struct DashboardRiskQuickAction: Identifiable {
     let id: String
     let title: String
@@ -32,16 +43,28 @@ struct DashboardRiskPill: View {
         NavigationLink {
             LazyDashboardDestinationView(destination: destination)
         } label: {
-            HStack(spacing: AppSpacing.tight * 0.75) {
-                Text(title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(hasRisk ? (colorScheme == .dark ? color : Color.white) : color)
-                Text(value)
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(hasRisk ? (colorScheme == .dark ? color : Color.white) : color)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AppSpacing.tight * 0.75) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                        .fixedSize()
+                    Spacer(minLength: 0)
+                    Text(value)
+                        .font(.caption.weight(.bold))
+                        .fixedSize()
+                }
+                VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
+                    Text(title)
+                        .font(.caption.weight(.semibold))
+                    Text(value)
+                        .font(.caption.weight(.bold))
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
+            .foregroundStyle(hasRisk ? (colorScheme == .dark ? color : Color.white) : color)
             .padding(.horizontal, AppSpacing.normal - 2)
             .padding(.vertical, AppSpacing.tight - 1)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
             .background(
                 RoundedRectangle(cornerRadius: AppSpacing.normal - 2, style: .continuous)
                     .fill(hasRisk ? (colorScheme == .dark ? color.opacity(0.22) : color) : color.opacity(0.12))
@@ -96,7 +119,7 @@ struct DashboardInventoryPill: View {
             AppSurface(
                 tone: .tertiary,
                 cornerRadius: 10,
-                stroke: Color(uiColor: .separator).opacity(0.12)
+                stroke: Color(uiColor: .separator).opacity(0.10)
             ) {
                 Color.clear
             }
@@ -152,13 +175,15 @@ struct DashboardPanel<Content: View>: View {
 }
 
 private struct DashboardPanelSurfaceModifier: ViewModifier {
+    @Environment(\.dashboardFlatSurfaces) private var flatSurfaces
+
     func body(content: Content) -> some View {
         AppPanel(
             tone: .grouped,
             cornerRadius: 16,
             padding: AppSpacing.normal,
-            shadow: .card,
-            stroke: Color(uiColor: .separator).opacity(0.18)
+            shadow: flatSurfaces ? .none : .card,
+            stroke: AppSurfaceDefaults.stroke
         ) {
             content
         }
@@ -219,37 +244,51 @@ struct TodoPreviewRow: View {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : (todo.isOverdue ? "exclamationmark.circle.fill" : "circle"))
                         .font(.body)
                         .foregroundStyle(todo.isDone ? Color.appSuccess : (todo.isOverdue ? Color.appRisk : Color.appPrimaryAction))
+                        .frame(minWidth: 32, minHeight: 32)
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(.borderless)
                 .accessibilityLabel(todo.isDone ? AppLocalization.string("标记未完成") : AppLocalization.string("标记完成"))
             } else {
                 Image(systemName: todo.isDone ? "checkmark.circle.fill" : (todo.isOverdue ? "exclamationmark.circle.fill" : "circle"))
                     .font(.body)
                     .foregroundStyle(todo.isDone ? Color.appSuccess : (todo.isOverdue ? Color.appRisk : Color.appPrimaryAction))
+                    .frame(minWidth: 32, minHeight: 32)
             }
-            VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
-                Text(todo.title)
-                    .font(.callout.weight(.medium))
-                    .foregroundStyle(todo.isDone ? .secondary : .primary)
-                    .strikethrough(todo.isDone)
-                    .appListPrimaryTextLayout()
-                ViewThatFits(in: .horizontal) {
-                    todoMetadataRow
-                    todoMetadataColumn
-                }
-                if let review = todo.review {
-                    Text(review.status.displayName)
+
+            NavigationLink {
+                SiteTodoView(initialProjectId: todo.projectId, focusedTodoId: todo.id)
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: AppSpacing.tight * 0.375) {
+                        Text(todo.title)
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(todo.isDone ? .secondary : .primary)
+                            .strikethrough(todo.isDone)
+                            .appListPrimaryTextLayout()
+                        ViewThatFits(in: .horizontal) {
+                            todoMetadataRow
+                            todoMetadataColumn
+                        }
+                        if let review = todo.review {
+                            Text(review.status.displayName)
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(review.status == .closed ? Color.appSuccess : Color.appWarning)
+                        }
+                        if let completedAt = todo.completedAt, todo.isDone {
+                            Text(String(format: AppLocalization.string("完成 %@"), Formatters.displayDateText(completedAt)))
+                                .font(.caption2)
+                                .foregroundStyle(Color.appSuccess)
+                        }
+                    }
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.right")
                         .font(.caption2.weight(.semibold))
-                        .foregroundStyle(review.status == .closed ? Color.appSuccess : Color.appWarning)
+                        .foregroundStyle(.tertiary)
                 }
-                if let completedAt = todo.completedAt, todo.isDone {
-                    Text(String(format: AppLocalization.string("完成 %@"), Formatters.displayDateText(completedAt)))
-                        .font(.caption2)
-                        .foregroundStyle(Color.appSuccess)
-                }
+                .contentShape(Rectangle())
             }
-            Spacer()
+            .buttonStyle(.plain)
         }
         .padding(.horizontal, AppSpacing.normal - 2)
         .padding(.vertical, AppSpacing.tight)

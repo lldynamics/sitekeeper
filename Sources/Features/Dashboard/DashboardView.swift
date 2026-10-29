@@ -9,6 +9,7 @@ struct DashboardView: View {
     @Environment(ProjectStore.self) var projectStore
     @Environment(FinanceStore.self) var financeStore
     @Environment(\.horizontalSizeClass) var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.expandedPhoneWorkspaceWidth) private var rootWorkspaceWidth
     @State var dashboardSearchText = ""
     @State var dashboardSearchProjectID: UUID?
@@ -20,10 +21,10 @@ struct DashboardView: View {
     @State private var containerWidth: CGFloat = 0
     @State private var padHeaderMeasuredHeight: CGFloat = 240
     @ScaledMetric(relativeTo: .body) private var independentPadMinimumWidth: CGFloat = 820
-    @ScaledMetric(relativeTo: .body) private var independentPadMinimumHeight: CGFloat = 520
     @ScaledMetric(relativeTo: .body) private var phoneMinimumPaneHeight: CGFloat = 240
     @AppStorage(UserPreferenceKeys.dashboardCurrentProjectId) var selectedProjectIdRaw = ""
     @AppStorage(UserPreferenceKeys.dashboardIgnoredBackupRiskDay) var ignoredBackupRiskDay = ""
+    @State private var dashboardRiskExpanded = false
     @AppStorage(UserPreferenceKeys.dashboardIgnoredMissingReceiptRiskDay) var ignoredMissingReceiptRiskDay = ""
     @AppStorage(UserPreferenceKeys.dashboardIgnoredPriceSpikeRiskDay) var ignoredPriceSpikeRiskDay = ""
     @AppStorage(UserPreferenceKeys.dashboardIgnoredNegativeStockRiskDay) var ignoredNegativeStockRiskDay = ""
@@ -32,6 +33,7 @@ struct DashboardView: View {
     var body: some View {
         NavigationStack {
             dashboardBodyContent
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .background(DashboardWidthReader(width: $containerWidth))
             .overlay(alignment: .top) {
                 if let quickActionToastMessage {
@@ -115,7 +117,7 @@ struct DashboardView: View {
         // aligns with the same sidebar track used by Projects, Toolbox and Quick Notes.
         let overviewWidth = max(0, min(contentWidth, sidebarTrackWidth - AppSpacing.relaxed))
 
-        return DashboardPhoneWorkspaceLayout(
+        return DashboardIndependentWorkspaceLayout(
             viewportSize: CGSize(width: max(0, size.width - AppSpacing.relaxed * 2),
                                  height: max(0, size.height - AppSpacing.tight * 2)),
             minimumPaneHeight: phoneMinimumPaneHeight,
@@ -143,6 +145,7 @@ struct DashboardView: View {
                     .padding(.horizontal, 1)
                 }
                 .scrollIndicators(.visible)
+                .scrollClipDisabled(false)
                 .accessibilityIdentifier("dashboard-expanded-phone-overview-scroll")
                 .frame(width: overviewWidth)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -158,11 +161,6 @@ struct DashboardView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
             .frame(maxHeight: .infinity, alignment: .topLeading)
-            .overlay(alignment: .leading) {
-                ExpandedPhoneColumnDivider()
-                    .frame(width: 1)
-                    .offset(x: overviewWidth + AppSpacing.normal * 0.5 - 0.5)
-            }
 
             dashboardRiskStrip
                 .fixedSize(horizontal: false, vertical: true)
@@ -170,21 +168,24 @@ struct DashboardView: View {
         }
         .padding(.horizontal, AppSpacing.relaxed)
         .padding(.vertical, AppSpacing.tight)
+        // The two independently clipped panes use the grouped canvas and outlines
+        // for separation, so card shadows cannot end abruptly at a scroll edge.
+        .environment(\.dashboardFlatSurfaces, true)
     }
 
     private func independentPadDashboardContainer(size: CGSize) -> some View {
-        let workspaceHeight = max(size.height, independentPadMinimumHeight)
-        // Change only the outer scroll axes, keeping search focus and both pane owners stable.
-        // With enough height there is no outer vertical scrolling; short viewports can reach every pane.
-        return ScrollView(size.height < independentPadMinimumHeight ? .vertical : []) {
-            independentPadDashboard(size: CGSize(width: size.width, height: workspaceHeight))
-                .frame(width: size.width, height: workspaceHeight, alignment: .topLeading)
+        // The outer scroller only moves when the header, reminders and minimum pane
+        // height exceed the viewport; the two content panes still scroll independently.
+        ScrollView(.vertical) {
+            independentPadDashboard(size: size)
+                .frame(width: size.width, alignment: .topLeading)
         }
+        .contentMargins(.top, 0, for: .scrollContent)
     }
 
     private var dashboardScrollContent: some View {
         ScrollView {
-            if usesWideDashboardLayout {
+            if usesWideDashboardLayout && !dynamicTypeSize.isAccessibilitySize {
                 wideDashboardContent(containerWidth: containerWidth)
             } else {
                 compactDashboardContent
@@ -196,8 +197,16 @@ struct DashboardView: View {
         let contentWidth = max(0, size.width - AppSpacing.relaxed * 2 - AppSpacing.normal)
         let overviewWidth = min(max(contentWidth * 0.42, 340), 520)
 
-        return VStack(alignment: .leading, spacing: AppSpacing.normal) {
-            independentPadHeader(maximumHeight: max(0, size.height * 0.4))
+        return DashboardIndependentWorkspaceLayout(
+            viewportSize: CGSize(width: max(0, size.width - AppSpacing.relaxed * 2),
+                                 height: max(0, size.height - AppSpacing.tight * 2)),
+            minimumPaneHeight: phoneMinimumPaneHeight,
+            spacing: AppSpacing.normal
+        ) {
+            // Keep every quick action visible when idle. Search results can grow the
+            // header substantially, so only constrain it while a query is active.
+            independentPadHeader(maximumHeight: dashboardSearchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                 ? .infinity : max(0, size.height * 0.4))
 
             HStack(alignment: .top, spacing: AppSpacing.normal) {
                 DashboardPanel(title: AppLocalization.string("时间轴"), systemImage: "calendar.badge.clock") {
@@ -224,6 +233,7 @@ struct DashboardView: View {
                     .padding(.horizontal, 1)
                 }
                 .scrollIndicators(.visible)
+                .scrollClipDisabled()
                 .accessibilityIdentifier("dashboard-ipad-overview-scroll")
                 .frame(width: overviewWidth)
                 .frame(maxHeight: .infinity, alignment: .topLeading)
@@ -231,6 +241,7 @@ struct DashboardView: View {
             .frame(maxHeight: .infinity, alignment: .topLeading)
 
             dashboardRiskStrip
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.horizontal, AppSpacing.relaxed)
         .padding(.vertical, AppSpacing.tight)
@@ -276,6 +287,12 @@ struct DashboardView: View {
 
     private var compactDashboardContent: some View {
         VStack(alignment: .leading, spacing: AppSpacing.normal) {
+            #if DEBUG
+            if ProcessInfo.processInfo.environment["UITEST_DUO_SCROLL_FIXTURE"] == "1" {
+                NavigationLink("Duo Progress Test") { TaskProgressView() }
+                    .accessibilityIdentifier("duo-progress-test-entry")
+            }
+            #endif
             globalSearchInput
             currentProjectSelector
             if hasDashboardRisk { dashboardRiskStrip }
@@ -331,7 +348,7 @@ struct DashboardView: View {
                         tone: .grouped,
                         cornerRadius: 16,
                         shadow: .card,
-                        stroke: Color(uiColor: .separator).opacity(0.18)
+                        stroke: AppSurfaceDefaults.stroke
                     ) {
                         Color.clear
                     }
@@ -453,7 +470,7 @@ struct DashboardView: View {
     }
 
     private var dashboardRiskStrip: some View {
-        DashboardRiskStrip(hasDashboardRisk: hasDashboardRisk, pins: visibleDashboardRiskPins)
+        DashboardRiskStrip(isExpanded: $dashboardRiskExpanded, hasDashboardRisk: hasDashboardRisk, pins: visibleDashboardRiskPins)
     }
 
     private var businessOverviewPanel: some View {
@@ -495,7 +512,7 @@ private struct DashboardPadHeaderHeightKey: PreferenceKey {
 // Keep the three child owners in declaration order: header, scrolling columns, risk strip.
 // Place risk labels below search visually, without moving or recreating either owner.
 // Only the columns consume the viewport's remaining height.
-private struct DashboardPhoneWorkspaceLayout: Layout {
+private struct DashboardIndependentWorkspaceLayout: Layout {
     let viewportSize: CGSize
     let minimumPaneHeight: CGFloat
     let spacing: CGFloat

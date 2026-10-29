@@ -108,19 +108,20 @@ struct ProjectCustomerStatement {
         let collections = records.filter {
             $0.projectId == project.id && $0.countsInBusinessMetrics && $0.isCollectionIncome
         }
-        let recorded = ProjectFinancialMetrics.collectionAmount(collections)
+        let recorded = ProjectFinancialMetrics.strictCollectionAmount(collections) ?? MoneyValue(.nan)
         currentCumulativePaid = ProjectFinancialMetrics.effectivePaidAmount(
             recordedCollectionAmount: recorded, manualPaidAmount: project.paidAmount
         )
         paidSource = recorded.isPositive || (!recorded.isValid && !recorded.isEmpty)
             ? .recordedCollections : .historicalManual
-        currentOutstanding = ProjectFinancialMetrics.unpaidAmount(
+        currentOutstanding = project.contractAmount.isEmpty ? .empty : ProjectFinancialMetrics.unpaidAmount(
             contractAmount: project.contractAmount, paidAmount: currentCumulativePaid
         )
         periodReceipts = collections.filter { period.contains($0.date) }
             .sorted { $0.date < $1.date }
             .map { Receipt(id: $0.id, date: $0.date, amount: $0.amount) }
-        periodReceived = periodReceipts.reduce(MoneyValue.zero) { $0 + $1.amount }
+        periodReceived = periodReceipts.allSatisfy { $0.amount.isValid && !$0.amount.isNegative }
+            ? periodReceipts.reduce(MoneyValue.zero) { $0 + $1.amount } : MoneyValue(.nan)
         undatedReceiptCount = collections.filter { $0.date.calendarDay(in: period.timeZone) == nil }.count
         // A payment plan is a schedule, not evidence of payment. Expense plans stay internal.
         plannedReceipts = project.paymentPlans.filter { $0.direction == .income && !$0.isArchived }

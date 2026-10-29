@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct MaterialLibraryListView: View {
+    let usesPhoneWorkspaceSurface: Bool
     let recentSearchKeywords: [String]
     @Binding var searchText: String
     let recentMaterials: [RecentMaterialItem]
@@ -37,6 +38,7 @@ struct MaterialLibraryListView: View {
                         }
                     }
                 }
+                .listRowBackground(phoneRowBackground)
             }
 
             if !recentMaterials.isEmpty && searchText.isEmpty {
@@ -68,6 +70,7 @@ struct MaterialLibraryListView: View {
                         }
                     }
                 }
+                .listRowBackground(phoneRowBackground)
             }
 
             if !filteredUser.isEmpty {
@@ -81,6 +84,7 @@ struct MaterialLibraryListView: View {
                             }
                     }
                 }
+                .listRowBackground(phoneRowBackground)
             }
 
             Section(
@@ -97,6 +101,7 @@ struct MaterialLibraryListView: View {
                         }
                 }
             }
+            .listRowBackground(phoneRowBackground)
 
             if showRecycleBin {
                 Section(AppLocalization.string("materials.library.recycleBin.section")) {
@@ -107,8 +112,10 @@ struct MaterialLibraryListView: View {
                         deletedUserRow(item)
                     }
                 }
+                .listRowBackground(phoneRowBackground)
             }
         }
+        .scrollContentBackground(usesPhoneWorkspaceSurface ? .hidden : .automatic)
         .searchable(
             text: $searchText,
             placement: .navigationBarDrawer(displayMode: .always),
@@ -117,5 +124,9 @@ struct MaterialLibraryListView: View {
         .onSubmit(of: .search) {
             onSubmitSearch()
         }
+    }
+
+    private var phoneRowBackground: Color? {
+        usesPhoneWorkspaceSurface ? Color(.secondarySystemBackground) : nil
     }
 }

@@ -77,7 +77,8 @@ extension SitekeeperUITests {
         languageCode: String = "zh-Hans",
         reviewRegressionFixture: Bool = false,
         workflowOptimizationFixture: Bool = false,
-        duoWorkflowFixture: Bool = false
+        duoWorkflowFixture: Bool = false,
+        duoScrollFixture: Bool = false
     ) -> XCUIApplication {
         if ProcessInfo.processInfo.environment["UITEST_REQUIRE_ANIMATIONS"] == "1" {
             let reducesMotion = UIAccessibility.isReduceMotionEnabled
@@ -114,6 +115,7 @@ extension SitekeeperUITests {
         }
         app.launchEnvironment["UITEST_WORKFLOW_OPTIMIZATION_FIXTURE"] = workflowOptimizationFixture ? "1" : "0"
         app.launchEnvironment["UITEST_DUO_WORKFLOW_FIXTURE"] = duoWorkflowFixture ? "1" : "0"
+        app.launchEnvironment["UITEST_DUO_SCROLL_FIXTURE"] = duoScrollFixture ? "1" : "0"
         app.launch()
         return app
     }
@@ -130,6 +132,18 @@ extension SitekeeperUITests {
                 sidebarModule.tap()
                 return
             }
+        }
+
+        let compactMenu = app.descendants(matching: .any)["primary-module-menu"].firstMatch
+        if compactMenu.exists, compactMenu.isHittable {
+            compactMenu.tap()
+            let option = app.buttons[name].firstMatch
+            guard option.waitForExistence(timeout: 3), option.isHittable else {
+                XCTFail("Missing primary module in navigation menu: \(name)")
+                return
+            }
+            option.tap()
+            return
         }
 
         let tabIdentifier: String? = switch name {

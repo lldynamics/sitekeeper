@@ -124,6 +124,68 @@ struct KeyboardToolbarTests {
         #expect(KeyboardToolbarScopeView.hasUsableBounds(CGRect(x: 0, y: 0, width: 320, height: 44)))
     }
 
+    @Test func floatingKeyboardPlacementUsesWindowAndPageCoordinates() {
+        let window = CGRect(x: 0, y: 0, width: 1032, height: 1376)
+        let owner = CGRect(x: 226, y: 360, width: 580, height: 650)
+        let page = CGRect(x: 226, y: 420, width: 580, height: 590)
+        let lowerKeyboard = CGRect(x: 520, y: 940, width: 320, height: 260)
+        let upperKeyboard = CGRect(x: 250, y: 340, width: 320, height: 260)
+        let dockedKeyboard = CGRect(x: 0, y: 1050, width: 1032, height: 326)
+
+        #expect(KeyboardToolbarScopeView.isFloatingKeyboard(lowerKeyboard, in: window))
+        #expect(KeyboardToolbarScopeView.isFloatingKeyboard(upperKeyboard, in: window))
+        #expect(!KeyboardToolbarScopeView.isFloatingKeyboard(dockedKeyboard, in: window))
+        #expect(!KeyboardToolbarScopeView.isFloatingKeyboard(.null, in: window))
+        #expect(KeyboardToolbarScopeView.shouldPlaceBarAtTop(keyboard: lowerKeyboard, page: page, owner: owner))
+        #expect(!KeyboardToolbarScopeView.shouldPlaceBarAtTop(keyboard: upperKeyboard, page: page, owner: owner))
+    }
+
+    @Test func floatingKeyboardKeepsToolbarControlsOnTheUncoveredSide() {
+        let owner = CGRect(x: 226, y: 50, width: 580, height: 550)
+        let page = CGRect(x: 226, y: 100, width: 580, height: 450)
+        let left = KeyboardToolbarScopeView.horizontalToolbarAvoidance(
+            keyboard: CGRect(x: 7, y: 81, width: 320, height: 223), page: page, owner: owner)
+        #expect(left.leading == 109 && left.trailing == 0)
+        let right = KeyboardToolbarScopeView.horizontalToolbarAvoidance(
+            keyboard: CGRect(x: 700, y: 81, width: 320, height: 223), page: page, owner: owner)
+        #expect(right.leading == 0 && right.trailing == 114)
+        let outside = KeyboardToolbarScopeView.horizontalToolbarAvoidance(
+            keyboard: CGRect(x: 0, y: 900, width: 320, height: 223), page: page, owner: owner)
+        #expect(outside.leading == 0 && outside.trailing == 0)
+        let narrow = CGRect(x: 226, y: 100, width: 150, height: 450)
+        let insufficient = KeyboardToolbarScopeView.horizontalToolbarAvoidance(
+            keyboard: CGRect(x: 7, y: 81, width: 320, height: 223), page: narrow, owner: owner)
+        #expect(insufficient.leading == 0 && insufficient.trailing == 0)
+        #expect(KeyboardToolbarScopeView.cancelShouldBeTrailing(
+            keyboard: CGRect(x: 361, y: 80, width: 320, height: 227), page: page))
+        #expect(!KeyboardToolbarScopeView.cancelShouldBeTrailing(
+            keyboard: CGRect(x: 700, y: 81, width: 320, height: 223), page: page))
+    }
+
+    @Test func floatingKeyboardScrollAvoidanceKeepsTheCaretInTheVisiblePage() {
+        let visible = CGRect(x: 0, y: 0, width: 500, height: 500)
+        let input = CGRect(x: 200, y: 240, width: 10, height: 30)
+        let keyboard = CGRect(x: 100, y: 200, width: 300, height: 200)
+        let delta = KeyboardToolbarScopeView.unobscuredScrollDelta(
+            input: input, visible: visible, keyboard: keyboard,
+            currentOffset: 100, lower: 0, upper: 600, proposed: 0
+        )
+        let shifted = input.offsetBy(dx: 0, dy: -delta)
+        #expect(delta == 82)
+        #expect(visible.contains(shifted))
+        #expect(!shifted.intersects(keyboard))
+
+        let noOverlap = keyboard.offsetBy(dx: 500, dy: 0)
+        #expect(KeyboardToolbarScopeView.unobscuredScrollDelta(
+            input: input, visible: visible, keyboard: noOverlap,
+            currentOffset: 100, lower: 0, upper: 600, proposed: 0
+        ) == 0)
+        #expect(KeyboardToolbarScopeView.unobscuredScrollDelta(
+            input: input, visible: visible, keyboard: visible,
+            currentOffset: 100, lower: 0, upper: 600, proposed: 0
+        ) == 0, "Do not force an invalid offset when the keyboard covers the entire page.")
+    }
+
     @Test func resizingKeepsTheFocusedCaretBelowThePageChromeWithoutRefocusing() async throws {
         let fixture = KeyboardToolbarWindowFixture()
         defer { fixture.close() }

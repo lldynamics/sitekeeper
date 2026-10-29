@@ -4,6 +4,7 @@ import UIKit
 struct SiteTodoView: View {
     @Environment(DataStore.self) private var store
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let initialProjectId: UUID?
     let autoOpenComposer: Bool
     let focusedTodoId: UUID?
@@ -19,6 +20,7 @@ struct SiteTodoView: View {
     @State private var didOpenFocusedTodo = false
     @State private var operationNotice: OperationToastNotice?
     @State private var undoableDeletion = UndoableDeletionCoordinator()
+    @State private var preferredColumn: NavigationSplitViewColumn = .detail
 
     init(
         initialProjectId: UUID? = nil,
@@ -63,18 +65,12 @@ struct SiteTodoView: View {
     }
 
     var body: some View {
-        AdaptiveListDetailLayout(
-            forceSplit: usesSidebarLayout,
-            compact: {
-                compactTodoLayout
-            },
-            sidebar: {
-                filterSidebar
-            },
-            detail: {
-                todoListContent
-            }
-        )
+        NavigationSplitView(preferredCompactColumn: $preferredColumn) {
+            filterSidebar
+        } detail: {
+            todoListContent
+        }
+        .navigationSplitViewStyle(.balanced)
         .navigationTitle(AppLocalization.string("现场待办"))
         .searchable(text: $searchText, prompt: AppLocalization.string("搜索事项、负责人、备注"))
         .toolbar {
@@ -118,13 +114,6 @@ struct SiteTodoView: View {
         .operationToast(notice: $operationNotice)
     }
 
-    private var compactTodoLayout: some View {
-        List {
-            filterSection
-            todoListSection
-        }
-    }
-
     private var filterSidebar: some View {
         List {
             filterSection
@@ -142,8 +131,10 @@ struct SiteTodoView: View {
 
     private var todoListContent: some View {
         List {
+            if !usesSidebarLayout { filterSection }
             todoListSection
         }
+        .modifier(AppPreserveListPosition(split: usesSidebarLayout, rowIDs: filteredTodos.map(\.id)))
     }
 
     private var filterSection: some View {
@@ -154,13 +145,22 @@ struct SiteTodoView: View {
                     Text(project.name).tag(project.id as UUID?)
                 }
             }
-            Picker(AppLocalization.string("状态"), selection: $statusFilter) {
-                ForEach(TodoFilter.allCases, id: \.self) { filter in
-                    Text(filter.displayName).tag(filter)
-                }
+            .accessibilityIdentifier("todo-project-filter")
+            if dynamicTypeSize.isAccessibilitySize {
+                statusPicker.pickerStyle(.menu)
+            } else {
+                statusPicker.pickerStyle(.segmented)
             }
-            .pickerStyle(.segmented)
         }
+    }
+
+    private var statusPicker: some View {
+        Picker(AppLocalization.string("状态"), selection: $statusFilter) {
+            ForEach(TodoFilter.allCases, id: \.self) { filter in
+                Text(filter.displayName).tag(filter)
+            }
+        }
+        .accessibilityIdentifier("todo-status-filter")
     }
 
     private var todoListSection: some View {
@@ -186,6 +186,8 @@ struct SiteTodoView: View {
                         )
                     }
                     .buttonStyle(.plain)
+                    .background { AppListRowAnchor(id: todo.id) }
+                    .id(todo.id)
                     .swipeActions(edge: .leading, allowsFullSwipe: true) {
                         Button {
                             toggleDone(todo)

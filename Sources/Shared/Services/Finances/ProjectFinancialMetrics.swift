@@ -30,6 +30,18 @@ enum ProjectFinancialMetrics {
         summary(records).collectionAmount
     }
 
+    /// Empty historical amounts are unknown, not zero. Keep the existing
+    /// generic ledger summary intact for callers that use its legacy contract.
+    static func strictCollectionAmount(_ records: [ProjectFinancialRecord]) -> MoneyValue? {
+        var total = MoneyValue.zero
+        for record in records where record.countsInBusinessMetrics && record.isCollectionIncome {
+            guard record.amount.isValid, !record.amount.isNegative else { return nil }
+            total += record.amount
+            guard total.isValid else { return nil }
+        }
+        return total
+    }
+
     static func missingReceiptRecords(
         _ records: [ProjectFinancialRecord],
         hasLinkedDocument: (ProjectFinancialRecord) -> Bool
@@ -70,7 +82,9 @@ enum ProjectFinancialMetrics {
     }
 
     static func paidAmount(project: Project, records: [ProjectFinancialRecord]) -> MoneyValue {
-        let collection = summary(records).collectionAmount
+        guard let collection = strictCollectionAmount(records.filter { $0.projectId == project.id }) else {
+            return MoneyValue(.nan)
+        }
         return effectivePaidAmount(recordedCollectionAmount: collection, manualPaidAmount: project.paidAmount)
     }
 
@@ -80,7 +94,8 @@ enum ProjectFinancialMetrics {
 
     /// Clamp valid overpayments only. Unknown legacy amounts must remain unknown.
     static func unpaidAmount(contractAmount: MoneyValue, paidAmount: MoneyValue) -> MoneyValue {
-        nonNegative(contractAmount - paidAmount)
+        guard contractAmount.isValid, paidAmount.isValid else { return MoneyValue(.nan) }
+        return nonNegative(contractAmount - paidAmount)
     }
 
     static func totalReceivableAmount(

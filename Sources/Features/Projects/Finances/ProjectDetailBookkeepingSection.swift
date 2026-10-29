@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct ProjectBookkeepingView: View {
+    @Environment(DataStore.self) private var store
     let projectID: UUID
     let records: [ProjectFinancialRecord]
     let supplierProfiles: [SupplierProfile]
@@ -60,8 +61,22 @@ struct ProjectBookkeepingView: View {
                     }
                 }
                 .accessibilityIdentifier("project.paid-amount-explanation")
+
+                ProjectCostBasisSection(
+                    project: project,
+                    summary: ProjectCostBasisMetrics.summary(
+                        project: project,
+                        materials: store.financeStore.materialItems(for: projectID),
+                        labor: store.financeStore.laborRecords(for: projectID),
+                        records: records
+                    )
+                )
             }
             ProjectDetailAnchoredSection(AppLocalization.string("成本汇总"), anchor: .finance) {
+                NavigationLink { QuotationView(initialProjectId: projectID) } label: {
+                    Label(AppLocalization.string("quote_business_selection_title"), systemImage: "doc.text.magnifyingglass")
+                }
+                .accessibilityIdentifier("project.business-quote-selection")
                 NavigationLink { ProjectPaymentPlanView(projectID: projectID) } label: {
                     Label(AppLocalization.string("分期收付款"), systemImage: "calendar.badge.clock")
                 }
@@ -77,9 +92,9 @@ struct ProjectBookkeepingView: View {
                 } label: {
                     Label(AppLocalization.string("记账"), systemImage: "plus.circle.fill")
                 }
-                LabeledContent(AppLocalization.string("正式收入"), value: ReportBuilder.money(totalIncome))
-                LabeledContent(AppLocalization.string("正式支出"), value: ReportBuilder.money(totalExpense))
-                LabeledContent(AppLocalization.string("正式净额"), value: ReportBuilder.money(totalIncome - totalExpense))
+                LabeledContent(AppLocalization.string("正式收入"), value: strictAmountText(totalIncome))
+                LabeledContent(AppLocalization.string("正式支出"), value: strictAmountText(totalExpense))
+                LabeledContent(AppLocalization.string("正式净额"), value: strictAmountText(totalNet))
                 LabeledContent(AppLocalization.string("未附票据"), value: String(format: AppLocalization.string("%lld 笔"), Int64(unattachedCount)))
                 Text(AppLocalization.string("汇总、往来与缺票统计仅计入正式账目。"))
                     .font(.footnote)
@@ -224,6 +239,48 @@ struct ProjectBookkeepingView: View {
     }
 }
 
+private struct ProjectCostBasisSection: View {
+    let project: Project
+    let summary: ProjectCostBasisSummary
+
+    var body: some View {
+        Section(AppLocalization.string("cost_basis_title")) {
+            LabeledContent(AppLocalization.string("cost_basis_material"), value: componentText(summary.material))
+            LabeledContent(AppLocalization.string("cost_basis_labor"), value: componentText(summary.labor))
+            LabeledContent(AppLocalization.string("cost_basis_expense"), value: expenseText)
+            LabeledContent(AppLocalization.string("cost_basis_profit"), value: amountText(summary.estimatedProfit(contract: project.contractAmount)))
+            Text(AppLocalization.string("cost_basis_explanation"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            if summary.material.amount == nil || summary.labor.amount == nil || summary.formalExpense == nil {
+                Label(AppLocalization.string("cost_basis_incomplete"), systemImage: "exclamationmark.triangle")
+                    .font(.footnote)
+                    .foregroundStyle(Color.appWarning)
+            }
+        }
+        .accessibilityIdentifier("project.cost-basis")
+    }
+
+    private var expenseText: String {
+        guard summary.formalExpenseCount > 0 else { return AppLocalization.string("cost_basis_no_expenses") }
+        return amountText(summary.formalExpense)
+    }
+
+    private func componentText(_ component: ProjectCostComponent) -> String {
+        let source: String
+        switch component.source {
+        case .details: source = AppLocalization.string("cost_basis_source_details")
+        case .manual: source = AppLocalization.string("cost_basis_source_manual")
+        case .unavailable: source = AppLocalization.string("cost_basis_source_missing")
+        }
+        return "\(amountText(component.amount)) · \(source)"
+    }
+
+    private func amountText(_ amount: MoneyValue?) -> String {
+        amount.map(ReportBuilder.money) ?? AppLocalization.string("cost_basis_unknown")
+    }
+}
+
 private extension ProjectBookkeepingView {
     private var filteredRecords: [ProjectFinancialRecord] {
         records.filter { record in
@@ -240,16 +297,32 @@ private extension ProjectBookkeepingView {
         }
     }
 
-    private var totalIncome: MoneyValue {
-        ProjectFinancialMetrics.businessRecords(records)
-            .filter(\.isIncomeDirection)
-            .reduce(MoneyValue.zero) { $0 + $1.amount }
+    private var totalIncome: MoneyValue? {
+        strictLedgerTotal(records.filter { $0.isIncomeDirection })
     }
 
-    private var totalExpense: MoneyValue {
-        ProjectFinancialMetrics.businessRecords(records)
-            .filter(\.isExpenseDirection)
-            .reduce(MoneyValue.zero) { $0 + $1.amount }
+    private var totalExpense: MoneyValue? {
+        strictLedgerTotal(records.filter { $0.isExpenseDirection })
+    }
+
+    private var totalNet: MoneyValue? {
+        guard let income = totalIncome, let expense = totalExpense else { return nil }
+        let value = income - expense
+        return value.isValid ? value : nil
+    }
+
+    private func strictLedgerTotal(_ candidates: [ProjectFinancialRecord]) -> MoneyValue? {
+        var total = MoneyValue.zero
+        for record in candidates where record.projectId == projectID && record.countsInBusinessMetrics {
+            guard record.amount.isValid, !record.amount.isNegative else { return nil }
+            total += record.amount
+            guard total.isValid else { return nil }
+        }
+        return total
+    }
+
+    private func strictAmountText(_ value: MoneyValue?) -> String {
+        value.map(ReportBuilder.money) ?? AppLocalization.string("cost_basis_unknown")
     }
 
     private var unattachedCount: Int {

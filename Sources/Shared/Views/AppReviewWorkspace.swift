@@ -62,6 +62,8 @@ struct AppReviewWorkspace<Primary: View, Secondary: View>: View {
                         .allowsHitTesting(split || selectedPane == .primary)
                         .accessibilityHidden(!split && selectedPane != .primary)
                         .simultaneousGesture(TapGesture().onEnded { selectedPane = .primary })
+                        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in selectedPane = .primary })
+                        .simultaneousGesture(MagnifyGesture().onChanged { _ in selectedPane = .primary })
                     secondary()
                         .environment(\.appReviewPaneIsVisible, split || selectedPane == .secondary)
                         .accessibilityElement(children: .contain)
@@ -69,6 +71,7 @@ struct AppReviewWorkspace<Primary: View, Secondary: View>: View {
                         .allowsHitTesting(split || selectedPane == .secondary)
                         .accessibilityHidden(!split && selectedPane != .secondary)
                         .simultaneousGesture(TapGesture().onEnded { selectedPane = .secondary })
+                        .simultaneousGesture(DragGesture(minimumDistance: 4).onChanged { _ in selectedPane = .secondary })
                 }
                 .clipped()
             }

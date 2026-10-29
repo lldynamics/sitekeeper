@@ -124,6 +124,26 @@ struct ProjectWorkspaceView: View {
                 onAutoOpenComposerConsumed: onAutoOpenComposerConsumed
             )
             .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: usesExpandedPhoneSidebar))
+            .background {
+                if usesExpandedPhoneSidebar {
+                    Color(.secondarySystemGroupedBackground)
+                        .ignoresSafeArea(.container, edges: [.top, .bottom])
+                }
+            }
+            .toolbarBackground(usesExpandedPhoneSidebar ? .hidden : .automatic, for: .navigationBar)
+            .overlay(alignment: .top) {
+                if usesExpandedPhoneSidebar {
+                    // Cover scrolling rows behind the transparent split-view toolbar
+                    // while matching the sidebar's dynamic background color.
+                    GeometryReader { proxy in
+                        Color(.secondarySystemGroupedBackground)
+                            .frame(height: proxy.safeAreaInsets.top)
+                            .offset(y: -proxy.safeAreaInsets.top)
+                    }
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
+                }
+            }
             .overlay(alignment: .trailing) {
                 if usesExpandedPhoneSidebar {
                     ExpandedPhoneColumnDivider()

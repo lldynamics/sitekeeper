@@ -1,6 +1,7 @@
 import Testing
 import Foundation
 import PDFKit
+import UIKit
 @testable import sitekeeper
 
 @MainActor
@@ -247,6 +248,113 @@ extension ReportBuilderTests {
         let item = QuoteItem(name: "电缆", unitPrice: NumericInputSupport.money("100"), quantity: NumericInputSupport.quantity("2"), unit: "米", notes: "", taxRate: NumericInputSupport.quantity("0"), discountRate: NumericInputSupport.quantity("0"), projectId: nil)
         let pdf = ReportBuilder.makeQuotationPDF(title: "报价单", items: [item], projects: [])
         #expect(pdf.count > 100)
+    }
+
+    @Test func quotationPDFMarksIncompleteAmountsForReview() {
+        let item = QuoteItem(name: "Missing price", unitPrice: .empty, quantity: 2, unit: "m", notes: "",
+                             taxRate: 0, discountRate: 0)
+        let text = pdfText(ReportBuilder.makeQuotationPDF(title: "Quote", items: [item], projects: []))
+        #expect(text.contains(ReportBuilder.loc("cost_basis_unknown")))
+    }
+
+    @Test func projectPDFsKeepQuoteVersionsAndCostSourcesSeparate() {
+        let project = Project(name: "Scope", location: "", contractAmount: 1000, materialCost: 100, laborCost: 200,
+                              businessQuoteVersion: "V1")
+        let current = QuoteItem(name: "Current", unitPrice: 10, quantity: 2, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                                versionName: "V1", status: .confirmed, projectId: project.id)
+        let previous = QuoteItem(name: "Previous", unitPrice: 30, quantity: 2, unit: "项", notes: "", taxRate: 0, discountRate: 0,
+                                 versionName: "V2", status: .confirmed, projectId: project.id)
+        let records = [ProjectFinancialRecord(projectId: project.id, direction: .expense, amount: 12),
+                       ProjectFinancialRecord(projectId: UUID(), direction: .income, category: .collection, amount: 999)]
+        let reports = [
+            ReportBuilder.makeProjectArchiveReportPDF(project: project, materials: [], quotes: [current, previous], labor: [],
+                                                      logs: [], tasks: [], todos: [], financialRecords: records),
+            ReportBuilder.makeProjectPackagePDF(project: project, materials: [], quotes: [current, previous], labor: [],
+                                                logs: [], tasks: [], todos: [], financialRecords: records)
+        ]
+        let quoteLine = ReportBuilder.locFormat("report_scope_quote_format", "V1", ReportBuilder.money(20), ReportBuilder.money(80))
+            .filter { !$0.isWhitespace }
+        let costLine = ReportBuilder.locFormat("report_scope_cost_format", ReportBuilder.money(100), ReportBuilder.money(200))
+            .filter { !$0.isWhitespace }
+        for report in reports {
+            let text = pdfText(report).filter { !$0.isWhitespace }
+            #expect(text.contains(quoteLine))
+            #expect(text.contains(costLine))
+            #expect(text.contains(ReportBuilder.money(700).filter { !$0.isWhitespace }))
+        }
+    }
+
+    @Test func businessPDFPagesRenderVisibleContent() throws {
+        let project = Project(name: "Rendering fixture", location: "", contractAmount: 1000,
+                              materialCost: 100, laborCost: 200, businessQuoteVersion: "V1")
+        let quotes = (0..<45).map { index in
+            QuoteItem(name: "Rendering item \(index)", unitPrice: 10, quantity: 2, unit: "m", notes: "",
+                      taxRate: 0, discountRate: 0, versionName: "V1", status: .confirmed, projectId: project.id)
+        }
+        let reports = [
+            ReportBuilder.makeQuotationPDF(title: "Rendering quote", items: quotes, projects: [project]),
+            ReportBuilder.makeProjectArchiveReportPDF(project: project, materials: [], quotes: quotes, labor: [],
+                                                      logs: [], tasks: [], todos: []),
+            ReportBuilder.makeProjectPackagePDF(project: project, materials: [], quotes: quotes, labor: [],
+                                                logs: [], tasks: [], todos: [])
+        ]
+        for (index, data) in reports.enumerated() {
+            let document = try #require(PDFDocument(data: data))
+            #expect(document.pageCount > 0)
+            if index == 0 { #expect(document.pageCount > 1) }
+            for pageIndex in 0..<document.pageCount {
+                let page = try #require(document.page(at: pageIndex))
+                let image = try #require(page.thumbnail(of: CGSize(width: 300, height: 420), for: .mediaBox).cgImage)
+                #expect(darkPixelCount(in: image) > 20, "Report \(index), page \(pageIndex) should render visible content")
+            }
+        }
+    }
+
+    @Test func projectPackageTablesFitInsidePageMargins() throws {
+        let project = Project(name: "Margins", location: "", businessQuoteVersion: "V1")
+        let quotes = (0..<48).map { index in
+            QuoteItem(name: "Cable \(index)", unitPrice: 10, quantity: 2, unit: "m", notes: "Installed",
+                      taxRate: 0, discountRate: 0, versionName: "V1", status: .confirmed, projectId: project.id)
+        }
+        let records = [ProjectFinancialRecord(projectId: project.id, direction: .income,
+                                              category: .collection, amount: 1200, counterparty: "Customer",
+                                              invoiceNumber: "RC-001", note: "Payment")]
+        let data = ReportBuilder.makeProjectPackagePDF(project: project, materials: [], quotes: quotes, labor: [],
+                                                       logs: [], tasks: [], todos: [], financialRecords: records)
+        let document = try #require(PDFDocument(data: data))
+        let pages = (0..<document.pageCount).compactMap { document.page(at: $0) }
+        let quotePages = pages.filter { $0.string?.contains("Cable ") == true }
+        let financePages = pages.filter { $0.string?.contains("RC-001") == true }
+        #expect(quotePages.count >= 2)
+        #expect(financePages.count == 1)
+        for (section, matching) in [("quotation", quotePages), ("finance", financePages)] {
+            for page in matching {
+                let image = try #require(page.thumbnail(of: CGSize(width: 595, height: 842), for: .mediaBox).cgImage)
+                let marginPixels = max(1, Int(CGFloat(image.width) * 32 / 595))
+                #expect(darkPixelCount(in: image) > 20)
+                #expect(darkPixelCount(in: image, rightMargin: marginPixels) == 0,
+                        "The \(section) page must leave a clear right margin for printing.")
+            }
+        }
+    }
+
+    private func darkPixelCount(in image: CGImage, rightMargin: Int? = nil) -> Int {
+        let width = image.width, height = image.height
+        var pixels = [UInt8](repeating: 255, count: width * height * 4)
+        return pixels.withUnsafeMutableBytes { buffer in
+            guard let context = CGContext(data: buffer.baseAddress, width: width, height: height,
+                                          bitsPerComponent: 8, bytesPerRow: width * 4,
+                                          space: CGColorSpaceCreateDeviceRGB(),
+                                          bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return 0 }
+            context.setFillColor(UIColor.white.cgColor)
+            context.fill(CGRect(x: 0, y: 0, width: width, height: height))
+            context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+            let values = buffer.bindMemory(to: UInt8.self)
+            return stride(from: 0, to: values.count, by: 4).reduce(into: 0) { count, offset in
+                if let rightMargin, (offset / 4) % width < max(0, width - rightMargin) { return }
+                if values[offset] < 225 && values[offset + 1] < 225 && values[offset + 2] < 225 { count += 1 }
+            }
+        }
     }
 
     // MARK: - Daily Logs In Full PDF

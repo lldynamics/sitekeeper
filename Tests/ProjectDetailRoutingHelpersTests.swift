@@ -3,6 +3,45 @@ import Testing
 @testable import sitekeeper
 
 struct ProjectDetailRoutingHelpersTests {
+    @Test func explicitSectionSelectionCanRepeatWithoutDuplicatingAutomaticSync() throws {
+        var state = ProjectDetailRouteState(mode: .overview)
+        state.selectMode(.finance, anchor: .finance, prefersInlineSections: true, isUserInitiated: true)
+        let first = try #require(state.anchorRequest)
+        #expect(first.anchor == .finance)
+
+        state.requestAnchorScroll(.finance)
+        #expect(state.anchorRequest?.id == first.id)
+
+        state.selectMode(.finance, anchor: .finance, prefersInlineSections: true, isUserInitiated: true)
+        let repeated = try #require(state.anchorRequest)
+        #expect(repeated.anchor == .finance)
+        #expect(repeated.id != first.id)
+        state.requestAnchorScroll(.finance)
+        #expect(state.anchorRequest?.id == repeated.id)
+
+        state.selectMode(.records, anchor: .records, prefersInlineSections: true, isUserInitiated: true)
+        let records = try #require(state.anchorRequest)
+        state.selectMode(.records, anchor: .records, prefersInlineSections: true, isUserInitiated: true)
+        #expect(state.anchorRequest?.anchor == .records)
+        #expect(state.anchorRequest?.id != records.id)
+    }
+
+    @Test func automaticAndCompactModeChangesKeepTheirExistingScrollBehavior() throws {
+        var state = ProjectDetailRouteState(mode: .overview)
+        state.selectMode(.finance, anchor: .finance, prefersInlineSections: true, isUserInitiated: false)
+        let initial = try #require(state.anchorRequest)
+        state.selectMode(.finance, anchor: .finance, prefersInlineSections: true, isUserInitiated: false)
+        #expect(state.anchorRequest?.id == initial.id)
+
+        var compact = ProjectDetailRouteState(mode: .overview)
+        compact.selectMode(.finance, anchor: .finance, prefersInlineSections: false, isUserInitiated: true)
+        #expect(compact.mode == .finance)
+        #expect(compact.anchorRequest == nil)
+        compact.selectMode(.records, anchor: .records, prefersInlineSections: false, isUserInitiated: true)
+        #expect(compact.mode == .records)
+        #expect(compact.anchorRequest == nil)
+    }
+
     @Test(arguments: [AppLanguage.chinese, .english])
     func methodPreviewFormatsKeepNumericAndObjectArgumentsDistinct(language: AppLanguage) {
         let bundle = AppLocalization.localizedBundle(language: language)

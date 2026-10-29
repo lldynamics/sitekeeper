@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DashboardProjectSelector: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @Environment(\.dashboardFlatSurfaces) private var flatSurfaces
     let activeProjectCount: Int
     let displayLimit: Int
     let rows: [DashboardProjectRow]
@@ -29,8 +30,8 @@ struct DashboardProjectSelector: View {
             AppSurface(
                 tone: .grouped,
                 cornerRadius: 16,
-                shadow: .card,
-                stroke: Color(uiColor: .separator).opacity(0.18)
+                shadow: flatSurfaces ? .none : .card,
+                stroke: AppSurfaceDefaults.stroke
             ) {
                 Color.clear
             }
@@ -61,14 +62,18 @@ struct DashboardProjectSelector: View {
 
     private var focusedProjectScrollerShell: some View {
         VStack(alignment: .leading, spacing: AppSpacing.tight) {
-            HStack(spacing: AppSpacing.tight) {
-                Label(AppLocalization.string("进行中的工程"), systemImage: "scope")
-                    .font(.headline)
-                Spacer()
-                if activeProjectCount > displayLimit {
-                    Text(String(format: AppLocalization.string("共 %lld 个"), Int64(activeProjectCount)))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: AppSpacing.tight) {
+                    projectHeading
+                    Spacer(minLength: AppSpacing.tight)
+                    projectCount
+                }
+                .fixedSize(horizontal: true, vertical: false)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                VStack(alignment: .leading, spacing: AppSpacing.tight * 0.5) {
+                    projectHeading
+                    projectCount
                 }
             }
 
@@ -98,11 +103,26 @@ struct DashboardProjectSelector: View {
             AppSurface(
                 tone: .grouped,
                 cornerRadius: 16,
-                shadow: .card,
-                stroke: Color(uiColor: .separator).opacity(0.18)
+                shadow: flatSurfaces ? .none : .card,
+                stroke: AppSurfaceDefaults.stroke
             ) {
                 Color.clear
             }
+        }
+    }
+
+    private var projectHeading: some View {
+        Label(AppLocalization.string("进行中的工程"), systemImage: "scope")
+            .font(.headline)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder
+    private var projectCount: some View {
+        if activeProjectCount > displayLimit {
+            Text(String(format: AppLocalization.string("共 %lld 个"), Int64(activeProjectCount)))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 

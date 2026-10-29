@@ -15,6 +15,7 @@ enum DashboardDestination {
     )
     case bookkeepingProjectPicker(projects: [Project])
     case projectList(initialOverviewFilter: ProjectOverviewFilter? = nil)
+    case overdueItems
     case warehouseOverview
     case warehouse(project: Project)
     case dataManagement(initialRoute: DataManagementRoute? = nil)
@@ -88,6 +89,8 @@ struct LazyDashboardDestinationView: View {
             BookkeepingProjectPickerView(projects: projects)
         case .projectList(let initialOverviewFilter):
             ProjectListView(initialOverviewFilter: initialOverviewFilter)
+        case .overdueItems:
+            DashboardOverdueListView()
         case .warehouseOverview:
             ProjectWarehouseOverviewView()
         case .warehouse(let project):
@@ -167,7 +170,7 @@ struct TodayMiniAction: View {
                 AppSurface(
                     tone: .tertiary,
                     cornerRadius: 12,
-                    stroke: Color(uiColor: .separator).opacity(0.12)
+                    stroke: Color(uiColor: .separator).opacity(0.10)
                 ) {
                     Color.clear
                 }

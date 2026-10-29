@@ -22,8 +22,121 @@ struct BusinessWorkflowServiceTests {
         let progress = MaterialWarehouseWorkflow.progress(material: material, movements: store.projectWarehouseMovements)
         #expect(progress.planned == 10 && progress.received == 4 && progress.remaining == 6 && progress.stock == 3)
         #expect(store.materialItems[0].quantity == 10)
+        #expect(store.materialItems[0].purchaseStatus == material.purchaseStatus)
+        #expect(store.projectFinancialRecords.isEmpty)
+        #expect(progress.reviewReason == .statusConflict)
         #expect(received.origin?.materialItemID == material.id)
         await #expect(throws: (any Error).self) { _ = try await MaterialWarehouseWorkflow.receive(request, store: store) }
+    }
+
+    @Test func receiptProgressFlagsPartialArrivedAndUsedWithoutLosingKnownQuantities() {
+        let projectID = UUID()
+        for status in [MaterialPurchaseStatus.arrived, .used] {
+            let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", purchaseStatus: status, projectId: projectID)
+            let receipt = ProjectWarehouseMovement(projectId: projectID, materialName: "Cable", unit: "m", quantity: 4,
+                                                   origin: BusinessRecordOrigin(materialItemID: material.id))
+            let partial = MaterialWarehouseWorkflow.progress(material: material, movements: [receipt])
+            #expect(partial.received == 4 && partial.remaining == 6)
+            #expect(partial.reviewReason == .statusConflict)
+            let unknown = MaterialWarehouseWorkflow.progress(material: material, movements: [])
+            #expect(unknown.received.isEmpty && unknown.remaining.isEmpty)
+            #expect(unknown.reviewReason == .missingReceipts)
+            var completeReceipt = receipt
+            completeReceipt.quantity = 10
+            let complete = MaterialWarehouseWorkflow.progress(material: material, movements: [completeReceipt])
+            #expect(complete.received == 10 && complete.remaining == .zero)
+            #expect(complete.reviewReason == nil)
+            #expect(material.purchaseStatus == status)
+        }
+    }
+
+    @Test func receiptProgressFlagsUnpurchasedStatusWhenReceiptsExist() {
+        let projectID = UUID()
+        let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", purchaseStatus: .notPurchased, projectId: projectID)
+        let quantities: [QuantityValue] = [4, 10]
+        for received in quantities {
+            let receipt = ProjectWarehouseMovement(projectId: projectID, materialName: "Cable", unit: "m", quantity: received,
+                                                   origin: BusinessRecordOrigin(materialItemID: material.id))
+            let progress = MaterialWarehouseWorkflow.progress(material: material, movements: [receipt])
+            #expect(progress.received == received)
+            #expect(progress.remaining == (received == 4 ? 6 : .zero))
+            #expect(progress.reviewReason == .statusConflict)
+            #expect(material.purchaseStatus == .notPurchased)
+        }
+        #expect(MaterialWarehouseWorkflow.progress(material: material, movements: []).reviewReason == nil)
+    }
+
+    @Test func receiptProgressRequiresCompatibleUnitsAndKnownNonnegativeQuantities() {
+        let projectID = UUID()
+        let material = MaterialItem(name: "Cable", quantity: 10, unit: " m ", purchaseStatus: .purchased, projectId: projectID)
+        let valid = ProjectWarehouseMovement(projectId: projectID, materialName: "Cable", unit: "m\n", quantity: 4,
+                                             origin: BusinessRecordOrigin(materialItemID: material.id))
+        let matched = MaterialWarehouseWorkflow.progress(material: material, movements: [valid])
+        #expect(matched.received == 4 && matched.remaining == 6 && matched.reviewReason == nil)
+        for unit in ["roll", "M", ""] {
+            var incompatible = valid
+            incompatible.id = UUID()
+            incompatible.unit = unit
+            let progress = MaterialWarehouseWorkflow.progress(material: material, movements: [valid, incompatible])
+            #expect(progress.received.isEmpty && progress.remaining.isEmpty)
+            #expect(progress.reviewReason == .receiptUnits)
+        }
+        for quantity in [QuantityValue.empty, QuantityValue(storage: .unresolved("legacy unknown")), NumericInputSupport.quantity("-1")] {
+            var unknown = valid
+            unknown.id = UUID()
+            unknown.quantity = quantity
+            let progress = MaterialWarehouseWorkflow.progress(material: material, movements: [valid, unknown])
+            #expect(progress.received.isEmpty && progress.remaining.isEmpty && progress.stock.isEmpty)
+            #expect(progress.reviewReason == .quantityUnknown)
+        }
+        var unknownPlan = material
+        unknownPlan.quantity = .empty
+        #expect(MaterialWarehouseWorkflow.progress(material: unknownPlan, movements: [valid]).reviewReason == .quantityUnknown)
+    }
+
+    @Test func receiptProgressRetainsExcessAndSeparatesProjectsMaterialLinksAndStock() {
+        let projectID = UUID()
+        let material = MaterialItem(name: "Cable", quantity: 10, unit: "m", purchaseStatus: .purchased, projectId: projectID)
+        let receipt = ProjectWarehouseMovement(projectId: projectID, materialName: "Cable", unit: "m", quantity: 4,
+                                               origin: BusinessRecordOrigin(materialItemID: material.id))
+        let unrelated = [
+            ProjectWarehouseMovement(projectId: UUID(), materialName: "Cable", unit: "m", quantity: 100,
+                                     origin: BusinessRecordOrigin(materialItemID: material.id)),
+            ProjectWarehouseMovement(projectId: projectID, materialName: "Other", unit: "m", quantity: 100,
+                                     origin: BusinessRecordOrigin(materialItemID: UUID())),
+            ProjectWarehouseMovement(projectId: projectID, movementType: .outbound, materialName: "Cable", unit: "m", quantity: 1,
+                                     origin: BusinessRecordOrigin(materialItemID: material.id)),
+            ProjectWarehouseMovement(projectId: projectID, materialName: "Cable", unit: "roll", quantity: 100)
+        ]
+        let scoped = MaterialWarehouseWorkflow.progress(material: material, movements: [receipt] + unrelated)
+        #expect(scoped.received == 4 && scoped.remaining == 6 && scoped.stock == 3)
+        #expect(scoped.reviewReason == nil)
+        var excess = receipt
+        excess.quantity = 11
+        let over = MaterialWarehouseWorkflow.progress(material: material, movements: [excess])
+        #expect(over.received == 11 && over.stock == 11 && over.remaining.isEmpty)
+        #expect(over.reviewReason == .receivedExceedsPlan)
+    }
+
+    @Test func receiptSaveUsesCurrentSourceAndNeverPostsMoneyOrChangesPurchaseStatus() async throws {
+        let store = WorkflowTestStore()
+        let project = Project(name: "A", location: "")
+        store.projects = [project]
+        let original = MaterialItem(name: "Cable", quantity: 10, unit: "m", purchaseStatus: .arrived, projectId: project.id)
+        var current = original
+        current.quantity = 12
+        store.materialItems = [current]
+        let stale = MaterialReceiptRequest(materialID: original.id, expectedMaterial: BusinessDraftStore.fingerprint(original),
+                                           quantity: 2, unitPrice: 3, date: .today(), handler: "", note: "")
+        await #expect(throws: (any Error).self) { _ = try await MaterialWarehouseWorkflow.receive(stale, store: store) }
+        #expect(store.projectWarehouseMovements.isEmpty)
+        var confirmed = stale
+        confirmed.expectedMaterial = BusinessDraftStore.fingerprint(current)
+        let movement = try await MaterialWarehouseWorkflow.receive(confirmed, store: store)
+        #expect(movement.projectId == project.id && movement.quantity == 2 && movement.unit == "m")
+        #expect(store.materialItems.first?.purchaseStatus == .arrived)
+        #expect(store.materialItems.first?.quantity == 12)
+        #expect(store.projectFinancialRecords.isEmpty)
     }
 
     @Test func ledgerDraftKeepsDocumentsCostAndIdempotencyAndDoesNotPostCash() async throws {

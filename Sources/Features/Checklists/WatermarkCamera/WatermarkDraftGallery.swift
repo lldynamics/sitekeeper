@@ -175,7 +175,16 @@ private struct WatermarkDraftZoomView: View {
                     offset = CGSize(width: settledOffset.width + value.translation.width, height: settledOffset.height + value.translation.height)
                 }.onEnded { _ in settledOffset = offset })
                 .accessibilityLabel(AppLocalization.string("照片大图，使用手势缩放和移动"))
-            Button(AppLocalization.string("关闭")) { dismiss() }.padding().foregroundStyle(.white)
+            Button(AppLocalization.string("关闭")) {
+                dismiss()
+            }
+            .font(.body.weight(.medium))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.2), in: Capsule())
+            .safeAreaPadding(.top)
+            .padding(.trailing, 16)
         }
     }
 }

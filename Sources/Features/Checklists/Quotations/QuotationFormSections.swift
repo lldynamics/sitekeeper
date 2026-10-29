@@ -318,6 +318,11 @@ struct QuotationExportFormSections: View {
 
     var body: some View {
         Form {
+            Section(AppLocalization.string("quote_reference_export_scope_title")) {
+                Text(AppLocalization.string("quote_reference_export_scope_rule"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             Section(AppLocalization.string("客户信息")) {
                 TextField(AppLocalization.string("客户名称"), text: $quoteCustomerName)
                 TextField(AppLocalization.string("项目地址"), text: $quoteProjectAddress, axis: .vertical)

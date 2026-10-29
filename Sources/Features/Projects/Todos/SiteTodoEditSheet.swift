@@ -33,6 +33,7 @@ struct SiteTodoEditSheet: View {
     @State var isSaving = false
     @State var showDeleteConfirm = false
     @State var showDiscardDraft = false
+    @FocusState private var noteFocused: Bool
 
     init(
         todo: SiteTodo?, projects: [Project], constructionMethods: [ConstructionMethod], initialProjectId: UUID?,
@@ -60,6 +61,7 @@ struct SiteTodoEditSheet: View {
 
     var body: some View {
         NavigationStack {
+            ScrollViewReader { scrollProxy in
             Form {
                 draftStatusSection
                 incomingAfterPhotoSection
@@ -78,6 +80,8 @@ struct SiteTodoEditSheet: View {
                     }
                     TextField(AppLocalization.string("备注"), text: $draft.record.note, axis: .vertical)
                         .lineLimit(2...5)
+                        .focused($noteFocused)
+                        .id("todo-note-field")
                         .accessibilityIdentifier("todo-draft-note")
                 }
                 if showsDrawingIssueClosureFields { drawingIssueSection }
@@ -107,6 +111,22 @@ struct SiteTodoEditSheet: View {
                         Button(AppLocalization.string("删除待办"), role: .destructive) { showDeleteConfirm = true }
                     }
                 }
+            }
+            .appKeyboardToolbar {
+                KeyboardDismissToolbar { AppKeyboard.dismiss() }
+            }
+            .environment(\.keyboardToolbarCancelAction, KeyboardToolbarCancelAction(title: AppLocalization.string("取消")) {
+                persistDraft()
+                if draftError == nil { dismiss() }
+            })
+            .onChange(of: noteFocused) { _, focused in
+                guard UIDevice.current.userInterfaceIdiom == .pad, focused else { return }
+                withAnimation { scrollProxy.scrollTo("todo-note-field", anchor: .center) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardDidShowNotification)) { _ in
+                guard UIDevice.current.userInterfaceIdiom == .pad, noteFocused else { return }
+                withAnimation { scrollProxy.scrollTo("todo-note-field", anchor: .center) }
+            }
             }
             .navigationTitle(todo == nil ? AppLocalization.string("新增待办") : AppLocalization.string("编辑待办"))
             .navigationBarTitleDisplayMode(.inline)

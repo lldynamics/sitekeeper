@@ -282,7 +282,10 @@ struct ProfileTabView: View {
                 .padding(AppSpacing.relaxed)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .modifier(ExpandedPhoneSidebarScrollModifier(isExpanded: true))
+            .modifier(ExpandedPhoneSidebarScrollModifier(
+                isExpanded: true,
+                paneBackground: Color(.systemGroupedBackground)
+            ))
             .frame(width: profileSidebarWidth)
             .clipped()
             .accessibilityIdentifier("profile-expanded-identity-safety-pane")
@@ -374,7 +377,7 @@ struct ProfileTabView: View {
                 .frame(width: 1)
                 .offset(x: profileSidebarWidth - 0.5)
         }
-        .background(Color(.systemGroupedBackground), ignoresSafeAreaEdges: [])
+        .background(Color(.systemGroupedBackground), ignoresSafeAreaEdges: .all)
         .modifier(ExpandedPhoneScrollEdgeModifier(isExpanded: true))
     }
 

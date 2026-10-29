@@ -4,6 +4,7 @@ enum MaterialFollowUpFilter: String, CaseIterable, Identifiable {
     case allPending
     case notPurchased
     case awaitingArrival
+    case needsReview
 
     var id: String { rawValue }
 
@@ -12,6 +13,25 @@ enum MaterialFollowUpFilter: String, CaseIterable, Identifiable {
         case .allPending: AppLocalization.string("material_follow_up_all_pending")
         case .notPurchased: AppLocalization.string("未采购")
         case .awaitingArrival: AppLocalization.string("material_follow_up_awaiting_arrival")
+        case .needsReview: AppLocalization.string("material_follow_up_needs_review")
+        }
+    }
+}
+
+enum MaterialFollowUpReviewReason: Equatable {
+    case quantityUnknown
+    case receiptUnits
+    case missingReceipts
+    case statusConflict
+    case receivedExceedsPlan
+
+    var displayName: String {
+        switch self {
+        case .quantityUnknown: AppLocalization.string("material_follow_up_review_quantity")
+        case .receiptUnits: AppLocalization.string("material_follow_up_review_units")
+        case .missingReceipts: AppLocalization.string("material_follow_up_review_missing_receipts")
+        case .statusConflict: AppLocalization.string("material_follow_up_review_status")
+        case .receivedExceedsPlan: AppLocalization.string("material_follow_up_review_excess")
         }
     }
 }
@@ -28,9 +48,11 @@ struct MaterialFollowUpRow: Identifiable {
     let planned: QuantityValue
     let received: QuantityValue
     let remaining: QuantityValue
+    let reviewReason: MaterialFollowUpReviewReason?
 
     var followUpStatus: MaterialFollowUpFilter {
-        purchaseStatus == .notPurchased ? .notPurchased : .awaitingArrival
+        if reviewReason != nil { return .needsReview }
+        return purchaseStatus == .notPurchased ? .notPurchased : .awaitingArrival
     }
 }
 
@@ -49,8 +71,7 @@ enum MaterialFollowUpSummary {
         }
 
         return materials.compactMap { material -> MaterialFollowUpRow? in
-            guard material.projectId == projectID,
-                  material.purchaseStatus == .notPurchased || material.purchaseStatus == .purchased else { return nil }
+            guard material.projectId == projectID else { return nil }
             let supplierName = normalizedSupplier(material.supplier)
             if let supplier, supplierName != supplier { return nil }
             let inbound = linkedInbound[material.id] ?? []
@@ -59,26 +80,52 @@ enum MaterialFollowUpSummary {
             // A plan's unit may have been edited after receipt. Never sum across
             // unlike units or infer a conversion from a historical movement.
             let materialUnit = material.unit.trimmingCharacters(in: .whitespacesAndNewlines)
-            let received: QuantityValue = inbound.allSatisfy({
-                $0.quantity.isValid && !$0.quantity.isNegative
-                    && $0.unit.trimmingCharacters(in: .whitespacesAndNewlines) == materialUnit
-            })
-                ? inbound.reduce(.zero) { $0 + $1.quantity }
-                : .empty
+            let hasPendingStatus = material.purchaseStatus == .notPurchased || material.purchaseStatus == .purchased
+            let compatibleUnits = !materialUnit.isEmpty && inbound.allSatisfy {
+                $0.unit.trimmingCharacters(in: .whitespacesAndNewlines) == materialUnit
+            }
+            let validReceipts = inbound.allSatisfy { $0.quantity.isValid && !$0.quantity.isNegative }
+            // Pending plans have zero recorded receipts until linked movements
+            // exist. Arrived/Used without those movements are ambiguous legacy
+            // data: their status is not evidence of any received quantity.
+            let missingReceipts = !hasPendingStatus && inbound.isEmpty
+            let received: QuantityValue = compatibleUnits && validReceipts && !missingReceipts
+                ? inbound.reduce(.zero) { $0 + $1.quantity } : .empty
             let remaining: QuantityValue
-            if material.quantity.isValid, received.isValid,
-               let difference = (material.quantity - received).optionalDecimal {
-                remaining = QuantityValue(max(.zero, difference))
+            let reviewReason: MaterialFollowUpReviewReason?
+            if !compatibleUnits {
+                remaining = .empty
+                reviewReason = .receiptUnits
+            } else if !material.quantity.isValid || material.quantity.isNegative || !validReceipts {
+                remaining = .empty
+                reviewReason = .quantityUnknown
+            } else if missingReceipts {
+                remaining = .empty
+                reviewReason = .missingReceipts
+            } else if received.isValid, let difference = (material.quantity - received).optionalDecimal {
+                if difference < .zero {
+                    // Preserve the recorded total and require reconciliation;
+                    // clamping an over-delivery to zero would hide the conflict.
+                    remaining = .empty
+                    reviewReason = .receivedExceedsPlan
+                } else {
+                    remaining = QuantityValue(difference)
+                    let statusConflicts = (!hasPendingStatus && difference > .zero)
+                        || (material.purchaseStatus == .notPurchased && received.isPositive)
+                    reviewReason = statusConflicts ? .statusConflict : nil
+                }
             } else {
                 remaining = .empty
+                reviewReason = .quantityUnknown
             }
             // Unknown quantities stay visible for review instead of implying
             // that the order has been completely received.
-            guard !remaining.isZero else { return nil }
+            guard reviewReason != nil || !remaining.isZero else { return nil }
             let row = MaterialFollowUpRow(
                 id: material.id, name: material.name, specification: material.specification,
                 unit: material.unit, supplier: supplierName, purchaseStatus: material.purchaseStatus,
-                planned: material.quantity, received: received, remaining: remaining
+                planned: material.quantity, received: received, remaining: remaining,
+                reviewReason: reviewReason
             )
             guard filter == .allPending || row.followUpStatus == filter else { return nil }
             return row
@@ -126,6 +173,8 @@ enum MaterialFollowUpSummary {
             lines.append(String(format: AppLocalization.string("material_follow_up_specification_format"), singleLine(row.specification.isEmpty ? AppLocalization.string("material_follow_up_unspecified") : row.specification)))
             lines.append(String(format: AppLocalization.string("material_follow_up_supplier_format"), singleLine(supplierDisplayName(row.supplier))))
             lines.append(String(format: AppLocalization.string("material_follow_up_filter_format"), row.followUpStatus.displayName))
+            lines.append(String(format: AppLocalization.string("material_follow_up_purchase_status_format"), row.purchaseStatus.displayName))
+            if let reason = row.reviewReason { lines.append(reason.displayName) }
             lines.append(String(format: AppLocalization.string("material_follow_up_quantities_format"),
                                 quantityText(row.planned, unit: singleLine(row.unit)),
                                 quantityText(row.received, unit: singleLine(row.unit)),

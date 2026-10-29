@@ -69,6 +69,48 @@ struct DashboardSummaryInput {
     }
 }
 
+enum DashboardOverdueItem: Identifiable {
+    case todo(SiteTodo)
+    case task(ProgressTask)
+
+    var id: String {
+        switch self {
+        case .todo(let todo): return "todo-\(todo.id.uuidString)"
+        case .task(let task): return "task-\(task.id.uuidString)"
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .todo(let todo): return todo.title
+        case .task(let task): return task.title
+        }
+    }
+
+    var dueDate: BusinessDateValue {
+        switch self {
+        case .todo(let todo): return todo.dueDate
+        case .task(let task): return task.dueDate
+        }
+    }
+
+    var projectID: UUID? {
+        switch self {
+        case .todo(let todo): return todo.projectId
+        case .task(let task): return task.projectId
+        }
+    }
+
+    static func sorted(todos: [SiteTodo], tasks: [ProgressTask], timeZone: TimeZone) -> [Self] {
+        (todos.map(Self.todo) + tasks.map(Self.task)).sorted { lhs, rhs in
+            let leftDate = lhs.dueDate.date(in: timeZone) ?? .distantFuture
+            let rightDate = rhs.dueDate.date(in: timeZone) ?? .distantFuture
+            if leftDate != rightDate { return leftDate < rightDate }
+            return lhs.id < rhs.id
+        }
+    }
+}
+
 struct DashboardSummaryModel {
     let activeProjects: [Project]
     let activeProjectIDs: Set<UUID>
@@ -78,6 +120,7 @@ struct DashboardSummaryModel {
     let todayTodos: [SiteTodo]
     let overdueTasks: [ProgressTask]
     let overdueTodos: [SiteTodo]
+    let overdueItems: [DashboardOverdueItem]
     let activeFinancialRecords: [ProjectFinancialRecord]
     let businessSummary: ProjectBusinessSummary
     let warehouseMovements: [ProjectWarehouseMovement]

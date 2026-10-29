@@ -58,6 +58,7 @@ struct ProjectDetailContent: View {
     let linkedDocuments: (ProjectFinancialRecord) -> [ProjectDocument]
     let onResetFinanceJumpFilter: () -> Void
     @State private var inlineFocusedMode: ProjectDetailMode?
+    @State private var receivingMaterial: MaterialItem?
 
     var body: some View {
         ProjectDetailContentView(
@@ -77,6 +78,9 @@ struct ProjectDetailContent: View {
                 detailModeSections
             }
         )
+        .sheet(item: $receivingMaterial) { material in
+            MaterialReceiptSheet(material: material)
+        }
         .onChange(of: mode) { _, newMode in
             guard prefersInlineSections, showsAllSections else { return }
             inlineFocusedMode = newMode
@@ -208,6 +212,7 @@ struct ProjectDetailContent: View {
             onScanDocumentCategory: onScanDocumentCategory,
             onCaptureDocumentPhoto: onCaptureDocumentPhoto,
             onEditMaterial: onEditMaterial,
+            onReceiveMaterial: { receivingMaterial = $0 },
             onEditQuote: onEditQuote,
             onEditLabor: onEditLabor,
             onEditProgress: onEditProgress,

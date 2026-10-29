@@ -2,6 +2,11 @@ import Foundation
 import UIKit
 
 extension ReportBuilder {
+    static func scopedBusinessMoney(_ amount: MoneyValue?) -> String {
+        guard let amount, amount.isValid else { return loc("cost_basis_unknown") }
+        return money(amount)
+    }
+
     static func makeQuotationPDF(
         title: String,
         items: [QuoteItem],
@@ -42,6 +47,8 @@ extension ReportBuilder {
         let tax = items.reduce(MoneyValue.zero) { $0 + quoteTaxValue($1) }
         let discount = items.reduce(MoneyValue.zero) { $0 + quoteDiscountValue($1) }
         let total = subtotal + tax - discount
+        let complete = !items.isEmpty && items.allSatisfy { ProjectBusinessQuoteMetrics.strictAmount($0) != nil }
+            && [subtotal, tax, discount, total].allSatisfy(\.isValid)
         let projectName = resolvedProjectName(items: items, projects: projects)
 
         return renderer.pdfData { context in
@@ -71,10 +78,10 @@ extension ReportBuilder {
                     item.name,
                     item.unit,
                     item.quantity,
-                    money(item.unitPrice),
+                    scopedBusinessMoney(item.unitPrice.isValid ? item.unitPrice : nil),
                     "\(item.taxRate)%",
                     "\(item.discountRate)%",
-                    money(quoteGrandTotal(item)),
+                    scopedBusinessMoney(ProjectBusinessQuoteMetrics.strictAmount(item)),
                     item.notes
                 ]
             }
@@ -89,9 +96,9 @@ extension ReportBuilder {
             }
 
             y += 12
-            y = drawPDFText(locFormat("小计: %@", money(subtotal)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText(locFormat("税额: %@    折扣: -%@", money(tax), money(discount)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
-            y = drawPDFText(locFormat("合计: %@", money(total)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
+            y = drawPDFText(locFormat("小计: %@", scopedBusinessMoney(complete ? subtotal : nil)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText(locFormat("税额: %@    折扣: -%@", scopedBusinessMoney(complete ? tax : nil), scopedBusinessMoney(complete ? discount : nil)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
+            y = drawPDFText(locFormat("合计: %@", scopedBusinessMoney(complete ? total : nil)), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.boldSystemFont(ofSize: 14)) + 18
 
             _ = drawPDFText(locFormat("签字确认: %@____________________", meta.signerName), at: CGPoint(x: margin, y: y), maxWidth: maxWidth, font: UIFont.systemFont(ofSize: 12))
         }
@@ -119,13 +126,19 @@ extension ReportBuilder {
         paidAmountOverride: MoneyValue? = nil
     ) -> Data {
         let contract = project.contractAmount
-        let quoteTotal = quotes.reduce(MoneyValue.zero) { $0 + quoteGrandTotal($1) }
-        let materialCost = materials.reduce(MoneyValue.zero) { $0 + materialLineTotal($1) }
-        let laborCost = labor.reduce(MoneyValue.zero) { $0 + laborLineTotal($1) }
-        let financialSummary = ProjectFinancialMetrics.summary(financialRecords)
+        let quoteScope = ProjectBusinessQuoteMetrics(project: project, quotes: quotes)
+        let costScope = ProjectCostBasisMetrics.summary(project: project, materials: materials, labor: labor, records: financialRecords)
+        let projectRecords = financialRecords.filter { $0.projectId == project.id }
+        let financialSummary = ProjectFinancialMetrics.summary(projectRecords)
         let income = financialSummary.income
-        let expense = financialSummary.expense
-        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: financialRecords)
+        let incomeIsComplete = projectRecords.filter { $0.countsInBusinessMetrics && $0.isIncomeDirection }
+            .allSatisfy { $0.amount.isValid && !$0.amount.isNegative } && income.isValid
+        let balance: MoneyValue? = {
+            guard incomeIsComplete, let expense = costScope.formalExpense else { return nil }
+            let value = income - expense
+            return value.isValid ? value : nil
+        }()
+        let paid = paidAmountOverride ?? ProjectFinancialMetrics.paidAmount(project: project, records: projectRecords)
         let documentChecklist = DocumentArchiveChecklistSnapshot(
             documents: documents,
             requiredCategories: project.requiredDocumentCategories
@@ -144,12 +157,18 @@ extension ReportBuilder {
         lines.append(locFormat("状态: %@  工期: %@ 至 %@", project.status.displayName, project.startDate.isEmpty ? "-" : project.startDate.storageText, project.expectedEndDate.isEmpty ? "-" : project.expectedEndDate.storageText))
         lines.append("")
         lines.append(loc("二、经营汇总"))
-        lines.append(locFormat("合同金额: %@  已收: %@  未收: %@", money(contract), money(paid), money(ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid))))
-        lines.append(locFormat("报价合计: %@  材料成本: %@  人工成本: %@", money(quoteTotal), money(materialCost), money(laborCost)))
-        lines.append(locFormat("记账收入: %@  记账支出: %@  账面结余: %@", money(income), money(expense), money(income - expense)))
-        lines.append(locFormat("毛利估算: %@", money(contract - materialCost - laborCost)))
+        let unpaidText = contract.isValid && paid.isValid
+            ? money(ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid)) : "—"
+        lines.append(locFormat("合同金额: %@  已收: %@  未收: %@", contract.isEmpty ? "—" : money(contract), money(paid), unpaidText))
+        lines.append(locFormat("report_scope_quote_format", quoteScope.selectedVersion ?? loc("quote_business_selection_none"),
+                               scopedBusinessMoney(quoteScope.amount), scopedBusinessMoney(quoteScope.allVersionsAmount)))
+        lines.append(locFormat("report_scope_cost_format", scopedBusinessMoney(costScope.material.amount), scopedBusinessMoney(costScope.labor.amount)))
+        lines.append(locFormat("记账收入: %@  记账支出: %@  账面结余: %@",
+                               scopedBusinessMoney(incomeIsComplete ? income : nil),
+                               scopedBusinessMoney(costScope.formalExpense), scopedBusinessMoney(balance)))
+        lines.append(locFormat("毛利估算: %@", scopedBusinessMoney(costScope.estimatedProfit(contract: contract))))
+        lines.append(loc("cost_basis_explanation"))
         lines.append(locFormat("已收金额来源: %@；手填历史和正式收款不会相加。", ProjectPaidAmountExplanation(project: project, records: financialRecords).source.displayName))
-        lines.append(loc("本报告毛利估算＝合同金额－材料明细合计－人工明细合计；不等于最终利润，其他支出需另行核对。"))
         lines.append("")
         lines.append(loc("三、资料完整度"))
         lines.append(locFormat("施工日志: %lld 条  现场照片: %lld 张  进度平均: %lld%%", Int64(logs.count), Int64(photosCount), Int64(progress * 100)))

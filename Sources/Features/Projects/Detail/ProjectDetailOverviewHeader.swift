@@ -82,7 +82,7 @@ struct ProjectDetailOverviewHeader: View {
             + checklist.returnedDocumentCount
             + checklist.legacyDocumentCount
             + (snapshot.hasTodayLog ? 0 : 1)
-            + (unpaidAmount > 0 ? 1 : 0)
+            + (!unpaidAmount.isValid || unpaidAmount > 0 ? 1 : 0)
     }
 
     private func pendingSignalCount(checklist: DocumentArchiveChecklistSnapshot) -> Int {
@@ -95,6 +95,10 @@ struct ProjectDetailOverviewHeader: View {
     private func openPrimaryRisk(unpaidAmount: MoneyValue, checklist: DocumentArchiveChecklistSnapshot) {
         if snapshot.missingReceiptCount > 0 {
             onOpenFinanceFilter(.missingReceipt)
+            return
+        }
+        if !unpaidAmount.isValid {
+            onOpenFinanceFilter(.none)
             return
         }
         if unpaidAmount > 0 {

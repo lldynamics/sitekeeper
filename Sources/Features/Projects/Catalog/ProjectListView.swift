@@ -75,7 +75,7 @@ struct ProjectListView: View {
                 case .priceSpike:
                     return materialPriceSpikeCount(for: project) > 0
                 case .receivableAging:
-                    return hasReceivableAging(for: project)
+                    return project.status.isActiveOrPaused && hasReceivableAging(for: project)
                 case .recentCollection:
                     return hasRecentCollection(for: project)
                 case .costAnomaly:

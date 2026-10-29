@@ -100,18 +100,118 @@ struct PracticalFinanceMaterialTests {
         let used = material(projectID: projectID, supplier: "Supplier A", status: .used)
         let unrelated = material(projectID: UUID(), supplier: "Supplier A")
         let materials = [unpurchased, awaiting, otherSupplier, unassigned, complete, arrived, used, unrelated]
-        let movements = [inbound(projectID: projectID, materialID: complete.id, quantity: "11")]
+        let movements = [inbound(projectID: projectID, materialID: complete.id, quantity: "10")]
 
         let all = MaterialFollowUpSummary.rows(projectID: projectID, materials: materials, movements: movements)
-        #expect(Set(all.map(\.id)) == Set([unpurchased.id, awaiting.id, otherSupplier.id, unassigned.id]))
+        #expect(Set(all.map(\.id)) == Set([unpurchased.id, awaiting.id, otherSupplier.id, unassigned.id, arrived.id, used.id]))
         #expect(MaterialFollowUpSummary.suppliers(in: all) == ["", "Supplier A", "Supplier AB"])
         let purchased = MaterialFollowUpSummary.rows(projectID: projectID, materials: materials, movements: movements,
                                                      supplier: "Supplier A", filter: .awaitingArrival)
         #expect(purchased.map(\.id) == [awaiting.id])
         #expect(try #require(purchased.first).received == .zero)
+        #expect(purchased.first?.reviewReason == nil)
         let notPurchased = MaterialFollowUpSummary.rows(projectID: projectID, materials: materials, movements: movements,
                                                         supplier: "Supplier A", filter: .notPurchased)
         #expect(notPurchased.map(\.id) == [unpurchased.id])
+        let review = MaterialFollowUpSummary.rows(projectID: projectID, materials: materials, movements: movements,
+                                                 supplier: "Supplier A", filter: .needsReview)
+        #expect(Set(review.map(\.id)) == Set([arrived.id, used.id]))
+        #expect(review.allSatisfy { $0.reviewReason == .missingReceipts && $0.received.isEmpty && $0.remaining.isEmpty })
+    }
+
+    @Test func arrivedAndUsedPartialReceiptsRemainVisibleWithoutChangingBusinessRecords() throws {
+        let projectID = UUID()
+        for status in [MaterialPurchaseStatus.arrived, .used] {
+            let plan = material(projectID: projectID, status: status)
+            let receipt = inbound(projectID: projectID, materialID: plan.id, quantity: "4.25")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = .sortedKeys
+            let originalPlan = try encoder.encode(plan)
+            let originalReceipt = try encoder.encode(receipt)
+            let row = try #require(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt]).first)
+
+            #expect(row.received == quantity("4.25"))
+            #expect(row.remaining == quantity("5.75"))
+            #expect(row.purchaseStatus == status)
+            #expect(row.followUpStatus == .needsReview)
+            #expect(row.reviewReason == .statusConflict)
+            #expect(try encoder.encode(plan) == originalPlan)
+            #expect(try encoder.encode(receipt) == originalReceipt)
+        }
+    }
+
+    @Test func fullyReceivedPlansAreExcludedWhenPurchaseStatusIsConsistent() {
+        let projectID = UUID()
+        for status in [MaterialPurchaseStatus.purchased, .arrived, .used] {
+            let plan = material(projectID: projectID, status: status)
+            let receipt = inbound(projectID: projectID, materialID: plan.id, quantity: "10")
+            #expect(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt]).isEmpty)
+        }
+    }
+
+    @Test func unpurchasedPlansWithReceiptsRemainVisibleForReview() throws {
+        let projectID = UUID()
+        let plan = material(projectID: projectID, status: .notPurchased)
+        for amount in ["4.25", "10"] {
+            let receipt = inbound(projectID: projectID, materialID: plan.id, quantity: amount)
+            let row = try #require(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt]).first)
+            #expect(row.received == quantity(amount))
+            #expect(row.remaining == quantity(amount == "10" ? "0" : "5.75"))
+            #expect(row.purchaseStatus == .notPurchased)
+            #expect(row.followUpStatus == .needsReview)
+            #expect(row.reviewReason == .statusConflict)
+        }
+        let none = try #require(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: []).first)
+        #expect(none.followUpStatus == .notPurchased && none.reviewReason == nil)
+    }
+
+    @Test func excessReceiptsStayVisibleForReviewInsteadOfBeingClampedToComplete() throws {
+        let projectID = UUID()
+        for status in MaterialPurchaseStatus.allCases {
+            let plan = material(projectID: projectID, status: status)
+            let receipt = inbound(projectID: projectID, materialID: plan.id, quantity: "10.125")
+            let row = try #require(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt]).first)
+            #expect(row.received == quantity("10.125"))
+            #expect(row.remaining.isEmpty)
+            #expect(row.followUpStatus == .needsReview)
+            #expect(row.reviewReason == .receivedExceedsPlan)
+        }
+    }
+
+    @Test func completedStatusWithUnknownOrIncompatibleReceiptDoesNotImplyDelivery() throws {
+        let projectID = UUID()
+        for status in [MaterialPurchaseStatus.arrived, .used] {
+            let plan = material(projectID: projectID, status: status)
+            var unknown = inbound(projectID: projectID, materialID: plan.id, quantity: "10")
+            unknown.quantity = .empty
+            var incompatible = inbound(projectID: projectID, materialID: plan.id, quantity: "10")
+            incompatible.unit = "袋"
+            for receipt in [unknown, incompatible] {
+                let row = try #require(MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt]).first)
+                #expect(row.received.isEmpty)
+                #expect(row.remaining.isEmpty)
+                #expect(row.followUpStatus == .needsReview)
+                #expect(row.reviewReason == (receipt.unit == "kg" ? .quantityUnknown : .receiptUnits))
+            }
+        }
+    }
+
+    @Test func completedStatusCannotBorrowReceiptFromAnotherProjectOrMaterial() throws {
+        let projectID = UUID()
+        let plan = material(projectID: projectID, status: .arrived)
+        var foreignPlan = plan
+        foreignPlan.projectId = UUID()
+        let otherPlan = material(projectID: projectID, status: .used)
+        let movements = [
+            inbound(projectID: foreignPlan.projectId!, materialID: plan.id, quantity: "10"),
+            inbound(projectID: projectID, materialID: otherPlan.id, quantity: "10"),
+            inbound(projectID: projectID, materialID: nil, quantity: "10")
+        ]
+        let rows = MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan, foreignPlan, otherPlan], movements: movements)
+        #expect(rows.map(\.id) == [plan.id])
+        let row = try #require(rows.first)
+        #expect(row.reviewReason == .missingReceipts)
+        #expect(row.received.isEmpty)
     }
 
     @Test func followUpKeepsUnknownPlanAndReceiptQuantitiesForReview() throws {
@@ -128,6 +228,8 @@ struct PracticalFinanceMaterialTests {
         let receiptRow = try #require(rows.first { $0.id == unknownReceipt.id })
         #expect(receiptRow.received.isEmpty)
         #expect(receiptRow.remaining.isEmpty)
+        #expect(receiptRow.followUpStatus == .needsReview)
+        #expect(receiptRow.reviewReason == .quantityUnknown)
         #expect(MaterialFollowUpSummary.quantityText(receiptRow.remaining, unit: "kg") != "0 kg")
     }
 
@@ -160,7 +262,33 @@ struct PracticalFinanceMaterialTests {
             ).first)
             #expect(row.received.isEmpty)
             #expect(row.remaining.isEmpty)
+            #expect(row.followUpStatus == .needsReview)
         }
+    }
+
+    @Test func reviewExportShowsOriginalStatusAndRecordedQuantitiesWithoutPrivateFields() throws {
+        let projectID = UUID()
+        var plan = material(projectID: projectID, status: .used)
+        plan.unitPrice = money("123456789.99")
+        plan.brand = "PRIVATE_BRAND"
+        var receipt = inbound(projectID: projectID, materialID: plan.id, quantity: "2.125")
+        receipt.note = "PRIVATE_FINANCE_NOTE"
+        receipt.handler = "PRIVATE_HANDLER"
+        let rows = MaterialFollowUpSummary.rows(projectID: projectID, materials: [plan], movements: [receipt], filter: .needsReview)
+        let row = try #require(rows.first)
+        let text = MaterialFollowUpSummary.exportText(projectName: "Synthetic project", rows: rows, supplier: nil, filter: .needsReview)
+        let originalStatusLine = String(format: AppLocalization.string("material_follow_up_purchase_status_format"), row.purchaseStatus.displayName)
+
+        #expect(text.contains(row.followUpStatus.displayName))
+        #expect(originalStatusLine.contains(row.purchaseStatus.displayName))
+        #expect(text.components(separatedBy: .newlines).contains(originalStatusLine))
+        #expect(text.contains(try #require(row.reviewReason).displayName))
+        #expect(text.contains("2.125 kg"))
+        #expect(text.contains("7.875 kg"))
+        #expect(!text.contains("123456789.99"))
+        #expect(!text.contains("PRIVATE_BRAND"))
+        #expect(!text.contains("PRIVATE_FINANCE_NOTE"))
+        #expect(!text.contains("PRIVATE_HANDLER"))
     }
 
     @Test func followUpExportContainsAllSelectedRowsAndExcludesFinancialAndFreeTextFields() {

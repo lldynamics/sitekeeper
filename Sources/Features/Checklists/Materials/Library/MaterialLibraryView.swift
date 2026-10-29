@@ -5,6 +5,7 @@ struct MaterialLibraryView: View {
     @Environment(MaterialLibraryStore.self) private var materialLibraryStore
     @Environment(ProjectStore.self) private var projectStore
     @Environment(MaterialLibraryPreferencesStore.self) private var materialLibraryPreferencesStore
+    @Environment(\.expandedPhoneWorkspaceWidth) private var rootWorkspaceWidth
     @State private var categoryState = MaterialLibraryCategoryState()
     @State var priceFilter: MaterialPriceFilter = .all
     @State private var searchText = ""
@@ -31,6 +32,10 @@ struct MaterialLibraryView: View {
     var recentMaterialKeys: [String] { materialLibraryPreferencesStore.recentMaterialKeys }
     var hiddenPresetKeys: Set<String> { materialLibraryPreferencesStore.hiddenPresetKeys }
     var projects: [Project] { projectStore.projects }
+
+    private var usesPhoneWorkspaceSurface: Bool {
+        rootWorkspaceWidth > 0
+    }
 
     private var visiblePresetMaterials: [CommonMaterial] {
         MaterialLibrary.all.filter { !isPresetHidden($0) }
@@ -129,25 +134,33 @@ struct MaterialLibraryView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            MaterialLibraryFilterBar(
-                selectedCategory: categoryState.selectedCategory,
-                availableCategories: availableCategories,
-                priceFilter: priceFilter,
-                onSelectCategory: { category in
-                    categoryState.selectedCategory = category
-                },
-                onSelectPriceFilter: { filter in
-                    priceFilter = filter
-                },
-                onOpenCategoryManager: {
-                    categoryState.showCategoryManager = true
-                }
-            )
-            .background(.ultraThinMaterial)
+            VStack(spacing: 0) {
+                MaterialLibraryFilterBar(
+                    selectedCategory: categoryState.selectedCategory,
+                    availableCategories: availableCategories,
+                    priceFilter: priceFilter,
+                    onSelectCategory: { category in
+                        categoryState.selectedCategory = category
+                    },
+                    onSelectPriceFilter: { filter in
+                        priceFilter = filter
+                    },
+                    onOpenCategoryManager: {
+                        categoryState.showCategoryManager = true
+                    }
+                )
+                .background(
+                    usesPhoneWorkspaceSurface
+                        ? AnyShapeStyle(Color(.secondarySystemGroupedBackground))
+                        : AnyShapeStyle(.ultraThinMaterial)
+                )
 
-            defaultMaterialSheetTargetBar
+                defaultMaterialSheetTargetBar
+            }
+            .modifier(MaterialLibraryWorkspaceHeaderModifier(isPhoneWorkspace: usesPhoneWorkspaceSurface))
 
             MaterialLibraryListView(
+                usesPhoneWorkspaceSurface: usesPhoneWorkspaceSurface,
                 recentSearchKeywords: recentSearchKeywords,
                 searchText: $searchText,
                 recentMaterials: recentMaterials,
@@ -206,7 +219,9 @@ struct MaterialLibraryView: View {
                     batchState.isBatchSelectionMode = true
                 }
                 .accessibilityIdentifier("material-library-batch-select")
-                Button { showAddSheet = true } label: { Image(systemName: "plus").visibleIconStyle() }.accessibilityLabel(AppLocalization.string("materials.library.addCustomMaterial.accessibility"))
+                Button(AppLocalization.string("新建材料")) { showAddSheet = true }
+                .accessibilityLabel(AppLocalization.string("materials.library.addCustomMaterial.accessibility"))
+                .accessibilityIdentifier("material-library-add-custom-material")
             }
         }
         .materialLibrarySheetPresentations(
@@ -372,5 +387,21 @@ struct MaterialLibraryView: View {
             term: term,
             from: recentSearchKeywordsRaw
         )
+    }
+}
+
+private struct MaterialLibraryWorkspaceHeaderModifier: ViewModifier {
+    let isPhoneWorkspace: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if isPhoneWorkspace {
+            content
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .padding(.horizontal, AppSpacing.normal)
+                .padding(.bottom, AppSpacing.tight)
+        } else {
+            content
+        }
     }
 }

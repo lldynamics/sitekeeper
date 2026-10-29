@@ -29,6 +29,26 @@ struct ReceivableValidityTests {
         #expect(!ProjectFinancialMetrics.totalReceivableAmount(projects: [project], recordedCollections: [project.id: paid]).isValid)
     }
 
+    @Test func emptyFormalCollectionCannotFallBackToManualOrAppearAsZero() {
+        let project = Project(name: "缺收款金额", location: "", contractAmount: 1000, paidAmount: 200)
+        let records = [ProjectFinancialRecord(projectId: project.id, direction: .income, category: .collection, amount: .empty)]
+        let paid = ProjectFinancialMetrics.paidAmount(project: project, records: records)
+        #expect(!paid.isValid)
+        #expect(ProjectFinancialMetrics.strictCollectionAmount(records) == nil)
+        #expect(!ProjectFinancialMetrics.unpaidAmount(project: project, records: records).isValid)
+        let explanation = ProjectPaidAmountExplanation(project: project, records: records)
+        #expect(explanation.source == .unresolvedCollections)
+        #expect(explanation.requiresAmountReview)
+    }
+
+    @Test func missingContractAndMissingPaidAmountRemainUnknown() {
+        #expect(!ProjectFinancialMetrics.unpaidAmount(contractAmount: .empty, paidAmount: 0).isValid)
+        #expect(!ProjectFinancialMetrics.unpaidAmount(contractAmount: 100, paidAmount: .empty).isValid)
+        let project = Project(name: "未填合同", location: "")
+        #expect(!ProjectFinancialMetrics.unpaidAmount(project: project, records: []).isValid)
+        #expect(!ProjectFinancialMetrics.totalReceivableAmount(projects: [project], recordedCollections: [:]).isValid)
+    }
+
     @Test func overflowStaysUnknownWhileValidOverpaymentClampsToZero() throws {
         let huge = MoneyValue(try #require(Decimal(string: "1e127")))
         #expect(!ProjectFinancialMetrics.unpaidAmount(contractAmount: huge, paidAmount: MoneyValue(-1)).isValid)
@@ -66,7 +86,8 @@ struct ReceivableValidityTests {
     }
 
     private func summary(contract: MoneyValue, paid: MoneyValue) -> ProjectBusinessSummary {
-        ProjectBusinessSummary(quoteTotal: 0, contractAmount: contract, paidAmount: paid, receivableAmount: 0,
-            receivableAgeDays: nil, recentCollection: nil, materialCost: 0, laborCostAmount: 0, pendingMaterialCount: 0, unpricedQuoteCount: 0)
+        ProjectBusinessSummary(quoteTotal: 0, contractAmount: contract, paidAmount: paid,
+            receivableAmount: ProjectFinancialMetrics.unpaidAmount(contractAmount: contract, paidAmount: paid),
+            recentCollection: nil, materialCost: 0, laborCostAmount: 0, pendingMaterialCount: 0, unpricedQuoteCount: 0)
     }
 }

@@ -8,6 +8,8 @@ struct MaterialFollowUpView: View {
     @State private var statusFilter: MaterialFollowUpFilter = .allPending
     @State private var pageIndex = 0
     @State private var exportPreview: MaterialFollowUpExportPreview?
+    @State private var receivingMaterial: MaterialItem?
+    @State private var showMissingReceiptSource = false
 
     private var pendingRows: [MaterialFollowUpRow] {
         MaterialFollowUpSummary.rows(
@@ -56,7 +58,20 @@ struct MaterialFollowUpView: View {
                     )
                 } else {
                     ForEach(page.items) { row in
-                        MaterialFollowUpRowView(row: row)
+                        VStack(alignment: .leading, spacing: 8) {
+                            MaterialFollowUpRowView(row: row)
+                            Button(AppLocalization.string("到货入库"), systemImage: "shippingbox.and.arrow.backward") {
+                                if let current = store.financeStore.materialItems(for: project.id).first(where: {
+                                    $0.id == row.id && $0.projectId == project.id
+                                }) {
+                                    receivingMaterial = current
+                                } else {
+                                    showMissingReceiptSource = true
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityIdentifier("material-follow-up.receive.\(row.id)")
+                        }
                     }
                     RecordPageControls(index: page.index, count: page.count, selection: $pageIndex)
                 }
@@ -87,6 +102,14 @@ struct MaterialFollowUpView: View {
         .sheet(item: $exportPreview) { preview in
             MaterialFollowUpExportPreviewView(preview: preview)
         }
+        .sheet(item: $receivingMaterial) { material in
+            MaterialReceiptSheet(material: material)
+        }
+        .alert(AppLocalization.string("到货入库"), isPresented: $showMissingReceiptSource) {
+            Button(AppLocalization.string("完成"), role: .cancel) {}
+        } message: {
+            Text(BusinessWorkflowError.missingSource.localizedDescription)
+        }
     }
 }
 
@@ -101,6 +124,11 @@ private struct MaterialFollowUpRowView: View {
                 .foregroundStyle(.secondary)
             LabeledContent(AppLocalization.string("供应商"), value: MaterialFollowUpSummary.supplierDisplayName(row.supplier))
             LabeledContent(AppLocalization.string("状态"), value: row.followUpStatus.displayName)
+            LabeledContent(AppLocalization.string("material_follow_up_purchase_status"), value: row.purchaseStatus.displayName)
+            if let reason = row.reviewReason {
+                Label(reason.displayName, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.orange)
+            }
             LabeledContent(AppLocalization.string("material_follow_up_planned"), value: MaterialFollowUpSummary.quantityText(row.planned, unit: row.unit))
             LabeledContent(AppLocalization.string("material_follow_up_received"), value: MaterialFollowUpSummary.quantityText(row.received, unit: row.unit))
             LabeledContent(AppLocalization.string("material_follow_up_remaining"), value: MaterialFollowUpSummary.quantityText(row.remaining, unit: row.unit))

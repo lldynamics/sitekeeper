@@ -132,6 +132,9 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     }
 
     private var financeShortcutSubtitle: String {
+        if !unpaidAmount.isValid {
+            return AppLocalization.string("business_scope_receipts_review")
+        }
         if unpaidAmount > 0 {
             return ReportBuilder.money(unpaidAmount)
         }
@@ -142,6 +145,7 @@ struct ProjectOverviewView<LogRowContent: View>: View {
     }
 
     private var financeShortcutColor: Color {
+        if !unpaidAmount.isValid { return .appWarning }
         if unpaidAmount > 0 { return .appFinance }
         if missingReceiptCount > 0 { return .appWarning }
         return .secondary
@@ -165,7 +169,9 @@ struct ProjectOverviewView<LogRowContent: View>: View {
         if overdueCount > 0 {
             suggestions.append(.init(title: AppLocalization.string("处理延期事项"), subtitle: String(format: AppLocalization.string("%lld 项需要跟进"), Int64(overdueCount)), systemImage: "calendar.badge.exclamationmark", tint: .appRisk, action: .records))
         }
-        if unpaidAmount > 0 {
+        if !unpaidAmount.isValid {
+            suggestions.append(.init(title: AppLocalization.string("business_scope_receipts_review"), subtitle: AppLocalization.string("business_scope_receipts_review_detail"), systemImage: "yensign.circle.fill", tint: .appWarning, action: .finance))
+        } else if unpaidAmount > 0 {
             suggestions.append(.init(title: AppLocalization.string("跟进未收款"), subtitle: ReportBuilder.money(unpaidAmount), systemImage: "yensign.circle.fill", tint: .appFinance, action: .finance))
         }
         if missingReceiptCount > 0 {

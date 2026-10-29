@@ -16,21 +16,75 @@ struct MaterialWarehouseProgress {
     let received: QuantityValue
     let remaining: QuantityValue
     let stock: QuantityValue
+    let reviewReason: MaterialWarehouseReviewReason?
+}
+
+enum MaterialWarehouseReviewReason: Equatable {
+    case quantityUnknown
+    case receiptUnits
+    case missingReceipts
+    case statusConflict
+    case receivedExceedsPlan
+
+    var displayName: String {
+        switch self {
+        case .quantityUnknown: AppLocalization.string("material_follow_up_review_quantity")
+        case .receiptUnits: AppLocalization.string("material_follow_up_review_units")
+        case .missingReceipts: AppLocalization.string("material_follow_up_review_missing_receipts")
+        case .statusConflict: AppLocalization.string("material_follow_up_review_status")
+        case .receivedExceedsPlan: AppLocalization.string("material_follow_up_review_excess")
+        }
+    }
 }
 
 enum MaterialWarehouseWorkflow {
     static func progress(material: MaterialItem, movements: [ProjectWarehouseMovement]) -> MaterialWarehouseProgress {
         let linked = movements.filter { $0.projectId == material.projectId && $0.origin?.materialItemID == material.id && $0.movementType == .inbound }
-        let received = linked.reduce(QuantityValue.zero) { $0 + $1.quantity }
-        let remainder = material.quantity - received
-        let remaining = remainder.optionalDecimal.map { QuantityValue(max(.zero, $0)) } ?? .empty
-        let key = MaterialIdentity.key(name: material.name, specification: material.specification, unit: material.unit)
-        let stock = movements.filter {
-            $0.projectId == material.projectId && MaterialIdentity.key(name: $0.materialName, specification: $0.specification, unit: $0.unit) == key
-        }.reduce(QuantityValue.zero) { total, movement in
-            movement.movementType == .inbound ? total + movement.quantity : total - movement.quantity
+        let unit = material.unit.trimmingCharacters(in: .whitespacesAndNewlines)
+        let compatibleUnits = !unit.isEmpty && linked.allSatisfy {
+            $0.unit.trimmingCharacters(in: .whitespacesAndNewlines) == unit
         }
-        return MaterialWarehouseProgress(planned: material.quantity, received: received, remaining: remaining, stock: stock)
+        let validReceipts = linked.allSatisfy { $0.quantity.isValid && !$0.quantity.isNegative }
+        let pendingStatus = material.purchaseStatus == .notPurchased || material.purchaseStatus == .purchased
+        let missingReceipts = !pendingStatus && linked.isEmpty
+        // A manual status cannot establish a historical receipt quantity.
+        let received: QuantityValue = compatibleUnits && validReceipts && !missingReceipts
+            ? linked.reduce(.zero) { $0 + $1.quantity } : .empty
+        let remaining: QuantityValue
+        let reviewReason: MaterialWarehouseReviewReason?
+        if !compatibleUnits {
+            remaining = .empty
+            reviewReason = .receiptUnits
+        } else if !material.quantity.isValid || material.quantity.isNegative || !validReceipts {
+            remaining = .empty
+            reviewReason = .quantityUnknown
+        } else if missingReceipts {
+            remaining = .empty
+            reviewReason = .missingReceipts
+        } else if received.isValid, let difference = (material.quantity - received).optionalDecimal {
+            if difference < .zero {
+                remaining = .empty
+                reviewReason = .receivedExceedsPlan
+            } else {
+                remaining = QuantityValue(difference)
+                let statusConflicts = (!pendingStatus && difference > .zero)
+                    || (material.purchaseStatus == .notPurchased && received.isPositive)
+                reviewReason = statusConflicts ? .statusConflict : nil
+            }
+        } else {
+            remaining = .empty
+            reviewReason = .quantityUnknown
+        }
+        let key = MaterialIdentity.key(name: material.name, specification: material.specification, unit: material.unit)
+        let stockMovements = movements.filter {
+            $0.projectId == material.projectId && MaterialIdentity.key(name: $0.materialName, specification: $0.specification, unit: $0.unit) == key
+        }
+        let stock: QuantityValue = !unit.isEmpty && stockMovements.allSatisfy({ $0.quantity.isValid && !$0.quantity.isNegative })
+            ? stockMovements.reduce(.zero) { total, movement in
+            movement.movementType == .inbound ? total + movement.quantity : total - movement.quantity
+        } : .empty
+        return MaterialWarehouseProgress(planned: material.quantity, received: received, remaining: remaining, stock: stock,
+                                         reviewReason: reviewReason)
     }
 
     @MainActor

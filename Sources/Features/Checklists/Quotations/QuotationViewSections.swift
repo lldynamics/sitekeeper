@@ -4,7 +4,7 @@ struct QuotationScopeSection: View {
     let projects: [Project]
     @Binding var projectFilter: UUID?
     let statusChipBinding: Binding<QuoteStatusChip>
-    let projectQuoteSummaries: [(name: String, total: MoneyValue)]
+    let projectQuoteSummaries: [QuotationProjectReferenceSummary]
 
     var body: some View {
         Section(AppLocalization.string("范围")) {
@@ -20,8 +20,12 @@ struct QuotationScopeSection: View {
                 title: { $0.title }
             )
             if projectFilter == nil {
-                ForEach(projectQuoteSummaries, id: \.name) { summary in
-                    LabeledContent(summary.name, value: ReportBuilder.money(summary.total))
+                Text(AppLocalization.string("quote_reference_project_scope"))
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                ForEach(projectQuoteSummaries) { row in
+                    LabeledContent(row.name, value: row.summary.amounts.map { ReportBuilder.money($0.total) }
+                        ?? AppLocalization.string("quote_reference_amount_review"))
                 }
             }
         }
@@ -37,7 +41,7 @@ struct QuotationItemsSection: View {
 
     var body: some View {
         ForEach(items) { item in
-            let total = ReportBuilder.quoteGrandTotal(item)
+            let total = ProjectBusinessQuoteMetrics.strictAmount(item)
             let projectText = item.projectId.flatMap { id in
                 projects.first(where: { $0.id == id })?.name
             } ?? AppLocalization.string("未归属")
@@ -60,7 +64,7 @@ struct QuotationItemsSection: View {
                     title: item.name,
                     meta: [amountText, projectText, statusText].joined(separator: " · "),
                     note: [extraText, item.notes].filter { !$0.isEmpty }.joined(separator: " · "),
-                    trailing: ReportBuilder.money(total),
+                    trailing: total.map { ReportBuilder.money($0) } ?? AppLocalization.string("quote_reference_amount_review"),
                     trailingColor: Color.appPrimaryAction
                 )
             }
@@ -70,42 +74,31 @@ struct QuotationItemsSection: View {
 }
 
 struct QuotationTotalsSection: View {
-    let subtotalBeforeValue: MoneyValue
-    let totalTaxValue: MoneyValue
-    let totalDiscountValue: MoneyValue
-    let grandTotalValue: MoneyValue
+    let summary: QuotationReferenceSummary
 
     var body: some View {
-        Section {
-            VStack(spacing: 4) {
-                HStack {
-                    Text(AppLocalization.string("小计")).foregroundStyle(.secondary)
-                    Spacer()
-                    Text(ReportBuilder.money(subtotalBeforeValue))
+        Section(AppLocalization.string("quote_reference_filtered_title")) {
+            if let amounts = summary.amounts {
+                LabeledContent(AppLocalization.string("小计"), value: ReportBuilder.money(amounts.subtotal))
+                if amounts.tax.isPositive {
+                    LabeledContent(AppLocalization.string("税额"), value: ReportBuilder.money(amounts.tax))
                 }
-                if totalTaxValue.isPositive {
-                    HStack {
-                        Text(AppLocalization.string("税额")).foregroundStyle(.appRisk)
-                        Spacer()
-                        Text(ReportBuilder.money(totalTaxValue)).foregroundStyle(.appRisk)
-                    }
+                if amounts.discount.isPositive {
+                    LabeledContent(AppLocalization.string("折扣"), value: "-\(ReportBuilder.money(amounts.discount))")
                 }
-                if totalDiscountValue.isPositive {
-                    HStack {
-                        Text(AppLocalization.string("折扣")).foregroundStyle(.appSuccess)
-                        Spacer()
-                        Text("-\(ReportBuilder.money(totalDiscountValue))").foregroundStyle(.appSuccess)
-                    }
-                }
-                Divider()
-                HStack {
-                    Text(AppLocalization.string("合计")).font(.title3.weight(.bold))
-                    Spacer()
-                    Text(ReportBuilder.money(grandTotalValue))
-                        .font(.title3.weight(.bold))
-                        .foregroundStyle(.appWarning)
-                }
+                LabeledContent(AppLocalization.string("quote_reference_total"), value: ReportBuilder.money(amounts.total))
+                    .font(.headline)
+                    .foregroundStyle(Color.appWarning)
+            } else {
+                LabeledContent(
+                    AppLocalization.string("quote_reference_total"),
+                    value: AppLocalization.string(summary.itemCount == 0
+                        ? "quote_reference_no_matches" : "quote_reference_amount_review")
+                )
             }
+            Text(AppLocalization.string("quote_reference_filtered_rule"))
+                .font(.footnote)
+                .foregroundStyle(.secondary)
         }
     }
 }

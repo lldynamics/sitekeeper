@@ -382,4 +382,61 @@ extension ProjectFinancialMetricsTests {
 
         #expect(warnings.isEmpty)
     }
+
+    @Test func costBasisSeparatesEstimatesFromFormalExpenses() {
+        let project = Project(name: "成本口径", location: "", contractAmount: 1000, materialCost: 500, laborCost: 300)
+        let material = MaterialItem(name: "材料", quantity: 2, unit: "m", unitPrice: 40, projectId: project.id)
+        let labor = LaborRecord(date: .today(), workers: 2, hours: 3, unitRate: 10, note: "", projectId: project.id)
+        let records = [
+            ProjectFinancialRecord(projectId: project.id, direction: .expense, category: .material, amount: 50),
+            ProjectFinancialRecord(projectId: project.id, direction: .expense, category: .labor, amount: 30, status: .draft),
+            ProjectFinancialRecord(projectId: project.id, direction: .expense, category: .labor, amount: 40, status: .archived),
+            ProjectFinancialRecord(projectId: UUID(), direction: .expense, category: .material, amount: 900)
+        ]
+        let summary = ProjectCostBasisMetrics.summary(project: project, materials: [material], labor: [labor], records: records)
+        #expect(summary.material.source == .details && summary.material.amount == 80)
+        #expect(summary.labor.source == .details && summary.labor.amount == 60)
+        #expect(summary.formalExpense == 50 && summary.formalExpenseCount == 1)
+        #expect(summary.estimatedProfit(contract: project.contractAmount) == 860)
+    }
+
+    @Test func costBasisDoesNotReplaceMissingOrZeroDetailsWithManualValues() {
+        let project = Project(name: "明细口径", location: "", materialCost: 500, laborCost: 300)
+        let zero = MaterialItem(name: "零价", quantity: 3, unit: "m", unitPrice: 0, projectId: project.id)
+        let missing = MaterialItem(name: "未填价格", quantity: 2, unit: "m", projectId: project.id)
+        let manual = ProjectCostBasisMetrics.summary(project: project, materials: [], labor: [], records: [])
+        #expect(manual.material.source == .manual && manual.material.amount == 500)
+        #expect(manual.labor.source == .manual && manual.labor.amount == 300)
+        let validZero = ProjectCostBasisMetrics.summary(project: project, materials: [zero], labor: [], records: [])
+        #expect(validZero.material.source == .details && validZero.material.amount == 0)
+        let partial = ProjectCostBasisMetrics.summary(project: project, materials: [zero, missing], labor: [], records: [])
+        #expect(partial.material.source == .details && partial.material.amount == nil)
+        #expect(partial.material.incompleteCount == 1)
+        #expect(partial.estimatedProfit(contract: 1000) == nil)
+    }
+
+    @Test func costBasisKeepsUnknownLaborAndLedgerAmountsVisibleForReview() {
+        let project = Project(name: "待核对", location: "")
+        let legacyLabor = LaborRecord(date: .today(), workers: 1, hours: 2, workloadUnit: .legacyUnspecified,
+                                      unitRate: 20, note: "", projectId: project.id)
+        let missingExpense = ProjectFinancialRecord(projectId: project.id, direction: .expense, amount: .empty)
+        let summary = ProjectCostBasisMetrics.summary(project: project, materials: [], labor: [legacyLabor], records: [missingExpense])
+        #expect(summary.material.amount == nil && summary.material.source == .unavailable)
+        #expect(summary.labor.amount == nil && summary.labor.incompleteCount == 1)
+        #expect(summary.formalExpense == nil && summary.incompleteExpenseCount == 1)
+        #expect(summary.estimatedProfit(contract: 1000) == nil)
+    }
+
+    @Test func costBasisPreservesExactAmountsAndRejectsOverflow() {
+        let project = Project(name: "精度", location: "", materialCost: 0, laborCost: 0)
+        let material = MaterialItem(name: "精度", quantity: NumericInputSupport.quantity("3"), unit: "m",
+                                    unitPrice: NumericInputSupport.money("0.10"), projectId: project.id)
+        let summary = ProjectCostBasisMetrics.summary(project: project, materials: [material], labor: [], records: [])
+        #expect(summary.material.amount == NumericInputSupport.money("0.30"))
+        let huge = NumericInputSupport.money("99999999999999999999999999999999999999")
+        let expenses = [ProjectFinancialRecord(projectId: project.id, amount: huge),
+                        ProjectFinancialRecord(projectId: project.id, amount: NumericInputSupport.money("0.1"))]
+        let overflow = ProjectCostBasisMetrics.summary(project: project, materials: [], labor: [], records: expenses)
+        #expect(overflow.formalExpense == nil && overflow.incompleteExpenseCount > 0)
+    }
 }

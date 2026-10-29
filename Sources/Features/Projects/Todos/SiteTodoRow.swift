@@ -15,9 +15,10 @@ struct SiteTodoRow: View {
                         Image(systemName: todo.isDone ? "checkmark.circle.fill" : isOverdue ? "exclamationmark.circle.fill" : "circle")
                             .font(.title3)
                             .foregroundStyle(todo.isDone ? Color.appSuccess : isOverdue ? .appRisk : Color.appWarning)
+                            .frame(minWidth: 32, minHeight: 32)
                             .contentShape(Rectangle())
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(.borderless)
                     .accessibilityLabel(todo.review?.status == .awaitingReview ? AppLocalization.string("记录复验") :
                         todo.review != nil && !todo.isDone ? AppLocalization.string("提交复验") :
                         todo.isDone ? AppLocalization.string("标记未完成") : AppLocalization.string("标记完成"))
@@ -25,6 +26,7 @@ struct SiteTodoRow: View {
                     Image(systemName: todo.isDone ? "checkmark.circle.fill" : isOverdue ? "exclamationmark.circle.fill" : "circle")
                         .font(.title3)
                         .foregroundStyle(todo.isDone ? Color.appSuccess : isOverdue ? .appRisk : Color.appWarning)
+                        .frame(minWidth: 32, minHeight: 32)
                 }
                 Text(todo.title.isEmpty ? AppLocalization.string("未命名事项") : todo.title)
                     .font(.body.weight(.semibold))

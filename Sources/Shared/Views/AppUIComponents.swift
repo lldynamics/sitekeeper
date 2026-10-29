@@ -10,6 +10,7 @@ enum AppSpacing {
 /// The expanded phone workspace follows its container, never a device name or screen size.
 /// iPad keeps its independently selected layouts.
 enum ExpandedPhoneWorkspaceLayout {
+    @MainActor
     static func isAvailable(width: CGFloat, minimumWidth: CGFloat = 820) -> Bool {
         UIDevice.current.userInterfaceIdiom == .phone && width >= max(820, minimumWidth)
     }
@@ -38,6 +39,7 @@ extension EnvironmentValues {
 /// Interior panes use their own boundaries rather than the root navigation rail's inset.
 struct ExpandedPhoneSidebarScrollModifier: ViewModifier {
     let isExpanded: Bool
+    var paneBackground: Color = Color(.secondarySystemGroupedBackground)
 
     func body(content: Content) -> some View {
         content
@@ -45,7 +47,7 @@ struct ExpandedPhoneSidebarScrollModifier: ViewModifier {
             .contentMargins(.horizontal, isExpanded ? 0 : nil, for: .scrollContent)
             .contentMargins(.horizontal, isExpanded ? 0 : nil, for: .scrollIndicators)
             .scrollContentBackground(isExpanded ? .hidden : .automatic)
-            .background(isExpanded ? Color(.secondarySystemGroupedBackground) : Color.clear, ignoresSafeAreaEdges: [])
+            .background(isExpanded ? paneBackground : Color.clear, ignoresSafeAreaEdges: [])
             .modifier(ExpandedPhoneScrollEdgeModifier(isExpanded: isExpanded))
     }
 }
@@ -182,6 +184,7 @@ extension ShapeStyle where Self == Color {
 }
 
 struct ProjectContextStrip: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let title: String
     let projects: [Project]
     @Binding var selectedProjectId: UUID?
@@ -213,18 +216,23 @@ struct ProjectContextStrip: View {
                 }
             }
         } label: {
-            HStack(spacing: 8) {
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+                : AnyLayout(HStackLayout(spacing: 8))
+            layout {
                 Label(title, systemImage: "scope")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
-                Spacer(minLength: 8)
-                Text(currentProjectName)
-                    .font(.subheadline.weight(.semibold))
-                    .appListPrimaryTextLayout()
-                    .foregroundStyle(.primary)
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                if !dynamicTypeSize.isAccessibilitySize { Spacer(minLength: 8) }
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(currentProjectName)
+                        .font(.subheadline.weight(.semibold))
+                        .appListPrimaryTextLayout()
+                        .foregroundStyle(.primary)
+                    Image(systemName: "chevron.down")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
