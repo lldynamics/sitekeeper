@@ -10,13 +10,17 @@ enum ReportBuilderPDFSections {
         if options.includeMaterials {
             lines.append(AppLocalization.string("材料清单"))
             lines += snapshot.materialItems.map {
-                "- \($0.name)  \($0.quantity) \($0.unit)  单价\(ReportBuilder.money($0.unitPrice, currencyDisplayMode: currencyDisplayMode))  金额\(ReportBuilder.money(ReportBuilder.materialLineTotal($0), currencyDisplayMode: currencyDisplayMode))"
+                String(format: AppLocalization.string("report_pdf_material_line_format"),
+                       $0.name, String(describing: $0.quantity), $0.unit,
+                       ReportBuilder.money($0.unitPrice, currencyDisplayMode: currencyDisplayMode),
+                       ReportBuilder.money(ReportBuilder.materialLineTotal($0), currencyDisplayMode: currencyDisplayMode))
             }
             lines.append("")
         }
         if options.includeQuotes {
             let total = snapshot.quoteItems.reduce(MoneyValue.zero) { $0 + ReportBuilder.quoteGrandTotal($1) }
-            lines.append("\(AppLocalization.string("报价明细"))  合计 \(ReportBuilder.money(total, currencyDisplayMode: currencyDisplayMode))")
+            lines.append(String(format: AppLocalization.string("report_pdf_section_total_format"),
+                                AppLocalization.string("报价明细"), ReportBuilder.money(total, currencyDisplayMode: currencyDisplayMode)))
             lines += snapshot.quoteItems.map {
                 "- \($0.name)  \($0.quantity)\($0.unit)  \(ReportBuilder.money(ReportBuilder.quoteGrandTotal($0), currencyDisplayMode: currencyDisplayMode))"
             }
@@ -25,7 +29,10 @@ enum ReportBuilderPDFSections {
         if options.includeLabor {
             lines.append(AppLocalization.string("人工记录"))
             lines += snapshot.laborRecords.map {
-                "- \($0.date)  \($0.workers)人 × \($0.hours)\($0.workloadUnit.displayName)  单价\(ReportBuilder.money($0.unitRate, currencyDisplayMode: currencyDisplayMode))/\($0.workloadUnit.displayName)  金额\(ReportBuilder.money(ReportBuilder.laborLineTotal($0), currencyDisplayMode: currencyDisplayMode))  \($0.note)"
+                String(format: AppLocalization.string("report_pdf_labor_line_format"),
+                       String(describing: $0.date), String(describing: $0.workers), String(describing: $0.hours), $0.workloadUnit.displayName,
+                       ReportBuilder.money($0.unitRate, currencyDisplayMode: currencyDisplayMode), $0.workloadUnit.displayName,
+                       ReportBuilder.money(ReportBuilder.laborLineTotal($0), currencyDisplayMode: currencyDisplayMode), $0.note)
             }
             lines.append("")
         }
@@ -51,8 +58,12 @@ enum ReportBuilderPDFSections {
             lines.append("")
             lines.append(AppLocalization.string("项目财务流水"))
             lines += snapshot.projectFinancialRecords.sorted(by: { $0.date > $1.date }).map {
-                let reminder = $0.hasDueReminder ? "  到期\($0.dueDate) \($0.normalizedReminderStatus.displayName)" : ""
-                return "- \(Formatters.displayDateText($0.date)) [\($0.direction.displayName)] [\($0.category.displayName)] [\($0.normalizedStatus.displayName)]\(reminder) \(ReportBuilder.money($0.amount, currencyDisplayMode: currencyDisplayMode))  \($0.counterparty)  票据\($0.linkedDocumentIds.count)份"
+                let reminder = $0.hasDueReminder
+                    ? String(format: AppLocalization.string("report_pdf_due_reminder_format"), String(describing: $0.dueDate), $0.normalizedReminderStatus.displayName)
+                    : ""
+                return String(format: AppLocalization.string("report_pdf_financial_line_format"),
+                              Formatters.displayDateText($0.date), $0.direction.displayName, $0.category.displayName, $0.normalizedStatus.displayName,
+                              reminder, ReportBuilder.money($0.amount, currencyDisplayMode: currencyDisplayMode), $0.counterparty, Int64($0.linkedDocumentIds.count))
             }
         }
         if options.includeProjectDocuments {
@@ -73,7 +84,9 @@ enum ReportBuilderPDFSections {
                 let register = [$0.versionDisplayText, $0.submissionStatus.displayName, $0.responsiblePerson, Formatters.displayDateText($0.formedAt), $0.archiveNumber, $0.workSection]
                     .filter { !$0.isEmpty }
                     .joined(separator: " · ")
-                return "- \(Formatters.displayDateText($0.createdAt)) [\($0.category.displayName)] \($0.title)  \($0.pageCount)页  \(ReportBuilder.money($0.amount, currencyDisplayMode: currencyDisplayMode))  \(register)"
+                return String(format: AppLocalization.string("report_pdf_document_line_format"),
+                              Formatters.displayDateText($0.createdAt), $0.category.displayName, $0.title, Int64($0.pageCount),
+                              ReportBuilder.money($0.amount, currencyDisplayMode: currencyDisplayMode), register)
             }
         }
         if options.includeProjectContacts && !snapshot.projectContacts.isEmpty {
@@ -117,7 +130,10 @@ enum ReportBuilderPDFSections {
         if options.includeQuickNotes && !snapshot.quickNotes.isEmpty {
             lines.append("")
             lines.append(AppLocalization.string("随手记"))
-            lines += snapshot.quickNotes.map { "- \($0.title)  \(Formatters.displayDateText($0.updatedAt))  附件\($0.attachments.count)个" }
+            lines += snapshot.quickNotes.map {
+                String(format: AppLocalization.string("report_pdf_quick_note_line_format"),
+                       $0.title, Formatters.displayDateText($0.updatedAt), Int64($0.attachments.count))
+            }
         }
         if options.includeOperationAuditLogs && !options.operationAuditEntries.isEmpty {
             lines.append("")

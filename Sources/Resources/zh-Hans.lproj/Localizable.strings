@@ -5184,3 +5184,12 @@
 /* Keep public-main localized prefixes. */
 "类型: " = "类型: ";
 "项目: " = "项目: ";
+/* 通用 PDF 导出模板。用户内容与已格式化数值作为参数原样传入。 */
+"report_pdf_export_title_format" = "%@ 数据导出";
+"report_pdf_material_line_format" = "- %@  %@ %@  单价%@  金额%@";
+"report_pdf_section_total_format" = "%@  合计 %@";
+"report_pdf_labor_line_format" = "- %@  %@人 × %@%@  单价%@/%@  金额%@  %@";
+"report_pdf_due_reminder_format" = "  到期%@ %@";
+"report_pdf_financial_line_format" = "- %@ [%@] [%@] [%@]%@ %@  %@  票据%lld份";
+"report_pdf_document_line_format" = "- %@ [%@] %@  %lld页  %@  %@";
+"report_pdf_quick_note_line_format" = "- %@  %@  附件%lld个";

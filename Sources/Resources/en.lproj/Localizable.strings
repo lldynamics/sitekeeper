@@ -5185,3 +5185,12 @@
 /* Keep public-main localized prefixes. */
 "类型: " = "Type: ";
 "项目: " = "Project: ";
+/* General PDF export templates. User content and preformatted numbers remain arguments. */
+"report_pdf_export_title_format" = "%@ Data Export";
+"report_pdf_material_line_format" = "- %@  %@ %@  Unit Price %@  Amount %@";
+"report_pdf_section_total_format" = "%@  Total %@";
+"report_pdf_labor_line_format" = "- %@  %@ people × %@ %@  Unit Price %@/%@  Amount %@  %@";
+"report_pdf_due_reminder_format" = "  Due %@ %@";
+"report_pdf_financial_line_format" = "- %@ [%@] [%@] [%@]%@ %@  %@  Receipts: %lld";
+"report_pdf_document_line_format" = "- %@ [%@] %@  Pages: %lld  %@  %@";
+"report_pdf_quick_note_line_format" = "- %@  %@  Attachments: %lld";
